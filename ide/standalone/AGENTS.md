@@ -21,7 +21,7 @@ ide/standalone/build.sh --help
 `--with-cli-bundle` takes what `dev-tools/pyinstaller/build.sh --no-archive` leaves in `dist/standalone/partcad`.
 Node.js is needed unless `--vsix` points at an already-built PartCAD extension: the extension is built here
 the same way it is built everywhere else, with `npm ci && npm run vsce-package` (see "Build / package" in
-`../ide/vscode/AGENTS.md`), and the other extensions are packaged with `vsce`. `cairosvg`, `Pillow`, `rcedit` and
+`../vscode/AGENTS.md`), and the other extensions are packaged with `vsce`. `cairosvg`, `Pillow`, `rcedit` and
 -- on Windows -- Inno Setup 6.3+ (`ISCC.exe`, for `installer/partcad-ide.iss`) are optional, and the build
 reports what it skipped without them. Output lands in `dist/ide/`.
 

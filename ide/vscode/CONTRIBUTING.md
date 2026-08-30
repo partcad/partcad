@@ -15,7 +15,10 @@ CI pins **Node 22** for packaging (`.github/workflows/vsix.yml`) and runs the te
 (`.github/workflows/npm-test.yml`). Anything from 22 up works — `@vscode/test-cli` and `@vscode/test-electron`
 declare `node >= 22`, so an older Node installs with `EBADENGINE` warnings and cannot run `npm test`.
 
-Run every command below from this directory (`ide/vscode/`).
+Run every command below from this directory (`ide/vscode/`), on the host or inside the dev container as you
+prefer. Unlike the Python packages, nothing here needs the container's pinned toolchain: this package is
+Node and TypeScript, the container carries Node as well, and CI builds it on a plain runner with
+`actions/setup-node`. What matters is the Node version, not where it comes from.
 
 ## Setup
 

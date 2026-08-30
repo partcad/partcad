@@ -25,7 +25,7 @@ import socket
 import threading
 from typing import Callable, Mapping, Optional
 
-from ..rpc.dispatcher import Dispatcher, Handler
+from ..rpc.dispatcher import INVALID_PARAMS, Dispatcher, Handler
 from partcad_utils.framing import read_message, write_message
 from partcad_utils.logging_ansi_render import AnsiEventRenderer
 
@@ -135,7 +135,27 @@ class SocketServer:
                     break
 
                 if isinstance(request, dict) and request.get("method") == LOG_MODE_METHOD:
-                    wants_ansi = bool((request.get("params") or {}).get("ansi"))
+                    # Handled here, so `Dispatcher` never sees it -- and neither
+                    # does its parameter checking. JSON-RPC allows `params` to be
+                    # an array, and `.get` on a list raises, which would take the
+                    # connection down rather than answer the request.
+                    params = request.get("params")
+                    if params is not None and not isinstance(params, dict):
+                        if "id" in request:
+                            with write_lock:
+                                write_message(
+                                    wfile,
+                                    {
+                                        "jsonrpc": "2.0",
+                                        "id": request["id"],
+                                        "error": {
+                                            "code": INVALID_PARAMS,
+                                            "message": "Invalid params: expected an object",
+                                        },
+                                    },
+                                )
+                        continue
+                    wants_ansi = bool((params or {}).get("ansi"))
                     if wants_ansi and renderer[0] is None:
                         start_rendering()
                     elif not wants_ansi and renderer[0] is not None:

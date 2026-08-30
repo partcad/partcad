@@ -32,7 +32,7 @@ import {
 } from 'vscode-jsonrpc/node';
 
 import { traceError, traceInfo } from './log/logging';
-import { cliBeside, ensureServiceExecutable, resolveServicePath } from './provision';
+import { cliBeside, ensureServiceExecutable, locateCommand, resolveServicePath } from './provision';
 import { writeTerminal } from '../terminal';
 import { refreshToolsPath } from './terminalPath';
 import { getServiceChannelFromSetting } from './settings';
@@ -503,8 +503,8 @@ function reportNoService(context: vscode.ExtensionContext, serverId: string): vo
         'ERROR: "Find installed PartCAD" and point at the environment it is installed in.',
         'ERROR: If it is already installed and was not found, VS Code very likely cannot see that',
         'ERROR: environment: the PATH above is the one VS Code was started with, not the one an',
-        'ERROR: activated terminal has. `which partcad-json-rpc` in a terminal where PartCAD works',
-        'ERROR: prints the path to point at (or to put in the "partcad.servicePath" setting).',
+        `ERROR: activated terminal has. \`${locateCommand()} partcad-json-rpc\` in a terminal where PartCAD`,
+        'ERROR: works prints the path to point at (or to put in the "partcad.servicePath" setting).',
     ];
     writeTerminal(lines.map((line) => `${line}\r\n`).join(''));
 }

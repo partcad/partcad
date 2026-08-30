@@ -208,3 +208,32 @@ def test_the_mode_can_be_turned_back_off():
     assert {"jsonrpc": "2.0", "id": 2, "result": {"ansi": False}} in messages
     methods = [m.get("method") for m in messages if "method" in m]
     assert "log" in methods and "terminal" not in methods
+
+
+def test_array_params_are_refused_rather_than_ending_the_connection():
+    """`log.mode` bypasses the dispatcher, so it does its own parameter check.
+
+    JSON-RPC allows `params` to be an array. `.get` on a list raises, and the
+    transports catch neither -- the socket handler would drop the connection and
+    the stdio loop would exit, both instead of answering the request.
+    """
+    messages = _serve(
+        [
+            {"jsonrpc": "2.0", "id": 1, "method": "log.mode", "params": ["ansi"]},
+            {"jsonrpc": "2.0", "id": 2, "method": "speak", "params": {}},
+        ],
+        _speak,
+    )
+
+    errors = [m for m in messages if m.get("id") == 1 and "error" in m]
+    assert errors, f"expected an error for array params, got {messages}"
+    assert errors[0]["error"]["code"] == -32602
+
+    # And the connection is still serving: the request after it was answered.
+    assert any(m.get("id") == 2 for m in messages), "the transport stopped instead of carrying on"
+
+
+def test_absent_params_are_allowed():
+    """`log.mode` with no params at all means "not ansi", not a protocol error."""
+    messages = _serve([{"jsonrpc": "2.0", "id": 1, "method": "log.mode"}], _speak)
+    assert {"jsonrpc": "2.0", "id": 1, "result": {"ansi": False}} in messages

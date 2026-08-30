@@ -18,7 +18,8 @@ The daemon owns two things its clients do not, and both decide what belongs on w
    package-mutating command (`add`, `import`) must be a daemon client and evict the context it changed
    (`_invalidate_context`).
    The context is warm across connections, which is why `activate` **reloads** `partcad` rather than importing
-   it: `Session.load_partcad` drops every `partcad*` module out of `sys.modules` and imports the package again,
+   it: `Session.load_partcad` drops `partcad` and `partcad.*` from `sys.modules` (along with `partcad_cli*` and
+   `partcad_ide_client*`, but never this package, whose session is doing the dropping) and imports again,
    so one package load's global state does not leak into the next. That makes reload-safety a property
    `partcad` has to have, and one nothing else exercises — the *first* client of a daemon takes the import
    path and every later one takes the reload path. It broke exactly that way: `partcad/__init__.py` aliased

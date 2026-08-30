@@ -132,11 +132,33 @@ suite('Where the service was looked for', () => {
             .update('servicePath', exe ?? '', vscode.ConfigurationTarget.Global);
     }
 
+    // `resolveServicePath` looks in `$XDG_DATA_HOME/partcad` and in the home
+    // directory before it reaches PATH, so on a machine with PartCAD installed
+    // by `install.sh` it would return early and the search report would be one
+    // entry long. Point both at the empty temporary directory for the duration:
+    // what is under test is the report, not this machine.
+    let savedXdg: string | undefined;
+    let savedHome: string | undefined;
+
     setup(() => {
         tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'partcad-provision-'));
+        savedXdg = process.env.XDG_DATA_HOME;
+        savedHome = process.env.HOME;
+        process.env.XDG_DATA_HOME = path.join(tmp, 'data');
+        process.env.HOME = path.join(tmp, 'home');
     });
 
+    function restore(name: string, value: string | undefined): void {
+        if (value === undefined) {
+            delete process.env[name];
+        } else {
+            process.env[name] = value;
+        }
+    }
+
     teardown(async () => {
+        restore('XDG_DATA_HOME', savedXdg);
+        restore('HOME', savedHome);
         await pointServicePathAt(undefined);
         fs.rmSync(tmp, { recursive: true, force: true });
     });

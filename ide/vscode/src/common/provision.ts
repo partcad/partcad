@@ -347,6 +347,16 @@ export function resolveServicePath(
 export type ServiceResolution = { kind: 'ready'; execPath: string } | { kind: 'restarting' } | { kind: 'none' };
 
 /**
+ * How to ask a shell where an executable is, on this platform.
+ *
+ * `which` is not a command on Windows, so telling a Windows user to run it
+ * leaves them with no way to find the path the message is asking for.
+ */
+export function locateCommand(): string {
+    return process.platform === 'win32' ? 'where.exe' : 'which';
+}
+
+/**
  * Where a `partcad-json-rpc` might be inside a directory the user picked.
  *
  * They are asked for the environment's `bin` (`Scripts` on Windows), because
@@ -395,7 +405,7 @@ async function useLocalPython(serverId: string): Promise<ServiceResolution> {
         await vscode.window.showErrorMessage(
             `No ${EXE} in ${dir}. Pick the directory a "pip install partcad" put it in -- the ` +
                 `environment's "bin" ("Scripts" on Windows), or the environment's root directory. ` +
-                `"which ${EXE}" in a terminal where PartCAD works prints the path.`,
+                `"${locateCommand()} ${EXE}" in a terminal where PartCAD works prints the path.`,
             { modal: true },
         );
         return { kind: 'none' };
