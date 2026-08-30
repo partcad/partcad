@@ -37,7 +37,7 @@ from ..file_factory_url import FileFactoryUrl
 # handing an argument to the daemon, and they must not import 'partcad' to do it
 # (see "Command boundary" in src/partcad_cli/AGENTS.md). Re-exported here so that
 # everything about adding from a URL is still reachable from one module.
-from ..utils import filename_from_url, looks_like_url  # noqa: F401
+from ..utils import filename_from_url, looks_like_url, redacted_url  # noqa: F401
 
 # The algorithm the generated 'fileHash' uses. One choice, not a setting: a
 # package author reading a generated declaration should not have to wonder why
@@ -78,7 +78,11 @@ async def fetched_file_config_async(ctx, project, url: str, filename: str) -> di
         await factory.download(downloaded)
         digest = await file_digest_async(downloaded, HASH_ALGORITHM)
 
-    pc_logging.info("Fetched %s: %s:%s" % (url, HASH_ALGORITHM, digest))
+    # Logged without its userinfo or its query string. A URL a package is given
+    # can be a pre-signed one, and its signature is a credential; the
+    # declaration below keeps the URL whole because fetching it again needs the
+    # whole of it, but a log line has no such need and travels much further.
+    pc_logging.info("Fetched %s: %s:%s" % (redacted_url(url), HASH_ALGORITHM, digest))
     return {
         "path": filename,
         "fileFrom": "url",
@@ -107,6 +111,6 @@ async def add_object_from_url_async(ctx, project, section: str, url: str, kind=N
     obj.update(fetched)
 
     with pc_logging.Process("AddUrl", project.name):
-        pc_logging.info("Adding '%s' to '%s' from %s" % (name, section, url))
+        pc_logging.info("Adding '%s' to '%s' from %s" % (name, section, redacted_url(url)))
         project.add_object_config(section, name, obj)
     return name

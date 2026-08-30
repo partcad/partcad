@@ -47,6 +47,39 @@ def looks_like_url(value) -> bool:
     return parsed.scheme.lower() in URL_SCHEMES and bool(parsed.netloc)
 
 
+def redacted_url(url: str) -> str:
+    """The same URL with the parts that carry credentials taken out, for a log.
+
+    Userinfo and a query string are where a URL keeps its secrets: a token in
+    the 'user:token@' of one, a signature in the '?X-Amz-Signature=...' of a
+    pre-signed one. The declaration that is written down keeps the URL whole,
+    because fetching the file again needs the whole of it; a log line does not,
+    and logs are copied, shipped and kept far more widely than a package is.
+
+    What was removed is still shown as removed, so that the line cannot be read
+    as a URL that was simply shorter than it was.
+    """
+    if not isinstance(url, str):
+        return "<url>"
+    try:
+        parsed = urlparse(url)
+        netloc = parsed.netloc
+        userinfo, _, host = netloc.rpartition("@")
+    except ValueError:
+        return "<url>"
+    if not parsed.scheme or not netloc:
+        # Not something with credentials in it to begin with: a path, or a URL
+        # too malformed to take apart. Left alone rather than mangled.
+        return url
+
+    redacted = "%s://%s%s%s" % (parsed.scheme, "...@" if userinfo else "", host, parsed.path)
+    if parsed.query:
+        redacted += "?..."
+    if parsed.fragment:
+        redacted += "#..."
+    return redacted
+
+
 def filename_from_url(url: str, fallback: str = "download") -> str:
     """The file name a URL would sensibly be saved as.
 

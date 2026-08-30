@@ -27,6 +27,7 @@ from partcad.actions.add import (
     filename_from_url,
     looks_like_url,
     object_name_from_filename,
+    redacted_url,
 )
 from partcad.file_factory import unreproducible_reason
 
@@ -84,6 +85,26 @@ def _declared(pkg, section, name):
 )
 def test_a_url_is_told_from_a_path(value, is_url):
     assert looks_like_url(value) is is_url
+
+
+@pytest.mark.parametrize(
+    "url, logged",
+    [
+        ("https://example.com/vendor/bolt.step", "https://example.com/vendor/bolt.step"),
+        # A pre-signed URL: the signature in the query is a credential.
+        ("https://example.com/bolt.step?X-Amz-Signature=deadbeef", "https://example.com/bolt.step?..."),
+        ("https://token:secret@example.com/bolt.step", "https://...@example.com/bolt.step"),
+        ("https://example.com/bolt.step#part", "https://example.com/bolt.step#..."),
+        # The port is part of where it came from, not a secret, so it stays.
+        ("http://127.0.0.1:8080/bolt.step", "http://127.0.0.1:8080/bolt.step"),
+        # Not a URL at all: left alone rather than mangled into one.
+        ("bolt.step", "bolt.step"),
+        (None, "<url>"),
+    ],
+)
+def test_a_url_is_logged_without_its_credentials(url, logged):
+    """A log line travels further than the package it was written beside."""
+    assert redacted_url(url) == logged
 
 
 @pytest.mark.parametrize(
