@@ -36,7 +36,11 @@ def resolve_cart_object(ctx, name: str):
 
     A cart item is a part most of the time, but it is an assembly whenever one
     is supplied assembled. The name alone does not say which, and it is all that
-    survives a cart item being persisted, so both are looked up here.
+    survives a cart item being persisted, so every kind that can be one is
+    looked up here. A scene is among them because what it holds is procured
+    like anything else: a scene is never itself something to order -- nobody
+    sells an arrangement -- so it only ever appears as the objects in it, but
+    the cart is filled from its name.
     """
     project_name, object_name = resolve_resource_path(ctx.current_project_path, name)
     prj = ctx.get_project(project_name)
@@ -46,7 +50,9 @@ def resolve_cart_object(ctx, name: str):
 
     object = prj.get_part(object_name, quiet=True)
     if object is None:
-        object = prj.get_assembly(object_name)
+        object = prj.get_assembly(object_name, quiet=True)
+    if object is None:
+        object = prj.get_scene(object_name)
     return object
 
 
@@ -151,7 +157,7 @@ class ProviderCart:
             await self.add_object(ctx, object, recursive=recursive)
 
     async def add_object(self, ctx, object: str, recursive: bool = False):
-        """Add a part or an assembly.
+        """Add a part, an assembly or a scene.
 
         An assembly the model declares as supplied assembled (see
         'Assembly.is_declared_purchasable()') is added as a single item, the way
@@ -162,6 +168,11 @@ class ProviderCart:
         is filled, so an assembly that is declared orderable but that nobody has
         available still enters the cart as one item. Availability is what the
         providers answer afterwards, when the finished cart is put to them.
+
+        A scene is broken down the same way an assembly is, and always: it is
+        an arrangement of objects rather than a thing to order, so there is
+        never an item to add for the scene itself. What is in it is procured
+        exactly as an assembly's contents are.
 
         Pass 'recursive=True' to break every assembly down to its parts,
         including the ones that could have been ordered assembled.
@@ -181,7 +192,9 @@ class ProviderCart:
             await item.set_spec(ctx, name)
             self.add_item(item, count)
         else:
-            assembly = prj.get_assembly(object_name)
+            # Quietly, both of them: a name that is one is not the other, and
+            # the failure worth reporting is the one at the end.
+            assembly = prj.get_assembly(object_name, quiet=True) or prj.get_scene(object_name, quiet=True)
             if assembly:
                 if not recursive and assembly.is_declared_purchasable():
                     pc_logging.debug(f"Adding assembly '{object_name}' to the cart as is")
@@ -200,7 +213,7 @@ class ProviderCart:
                 await asyncio.gather(*tasks)
             else:
                 # TODO(clairbee): turn it into an error() and recover nicely
-                raise Exception(f"Part or assembly '{object_name}' not found in project '{project_name}'")
+                raise Exception(f"Part, assembly or scene '{object_name}' not found in project '{project_name}'")
 
     async def add_item_from_spec(self, ctx, part_spec: str, count=1):
         part_item = ProviderCartItem()

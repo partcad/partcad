@@ -32,7 +32,7 @@
   window.addEventListener('message', event => {
     const message = event.data; // The json data that the extension sent
     let config = {};
-    if (message.type === 'package' || message.type === 'sketch' || message.type === 'interface' || message.type === 'part' || message.type === 'assembly' || message.type === 'software') {
+    if (message.type === 'package' || message.type === 'sketch' || message.type === 'interface' || message.type === 'part' || message.type === 'assembly' || message.type === 'scene' || message.type === 'software') {
       config = message.obj['config'];
     }
     switch (message.type) {
@@ -96,6 +96,9 @@
       case 'interface':
       case 'part':
       case 'assembly':
+      // A scene is shown exactly as an assembly is: it takes parameters the
+      // same way, and it is inspected in the viewer the same way.
+      case 'scene':
         {
           let contents = document.querySelector('.contents');
           let html = '';
@@ -228,6 +231,8 @@
                   command = "partcad.inspectSketch";
                 } else if (message.type === 'assembly') {
                   command = "partcad.inspectAssembly";
+                } else if (message.type === 'scene') {
+                  command = "partcad.inspectScene";
                 } else if (message.type === 'interface') {
                   command = "partcad.inspectInterface";
                 } else {

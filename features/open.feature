@@ -14,6 +14,8 @@ Feature: `pc open` command
     Then the command should exit with a non-zero status code
     And OUTPUT should contain "Unknown application"
     And OUTPUT should contain "freecad"
+    And OUTPUT should contain "gazebo"
+    And OUTPUT should contain "kicad"
 
   @failure @pc-open
   Scenario: A file that is not there is reported rather than opened
@@ -32,3 +34,19 @@ Feature: `pc open` command
     Then the command should exit with a non-zero status code
     And STDOUT should contain '"ok": false'
     And STDOUT should contain "No such file"
+
+  @failure @pc-open
+  Scenario: A world file that is not there is reported rather than opened in Gazebo
+    # The scene half of the "Open in..." menu: a '.world' file is what Gazebo
+    # reads, and it is looked for on this machine exactly as a STEP file is.
+    Given a file named "warehouse.world" does not exist
+    When I run "pc --no-ansi open --with gazebo warehouse.world"
+    Then the command should exit with a non-zero status code
+    And OUTPUT should contain "No such file"
+
+  @failure @pc-open
+  Scenario: A board that is not there is reported rather than opened in KiCad
+    Given a file named "pcb.kicad_pro" does not exist
+    When I run "pc --no-ansi open --with kicad pcb.kicad_pro"
+    Then the command should exit with a non-zero status code
+    And OUTPUT should contain "No such file"

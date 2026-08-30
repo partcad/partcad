@@ -272,7 +272,9 @@ surface with a no-op `handleInput`, not a shell, and has no environment to inher
 ## ASSY diagnostics
 
 `.assy` files are registered as YAML for highlighting but are not YAML: they are Jinja2 templates that render
-to YAML and then have to match the ASSY schema. `src/PartcadLint.ts` checks the open document (debounced on
+to YAML and then have to match the ASSY schema. (`.world` files are registered the same way, against `xml`:
+a Gazebo world *is* XML, so the editor's own XML support is the whole of what it needs -- there is no PartCAD
+check for one, and none is wanted.) `src/PartcadLint.ts` checks the open document (debounced on
 edit, immediately on open/save) through the `partcad.lintFile` command and publishes the answer into a
 `partcad` diagnostic collection.
 
@@ -283,6 +285,12 @@ exactly when the package fails to load *because* of the file being typed into. `
 answers it by running `pc --no-ansi lint --file <path> --stdin --json`, feeding the buffer on stdin. Same
 reasoning as `pc daemon stop`: defer to the CLI rather than keep a second copy here.
 
+An ASSY file a **scene** points at is checked against the same schema with `how` forbidden, and which of the
+two a given file is is not a property of the file. `PartcadLint.flavorOf` answers it from the package contents
+the Explorer has already loaded -- the declaration itself -- and leaves the question to `pc lint` for a file no
+loaded package mentions. Both lean the same way when they cannot tell: unknown means assembly, because reading
+an assembly as a scene would put a false error on correct code.
+
 The checker is `partcad_utils.assy_lint` (schema: `src/partcad_utils/schema/assy.json`), shared
 with the daemon-side package lint so an editor and CI cannot disagree about a file. It masks each Jinja2
 construct with equally sized filler before parsing, which is what keeps every finding on its source line and
@@ -291,9 +299,20 @@ message wording there, not here.
 
 ## Opening a file in a third-party application
 
-The Explorer's per-item **"Open in > FreeCAD"** menu (`partcad.openInFreeCAD`, on parts and assemblies that
-have a source file) hands the item's `itemPath` to `partcad.openExternal`, which runs
-`pc --no-ansi open --with freecad [--use-docker] [--docker-image <image>] <path> --json`.
+The Explorer's per-item **"Open in > ..."** menu hands the item's file to `partcad.openExternal`, which runs
+`pc --no-ansi open --with <tool> [--use-docker] [--docker-image <image>] <path> --json`. Three applications,
+each offered for the objects it can actually open:
+
+| Menu entry | Command | Shown for |
+| --- | --- | --- |
+| FreeCAD | `partcad.openInFreeCAD` | parts and assemblies |
+| Gazebo | `partcad.openInGazebo` | scenes of type `world` (`viewItem == sceneWorld`) |
+| KiCad | `partcad.openInKiCad` | parts of type `kicad` (`viewItem == partKicad`) |
+
+The two narrow ones are why `PartcadItem` gives those objects a context value of their own: `viewItem` is one
+string compared exactly, so "a scene Gazebo can open" and "a part KiCad can open" have to *be* separate
+values. Both are then added back to every other clause that names their kind, because a world scene is a scene
+everywhere else and a KiCad part is a part.
 
 **It never reaches the daemon, and there is no RPC method for it** -- a stronger version of the rule
 `pc lint --file` follows. A daemon can be remote: "open this in FreeCAD" sent to one would put a window on
@@ -310,8 +329,14 @@ needs (which X server to install and what to allow, or how to let PartCAD use a 
 What is handed over is `config.item_path`, not the item's `itemPath`. The tree sets `itemPath` only for the
 types this editor can *edit* -- the scripts -- so a STEP or BREP part, which is exactly what another CAD
 application is for, has none; `config.item_path` is the file the daemon reported for the object either way.
-The menu is therefore on the same items as "Export" (`part`, `assembly`, with or without code) and an object
-that has no file of its own says so when it is picked, rather than being silently missing from the menu.
+The menu is therefore on the same items as "Export" and an object that has no file of its own says so when it
+is picked, rather than being silently missing from the menu.
+
+And no more than that is decided here. A `kicad` part's file is the STEP KiCad's command line writes out of
+the board; the board is the `.kicad_pro` beside it, and swapping one for the other is a fact about KiCad that
+lives in `external.TOOLS` (`Tool.companions`), not in this tree. Same for how Gazebo is launched: `gz sim`,
+`ign gazebo` and `gazebo` are three front ends of one application and `Tool.binary_args` is where that is
+written down.
 
 `partcad.open.useDocker` and `partcad.open.dockerImage` are read here, on the way to that command line, rather
 than being worked out anywhere in Python: PartCAD decides *how* to run the application, and the settings only

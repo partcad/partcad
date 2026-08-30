@@ -79,6 +79,8 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         // menu is where the user says what they want, and a picker on top of a
         // menu is the same question twice.
         vscode.commands.registerCommand(`partcad.openInFreeCAD`, (item) => this.openWith('freecad', item));
+        vscode.commands.registerCommand(`partcad.openInGazebo`, (item) => this.openWith('gazebo', item));
+        vscode.commands.registerCommand(`partcad.openInKiCad`, (item) => this.openWith('kicad', item));
 
         vscode.commands.registerCommand(`partcad.test`, (item) => this.test(item));
 
@@ -144,8 +146,8 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
     }
 
     /**
-     * Open the file a part or an assembly is defined by in a third-party CAD
-     * application ("Open in..." in the context menu).
+     * Open the file an object is defined by in a third-party application
+     * ("Open in..." in the context menu).
      *
      * It is the item's own source file that is handed over, not a rendering of
      * it: rendering is the daemon's work, and this deliberately has none in it.
@@ -158,6 +160,9 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         // `config.item_path` rather than `itemPath`: the latter is set only for
         // the types this editor can edit (scripts), and a STEP or BREP part --
         // exactly what another CAD application is for -- is not one of them.
+        // A `kicad` part hands over the STEP KiCad's CLI writes; which file
+        // KiCad is actually pointed at is `pc open`'s to decide, because that
+        // is a fact about KiCad rather than about this tree.
         const path = item?.config?.item_path ?? item?.itemPath;
         if (path === undefined) {
             await vscode.window.showWarningMessage(
@@ -281,24 +286,6 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             elements.push(new PartcadItem(dir, assembly.name, items.name, assembly, filepath, ITEM_TYPE_ASSEMBLY));
         }
 
-        const scenes = (items.scenes ?? []).slice().sort((i1, i2) => {
-            if (i1.type === 'alias' && i2.type !== 'alias') {
-                return 1;
-            }
-            if (i1.type !== 'alias' && i2.type === 'alias') {
-                return -1;
-            }
-            return i1['name'].localeCompare(i2['name']);
-        });
-        for (const scene of scenes) {
-            let filepath = undefined;
-            // The scene types that *are* a file, so the tree can open one.
-            if (scene.type === 'assy' || scene.type === 'world') {
-                filepath = scene.item_path;
-            }
-            elements.push(new PartcadItem(dir, scene.name, items.name, scene, filepath, ITEM_TYPE_SCENE));
-        }
-
         items.parts = items.parts.sort((i1, i2) => {
             if (i1.type === 'alias' && i2.type !== 'alias') {
                 return 1;
@@ -343,6 +330,29 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
                 filepath = sketch.item_path;
             }
             elements.push(new PartcadItem(dir, sketch.name, items.name, sketch, filepath, ITEM_TYPE_SKETCH));
+        }
+
+        // After the geometry, because a scene is an arrangement *of* it rather
+        // than one more piece of it: the parts, assemblies and sketches a
+        // package publishes come first, and what somebody put them into comes
+        // at the end. Before the software for the same reason - software is not
+        // geometry at all.
+        const scenes = (items.scenes ?? []).slice().sort((i1, i2) => {
+            if (i1.type === 'alias' && i2.type !== 'alias') {
+                return 1;
+            }
+            if (i1.type !== 'alias' && i2.type === 'alias') {
+                return -1;
+            }
+            return i1['name'].localeCompare(i2['name']);
+        });
+        for (const scene of scenes) {
+            let filepath = undefined;
+            // The scene types that *are* a file, so the tree can open one.
+            if (scene.type === 'assy' || scene.type === 'world') {
+                filepath = scene.item_path;
+            }
+            elements.push(new PartcadItem(dir, scene.name, items.name, scene, filepath, ITEM_TYPE_SCENE));
         }
 
         // After the geometry, because software is what the product ships with

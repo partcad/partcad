@@ -186,6 +186,7 @@ class FakeProject:
         self.parts = {}
         self.sketches = {}
         self.assemblies = {}
+        self.scenes = {}
         self.interfaces = {}
         self.software = {}
         self.providers = {}
@@ -273,6 +274,8 @@ class FakeContext:
             "stats_parts_instantiated",
             "stats_assemblies",
             "stats_assemblies_instantiated",
+            "stats_scenes",
+            "stats_scenes_instantiated",
             "stats_memory",
         ):
             setattr(self, name, 0)
@@ -292,6 +295,9 @@ class FakeContext:
 
     def get_assembly(self, path, params=None):
         return self._get_shape("assembly", path, params)
+
+    def get_scene(self, path, params=None):
+        return self._get_shape("scene", path, params)
 
     def get_interface(self, path):
         return self._get_shape("interface", path)
@@ -587,6 +593,7 @@ def install_fake_search(monkeypatch):
                 "search_parts": fake_search(lambda p: p.parts.values()),
                 "search_sketches": fake_search(lambda p: p.sketches.values()),
                 "search_assemblies": fake_search(lambda p: p.assemblies.values()),
+                "search_scenes": fake_search(lambda p: p.scenes.values()),
                 "search_interfaces": fake_search(lambda p: p.interfaces.values()),
             },
             "partcad.actions.package": {"search_packages": fake_search(lambda p: [p])},
@@ -600,6 +607,7 @@ def install_fake_search(monkeypatch):
         ("parts", "Search Parts"),
         ("sketches", "Search Sketches"),
         ("assemblies", "Search Assemblies"),
+        ("scenes", "Search Scenes"),
         ("interfaces", "Search Interfaces"),
     ],
 )

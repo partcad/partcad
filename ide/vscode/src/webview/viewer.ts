@@ -97,8 +97,13 @@ function tabsFor(message: ShowMessage): TabSpec[] {
     if (!message.package) {
         return specs;
     }
-    if (message.kind === 'assembly') {
+    if (message.kind === 'assembly' || message.kind === 'scene') {
         specs.push({ id: 'bom', label: 'Bill of Materials', pane: panes.bom });
+    }
+    if (message.kind === 'assembly') {
+        // Instructions are the steps that put an assembly together, and a scene
+        // says only where things ended up - deliberately, so it has no steps to
+        // show. See 'partcad.scene'.
         specs.push({ id: 'instructions', label: 'Instructions', pane: panes.instructions });
     }
     specs.push({ id: 'supply', label: 'Supply', pane: panes.supply });

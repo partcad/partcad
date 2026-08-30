@@ -1344,7 +1344,7 @@ class Project(project_config.Configuration):
         finally:
             self._finish_derived_part(owner, done)
 
-    def get_assembly(self, assembly_name, func_params=None) -> Optional[assembly.Assembly]:
+    def get_assembly(self, assembly_name, func_params=None, quiet=False) -> Optional[assembly.Assembly]:
         return self.get_object(
             "assembly",
             Project.AssemblyLock,
@@ -1355,9 +1355,10 @@ class Project(project_config.Configuration):
             afa.AssemblyFactoryAlias,
             assembly_name,
             func_params,
+            quiet=quiet,
         )
 
-    def get_scene(self, scene_name, func_params=None) -> Optional[scene.Scene]:
+    def get_scene(self, scene_name, func_params=None, quiet=False) -> Optional[scene.Scene]:
         return self.get_object(
             "scene",
             Project.SceneLock,
@@ -1368,6 +1369,7 @@ class Project(project_config.Configuration):
             scnf.SceneFactoryAlias,
             scene_name,
             func_params,
+            quiet=quiet,
         )
 
     def get_provider(self, provider_name, func_params=None) -> Optional[plugin_provider.Provider]:

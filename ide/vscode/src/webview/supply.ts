@@ -9,7 +9,8 @@
 // 'ProviderCart' exactly as 'pc supply quote' does and asks every supplier of
 // each item on its own). Two views over that one answer:
 //
-//   * an assembly is a list of things to order, so it opens on the list, and
+//   * an assembly - or a scene, which is a placed arrangement of the same
+//     things - is a list of things to order, so it opens on the list, and
 //     clicking a line item zooms in on where that one can be bought;
 //   * a part is a single thing to order, so there is no list to choose from and
 //     it opens on the options themselves.
@@ -28,13 +29,14 @@ export class SupplyView {
     /**
      * Show the supply information of the object now on screen.
      *
-     * 'kind' is what the viewer was told it is showing: an assembly is a list of
-     * things to order, anything else is one thing.
+     * 'kind' is what the viewer was told it is showing: an assembly - or a
+     * scene, which is an assembly of placed things - is a list of things to
+     * order, anything else is one thing.
      */
     public render(data: SupplyData, kind: string | null): void {
         this.root.classList.add('sheet');
         this.data = data;
-        this.listed = kind === 'assembly';
+        this.listed = kind === 'assembly' || kind === 'scene';
         if (this.listed) {
             this.showList();
         } else {
