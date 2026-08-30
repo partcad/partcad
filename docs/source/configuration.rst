@@ -2075,7 +2075,7 @@ specific, and ``pc lint`` requires one of them (the ``Software`` check):
 
 - The package **carries the file**. It is content of the repository, so the
   revision recorded beside every software line item identifies it exactly.
-- The package **pulls it in** with ``fileFrom``, and pins it with ``hash``.
+- The package **pulls it in** with ``fileFrom``, and pins it with ``fileHash``.
   Without a hash nothing identifies it: the URL serves whatever it serves at the
   moment it is fetched, and the same package revision produces a different image
   tomorrow.

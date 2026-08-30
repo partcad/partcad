@@ -232,7 +232,7 @@ class Project(project_config.Configuration):
     class SoftwareLock(object):
         def __init__(self, prj, software_name: str):
             prj.software_locks_lock.acquire()
-            if not software_name in prj.software_locks:
+            if software_name not in prj.software_locks:
                 prj.software_locks[software_name] = threading.Lock()
             self.lock = prj.software_locks[software_name]
             prj.software_locks_lock.release()
@@ -1751,6 +1751,14 @@ class Project(project_config.Configuration):
         valid, rel_path, _ = self._validate_path(path, None)
         if not valid:
             return False
+        # '_validate_path' answers where the path is, not what it is, and a
+        # directory is inside the package like any file. Software is always a
+        # file, so one written here would be refused by 'SoftwareFactoryFile' on
+        # the next load -- a declaration that never had a chance, reported far
+        # from the command that wrote it.
+        if not os.path.isfile(os.path.join(self.config_dir, rel_path)):
+            pc_logging.error("Software must be a file: %s" % self.rel_path(path))
+            return False
         name = os.path.splitext(os.path.basename(rel_path))[0]
         return self.add_object_config("software", name, {**config, "path": rel_path})
 
@@ -2498,7 +2506,7 @@ class Project(project_config.Configuration):
                 shape = self.sketches[name]
                 lines += add_section(name, name, shape, render_cfg)
 
-        if self.software and not "software" in exclude:
+        if self.software and "software" not in exclude:
             # A table rather than the per-object sections above: software has no
             # image to show and no parameters to enumerate, and what a reader
             # needs of it - which file, which version, is it pinned - is a few
@@ -2538,7 +2546,9 @@ class Project(project_config.Configuration):
                     "| %s | %s | %s | %s | %s |"
                     % (
                         _readme_cell(name),
-                        _readme_cell(config.get("version") or ""),
+                        # A numeric "version: 0" is a version like any other, and
+                        # the schema allows one; 'or ""' would render it blank.
+                        _readme_cell("" if config.get("version") is None else config.get("version")),
                         file_text,
                         "`%s`" % _readme_cell(declared_hash) if declared_hash else "",
                         _readme_cell(software.desc or ""),

@@ -74,6 +74,11 @@ def _declared(pkg, section, name):
         # Nor is every scheme one 'fileFrom' knows.
         ("ftp://example.com/bolt.step", False),
         ("git@github.com:owner/repo.git", False),
+        # A scheme with no authority behind it: 'urlparse' reads this as the
+        # scheme 'https', but it is a file name a shell hands over verbatim,
+        # and there is no host to fetch it from.
+        ("https:firmware.bin", False),
+        ("https://", False),
         (None, False),
     ],
 )
@@ -208,6 +213,20 @@ def test_software_is_added_from_a_local_file(package):
     assert declared == {"desc": "The image", "path": "firmware.bin"}
     # It is in the package, so it needs no hash to be reproducible.
     assert unreproducible_reason(declared) is None
+
+
+def test_a_directory_is_not_software(package):
+    """Software is always a file, and the refusal belongs to the command.
+
+    A directory is inside the package like any file, so the path check passes
+    it. Written down, it would be refused by 'SoftwareFactoryFile' on the next
+    load instead -- far from the command that wrote it.
+    """
+    (package / "images").mkdir()
+    project = pc.Context(str(package)).get_project("//")
+
+    assert not project.add_software(str(package / "images"))
+    assert yaml.safe_load((package / "partcad.yaml").read_text()) == {"desc": "A package under test"}
 
 
 def test_software_outside_the_package_is_refused(package, tmp_path):

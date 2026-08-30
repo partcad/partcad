@@ -31,13 +31,20 @@ URL_SCHEMES = ("http", "https")
 
 
 def looks_like_url(value) -> bool:
-    """Whether this argument names a URL to fetch rather than a file on disk."""
+    """Whether this argument names a URL to fetch rather than a file on disk.
+
+    A host is required as well as a scheme. 'urlparse' reads 'https:firmware.bin'
+    as the scheme 'https' with no authority at all, and that is a file name a
+    shell will hand over verbatim - so scheme alone would send a local file off
+    to be fetched from nowhere.
+    """
     if not isinstance(value, str):
         return False
     try:
-        return urlparse(value).scheme.lower() in URL_SCHEMES
+        parsed = urlparse(value)
     except ValueError:
         return False
+    return parsed.scheme.lower() in URL_SCHEMES and bool(parsed.netloc)
 
 
 def filename_from_url(url: str, fallback: str = "download") -> str:

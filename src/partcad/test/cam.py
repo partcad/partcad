@@ -110,7 +110,18 @@ class CamTest(Test):
             declared.append("file:%s@%s" % (config.get("fileFrom"), declared_hash(config)))
         for ref in pc_software.resolved_software_refs(shape.project_name, config):
             _project, software = pc_software.lookup(ctx, ref, quiet=True)
-            declared.append("%s@%s" % (ref, "" if software is None else software.declared_hash()))
+            if software is None:
+                declared.append("%s@" % ref)
+            else:
+                # Where the file comes from, not only which bytes are expected:
+                # 'software_failure()' reaches its verdict through
+                # 'unreproducible_reason()', which reads 'fileFrom' as well. A
+                # package that commits the image it used to fetch and drops
+                # 'fileFrom' leaves 'declared_hash()' at None throughout, so
+                # without this the key would not move and the cached failure
+                # would be handed back for a declaration that now passes. Line
+                # above folds it in for the shape's own file, for this reason.
+                declared.append("%s@%s@%s" % (ref, software.config.get("fileFrom"), software.declared_hash()))
         if not declared:
             # Nothing beyond the shape itself was read, so nothing is added:
             # an object that declares neither keys exactly as it always has,

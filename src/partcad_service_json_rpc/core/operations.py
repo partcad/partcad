@@ -1607,6 +1607,11 @@ def _bom_table(items: list) -> str:
             source = item.get("package") or ""
             if item.get("revision"):
                 source = "%s@%s" % (source, item["revision"])
+            elif item.get("fileHash"):
+                # No revision to name it by -- a package with no source tree of
+                # its own has none -- so the hash of the file it pins is what is
+                # left to identify a fetched image with.
+                source = "%s %s" % (source, item["fileHash"])
         elif item.get("vendor") and item.get("sku"):
             # What to order, for the items that say so: buying one needs the
             # vendor and the SKU, not the name PartCAD knows it by.

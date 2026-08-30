@@ -523,15 +523,21 @@ def software_blocks(project, packages, dir_path, level=2) -> list:
             )
         )
         blocks.append(
+            # 'File hash' earns its column: the revision beside it identifies a
+            # file the package carries, but a package with no source tree of its
+            # own has no revision to report, and then a fetched image is
+            # identified by its 'fileHash' or by nothing at all.
             doc.Table(
-                columns=["Software", "Count", "Version", "Package revision", "Description"],
-                aligns=["left", "right", "left", "left", "left"],
+                columns=["Software", "Count", "Version", "Package revision", "File hash", "Description"],
+                aligns=["left", "right", "left", "left", "left", "left"],
                 rows=[
                     [
                         name,
                         entries[name]["count"],
-                        entries[name].get("version") or "",
+                        # Not 'or ""': a numeric "version: 0" is a version.
+                        "" if entries[name].get("version") is None else entries[name]["version"],
                         entries[name].get("revision") or "",
+                        entries[name].get("fileHash") or "",
                         entries[name].get("desc") or "",
                     ]
                     for name in sorted(entries.keys())
