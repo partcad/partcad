@@ -306,7 +306,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     # The suite is sharded BEHAVE_SHARDS ways, so a single shard is a fraction
     # of the old whole-suite runtime (which used to hit the 120m cap on
-    # Windows). 60m leaves generous margin for the slowest shard.
+    # Windows). The shards are balanced by measured runtime
+    # (dev-tools/behave_durations.json), which puts every one of them at ~33
+    # minutes of features plus ~6 minutes of job setup on the slowest image.
+    # 60m is roughly a third of margin over that. Before the split was measured
+    # rather than counted, shard 4 took 55 minutes of features on
+    # windows-latest and was cancelled here.
     timeout-minutes: 60
 
     steps:
@@ -347,9 +352,12 @@ jobs:
           export PYTHONUTF8=1
           export PYTHONIOENCODING=utf-8
 
-          # This shard's slice of the feature files (balanced by scenario
-          # count). Across all shards every feature runs; sharding only changes
-          # how many run in parallel.
+          # This shard's slice of the feature files, balanced by how long each
+          # feature was measured to take. Across all shards every feature runs;
+          # sharding only changes how many run in parallel. The summary prints
+          # every shard's predicted minutes, so a split that has drifted away
+          # from the measurements is visible in the log of any behave job.
+          python dev-tools/behave_shard.py --shards "$BEHAVE_SHARDS" --summary
           FEATURES=$(python dev-tools/behave_shard.py --shards "$BEHAVE_SHARDS" --index "$MATRIX_SHARD")
           echo "Shard $MATRIX_SHARD/$BEHAVE_SHARDS runs:"
           printf '  %s\n' $FEATURES
