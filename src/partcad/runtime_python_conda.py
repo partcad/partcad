@@ -361,7 +361,22 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     shell=False,
                     encoding="utf-8",
                 )
-                _, stderr = p.communicate(timeout=300)
+                try:
+                    _, stderr = p.communicate(timeout=300)
+                except subprocess.TimeoutExpired:
+                    # communicate() does not kill the child when its timeout
+                    # passes, so simply returning here would leave "conda clean"
+                    # running against the very package cache the retry is about
+                    # to solve from -- two conda processes writing one cache,
+                    # which is a worse position than the corrupt entry that got
+                    # us here. Kill it, then reap it with a second communicate()
+                    # (no input: that is undefined after a timeout) so the pipes
+                    # are closed and the return code is collected before the
+                    # caller moves on.
+                    p.kill()
+                    p.communicate()
+                    pc_logging.warning("conda clean timed out and was killed; the package cache is unchanged")
+                    return
             if p.returncode != 0:
                 pc_logging.warning("conda clean exited %s: %s" % (p.returncode, (stderr or "").strip()))
             else:
@@ -431,13 +446,21 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     # had already recovered, rendered everything and finished.
                     if not stderr is None and stderr.strip() != "":
                         self.conda_last_error = stderr.strip()
+                        # A corrupt cache is asked about first, and not nested
+                        # under the sporadic check: the two lists share only
+                        # "Found incorrect download", so a failure that names
+                        # only the extraction or the record file would fail the
+                        # sporadic test and fall through to a bare warning --
+                        # left uncleaned, and then retried by the caller against
+                        # the very cache that failed it.
+                        if _is_corrupt_cache(stderr):
+                            pc_logging.warning("conda env install error (dropping the cache and retrying): %s" % stderr)
+                            self._clean_package_cache()
+                            attempts += 1
+                            continue
                         # Handle most common sporadic conda/mamba failures
                         if any(marker in stderr for marker in _SPORADIC_CONDA_ERRORS):
                             pc_logging.warning("conda env install error (retrying): %s" % stderr)
-                            # A retry against the same broken cache reproduces
-                            # the same failure, so drop it first.
-                            if _is_corrupt_cache(stderr):
-                                self._clean_package_cache()
                             attempts += 1
                             continue
                         pc_logging.warning("conda env install error: %s" % stderr)

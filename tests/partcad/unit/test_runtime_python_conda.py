@@ -18,6 +18,7 @@ arguments, and reproducing it for real means a conda solve per case.
 
 import os
 import pathlib
+import subprocess
 
 import pytest
 
@@ -412,4 +413,78 @@ def test_a_clean_that_reports_failure_is_only_a_warning(tmp_path, scripted_comma
     runtime._clean_package_cache()
 
     assert [command[1] for command in commands] == ["clean"], commands
+    assert pc_logging.had_errors is False
+
+
+# ---- each corrupt-cache marker on its own -------------------------------------
+#
+# The two marker lists share only "Found incorrect download". So a create
+# failure naming just the extraction or just the record file passes no sporadic
+# test, and if the cache check were nested under that one it would fall through
+# to a bare warning: uncleaned, then retried by the caller against the cache
+# that failed it. Each marker is therefore driven on its own here rather than
+# through the real three-line message, which happens to carry all of them.
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "Found incorrect download: pycairo. Aborting\n",
+        "warning  libmamba Extracted package cache '/x/pycairo' has invalid 'repodata_record.json' file\n",
+        "error    libmamba Error when extracting package: filesystem error: cannot remove all\n",
+    ],
+)
+def test_each_corrupt_cache_marker_alone_cleans_and_retries_the_create(tmp_path, scripted_commands, stderr):
+    commands, script = scripted_commands
+    script.append((0, "", stderr))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert [command[1] for command in commands] == ["create", "clean", "create", "install"], commands
+    assert pc_logging.had_errors is False
+
+
+# ---- a clean that will not finish ---------------------------------------------
+
+
+class _HangingProcess:
+    """A process whose communicate() times out until it is killed.
+
+    subprocess.communicate() does not kill the child when its timeout passes, so
+    what matters is that the caller does, and then reaps it.
+    """
+
+    returncode = None
+
+    def __init__(self):
+        self.killed = False
+        self.reaped = False
+
+    def communicate(self, *args, **kwargs):
+        if not self.killed:
+            raise subprocess.TimeoutExpired(cmd="conda clean", timeout=kwargs.get("timeout", 300))
+        self.reaped = True
+        self.returncode = -9
+        return "", ""
+
+    def kill(self):
+        self.killed = True
+
+
+def test_a_clean_that_times_out_is_killed_and_reaped(tmp_path, monkeypatch):
+    """Otherwise 'conda clean' keeps writing the cache the retry solves from.
+
+    Two conda processes on one package cache is a worse place to be than the
+    corrupt entry that started this, so the timeout may not simply be reported
+    and walked away from.
+    """
+    hanging = _HangingProcess()
+    monkeypatch.setattr(runtime_python_conda.subprocess, "Popen", lambda *a, **k: hanging)
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime._clean_package_cache()  # must not raise
+
+    assert hanging.killed is True, "a timed-out conda clean was left running"
+    assert hanging.reaped is True, "the killed process was never reaped"
     assert pc_logging.had_errors is False
