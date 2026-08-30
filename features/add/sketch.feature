@@ -275,3 +275,22 @@ Feature: `pc add sketch` command
   #     parts:
   #     assemblies:
   #     """
+
+  @cadquery @success
+  Scenario: Add a sketch from a URL, pinned by the hash of what came back
+    # A sketch cannot be bought by vendor and SKU, so a fetched one is
+    # reproducible only if it says which bytes it expects. `pc add` fetches once
+    # and writes that hash, so the declaration is pinned from the start.
+    Given "outline.py" is served over HTTP with content:
+      """
+      import cadquery as cq
+      shape = cq.Workplane("XY").rect(20, 10)
+      show_object(shape)
+      """
+    When I run "partcad add sketch cadquery $PC_TEST_HTTP_URL/outline.py"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Sketch 'outline' added to the project."
+    And a file named "partcad.yaml" should contain "fileFrom: url"
+    And a file named "partcad.yaml" should contain "fileHash: sha256:86915b0c8b1e080d45b1bcd0e5aab2aaa7f2db390bce9f38592af712a445bd31"
+    # Not kept: the declaration says where to fetch it, `pc install` does so.
+    And a file named "outline.py" should not exist

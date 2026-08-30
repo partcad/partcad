@@ -41,3 +41,7 @@ test-results/
 *.code-workspace
 # Materialized (symlink-free) plugin artifact produced by ai-agents/scripts/materialize.sh
 /ai-agents/.build
+# Fetched by 'fileFrom: url' in examples/produce_part_kicad -- the package
+# deliberately does not carry it (see its 'software:' section), and an untracked
+# copy left behind by 'pc install' would trip the rendered-examples check.
+/examples/produce_part_kicad/arduino-cli-install.sh

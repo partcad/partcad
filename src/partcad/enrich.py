@@ -65,6 +65,9 @@ ENRICH_IGNORED_PROPERTIES = frozenset(
         "path",
         "fileFrom",
         "fileUrl",
+        # ... and which bytes that definition expects to be handed. An enrich
+        # fetches nothing, so pinning a download from one pins nothing.
+        "fileHash",
         "url",
         "dependencies",
         # What it is built with

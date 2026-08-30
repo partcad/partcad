@@ -38,6 +38,9 @@ There are many ways to produce a PartCAD model that can be consumed by others.
   - [Assembly YAML (ASSY) files](./produce_assembly_assy/)
   - [URDF files](./produce_assembly_urdf/)
 
+- Ship software with the hardware:
+  - [Firmware images and other files a product ships with](./produce_software/)
+
 ## Get (consume) existing models
 
 Below are some examples of consuming existing modules:

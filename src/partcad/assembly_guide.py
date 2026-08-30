@@ -465,9 +465,9 @@ def exploded_assembly(step: GuideStep) -> Assembly:
 def bom_blocks(project, grouped, dir_path, level=2) -> list:
     """The bill of materials, as document blocks.
 
-    The same section, whichever document asks for it: every part and every
-    sub-assembly the assembly is made of, grouped by the package they come from
-    and counted.
+    The same section, whichever document asks for it: every part, every
+    sub-assembly and every piece of software the assembly is made of, grouped by
+    the package they come from and counted.
     """
     blocks = []
     for title, column, packages in (
@@ -496,6 +496,54 @@ def bom_blocks(project, grouped, dir_path, level=2) -> list:
                     ],
                 )
             )
+    blocks += software_blocks(project, grouped.get("software") or {}, dir_path, level=level)
+    return blocks
+
+
+def software_blocks(project, packages, dir_path, level=2) -> list:
+    """The software section of a bill of materials.
+
+    Its own table rather than another column on the parts one, because what
+    identifies a file is not what identifies a part. A part is identified by its
+    name: whoever reads the BoM goes and gets that part. A firmware image is a
+    file that its package can publish again tomorrow, so the line has to say
+    *which* one - hence the revision of the source package on every row, beside
+    the version and the hash the declaration pins.
+    """
+    if not packages:
+        return []
+    blocks = [doc.Heading("Software", level=level)]
+    for package_name in sorted(packages.keys()):
+        entries = packages[package_name]
+        blocks.append(
+            doc.Heading(
+                package_name,
+                level=level + 1,
+                url=package_document_link(project, package_name, dir_path),
+            )
+        )
+        blocks.append(
+            # 'File hash' earns its column: the revision beside it identifies a
+            # file the package carries, but a package with no source tree of its
+            # own has no revision to report, and then a fetched image is
+            # identified by its 'fileHash' or by nothing at all.
+            doc.Table(
+                columns=["Software", "Count", "Version", "Package revision", "File hash", "Description"],
+                aligns=["left", "right", "left", "left", "left", "left"],
+                rows=[
+                    [
+                        name,
+                        entries[name]["count"],
+                        # Not 'or ""': a numeric "version: 0" is a version.
+                        "" if entries[name].get("version") is None else entries[name]["version"],
+                        entries[name].get("revision") or "",
+                        entries[name].get("fileHash") or "",
+                        entries[name].get("desc") or "",
+                    ]
+                    for name in sorted(entries.keys())
+                ],
+            )
+        )
     return blocks
 
 
@@ -550,7 +598,7 @@ def package_author(project):
 
 async def build_readme_document_async(project, assembly, images: ImageSource, dir_path=None) -> doc.Document:
     """The markdown document of an assembly: what it is made of."""
-    grouped = await assembly.get_bom_grouped_async()
+    grouped = await assembly.get_bom_grouped_async(project.ctx)
 
     blocks = [doc.Heading(assembly.name, level=1)]
     if assembly.desc:
@@ -583,7 +631,7 @@ async def build_guide_document_async(ctx, project, assembly, images: ImageSource
     a page for each of its steps, and a page of links to close.
     """
     sections = await collect_sections_async(ctx, assembly)
-    grouped = await assembly.get_bom_grouped_async()
+    grouped = await assembly.get_bom_grouped_async(ctx)
 
     pages = [await _title_page(project, assembly, images, sections)]
     pages.append(doc.Page(title="Bill of Materials", blocks=_bom_page_blocks(project, grouped, dir_path)))
@@ -761,8 +809,11 @@ def _links_page(project, assembly, grouped, dir_path):
 def _supplier_packages(project, grouped):
     """The packages that supply enough of this assembly to be worth linking to."""
     counts = {}
-    for packages in grouped.values():
-        for package_name, entries in packages.items():
+    # Parts and sub-assemblies only: this counts what somebody has to source,
+    # and the label below says "parts". Where a package's software comes from is
+    # already a link of its own, in the software section of the BoM.
+    for kind in ("parts", "assemblies"):
+        for package_name, entries in (grouped.get(kind) or {}).items():
             if package_name == project.name:
                 continue
             counts[package_name] = counts.get(package_name, 0) + sum(entry["count"] for entry in entries.values())

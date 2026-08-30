@@ -82,6 +82,74 @@ Feature: `pc bom` command
     And STDOUT should not contain "UNIT-1"
 
   @success @pc-bom
+  Scenario: The bill of materials lists the software the hardware ships with
+    Given a file named "partcad.yaml" with content:
+      """
+      software:
+        cube-firmware:
+          desc: What a cube runs
+          version: "2.0.0"
+          path: cube-firmware.bin
+
+      parts:
+        cube:
+          type: cadquery
+          desc: A cube
+          software:
+            - cube-firmware
+
+      assemblies:
+        unit:
+          type: assy
+          desc: A pair of cubes
+      """
+    And a file named "cube-firmware.bin" with content:
+      """
+      PARTCAD-BEHAVE-FIRMWARE
+      """
+    When I run "pc bom :unit"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Software:"
+    And STDOUT should contain "//:cube-firmware"
+    # Two cubes to flash, counted apart from the two cubes themselves.
+    And STDOUT should contain "Total: 2"
+    And STDOUT should contain "Software total: 2"
+
+  @success @pc-bom
+  Scenario: A software line item names the package it came from, and its revision
+    Given a file named "partcad.yaml" with content:
+      """
+      software:
+        cube-firmware:
+          desc: What a cube runs
+          path: cube-firmware.bin
+
+      parts:
+        cube:
+          type: cadquery
+          desc: A cube
+          software:
+            - cube-firmware
+
+      assemblies:
+        unit:
+          type: assy
+          desc: A pair of cubes
+      """
+    And a file named "cube-firmware.bin" with content:
+      """
+      PARTCAD-BEHAVE-FIRMWARE
+      """
+    When I run "pc -q bom --json :unit"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain '"kind": "software"'
+    And STDOUT should contain '"package": "//"'
+    # Present whether or not this sandbox is a git repository: outside one there
+    # is no commit to name, and the line says so rather than leaving it out.
+    And STDOUT should contain '"revision"'
+    And STDOUT should contain '"totalSoftware": 2'
+
+  @success @pc-bom
   Scenario: A part is not an assembly
     When I run "pc bom :cube"
     Then the command should exit with a non-zero status code

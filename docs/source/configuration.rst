@@ -216,6 +216,9 @@ PartCAD :ref:`packages` may contain the following objects:
 
 - :ref:`assemblies` are instructions how to put parts and other assemblies together to be used as a single object.
 
+- :ref:`software` is what the product ships with that is not geometry: a firmware image, a binary, a disk image.
+  It is always a file.
+
 - :ref:`providers` are implementations of a way to get parts and assemblies (to purchase them or to manufacture them).
 
 ===============
@@ -411,9 +414,100 @@ not expected to be a part of the package, PartCAD does not complain about it
 being missing while the package is loaded.
 
 ``fileFrom`` and ``fileUrl`` must be declared together.
-They are recognized in :ref:`parts`, :ref:`sketches` and :ref:`assemblies`
+They are recognized in :ref:`parts`, :ref:`sketches`, :ref:`assemblies`
 (an assembly's source file is pulled the same way, whether it is an ``.assy``
-file or a CAD file).
+file or a CAD file) and :ref:`software`.
+
+.. _file-hash:
+
+Pinning what is downloaded
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A URL serves whatever it serves at the moment it is fetched. The same
+declaration can produce a different file tomorrow -- the vendor revises the
+model, the branch moves, the host is not the one you thought. ``fileHash``,
+beside ``fileUrl``, pins the bytes:
+
+.. code-block:: yaml
+
+  parts:
+    bolt:
+      type: step
+      fileFrom: url
+      fileUrl: https://example.com/vendor/catalog/bolt.step
+      fileHash: sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
+
+The download is refused unless the file hashes to this, and the bytes that were
+refused are deleted rather than left behind -- the next run skips the download
+when the file is already there, and would otherwise reuse the file the hash had
+just rejected.
+
+Write it as ``<algorithm>:<digest>`` over ``md5``, ``sha1``, ``sha256`` or
+``sha512``. A bare digest works too, and the algorithm is read from its length,
+which is the form most vendors publish.
+
+``fileHash`` is recognized wherever ``fileFrom`` is, and it is **optional but
+required for reproducibility**. The schema never demands one, of any kind of
+object, and nothing refuses to load, build or lint an object that omits it.
+What such an object cannot do is promise that the next run produces the same
+thing, and manufacturing is repetition -- so ``pc test`` refuses to call it
+manufacturable (see :ref:`reproducibility`). Pull a vendor's model down and
+never claim it can be made, and none of this touches you.
+
+``pc add`` writes one for you. Given a URL instead of a path it fetches the file
+once and records the hash of what came back, so an object added that way is
+pinned from the moment it exists.
+
+A file served by a repository plugin -- what PartCAD uses for a package with no
+source tree of its own -- may carry a ``fileHash`` too, and it is verified the
+same way. It is not yet required, because nothing has been put in place for such
+a package to pin what its plugin serves.
+
+This has nothing to do with the hashes PartCAD computes for itself -- a shape's
+cache key, or the commit a package was read at. Those identify something PartCAD
+built or fetched; ``fileHash`` states, in advance, which bytes a package is
+asking for.
+
+.. _reproducibility:
+
+Reproducibility and manufacturability
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Manufacturing is repetition: the run after this one has to produce the same
+thing, so everything that goes into a product has to be gettable a second time
+and be the same thing. There are three ways an object can promise that, and the
+``cam`` check of ``pc test`` fails one that offers none of them:
+
+- **It is bought.** A ``vendor`` and an ``sku`` name a thing to order, and
+  ordering it again is what "the same again" means for it -- whatever file the
+  declaration also carries is a drawing of what arrives rather than the identity
+  of it. Only :ref:`parts` and :ref:`assemblies` can say this; the schema gives
+  ``vendor``/``sku`` to those two alone.
+- **The package carries the file.** Its revision identifies the file exactly.
+- **The file is pinned** with a ``fileHash``.
+
+A :ref:`sketch <sketches>` cannot be bought, so for it the second and third are
+the whole of it -- nothing manufactures a drawing, but a part extruded from one
+is no more repeatable than the drawing was. :ref:`software` is the same case,
+and for the same reason: a firmware image nobody can identify makes the bill of
+materials that names it worthless.
+
+.. code-block:: text
+
+  Test failed: //robot:bracket: cam: It is not reproducible: it is fetched with
+  'fileFrom: url', declares no 'fileHash', and names no vendor and SKU to order
+  it by, so nothing says which one it is
+
+The rule is about being *identified*, not about being available -- the file may
+download perfectly well and still be a different file than it was last month.
+
+Software is the one kind of object where a missing ``fileHash`` is reported by
+``pc lint`` as well, before anything is built or fetched at all.
+
+A file served by a repository plugin is exempt from all of this for now. A
+``fileHash`` given for one is verified like any other; it is simply not required
+yet, because nothing has been put in place for a plugin-backed package to pin
+what its plugin serves.
 
 Parameters
 ----------
@@ -1851,6 +1945,187 @@ an Assembly YAML file) is not an object of any package, so there is no name to
 order it by. Such an assembly is always procured as its contents, and declaring
 a vendor for it has no effect.
 
+.. _software:
+
+========
+Software
+========
+
+A product is rarely hardware alone: the board in it runs a firmware image, the
+controller boots a disk image, the tool that talks to it is a binary on the
+host. ``software`` declares those as objects of the package, beside its parts
+and its assemblies.
+
+Software is **not** a shape. There is no geometry to render, to export or to
+measure, and none of what :ref:`parts` and :ref:`assemblies` can do applies to
+it. What it is, always, is a *file*:
+
+.. code-block:: yaml
+
+  software:
+    <software name>:
+      type: raw # (optional) "raw" is the default and the only type so far
+      desc: <(optional) textual description>
+      version: <(optional) the version of this software>
+      url: <(optional) where to read about it>
+      path: <(optional) the file, relative to the package>
+      fileFrom: <(optional) where to fetch the file from; see "Files">
+      fileUrl: <(optional) the URL to fetch it from>
+      fileHash: <the bytes to expect; required with "fileFrom", see "Files">
+
+The short form declares nothing but the path:
+
+.. code-block:: yaml
+
+  software:
+    service-tool: tools/service-tool.sh
+
+``path`` behaves as it does everywhere else (see `Files`_): without it the file
+is the object's own name, and a file the package does not carry is declared with
+``fileFrom``/``fileUrl`` and fetched lazily. The default path carries no
+extension, because a firmware image is as likely to be a ``.img``, a ``.uf2`` or
+nothing at all as it is a ``.bin``.
+
+``raw`` is the file handed over as it is: PartCAD carries it, says which one it
+is, and what to do with it is the reader's business. Every type is a file and
+that will not change -- the types that come after ``raw`` name the *procedure*
+the file goes through rather than a different kind of object, associating a
+specific firmware flashing procedure (which tool, which bootloader, which reset
+dance) with the image.
+
+Which software an object ships with
+-----------------------------------
+
+A part or an assembly says what it ships with in its own ``software`` list. A
+bare name is software of the same package; a qualified one is software of
+another:
+
+.. code-block:: yaml
+
+  parts:
+    controller:
+      type: step
+      software:
+        - controller-firmware
+        - //vendor/blobs:radio-firmware
+
+  assemblies:
+    device:
+      type: assy
+      # The host-side tool is the whole device's, not any one board's.
+      software:
+        - service-tool
+
+``software`` is optional, and most parts declare none. A single one may be
+written on its own instead of as a list (``software: controller-firmware``).
+Declaring it is what puts the file into the bill of materials of every assembly
+the part ends up in, and what makes ``pc test`` insist the file be obtainable
+(see `Manufacturability`_ below).
+
+The reference is resolved against the package that *wrote* it, so an ``alias``
+or an ``enrich`` of that part in another package still points at the same file.
+
+In the bill of materials
+------------------------
+
+Every assembly's bill of materials lists the software of the parts and
+sub-assemblies it is made of, and its own, under a heading of its own:
+
+.. code-block:: shell
+
+  $ pc bom :device
+  Bill of materials of //robot:device:
+          //robot:controller  2  The controller board
+  Total: 2
+  Software:
+          //robot:controller-firmware  2  //robot@8f1c...  The image the board is flashed with
+          //robot:service-tool         1  //robot@8f1c...
+  Software total: 3
+
+Each software line names the package it came from **and the revision of that
+package** -- the commit its files were read at. A bracket is the same bracket
+whenever it is fetched; a firmware image is a different file as soon as its
+package publishes again, so the revision is what makes the line mean something.
+A package that is not in a git repository has no revision, and the line says so
+rather than inventing one.
+
+The count is how many times something in the assembly needs it: three boards
+running one image is a count of three, the same way three of anything else is.
+A sub-assembly that is bought whole -- it declares a vendor and an SKU, and a
+supplier has it available -- is not expanded, so its firmware is no more a line
+item than its screws are.
+
+Software is not procured: ``pc supply`` and the manufacturability tests walk the
+hardware only, because nobody sells a firmware image.
+
+In the package's README
+-----------------------
+
+``pc render -t readme`` lists the software of a package in a table of its own,
+saying which file each one is, the version it declares, and the hash it is
+pinned to. The file is linked where the package carries it; where it is fetched,
+the URL it comes from is shown instead.
+
+Which file is it?
+-----------------
+
+The whole point of listing software beside the hardware is being able to say
+which file went into a product. There are two ways a package can be that
+specific, and ``pc lint`` requires one of them (the ``Software`` check):
+
+- The package **carries the file**. It is content of the repository, so the
+  revision recorded beside every software line item identifies it exactly.
+- The package **pulls it in** with ``fileFrom``, and pins it with ``fileHash``.
+  Without a hash nothing identifies it: the URL serves whatever it serves at the
+  moment it is fetched, and the same package revision produces a different image
+  tomorrow.
+
+.. code-block:: yaml
+
+  software:
+    # In this repository: its revision says which file it is.
+    controller-firmware:
+      path: controller-firmware.bin
+
+    # Not in this repository: pinned by hash.
+    radio-firmware:
+      fileFrom: url
+      fileUrl: https://example.com/vendor/radio-1.4.bin
+      fileHash: sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
+
+``fileHash`` is not a software-specific idea: it pins the bytes of any file a
+package fetches rather than carries, and the download is refused unless they
+match (see :ref:`file-hash` for the spelling and the details). Everywhere it is
+required for the object to be manufacturable; software is the one kind where a
+missing one is reported by ``pc lint`` as well, before anything is built.
+
+See ``examples/produce_software`` for a package that does both, and
+``examples/produce_part_kicad`` for a board that pulls its host-side tool from a
+public URL.
+
+Manufacturability
+-----------------
+
+A board nobody can flash is not a board anybody can make. So the manufacturing
+test (``pc test``, the ``cam`` check) asks the same question of a part's
+``software`` that it asks of everything else the part needs, and the part fails
+unless all of it holds:
+
+- every reference resolves to a software object;
+- the file is there -- carried by the package, or fetched successfully;
+- it matches its ``fileHash``, where one is declared;
+- and the declaration is reproducible at all, which is the same
+  ``fileFrom``-needs-a-``fileHash`` rule the part's own file is held to
+  (:ref:`reproducibility`).
+
+That applies whether the part is bought or made: buying the board does not
+answer the question of which image goes on it. An assembly that declares
+software of its own is held to the same rule; its parts' software is checked by
+their own run of the test.
+
+Software is otherwise absent from procurement -- ``pc supply`` walks the
+hardware only, because nobody sells a firmware image.
+
 .. _providers:
 
 =========
@@ -2015,7 +2290,7 @@ or a new piece of metadata needs no new API:
 
 - ``objects/<kind>`` -- all objects of a kind, as ``{name: config, ...}`` (kinds
   are ``sketch``, ``part``, ``assembly``, ``interface``, ``provider``,
-  ``repository``)
+  ``repository``, ``software``)
 - ``objects/<kind>/<name>`` -- a single object's config, fetched without listing
   the whole repository
 - ``deps`` -- the names of the child packages

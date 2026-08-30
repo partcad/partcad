@@ -36,6 +36,8 @@ from . import (
     project_config,
     sketch,
     sketch_config,
+    software as pc_software,
+    software_config,
 )
 from . import sketch_factory_alias as sfa
 from . import tags as pc_tags
@@ -59,7 +61,7 @@ if TYPE_CHECKING:
 # The kinds of first-class objects a package may contain, mapped to the
 # 'partcad.yaml' section that declares them. Kept as data so that introducing a
 # new kind of object does not require touching the per-kind accessor plumbing.
-OBJECT_KINDS = ("interface", "sketch", "part", "assembly", "provider", "repository", "partType")
+OBJECT_KINDS = ("interface", "sketch", "part", "assembly", "provider", "repository", "software", "partType")
 OBJECT_KIND_SECTIONS = {
     "interface": "interfaces",
     "sketch": "sketches",
@@ -67,6 +69,11 @@ OBJECT_KIND_SECTIONS = {
     "assembly": "assemblies",
     "provider": "providers",
     "repository": "repositories",
+    # 'software' is the one kind of object that is neither a shape nor a plugin:
+    # a file the product ships with (a firmware image, a binary) rather than
+    # geometry or a way of getting geometry. The section is named the same in
+    # the singular and the plural, which is why this entry looks like a no-op.
+    "software": "software",
     # A 'partType' is a package-defined way to construct parts (e.g. a wrapper
     # script). It is enumerable like any other object, but it is not a shape and
     # is never instantiated: parts whose 'type' references it are constructed by
@@ -105,10 +112,28 @@ def _has_running_loop() -> bool:
     return True
 
 
+# The file extension each object kind is written to, where it is not the kind's
+# own name. 'None' means the kind is not file-backed at all, so what the user
+# names is the object rather than a path. Lifted out of the 'add_*' methods
+# because the URL form of 'pc add' has to derive the same name from the last
+# segment of a URL, and two copies of these would name one file two ways.
+SECTION_EXTENSIONS = {
+    "sketches": {"cadquery": "py", "build123d": "py", "basic": None},
+    "parts": {"cadquery": "py", "build123d": "py", "chili3d": "chili", "sdf": "py"},
+    "assemblies": {},
+}
+
+
 # What '_skipped_by' returns for a declaration whose 'unless' PartCAD could not
 # read. Not a clause - nothing excluded it - but the object is dropped all the
 # same, and recorded as broken so that the reason reaches the user.
 INVALID_UNLESS = "<invalid 'unless'>"
+
+
+def _readme_cell(text) -> str:
+    """A value made safe to put in one cell of a generated markdown table."""
+    text = "" if text is None else str(text)
+    return text.replace("|", "\\|").replace("\n", "<br/>")
 
 
 @telemetry.instrument()
@@ -118,6 +143,7 @@ class Project(project_config.Configuration):
     assemblies: dict[str, assembly.Assembly]
     providers: dict[str, plugin_provider.Provider]
     repositories: dict[str, plugin_repository.Repository]
+    software: dict[str, pc_software.Software]
 
     class InterfaceLock(object):
         def __init__(self, prj, interface_name: str):
@@ -196,6 +222,20 @@ class Project(project_config.Configuration):
                 prj.repository_locks[repository_name] = threading.Lock()
             self.lock = prj.repository_locks[repository_name]
             prj.repository_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
+
+    class SoftwareLock(object):
+        def __init__(self, prj, software_name: str):
+            prj.software_locks_lock.acquire()
+            if software_name not in prj.software_locks:
+                prj.software_locks[software_name] = threading.Lock()
+            self.lock = prj.software_locks[software_name]
+            prj.software_locks_lock.release()
 
         def __enter__(self, *_args):
             self.lock.acquire()
@@ -290,6 +330,10 @@ class Project(project_config.Configuration):
         self.repository_locks = {}
         self.repository_locks_lock = threading.Lock()
 
+        self.software = {}
+        self.software_locks = {}
+        self.software_locks_lock = threading.Lock()
+
         # The assemblies already built to materialize a part of theirs (see
         # '_materialize_derived_part'), and the lock that keeps two threads from
         # building the same one.
@@ -370,6 +414,10 @@ class Project(project_config.Configuration):
         override it to instantiate lazily, on demand, instead of enumerating
         and instantiating everything up front.
         """
+        # First: software is a file the package ships, not geometry, so nothing
+        # here depends on it having been read, and a part that references one
+        # resolves it by name when asked rather than at load time.
+        self.init_software()
         self.init_sketches()
         self.init_interfaces()  # After sketches
         self.init_mates()  # After interfaces
@@ -478,6 +526,10 @@ class Project(project_config.Configuration):
     @property
     def repository_configs(self) -> dict:
         return self.object_configs("repository")
+
+    @property
+    def software_configs(self) -> dict:
+        return self.object_configs("software")
 
     # TODO(clairbee): Implement get_cover()
     # def get_cover(self):
@@ -716,6 +768,9 @@ class Project(project_config.Configuration):
     def get_repository_config(self, repository_name):
         return self.object_config("repository", repository_name)
 
+    def get_software_config(self, software_name):
+        return self.object_config("software", software_name)
+
     def get_part_type_config(self, part_type_name):
         return self.object_config("partType", part_type_name)
 
@@ -767,6 +822,15 @@ class Project(project_config.Configuration):
             plugin_config.PluginConfiguration,
             None,
             self.get_repository_config,
+        )
+
+    def init_software(self):
+        return self.init_objects(
+            "software",
+            self.software_configs,
+            software_config.SoftwareConfiguration,
+            None,
+            self.get_software_config,
         )
 
     def record_broken_object(self, kind: str, name: str, reason) -> None:
@@ -892,6 +956,9 @@ class Project(project_config.Configuration):
 
     def init_repository_by_config(self, config, source_project=None):
         self.init_object_by_config("repository", plugin_config.PluginConfiguration, None, config, source_project)
+
+    def init_software_by_config(self, config, source_project=None):
+        self.init_object_by_config("software", software_config.SoftwareConfiguration, None, config, source_project)
 
     def materialize_part_by_config(self, config) -> Optional[Part]:
         """The part an assembly materializes, created on first use.
@@ -1244,6 +1311,20 @@ class Project(project_config.Configuration):
             func_params,
         )
 
+    def get_software(self, software_name, func_params=None, quiet=False) -> Optional[pc_software.Software]:
+        return self.get_object(
+            "software",
+            Project.SoftwareLock,
+            self.software,
+            self.software_configs,
+            self.get_software_config,
+            software_config.SoftwareConfiguration,
+            None,
+            software_name,
+            func_params,
+            quiet=quiet,
+        )
+
     def get_object(
         self,
         factory_name: str,
@@ -1550,13 +1631,19 @@ class Project(project_config.Configuration):
         if not os.path.isabs(root):
             root = os.path.abspath(root)
 
-        if not path.startswith(root):
+        # A path boundary, not a string prefix: '/work/pkg-other/fw.bin' starts
+        # with '/work/pkg' and is not in it, and 'relpath' would then hand back
+        # '../pkg-other/fw.bin' to be written down as the object's path. This is
+        # the test 'rel_path()' above already makes.
+        if not (path == root or path.startswith(root + os.sep)):
             pc_logging.error("Can't add files outside of the package")
             return False, None, None
 
         path = os.path.relpath(path, root).replace("\\", "/")
         name = path
-        if name.lower().endswith((".%s" % extension).lower()):
+        # 'extension' is None for a caller that wants the path back untouched
+        # (software, whose file has no extension PartCAD can predict).
+        if extension and name.lower().endswith((".%s" % extension).lower()):
             name = name[: -len(extension) - 1]
 
         return True, path, name
@@ -1586,28 +1673,48 @@ class Project(project_config.Configuration):
             name = path
             path = None
 
-        yaml = ruamel.yaml.YAML()
-        yaml.preserve_quotes = True
-        with open(self.config_path) as fp:
-            config = yaml.load(fp)
-            fp.close()
-
         obj = {"type": kind, **component_config}
         if name == path:
             obj["path"] = path
 
-        found = False
-        for elem in config:
-            if elem == section:
-                config_section = config[section]
-                if config_section is None:
-                    config_section = {}
-                config_section[name] = obj
-                config[section] = config_section
-                found = True
-                break  # no need to iterate further
-        if not found:
-            config[section] = {name: obj}
+        return self.add_object_config(section, name, obj)
+
+    def extension_for(self, section: str, kind: str):
+        """The file extension objects of this kind are written to.
+
+        'None' where the kind is not file-backed; the kind's own name where
+        nothing says otherwise, which is the common case ('step' -> '.step').
+        """
+        by_kind = SECTION_EXTENSIONS.get(section, {})
+        return by_kind[kind] if kind in by_kind else kind
+
+    def add_object_config(self, section: str, name: str, obj: dict) -> bool:
+        """Write one object declaration into this package's 'partcad.yaml'.
+
+        The one place a declaration is added, so that a locally added file and
+        one fetched from a URL land in the file the same way, and so that
+        'ruamel' keeps the rest of the document as the author wrote it.
+        """
+        yaml = ruamel.yaml.YAML()
+        yaml.preserve_quotes = True
+        # Wide enough that nothing here is ever folded onto a second line. The
+        # default wraps at about 80 columns, which is narrower than a URL and
+        # narrower than a sha256 'fileHash' - and a URL split across two lines is
+        # both hard to read and easy to break while editing it by hand.
+        yaml.width = 4096
+        with open(self.config_path) as fp:
+            config = yaml.load(fp)
+            fp.close()
+
+        # A 'partcad.yaml' holding nothing at all parses as None.
+        if config is None:
+            config = {}
+
+        config_section = config.get(section)
+        if config_section is None:
+            config_section = {}
+        config_section[name] = obj
+        config[section] = config_section
 
         with open(self.config_path, "w") as fp:
             yaml.dump(config, fp)
@@ -1617,43 +1724,55 @@ class Project(project_config.Configuration):
 
     def add_sketch(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the sketch %s of type %s" % (self.rel_path(path), kind))
-        ext_by_kind = {
-            "cadquery": "py",
-            "build123d": "py",
-            "basic": None,
-        }
         return self._add_component(
             kind,
             path,
             "sketches",
-            ext_by_kind,
+            SECTION_EXTENSIONS["sketches"],
             config,
         )
 
     def add_part(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the part %s of type %s" % (self.rel_path(path), kind))
-        ext_by_kind = {
-            "cadquery": "py",
-            "build123d": "py",
-            "chili3d": "chili",
-            "sdf": "py",
-        }
         return self._add_component(
             kind,
             path,
             "parts",
-            ext_by_kind,
+            SECTION_EXTENSIONS["parts"],
             config,
         )
 
+    def add_software(self, path: str, config={}) -> bool:
+        """Declare a file of this package as software of it.
+
+        No 'kind' argument: 'raw' is the only type there is, and the types that
+        will join it name a flashing procedure rather than a file format. No
+        extension either - a firmware image is as likely to be a '.img' or
+        nothing at all as a '.bin' - so the path is recorded whole and the name
+        is its stem.
+        """
+        pc_logging.info("Adding the software %s" % self.rel_path(path))
+        valid, rel_path, _ = self._validate_path(path, None)
+        if not valid:
+            return False
+        # '_validate_path' answers where the path is, not what it is, and a
+        # directory is inside the package like any file. Software is always a
+        # file, so one written here would be refused by 'SoftwareFactoryFile' on
+        # the next load -- a declaration that never had a chance, reported far
+        # from the command that wrote it.
+        if not os.path.isfile(os.path.join(self.config_dir, rel_path)):
+            pc_logging.error("Software must be a file: %s" % self.rel_path(path))
+            return False
+        name = os.path.splitext(os.path.basename(rel_path))[0]
+        return self.add_object_config("software", name, {**config, "path": rel_path})
+
     def add_assembly(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the assembly %s of type %s" % (self.rel_path(path), kind))
-        ext_by_kind = {}
         return self._add_component(
             kind,
             path,
             "assemblies",
-            ext_by_kind,
+            SECTION_EXTENSIONS["assemblies"],
             config,
         )
 
@@ -2390,6 +2509,56 @@ class Project(project_config.Configuration):
             for name in shape_names:
                 shape = self.sketches[name]
                 lines += add_section(name, name, shape, render_cfg)
+
+        if self.software and "software" not in exclude:
+            # A table rather than the per-object sections above: software has no
+            # image to show and no parameters to enumerate, and what a reader
+            # needs of it - which file, which version, is it pinned - is a few
+            # short columns that are worth comparing side by side.
+            lines += ["## Software"]
+            lines += [""]
+            lines += [
+                "| Software | Version | File | Hash | Description |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+            for name in sorted(self.software.keys()):
+                software = self.software[name]
+                config = software.config
+                file_text = ""
+                if software.path:
+                    # Relative to the package, the way a part's source file is
+                    # linked above: a generated README lives in the package it
+                    # documents.
+                    file_path = os.path.relpath(software.path, self.config_dir)
+                    file_name = os.path.basename(software.path)
+                    if software.is_local_file():
+                        # The package carries the file, so the README can link
+                        # straight at it. What 'fileFrom' pulls in is not in the
+                        # repository at all, and a link to where it is not is
+                        # worse than the name of the file it will be saved as.
+                        file_text = "[%s](%s)" % (_readme_cell(file_name), _readme_cell(file_path))
+                    else:
+                        file_text = "`%s`" % _readme_cell(file_name)
+                        file_url = config.get("fileUrl")
+                        if file_url:
+                            file_text += " from [%s](%s)" % (
+                                _readme_cell(config.get("fileFrom", "url")),
+                                _readme_cell(file_url),
+                            )
+                declared_hash = software.declared_hash()
+                lines += [
+                    "| %s | %s | %s | %s | %s |"
+                    % (
+                        _readme_cell(name),
+                        # A numeric "version: 0" is a version like any other, and
+                        # the schema allows one; 'or ""' would render it blank.
+                        _readme_cell("" if config.get("version") is None else config.get("version")),
+                        file_text,
+                        "`%s`" % _readme_cell(declared_hash) if declared_hash else "",
+                        _readme_cell(software.desc or ""),
+                    )
+                ]
+            lines += [""]
 
         lines += [
             "<br/><br/>",

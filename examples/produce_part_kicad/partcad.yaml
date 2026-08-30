@@ -10,9 +10,45 @@ url: https://gitlab.com/kicad/libraries/kicad-templates/-/tree/master/Projects/A
 # bare 'arm': all three have to hold together for the part to be unbuildable.
 unless: [[arm, useDocker, useDockerKicad]]
 
+# A board is not just its geometry: it runs software, and the software is as
+# much a part of what ships as the copper is. 'software' declares that file as
+# an object of this package, and unlike a part it has no geometry at all -- it
+# is always a file. Here the package does not carry the file, so it says where
+# to fetch it from and pins it with 'fileHash': what a URL serves can change,
+# and the hash is the only thing that says this is the right file. The download
+# is refused if it hashes to anything else. The URL names a commit rather than a
+# branch or a tag for the same reason.
+#
+# 'fileHash' is not a software thing -- a part, a sketch or an assembly pins a
+# 'fileFrom' download exactly the same way, and 'pc test' requires it of
+# anything it is asked to call manufacturable: a file that may be a different
+# file tomorrow cannot be made again.
+#
+# 'raw' (the default) means PartCAD hands the file over as it is. The types that
+# will join it name the firmware flashing procedure the file goes through, never
+# another way of pointing at a file.
+software:
+  arduino-cli-installer:
+    desc: >
+      The official installer for arduino-cli, the host-side tool this board is
+      programmed with. Not carried by this package: it is fetched from Arduino's
+      own repository, at the commit tagged 1.3.1.
+    version: "1.3.1"
+    path: arduino-cli-install.sh
+    fileFrom: url
+    fileUrl: https://raw.githubusercontent.com/arduino/arduino-cli/08ff7e2b76b7cd6394c4d09420b10cf0592b4405/install.sh
+    fileHash: sha256:dfa8aa41202a3752f1a716d56584c24e7e93087b94c4ae8c50df50012ea6095d
+
 parts:
   Arduino_Nano:
    type: kicad
+   # What this part ships with, resolved to '//pub/examples/partcad/produce_part_kicad:arduino-cli-installer'.
+   # It is optional -- most parts declare none -- and declaring it puts the
+   # software into the bill of materials of every assembly this board ends up
+   # in, beside the board itself. `pc test` then requires the software to hold
+   # up before it will call the board manufacturable.
+   software:
+     - arduino-cli-installer
 
 render:
   svg:

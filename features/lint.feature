@@ -677,3 +677,82 @@ Feature: `pc lint` command
       """
     When I run "pc lint --file logo.assy --recursive"
     Then the command should exit with a status code of "2"
+
+  @success
+  Scenario: A part may pin the file it downloads
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A part whose STEP file is pulled from the vendor and pinned
+      parts:
+        bolt:
+          type: step
+          fileFrom: url
+          fileUrl: https://example.com/vendor/bolt.step
+          fileHash: sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+
+  @success
+  Scenario: A part that does not pin its download is not an error
+    # Only software is required to be pinned. Everywhere else it is the
+    # package's own choice, and demanding it would break every package that
+    # already pulls a vendor's file from a URL.
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A part whose STEP file is pulled from the vendor, unpinned
+      parts:
+        bolt:
+          type: step
+          fileFrom: url
+          fileUrl: https://example.com/vendor/bolt.step
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+
+  @failure
+  Scenario: Software pulled in from elsewhere has to be pinned by a fileHash
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package whose firmware is not in the package
+      software:
+        firmware:
+          desc: A vendor image nothing identifies
+          fileFrom: url
+          fileUrl: https://example.com/vendor/firmware.bin
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "software 'firmware' is fetched with 'fileFrom: url' and declares no 'fileHash'"
+
+  @success
+  Scenario: Software the package carries needs no hash
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package that carries its own firmware
+      software:
+        firmware:
+          desc: The image this package carries
+          path: firmware.bin
+      """
+    And a file named "firmware.bin" with content:
+      """
+      PARTCAD-BEHAVE-FIRMWARE
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+
+  @success
+  Scenario: Software pulled in with a fileHash passes
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package whose firmware is pinned
+      software:
+        firmware:
+          desc: A vendor image, pinned
+          fileFrom: url
+          fileUrl: https://example.com/vendor/firmware.bin
+          fileHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"

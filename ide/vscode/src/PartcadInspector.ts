@@ -91,6 +91,25 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
     }
 
     /**
+     * Show what a software object is, and render nothing.
+     *
+     * Software is a file the package ships - a firmware image, a disk image, a
+     * binary - and not geometry, so there is nothing for the PartCAD Viewer to
+     * draw and it is deliberately left alone: whatever shape it is showing stays
+     * on screen. That is why this does not go through 'inspect()', which exists
+     * to ask PartCAD for a render.
+     */
+    public async inspectSoftware(software: ItemData) {
+        // Forgotten rather than remembered, because the details on screen are no
+        // longer any item's: without this, inspecting the part that was shown
+        // before this software object would find its own name still recorded and
+        // skip re-posting, leaving the software details in view.
+        this.shownPackage = '';
+        this.shownItem = '';
+        await this._view?.webview.postMessage({ type: 'software', obj: software, params: {} });
+    }
+
+    /**
      * Render an item and show it in the PartCAD Viewer.
      *
      * PartCAD renders the item in its own process and pushes the result to the

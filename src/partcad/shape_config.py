@@ -30,6 +30,28 @@ class _NoDefault:
 NO_DEFAULT = _NoDefault()
 
 
+def final_config(obj) -> dict:
+    """The declaration an object resolves to, defensively.
+
+    'get_final_config()' rather than 'config', so that an alias and an enrich
+    answer for what they point at: neither says where a file comes from or what
+    software it ships with, and reading their own configuration would find
+    nothing and quietly conclude there is nothing to find.
+
+    Module-level and duck-typed because the callers are not all looking at a
+    'ShapeConfiguration' - a bill of materials walks whatever an assembly holds
+    - and because two copies of this would be two answers to one question.
+    """
+    get_final_config = getattr(obj, "get_final_config", None)
+    if get_final_config is None:
+        return obj.config
+    try:
+        return get_final_config()
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.debug("Failed to resolve the configuration of %s: %s" % (getattr(obj, "name", obj), e))
+        return obj.config
+
+
 class ShapeConfiguration:
     is_manufacturable: bool = False
 

@@ -59,6 +59,51 @@ isort --check src/partcad tests/partcad
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
 
+- **Software is not a shape** (`software.py`, `software_factory*.py`): a package's `software:` section declares
+  the files a product ships with -- firmware images, binaries -- and `Software` deliberately does not inherit
+  `Shape`. There is no geometry, so nothing here renders, exports, tessellates or caches a shape; what it shares
+  with the shape factories is the `path`/`fileFrom` plumbing, and it shares it by following the same shape of
+  code rather than by inheriting a class built for shapes. Only one type exists, `raw`; the ones that follow it
+  name a firmware flashing procedure for the same file, so they belong beside `SoftwareFactoryRaw` and never as
+  a second way of pointing at a file.
+
+  A part or an assembly lists what it ships with in its own `software:`, resolved **once**, by
+  `ShapeFactory.__init__`, into `software_resolved` -- that is the only place that knows which package authored
+  the declaration, and an alias or an enrich hands the configuration on to packages where a bare name would mean
+  something else. Every assembly's bill of materials then lists that software with the commit its package was
+  read at (`revision.py`), because a firmware image, unlike a bracket, is a different file once its package
+  publishes again. `lint/software.py` is what keeps that answerable: a file the package does not carry has to
+  declare a `fileHash`, and `CamTest.software_failure()` enforces the same rule where it bites -- a board nobody
+  can flash is not a board anybody can make, so a part fails the manufacturing test when its software does not
+  resolve, cannot be fetched, or does not match its `fileHash`.
+
+  `pc add` writes a `fileHash` by itself where it can: given a URL rather than a path it fetches the file once
+  (`actions/add.py`) and records the hash of what came back, so an object added that way is pinned from the
+  moment it exists. That is also why `FileFactoryUrl` raises on a failed HTTP status -- without it a 404 page
+  is written out as the file, and `pc add` would pin the hash of an error page.
+
+  `fileHash` itself is **not** a software feature and does not live here: it sits beside `fileFrom`/`fileUrl`
+  and pins the *bytes* of any file a package fetches rather than carries, so it belongs to `file_factory.py`,
+  which refuses a download that does not hash to it (and deletes what it refused, or the next run would skip
+  the download and reuse it). It is optional in the declaration and required for reproducibility:
+  `unreproducible_reason()` is the one statement of that rule, and `CamTest.reproducibility_failure()` is what
+  makes a fetched-but-unpinned object fail the manufacturing test -- manufacturing is repetition, and a file
+  that may be a different file tomorrow cannot be made again. There are three ways out and any one will do: a
+  `vendor` and an `sku` (ordering the same SKU again is what "the same again" means for a bought thing), a
+  file the package carries, or a `fileHash`. Only parts and assemblies can take the first -- the schema gives
+  `vendor`/`sku` to those two alone -- so a sketch and a piece of software fall through to the file, which is
+  why the check reaches sketches at all even though nothing manufactures a drawing. `lint/software.py`
+  answers the same rule earlier, on the declaration, and only for software. A file a repository plugin serves
+  is exempt for now (`PACKAGE_FILE_SOURCES`): a `fileHash` given for one is verified, it is simply not
+  required yet.
+
+  Keep all of it clear of the hashes PartCAD computes for itself -- `CacheHash`, a git revision -- which
+  identify something PartCAD built or fetched, where this states in advance which bytes were asked for.
+
+  That test reads more than the shape's hash covers, which is what `Test.cache_key_suffix()` exists for: a
+  corrected `fileHash` has to move the cache key, or `pc test` answers the new declaration with the old one's
+  failure.
+
 - **Built-in packages** (`./src/partcad/builtin`): PartCAD ships two packages inside itself, reachable from
   every context as `//builtin/export` and `//builtin/render` (loaded on demand by `Context.get_project`, see
   `output.py`). They declare the file types `pc export` and `pc render` write, in exactly the form a user's

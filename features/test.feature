@@ -42,6 +42,139 @@ Feature: `pc test` command
     Then STDOUT should contain "cam: No suppliers found"
     Then STDOUT should contain "DONE: Test: //"
 
+  @success @pc-test @pc-test-reproducibility
+  Scenario: A part fetched from a URL and pinned by nothing is not manufacturable
+    # 'cam' only, and nothing is fetched: the declaration alone settles it, so
+    # no geometry is built and no request is made.
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      parts:
+        bolt:
+          type: step
+          fileFrom: url
+          fileUrl: https://example.com/vendor/bolt.step
+      """
+    When I run "pc test -f cam bolt"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "It is not reproducible"
+    And STDOUT should contain "declares no 'fileHash'"
+
+  @success @pc-test @pc-test-reproducibility
+  Scenario: The same part is reproducible once the download is pinned
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      parts:
+        bolt:
+          type: step
+          fileFrom: url
+          fileUrl: https://example.com/vendor/bolt.step
+          fileHash: sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
+      """
+    When I run "pc test -f cam bolt"
+    # It still has no way of being made or bought, so the test still fails --
+    # but reproducibility is no longer what is wrong with it.
+    Then STDOUT should not contain "not reproducible"
+
+  @success @pc-test @pc-test-reproducibility
+  Scenario: A part that is bought is reproducible without a hash
+    # A vendor and an SKU say what to order, and ordering the same SKU again is
+    # what "the same again" means for a bought thing. The file it draws is a
+    # picture of what arrives rather than the identity of it.
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      parts:
+        bolt:
+          type: step
+          vendor: partcad
+          sku: BOLT-1
+          fileFrom: url
+          fileUrl: https://example.com/vendor/bolt.step
+      """
+    When I run "pc test -f cam bolt"
+    Then STDOUT should not contain "not reproducible"
+
+  @success @pc-test @pc-test-software
+  Scenario: A board whose image does not match its fileHash is not manufacturable
+    # 'cam' only: the siblings ('cam-additive', 'cam-subtractive', ...) apply to
+    # a part that is made rather than bought, and this one is bought, so nothing
+    # here needs the geometry built.
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      software:
+        firmware:
+          desc: What the board runs
+          path: firmware.bin
+          fileHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+      parts:
+        board:
+          type: cadquery
+          desc: A board bought off the shelf, flashed with an image of ours
+          vendor: partcad
+          sku: BOARD-1
+          software:
+            - firmware
+      """
+    And a file named "firmware.bin" with content:
+      """
+      PARTCAD-BEHAVE-FIRMWARE
+      """
+    And a file named "board.py" with content:
+      """
+      import cadquery as cq
+
+      shape = cq.Workplane("XY").box(40, 25, 1.6)
+      show_object(shape)
+      """
+    When I run "pc test -f cam board"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "//:firmware"
+    And STDOUT should contain "does not match its 'fileHash'"
+
+  @success @pc-test @pc-test-software
+  Scenario: A board whose image the package carries is manufacturable
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      software:
+        firmware:
+          desc: What the board runs
+          path: firmware.bin
+
+      parts:
+        board:
+          type: cadquery
+          desc: A board bought off the shelf, flashed with an image of ours
+          vendor: partcad
+          sku: BOARD-1
+          software:
+            - firmware
+      """
+    And a file named "firmware.bin" with content:
+      """
+      PARTCAD-BEHAVE-FIRMWARE
+      """
+    And a file named "board.py" with content:
+      """
+      import cadquery as cq
+
+      shape = cq.Workplane("XY").box(40, 25, 1.6)
+      show_object(shape)
+      """
+    When I run "pc test -f cam board"
+    # The package declares no supplier, so the part still has nowhere to be
+    # bought from -- but the software is no longer what is wrong with it.
+    Then STDOUT should not contain "cannot be relied on"
+
   @wip
   Scenario: Test with invalid configuration
     Given I have an invalid PartCAD configuration

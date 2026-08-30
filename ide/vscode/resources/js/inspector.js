@@ -13,12 +13,26 @@
   // @ts-expect-error
   const vscode = acquireVsCodeApi();
 
+  /**
+   * The value as text rather than as markup.
+   *
+   * A path, a description or a hash reaches this view from a package's
+   * configuration, and a package can be somebody else's: the content security
+   * policy above keeps injected markup from running, but nothing else keeps it
+   * from wrecking the table it is put in.
+   */
+  function escapeHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value === undefined || value === null ? '' : String(value);
+    return div.innerHTML;
+  }
+
 
   // Handle messages sent from the extension to the webview
   window.addEventListener('message', event => {
     const message = event.data; // The json data that the extension sent
     let config = {};
-    if (message.type === 'package' || message.type === 'sketch' || message.type === 'interface' || message.type === 'part' || message.type === 'assembly') {
+    if (message.type === 'package' || message.type === 'sketch' || message.type === 'interface' || message.type === 'part' || message.type === 'assembly' || message.type === 'software') {
       config = message.obj['config'];
     }
     switch (message.type) {
@@ -41,6 +55,37 @@
             html += `<tr><td>Type:</td><td>${config['type']}</td></tr>`;
             if (config['type'] === 'git' && 'importUrl' in config) {
               html += `<tr><td>Git:</td><td>${config['importUrl']}</td></tr>`;
+            }
+            html += `</table>`;
+            contents.innerHTML = html;
+          }
+          break;
+        }
+      case 'software':
+        {
+          // Software is a file the package ships and not geometry, so this says
+          // what the file is and where it is, and asks for no render: whatever
+          // the PartCAD Viewer is showing stays as it is.
+          let contents = document.querySelector('.contents');
+          if (contents) {
+            let html = `<table class="inspector">`;
+            html += `<tr><td>Name:</td><td>${escapeHtml(message.obj['name'])}</td></tr>`;
+            html += `<tr><td>Package:</td><td>${escapeHtml(message.obj['pkg'])}</td></tr>`;
+            html += `<tr><td>Type:</td><td>${escapeHtml(config['type'])}</td></tr>`;
+            if ('desc' in config) {
+              html += `<tr><td>Description:</td><td>${escapeHtml(config['desc'])}</td></tr>`;
+            }
+            // 'item_path' is where the file is on disk, which is what the user
+            // needs; 'path' is the fallback for a package that declares one
+            // without PartCAD having resolved it.
+            const filePath = config['item_path'] || config['path'];
+            if (filePath) {
+              html += `<tr><td>Path:</td><td>${escapeHtml(filePath)}</td></tr>`;
+            }
+            // Absent for a file the package carries itself, where the revision
+            // of the package is what identifies it and no hash is required.
+            if (config['fileHash']) {
+              html += `<tr><td>Hash:</td><td>${escapeHtml(config['fileHash'])}</td></tr>`;
             }
             html += `</table>`;
             contents.innerHTML = html;

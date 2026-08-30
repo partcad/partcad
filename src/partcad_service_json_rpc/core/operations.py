@@ -315,13 +315,30 @@ def _invalidate_context(session, params):
         session.partcad_ctx = None
 
 
-def add_object(session, params):
-    """Add an existing part or assembly to a package (by reference, no copy).
+# The 'partcad.yaml' section each kind of object 'pc add' can create is
+# declared in.
+_ADD_SECTIONS = {
+    "part": "parts",
+    "assembly": "assemblies",
+    "sketch": "sketches",
+    "software": "software",
+}
 
-    The CLI resolves ``path`` to an absolute path (it and the daemon do not
-    share a working directory); ``Project._validate_path`` rejects anything
-    outside the package, and messages report the path relative to the package.
+
+def add_object(session, params):
+    """Add a part, assembly or piece of software to a package.
+
+    Two forms. Given ``path``, the package is pointed at a file it already has:
+    the CLI resolves it to an absolute path (it and the daemon do not share a
+    working directory), ``Project._validate_path`` rejects anything outside the
+    package, and messages report the path relative to the package.
+
+    Given ``url``, there is no file yet. It is fetched once - here, because the
+    daemon is what has the context and the network - so that the declaration can
+    be written with the ``fileHash`` of what came back. See
+    ``partcad.actions.add``.
     """
+    import asyncio
     from pathlib import Path
 
     ctx = _ctx(session, params)
@@ -335,19 +352,42 @@ def add_object(session, params):
         pc.logging.error("Package %s is not found" % package)
         return None
 
-    path = params["path"]
-    if not Path(path).exists():
-        raise JsonRpcError(USAGE_ERROR, "ERROR: The part file '%s' does not exist." % package_obj.rel_path(path))
-
     config = {}
     if params.get("desc"):
         config["desc"] = params["desc"]
+
+    url = params.get("url")
+    if url:
+        from partcad.actions.add import add_object_from_url_async
+
+        section = _ADD_SECTIONS.get(obj_kind)
+        if section is None:
+            raise JsonRpcError(USAGE_ERROR, "ERROR: '%s' cannot be added from a URL." % obj_kind)
+        try:
+            name = asyncio.run(
+                add_object_from_url_async(ctx, package_obj, section, url, kind=params.get("kind"), config=config)
+            )
+        except Exception as e:  # pylint: disable=broad-except
+            # Without the bytes there is no hash, and an unpinned declaration is
+            # what fetching it here exists to avoid - so this fails rather than
+            # writing one.
+            raise JsonRpcError(USAGE_ERROR, "ERROR: Failed to fetch '%s': %s" % (url, e))
+        finally:
+            _invalidate_context(session, params)
+        return {"name": name}
+
+    path = params["path"]
+    if not Path(path).exists():
+        raise JsonRpcError(USAGE_ERROR, "ERROR: The part file '%s' does not exist." % package_obj.rel_path(path))
 
     try:
         if obj_kind == "part":
             from partcad.actions.part import add_part_action
 
             added = add_part_action(package_obj, params["kind"], path, config)
+        elif obj_kind == "software":
+            with pc.logging.Process("AddSoftware", package_obj.name):
+                added = package_obj.add_software(path, config)
         else:
             with pc.logging.Process("AddAssy", package_obj.name):
                 added = package_obj.add_assembly(params["kind"], path)
@@ -516,7 +556,7 @@ def info(session, params):
 
 
 def info_object(session, params):
-    """Show detailed information about a part, assembly, interface, or sketch.
+    """Show detailed information about a part, assembly, interface, sketch, or software.
 
     Ported verbatim from the CLI `info` command: with no object name it reports
     the package's info, otherwise the object's configuration and info. Output is
@@ -552,6 +592,12 @@ def info_object(session, params):
         obj = ctx.get_interface(path)
     elif params.get("sketch"):
         obj = ctx.get_sketch(path, params=param_list)
+    elif params.get("software"):
+        # Resolved through the package rather than through a context accessor:
+        # software is not a shape, and none of what 'ctx.get_*' does for one -
+        # parameters, instantiation, the shape cache - applies to a file.
+        project = ctx.get_project(package)
+        obj = project.get_software(object_name) if project is not None else None
     else:
         obj = ctx.get_part(path, params=param_list)
 
@@ -1085,7 +1131,8 @@ def install(session, params):
         stats = pc.actions.package.install(ctx, packages)
 
     session.emitter.info(
-        "Installed %d sketches, %d parts and %d assemblies" % (stats["sketch"], stats["part"], stats["assembly"])
+        "Installed %d sketches, %d parts, %d assemblies and %d software objects"
+        % (stats["sketch"], stats["part"], stats["assembly"], stats["software"])
     )
     if stats["failed"]:
         session.emitter.error("Failed to install %d objects" % stats["failed"])
@@ -1223,7 +1270,7 @@ def package_refresh(session, params):
 
 
 def list_all(session, params):
-    """Load and report the contents (packages/sketches/interfaces/parts/assemblies)."""
+    """Load and report the contents (packages/sketches/interfaces/parts/assemblies/software)."""
     if session.partcad is None:
         session.emitter.error("Loading the package content while PartCAD is not loaded")
         return None
@@ -1236,20 +1283,30 @@ def list_all(session, params):
     return None
 
 
-# The four object kinds `pc list <kind>` renders identically (name + description
-# table, optional package column when recursive). One operation serves all four;
+# The object kinds `pc list <kind>` renders identically (name + description
+# table, optional package column when recursive). One operation serves them all;
 # the CLI passes the kind. Output is emitted verbatim through PartCAD's logger so
 # it renders exactly as the old in-process command did.
+#
+# The key is the name of the package attribute holding the objects, which is why
+# 'software' looks singular here: the section is called that in both numbers.
 _LIST_LABELS = {
     "parts": "PartCAD parts",
     "sketches": "PartCAD sketches",
     "assemblies": "PartCAD assemblies",
     "interfaces": "PartCAD interfaces",
+    "software": "PartCAD software",
 }
+
+# The kinds whose recursive listing walks every package rather than only the
+# ones with geometry in them. A package of firmware images has nothing to render
+# and would be filtered out of the walk exactly as a package of interfaces is
+# (see 'Context.get_packages', and the TODO there about the two).
+_LIST_EVERY_PACKAGE = ("interfaces", "software")
 
 
 def list_objects(session, params):
-    """List a package's parts, sketches, assemblies, or interfaces."""
+    """List a package's parts, sketches, assemblies, interfaces or software."""
     ctx = _ctx(session, params)
     if ctx is None:
         return None
@@ -1267,8 +1324,9 @@ def list_objects(session, params):
     with pc.logging.Process("List" + kind.capitalize(), package):
         count = 0
         if recursive:
-            # `list interfaces` walks every package; the others only those with content.
-            has_stuff = kind != "interfaces"
+            # `list interfaces` and `list software` walk every package; the
+            # others only those with content.
+            has_stuff = kind not in _LIST_EVERY_PACKAGE
             packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=has_stuff)]
         else:
             packages = [package]
@@ -1492,10 +1550,14 @@ def bom(session, params):
         )
 
         items = [{"name": name, **entry} for name, entry in sorted(bom_items.items())]
+        # 'total' counts the hardware, as it always has; the software of an
+        # assembly is counted separately rather than added into it. Two boards
+        # and the one image both of them run is not five of anything.
         result = {
             "assembly": path,
             "items": items,
-            "total": sum(item["count"] for item in items),
+            "total": sum(item["count"] for item in items if item.get("kind") != "software"),
+            "totalSoftware": sum(item["count"] for item in items if item.get("kind") == "software"),
         }
 
         if not params.get("json"):
@@ -1509,17 +1571,50 @@ def _bom_output(result: dict) -> str:
     The columns are sized from the content, not fixed the way `pc list` sizes
     its own: every name here carries the package it comes from, so the names are
     long and their length varies a lot from one BoM to the next.
+
+    Software is listed under a heading of its own rather than interleaved with
+    the hardware. What its "source" column says is not a vendor and an SKU -
+    nobody sells a firmware image - but the package it comes from and the
+    revision of that package, which is what identifies the file.
     """
     items = result["items"]
     output = "Bill of materials of %s:\n" % result["assembly"]
     if not items:
         return output + "\t<none>\n"
 
+    hardware = [item for item in items if item.get("kind") != "software"]
+    software = [item for item in items if item.get("kind") == "software"]
+
+    output += _bom_table(hardware)
+    output += "Total: %d\n" % result["total"]
+    if software:
+        output += "Software:\n"
+        output += _bom_table(software)
+        output += "Software total: %d\n" % result.get("totalSoftware", 0)
+    return output
+
+
+def _bom_table(items: list) -> str:
+    """One block of BoM line items, with the columns sized from the content."""
+    if not items:
+        return "\t<none>\n"
+
     rows = []
     for item in items:
-        # What to order, for the items that say so: buying one needs the vendor
-        # and the SKU, not the name PartCAD knows it by.
-        if item.get("vendor") and item.get("sku"):
+        if item.get("kind") == "software":
+            # The package and the commit it was read at: the same name in the
+            # same package is a different file once the package publishes again.
+            source = item.get("package") or ""
+            if item.get("revision"):
+                source = "%s@%s" % (source, item["revision"])
+            elif item.get("fileHash"):
+                # No revision to name it by -- a package with no source tree of
+                # its own has none -- so the hash of the file it pins is what is
+                # left to identify a fetched image with.
+                source = "%s %s" % (source, item["fileHash"])
+        elif item.get("vendor") and item.get("sku"):
+            # What to order, for the items that say so: buying one needs the
+            # vendor and the SKU, not the name PartCAD knows it by.
             source = "%s %s" % (item["vendor"], item["sku"])
         else:
             source = ""
@@ -1531,13 +1626,13 @@ def _bom_output(result: dict) -> str:
 
     # Where a folded description continues, counting the leading tab as one.
     indent = 1 + name_width + 2 + count_width + 2 + (source_width + 2 if source_width else 0)
+    output = ""
     for name, count, source, desc in rows:
         line = "\t%s  %s" % (name.ljust(name_width), count.rjust(count_width))
         if source_width:
             line += "  %s" % source.ljust(source_width)
         line += "  " + desc.replace("\n", "\n" + " " * indent)
         output += line.rstrip() + "\n"
-    output += "Total: %d\n" % result["total"]
     return output
 
 
@@ -2165,6 +2260,7 @@ def _load_package_contents(session, name="//"):
     interfaces = item_objs(project.interfaces, with_path=False)
     parts = item_objs(project.parts)
     assemblies = item_objs(project.assemblies)
+    software = item_objs(project.software)
 
     # Objects the package declares but PartCAD could not create - most often one
     # written against a PartCAD that still had a feature since retired (the
@@ -2191,6 +2287,7 @@ def _load_package_contents(session, name="//"):
             "interfaces": interfaces,
             "parts": parts,
             "assemblies": assemblies,
+            "software": software,
             "broken": broken,
         },
     )

@@ -297,6 +297,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                         items.interfaces.length === 0 &&
                         items.parts.length === 0 &&
                         items.assemblies.length === 0 &&
+                        // Software counts too, and is optional because an older
+                        // PartCAD does not report it: a package of nothing but
+                        // software has something to show.
+                        (items.software ?? []).length === 0 &&
                         // Objects that failed to load count as items too: a
                         // package of nothing but broken ones has something to
                         // show, and hiding the tree behind the "no items"
@@ -853,6 +857,19 @@ connect:
             }
             await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', true);
             await partcadInspector?.inspectAssembly(assy, params);
+            await vscode.commands.executeCommand('partcad.getStats');
+        }),
+        registerCommand(`partcad.inspectSoftware`, async (software) => {
+            currentItemType = PartcadItem.ITEM_TYPE_SOFTWARE;
+            currentItemName = software.name;
+            currentItemPackage = software.pkg;
+            currentItemParams = {};
+            // No 'itemToSelectOnRestart': software has no source file of its own
+            // to reopen, and its own file is a binary rather than something to
+            // put back in an editor.
+
+            await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', true);
+            await partcadInspector?.inspectSoftware(software);
             await vscode.commands.executeCommand('partcad.getStats');
         }),
         registerCommand(`partcad.inspectFileRoot`, async () => {

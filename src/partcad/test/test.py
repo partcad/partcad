@@ -36,6 +36,19 @@ class Test(ABC):
     def __init__(self, name: str) -> None:
         self.name = name
 
+    def cache_key_suffix(self, ctx, shape) -> str:
+        """What this test's result depends on beyond 'shape.hash', as text.
+
+        A shape's hash covers what the shape is built from, and a test may read
+        more than that. Whatever it reads has to reach the cache key, or the
+        answer to a question the user has just changed comes back from the run
+        before the change.
+
+        Empty for a test whose answer is a property of the shape alone; see
+        'CamTest.cache_key_suffix()' for the one that is not.
+        """
+        return ""
+
     @semaphore_wrapper
     async def test_cached(self, tests_to_run: list["Test"], ctx, shape, test_ctx: dict = {}) -> bool:
         is_cacheable = shape.get_cacheable()
@@ -44,7 +57,7 @@ class Test(ABC):
             # not part of shape.hash; fold it into the cache key so that flipping
             # the flag invalidates any previously cached result.
             manufacturable = int(bool(getattr(shape, "is_manufacturable", True)))
-            cache_key = f"test.{self.name}.manufacturable={manufacturable}"
+            cache_key = f"test.{self.name}.manufacturable={manufacturable}{self.cache_key_suffix(ctx, shape)}"
             cached_results = await ctx.cache_tests.read_data_async(shape.hash, [cache_key])
             cached_bytes = cached_results.get(cache_key, [])
             if cached_bytes and len(cached_bytes) != 0:

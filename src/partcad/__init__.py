@@ -126,6 +126,7 @@ from .project_factory_git import ProjectFactoryGit
 from .project_factory_local import ProjectFactoryLocal
 from .project_factory_tar import ProjectFactoryTar
 from .shape import Shape
+from .software import Software
 from .user_config import UserConfig, user_config
 
 
@@ -152,6 +153,7 @@ __all__ = [
     "ProviderRequestQuote",
     "ProviderRequestCaps",
     "Shape",
+    "Software",
     "UserConfig",
     "add_render_configuration",
     "config",

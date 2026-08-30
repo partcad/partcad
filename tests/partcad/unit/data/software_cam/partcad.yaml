@@ -1,0 +1,85 @@
+desc: A manufacturable board and the software it ships with
+manufacturable: true
+
+software:
+  # In this package, and pinned as well - the hash is redundant here, and it is
+  # what lets a test see the hash being checked without a network fetch.
+  firmware:
+    desc: The image the board is flashed with
+    path: firmware.bin
+    fileHash: sha256:3bed2db952367fceb79394840944affb604fe6ba1409f1a7d4033223dd18de46
+
+  # The same file, with a hash that is not its own.
+  mismatched:
+    desc: A file that is not what its hash says it is
+    path: firmware.bin
+    fileHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+  # Not in this package, and pinned by nothing.
+  unpinned:
+    desc: A vendor image nothing identifies
+    fileFrom: url
+    fileUrl: https://example.com/vendor/unpinned.bin
+
+parts:
+  board:
+    type: cadquery
+    path: board.py
+    desc: A board that ships an image nothing is wrong with
+    manufacturing:
+      method: subtractive
+    parameters:
+      tolerance: 0.1
+    software:
+      - firmware
+
+  board-plain:
+    type: cadquery
+    path: board.py
+    desc: The same board, shipping no software at all
+    manufacturing:
+      method: subtractive
+    parameters:
+      tolerance: 0.1
+
+  board-mismatched:
+    type: cadquery
+    path: board.py
+    desc: A board whose image is not what its hash says
+    manufacturing:
+      method: subtractive
+    parameters:
+      tolerance: 0.1
+    software:
+      - mismatched
+
+  board-unpinned:
+    type: cadquery
+    path: board.py
+    desc: A board whose image nothing identifies
+    manufacturing:
+      method: subtractive
+    parameters:
+      tolerance: 0.1
+    software:
+      - unpinned
+
+  board-missing:
+    type: cadquery
+    path: board.py
+    desc: A board that references software this package does not declare
+    manufacturing:
+      method: subtractive
+    parameters:
+      tolerance: 0.1
+    software:
+      - nowhere
+
+assemblies:
+  device:
+    type: assy
+    desc: A device that ships a host-side tool of its own
+    manufacturing:
+      method: assy
+    software:
+      - firmware

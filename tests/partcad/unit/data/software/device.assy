@@ -1,0 +1,10 @@
+links:
+  - part: controller
+    name: controller1
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: controller
+    name: controller2
+    location: [[0, 0, 5], [0, 0, 1], 0]
+  - part: sensor
+    package: sub
+    location: [[0, 0, 10], [0, 0, 1], 0]

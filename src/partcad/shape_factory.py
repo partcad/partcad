@@ -12,6 +12,7 @@ from . import factory
 from .file_factory import FileFactory
 from .port import WithPorts
 from . import sandbox_versions
+from . import software as pc_software
 from . import telemetry
 
 
@@ -39,6 +40,18 @@ class ShapeFactory(factory.Factory):
             self.fileFactory = factory.instantiate("file", config["fileFrom"], ctx, project, project, config)
         else:
             self.fileFactory = None
+
+        # The software this shape ships with, resolved against the package that
+        # *authored* the declaration. Resolved here because this is the only
+        # place that knows which package that is: an alias hands its source's
+        # configuration on unchanged and an enrich copies it, so by the time a
+        # bill of materials reads it there is no telling where a bare 'firmware'
+        # was written. Left alone when it is already there, which is what makes
+        # a reference survive being handed on (see 'software.RESOLVED_KEY').
+        if pc_software.RESOLVED_KEY not in config:
+            resolved = pc_software.declared_software_refs(project.name, config)
+            if resolved:
+                config[pc_software.RESOLVED_KEY] = resolved
 
         self.with_ports = WithPorts(config["name"], project, config)
 
