@@ -25,7 +25,10 @@ export function getPackagePathFromSetting(namespace: string, scope?: Configurati
 }
 
 export function getInstallOnOpenFromSetting(namespace: string, scope?: ConfigurationScope) {
-    return getConfiguration(namespace, scope).get<string>('installOnOpen') ?? 'true';
+    // Agrees with the declared default in package.json. A second, contradicting
+    // default here would only ever be reached if the contribution went missing,
+    // and would then silently restore the behaviour that default turns off.
+    return getConfiguration(namespace, scope).get<string>('installOnOpen') ?? 'false';
 }
 
 export function getReopenTerminalFromSetting(namespace: string, scope?: ConfigurationScope) {

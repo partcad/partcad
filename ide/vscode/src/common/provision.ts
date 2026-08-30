@@ -288,9 +288,23 @@ function newestBundleIn(root: string): string | undefined {
  * present. Checked in order: the explicit setting, the newest bundle at the
  * install.sh location, the newest bundle previously downloaded into the
  * extension's storage, the launcher symlink in `~/.local/bin`, then PATH.
+ *
+ * `searched` collects a description of each place as it is tried, so that the
+ * "no service available" report can say where it looked without keeping a
+ * second copy of this list -- one that would drift the first time a location is
+ * added here.
  */
-export function resolveServicePath(context: vscode.ExtensionContext, serverId: string): string | undefined {
+export function resolveServicePath(
+    context: vscode.ExtensionContext,
+    serverId: string,
+    searched?: string[],
+): string | undefined {
     const configured = getServicePathFromSetting(serverId);
+    searched?.push(
+        configured
+            ? `the "partcad.servicePath" setting (${configured})`
+            : 'the "partcad.servicePath" setting (not set)',
+    );
     if (configured && isFile(configured)) {
         return configured;
     }
@@ -299,6 +313,7 @@ export function resolveServicePath(context: vscode.ExtensionContext, serverId: s
     const xdgData = process.env.XDG_DATA_HOME || path.join(home, '.local', 'share');
     const roots = [path.join(xdgData, 'partcad'), cachedBundleRoot(context)];
     for (const root of roots) {
+        searched?.push(root);
         const found = newestBundleIn(root);
         if (found) {
             return found;
@@ -306,41 +321,129 @@ export function resolveServicePath(context: vscode.ExtensionContext, serverId: s
     }
 
     const linked = path.join(home, '.local', 'bin', EXE);
+    searched?.push(linked);
     if (isFile(linked)) {
         return linked;
     }
 
+    // Worth spelling out in the report: this is the PATH of the process VS Code
+    // was started from, which is not the PATH of an integrated terminal and does
+    // not contain an activated Python virtual environment unless VS Code itself
+    // was launched from one.
+    searched?.push(`PATH as VS Code inherited it (${(process.env.PATH ?? '').split(path.delimiter).length} entries)`);
     return whichOnPath(EXE);
 }
 
 /**
- * Ensure a `partcad-json-rpc` executable is available, prompting before a large
- * download. Returns its path, or undefined if the user declined (in which case
- * the caller falls back to the Python backend).
+ * What came of looking for a service, and what the caller should do about it.
+ *
+ * `restarting` exists because "Find installed PartCAD" answers the question by writing
+ * `partcad.servicePath`, and that setting is one of the ones
+ * `checkIfConfigurationChanged` watches -- so the write itself starts a restart.
+ * Returning a path here as well would leave two starts racing, neither of them
+ * guarded, so the caller stands down and lets the configuration change drive the
+ * single one.
+ */
+export type ServiceResolution = { kind: 'ready'; execPath: string } | { kind: 'restarting' } | { kind: 'none' };
+
+/**
+ * Where a `partcad-json-rpc` might be inside a directory the user picked.
+ *
+ * They are asked for the environment's `bin` (`Scripts` on Windows), because
+ * that is the directory that holds `pc` and `partcad` beside the service and so
+ * the one `cliBeside` and the terminal PATH both want. Picking the environment
+ * root instead is the obvious near-miss, so accept it rather than making them
+ * guess which directory was meant.
+ */
+export function serviceUnder(dir: string): string | undefined {
+    for (const candidate of [path.join(dir, EXE), path.join(dir, 'bin', EXE), path.join(dir, 'Scripts', EXE)]) {
+        if (isFile(candidate)) {
+            return candidate;
+        }
+    }
+    return undefined;
+}
+
+/**
+ * Ask for the Python environment that already has PartCAD in it, and remember it.
+ *
+ * There is no interpreter to interrogate: the extension does not ask
+ * `ms-python.python` what is selected, and a `partcad-json-rpc` inside a virtual
+ * environment is not on the PATH the extension host inherited unless VS Code was
+ * launched from that environment. So the user points at it once and the answer
+ * is kept in `partcad.servicePath`, which `resolveServicePath` consults first.
+ *
+ * The setting is `machine`-scoped, so `Global` is the only target it can be
+ * written to -- an environment is a property of this machine, not of a workspace.
+ */
+async function useLocalPython(serverId: string): Promise<ServiceResolution> {
+    const picked = await vscode.window.showOpenDialog({
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        openLabel: 'Use this environment',
+        title: `Select the directory holding ${EXE} (a Python environment's "bin", or "Scripts" on Windows)`,
+    });
+    const dir = picked?.[0]?.fsPath;
+    if (!dir) {
+        return { kind: 'none' };
+    }
+
+    const exe = serviceUnder(dir);
+    if (!exe) {
+        traceError(`PartCAD: no ${EXE} in ${dir}`);
+        await vscode.window.showErrorMessage(
+            `No ${EXE} in ${dir}. Pick the directory a "pip install partcad" put it in -- the ` +
+                `environment's "bin" ("Scripts" on Windows), or the environment's root directory. ` +
+                `"which ${EXE}" in a terminal where PartCAD works prints the path.`,
+            { modal: true },
+        );
+        return { kind: 'none' };
+    }
+
+    traceInfo(`PartCAD: using the local Python installation at ${exe}`);
+    await vscode.workspace.getConfiguration(serverId).update('servicePath', exe, vscode.ConfigurationTarget.Global);
+    return { kind: 'restarting' };
+}
+
+/**
+ * Ensure a `partcad-json-rpc` executable is available, asking the user only when
+ * there is none.
+ *
+ * The dialog appears if and only if nothing was found: an installation that
+ * `resolveServicePath` can see is simply used, with no question asked. When
+ * there is none there are exactly two ways forward -- download the standalone
+ * bundle, or point at a local Python environment that already has PartCAD --
+ * and both are offered. There is no third, silent option: the button used to
+ * say "Use Python instead" and select a `python` backend that had already been
+ * deleted, so choosing it produced no backend at all.
  */
 export async function ensureServiceExecutable(
     context: vscode.ExtensionContext,
     serverId: string,
-): Promise<string | undefined> {
+): Promise<ServiceResolution> {
     const existing = resolveServicePath(context, serverId);
     if (existing) {
         traceInfo(`PartCAD: using service executable at ${existing}`);
-        return existing;
+        return { kind: 'ready', execPath: existing };
     }
 
     const choice = await vscode.window.showInformationMessage(
-        'PartCAD needs its standalone service (partcad-json-rpc). This is a one-time download ' +
-            '(roughly 60 MB compressed). If you would rather not download it, PartCAD can use a Python ' +
-            'environment instead (the "python" backend), which requires a working Python interpreter.',
+        'No PartCAD installation was found. Download the standalone PartCAD -- a one-time download of ' +
+            'roughly 60 MB compressed, which needs no Python of your own -- or use a local Python ' +
+            'environment that already has PartCAD in it, which you will be asked to point at.',
         { modal: true },
         'Download',
-        'Use Python instead',
+        'Find installed PartCAD',
     );
+    if (choice === 'Find installed PartCAD') {
+        return useLocalPython(serverId);
+    }
     if (choice !== 'Download') {
-        return undefined;
+        return { kind: 'none' };
     }
 
-    return vscode.window.withProgress(
+    const downloaded = await vscode.window.withProgress(
         { location: vscode.ProgressLocation.Notification, title: 'Downloading PartCAD', cancellable: false },
         async (progress) => {
             try {
@@ -352,6 +455,7 @@ export async function ensureServiceExecutable(
             }
         },
     );
+    return downloaded ? { kind: 'ready', execPath: downloaded } : { kind: 'none' };
 }
 
 /**
@@ -378,8 +482,14 @@ export async function updateServiceBundle(
     if (!execPath) {
         // Nothing installed yet: an update of nothing is an install, and that is
         // the one flow that has to ask before spending 60MB of somebody's link.
-        const downloaded = await ensureServiceExecutable(context, serverId);
-        return { updated: !!downloaded, execPath: downloaded };
+        // "Find installed PartCAD" answers by writing `partcad.servicePath`, whose
+        // change reconnects the backend on its own -- so there is nothing to
+        // hand back here, and nothing to report as a failed update either.
+        const resolution = await ensureServiceExecutable(context, serverId);
+        return {
+            updated: resolution.kind === 'ready',
+            execPath: resolution.kind === 'ready' ? resolution.execPath : undefined,
+        };
     }
 
     const cli = cliBeside(execPath);
