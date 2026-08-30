@@ -489,8 +489,8 @@ To test VSCode plugin, run the following commands in a shell session in the Term
 .. code-block:: bash
 
     $ cd ide/vscode
-    $ nox --session setup
-    $ nox --session build_package
+    $ npm ci
+    $ npm run vsce-package
     $ code --install-extension partcad.vsix
 
 To test the Python core module using the VSCode plugin, click the `Restart PartCAD` icon in the PartCAD's `Context` view after each change.

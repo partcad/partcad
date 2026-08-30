@@ -53,6 +53,20 @@ def make_bundle(tmp_path, with_tools=True):
     )
     brand.brand_product(product, COMPONENT_ROOT / "product.overlay.json", "0.1.2")
 
+    # The entry point `build.sh` writes so that the 3D view works without a GPU.
+    out = resources / "app" / "out"
+    out.mkdir()
+    (out / "partcad-main.js").write_text(
+        "import { app } from 'electron';\n"
+        "app.commandLine.appendSwitch('enable-unsafe-swiftshader');\n"
+        "await import('./main.js');\n",
+        encoding="utf-8",
+    )
+    (resources / "app" / "package.json").write_text(
+        json.dumps({"name": "Code", "type": "module", "main": "./out/partcad-main.js"}),
+        encoding="utf-8",
+    )
+
     extensions = resources / "app" / "extensions"
     extensions.mkdir()
     add_extension(extensions, "OpenVMP", "partcad")
@@ -172,3 +186,41 @@ def test_the_activity_bar_is_reported(tmp_path, capsys):
 def test_an_extension_with_no_activity_bar_icon_is_not_reported(tmp_path, capsys):
     assert run(make_bundle(tmp_path), tmp_path) == 0
     assert "activity bar" not in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# The software-WebGL entry point. Both halves matter: `package.json` has to
+# point at the wrapper and the wrapper has to be there and contain the switch.
+# Getting one without the other leaves an application that either starts with no
+# software WebGL (and a dead 3D view on a machine with no GPU driver) or does not
+# start at all.
+# ---------------------------------------------------------------------------
+
+
+def test_the_entry_point_is_reported(tmp_path, capsys):
+    assert run(make_bundle(tmp_path), tmp_path) == 0
+    assert "software WebGL enabled" in capsys.readouterr().out
+
+
+def test_an_unpatched_entry_point_is_a_problem(tmp_path, capsys):
+    resources = make_bundle(tmp_path)
+    (resources / "app" / "package.json").write_text(json.dumps({"main": "./out/main.js"}), encoding="utf-8")
+
+    assert run(resources, tmp_path) != 0
+    assert "not the PartCAD entry point" in capsys.readouterr().out
+
+
+def test_a_missing_wrapper_is_a_problem(tmp_path, capsys):
+    resources = make_bundle(tmp_path)
+    (resources / "app" / "out" / "partcad-main.js").unlink()
+
+    assert run(resources, tmp_path) != 0
+    assert "no file at" in capsys.readouterr().out
+
+
+def test_a_wrapper_that_does_not_enable_it_is_a_problem(tmp_path, capsys):
+    resources = make_bundle(tmp_path)
+    (resources / "app" / "out" / "partcad-main.js").write_text("await import('./main.js');\n", encoding="utf-8")
+
+    assert run(resources, tmp_path) != 0
+    assert "does not enable software WebGL" in capsys.readouterr().out

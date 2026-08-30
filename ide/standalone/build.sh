@@ -526,6 +526,56 @@ log "==> Rebranding"
   --overlay "${SCRIPT_DIR}/product.overlay.json" \
   --version "${VERSION}"
 
+# ---------------------------------------------------------------------------
+# Software WebGL, so the 3D view works on a machine with no working GPU driver.
+#
+# The PartCAD Viewer renders with WebGL. Chromium refuses to back WebGL with
+# SwiftShader unless asked (since M136), so on a machine whose GPU process fails
+# to start -- no driver, a confined package that cannot see one, a VM, a remote
+# display -- there is no WebGL at all and the 3D view is dead. That is not a
+# rare configuration, and this IDE is the download for people who have no editor
+# set up: they are the least able to diagnose "webgl: disabled_off".
+#
+# The switch only permits the software fallback. Chromium still uses a real GPU
+# wherever there is one, so this costs nothing on a machine that was fine.
+#
+# It goes in an entry point of our own rather than in a launcher, because the
+# launchers do not cover every way the application starts: the Linux desktop
+# entry runs the binary directly (not `bin/partcad-ide`), and nothing passes
+# arguments to a MacOS bundle opened from Finder. `package.json`'s `main` is the
+# one path all of them go through.
+#
+# ESM with a *dynamic* import, because the application is `"type": "module"` and
+# a static import would be hoisted above the call it has to follow. Neither this
+# file nor `package.json` is listed in `product.json`'s `checksums`, so this does
+# not trip the "installation appears corrupt" warning; `out/main.js` is left
+# untouched.
+log "==> Enabling software WebGL"
+APP_MAIN_WRAPPER="${RESOURCES_DIR}/app/out/partcad-main.js"
+cat >"${APP_MAIN_WRAPPER}" <<'WRAPPER_EOF'
+// Added by the PartCAD IDE build (ide/standalone/build.sh). See the note there.
+import { app } from 'electron';
+
+app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+
+await import('./main.js');
+WRAPPER_EOF
+
+"${PYTHON}" -c "
+import json, pathlib, sys
+manifest = pathlib.Path(sys.argv[1])
+package = json.loads(manifest.read_text(encoding='utf-8'))
+previous = package.get('main')
+if previous is None:
+    raise SystemExit('no \'main\' in %s: this is not an Electron application' % manifest)
+if 'partcad-main' not in previous:
+    # Idempotent: a rebuild over an already-patched staging directory must not
+    # point the wrapper at itself.
+    package['main'] = sys.argv[2]
+    manifest.write_text(json.dumps(package, indent=2) + '\n', encoding='utf-8')
+" "${RESOURCES_DIR}/app/package.json" "./out/partcad-main.js" \
+  || fail "could not point the application at the PartCAD entry point"
+
 ICON_DIR="${WORK_DIR}/icons"
 ICONS_BUILT=0
 if [ "${BRAND_ICONS}" = "1" ]; then

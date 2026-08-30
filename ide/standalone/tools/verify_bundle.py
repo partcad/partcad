@@ -100,6 +100,41 @@ def check_product(product_path: pathlib.Path, problems: list[str], notes: list[s
     )
 
 
+def check_entry_point(app_dir: pathlib.Path, problems: list[str], notes: list[str]) -> None:
+    """The entry point that turns software WebGL on.
+
+    Without it the 3D view is dead on any machine whose GPU process does not
+    start, and dead silently -- Chromium reports "webgl: disabled_off" and the
+    viewer sees only a failed context. The build writes `out/partcad-main.js`
+    and points `package.json` at it; both halves are checked, because either one
+    alone leaves the application running with the switch absent (or, worse,
+    pointing at a file that is not there).
+    """
+    manifest_path = app_dir / "package.json"
+    if not manifest_path.is_file():
+        problems.append(f"no package.json at {manifest_path}")
+        return
+
+    manifest = jsonc.load(manifest_path)
+    main = manifest.get("main") or ""
+    if "partcad-main" not in main:
+        problems.append(
+            f"package.json: main is {main!r}, not the PartCAD entry point; "
+            "the 3D view will not work without a GPU driver"
+        )
+        return
+
+    wrapper = app_dir / pathlib.PurePosixPath(main.lstrip("./")).as_posix()
+    if not wrapper.is_file():
+        problems.append(f"package.json points main at {main!r}, but there is no file at {wrapper}")
+        return
+    if "enable-unsafe-swiftshader" not in wrapper.read_text(encoding="utf-8"):
+        problems.append(f"{wrapper} does not enable software WebGL")
+        return
+
+    notes.append(f"entry point: {main} (software WebGL enabled)")
+
+
 def check_executable(path: pathlib.Path, description: str, problems: list[str], notes: list[str]) -> None:
     if not path.is_file():
         problems.append(f"no {description} at {path}")
@@ -133,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     notes: list[str] = []
 
     check_product(args.resources / "app" / "product.json", problems, notes)
+    check_entry_point(args.resources / "app", problems, notes)
     check_executable(args.executable, "application executable", problems, notes)
     check_executable(args.launcher, "command line launcher", problems, notes)
 
