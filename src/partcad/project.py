@@ -2002,6 +2002,7 @@ class Project(project_config.Configuration):
         options_package: Optional[str] = None,
         ignore_manufacturability: bool = False,
         scenes: Optional[List] = None,
+        overlay=None,
     ):
         with pc_logging.Action("RenderPkg", self.name):
             # A skipped package has nothing to render, and must not be asked to:
@@ -2056,6 +2057,7 @@ class Project(project_config.Configuration):
                                     project=self,
                                     output_dir=output_dir,
                                     options_package=options_package,
+                                    overlay=overlay,
                                 )
                             )
 
@@ -2133,20 +2135,26 @@ class Project(project_config.Configuration):
             # with an 'EmptyShapesError'.
             return [name for name in names if self.get_skipped_object_clause(kind, name) is None]
 
-        sketches = sketches or get_keys("sketches", "sketch")
-        # interfaces = sketches or get_keys("interfaces", "interface")
-        parts = parts or get_keys("parts", "part")
-        assemblies = assemblies or get_keys("assemblies", "assembly")
-        scenes = scenes or get_keys("scenes", "scene")
+        # Naming nothing at all means the whole package. Naming one object means
+        # that object: each kind used to fall back to "all of them" on its own,
+        # so asking for one part rendered every sketch, every assembly and every
+        # scene beside it - which is a lot of work nobody asked for, and, with
+        # "--with-ports", a lot of pictures nobody asked for either.
+        if not (sketches or interfaces or parts or assemblies or scenes):
+            sketches = get_keys("sketches", "sketch")
+            # interfaces = get_keys("interfaces", "interface")
+            parts = get_keys("parts", "part")
+            assemblies = get_keys("assemblies", "assembly")
+            scenes = get_keys("scenes", "scene")
 
         shapes = []
-        for name in sketches:
+        for name in sketches or []:
             shapes.append(self.get_sketch(name))
-        for name in parts:
+        for name in parts or []:
             shapes.append(self.get_part(name))
-        for name in assemblies:
+        for name in assemblies or []:
             shapes.append(self.get_assembly(name))
-        for name in scenes:
+        for name in scenes or []:
             shapes.append(self.get_scene(name))
         # TODO(clairbee): interfaces are not yet renderable.
         # for name in interfaces: shapes.append(self.get_interface(name))
@@ -2187,6 +2195,7 @@ class Project(project_config.Configuration):
         options_package: Optional[str] = None,
         ignore_manufacturability: bool = False,
         scenes: Optional[list] = None,
+        overlay=None,
     ):
         asyncio.run(
             self.render_async(
@@ -2199,6 +2208,7 @@ class Project(project_config.Configuration):
                 options_package,
                 ignore_manufacturability,
                 scenes,
+                overlay,
             )
         )
 

@@ -1160,6 +1160,7 @@ class Context:
         output_dir=None,
         options_package=None,
         ignore_manufacturability=False,
+        overlay=None,
     ):
         if project_path is None:
             project_path = self.get_current_project_path()
@@ -1170,6 +1171,7 @@ class Context:
             output_dir=output_dir,
             options_package=options_package,
             ignore_manufacturability=ignore_manufacturability,
+            overlay=overlay,
         )
 
     def render(
@@ -1179,6 +1181,7 @@ class Context:
         output_dir=None,
         options_package=None,
         ignore_manufacturability=False,
+        overlay=None,
     ):
         if project_path is None:
             project_path = self.get_current_project_path()
@@ -1189,6 +1192,7 @@ class Context:
             output_dir=output_dir,
             options_package=options_package,
             ignore_manufacturability=ignore_manufacturability,
+            overlay=overlay,
         )
 
     # TODO(clairbee): convert it into: ctx.get_runtime("python", "conda", {"version": "3.11"})

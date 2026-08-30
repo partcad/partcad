@@ -25,6 +25,7 @@ from .shape_config import ShapeConfiguration
 from .utils import total_size
 from . import logging as pc_logging
 from .sync_threads import threadpool_manager
+from . import render_overlay
 from . import sandbox_versions
 from . import wrapper
 
@@ -947,13 +948,19 @@ class Shape(ShapeConfiguration):
             f.write(content)
         return script_abs
 
-    async def _output_request(self, obj, impl, kwargs):
+    async def _output_request(self, obj, impl, kwargs, overlay=None, ports=None):
         """What the implementation is handed.
 
         The shape, every parameter the layered configuration ended up with, and
         enough about the shape itself for an implementation to adapt to what it
         was given - which is how the SVG renderer knows to look at a sketch
         head-on without PartCAD having to tell it.
+
+        'overlay'/'ports' are the overlay this file type ended up drawing (see
+        render_overlay.effective) and where those ports are. They are set after
+        'impl.parameters' rather than before, because the resolved overlay is
+        what a file type declaring 'with_ports:' asked for plus what the command
+        line asked for - the declaration has already been read.
         """
         request = {
             "wrapped": obj,
@@ -963,6 +970,10 @@ class Shape(ShapeConfiguration):
             "package_name": self.project_name,
         }
         request.update(impl.parameters)
+        if overlay is not None:
+            request["with_ports"] = overlay.ports
+            request["with_interfaces"] = overlay.interfaces
+            request["ports"] = ports or []
         # An explicit argument wins over the configuration, but only when it is
         # one: 'render_async(**kwargs)' is called with a fixed set of keyword
         # arguments defaulting to None by several callers.
@@ -975,7 +986,44 @@ class Shape(ShapeConfiguration):
         # collected here, and nothing has to be instantiated to collect it.
         return request
 
-    async def _render_one_async(self, ctx, obj, format_name, project, filepath, options_project, output_dir, kwargs):
+    async def _overlay_ports_async(self, ctx, overlay, cache):
+        """Where this shape's ports are, worked out at most once per render call.
+
+        Two file types of one object can ask for different overlays, and what
+        the answers differ in is only whether the port boundaries came along -
+        so a collection that has them also answers a file type that does not.
+
+        Failing to work it out must not cost the picture: an overlay is an
+        annotation on a render, not the render. The failure is reported and the
+        file is written without it.
+        """
+        if True in cache:
+            return cache[True]
+        if not overlay.interfaces and False in cache:
+            return cache[False]
+
+        try:
+            records = await render_overlay.collect_async(self, ctx, overlay)
+            render_overlay.report(self, records, overlay)
+        except Exception as e:
+            pc_logging.error("%s:%s: failed to locate the ports to draw: %s" % (self.project_name, self.name, e))
+            records = []
+        cache[overlay.interfaces] = records
+        return records
+
+    async def _render_one_async(
+        self,
+        ctx,
+        obj,
+        format_name,
+        project,
+        filepath,
+        options_project,
+        output_dir,
+        kwargs,
+        overlay=None,
+        ports_cache=None,
+    ):
         """Produce one output file, whatever its type."""
         impl, final_filepath = self.output_getopts(ctx, format_name, project, filepath, options_project, output_dir)
         final_filepath = os.path.abspath(final_filepath)
@@ -988,7 +1036,14 @@ class Shape(ShapeConfiguration):
 
         script = await self._materialize_output_script(ctx, impl)
 
-        request = await self._output_request(obj, impl, kwargs)
+        effective_overlay = render_overlay.effective(overlay, impl)
+        ports = None
+        if effective_overlay is not None:
+            ports = await self._overlay_ports_async(
+                ctx, effective_overlay, ports_cache if ports_cache is not None else {}
+            )
+
+        request = await self._output_request(obj, impl, kwargs, overlay=effective_overlay, ports=ports)
         request[output.SCRIPT_KEY] = os.path.abspath(script)
         # Whether the sandbox rebuilds the envelopes into live geometry before
         # the implementation sees them. Off for an implementation that needs what
@@ -1062,6 +1117,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         options_package: Optional[str] = None,
         output_dir=None,
+        overlay=None,
         **kwargs,
     ) -> None:
         """Write this shape out as one output file type, or as all of them.
@@ -1079,6 +1135,11 @@ class Shape(ShapeConfiguration):
                 declared in one package is used from another.
             output_dir: Where the file goes when 'filepath' does not say,
                 overriding whatever the configuration asked for.
+            overlay: A 'render_overlay.Overlay' asking for this shape's ports
+                and/or interfaces to be drawn on the projection ("pc render
+                --with-ports"/"--with-interfaces"), or None. A file type that
+                declares 'with_ports:'/'with_interfaces:' of its own draws them
+                either way - see 'render_overlay.effective'.
             kwargs: Export parameters, overriding what the configuration says.
         """
         # A caller that names no package still gets the shape's own. Its
@@ -1101,8 +1162,23 @@ class Shape(ShapeConfiguration):
                 pc_logging.error(f"Cannot render '{self.name}': shape is empty")
                 return
 
+            # Shared by every file type this call writes, so that an object
+            # whose ports are asked for in three formats is walked once.
+            ports_cache = {}
+
             for fmt in [format_name] if format_name else output.all_formats(ctx):
-                await self._render_one_async(ctx, obj, fmt, project, filepath, options_project, output_dir, kwargs)
+                await self._render_one_async(
+                    ctx,
+                    obj,
+                    fmt,
+                    project,
+                    filepath,
+                    options_project,
+                    output_dir,
+                    kwargs,
+                    overlay=overlay,
+                    ports_cache=ports_cache,
+                )
 
     def render(
         self,
@@ -1112,9 +1188,12 @@ class Shape(ShapeConfiguration):
         filepath=None,
         options_package: Optional[str] = None,
         output_dir=None,
+        overlay=None,
         **kwargs,
     ) -> None:
-        asyncio.run(self.render_async(ctx, format_name, project, filepath, options_package, output_dir, **kwargs))
+        asyncio.run(
+            self.render_async(ctx, format_name, project, filepath, options_package, output_dir, overlay, **kwargs)
+        )
 
     async def render_svg_somewhere_async(
         self,

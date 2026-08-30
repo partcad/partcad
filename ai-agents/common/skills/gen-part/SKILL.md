@@ -107,3 +107,10 @@ no fixed retry count.
 
 Summarize what you built — key dimensions and assumptions — and how to view it:
 `pc inspect <name>`.
+
+If the part is meant to connect to something — a bolt pattern, a plug, a rail —
+say so and offer `/pc:add-interfaces`, which adds the ports and interfaces that
+let PartCAD mate it automatically. Once it has them,
+`pc render -t png --with-all <name>` draws them on the same picture you have
+been comparing against, so a port that is in the wrong place or facing the wrong
+way is visible rather than inferred.

@@ -2097,6 +2097,16 @@ def render_objects(session, params):
             raise JsonRpcError(USAGE_ERROR, "Options package %s is not found" % options_package)
 
     from partcad.exception import AssemblyDocumentError
+    from partcad.render_overlay import Overlay
+
+    # "--with-ports"/"--with-interfaces"/"--with-all": draw the connection
+    # metadata on top of the projection. Only 'pc render' offers them, and only
+    # the 'render:' file types act on them (see Shape._output_request).
+    overlay = Overlay.of(
+        ports=params.get("with_ports", False),
+        interfaces=params.get("with_interfaces", False),
+        all=params.get("with_all", False),
+    )
 
     with pc.logging.Process(params.get("label", "Render"), package):
         ctx.option_create_dirs = params.get("create_dirs", False)
@@ -2111,6 +2121,7 @@ def render_objects(session, params):
                 object_name,
                 options_package,
                 ignore_manufacturability,
+                overlay,
             )
         except AssemblyDocumentError as e:
             # Asking for an assembly instruction book of something that has no
@@ -2130,6 +2141,7 @@ def _render_objects(
     object_name,
     options_package,
     ignore_manufacturability,
+    overlay=None,
 ):
     """The body of 'render_objects', once the request has been made sense of."""
     import asyncio
@@ -2159,6 +2171,7 @@ def _render_objects(
             object_name,
             options_package,
             ignore_manufacturability,
+            overlay,
         )
     )
 
@@ -2173,6 +2186,7 @@ async def _render_packages_async(
     object_name,
     options_package,
     ignore_manufacturability,
+    overlay=None,
 ):
     """Render the given packages, several at a time.
 
@@ -2218,6 +2232,7 @@ async def _render_packages_async(
                     output_dir=output_dir,
                     options_package=options_package,
                     ignore_manufacturability=ignore_manufacturability,
+                    overlay=overlay,
                 )
             else:
                 sketches, interfaces, parts, assemblies, scenes = [], [], [], [], []
@@ -2242,6 +2257,7 @@ async def _render_packages_async(
                     output_dir=output_dir,
                     options_package=options_package,
                     ignore_manufacturability=ignore_manufacturability,
+                    overlay=overlay,
                 )
 
     results = await asyncio.gather(*[render_package(package) for package in packages], return_exceptions=True)

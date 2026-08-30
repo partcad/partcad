@@ -10,9 +10,11 @@ PartCAD part so PartCAD can mate it to other parts by connection rather than by
 hand-placed coordinates. The text after the command (`$ARGUMENTS`) names the
 target part (and, optionally, how it is meant to connect). *You* decide the
 interface types and the exact port coordinates by examining the geometry, and
-you prove they are right by mating two instances in a throwaway assembly and
-rendering it. Hard requirement: the enriched part **passes `pc test`** and the
-validation assembly renders **correctly connected**.
+you prove they are right twice: by drawing them on the part itself
+(`pc render --with-all`, step 4) and by mating two instances in a throwaway
+assembly and rendering that (step 5). Hard requirement: the enriched part
+**passes `pc test`** and the validation assembly renders **correctly
+connected**.
 
 Interfaces are the reusable half of this: define the connector once, then every
 part that has that feature `implements:` it, and any two compatible parts mate.
@@ -45,6 +47,10 @@ part's own coordinate frame, in millimeters. Get them two ways and cross-check:
   To see other angles, place the part at rotated `location`s in a throwaway
   `.assy` and render that. Run `/pc:describe` on the part for a written read of
   the shape.
+
+  Once the part already has some ports, add `--with-ports` to see them drawn on
+  that same picture — see "Look at the ports" below. That is also how you check
+  a port you have just written before doing anything else with it.
 - **Read the exact coordinates** from the source when you can — the CAD script,
   the STEP/BREP, or (for a generated/meshed part) the upstream data file. Exact
   numbers beat measuring off a render.
@@ -153,6 +159,41 @@ sub-package of the upstream one and run `pc` from the upstream root. If `enrich`
 cannot carry the metadata for a given part, fall back to a local wrapper
 (`type: alias`, or a thin re-declared part) that adds the `implements:`.
 
+### Look at the ports
+
+`implements:` is what actually puts the ports on the part, so this is the first
+moment there is anything to look at — and the cheapest check there is, before
+any assembly exists. A port is a coordinate frame and an interface is a named
+set of them, so neither shows up in an ordinary render; `pc render` draws them
+when asked:
+
+```sh
+pc render -t png -O /tmp/pc-render --with-ports <part>        # every port marked and named
+pc render -t png -O /tmp/pc-render --with-interfaces <part>   # every interface, joined to its ports
+pc render -t png -O /tmp/pc-render --with-all <part>          # both
+```
+
+View the PNG and read it against what you wrote:
+
+- Each port is a coordinate frame. The **long arrow is `+Z`** — the direction a
+  part travels along when it is connected through that port. A male port's `+Z`
+  points out of the material, a female port's points into it. An arrow pointing
+  the wrong way is the single most common mistake, and it is obvious here.
+- The frame sits at the port's origin. If it is off the feature it is supposed
+  to name — beside the hole rather than in it, on the wrong face, at the part
+  origin because the `location:` was omitted — the coordinates are wrong.
+- The short arrows are `X` and `Y`: use them to check the roll convention (X
+  toward the "next" equivalent port).
+- `--with-interfaces` names each *instance* once and draws a line out to every
+  port in it, so a bolt pattern that should be one interface with four ports
+  reads as exactly that. Four separate names means four instances — usually not
+  what was intended. The small outlines are the port boundary sketches.
+
+Every port drawn is also listed in the log with the exact name to write in an
+ASSY file — look for the `N port(s) drawn on the projection:` line and the
+indented list under it. That is where the `with:`/`to:`/`withInstance:`/
+`toInstance:` values below come from; do not guess them.
+
 ## 5. Validate by mating two instances and rendering
 
 This is the real proof the coordinates are right. Scaffold a throwaway assembly
@@ -182,8 +223,9 @@ exclusive per node. Mark the assembly `manufacturable: false` so `pc test`
 passes, then:
 
 ```sh
-pc test -a <name>                                # geometry instantiates + mates resolve
-pc render -a -t png -O /tmp/pc-render <name>     # writes /tmp/pc-render/<name>.png
+pc test -a <name>                                     # geometry instantiates + mates resolve
+pc render -a -t png -O /tmp/pc-render <name>          # writes /tmp/pc-render/<name>.png
+pc render -a -t png -O /tmp/pc-render --with-ports <name>   # the same, with every port drawn
 ```
 
 **View the PNG** and check the two parts are actually connected the way the real
@@ -192,16 +234,57 @@ interpenetration and no gap. A wrong port position shows up as a gap or overlap;
 a wrong orientation shows up as the incoming part rotated or facing the wrong
 way.
 
+**Then view the `--with-ports` PNG**, which is what says *why*. On an assembly
+the option walks every part and draws each one's ports where the assembly put
+them, so the two ports that were supposed to mate are two frames on the same
+picture:
+
+- Connected correctly: the two frames sit on top of each other with their `+Z`
+  arrows pointing in **opposite** directions.
+- Two frames a fixed distance apart: the port position is off by exactly that
+  much, on the part whose frame is not where the feature is.
+- Two frames at the same place but with `+Z` arrows agreeing rather than
+  opposing, or rolled against each other: the orientation is wrong, not the
+  position.
+- A frame nowhere near the feature it names: the `implements:` location is
+  wrong, not the interface.
+
+Names on the picture are the instance path (`<part-instance>:<port>`), and the
+same list is written to the log, so you can tell which of two identical-looking
+frames belongs to which part.
+
 ## 6. Iterate
 
 Adjust the port coordinates/orientations and repeat step 5 until the render is
-correct — no fixed retry count. Re-check with a second instance placed at a
-*different* port (an offset, not just the aligned case) to confirm the whole
-interface is consistent, not just one lucky pair.
+correct — no fixed retry count. Read the `--with-ports` render each time rather
+than guessing from the plain one: it distinguishes a wrong position from a wrong
+orientation, which the plain render does not. Re-check with a second instance
+placed at a *different* port (an offset, not just the aligned case) to confirm
+the whole interface is consistent, not just one lucky pair.
 
 ## 7. Finalize
 
 Summarize the interfaces you defined (with the male/female Z convention), which
 ports/instances you placed and where, where you stored them (the part's package,
 or the consuming package for a plugin-backed part), and how to view a connected
-example (`pc inspect -a <name>`).
+example (`pc inspect -a <name>`, or
+`pc render -a -t png --with-all <name>` for a picture with the connection
+metadata on it).
+
+If the part's ports are worth keeping a picture of — a catalog part other
+packages will mate against — declare the drawing as a file type so `pc render`
+keeps it up to date instead of leaving it to be redrawn by hand:
+
+```yaml
+parts:
+  <part>:
+    render:
+      svg-with-ports:
+        package: //builtin/render
+        path: render_svg.py
+        extension: ports.svg
+        with_ports: true
+```
+
+See `examples/feature_interface`, which does exactly this for a part and for the
+assembly it belongs to.

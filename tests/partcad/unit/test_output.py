@@ -195,25 +195,35 @@ def test_builtin_requirements_match_the_pinned_cad_stack():
         "urdf-parser-py": sandbox_versions.URDF_PARSER_PY,
     }
     seen = set()
+    for section, where, requirements in _builtin_requirements():
+        for requirement in requirements:
+            distribution = sandbox_versions.distribution_name(requirement)
+            assert distribution in known, "%s: unknown requirement %s" % (where, requirement)
+            assert requirement == known[distribution], "%s: %s" % (where, requirement)
+            seen.add(distribution)
+    assert seen == set(known), "unused pin(s): %s" % (set(known) - seen)
+
+
+def _builtin_requirements():
+    """Every 'pythonRequirements' list in the built-in packages.
+
+    A file type declares what its own script needs; the package declares what
+    the scripts share, which is also what a file type another package declares
+    against one of those scripts gets (see '//builtin/render'). Both are
+    installed into the sandbox, so both are pins that can drift.
+    """
     for section in output.SECTIONS:
         config = yaml.safe_load(open(os.path.join(BUILTIN_DIR, section, "partcad.yaml")))
+        yield section, section, config.get("pythonRequirements") or []
         for format_name, format_config in config[section].items():
-            for requirement in format_config.get("pythonRequirements") or []:
-                distribution = sandbox_versions.distribution_name(requirement)
-                assert distribution in known, "%s: unknown requirement %s" % (format_name, requirement)
-                assert requirement == known[distribution], "%s: %s" % (format_name, requirement)
-                seen.add(distribution)
-    assert seen == set(known), "unused pin(s): %s" % (set(known) - seen)
+            yield section, format_name, format_config.get("pythonRequirements") or []
 
 
 def test_cadquery_ocp_is_reasserted_after_build123d():
     """Installing build123d replaces OCP, so the pin has to come after it."""
-    for section in output.SECTIONS:
-        config = yaml.safe_load(open(os.path.join(BUILTIN_DIR, section, "partcad.yaml")))
-        for format_name, format_config in config[section].items():
-            requirements = format_config.get("pythonRequirements") or []
-            if sandbox_versions.BUILD123D in requirements:
-                assert requirements[-1] == sandbox_versions.CADQUERY_OCP, format_name
+    for _section, where, requirements in _builtin_requirements():
+        if sandbox_versions.BUILD123D in requirements:
+            assert requirements[-1] == sandbox_versions.CADQUERY_OCP, where
 
 
 # --------------------------------------------------------------------------- #

@@ -145,6 +145,20 @@ instructions contradict themselves — a mismatched thread, or a `*Min` above it
 Prefer `connect`/`connectPorts` when the parts define interfaces/ports; otherwise
 use explicit `location`. Work in millimeters and degrees.
 
+**Do not guess the names** `with:`, `to:`, `withInstance:`, `toInstance:`,
+`withPort:` and `toPort:` take. Ask each part what it has, and read the exact
+spelling out of the log:
+
+```sh
+mkdir -p /tmp/pc-render                                  # -O needs the directory to exist
+pc render -t png -O /tmp/pc-render --with-all <part>
+```
+
+That draws every port of the part with its name, and every interface instance
+with a line out to the ports that belong to it — and lists all of them in the
+log, under the `N port(s) drawn on the projection:` line, which is the list to
+copy from. `pc info <part>` reports the same names as text.
+
 Then mark the assembly **not manufacturable** in `partcad.yaml` (it is generated,
 not a catalog item) so `pc test` passes:
 
@@ -175,7 +189,63 @@ oriented correctly and that nothing interpenetrates unintentionally, then adjust
 placements/mates. Iterate until it matches. `pc inspect -a <name>` gives an
 interactive view.
 
+### When a connection comes out wrong
+
+A part in the wrong place tells you *that* a `connect:` is wrong, not *why* —
+ports and interfaces are not geometry, so nothing about them is on the plain
+render. Draw them:
+
+```sh
+pc render -a -t png -O /tmp/pc-render --with-ports <name>       # every port of every part
+pc render -a -t png -O /tmp/pc-render --with-interfaces <name>  # every interface, joined to its ports
+pc render -a -t png -O /tmp/pc-render --with-all <name>         # both
+```
+
+On an assembly these walk everything inside it and place each child's ports
+where the assembly put the child, so both ends of a connection are on one
+picture. Each port is a coordinate frame whose **long arrow is `+Z`** — the
+direction a part travels along when it is connected through that port — and each
+is named `<part-instance>:<port>`. Read the picture:
+
+- **Connected as intended**: the two frames coincide and their `+Z` arrows point
+  in **opposite** directions.
+- **A fixed gap between the two frames**: the connection resolved, but one of
+  the parts places that port wrong. Fix the part's `implements:`, not the ASSY —
+  and use `/pc:add-interfaces` for that.
+- **Frames coincide but the part is rotated**: the ports met and the roll (their
+  `X` axes) is what disagrees, or the wrong instance of a symmetric interface was
+  picked. Pin it with `withInstance:`/`toInstance:`.
+- **The part did not move at all**: the `connect:` named something that does not
+  exist or is ambiguous. The log lists every port drawn, with its exact name —
+  compare it against what the ASSY says.
+- **Two parts connected through the wrong pair**: `--with-interfaces` shows
+  which ports each interface instance owns, which is what a `connect:` selects
+  by. If a bolt pattern shows up as four separate instances rather than one with
+  four ports, the interface is declared wrong.
+
+Iterate on the `--with-ports` render, not the plain one, for as long as a
+connection is the thing being fixed.
+
 ## 5. Finalize
 
 Summarize the structure — parts, sub-assemblies, key placements — and how to view
-it (`pc inspect -a <name>`).
+it (`pc inspect -a <name>`, or `pc render -a -t png --with-all <name>` for a
+picture with the connection metadata on it).
+
+For an assembly whose connections are worth keeping a picture of, declare the
+drawing as a file type so `pc render` keeps it up to date along with everything
+else:
+
+```yaml
+assemblies:
+  <name>:
+    render:
+      svg-with-ports:
+        package: //builtin/render
+        path: render_svg.py
+        extension: ports.svg
+        with_ports: true
+```
+
+`examples/feature_interface` does this for a part and for the assembly it
+belongs to.

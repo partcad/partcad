@@ -7,6 +7,52 @@ cover:
   assembly: connect-mates
 
 docs:
+  intro: |
+    ### Seeing the ports and the interfaces
+
+    A port is a coordinate frame and an interface is a named set of them.
+    Neither is geometry, so neither shows up in a drawing - which is exactly
+    what makes them hard to get right. `pc render` draws them when asked:
+
+    <table><tr>
+    <td valign=top><b><code>--with-ports</code></b><br/>
+    <a href="./example-bracket.ports.svg"><img src="./example-bracket.ports.svg"
+    alt="The bracket's ports" width="430"></a></td>
+    <td valign=top><b><code>--with-interfaces</code></b><br/>
+    <a href="./example-bracket.interfaces.svg"><img src="./example-bracket.interfaces.svg"
+    alt="The bracket's interfaces" width="430"></a></td>
+    </tr></table>
+
+    `--with-ports` marks every port with its own coordinate frame - the long
+    arrow is `+Z`, the direction a part travels along when it is connected
+    through that port - and writes the name a `connectPorts:` would have to use.
+    `--with-interfaces` names each *instance* of an interface once and draws a
+    line out to each port that belongs to it, so a bolt pattern reads as the one
+    connection it is; the small circles are the port boundaries, the `m3` and
+    `m4` sketches this package defines.
+
+    On an assembly the same two options walk everything inside it, which is how
+    a connection that went wrong is found - two frames that should have met and
+    did not:
+
+    <table><tr>
+    <td valign=top><b><code>--with-ports</code></b><br/>
+    <a href="./connect-mates.ports.svg"><img src="./connect-mates.ports.svg"
+    alt="The assembly's ports" width="430"></a></td>
+    <td valign=top><b><code>--with-interfaces</code></b><br/>
+    <a href="./connect-mates.interfaces.svg"><img src="./connect-mates.interfaces.svg"
+    alt="The assembly's interfaces" width="430"></a></td>
+    </tr></table>
+
+    All four are drawings rather than pictures — open any of them to read the
+    names at full size.
+
+    They are checked in, and `pc render` keeps them that way: `example-bracket`
+    and `connect-mates` each declare two file types of their own in
+    `partcad.yaml` that draw what the two options draw. `--with-ports` and
+    `--with-interfaces` are the same thing asked for once, on the command line,
+    for any object and any output format.
+
   usage: |
     ```shell
     # placement == "outer"
@@ -22,7 +68,16 @@ docs:
     pc inspect -a -p placement=inner connect-ports
     pc inspect -a -p placement=inner connect-interfaces
     pc inspect -a -p placement=inner connect-mates
+
+    # where the ports are, and which interface each of them belongs to
+    pc render -t png --with-ports example-bracket
+    pc render -t png --with-interfaces example-bracket
+    pc render -a -t png --with-all connect-mates
     ```
+
+    Every port drawn is also listed in the log, with the exact name to write in
+    an ASSY file - the names on the drawing are small, and there are a lot of
+    them.
 
 sketches:
   m3:
@@ -238,6 +293,38 @@ parts:
     vendor: omc-stepperonline
     sku: ST-M1
     type: step
+    # Two more drawings of this part, beside whatever else is rendered: the
+    # projection with its ports on it, and the projection with its interfaces
+    # on it. They are what `pc render --with-ports` and `--with-interfaces`
+    # draw, declared as file types so that `pc render` keeps them up to date
+    # with the geometry instead of leaving them to be redrawn by hand.
+    #
+    # Both name an implementation that lives in another package
+    # (`//builtin/render`, the one that implements `svg` itself) exactly as
+    # `feature_render_custom` names one - `package` says where, `path` says
+    # which script. `extension` is what keeps them apart from the plain `svg`
+    # drawing, which would otherwise be the very same file.
+    render: &connection-drawings
+      svg-with-ports:
+        desc: The projection, with every port marked and named.
+        package: //builtin/render
+        path: render_svg.py
+        extension: ports.svg
+        with_ports: true
+        # A name is drawn as line segments, and there are a lot of names here,
+        # so these two files are several times the size of the plain drawing.
+        # Four decimal places is a tenth of a micron on a part measured in tens
+        # of millimetres, and it takes a quarter off the bytes of the ten this
+        # renderer writes by default -- which matters for a drawing that lives
+        # in a repository.
+        precision: 4
+      svg-with-interfaces:
+        desc: The projection, with every interface named and joined to its ports.
+        package: //builtin/render
+        path: render_svg.py
+        extension: interfaces.svg
+        with_interfaces: true
+        precision: 4
     connect:
       # The bracket is the fixture everything else is connected to: it is held
       # by its foot, which is the part of it nothing else needs.
@@ -290,6 +377,10 @@ assemblies:
     desc: |
       Demonstrates how to provide the minimum information while letting PartCAD
       determine the rest using the interfaces' mating metadata.
+    # The same two drawings as `example-bracket` above, of the whole mount: on
+    # an assembly they walk every child, so what they show is where the parts'
+    # ports ended up once the assembly placed them.
+    render: *connection-drawings
     parameters:
       placement:
         type: string

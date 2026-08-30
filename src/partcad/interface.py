@@ -34,6 +34,33 @@ def _port_location(port) -> Location:
     return port.location if port.location is not None else Location()
 
 
+def place_components(components, placement: Location):
+    """The shape envelopes of 'components', moved by 'placement'.
+
+    The envelopes stay envelopes: the placement is composed onto whatever
+    placement each one already carries and travels on as plain data
+    (KEY_LOCATION), exactly as an assembly places its children, so it becomes a
+    real transform only once a sandbox decodes the envelope. That is what keeps
+    this - and the core process - free of OCP.
+
+    Shared by 'Interface.get_components()', which places an interface's port
+    sketches onto its ports for the viewer, and by 'render_overlay', which
+    places the same sketches for a projection.
+    """
+    from . import shape_envelope
+
+    if isinstance(components, list):
+        return [place_components(item, placement) for item in components]
+    if not shape_envelope.is_shape_envelope(components):
+        # Not geometry (a null a factory produced, say); nothing to place.
+        return components
+    own = components.get(shape_envelope.KEY_LOCATION)
+    composed = placement if own is None else (placement * Location(own))
+    moved = dict(components)
+    moved[shape_envelope.KEY_LOCATION] = composed.as_packed()
+    return moved
+
+
 @telemetry.instrument()
 class InterfacePort:
     """One of the ports provided by the interface,
@@ -566,32 +593,15 @@ class Interface:
     async def get_components(self, ctx):
         """This interface's port sketches, each moved onto its port.
 
-        This is a viewer-only path (Interface.show). The sketch components stay
-        BREP envelopes: the port's placement is composed onto whatever placement
-        the envelope already carries and travels as plain data (KEY_LOCATION),
-        exactly as an assembly places its children, so the placement becomes a
-        real transform only once a sandbox decodes the envelope. That keeps this
-        module - and the core process - free of OCP.
+        This is a viewer-only path (Interface.show); 'render_overlay' does the
+        same for a projection. The sketch components stay BREP envelopes - see
+        'place_components()' above for why.
         """
-        from . import shape_envelope
-
-        def move_component(component, placement):
-            if isinstance(component, list):
-                return [move_component(item, placement) for item in component]
-            if not shape_envelope.is_shape_envelope(component):
-                # Not geometry (a null a factory produced, say); nothing to place.
-                return component
-            own = component.get(shape_envelope.KEY_LOCATION)
-            composed = placement if own is None else (placement * Location(own))
-            moved = dict(component)
-            moved[shape_envelope.KEY_LOCATION] = composed.as_packed()
-            return moved
-
         components = []
         for port in self.get_ports().values():
             if port.sketch is not None:
                 sketch_components = list(await port.sketch.get_components(ctx))
-                components.append([move_component(c, _port_location(port)) for c in sketch_components])
+                components.append(place_components(sketch_components, _port_location(port)))
         return components
 
     def get_markers(self):

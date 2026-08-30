@@ -58,6 +58,37 @@ Feature: `pc render` command
       |     pdf | primitive.pdf     |
       |    html | primitive.html    |
 
+  # A port is a coordinate frame and an interface is a named set of them, so
+  # neither is geometry and neither reaches a drawing without being asked for.
+  # `feature_interface` is the example that has them.
+  @type-image
+  Scenario Outline: `pc render` draws the ports and the interfaces
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_interface -t png -O ./ <option> example-bracket"
+    Then the command should exit with a status code of "0"
+    Then a file named "example-bracket.png" should be created
+    Given a file named "partcad.yaml" does not exist
+    # Every port drawn is also named in the log, where it can be copied from
+    # into an ASSY file.
+    Then STDERR should contain "10 port(s) drawn on the projection"
+    Then STDERR should contain "L-30mm-slotted-3mm-thru-opening-m4"
+
+    Examples: The three ways to ask
+      |            option |
+      |      --with-ports |
+      | --with-interfaces |
+      |        --with-all |
+
+  # Naming one object renders that object. The package holds four assemblies and
+  # three more parts, none of which was asked for.
+  @type-image
+  Scenario: `pc render` of one object renders only that object
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_interface -t png -O ./ example-bracket"
+    Then the command should exit with a status code of "0"
+    Then a file named "example-bracket.png" should be created
+    Given a file named "partcad.yaml" does not exist
+    Then a file named "connect-mates.png" should not exist
+    Then a file named "example-motor.png" should not exist
+
   @type-guide
   Scenario: `pc render -t pdf` refuses an assembly that is not meant to be built
     When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t pdf -O ./ -a :primitive"

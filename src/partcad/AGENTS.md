@@ -114,6 +114,18 @@ isort --check src/partcad tests/partcad
   spec (see "Packaging" in the root [AGENTS.md](../../AGENTS.md)). The requirement strings there are the versions
   `sandbox_versions.py` pins, which `tests/partcad/unit/test_output.py` enforces.
 
+- **Drawing ports and interfaces** (`./src/partcad/render_overlay.py`, `./src/partcad/wrappers/stroke_text.py`):
+  `pc render --with-ports`/`--with-interfaces` draws the connection metadata on top of a projection.
+  `render_overlay.py` answers only *where* the ports are — a lookup for a part, a walk for an assembly (and so
+  for a scene, which is one), all of it plain arithmetic on `geom.Location` plus the port sketches' existing
+  envelopes, so the core stays free of OCP — and `builtin/render/render_svg.py` does the drawing, because it is
+  the only side that knows where the camera is. The labels are line segments from `stroke_text.py` rather than
+  an SVG `<text>` element: PNG and JPEG go through the SVG and would keep one, but DXF converts paths only, and
+  real text geometry would need a font whose version this repository does not control. Two things ask for the
+  overlay and neither overrides the other — the command line, and a `render:` file type declaring
+  `with_ports:`/`with_interfaces:` — which is `render_overlay.effective()`, and is how
+  `examples/feature_interface` keeps four such drawings checked in.
+
 - **Sandbox environment** (`./src/partcad/python_env.py`): importing `partcad` sweeps every `PYTHON*` variable
   out of `os.environ` and puts back only `PARTCAD_PYTHON_ENV`. Everything PartCAD spawns — the wrappers, `pip`,
   `-m venv`, conda — inherits that, which is why a sandbox interpreter runs with plain `-sOOu` rather than the
