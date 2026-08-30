@@ -126,9 +126,10 @@ option_groups = [
 command_groups = [
     {
         # `version` and `upgrade` are about this installation of PartCAD;
-        # `config`, `system` and `daemon` about the host it runs on.
+        # `config`, `system`, `daemon` and `open` about the host it runs on --
+        # `open` starts an application on the screen of whoever ran it.
         "name": "Host commands",
-        "commands": ["version", "upgrade", "config", "system", "daemon"],
+        "commands": ["version", "upgrade", "config", "system", "daemon", "open"],
     },
     {
         "name": "Package commands",

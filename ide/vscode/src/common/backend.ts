@@ -233,6 +233,52 @@ class JsonRpcBackend implements PartcadBackend {
     }
 
     /**
+     * Open one file in a third-party application with `pc open`.
+     *
+     * Never over this connection, and there is no RPC method for it: the daemon
+     * can be remote, where the window would open on somebody else's screen and
+     * the path would name a file nobody has. So it is the CLI, run here, on this
+     * machine, with this machine's display -- the same rule as `pc lint --file`.
+     *
+     * Whether a container may be used is the user's setting rather than
+     * something worked out here: PartCAD decides how to run the application, and
+     * this only says what it is allowed to do.
+     */
+    private async openExternal(arg: { path?: string; tool?: string }): Promise<{ detail: string; method: string }> {
+        const config = vscode.workspace.getConfiguration('partcad');
+        const image = (config.get<string>('open.dockerImage') ?? '').trim();
+        const args = [
+            'open',
+            '--with',
+            arg?.tool ?? 'freecad',
+            ...(config.get<boolean>('open.useDocker') === true ? ['--use-docker'] : []),
+            ...(image ? ['--docker-image', image] : []),
+            arg?.path ?? '',
+            '--json',
+        ];
+        const stdout = await runCli(this.cliPath, args, this.cwd, this.outputChannel, undefined, {
+            // The reason for a failure is in the JSON -- which X server to
+            // install, how to allow a container -- and it is the whole answer.
+            // Rejecting on the exit code would throw it away and leave the user
+            // with "the command failed".
+            allowFailure: true,
+        });
+        let parsed: any;
+        try {
+            parsed = JSON.parse(stdout);
+        } catch {
+            // Nothing parseable on stdout: a `pc` too old to know the command
+            // says so on stderr and prints nothing here. Reporting that beats
+            // showing the user a JSON parser error.
+            throw new Error('This PartCAD cannot open files in other applications; update PartCAD and try again.');
+        }
+        if (!parsed?.ok) {
+            throw new Error(parsed?.error ?? 'PartCAD could not open the file.');
+        }
+        return { detail: parsed.detail ?? '', method: parsed.method ?? '' };
+    }
+
+    /**
      * Register the `partcad.*` commands the extension invokes, mapping each to
      * the CLI-shaped JSON-RPC method with translated parameters. This replaces
      * what the LanguageClient's ExecuteCommandFeature did for the LSP backend.
@@ -296,6 +342,10 @@ class JsonRpcBackend implements PartcadBackend {
         // answering when the daemon is down or the package will not load
         // because of the very file being typed into.
         reg('partcad.lintFile', (a) => this.lintFile(typeof a === 'string' ? { path: a } : a));
+        // Through the CLI for the same reason, and a stronger one: a daemon can
+        // be remote, and "open this in FreeCAD" is meaningless anywhere but on
+        // the machine sitting in front of the user.
+        reg('partcad.openExternal', (a) => this.openExternal(typeof a === 'string' ? { path: a } : a));
         reg('partcad.testReal', (a) => this.send('test', { package: a.packageName, object: a.objectName }));
         reg('partcad.getStats', () => this.send('info', {}));
         reg('partcad.activate', () => this.send('activate', {}));

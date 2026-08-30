@@ -1,5 +1,5 @@
 {
-  "_source": "Measured in CI run 33149121989 (commit 314290fc), from the timestamps behave prints on each \"Feature:\" line. Each value is the longest of the three cells measured there: windows-latest/3.10, windows-latest/3.14 and ubuntu-latest/3.10 -- Windows is what the 60 minute job timeout binds on, and taking the maximum keeps a feature that is skipped on one OS from being weighed as free on the others. The two 'software' features were added after that run and are scaled from a local measurement against a feature of the same shape measured there ('features/add/sketch.feature' and 'features/list/sketches.feature'), so they are estimates until the table is next re-measured. 'features/add/sketch.feature' is its measurement scaled by the same local ratio, for the URL scenario added to it here.",
+  "_source": "Measured in CI run 33149121989 (commit 314290fc), from the timestamps behave prints on each \"Feature:\" line. Each value is the longest of the three cells measured there: windows-latest/3.10, windows-latest/3.14 and ubuntu-latest/3.10 -- Windows is what the 60 minute job timeout binds on, and taking the maximum keeps a feature that is skipped on one OS from being weighed as free on the others. The two 'software' features were added after that run and are scaled from a local measurement against a feature of the same shape measured there ('features/add/sketch.feature' and 'features/list/sketches.feature'), so they are estimates until the table is next re-measured. 'features/add/sketch.feature' is its measurement scaled by the same local ratio, for the URL scenario added to it here. 'features/open.feature' was added after that run too, and is estimated from 'features/upgrade.feature', which it resembles -- a handful of `pc` invocations that fail before any package is loaded.",
   "_unit": "seconds",
   "_refresh": "Re-measure when the suite's shape changes materially: download the Behave job logs (gh api repos/partcad/partcad/actions/jobs/<id>/logs), take the timestamp of each \"Feature: ... # features/<path>:<line>\" line, and difference consecutive ones. Values only have to be right relative to each other. tests/partcad_cli/unit/test_behave_shard.py fails when a feature file here no longer exists, or when a feature file has no entry.",
   "seconds": {
@@ -35,6 +35,7 @@
     "features/list/sketches.feature": 3.4,
     "features/list/software.feature": 6.0,
     "features/monorepo.feature": 109.0,
+    "features/open.feature": 2.0,
     "features/pc.feature": 12.2,
     "features/render.feature": 769.8,
     "features/search/all.feature": 12.8,

@@ -167,6 +167,24 @@
         }
       },
       {
+        "title": "Third-party applications",
+        "order": 2,
+        "properties": {
+          "partcad.open.useDocker": {
+            "default": false,
+            "description": "Let PartCAD run a third-party CAD application (\"Open in...\") in a Docker container when it is not installed on this machine. The container is named after the application ('partcad-freecad'), keeps the workspace mounted at the path it has here, and shows its windows on this machine's X display - which macOS and Windows need an X server for.",
+            "scope": "machine",
+            "type": "boolean"
+          },
+          "partcad.open.dockerImage": {
+            "default": "",
+            "description": "Create that container from this image instead of the application's default one (FreeCAD: 'linuxserver/freecad:latest'). Applies only when the container is created; remove an existing one to have it recreated.",
+            "scope": "machine",
+            "type": "string"
+          }
+        }
+      },
+      {
         "title": "General",
         "order": 3,
         "properties": {
@@ -531,6 +549,13 @@
         "group": "Export",
         "title": "glTF...",
         "icon": "$(export)"
+      },
+      {
+        "command": "partcad.openInFreeCAD",
+        "category": "PartCAD",
+        "group": "Open in",
+        "title": "FreeCAD",
+        "icon": "$(link-external)"
       }
     ],
     "submenus": [
@@ -558,6 +583,11 @@
         "id": "partcad.submenu.export",
         "label": "Export",
         "icon": "$(export)"
+      },
+      {
+        "id": "partcad.submenu.openWith",
+        "label": "Open in",
+        "icon": "$(link-external)"
       }
     ],
     "menus": {
@@ -662,6 +692,11 @@
           "submenu": "partcad.submenu.export",
           "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode || viewItem == assembly || viewItem == assemblyWithCode)",
           "group": "additional_commands"
+        },
+        {
+          "submenu": "partcad.submenu.openWith",
+          "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode || viewItem == assembly || viewItem == assemblyWithCode)",
+          "group": "additional_commands"
         }
       ],
       "partcad.submenu.add": [
@@ -764,6 +799,12 @@
         },
         {
           "command": "partcad.exportToGLTF",
+          "when": "view == partcadExplorer"
+        }
+      ],
+      "partcad.submenu.openWith": [
+        {
+          "command": "partcad.openInFreeCAD",
           "when": "view == partcadExplorer"
         }
       ]

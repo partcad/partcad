@@ -65,6 +65,11 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         vscode.commands.registerCommand(`partcad.exportToIGES`, (item) => this.exportToIGES(item));
         vscode.commands.registerCommand(`partcad.exportToGLTF`, (item) => this.exportToGLTF(item));
 
+        // One command per application rather than one that asks which: a context
+        // menu is where the user says what they want, and a picker on top of a
+        // menu is the same question twice.
+        vscode.commands.registerCommand(`partcad.openInFreeCAD`, (item) => this.openWith('freecad', item));
+
         vscode.commands.registerCommand(`partcad.test`, (item) => this.test(item));
 
         vscode.commands.registerCommand(`partcad.addPartItem`, (item) => this.addPart(item));
@@ -111,6 +116,45 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             packageName: packageName,
             callback: 'partcad.addAssembly2',
         });
+    }
+
+    /**
+     * Open the file a part or an assembly is defined by in a third-party CAD
+     * application ("Open in..." in the context menu).
+     *
+     * It is the item's own source file that is handed over, not a rendering of
+     * it: rendering is the daemon's work, and this deliberately has none in it.
+     * `pc open` runs on the machine the user is sitting at, finds a locally
+     * installed application or (when the setting allows it) a container, and
+     * says what to install when it can find neither -- which is why the failure
+     * is shown as it comes back rather than summarised.
+     */
+    public async openWith(tool: string, item: PartcadItem) {
+        // `config.item_path` rather than `itemPath`: the latter is set only for
+        // the types this editor can edit (scripts), and a STEP or BREP part --
+        // exactly what another CAD application is for -- is not one of them.
+        const path = item?.config?.item_path ?? item?.itemPath;
+        if (path === undefined) {
+            await vscode.window.showWarningMessage(
+                `'${item?.name}' has no file of its own to open in another application.`,
+            );
+            return;
+        }
+        try {
+            // Under a progress notification because the first open of a
+            // containerised application downloads its image, which takes
+            // minutes and would otherwise look like nothing happening.
+            await vscode.window.withProgress(
+                { location: vscode.ProgressLocation.Notification, title: `${item.name}`, cancellable: false },
+                async (progress) => {
+                    progress.report({ message: 'Opening...' });
+                    await vscode.commands.executeCommand('partcad.openExternal', { path: path, tool: tool });
+                },
+            );
+        } catch (e) {
+            const reason = e instanceof Error ? e.message : `${e}`;
+            await vscode.window.showErrorMessage(`Could not open '${item.name}'`, { modal: false, detail: reason });
+        }
     }
 
     public async inspectSource(item: PartcadItem) {

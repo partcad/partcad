@@ -43,7 +43,8 @@ a CAD addon, or documentation.
 * [src/partcad_client](./src/partcad_client):
 
   What a **client** does, and a daemon must not: discovering the daemon serving a workspace and connecting to
-  it (`daemon`, `client`), and replacing this installation of PartCAD (`selfupdate`).
+  it (`daemon`, `client`), replacing this installation of PartCAD (`selfupdate`), and opening a file in a
+  third-party CAD application on this machine (`external`).
 
   All of it acts on **this machine**, from the process running out of it. A daemon can be remote, where
   "update PartCAD" would mean updating somebody else's installation and "stop the local daemons" somebody
@@ -58,6 +59,13 @@ a CAD addon, or documentation.
 
   It also refuses: `pc upgrade` run inside a bundle the editor extension downloaded errors out and says to
   update the extension instead, since the extension owns that bundle.
+
+  `external` is the same rule applied to a window instead of an installation. `pc open` (and the VS Code
+  extension's per-part "Open in..." menu, by running it) starts FreeCAD on the screen of whoever ran the
+  command — on this machine, with this machine's file, and never over the wire; there is no RPC method for it
+  and none may be added. A machine with no local installation can run the application in a container PartCAD
+  keeps for it, named after the tool (`partcad-freecad`), with the workspace and the daemon's socket mounted
+  at the paths they have here and the host's X display forwarded into it.
 
 * [src/partcad_ide_client](./src/partcad_ide_client/AGENTS.md):
 
