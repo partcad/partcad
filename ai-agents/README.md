@@ -46,18 +46,49 @@ The plugin folder is named `claude`, but the command namespace comes from
   assembly, or a 2D sketch and follows the matching flow below.
 - **`/pc:gen-part <description>`** — generates a single part: the agent picks a
   representation (build123d / cadquery / openscad / sdf), authors the CAD script
-  itself, and validates it by rendering with `pc render`. Supersedes the legacy
-  `pc add part --ai` pipeline (the agent is the model; no provider/API key).
+  itself, and validates it by rendering **four views** (`front`, `top`, `right`,
+  `iso`) and checking each against the description — `pc test` only proves the
+  geometry instantiates, and one projection hides whatever is behind it.
+  Supersedes the legacy `pc add part --ai` pipeline (the agent is the model; no
+  provider/API key).
 - **`/pc:gen-assembly <description>`** — generates an assembly: reuses or
   generates the component parts, authors the `.assy` (explicit placement or
-  interface mates), and validates by rendering. New capability — PartCAD had no
-  AI assembly path.
+  interface mates), and validates the same four ways — a component offset along
+  the viewing direction sits perfectly in the one view that hides the offset. New
+  capability — PartCAD had no AI assembly path.
 - **`/pc:gen-sketch <description>`** — generates a 2D sketch: the agent picks a
   representation (build123d / cadquery / dxf / svg), authors the sketch, and
   validates by rendering to SVG.
+- **`/pc:export <object> <format>`** — writes a 3D/CAD file out of an object a
+  package declares (`pc export`) and changes nothing in `partcad.yaml`. This is
+  what "export it as STEP" almost always means. It reaches more formats than
+  `pc convert` does — `urdf`, plus any file type a package implements itself.
+- **`/pc:convert <what> <to what>`** — changes what something *is*. For an
+  object in a package that is `pc convert`, which writes the file **and**
+  rewrites the object's definition to point at it; for a file that belongs to no
+  package it is `pc adhoc convert`, which touches no package at all.
+- **`/pc:render <what> <from where>`** — writes a 2D projection to look at
+  (`png`, `jpeg`, `svg`, `dxf`): `pc render` for an object in a package, so the
+  package's own `render:` options apply, and `pc adhoc render` for a bare file.
+  The viewing angle is `--view front|top|iso|…`, or `--viewport-origin` /
+  `--viewport-up` for an arbitrary one — the same two keys a `render:` file type
+  is configured with in `partcad.yaml`. `--with-ports` / `--with-interfaces` /
+  `--with-all` draw the connection metadata on top of the projection, which is
+  the only way any of it becomes visible.
+
+  All three begin the same way, because the answer to "which command" is the
+  same question in each: is there a package, and does what the user named
+  resolve to an object in it (by name, or as the file an object is built from)?
+  If so the package command is right; if not it is the `adhoc` one, and
+  `pc export` has no `adhoc` form because `pc adhoc convert` already is it.
 - **`/pc:describe <object>`** — writes a narratable description of an existing
-  part, assembly, or sketch by rendering and examining it, and stores it in the
-  object's `summary:`. Reproduces the retired built-in AI shape-summary.
+  part, assembly, or sketch, and stores it in the object's `summary:`.
+  Reproduces the retired built-in AI shape-summary. It renders **three views**
+  (`front`, `top`, `iso`) rather than one, since a single projection hides
+  everything behind it — and for a part it also asks
+  `//pub/feature/render/draftwright` (through `pc render -e`) for a dimensioned
+  technical drawing, so the numbers in the description are read off the drawing
+  instead of estimated from pixels.
 - **`/pc:search <query>`** — finds existing parts and assemblies in the catalog
   whose name, description, or source matches the query (`pc search parts` /
   `pc search assemblies`), lists the matches, and can inspect or render a chosen
