@@ -25,7 +25,9 @@ three things at once:
   passes through instead of blocking on a lock the waiting thread holds.
 """
 
+import ast
 import asyncio
+import pathlib
 import threading
 
 import pytest
@@ -365,3 +367,79 @@ def test_a_refused_sync_caller_leaves_no_claim_behind():
 
     asyncio.run(main())
     assert "robot/base" in prj.parts
+
+
+# ---- no coroutine is left calling the synchronous accessor ---------------------
+
+
+def _src_root():
+    """The 'src' directory of this checkout, from this file's own location."""
+    return pathlib.Path(__file__).resolve().parents[3] / "src"
+
+
+def _sync_part_lookups_inside_coroutines():
+    """(file, line, name, enclosing functions) for each one still there.
+
+    Lexical, so it says nothing about a synchronous helper a coroutine calls -
+    but every case found so far has been of this shape, and it is the shape a
+    reviewer cannot see: the call reads like any other line in the function.
+    """
+    found = []
+
+    class Visitor(ast.NodeVisitor):
+        def __init__(self, path):
+            self.path = path
+            self.stack = []
+
+        def _function(self, node, is_async):
+            self.stack.append((node.name, is_async))
+            self.generic_visit(node)
+            self.stack.pop()
+
+        def visit_FunctionDef(self, node):
+            self._function(node, False)
+
+        def visit_AsyncFunctionDef(self, node):
+            self._function(node, True)
+
+        def visit_Call(self, node):
+            func = node.func
+            name = getattr(func, "attr", None) or getattr(func, "id", None)
+            if name in ("get_part", "_get_part") and any(is_async for _, is_async in self.stack):
+                enclosing = " > ".join(n for n, _ in self.stack)
+                found.append((self.path, node.lineno, name, enclosing))
+            self.generic_visit(node)
+
+    modules = sorted(_src_root().rglob("*.py"))
+    # A sweep that reads nothing passes for the wrong reason, and the path it
+    # walks is derived from this file's location rather than the working
+    # directory, so a move of either tree would do exactly that.
+    assert len(modules) > 100, "%s is not the source tree" % _src_root()
+    for path in modules:
+        Visitor(path).visit(ast.parse(path.read_text(encoding="utf-8")))
+    return found
+
+
+def test_no_coroutine_calls_the_synchronous_part_accessor():
+    """The synchronous accessor now raises at a coroutine, so this is a bug.
+
+    'Project.get_part()' answers a caller that already owns a loop by naming
+    'get_part_async()', because materializing a derived part from there is
+    something it cannot do. That is a better answer than the borrowed thread it
+    replaced -- but it turns every unconverted coroutine into a failure the
+    moment the part it asks for happens to be a derived one, which is a property
+    of the package being read rather than of the call.
+
+    Seven such callers existed when the accessor started refusing. Three were
+    converted with it -- 'AssemblyFactoryAssy' twice and 'ProviderCart.add_object'
+    -- and four were missed: two in 'PartFactoryAlias' resolving the source it
+    points at, one in 'PartFactoryEnrich' doing the same, and '_test_async' in
+    the JSON-RPC service. The last of those is what failed CI, on the single
+    behave scenario that tests a URDF link by name. Sweeping for the call is how
+    the other three were found, so the sweep is kept.
+    """
+    remaining = _sync_part_lookups_inside_coroutines()
+
+    assert remaining == [], "await get_part_async() instead:\n" + "\n".join(
+        "  %s:%d %s() in %s" % (path, line, name, enclosing) for path, line, name, enclosing in remaining
+    )

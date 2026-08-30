@@ -647,7 +647,10 @@ async def _test_async(ctx, pc, packages, filter_prefix, sketch, interface, assem
             elif assembly:
                 shape = prj.get_assembly(obj)
             else:
-                shape = prj.get_part(obj)
+                # Awaited, not 'get_part()': this is a coroutine, and a part a
+                # URDF or STEP assembly produces has to have that assembly
+                # built before it exists. See 'Project.get_part_async()'.
+                shape = await prj.get_part_async(obj)
             if shape is None:
                 pc.logging.error("%s is not found" % obj)
             elif not shape.finalized:

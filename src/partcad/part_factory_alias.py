@@ -91,7 +91,7 @@ class PartFactoryAlias(pf.PartFactory):
         Resolving is the point: the source may live in another package, and
         asking the context for it loads - and so downloads - that package.
         """
-        source = self.ctx._get_part(self.source)
+        source = await self.ctx._get_part_async(self.source)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")
         await source.prepare_async()
@@ -111,7 +111,7 @@ class PartFactoryAlias(pf.PartFactory):
     async def instantiate(self, obj):
         with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_part_name}"):
 
-            source = self.ctx._get_part(self.source)
+            source = await self.ctx._get_part_async(self.source)
             if not source:
                 pc_logging.error(f"The alias source {self.source} is not found")
                 return None
