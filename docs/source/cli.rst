@@ -97,7 +97,8 @@ Host commands
   publishes no image of its own, Gazebo's is ``gazebosim/gz-harmonic:latest``, and KiCad's is the
   ``ghcr.io/partcad/partcad-container-kicad`` image PartCAD already builds for ``kicad`` parts) the first
   time and reused afterwards, so a container you have prepared
-  keeps being the one that is used. Remove it (``docker rm -f partcad-freecad``) to have the next ``pc open``
+  keeps being the one that is used. Remove the application's own container (``docker rm -f partcad-freecad``,
+  ``partcad-gazebo``, ``partcad-kicad``) to have the next ``pc open``
   create a fresh one. The workspace and the directory holding this workspace's daemon socket are mounted **at
   the paths they have on the host**, which is what lets one path mean the same thing on both sides. A file
   that is not in this workspace gets its own workspace mounted instead, so that whatever is mounted always

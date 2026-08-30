@@ -111,7 +111,8 @@ workspace and the PartCAD daemon's socket mounted at the paths they have here, s
 on both sides. Its windows come out on your X display. On Linux that is the display you are already using; on
 macOS and Windows it needs an X server (XQuartz, VcXsrv) that PartCAD cannot install for you, so it tells you
 which one to install and what to allow rather than starting a container whose windows go nowhere. Remove the
-container (`docker rm -f partcad-freecad`) to have the next open create a fresh one.
+container of the application in question (`docker rm -f partcad-freecad`, `partcad-gazebo` or
+`partcad-kicad`) to have the next open create a fresh one.
 
 ## Inspecting published PartCAD packages
 

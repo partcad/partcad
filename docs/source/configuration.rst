@@ -419,7 +419,7 @@ being missing while the package is loaded.
 ``fileFrom`` and ``fileUrl`` must be declared together.
 They are recognized in :ref:`parts`, :ref:`sketches`, :ref:`assemblies`
 (an assembly's source file is pulled the same way, whether it is an ``.assy``
-file or a CAD file) and :ref:`software`.
+file or a CAD file), :ref:`scenes` and :ref:`software`.
 
 .. _file-hash:
 
@@ -1980,6 +1980,7 @@ Declare scenes
       path: <(optional) the source file path>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
       fileUrl: <(fileFrom=url only) the URL to download the source file from>
+      fileHash: <the bytes to expect; required with "fileFrom", see "Files">
       parameters:  # (optional) same as for assemblies
         <param name>:
           type: <string|float|int|bool>
