@@ -327,6 +327,39 @@ def test_the_tar_member_policy_drops_what_must_not_be_written(tmp_path):
     assert kept == ["partcad/ok"]
 
 
+@pytest.mark.parametrize(
+    "link",
+    [
+        "/etc/passwd",  # absolute, and drive-relative on Windows since 3.13
+        "//server/share/secrets",  # a UNC root, absolute either way
+        "C:/Windows/System32/config/SAM",  # a drive, in the spelling a tar carries
+        "C:\\Windows\\System32\\config\\SAM",  # a drive, in Windows spelling
+        "C:secrets",  # anchored to a drive without a root
+        "\\etc\\passwd",  # the root of the current drive on Windows
+    ],
+)
+def test_the_tar_member_policy_drops_a_link_anchored_anywhere(link, tmp_path):
+    """A link target is a POSIX path, and this runs the same table on both hosts.
+
+    `os.path.isabs` is `ntpath.isabs` on Windows, where Python 3.13 stopped
+    calling a rootless `/etc/passwd` absolute -- so the answer has to come from
+    `posixpath`, plus the Windows anchors it does not know about. Whether an
+    archive is hostile is a property of the archive; running half of this table
+    on one host and half on the other is how the same guard in
+    `partcad_client.selfupdate` came to misreport one of these on Windows alone.
+    """
+    archive = str(tmp_path / "anchored.tar.gz")
+    with tarfile.open(archive, "w:gz") as tf:
+        member = tarfile.TarInfo("partcad/link")
+        member.type = tarfile.SYMTYPE
+        member.linkname = link
+        tf.addfile(member)
+
+    dest = str(tmp_path / "out")
+    with tarfile.open(archive) as tf:
+        assert [m.name for m in provision._safe_members(tf, dest)] == []
+
+
 def test_the_tar_member_policy_keeps_a_normal_bundle(tmp_path):
     archive = _bundle_tar(str(tmp_path / "bundle.tar.gz"), provision.EXE)
     dest = str(tmp_path / "out")
