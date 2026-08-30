@@ -329,7 +329,7 @@ def test_an_unrelated_sporadic_failure_is_not_a_corrupt_cache():
 def test_a_corrupt_cache_is_dropped_before_the_create_is_retried(tmp_path, scripted_commands):
     """Order is the whole point: cleaning after the retry repairs nothing."""
     commands, script = scripted_commands
-    script.append((0, "", _CORRUPT_CACHE))
+    script.append((1, "", _CORRUPT_CACHE))
     runtime = _bare_runtime(tmp_path, "3.13")
 
     runtime.once_conda_locked_attempt()
@@ -348,6 +348,28 @@ def test_a_sporadic_failure_that_is_not_the_cache_retries_without_cleaning(tmp_p
 
     assert _cleans(commands) == [], commands
     assert [command[1] for command in commands] == ["create", "create", "install"], commands
+
+
+def test_a_create_that_exited_zero_is_never_cleaned_up_after(tmp_path, scripted_commands):
+    """The markers on the stderr of a create that *worked* are not a reason to clean.
+
+    libmamba prints the invalid 'repodata_record.json' complaint as a warning and
+    carries on; the prefix it leaves behind is usable. Reading the markers off
+    stderr without asking the exit status would drop a cache every conda
+    environment on the machine shares, and redo a create that had succeeded,
+    on every run that happened to log one.
+    """
+    commands, script = scripted_commands
+    script.append((0, "", _CORRUPT_CACHE))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert _cleans(commands) == [], commands
+    # Still retried -- "Found incorrect download" is a sporadic marker as well --
+    # but retried against the cache rather than after dropping it.
+    assert [command[1] for command in commands] == ["create", "create", "install"], commands
+    assert pc_logging.had_errors is False
 
 
 def test_a_corrupt_cache_in_the_pip_install_is_dropped_too(tmp_path, scripted_commands):
@@ -436,7 +458,7 @@ def test_a_clean_that_reports_failure_is_only_a_warning(tmp_path, scripted_comma
 )
 def test_each_corrupt_cache_marker_alone_cleans_and_retries_the_create(tmp_path, scripted_commands, stderr):
     commands, script = scripted_commands
-    script.append((0, "", stderr))
+    script.append((1, "", stderr))
     runtime = _bare_runtime(tmp_path, "3.13")
 
     runtime.once_conda_locked_attempt()
