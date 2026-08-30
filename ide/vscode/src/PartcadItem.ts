@@ -16,6 +16,7 @@ export const ITEM_TYPE_SKETCH = 'sketch';
 export const ITEM_TYPE_INTERFACE = 'interface';
 export const ITEM_TYPE_PART = 'part';
 export const ITEM_TYPE_ASSEMBLY = 'assembly';
+export const ITEM_TYPE_SOFTWARE = 'software';
 /**
  * An object the package declares but PartCAD could not create.
  *
@@ -126,6 +127,23 @@ export class PartcadItem extends vscode.TreeItem {
                 command: 'partcad.inspectAssembly',
                 arguments: [{ name, pkg, config, itemPath }, {/*params*/}],
             };
+        } else if (itemType === ITEM_TYPE_SOFTWARE) {
+            // The icon parts used before they moved to 'database': software is a
+            // file the package ships rather than geometry, which is what this
+            // icon said about a part and says about software just as well.
+            this.iconPath = {
+                light: path.join(__filename, '..', '..', 'resources', 'light', 'file-binary.svg'),
+                dark: path.join(__filename, '..', '..', 'resources', 'dark', 'file-binary.svg'),
+            };
+            // No 'WithCode' variant: a software object's file is a firmware or
+            // disk image rather than source, so the explorer hands over no path
+            // for it and there is nothing for the 'Edit' actions to open.
+            this.contextValue = 'software';
+            this.command = {
+                title: 'Inspect',
+                command: 'partcad.inspectSoftware',
+                arguments: [{ name, pkg, config, itemPath }, {/*params*/}],
+            };
         } else {
             if (config.type === 'alias') {
                 this.iconPath = {
@@ -133,10 +151,7 @@ export class PartcadItem extends vscode.TreeItem {
                     dark: path.join(__filename, '..', '..', 'resources', 'dark', 'file-symlink-file.svg'),
                 };
             } else {
-                this.iconPath = {
-                    light: path.join(__filename, '..', '..', 'resources', 'light', 'file-binary.svg'),
-                    dark: path.join(__filename, '..', '..', 'resources', 'dark', 'file-binary.svg'),
-                };
+                this.iconPath = new vscode.ThemeIcon('database');
             }
             this.contextValue = itemPath === undefined ? 'part' : 'partWithCode';
             this.command = {

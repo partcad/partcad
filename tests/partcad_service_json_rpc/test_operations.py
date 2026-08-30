@@ -14,6 +14,7 @@ event emission, formatting) is exercised without a real CAD environment.
 
 import contextlib
 import copy
+import os
 import sys
 import types
 
@@ -134,7 +135,7 @@ class FakeShape:
 
 
 class FakeObject:
-    """A part, sketch, assembly or interface as the report operations see it."""
+    """A part, sketch, assembly, interface or software as the report operations see it."""
 
     def __init__(self, name, desc=None, project_name=None, project=None, config=None, info=None, path=None):
         self.name = name
@@ -186,6 +187,7 @@ class FakeProject:
         self.sketches = {}
         self.assemblies = {}
         self.interfaces = {}
+        self.software = {}
         self.providers = {}
         self.children = []
         # The providers this package buys through, as `get_suppliers()` reports
@@ -1013,6 +1015,29 @@ def test_load_package_contents_lists_objects_that_could_not_be_created():
     # The user is told to go look, since the package otherwise appears empty.
     warnings = [payload for event, payload in seen if event == events.WARNING]
     assert any("could not be loaded" in w for w in warnings)
+
+
+def test_load_package_contents_lists_the_packages_software():
+    session, seen = make_session()
+    project = session.partcad_ctx.projects["//"]
+    project.add(
+        "software",
+        FakeObject("firmware", config={"name": "firmware", "type": "raw", "fileHash": "sha256:abc"}, path="fw.bin"),
+    )
+
+    operations._load_package_contents(session, "//")
+
+    (items,) = [payload for event, payload in seen if event == events.ITEMS]
+    # Reported beside the geometry, because software is part of what the package
+    # ships and the client has no other way to find out that it is there.
+    assert items["software"] == [
+        {
+            "name": "firmware",
+            "type": "raw",
+            "fileHash": "sha256:abc",
+            "item_path": os.path.join(project.config_dir, "fw.bin"),
+        }
+    ]
 
 
 def test_load_package_contents_skips_a_child_package_it_cannot_read():

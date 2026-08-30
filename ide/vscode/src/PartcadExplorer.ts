@@ -17,6 +17,7 @@ import {
     ITEM_TYPE_SKETCH,
     ITEM_TYPE_INTERFACE,
     ITEM_TYPE_PART,
+    ITEM_TYPE_SOFTWARE,
     ITEM_TYPE_BROKEN,
 } from './PartcadItem';
 
@@ -32,6 +33,7 @@ type ItemMetadata = {
     parts: PartConfig[];
     assemblies: PartConfig[];
     // Optional: an older PartCAD LSP server does not report these.
+    software?: PartConfig[];
     broken?: BrokenItem[];
 };
 
@@ -230,6 +232,18 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
                 filepath = sketch.item_path;
             }
             elements.push(new PartcadItem(dir, sketch.name, items.name, sketch, filepath, ITEM_TYPE_SKETCH));
+        }
+
+        // After the geometry, because software is what the product ships with
+        // rather than what it is shaped like. No alias-last ordering as above:
+        // software has no alias type to sort behind the rest.
+        const software = (items.software ?? []).slice().sort((i1, i2) => i1['name'].localeCompare(i2['name']));
+        for (const item of software) {
+            // 'item_path' of a software object is the file itself - a firmware
+            // image, a disk image, a binary - and not source anyone edits, so it
+            // is not handed over as a file to open. The inspector shows it as
+            // the path it is.
+            elements.push(new PartcadItem(dir, item.name, items.name, item, undefined, ITEM_TYPE_SOFTWARE));
         }
 
         // Last, so they never push the working objects out of view, and sorted

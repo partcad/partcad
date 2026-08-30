@@ -32,6 +32,10 @@ Objects
   opened for display and editing together, or their source edited directly.
 - **Test** a part, assembly, or scene.
 
+The Explorer also lists the ``software`` a package ships. Selecting one shows its path and its ``fileHash``
+in the Inspector and leaves the ``PartCAD Viewer`` as it is: software is a file, not geometry, so there is
+nothing to render.
+
 Export
 ------
 

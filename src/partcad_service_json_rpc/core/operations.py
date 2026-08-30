@@ -1270,7 +1270,7 @@ def package_refresh(session, params):
 
 
 def list_all(session, params):
-    """Load and report the contents (packages/sketches/interfaces/parts/assemblies)."""
+    """Load and report the contents (packages/sketches/interfaces/parts/assemblies/software)."""
     if session.partcad is None:
         session.emitter.error("Loading the package content while PartCAD is not loaded")
         return None
@@ -2260,6 +2260,7 @@ def _load_package_contents(session, name="//"):
     interfaces = item_objs(project.interfaces, with_path=False)
     parts = item_objs(project.parts)
     assemblies = item_objs(project.assemblies)
+    software = item_objs(project.software)
 
     # Objects the package declares but PartCAD could not create - most often one
     # written against a PartCAD that still had a feature since retired (the
@@ -2286,6 +2287,7 @@ def _load_package_contents(session, name="//"):
             "interfaces": interfaces,
             "parts": parts,
             "assemblies": assemblies,
+            "software": software,
             "broken": broken,
         },
     )
