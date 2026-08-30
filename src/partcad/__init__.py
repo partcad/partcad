@@ -45,6 +45,22 @@ import partcad_utils.telemetry_sentry  # noqa: F401,E402
 import partcad_utils.user_config  # noqa: F401,E402
 import partcad_utils.utils  # noqa: F401,E402
 
+# This module object, to bind the aliases onto below.
+#
+# Deliberately not `globals()`: this package has a submodule named `globals`, and
+# `from .globals import ...` further down binds it as an attribute of the
+# package. On a plain import that happens after this loop and nothing notices,
+# but a *reload* re-executes this body against the module dictionary the first
+# execution left behind -- where `globals` is that submodule. The builtin is
+# shadowed by it, so `globals()` raised `TypeError: 'module' object is not
+# callable` and every reload of `partcad` failed.
+#
+# The daemon reloads `partcad` on each `activate` to reset PartCAD's global state
+# between package loads (`partcad_service_json_rpc.core.session.load_partcad`),
+# and the VS Code extension activates on every connection -- so this broke the
+# second and every later window against a warm daemon, while the first worked.
+_self = _sys.modules[__name__]
+
 for _n in (
     "logging",
     "logging_ansi_terminal",
@@ -61,7 +77,7 @@ for _n in (
     # Also expose it as an attribute of the `partcad` package, so `partcad.<n>`
     # resolves even when nothing does `from . import <n>` below. (`user_config`
     # is re-bound to the config *instance* by a later explicit import.)
-    globals()[_n] = _mod
+    setattr(_self, _n, _mod)
 
 from . import telemetry
 

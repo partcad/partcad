@@ -15,7 +15,7 @@ first time it starts.
 
 It is built from [VSCodium](https://vscodium.com/), rebranded, with the extensions this repository recommends
 installed into it and the [standalone command line tools](../dev-tools/pyinstaller/README.md) inside it. The
-result per platform -- an archive everywhere, a `.dmg` on MacOS, a setup program on Windows -- is published on
+result per platform -- an archive everywhere, a `.dmg` on macOS, a setup program on Windows -- is published on
 the same GitHub release as everything else.
 
 ## Licensing
@@ -82,7 +82,7 @@ Two optional dependencies change what the build can do, and it reports what it l
   from git instead. That one is checked in because it cannot be rendered where it is needed: `cairosvg`
   needs `cairocffi`, and `cairocffi` needs a `libcairo-2.dll` that no wheel ships, so the renderers are
   installable on Windows but not loadable there. Regenerate it when `ide/vscode/resources/logo.svg`
-  changes -- on Linux or MacOS, since it is the machines that *can* render that keep it honest:
+  changes -- on Linux or macOS, since it is the machines that *can* render that keep it honest:
 
   ```bash
   python ide/standalone/tools/make_icons.py \
@@ -108,7 +108,7 @@ build runs the VSCodium command line with a staging directory (`--install-extens
 result inside the application. It does not write that directory itself: the editor resolves each extension
 against the gallery, picks the build for this platform and writes the layout it expects to read back.
 
-They go into the *application's* extensions directory rather than the user's for two reasons. On MacOS a user
+They go into the *application's* extensions directory rather than the user's for two reasons. On macOS a user
 installs by dragging the bundle to /Applications, and anything that was beside the bundle is left behind. And
 on any platform, a PartCAD IDE that installed extensions into `~/.vscode` would be editing the state of a
 Visual Studio Code on the same machine. The cost is that these extensions cannot be uninstalled, only
@@ -122,7 +122,7 @@ behavior -- it is versioned with the IDE, and a new one arrives with a new IDE.
 **The executable is renamed** to `partcad-ide`, so that the process, the window and the task bar say what this
 is. The `bin/` launcher names the executable it runs, so it is rewritten to match (`tools/brand.py shim`);
 that rewrite replaces whole words only, or a data directory like `.vscodium` would be renamed along with it.
-On MacOS nothing is renamed inside the bundle -- the launcher finds the executable through the bundle, and it
+On macOS nothing is renamed inside the bundle -- the launcher finds the executable through the bundle, and it
 is the bundle directory that becomes `PartCAD IDE.app`.
 
 **The command line tools are embedded** at `<resources>/partcad-cli`, beside `<resources>/app` rather than
@@ -162,7 +162,7 @@ whether it is running inside this IDE would slow down every other Visual Studio 
 
 ## Where things end up on the user's machine
 
-| | Linux | MacOS | Windows |
+| | Linux | macOS | Windows |
 | --- | --- | --- | --- |
 | The application | `~/.local/share/partcad/<version>-ide` | `/Applications/PartCAD IDE.app` | wherever the .zip was unpacked |
 | Settings, state, extensions the user installs | `~/.partcad-ide` | `~/.partcad-ide` | `%USERPROFILE%\.partcad-ide` |
@@ -172,11 +172,11 @@ whether it is running inside this IDE would slow down every other Visual Studio 
 machine. `~/.partcad` is deliberately shared: it is PartCAD's, not the editor's, and a package installed from
 the command line should be there in the IDE.
 
-## MacOS: signing
+## macOS: signing
 
-Editing files inside a signed application bundle invalidates its signature, and MacOS refuses to open a bundle
+Editing files inside a signed application bundle invalidates its signature, and macOS refuses to open a bundle
 whose signature does not verify. The build signs the result ad-hoc (`codesign --sign -`), which makes it
-launchable. It is not a Developer ID signature and the application is not notarized, so MacOS still refuses a
+launchable. It is not a Developer ID signature and the application is not notarized, so macOS still refuses a
 copy that carries the "downloaded from the internet" flag. `install.sh --ide` clears that flag on the copy it
 installs; someone who unpacks the archive by hand clears it with:
 

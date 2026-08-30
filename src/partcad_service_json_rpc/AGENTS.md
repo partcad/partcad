@@ -17,6 +17,19 @@ The daemon owns two things its clients do not, and both decide what belongs on w
    client that edits `partcad.yaml` behind the daemon's back leaves it serving stale contents, which is why a
    package-mutating command (`add`, `import`) must be a daemon client and evict the context it changed
    (`_invalidate_context`).
+   The context is warm across connections, which is why `activate` **reloads** `partcad` rather than importing
+   it: `Session.load_partcad` drops `partcad` and `partcad.*` from `sys.modules` (along with `partcad_cli*` and
+   `partcad_ide_client*`, but never this package, whose session is doing the dropping) and imports again,
+   so one package load's global state does not leak into the next. That makes reload-safety a property
+   `partcad` has to have, and one nothing else exercises — the *first* client of a daemon takes the import
+   path and every later one takes the reload path. It broke exactly that way: `partcad/__init__.py` aliased
+   the `partcad_utils` modules with `globals()[name] = module`, and since `partcad.globals` is a submodule that
+   `from .globals import ...` binds onto the package, the reload re-ran that line against a namespace where
+   `globals` was no longer the builtin. Every window after the first got `'module' object is not callable`.
+   `tests/partcad_service_json_rpc/test_partcad_reload.py` holds the invariant now. Keep module-level code in
+   `partcad/__init__.py` free of anything that a second execution against the first execution's namespace would
+   read differently.
+
 2. **The runtimes** — the sandboxed Python environments (`ctx.get_python_runtime()`) that every CAD wrapper runs
    in: `wrapper_import_assy` for STEP assemblies, the conversion wrappers behind `convert`/`--target-format`,
    the render/export wrappers. Those runtimes belong to the daemon's environment and **need not exist on the

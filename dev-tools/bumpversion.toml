@@ -121,10 +121,12 @@ filename = "ide/vscode/package.json"
 search = "version\": \"{current_version}\""
 replace = "version\": \"{new_version}\""
 
-[[tool.bumpversion.files]]
-filename = "ide/vscode/package.json"
-search = "v{current_version} is not found"
-replace = "v{new_version} is not found"
+# The Explorer's welcome view used to state the release ("PartCAD v0.8.15 is not
+# found"), which is why it was bumped here. It no longer names a version: the
+# view it lived in fired whenever the extension was connected but not yet loaded,
+# so it told a user whose PartCAD was found, running and exactly that version
+# that it was not found. What replaced it describes the state instead, and a
+# state needs no version in it.
 
 [[tool.bumpversion.files]]
 filename = "docs/source/contributing.rst"

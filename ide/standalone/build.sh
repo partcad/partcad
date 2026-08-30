@@ -19,10 +19,10 @@
 # Output (relative to the repository root):
 #
 #   dist/ide/partcad-ide/                              the application (Linux, Windows)
-#   dist/ide/PartCAD IDE.app/                          the application (MacOS)
+#   dist/ide/PartCAD IDE.app/                          the application (macOS)
 #   dist/ide/partcad-ide-<version>-<platform>.<ext>    the archive, and its .sha256
 #   dist/ide/partcad-ide-<version>-<platform>-setup.exe  Windows only, the installer
-#   dist/ide/partcad-ide-<version>-<platform>.dmg      MacOS only, with --dmg
+#   dist/ide/partcad-ide-<version>-<platform>.dmg      macOS only, with --dmg
 #
 # Everything the build does to the VSCodium it downloads is in this file and in
 # `tools/`; `README.md` says why each of those steps exists.
@@ -90,7 +90,7 @@ Options:
   --no-archive             Stop after the application, skip the archive.
   --no-installer           Skip the Windows installer (Windows only). Without
                            this it is built whenever Inno Setup is installed.
-  --dmg                    Also produce a .dmg (MacOS only).
+  --dmg                    Also produce a .dmg (macOS only).
   --record                 Write the VSCodium version and checksum that were
                            used into `vscodium.json`, to be committed as a pin.
   --help                   Show this message.
@@ -221,7 +221,7 @@ log "==> Building the PartCAD IDE ${VERSION} for ${PLATFORM}"
 
 # `read_api` is for api.github.com and `download` is for everything else, and
 # the difference is the rate limit. An anonymous API call is counted against the
-# source IP, and the hosted MacOS runners share theirs with enough other builds
+# source IP, and the hosted macOS runners share theirs with enough other builds
 # to sit over the limit for minutes at a time: the IDE build then died on
 # `curl: (56) The requested URL returned error: 403` a second after it started,
 # before it had downloaded anything. A token counts the call against the account
@@ -360,7 +360,7 @@ zip)
 esac
 
 # Some releases wrap the application in a directory and some do not, and the
-# MacOS bundle spells the same directory "Resources". Find the application by
+# macOS bundle spells the same directory "Resources". Find the application by
 # the one file that is always in it, rather than by a layout that varies.
 PRODUCT_JSON="$(find "${STAGE_DIR}" -maxdepth 5 -type f -ipath "*/resources/app/product.json" | head -n 1)"
 [ -n "${PRODUCT_JSON}" ] || fail "no resources/app/product.json under ${STAGE_DIR}: this is not a VSCodium build"
@@ -391,7 +391,7 @@ fi
 
 # Where the extensions end up: the application's own extensions directory, the
 # one VS Code calls "built-in". They travel with the application, which is what
-# lets a MacOS user drag the bundle to /Applications and keep them, and what
+# lets a macOS user drag the bundle to /Applications and keep them, and what
 # keeps them out of an existing `~/.vscode` on the same machine. A user can
 # still install a newer version of any of them from the Extensions view; an
 # installed version wins over the one shipped here.
@@ -526,6 +526,56 @@ log "==> Rebranding"
   --overlay "${SCRIPT_DIR}/product.overlay.json" \
   --version "${VERSION}"
 
+# ---------------------------------------------------------------------------
+# Software WebGL, so the 3D view works on a machine with no working GPU driver.
+#
+# The PartCAD Viewer renders with WebGL. Chromium refuses to back WebGL with
+# SwiftShader unless asked (since M136), so on a machine whose GPU process fails
+# to start -- no driver, a confined package that cannot see one, a VM, a remote
+# display -- there is no WebGL at all and the 3D view is dead. That is not a
+# rare configuration, and this IDE is the download for people who have no editor
+# set up: they are the least able to diagnose "webgl: disabled_off".
+#
+# The switch only permits the software fallback. Chromium still uses a real GPU
+# wherever there is one, so this costs nothing on a machine that was fine.
+#
+# It goes in an entry point of our own rather than in a launcher, because the
+# launchers do not cover every way the application starts: the Linux desktop
+# entry runs the binary directly (not `bin/partcad-ide`), and nothing passes
+# arguments to a macOS bundle opened from Finder. `package.json`'s `main` is the
+# one path all of them go through.
+#
+# ESM with a *dynamic* import, because the application is `"type": "module"` and
+# a static import would be hoisted above the call it has to follow. Neither this
+# file nor `package.json` is listed in `product.json`'s `checksums`, so this does
+# not trip the "installation appears corrupt" warning; `out/main.js` is left
+# untouched.
+log "==> Enabling software WebGL"
+APP_MAIN_WRAPPER="${RESOURCES_DIR}/app/out/partcad-main.js"
+cat >"${APP_MAIN_WRAPPER}" <<'WRAPPER_EOF'
+// Added by the PartCAD IDE build (ide/standalone/build.sh). See the note there.
+import { app } from 'electron';
+
+app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+
+await import('./main.js');
+WRAPPER_EOF
+
+"${PYTHON}" -c "
+import json, pathlib, sys
+manifest = pathlib.Path(sys.argv[1])
+package = json.loads(manifest.read_text(encoding='utf-8'))
+previous = package.get('main')
+if previous is None:
+    raise SystemExit('no \'main\' in %s: this is not an Electron application' % manifest)
+if 'partcad-main' not in previous:
+    # Idempotent: a rebuild over an already-patched staging directory must not
+    # point the wrapper at itself.
+    package['main'] = sys.argv[2]
+    manifest.write_text(json.dumps(package, indent=2) + '\n', encoding='utf-8')
+" "${RESOURCES_DIR}/app/package.json" "./out/partcad-main.js" \
+  || fail "could not point the application at the PartCAD entry point"
+
 ICON_DIR="${WORK_DIR}/icons"
 ICONS_BUILT=0
 if [ "${BRAND_ICONS}" = "1" ]; then
@@ -592,7 +642,7 @@ linux | windows)
   EXECUTABLE="${APP_ROOT}/partcad-ide${EXE_SUFFIX}"
   ;;
 macos)
-  # Nothing to rename: the MacOS launcher finds the executable through the
+  # Nothing to rename: the macOS launcher finds the executable through the
   # bundle, whose name comes from Info.plist and whose directory is renamed as a
   # whole further down.
   BUNDLE_EXECUTABLE="$("${PYTHON}" -c "
@@ -678,16 +728,16 @@ fi
 
 if [ "${OS_NAME}" = "macos" ]; then
   # Everything above edited files inside a signed bundle, which invalidates the
-  # signature: MacOS then refuses to open the application at all. Ad-hoc signing
+  # signature: macOS then refuses to open the application at all. Ad-hoc signing
   # makes it launchable again. It is not a Developer ID signature and does not
   # make the application notarized -- `install.sh` clears the quarantine flag
   # for a user who installs it, and README.md says what to do otherwise.
   if command -v codesign >/dev/null 2>&1; then
     log "==> Signing the application bundle (ad-hoc)"
     codesign --force --deep --sign - "${APP_ROOT}" >/dev/null ||
-      fail "ad-hoc signing failed; MacOS will refuse to open this bundle"
+      fail "ad-hoc signing failed; macOS will refuse to open this bundle"
   else
-    fail "no codesign; MacOS will refuse to open this bundle"
+    fail "no codesign; macOS will refuse to open this bundle"
   fi
 fi
 
@@ -826,7 +876,7 @@ with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as bundle:
     mkdir -p "${DMG_STAGE}"
     cp -R "${APP_ROOT}" "${DMG_STAGE}/"
     # The /Applications alias is the "drag this there" half of the window every
-    # MacOS user has seen.
+    # macOS user has seen.
     ln -s /Applications "${DMG_STAGE}/Applications"
     hdiutil create -volname "PartCAD IDE" -srcfolder "${DMG_STAGE}" -ov -quiet -format UDZO "${DMG}"
     checksum "${DMG}"

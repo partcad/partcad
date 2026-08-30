@@ -35,6 +35,7 @@
     "features/monorepo.feature": 109.0,
     "features/pc.feature": 12.2,
     "features/render.feature": 769.8,
+    "features/search/all.feature": 12.8,
     "features/search/assemblies.feature": 8.4,
     "features/search/interfaces.feature": 10.1,
     "features/search/parts.feature": 9.3,

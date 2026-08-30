@@ -19,11 +19,38 @@ ide/standalone/build.sh --help
 ```
 
 `--with-cli-bundle` takes what `dev-tools/pyinstaller/build.sh --no-archive` leaves in `dist/standalone/partcad`.
-Node.js is needed (the extensions are packaged with `vsce`), and `nox` unless `--vsix` points at an
-already-built PartCAD extension -- see "Build / package" in `../ide/vscode/AGENTS.md` for why the
-extension is built with `nox --session build_package` here and not with npm. `cairosvg`, `Pillow`, `rcedit` and
+Node.js is needed unless `--vsix` points at an already-built PartCAD extension: the extension is built here
+the same way it is built everywhere else, with `npm ci && npm run vsce-package` (see "Build / package" in
+`../vscode/AGENTS.md`), and the other extensions are packaged with `vsce`. `cairosvg`, `Pillow`, `rcedit` and
 -- on Windows -- Inno Setup 6.3+ (`ISCC.exe`, for `installer/partcad-ide.iss`) are optional, and the build
 reports what it skipped without them. Output lands in `dist/ide/`.
+
+## Software WebGL is on
+
+The build writes `resources/app/out/partcad-main.js` and points `package.json`'s `main` at it. All it does is
+`app.commandLine.appendSwitch('enable-unsafe-swiftshader')` and then `await import('./main.js')`.
+
+The PartCAD Viewer renders with WebGL, and since Chromium M136 a machine whose GPU process fails to start gets
+no WebGL at all rather than a software one -- `code --status` says `webgl: disabled_off`. That is not exotic: a
+confined package that cannot see the driver, an NVIDIA setup, a VM, a remote display. The IDE is the download
+for people who have no editor set up, so "the 3D view is blank and the fix is a Chromium switch" is not a
+position to leave them in. The switch only *permits* the software fallback; a machine with a working GPU still
+uses it, and pays nothing.
+
+Three things about how it is done:
+
+- **An entry point, not a launcher flag.** No launcher covers every start: the Linux desktop entry
+  `install.sh` writes runs the binary directly rather than `bin/partcad-ide`, and a macOS bundle opened from
+  Finder is passed no arguments at all. `package.json`'s `main` is the one path all of them go through.
+- **A dynamic `import`, because the application is `"type": "module"`.** A static import is hoisted above the
+  statement it has to follow, so `main.js` would run *before* the switch was set and the whole thing would be
+  silently inert.
+- **Neither file is checksummed.** `product.json`'s `checksums` covers `vs/**` (the workbench, the preload, the
+  extension host), so this does not trip the "installation appears corrupt" warning. `out/main.js` is left
+  alone.
+
+`tools/verify_bundle.py` fails the build if the wrapper is missing, if `main` does not point at it, or if it
+does not contain the switch -- each of which leaves an IDE that either has no software WebGL or does not start.
 
 ## Test
 

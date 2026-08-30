@@ -19,8 +19,69 @@ warm context.
 Where the executable comes from is `resolveServicePath`: the `partcad.servicePath` setting, then an existing
 standalone install, then the extension's own download directory, then `~/.local/bin`, then a plain `PATH`
 lookup. That last one is why a user with their own Python needs no download at all -- `pip install partcad`
-puts `partcad-json-rpc` on the `PATH`. Only when none of them resolves does the extension offer to download a
-bundle, and declining leaves it with no backend rather than falling back to something.
+puts `partcad-json-rpc` on the `PATH`.
+
+**The dialog appears if and only if none of those five resolves.** Anything found is used, silently: an
+installation the user already has is never a question. When there is none, `ensureServiceExecutable` offers
+exactly the two things that can produce one -- `Download` the standalone bundle, or `Find installed PartCAD` and
+point at an environment that already has PartCAD in it. There is no third option, and in particular no silent
+one: the second button used to read "Use Python instead" and select a `python` backend that had been deleted
+with the language server, so the one choice a user with their own Python would obviously make gave them no
+backend at all and a log line nobody reads.
+
+`Find installed PartCAD` asks for a **directory**, not the executable -- someone who just ran `pip install partcad`
+knows where their environment is, not what the service is called. `serviceUnder` accepts the environment's
+`bin` (`Scripts` on Windows), which is what is asked for because that is the directory holding `pc` and
+`partcad` beside the service, and also the environment root, which is the obvious near-miss. The answer is
+written to `partcad.servicePath`; the setting is `machine`-scoped, so `Global` is the only target it can go to,
+which is right for something that describes this machine rather than a workspace.
+
+`ensureServiceExecutable` returns a `ServiceResolution` rather than a path because of what that write does:
+`partcad.servicePath` is in `checkIfConfigurationChanged`, so setting it *is* a restart. The `restarting` case
+tells `restartBackend` to stand down and let the configuration change drive the single start -- nothing
+serialises two of them, and returning a path here as well would race one start against the other.
+
+**The `PATH` it searches is the extension host's, which is not the one the user's terminal has.** The host
+inherits `PATH` from whatever launched VS Code -- a desktop launcher, the Dock, an unactivated shell -- so a
+`partcad-json-rpc` inside a Python virtual environment is found only when VS Code itself was started from that
+environment. Nothing here consults the interpreter `ms-python.python` has selected; `partcad.interpreter` went
+with the language server. So "PartCAD is installed and the extension still offers to download it" is expected
+rather than a bug -- and `Find installed PartCAD` is what it is for. This is also why `resolveServicePath` takes an
+optional `searched` array and why `reportNoService` in `backend.ts` prints it: the message a user gets has to
+name the `PATH` it consulted, or it sends them looking in the environment they can see.
+
+**The `PartCAD` terminal view shows what the CLI shows, and does not render it itself.** Colours, level
+prefixes and the multi-line progress footer are a state machine (`partcad_utils.logging_ansi_terminal`) that
+the CLI runs on its own side, replaying the structured events a daemon forwards. This extension cannot: it is
+TypeScript, and a second implementation of that footer is a second thing to keep correct. So the *service*
+runs it -- `partcad_utils.logging_ansi_render.AnsiEventRenderer`, one instance per connection -- and sends what
+it drew.
+
+`JsonRpcBackend` asks for that with `log.mode {"ansi": true}` as soon as it connects. The service then sends
+`?/partcad/terminal` (base64, written into the pty verbatim) **instead of** `?/partcad/log`, not as well as:
+the two carry the same information. The `?/partcad/log` handler stays as the fallback for a service too old to
+answer `log.mode`, and `rendersLogs` says which of the two is live.
+
+Three things about it are load-bearing:
+
+- **One renderer per connection.** The footer is drawn by moving the cursor back over the lines it last wrote,
+  so two clients sharing a renderer would each erase lines from the other's terminal. The daemon is shared;
+  the renderer is not. `log.mode` is handled in the transport beside `daemon.stop`, because the dispatcher only
+  sees `(request, session)` and the session belongs to every client at once.
+- **`\n` becomes `\r\n` on arrival.** The renderer emits bare newlines, which is right for the CLI -- a real
+  terminal has ONLCR on. A pseudoterminal does not, so untranslated output walks off to the right. The
+  translation belongs here, where the destination is known.
+- **Nothing else may write while it is rendering.** An unrendered line inserted between the renderer's writes
+  desynchronises the footer's cursor arithmetic. So `?/partcad/error`/`warn` are not echoed when `rendersLogs`
+  is set (the renderer already prints them, in colour), and what remains -- the no-backend reports below --
+  happens only when there is no renderer running.
+
+**A backend that never starts reports itself in the `PartCAD` terminal view**, not only in the output channel.
+Everything else in that view arrives over the backend's own `?/partcad/terminal` and `?/partcad/log`
+notifications, which is precisely what a missing backend cannot send, so `terminal.ts` carries a
+`setTerminalWriter`/`writeTerminal` pair: `extension.ts` registers the writer (it owns the terminal, the
+reopen/popup settings and the context) and `common/backend.ts` calls it without importing `extension.ts`, which
+would be an import cycle. Before that, no backend meant a silent, inert window.
 
 **Daemon handling is the CLI's, not the extension's.** Which socket serves which workspace, whether anything
 is answering on it, and how to stop it and wait are `partcad_client`, reached by running `pc`. A second copy of
@@ -72,6 +133,13 @@ Four things about it are load-bearing:
 - **The wire format is shared with Python.** `src/viewer/protocol.ts` mirrors
   `src/partcad_ide_client/protocol.py`, which is the normative description. Changing one
   means changing both. `src/test/suite/viewerProtocol.test.ts` covers this side.
+- **A crash on the way up used to look like an idle panel.** The HTML's resting state is "Nothing to display
+  yet.", and the renderer replaces it once geometry arrives -- so a renderer that never ran left exactly the
+  message shown before the user has asked for anything. `scene.ts` builds its `THREE.WebGLRenderer` at module
+  scope, and that constructor throws in a window with no WebGL, during `viewer.ts`'s *import*: no `message`
+  handler registered, no `ready` posted, nothing logged. `host.ts` traps `error`/`unhandledrejection` and puts
+  the reason in the overlay; it lives there because every webview module imports it, and a module's
+  dependencies are evaluated before its own body, so it is installed before anything can throw.
 - **Nothing is escaped on its way into a pane.** What the tabs display is text out of a package's
   configuration -- a description, a part name, a supplier's answer -- so every pane builds its DOM node by
   node through `src/webview/dom.ts` rather than assigning `innerHTML`. `textContent` cannot be talked into
@@ -81,14 +149,53 @@ Geometry reaches the viewer already tessellated: `partcad` renders to binary glT
 compressed, so the extension never needs a CAD library. It used to hand live OCP objects to the third-party
 `OCP CAD Viewer` extension, which is why that dependency is gone.
 
+## What the Explorer says while starting
+
+The `partcadExplorer` welcome views in `package.json` are the only status the user sees before the tree
+appears, and they are selected by context keys rather than by anything that inspects the backend. Which key
+means what:
+
+- **`partcad.serviceMissing`** -- `restartBackend` found nothing to connect to. Set there because that is the
+  only place that can tell "no service" from "a service that has not answered yet".
+- **`partcad.activated`** -- a service is connected and `activate` has been *sent*. Not that it succeeded.
+- **`partcad.installed`** -- `?/partcad/loaded` (or `packageLoaded`) came back, so activation finished.
+- **`partcad.failed`** -- something along the way reported failure, `activateFailed` included.
+
+So `activated && !installed` is "connected, activation in flight or failed" -- and activation runs the health
+checks, so on a cold install it is in flight for a while. That state used to be one welcome view reading
+**"PartCAD v0.8.15 is not found."**, which was wrong in both halves of it: the extension was talking to a
+PartCAD, and the version it named was the version it was talking to. A user who had just pointed the extension
+at their own environment was told it had not been found. It is two views now, split on `partcad.failed` --
+starting, and did-not-finish-starting -- and neither claims anything about what is installed. The version came
+out of the text with it, along with its entry in `dev-tools/bumpversion.toml`.
+
+`?/partcad/error` and `?/partcad/warn` go to the `PartCAD` terminal view as well as to a popup, because the
+Explorer can only say that activation did not finish; the reason arrives on those notifications, and a popup
+is dismissed or (with `partcad.showNotifications` turned down) never shown.
+
+Nothing emits `INSTALLED`/`INSTALL_FAILED` any more -- `events.py` still defines them and `extension.ts` still
+listens -- so `partcad.installed` moves only through `loaded`/`packageLoaded`. Do not read the name as "the
+PartCAD Python module is installed"; that meaning belonged to the language server, along with the no-op
+`partcad.install` command.
+
 ## Installing a package's dependencies
 
 `partcad.installPackage` runs the daemon's `install` operation - the PartCAD counterpart of `npm install`: it
-downloads every imported package and prepares every sketch, part and assembly (see `pc install`). The extension
-runs it automatically the first time a workspace directory is opened, once the package has loaded, against
-whatever `partcad.packagePath` resolves to. "The first time" is remembered per config path in the workspace
-state, so reopening the window is not another download; `partcad.installOnOpen: "false"` turns the automatic
-run off and leaves the palette command.
+downloads every imported package and prepares every sketch, part and assembly (see `pc install`). It runs
+against whatever `partcad.packagePath` resolves to. "The first time" is remembered per config path in the
+workspace state, so reopening the window is never a second download.
+
+**`partcad.installOnOpen` defaults to `"false"`, so this does not happen on its own.** It used to, once per
+workspace, and the cost was not what "install the dependencies" suggests: `install` begins with
+`ctx.get_all_packages()` under `force_update = True`, which is the whole transitive closure re-fetched --
+measured at 101 packages and 268 seconds for `examples/`, with a warm cache and force-update *off*, 62 of them
+the entire `//pub` index. Then every object is asked for its cache key, which resolves aliases, enriches and
+links and runs plugin scripts (the LDraw ones to their 180 second deadline). And `socket_server.py` holds one
+`_dispatch_lock` around every dispatch, so for the duration nothing else the window asks for - expanding a
+node, opening a part, linting - is served. The tree appears, because `install` runs after `packageLoaded`, and
+then the window is frozen behind it.
+
+Turning it on is a reasonable thing for a user to do; doing it to them on first open is not.
 
 Do not confuse it with `partcad.install`, which is a no-op: it bootstrapped the PartCAD Python module for the
 backend that no longer exists, and survives only so an old command binding does not break.

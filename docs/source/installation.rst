@@ -8,7 +8,7 @@ Command line tools
 
 PartCAD command line tools are implemented in Python and, in theory,
 available on all platforms where Python is available. However, it is only
-getting tested on Linux, MacOS and Windows.
+getting tested on Linux, macOS and Windows.
 
 .. code-block:: shell
 
@@ -32,7 +32,7 @@ getting tested on Linux, MacOS and Windows.
 .. note::
 
   PartCAD works best when `conda <https://docs.conda.io/>`_ is installed.
-  If that doesn't help (e.g. MacOS+arm64) then try ``mamba``.
+  If that doesn't help (e.g. macOS+arm64) then try ``mamba``.
   On Windows, PartCAD must be used inside a ``conda`` environment.
 
 .. note::
@@ -117,7 +117,7 @@ Use the wheels instead if you want to ``import partcad`` from your own scripts.
 Install
 =======
 
-On Linux and MacOS:
+On Linux and macOS:
 
 .. code-block:: shell
 
@@ -129,12 +129,12 @@ That downloads the bundle for the current operating system and architecture from
 Nothing else on the system is touched, and no ``sudo`` is asked for. If ``~/.local/bin`` is not on your
 ``PATH``, the installer says so and prints the line to add.
 
-The bundle is around 180MB unpacked and 57MB to download on Linux x86_64, and about half that on MacOS and
+The bundle is around 180MB unpacked and 57MB to download on Linux x86_64, and about half that on macOS and
 on Linux arm64, which carry no bundled OpenSCAD. It carries no CAD kernel: PartCAD builds every shape in a
 conda sandbox it provisions itself, so ``conda`` (or ``mamba``) is a prerequisite here exactly as it is for
 the wheels. ``pc healthcheck`` reports what this machine is missing.
 
-Supported platforms are Linux on x86_64 and arm64, and MacOS on Apple silicon. Windows is covered by the
+Supported platforms are Linux on x86_64 and arm64, and macOS on Apple silicon. Windows is covered by the
 ``.zip`` archives under :ref:`manual installation <standalone-manual>`.
 
 .. _standalone-os-versions:
@@ -148,7 +148,7 @@ carries; the installer reads it, works out which of them this machine can run, a
 .. code-block:: text
 
   Linux, x86_64 and arm64     built on Ubuntu 22.04 and on Ubuntu 24.04
-  MacOS, Apple silicon        built on MacOS 15 and on MacOS 26
+  macOS, Apple silicon        built on macOS 15 and on macOS 26
   Windows, x86_64             built on Windows Server 2022
 
 The Ubuntu names are not a requirement to run Ubuntu. Any Linux distribution can run these bundles; what
@@ -190,7 +190,7 @@ Option                         Environment variable             Default
 ``--repository <owner/name>``  ``PARTCAD_REPOSITORY``           ``partcad/partcad``
 ``--platform <id>``            ``PARTCAD_PLATFORM``             detected from this machine
 ``--ide``                      ``PARTCAD_IDE``                  off, the command line tools alone
-``--app-dir <dir>``            ``PARTCAD_APP_DIR``              MacOS, with ``--ide``: ``/Applications``
+``--app-dir <dir>``            ``PARTCAD_APP_DIR``              macOS, with ``--ide``: ``/Applications``
                                                                 when it is writable, ``~/Applications``
                                                                 otherwise
 ============================== ================================ ==========================================
@@ -268,7 +268,7 @@ Each one unpacks into a single ``partcad/`` directory holding ``pc``, ``partcad`
 need. Put that directory anywhere and run the commands from it, or add it to ``PATH``. On Windows, unpack
 the ``.zip`` and add the resulting directory to ``PATH`` -- there is no shell script installer for Windows.
 
-The ``tar`` on MacOS and on every Linux distribution reads xz without being told to, which is why the command
+The ``tar`` on macOS and on every Linux distribution reads xz without being told to, which is why the command
 below passes no compression flag. A very small Linux system may need the ``xz`` utility installed for it
 (``xz-utils`` on Debian and Ubuntu, ``xz`` on Fedora and Alpine); ``install.sh`` says so by name if it is
 missing.
@@ -280,7 +280,7 @@ missing.
 
 .. note::
 
-  On MacOS, downloading the archive with a browser marks it as quarantined, and Gatekeeper then refuses to
+  On macOS, downloading the archive with a browser marks it as quarantined, and Gatekeeper then refuses to
   run the unpacked commands. Installing with ``install.sh``, or downloading with ``curl``, avoids that.
   To clear it after the fact: ``xattr -dr com.apple.quarantine <directory>``.
 
@@ -417,7 +417,7 @@ have. If you already work in Visual Studio Code, install
 Install
 =======
 
-On Linux and MacOS:
+On Linux and macOS:
 
 .. code-block:: shell
 
@@ -425,7 +425,7 @@ On Linux and MacOS:
 
 The same installer as the command line tools, with the same options: everything described for the
 :ref:`standalone command line tools <standalone-cli>` applies here too. On Linux it unpacks into
-``~/.local/share/partcad/<version>-ide`` and adds an entry to the applications menu. On MacOS it puts
+``~/.local/share/partcad/<version>-ide`` and adds an entry to the applications menu. On macOS it puts
 ``PartCAD IDE.app`` into ``/Applications``, or into ``~/Applications`` when the first is not writable;
 ``--app-dir`` chooses. Either way ``partcad-ide`` is linked into ``~/.local/bin``, along with ``pc`` and
 ``partcad`` from the copy inside the IDE -- so the command line tools are installed too, without a second
@@ -464,13 +464,13 @@ nothing with a Visual Studio Code or VSCodium on the same machine. PartCAD's own
 stay in ``~/.partcad``, shared with the command line tools, so a package installed in a terminal is
 there in the IDE.
 
-On MacOS, ``partcad-ide-<version>-macos-arm64.dmg`` is published as well: open it and drag the
+On macOS, ``partcad-ide-<version>-macos-arm64.dmg`` is published as well: open it and drag the
 application to Applications, the usual way.
 
 .. note::
 
-  The MacOS application is signed ad-hoc rather than notarized. ``install.sh`` clears the quarantine
-  flag on the copy it installs; if you unpack the archive by hand instead, MacOS refuses to open it
+  The macOS application is signed ad-hoc rather than notarized. ``install.sh`` clears the quarantine
+  flag on the copy it installs; if you unpack the archive by hand instead, macOS refuses to open it
   until you do the same:
   ``xattr -dr com.apple.quarantine "/Applications/PartCAD IDE.app"``.
 
@@ -585,7 +585,7 @@ directory into FreeCAD's ``Mod`` folder as ``PartCAD`` and restart FreeCAD:
   $ git clone https://github.com/partcad/partcad.git
   $ ln -s "$PWD/partcad/cad/freecad" ~/.local/share/FreeCAD/Mod/PartCAD
 
-The ``Mod`` folder is ``~/Library/Preferences/FreeCAD/Mod/`` on MacOS and ``%APPDATA%\FreeCAD\Mod\`` on
+The ``Mod`` folder is ``~/Library/Preferences/FreeCAD/Mod/`` on macOS and ``%APPDATA%\FreeCAD\Mod\`` on
 Windows. No Python setup is needed: the add-on drives the standalone ``partcad-json-rpc`` service, using an
 existing standalone installation if there is one and offering to download a bundle if there is not. See
 ``cad/freecad/README.md`` for what it does and which environment variables it reads.

@@ -32,7 +32,8 @@ import {
 } from 'vscode-jsonrpc/node';
 
 import { traceError, traceInfo } from './log/logging';
-import { cliBeside, ensureServiceExecutable } from './provision';
+import { cliBeside, ensureServiceExecutable, locateCommand, resolveServicePath } from './provision';
+import { writeTerminal } from '../terminal';
 import { refreshToolsPath } from './terminalPath';
 import { getServiceChannelFromSetting } from './settings';
 
@@ -44,6 +45,13 @@ export interface PartcadBackend {
     stop(): Promise<void>;
     /** Terminate the shared daemon (socket channel only); no-op otherwise. */
     stopDaemon?(): Promise<void>;
+    /**
+     * Whether the service renders the ANSI log display for this connection.
+     *
+     * When it does, its output already carries the level prefixes and colours,
+     * so anything the extension prints beside it is a duplicate.
+     */
+    rendersLogs?: boolean;
 }
 
 // The extension subscribes and the legacy server published under this prefix.
@@ -69,6 +77,8 @@ class JsonRpcBackend implements PartcadBackend {
     private readonly handlers = new Map<string, ((params: any) => void)[]>();
     private readonly commandDisposables: Disposable[] = [];
     private running = false;
+    /** Whether the service is drawing the log display for us (see `requestRenderedLogs`). */
+    public rendersLogs = false;
     private readonly cliPath: string | undefined;
     private readonly cwd: string;
     private readonly sharedDaemon: boolean;
@@ -90,6 +100,39 @@ class JsonRpcBackend implements PartcadBackend {
         this.connection.listen();
         this.running = true;
         this.registerServerCommands();
+        this.requestRenderedLogs();
+    }
+
+    /**
+     * Ask the service to render its log display for us, and send the bytes.
+     *
+     * The colours and the multi-line progress footer are a state machine
+     * (`partcad_utils.logging_ansi_terminal`) that the CLI runs on its own side.
+     * This extension cannot: it is TypeScript, and a second implementation of
+     * that footer is a second thing to keep correct. So the service runs it
+     * instead, once per connection, and sends what it drew -- which arrives on
+     * `?/partcad/terminal` and goes into the pty verbatim.
+     *
+     * From then on this connection gets no `?/partcad/log` events at all. They
+     * carry the same information as the bytes, so the service sends one or the
+     * other; the handler for them stays as the fallback for a service too old to
+     * know this request.
+     *
+     * Not awaited: requests go out in order on one connection and the daemon
+     * serialises them, so this is settled before the first thing that logs.
+     */
+    private requestRenderedLogs(): void {
+        this.connection.sendRequest('log.mode', { ansi: true }).then(
+            () => {
+                this.rendersLogs = true;
+                traceInfo('PartCAD service: rendering the log display service-side');
+            },
+            (e) => {
+                // A service that predates `log.mode` answers "method not found".
+                // Nothing is broken: the plain `?/partcad/log` rendering stands.
+                traceInfo(`PartCAD service: no service-side log rendering (${e}); using plain log lines`);
+            },
+        );
     }
 
     private fire(event: string, params: any): void {
@@ -436,6 +479,37 @@ function connectStdio(
 }
 
 /**
+ * Tell the user, in the `PartCAD` terminal view, that there is no backend.
+ *
+ * It lists where `resolveServicePath` looked, because the common way to arrive
+ * here with PartCAD *installed* is a Python environment the extension host
+ * cannot see: `pip install partcad` puts `partcad-json-rpc` in the environment's
+ * `bin`/`Scripts`, and that directory is on PATH only inside an activated shell.
+ * The extension host inherits the PATH of whatever launched VS Code -- a desktop
+ * launcher, the Dock, an unactivated shell -- so the last of the five lookups
+ * misses an installation the user can run by hand in the integrated terminal.
+ * Naming `partcad.servicePath` beside the list is the fix that always works.
+ */
+function reportNoService(context: vscode.ExtensionContext, serverId: string): void {
+    const searched: string[] = [];
+    resolveServicePath(context, serverId, searched);
+
+    const lines = [
+        'ERROR: No PartCAD service (partcad-json-rpc) is available.',
+        'ERROR: Until there is one, this window has no package tree, no viewer and no checking.',
+        'ERROR: Looked for it in:',
+        ...searched.map((where) => `ERROR:   - ${where}`),
+        'ERROR: Run "Restart PartCAD" to be asked again, and either download it or choose',
+        'ERROR: "Find installed PartCAD" and point at the environment it is installed in.',
+        'ERROR: If it is already installed and was not found, VS Code very likely cannot see that',
+        'ERROR: environment: the PATH above is the one VS Code was started with, not the one an',
+        `ERROR: activated terminal has. \`${locateCommand()} partcad-json-rpc\` in a terminal where PartCAD`,
+        'ERROR: works prints the path to point at (or to put in the "partcad.servicePath" setting).',
+    ];
+    writeTerminal(lines.map((line) => `${line}\r\n`).join(''));
+}
+
+/**
  * (Re)start the configured backend. Returns undefined if it could not start;
  * when the user declines the service download, the backend setting is switched
  * to "python" (which re-triggers startup through the configuration-change path).
@@ -454,7 +528,7 @@ export async function restartBackend(
             traceError(`Failed to stop the previous backend: ${e}`);
         }
     }
-    const execPath = await ensureServiceExecutable(context, serverId);
+    const resolution = await ensureServiceExecutable(context, serverId);
     // The tools directory only exists once something is installed, and this is
     // where a first install happens: `ensureServiceExecutable` downloads the
     // bundle when there is none. Activation already ran and found nothing, so
@@ -463,14 +537,34 @@ export async function restartBackend(
     // only after `updateServiceBundle`, which covers upgrades and not first
     // installs.
     refreshToolsPath(context, serverId);
-    if (!execPath) {
-        // Declining used to fall back to the Python backend. There is nothing to
-        // fall back to now, and nothing to invent: the user has told us not to
-        // download, so the honest outcome is no backend and a message saying how
-        // to supply one.
-        traceInfo('PartCAD: no PartCAD service available; install one with `pip install partcad`.');
+    // What the Explorer's welcome view says when there is nothing to connect to.
+    // Set from here because this is the only place that can tell "no service" apart
+    // from "a service that has not answered yet", and the two used to look the
+    // same in that view: it said "being initialized" indefinitely.
+    await vscode.commands.executeCommand('setContext', 'partcad.serviceMissing', resolution.kind === 'none');
+    if (resolution.kind === 'restarting') {
+        // "Find installed PartCAD": the chosen environment went into
+        // `partcad.servicePath`, and that change reaches the configuration
+        // handler, which restarts. Standing down here is what keeps that the
+        // only start -- nothing serialises two of them.
+        traceInfo('PartCAD: service path set to a local Python environment; the configuration change restarts.');
         return undefined;
     }
+    if (resolution.kind === 'none') {
+        // Declining used to fall back to the Python backend. There is nothing to
+        // fall back to now, and nothing to invent: the user has told us not to
+        // download and not to point at an installation, so the honest outcome is
+        // no backend and a message saying how to supply one.
+        //
+        // Said in the terminal view as well as the log. Without a backend the
+        // window is inert -- no package tree, no viewer, no lint -- and the
+        // output channel this used to go to alone is not open by default, so the
+        // failure looked like nothing happening at all.
+        traceInfo('PartCAD: no PartCAD service available; install one with `pip install partcad`.');
+        reportNoService(context, serverId);
+        return undefined;
+    }
+    const execPath = resolution.execPath;
     const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
     const args = serviceArgs(serverId);
     const env = serviceEnv(serverId);
@@ -480,7 +574,14 @@ export async function restartBackend(
         }
         return await connectSocket(execPath, args, cwd, env, outputChannel);
     } catch (e) {
+        // Invisible for the same reason as the case above: this leaves the
+        // window with no backend, and the output channel is not open.
         traceError(`Failed to start the PartCAD service: ${e}`);
+        writeTerminal(
+            `ERROR: Failed to start the PartCAD service at ${execPath}\r\n` +
+                `ERROR: ${e}\r\n` +
+                'ERROR: Run "Restart PartCAD" to try again.\r\n',
+        );
         return undefined;
     }
 }

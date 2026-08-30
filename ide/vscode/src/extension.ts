@@ -31,7 +31,7 @@ import { PartcadViewer } from './viewer/PartcadViewer';
 import { PartcadViewerServer } from './viewer/PartcadViewerServer';
 import * as PartcadItem from './PartcadItem';
 import { examples } from './examples';
-import { terminalInit } from './terminal';
+import { setTerminalWriter, terminalInit } from './terminal';
 import * as utils from './utils';
 
 let lsClient: PartcadBackend | undefined;
@@ -91,12 +91,46 @@ async function installPackageOnOpen(
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
     await vscode.commands.executeCommand('setContext', 'partcad.failed', false);
+    // Not yet known to be missing: `restartBackend` decides, and until it has,
+    // the Explorer should say the extension is starting rather than that there
+    // is nothing to start.
+    await vscode.commands.executeCommand('setContext', 'partcad.serviceMissing', false);
 
     // This is required to get server name and module. This should be
     // the first thing that we do in this extension.
     const serverInfo = loadServerDefaults();
     const serverName = serverInfo.name;
     const serverId = serverInfo.module;
+
+    /**
+     * Put text in the `PartCAD` terminal view, reopening it if the user closed
+     * it and raising it if they asked for that.
+     *
+     * Registered with `setTerminalWriter` below, so that code with no access to
+     * the terminal -- `restartBackend`, which reports a backend that never
+     * started -- can reach it too.
+     */
+    const showInTerminal = (text: string) => {
+        if (!terminalEmitter) {
+            // A precaution: the emitter exists from activation onwards.
+            return;
+        }
+        if (
+            getReopenTerminalFromSetting(serverId) === 'true' &&
+            partcadTerminal !== undefined &&
+            !vscode.window.terminals.includes(partcadTerminal)
+        ) {
+            // Reopen the terminal window if it was closed
+            // TODO(clairbee): is this the right way to dispose?
+            partcadTerminal.dispose();
+            partcadTerminal = terminalInit(context, terminalEmitter);
+        }
+        if (getPopupTerminalFromSetting(serverId) === 'true' && partcadTerminal !== undefined) {
+            // Show the terminal if it was hidden
+            partcadTerminal.show(true);
+        }
+        terminalEmitter.fire(text);
+    };
 
     // Setup logging
     const outputChannel = createOutputChannel(serverName);
@@ -302,37 +336,51 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 lsClient.onNotification('?/partcad/stats', async ({ stats, version }) => {
                     await partcadContext?.setStats(stats, version);
                 }),
+                // In the terminal as well as in a popup. A popup is dismissed --
+                // or never noticed, with `partcad.showNotifications` turned down
+                // -- and then the only account of why something failed is gone.
+                // The failure this mattered for is activation: the Explorer can
+                // only say that starting PartCAD did not finish, and the reason
+                // it did not arrives here.
+                //
+                // Except when the service is drawing the display: these are
+                // logged on its side too, so echoing them here would print each
+                // one twice -- and an unrendered line inserted between the
+                // renderer's writes desynchronises the footer, which erases the
+                // lines it last drew by moving the cursor back over them.
                 lsClient.onNotification('?/partcad/error', async (message) => {
+                    if (!lsClient?.rendersLogs) {
+                        showInTerminal(`ERROR: ${message}\r\n`);
+                    }
                     await vscode.window.showErrorMessage(message);
                 }),
                 lsClient.onNotification('?/partcad/warn', async (message) => {
+                    if (!lsClient?.rendersLogs) {
+                        showInTerminal(`WARNING: ${message}\r\n`);
+                    }
                     await vscode.window.showWarningMessage(message);
                 }),
                 lsClient.onNotification('?/partcad/info', async (message) => {
                     await vscode.window.showInformationMessage(message);
                 }),
+                // What the service drew: colours, level prefixes and the
+                // multi-line progress footer, rendered by the same code the CLI
+                // uses (see `requestRenderedLogs`). Written into the pty
+                // verbatim -- it is terminal control bytes, not text to format.
+                //
+                // `Buffer`, not `atob`: `atob` yields one character per byte, so
+                // any non-ASCII in a log line (a path, a description) would come
+                // out as mojibake. The extension host is Node; this is exact.
                 lsClient.onNotification('?/partcad/terminal', async (message) => {
-                    if (!terminalEmitter) {
-                        // This is a precaution, the emitter should always exist
-                        return;
-                    }
-
-                    if (
-                        getReopenTerminalFromSetting(serverId) === 'true' &&
-                        partcadTerminal !== undefined &&
-                        !vscode.window.terminals.includes(partcadTerminal)
-                    ) {
-                        // Reopen the terminal window if it was closed
-                        // TODO(clairbee): is this the right way to dispose?
-                        partcadTerminal.dispose();
-                        partcadTerminal = terminalInit(context, terminalEmitter);
-                    }
-                    if (getPopupTerminalFromSetting(serverId) === 'true' && partcadTerminal !== undefined) {
-                        // Show the terminal if it was hidden
-                        partcadTerminal.show(true);
-                    }
-
-                    terminalEmitter.fire(atob(message.line));
+                    // The renderer ends its lines with a bare "\n", which is
+                    // right for the CLI: a real terminal has ONLCR on and turns
+                    // it into a carriage return plus a line feed. A
+                    // pseudoterminal does not, so without this every line starts
+                    // where the last one ended and the display walks off to the
+                    // right. Translating here rather than in the renderer keeps
+                    // this a property of the destination, which is what it is.
+                    const drawn = Buffer.from(message.line, 'base64').toString('utf8');
+                    showInTerminal(drawn.replace(/\r?\n/g, '\r\n'));
                 }),
                 // The JSON-RPC service/daemon backend forwards structured log
                 // events (plain records and process/action markers) instead of
@@ -340,25 +388,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 // lines in the same terminal; the process/action markers only
                 // drive the CLI's ANSI progress footer, and the meaningful lines
                 // (including "DONE: ...") already arrive as 'log' records.
+                // The fallback, for a service too old to answer `log.mode`: it
+                // forwards structured records and the extension prints them
+                // plainly, without colour and without the progress footer. A
+                // service that renders for us sends `?/partcad/terminal`
+                // instead and never sends these, so this and the handler above
+                // do not both run.
                 lsClient.onNotification('?/partcad/log', async (event: any) => {
-                    if (!terminalEmitter || !event || event.kind !== 'log') {
+                    if (!event || event.kind !== 'log') {
                         return;
                     }
 
-                    if (
-                        getReopenTerminalFromSetting(serverId) === 'true' &&
-                        partcadTerminal !== undefined &&
-                        !vscode.window.terminals.includes(partcadTerminal)
-                    ) {
-                        partcadTerminal.dispose();
-                        partcadTerminal = terminalInit(context, terminalEmitter);
-                    }
-                    if (getPopupTerminalFromSetting(serverId) === 'true' && partcadTerminal !== undefined) {
-                        partcadTerminal.show(true);
-                    }
-
                     const level = event.levelname || 'INFO';
-                    terminalEmitter.fire(`${level}: ${event.message ?? ''}\r\n`);
+                    showInTerminal(`${level}: ${event.message ?? ''}\r\n`);
                 }),
                 lsClient.onNotification(`?/partcad/execute`, async ({ command, args }) => {
                     await vscode.commands.executeCommand(command, ...args);
@@ -366,6 +408,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             );
             await vscode.commands.executeCommand('partcad.activate');
             await vscode.commands.executeCommand('setContext', 'partcad.activated', true);
+        } else {
+            // No backend this time round. Nothing used to reset this, so a window
+            // that had been connected and then lost its service stayed
+            // "activated" -- and the Explorer showed the welcome view for a
+            // running PartCAD next to the one for a missing one.
+            await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
         }
     };
 
@@ -1024,6 +1072,10 @@ connect:
     terminalEmitter = new vscode.EventEmitter<string>();
     partcadTerminal = terminalInit(context, terminalEmitter);
     context.subscriptions.push(partcadTerminal);
+    // Before `runServer()` below, so that a backend which fails to start has
+    // somewhere to say so.
+    setTerminalWriter(showInTerminal);
+    context.subscriptions.push({ dispose: () => setTerminalWriter(undefined) });
 
     setImmediate(async () => {
         await runServer();

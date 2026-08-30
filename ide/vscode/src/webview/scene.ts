@@ -287,12 +287,15 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     const group = new THREE.Group();
 
     let loaded = 0;
+    let parsedOk = 0;
+    let failed = 0;
     for (const object of message.objects) {
         let parsed: THREE.Group;
         try {
             parsed = await parseGltf(base64ToArrayBuffer(object.gltf));
         } catch (error: any) {
             reportError(`failed to parse '${object.name}': ${error}`);
+            failed += 1;
             continue;
         }
 
@@ -322,6 +325,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
         });
         parsed.name = object.name;
         group.add(parsed);
+        parsedOk += 1;
 
         loaded += object.size;
         const percent = totalSize > 0 ? Math.round((loaded / totalSize) * 100) : 100;
@@ -349,6 +353,22 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     frame(group, message.keepCamera);
 
     label.textContent = message.name ?? '';
+
+    // Nothing parsed: an empty scene with the overlay hidden is a viewer that
+    // looks idle, which is the one thing this must not look like. The reason
+    // went to the log by way of `reportError`; say here that there is one.
+    //
+    // Counted rather than read off `group.children`, because `addMarkers` above
+    // has already put its triads in there: an interface whose geometry all
+    // failed to parse still has children, and the report would not fire.
+    if (failed > 0 && parsedOk === 0) {
+        overlay.textContent =
+            failed === 1
+                ? 'The geometry could not be read. See the PartCAD output for why.'
+                : `None of the ${failed} objects could be read. See the PartCAD output for why.`;
+        overlay.style.display = '';
+        return;
+    }
     overlay.style.display = 'none';
 }
 

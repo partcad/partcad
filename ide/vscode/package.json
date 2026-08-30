@@ -78,7 +78,7 @@
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src",
-    "format-check": "prettier --check 'src/**/*.ts' 'build/**/*.yml' '.github/**/*.yml'",
+    "format-check": "prettier --check \"src/**/*.ts\"",
     "test": "vscode-test",
     "vsce-package": "vsce package -o partcad.vsix"
   },
@@ -112,7 +112,7 @@
         "properties": {
           "partcad.servicePath": {
             "default": "",
-            "description": "Path to a 'partcad-json-rpc' executable. When empty, the extension looks for a 'partcad-json-rpc' on the PATH (a 'pip install partcad' puts one there) and for an existing standalone installation, then offers to download one.",
+            "description": "Path to a 'partcad-json-rpc' executable. When empty, the extension looks for an existing standalone installation and for a 'partcad-json-rpc' on the PATH, and uses whatever it finds without asking. Only when it finds none does it offer to download the standalone PartCAD or to be pointed at a local Python environment that has PartCAD installed -- and 'Find installed PartCAD' fills this setting in. Note that the PATH searched is the one VS Code itself was started with, which does not include a Python virtual environment unless VS Code was launched from it; set this by hand if your installation is not being found.",
             "scope": "machine",
             "type": "string"
           },
@@ -199,8 +199,8 @@
             "type": "string"
           },
           "partcad.installOnOpen": {
-            "default": "true",
-            "description": "Whether to download the package's dependencies (as `pc install` does) the first time a workspace directory is opened. The package installed is the one `partcad.packagePath` points at.",
+            "default": "false",
+            "description": "Whether to download the package's dependencies (as `pc install` does) the first time a workspace directory is opened. The package installed is the one `partcad.packagePath` points at. Off by default: this downloads the whole transitive dependency closure with force-update on -- for a package that imports the public index that is around a hundred packages and several minutes -- and the daemon serialises every request behind it, so the window stays unresponsive for the duration. Run \"PartCAD: Install the package dependencies\" when you want it.",
             "enum": [
               "true",
               "false"
@@ -807,7 +807,12 @@
       {
         "view": "partcadExplorer",
         "contents": "Hang in there!\nThe PartCAD extension is being initialized...",
-        "when": "!partcad.activated && !partcad.failed"
+        "when": "!partcad.activated && !partcad.failed && !partcad.serviceMissing"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "No PartCAD was found.\n\nThe extension needs a PartCAD to talk to. Install one below and it will be downloaded for you, or point the extension at a Python environment that already has one (`pip install partcad`).\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or find PartCAD](command:partcad.startInstall)",
+        "when": "partcad.serviceMissing"
       },
       {
         "view": "partcadExplorer",
@@ -821,8 +826,13 @@
       },
       {
         "view": "partcadExplorer",
-        "contents": "PartCAD v0.8.17 is not found.\n\nThe extension needs a PartCAD to talk to. Install one below and it will be downloaded for you, or run `pip install partcad` in a Python environment of your own -- the extension finds a `partcad-json-rpc` on the PATH.\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or update PartCAD](command:partcad.startInstall)",
-        "when": "partcad.activated && !partcad.installed && !partcad.beingInstalled"
+        "contents": "Hang in there!\nPartCAD is starting...\n\nHealth checks run before the package is loaded, so the first start after an installation is the slow one. The PartCAD terminal view shows what it is doing.",
+        "when": "partcad.activated && !partcad.installed && !partcad.beingInstalled && !partcad.failed"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "PartCAD did not finish starting.\n\nThe extension reached a PartCAD service, so one is installed -- activating it is what failed. The reason is in the PartCAD terminal view.\n\n[Restart PartCAD](command:partcad.restart)\n[Install or update PartCAD](command:partcad.startInstall)",
+        "when": "partcad.activated && !partcad.installed && !partcad.beingInstalled && partcad.failed"
       },
       {
         "view": "partcadExplorer",
