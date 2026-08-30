@@ -13,12 +13,10 @@ import copy
 import decimal
 import os
 import re
-import tempfile
 import threading
 import typing
 
 # from pprint import pformat
-from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
@@ -1937,8 +1935,8 @@ class Project(project_config.Configuration):
             return None
         assembly, path, dir_path, _return_path, render_cfg, output_dir = target
 
-        async with self._assembly_guide_document(
-            assembly, format.upper(), dir_path, ignore_manufacturability
+        async with assembly_guide.guide_document_async(
+            self.ctx, self, assembly, format.upper(), dir_path, ignore_manufacturability
         ) as document:
             self.ctx.ensure_dirs_for_file(path)
             if format == "html":
@@ -1948,24 +1946,6 @@ class Project(project_config.Configuration):
                 await render_pdf_async(self.ctx, document, path)
 
         return path
-
-    @asynccontextmanager
-    async def _assembly_guide_document(self, assembly, label, dir_path=None, ignore_manufacturability=False):
-        """The instruction book of an assembly, for as long as its pictures exist.
-
-        A context manager rather than a plain call because the illustrations are
-        files: most of them show something that is not an object of any package -
-        a pair of items pulled apart - so they are rendered into a directory of
-        their own and thrown away with it. Whoever asked for the document has to
-        write it down, or embed the pictures, before the block ends.
-        """
-        assembly = assembly_guide.resolve_alias(self.ctx, assembly)
-        assembly_guide.check_source(assembly, ignore_manufacturability)
-
-        with pc_logging.Action("Guide%s" % label, self.name, assembly.name):
-            with tempfile.TemporaryDirectory() as assets_dir:
-                images = assembly_guide.RenderedImages(self.ctx, self, assets_dir)
-                yield await assembly_guide.build_guide_document_async(self.ctx, self, assembly, images, dir_path)
 
     async def assembly_guide_data_async(self, assembly_name, ignore_manufacturability=False):
         """The assembly instruction book as plain data, pictures included.
@@ -1985,8 +1965,8 @@ class Project(project_config.Configuration):
         if assembly is None:
             return None
 
-        async with self._assembly_guide_document(
-            assembly, "Data", ignore_manufacturability=ignore_manufacturability
+        async with assembly_guide.guide_document_async(
+            self.ctx, self, assembly, "Data", ignore_manufacturability=ignore_manufacturability
         ) as document:
             return pc_document.to_data(document, embed_images=True)
 
