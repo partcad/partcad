@@ -18,6 +18,7 @@ are the two places where this module reaches out of the process, and both are
 replaced.
 """
 
+import os
 import subprocess
 
 import pytest
@@ -73,7 +74,9 @@ class FakeDocker:
         if args[:2] == ["docker", "ps"]:
             if self.state is None:
                 return self._result(0)
-            return self._result(0, stdout="partcad-freecad\t%s\n" % self.state)
+            # Whichever container was asked about: there is more than one tool.
+            asked = next(value.split("=", 1)[1] for flag, value in zip(args, args[1:]) if flag == "--filter")
+            return self._result(0, stdout="%s\t%s\n" % (asked, self.state))
         if args[:2] == ["docker", "run"]:
             self.state = "running"
             self.mounts = [value.split(":")[1] for flag, value in zip(args, args[1:]) if flag == "--volume"]
@@ -378,3 +381,146 @@ def test_the_result_says_how_the_file_was_opened(part, docker):
     assert result.to_dict()["ok"] is True
     assert result.to_dict()["method"] == "docker"
     assert result.to_dict()["path"] == str(part)
+
+
+# ---------------------------------------------------------------------------
+# The other applications in the table
+# ---------------------------------------------------------------------------
+
+
+def test_every_tool_can_be_named_and_has_a_container_of_its_own():
+    assert external.tool_names() == ["freecad", "gazebo", "kicad"]
+    names = {external.TOOLS[name].container_name for name in external.tool_names()}
+    assert names == {"partcad-freecad", "partcad-gazebo", "partcad-kicad"}
+
+
+def test_the_kicad_container_is_the_image_partcad_already_builds():
+    """One KiCad container in the product, not two.
+
+    'partcad.part_factory_kicad' pulls the same image, pinned to the same
+    release, to run 'kicad-cli' in. Pinning matters here as much as it does
+    there: the container carries PartCAD's own environment.
+    """
+    from partcad_client import __version__
+
+    assert external.TOOLS["kicad"].image == "ghcr.io/partcad/partcad-container-kicad:" + __version__
+
+
+@pytest.fixture
+def world(tmp_path):
+    """A Gazebo world inside a workspace."""
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    path = tmp_path / "warehouse.world"
+    path.write_text('<sdf version="1.9"><world name="warehouse"/></sdf>\n')
+    return path
+
+
+@pytest.mark.parametrize(
+    "binary, expected",
+    [
+        ("gz", ["sim"]),
+        ("ign", ["gazebo"]),
+        ("gazebo", []),
+    ],
+)
+def test_each_generation_of_gazebo_is_launched_the_way_it_wants(monkeypatch, spawned, world, binary, expected):
+    """`gz sim`, `ign gazebo` and plain `gazebo` are one application, three front ends."""
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/" + name if name == binary else None)
+
+    result = external.open_file(str(world), tool="gazebo")
+
+    assert result.method == "native"
+    assert spawned == [["/usr/bin/" + binary] + expected + [str(world)]]
+
+
+def test_gazebo_runs_in_its_own_container_with_the_world_file(world, docker):
+    docker.binaries = ["/usr/bin/gz"]
+
+    result = external.open_file(str(world), tool="gazebo", use_docker=True)
+
+    assert result.method == "docker"
+    created = docker.command("docker", "run")
+    assert "partcad-gazebo" in created
+    assert external.TOOLS["gazebo"].image in created
+    # The arguments the executable found *inside* the container needs, not the
+    # ones the host would have needed.
+    assert docker.command("docker", "exec", "--detach")[-3:] == ["/usr/bin/gz", "sim", str(world)]
+
+
+def test_kicad_opens_the_board_beside_the_step_a_part_points_at(monkeypatch, spawned, tmp_path):
+    """A `kicad` part *is* the STEP KiCad's CLI writes; the board is next to it."""
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    step = tmp_path / "Arduino_Nano.step"
+    step.write_text("ISO-10303-21;\n")
+    project = tmp_path / "Arduino_Nano.kicad_pro"
+    project.write_text("{}\n")
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/kicad" if name == "kicad" else None)
+
+    result = external.open_file(str(step), tool="kicad")
+
+    assert result.path == str(project)
+    assert spawned == [["/usr/bin/kicad", str(project)]]
+
+
+def test_kicad_falls_back_through_the_board_files_it_knows(monkeypatch, spawned, tmp_path):
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    step = tmp_path / "board.step"
+    step.write_text("ISO-10303-21;\n")
+    (tmp_path / "board.kicad_pcb").write_text("(kicad_pcb)\n")
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/kicad" if name == "kicad" else None)
+
+    external.open_file(str(step), tool="kicad")
+
+    assert spawned == [["/usr/bin/kicad", str(tmp_path / "board.kicad_pcb")]]
+
+
+def test_a_board_file_named_outright_is_the_one_opened(monkeypatch, spawned, tmp_path):
+    """Only a file KiCad cannot open is swapped; one it can is left alone."""
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    board = tmp_path / "board.kicad_pcb"
+    board.write_text("(kicad_pcb)\n")
+    (tmp_path / "board.kicad_pro").write_text("{}\n")
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/kicad" if name == "kicad" else None)
+
+    external.open_file(str(board), tool="kicad")
+
+    assert spawned == [["/usr/bin/kicad", str(board)]]
+
+
+def test_a_step_with_no_board_beside_it_is_handed_over_as_it_is(monkeypatch, spawned, part):
+    """Nothing is created and nothing is converted: `pc open` renders nothing."""
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/kicad" if name == "kicad" else None)
+
+    external.open_file(str(part), tool="kicad")
+
+    assert spawned == [["/usr/bin/kicad", str(part)]]
+
+
+def test_only_the_tool_that_declares_companions_swaps_the_file(monkeypatch, spawned, tmp_path):
+    """FreeCAD opens the STEP it was handed, board or no board beside it."""
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    step = tmp_path / "board.step"
+    step.write_text("ISO-10303-21;\n")
+    (tmp_path / "board.kicad_pro").write_text("{}\n")
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/freecad" if name == "freecad" else None)
+
+    external.open_file(str(step), tool="freecad")
+
+    assert spawned == [["/usr/bin/freecad", str(step)]]
+
+
+def test_a_launcher_that_is_not_the_program_supplies_its_own_arguments():
+    """macOS's `open -a` and `flatpak run` bundle one front end and know it.
+
+    `binary_args` is keyed on the program's own name, so neither matches -- and
+    neither should: adding `sim` to a `flatpak run org.gazebosim.Gazebo` would
+    hand it to the flatpak's entry point rather than to `gz`.
+    """
+    gazebo = external.TOOLS["gazebo"]
+
+    # The Windows form is spelled with the separator this platform uses, since
+    # that is what `native_command()` builds it with there.
+    assert gazebo.launch_args("/usr/bin/gz") == ("sim",)
+    assert gazebo.launch_args(os.path.join("Gazebo", "bin", "gz.exe")) == ("sim",)
+    assert gazebo.launch_args("org.gazebosim.Gazebo") == ()
+    assert gazebo.launch_args("/Applications/Gazebo.app") == ()

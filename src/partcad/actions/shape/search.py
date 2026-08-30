@@ -3,6 +3,7 @@ from partcad.sketch import Sketch
 from partcad.context import Context
 from partcad.assembly import Assembly
 from partcad.interface import Interface
+from partcad.scene import Scene
 from partcad.actions.common import _search
 
 
@@ -31,6 +32,15 @@ def search_assemblies(ctx: Context, package: str, recursive: bool, keyword: str)
         recursive,
         keyword,
         lambda project: project.assemblies.values()
+    )
+
+def search_scenes(ctx: Context, package: str, recursive: bool, keyword: str) -> list[Scene]:
+    return _search(
+        ctx,
+        package,
+        recursive,
+        keyword,
+        lambda project: project.scenes.values()
     )
 
 def search_interfaces(ctx: Context, package: str, recursive: bool, keyword: str) -> list[Interface]:

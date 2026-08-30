@@ -15,7 +15,16 @@ from .lint import Linting, Severity, LintingReport
 # package: the daemon checks a package's ASSY files while walking the package
 # graph, and a client checks the one file being edited in its own process. Two
 # copies of that check would let an editor and CI disagree about a file.
-from partcad_utils.assy_lint import ASSY_SCHEMA, SEVERITY_WARNING, get_schema, schema_name_for_file, validate_source
+from partcad_utils.assy_lint import (
+    ASSY_SCHEMA,
+    FLAVOR_ASSEMBLY,
+    FLAVOR_SCENE,
+    SEVERITY_WARNING,
+    get_schema,
+    schema_for_file,
+    schema_name_for_file,
+    validate_source,
+)
 
 
 class SchemaLinting(Linting):
@@ -89,16 +98,33 @@ class AssySchemaLinting(Linting):
     know which packages, and which of their files, to walk, which is what makes
     it daemon work. Checking a single file needs none of that and is done by the
     client itself (`partcad_client.lint`).
+
+    The package graph is also what makes this half *exact* about which schema a
+    file is checked against. A file an `assemblies:` entry points at is an
+    assembly, one only a `scenes:` entry points at is a scene, and a scene is
+    checked without `how` (see `partcad.scene`). A client editing the file has
+    to guess at that; here the declaration is in hand.
     """
 
     def __init__(self, name: str) -> None:
         super().__init__(name)
+        # (package name, target) -> the flavor its declaration makes it, filled
+        # in by 'get_targets'. Kept here because the two methods that need it -
+        # the hash and the check - are handed the target path and not the
+        # package, and 'get_targets' is called for a package before either of
+        # them runs against its targets.
+        self._flavors: dict = {}
 
     def get_hash(self, name: str, target: str) -> CacheHash:
         # As in 'SchemaLinting' above: a schema update has to invalidate the
-        # findings cached against the schema it replaced.
+        # findings cached against the schema it replaced. The flavor is in here
+        # for the same reason and is not implied by anything else in the hash:
+        # moving a file's declaration from 'assemblies:' to 'scenes:' changes
+        # which schema it is checked against without touching the file.
+        flavor = self._flavors.get((name, target), FLAVOR_ASSEMBLY)
         hash = super().get_hash(name, target)
         hash.add_string(json.dumps(get_schema(ASSY_SCHEMA), sort_keys=True))
+        hash.add_string(flavor)
         return hash
 
     def get_targets(self, ctx: Context, package: Project) -> list[str]:
@@ -109,11 +135,33 @@ class AssySchemaLinting(Linting):
         # insensitively: 'pc lint --file' and the extension already check a
         # 'Logo.ASSY', and the package walk skipping it is exactly the
         # editor/CI disagreement this module exists to prevent.
-        return sorted(
+        targets = sorted(
             os.path.join(config_dir, f)
             for f in os.listdir(config_dir)
             if schema_name_for_file(f) is not None and os.path.isfile(os.path.join(config_dir, f))
         )
+        declared_by_assembly = self._declared_files(package, "assembly")
+        declared_by_scene = self._declared_files(package, "scene")
+        for target in targets:
+            key = os.path.realpath(target)
+            # An assembly wins: the file has to satisfy the full schema for that
+            # assembly to be readable, whatever else also points at it.
+            if key in declared_by_scene and key not in declared_by_assembly:
+                self._flavors[(package.name, target)] = FLAVOR_SCENE
+            else:
+                self._flavors.pop((package.name, target), None)
+        return targets
+
+    @staticmethod
+    def _declared_files(package: Project, kind: str) -> set:
+        """The ASSY files this package's objects of 'kind' point at."""
+        files = set()
+        for name, config in (package.object_configs(kind) or {}).items():
+            if not isinstance(config, dict) or config.get("type") != "assy":
+                continue
+            declared = config.get("path") or "%s.assy" % config.get("orig_name", name)
+            files.add(os.path.realpath(os.path.join(package.config_dir, declared)))
+        return files
 
     async def validate(self, ctx: Context, package: Project, target: str, lint_ctx: dict = {}) -> LintingReport:
         lint_result = LintingReport(package.name)
@@ -129,8 +177,9 @@ class AssySchemaLinting(Linting):
             lint_result.add(Severity.FAILED, f"Failed to read assembly file: {err}")
             return lint_result
 
+        flavor = self._flavors.get((package.name, target), FLAVOR_ASSEMBLY)
         try:
-            diagnostics = validate_source(raw, get_schema(ASSY_SCHEMA))
+            diagnostics = validate_source(raw, schema_for_file(target, flavor))
         except Exception as exc:  # pylint: disable=broad-except
             pc_logging.debug(package.name, str(exc))
             lint_result.add(Severity.FAILED, "Internal Error: Failed to check the assembly file")

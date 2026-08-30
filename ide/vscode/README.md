@@ -90,21 +90,29 @@ template is rendered, so a schema finding that depends on such a value is left
 out rather than guessed at. Set `partcad.lint.enabled` to `false` to turn this
 off.
 
-## Opening a part in another CAD application
+## Opening an object in another application
 
-Right-click a part or an assembly in the PartCAD Explorer and pick **Open in > FreeCAD** to open the file it is
-defined by in FreeCAD. It is the object's own source file that is opened, so this is the way to reach it in a
-tool that draws, next to what the extension does with it.
+Right-click an object in the PartCAD Explorer and pick **Open in > ...** to open the file it is defined by in
+the application that made it. It is the object's own source file that is opened, so this is the way to reach it
+in a tool that draws, next to what the extension does with it.
+
+* **FreeCAD**, for a part or an assembly.
+* **Gazebo**, for a scene that *is* a Gazebo world -- one of type `world`, which is also what
+  **Export > Gazebo world...** writes out of any scene.
+* **KiCad**, for a part of type `kicad`. What is opened is the board (`.kicad_pro`) beside the STEP the part
+  is, because that is the file KiCad has anything to say about.
 
 This runs on your machine and never goes anywhere near the PartCAD daemon: the extension runs `pc open`, which
-looks for a FreeCAD installed here and starts it. If there is none, and `partcad.open.useDocker` is on, PartCAD
-runs FreeCAD in a Docker container instead -- one container named `partcad-freecad`, created from
-`linuxserver/freecad:latest` (or `partcad.open.dockerImage`) the first time and reused afterwards, with your
+looks for the application installed here and starts it. If there is none, and `partcad.open.useDocker` is on,
+PartCAD runs it in a Docker container instead -- one container per application, named after it
+(`partcad-freecad`, `partcad-gazebo`, `partcad-kicad`), created from the application's image (or
+`partcad.open.dockerImage`) the first time and reused afterwards, with your
 workspace and the PartCAD daemon's socket mounted at the paths they have here, so one path means the same thing
 on both sides. Its windows come out on your X display. On Linux that is the display you are already using; on
 macOS and Windows it needs an X server (XQuartz, VcXsrv) that PartCAD cannot install for you, so it tells you
 which one to install and what to allow rather than starting a container whose windows go nowhere. Remove the
-container (`docker rm -f partcad-freecad`) to have the next open create a fresh one.
+container of the application in question (`docker rm -f partcad-freecad`, `partcad-gazebo` or
+`partcad-kicad`) to have the next open create a fresh one.
 
 ## Inspecting published PartCAD packages
 

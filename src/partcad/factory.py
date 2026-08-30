@@ -128,6 +128,7 @@ all = {
     "file": {},
     "provider": {},
     "repository": {},
+    "scene": {},
     "sketch": {},
     "software": {},
 }

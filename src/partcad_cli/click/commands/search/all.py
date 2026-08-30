@@ -5,12 +5,13 @@ from partcad_cli.click.commands.search.assemblies import cli as search_assemblie
 from partcad_cli.click.commands.search.interfaces import cli as search_interfaces
 from partcad_cli.click.commands.search.packages import cli as search_packages
 from partcad_cli.click.commands.search.parts import cli as search_parts
+from partcad_cli.click.commands.search.scenes import cli as search_scenes
 from partcad_cli.click.commands.search.sketches import cli as search_sketches
 
 from ...cli_context import CliContext
 
 
-@click.command(help="Search all available parts, sketches, and assemblies with the given keyword")
+@click.command(help="Search all available parts, sketches, assemblies and scenes with the given keyword")
 @click.option(
     "-r",
     "--recursive",
@@ -53,3 +54,4 @@ def cli(cli_ctx: CliContext, recursive: bool, package: str, keyword: str) -> Non
     runner.invoke(search_interfaces, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     runner.invoke(search_parts, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     runner.invoke(search_assemblies, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
+    runner.invoke(search_scenes, options, catch_exceptions=catch_exceptions, obj=cli_ctx)

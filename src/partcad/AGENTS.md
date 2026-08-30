@@ -148,6 +148,14 @@ needs the package graph, which is daemon work — while each client checks the o
 process (`partcad_client.lint`, reached by `pc lint --file`). Two implementations of that check would let an
 editor and CI disagree about a file, so there is one, in the package both ends already depend on.
 
+The **scene** schema is that same schema with `how` forbidden, derived from it by
+`assy_lint.scene_schema()` rather than kept beside it as a second file — a copy is a copy that stops matching.
+Which of the two a given `.assy` is checked against is not a property of the file but of what points at it, so
+the package half reads the declaration (exact) and each client works it out best effort: `pc lint --file` from
+the `partcad.yaml` files around the file, the VS Code extension from the package contents it has already
+loaded. All three lean the same way — unknown means assembly, because reading an assembly as a scene would put
+a false error on correct code.
+
 ## The PartCAD IDE viewer client
 
 `./src/partcad_ide_client` is the Python half of the socket protocol that connects `partcad` to the PartCAD

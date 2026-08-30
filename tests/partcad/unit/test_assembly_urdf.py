@@ -218,7 +218,7 @@ def test_urdf_links_are_ordinary_parts():
 def test_a_slash_in_a_part_name_is_not_enough():
     """Only a name whose prefix really is such an assembly triggers the build."""
     project = pc.Context(EXAMPLES).get_project(URDF_PACKAGE)
-    assert project._derived_part_owner("robot/wrist") == "robot"
+    assert project._derived_part_owner("robot/wrist") == ("assembly", "robot")
     assert project._derived_part_owner("brackets/left") is None
     assert project._derived_part_owner("wrist") is None
 

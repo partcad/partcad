@@ -18,6 +18,14 @@ export const ITEM_TYPE_PART = 'part';
 export const ITEM_TYPE_ASSEMBLY = 'assembly';
 export const ITEM_TYPE_SOFTWARE = 'software';
 /**
+ * A placed arrangement of objects - a workcell, a table, a simulation world.
+ *
+ * Built out of the very same files an assembly is, and every operation that
+ * works on an assembly works on one; what separates them is that a scene states
+ * only where things are, never how they got there. See `partcad.scene`.
+ */
+export const ITEM_TYPE_SCENE = 'scene';
+/**
  * An object the package declares but PartCAD could not create.
  *
  * Shown rather than omitted: a package that lists nothing looks exactly like an
@@ -116,6 +124,25 @@ export class PartcadItem extends vscode.TreeItem {
                 command: 'partcad.inspectInterface',
                 arguments: [{ name, pkg, config, itemPath }, {/*params*/}],
             };
+        } else if (itemType === ITEM_TYPE_SCENE) {
+            this.iconPath = {
+                light: path.join(__filename, '..', '..', 'resources', 'light', 'globe.svg'),
+                dark: path.join(__filename, '..', '..', 'resources', 'dark', 'globe.svg'),
+            };
+            // A world scene gets a context value of its own: it is the one
+            // kind of scene another application can open, because a '.world'
+            // file *is* what Gazebo reads. An ASSY scene is PartCAD's own
+            // format and there is nothing to hand over. Only once there is a
+            // file, though - the value is what puts "Open in > Gazebo" and
+            // "Open source" on the row, and neither has anything to act on
+            // without one.
+            this.contextValue =
+                itemPath === undefined ? 'scene' : config.type === 'world' ? 'sceneWorld' : 'sceneWithCode';
+            this.command = {
+                title: 'Inspect',
+                command: 'partcad.inspectScene',
+                arguments: [{ name, pkg, config, itemPath }, {/*params*/}],
+            };
         } else if (itemType === ITEM_TYPE_ASSEMBLY) {
             this.iconPath = {
                 light: path.join(__filename, '..', '..', 'resources', 'light', 'extensions.svg'),
@@ -153,7 +180,13 @@ export class PartcadItem extends vscode.TreeItem {
             } else {
                 this.iconPath = new vscode.ThemeIcon('database');
             }
-            this.contextValue = itemPath === undefined ? 'part' : 'partWithCode';
+            // As with a world scene above: a 'kicad' part is the one kind of
+            // part KiCad can be pointed at, because the board it is generated
+            // from is a file beside it (see 'KICAD' in
+            // 'partcad_client.external'). 'itemPath' stays undefined for it -
+            // what the tree would open is the STEP KiCad writes, not source.
+            this.contextValue =
+                config.type === 'kicad' ? 'partKicad' : itemPath === undefined ? 'part' : 'partWithCode';
             this.command = {
                 title: 'Inspect',
                 command: 'partcad.inspectPart',

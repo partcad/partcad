@@ -41,6 +41,7 @@ disagreement here means the editor and CI contradicting each other about a file.
 Nothing in this module needs a loaded PartCAD context, or ``partcad`` at all.
 """
 
+import copy
 import json
 import os
 import re
@@ -118,6 +119,29 @@ _SCHEMA_BY_EXTENSION = {
     ".assy": ASSY_SCHEMA,
 }
 
+# What an ASSY file is being read as. The same document means slightly
+# different things depending on which section of a package points at it:
+#
+#   FLAVOR_ASSEMBLY -- an entry in `assemblies:`. The full ASSY schema.
+#   FLAVOR_SCENE    -- an entry in `scenes:`. The same schema with `how`
+#                      forbidden: a scene states where things are, not how they
+#                      got there (see `partcad.scene`).
+#
+# Which one a given file is is not a property of the file, so nothing here can
+# work it out; the caller says, and both callers answer it best effort (see
+# `partcad_client.lint.detect_flavor` and the extension's `PartcadLint`).
+FLAVOR_ASSEMBLY = "assembly"
+FLAVOR_SCENE = "scene"
+FLAVORS = (FLAVOR_ASSEMBLY, FLAVOR_SCENE)
+
+# What a scene is told when it declares assembly instructions. Carried in the
+# schema so that the one finding reads the same in the editor, in `pc lint` and
+# in `pc lint --file`; `_describe()` is what puts it in front of the user.
+SCENE_NO_HOW = (
+    "'how' is not allowed in a scene: a scene states where things are, "
+    "not how they got there. Declare it in an assembly instead"
+)
+
 # An upper bound on how many findings a single file reports. A file that is
 # mid-edit can cascade; an editor gains nothing from the thousandth squiggle.
 MAX_DIAGNOSTICS = 100
@@ -176,6 +200,49 @@ def get_schema(filename: str) -> dict:
 def schema_name_for_file(path: str):
     """Return the schema filename that governs ``path``, or None if unknown."""
     return _SCHEMA_BY_EXTENSION.get(os.path.splitext(os.path.basename(path))[1].lower())
+
+
+def scene_schema(schema: dict) -> dict:
+    """The scene-simplified ASSY schema: ``schema`` with ``how`` forbidden.
+
+    Derived from the assembly schema rather than kept beside it as a second
+    file. The two documents are the same format read for two purposes, and a
+    copy of one is a copy that stops matching the other -- every field added to
+    a ``connect:`` would have to be added twice, and the day one of them was
+    missed an editor and CI would disagree about a file, which is the whole
+    thing this module exists to prevent.
+
+    ``how`` is *forbidden* rather than dropped: dropping it would leave
+    ``additionalProperties: false`` to report an "unexpected property", which
+    reads like a typo. It is not a typo -- it is a section that means something
+    and belongs in an assembly -- and 'SCENE_NO_HOW' is what says so.
+    """
+    forbidden = {"not": {}, "description": SCENE_NO_HOW}
+    result = copy.deepcopy(schema)
+    definitions = result.get("definitions", {})
+    for name in ("connect", "connectPorts"):
+        properties = definitions.get(name, {}).get("properties")
+        if isinstance(properties, dict) and "how" in properties:
+            properties["how"] = forbidden
+    definitions.pop("how", None)
+    result["title"] = "PartCAD Scene YAML (ASSY)"
+    return result
+
+
+def schema_for_file(path: str, flavor: str = FLAVOR_ASSEMBLY):
+    """The schema that governs ``path`` when read as ``flavor``, or None."""
+    name = schema_name_for_file(path)
+    if name is None:
+        return None
+    if flavor != FLAVOR_SCENE:
+        return get_schema(name)
+    # Cached like the file-backed schemas beside it: an editor checks the same
+    # document on every keystroke, and deriving it each time would deep-copy
+    # the whole schema for nothing.
+    key = (name, FLAVOR_SCENE)
+    if key not in _schema_cache:
+        _schema_cache[key] = scene_schema(get_schema(name))
+    return _schema_cache[key]
 
 
 # ---- Jinja2 masking --------------------------------------------------------
@@ -399,6 +466,13 @@ def _describe(error):
     under {'required': [...]}") says nothing about what to change, so the three
     shapes PartCAD's schemas use are spelled out here.
     """
+    if error.validator == "not" and error.validator_value == {}:
+        # A property the schema forbids outright, carrying its own explanation
+        # (see 'scene_schema'). jsonschema would say "should not be valid under
+        # {}", which tells the reader nothing about what to do.
+        described = (error.schema or {}).get("description") if isinstance(error.schema, dict) else None
+        if described:
+            return described
     if error.validator == "not":
         forbidden = (error.validator_value or {}).get("required")
         if forbidden and len(forbidden) > 1:
@@ -452,6 +526,13 @@ def _validate_schema(data, schema, root_node, masked) -> list:
             node = _resolve(root_node, path) if root_node is not None else None
 
         start, end = _node_span(node) if node is not None else ((0, 0), (0, 1))
+
+        if error.validator == "not" and error.validator_value == {} and path and root_node is not None:
+            # A property the schema forbids outright: underline the key, which
+            # is what has to go, rather than the value under it.
+            key_node = _key_node(_resolve(root_node, path[:-1]), path[-1])
+            if key_node is not None:
+                start, end = _node_span(key_node)
 
         # Drop what the mask made unknowable (see the module docstring).
         if error.validator in _VALUE_VALIDATORS and masked.overlaps(start, end, _EXPR):

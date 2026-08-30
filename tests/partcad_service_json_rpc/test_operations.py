@@ -186,6 +186,7 @@ class FakeProject:
         self.parts = {}
         self.sketches = {}
         self.assemblies = {}
+        self.scenes = {}
         self.interfaces = {}
         self.software = {}
         self.providers = {}
@@ -219,8 +220,19 @@ class FakeProject:
         getattr(self, kind)[obj.name] = obj
         return self
 
-    def object_count(self):
-        return len(self.sketches) + len(self.parts) + len(self.assemblies)
+    def object_count(self, kind=None):
+        # 'Context.get_packages(has_stuff=True)' asks one kind at a time; the
+        # bare call is the whole package. Both, so the fake answers whichever
+        # the code under test makes.
+        counts = {
+            "sketch": len(self.sketches),
+            "part": len(self.parts),
+            "assembly": len(self.assemblies),
+            "scene": len(self.scenes),
+        }
+        if kind is None:
+            return sum(counts.values())
+        return counts.get(kind, 0)
 
     def matches(self, keyword):
         if not keyword:
@@ -273,6 +285,8 @@ class FakeContext:
             "stats_parts_instantiated",
             "stats_assemblies",
             "stats_assemblies_instantiated",
+            "stats_scenes",
+            "stats_scenes_instantiated",
             "stats_memory",
         ):
             setattr(self, name, 0)
@@ -292,6 +306,9 @@ class FakeContext:
 
     def get_assembly(self, path, params=None):
         return self._get_shape("assembly", path, params)
+
+    def get_scene(self, path, params=None):
+        return self._get_shape("scene", path, params)
 
     def get_interface(self, path):
         return self._get_shape("interface", path)
@@ -587,6 +604,7 @@ def install_fake_search(monkeypatch):
                 "search_parts": fake_search(lambda p: p.parts.values()),
                 "search_sketches": fake_search(lambda p: p.sketches.values()),
                 "search_assemblies": fake_search(lambda p: p.assemblies.values()),
+                "search_scenes": fake_search(lambda p: p.scenes.values()),
                 "search_interfaces": fake_search(lambda p: p.interfaces.values()),
             },
             "partcad.actions.package": {"search_packages": fake_search(lambda p: [p])},
@@ -600,6 +618,7 @@ def install_fake_search(monkeypatch):
         ("parts", "Search Parts"),
         ("sketches", "Search Sketches"),
         ("assemblies", "Search Assemblies"),
+        ("scenes", "Search Scenes"),
         ("interfaces", "Search Interfaces"),
     ],
 )

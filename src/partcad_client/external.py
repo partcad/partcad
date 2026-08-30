@@ -51,6 +51,8 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from partcad_utils.workspace import determine_root_path, socket_path
 
+from . import __version__
+
 __all__ = [
     "ExternalToolError",
     "OpenResult",
@@ -99,10 +101,53 @@ class Tool:
     flatpak_id: Optional[str] = None
     # Extra arguments the application needs before the file name, if any.
     args: Tuple[str, ...] = field(default_factory=tuple)
+    # The same, for one executable in particular. An application with more than
+    # one front end needs it: Gazebo's world file is `gz sim <world>` through
+    # the current command and a bare `gazebo <world>` through the old one, and
+    # which of the two is on the machine decides.
+    binary_args: Dict[str, Tuple[str, ...]] = field(default_factory=dict)
+    # Extensions this application actually opens, when the file it is handed is
+    # not one of them and one of these sits beside it. A PartCAD `kicad` part
+    # *is* the STEP file KiCad's CLI writes out of the board; the board itself --
+    # what somebody opening KiCad means -- is the project file next to it, and
+    # the tree has no other name for it.
+    companions: Tuple[str, ...] = ()
 
     @property
     def container_name(self) -> str:
         return CONTAINER_PREFIX + self.name
+
+    def launch_args(self, executable: str) -> Tuple[str, ...]:
+        """The arguments that go before the file name for this executable.
+
+        Keyed on the name of the program itself, so it answers for a binary
+        found on the PATH, in a container, or under a Windows install alike. A
+        launcher that is not the program -- macOS's `open -a`, `flatpak run` --
+        has no entry and gets `args`, which is right: each of those bundles one
+        front end and knows which of its own arguments to supply.
+        """
+        stem = os.path.splitext(os.path.basename(executable))[0]
+        return self.binary_args.get(stem, self.args)
+
+    def file_for(self, path: str) -> str:
+        """The file this application is really given, from the one it was handed.
+
+        Unchanged unless the tool declares `companions` and the path is not one
+        of them: then the first companion that exists beside it wins. Nothing is
+        created and nothing is converted -- `pc open` renders nothing -- so a
+        file with no companion is handed over as it is and the application says
+        what it thinks of it.
+        """
+        if not self.companions:
+            return path
+        stem, extension = os.path.splitext(path)
+        if extension.lower() in self.companions:
+            return path
+        for companion in self.companions:
+            candidate = stem + companion
+            if os.path.isfile(candidate):
+                return candidate
+        return path
 
 
 FREECAD = Tool(
@@ -122,9 +167,47 @@ FREECAD = Tool(
     flatpak_id="org.freecad.FreeCAD",
 )
 
-# The tools `pc open --with` accepts. FreeCAD is the first; the second one is a
-# row here, not a branch anywhere below.
-TOOLS: Dict[str, Tool] = {FREECAD.name: FREECAD}
+GAZEBO = Tool(
+    name="gazebo",
+    display_name="Gazebo",
+    # The simulator's own image for the current Gazebo. `:latest`, for the
+    # reason FreeCAD's is: a user asking for a container wants the current
+    # Gazebo, and `--docker-image` is the answer for anyone who wants another
+    # one (`osrf/gazebo` for Gazebo Classic, say).
+    image="gazebosim/gz-harmonic:latest",
+    # Three generations of one program, newest first: `gz sim` today, `ign
+    # gazebo` in the Ignition years, and `gazebo` for Gazebo Classic. Whichever
+    # the machine has is the one used.
+    binaries=("gz", "ign", "gazebo"),
+    binary_args={"gz": ("sim",), "ign": ("gazebo",)},
+    macos_apps=("Gazebo.app",),
+    windows_globs=("Gazebo*/bin/gz.exe",),
+    flatpak_id="org.gazebosim.Gazebo",
+)
+
+KICAD = Tool(
+    name="kicad",
+    display_name="KiCad",
+    # The image PartCAD already builds and uses for `kicad` parts (see
+    # 'partcad.part_factory_kicad'), pinned to this release the same way: it is
+    # `kicad/kicad` with PartCAD's own environment on top, so the GUI is in it
+    # and there is one KiCad container in the product rather than two. It is
+    # `linux/amd64` only, as KiCad's own images are; a machine that cannot run
+    # it almost certainly has KiCad installed, which is used first anyway.
+    image="ghcr.io/partcad/partcad-container-kicad:" + __version__,
+    binaries=("kicad",),
+    macos_apps=("KiCad/KiCad.app", "KiCad.app"),
+    windows_globs=("KiCad/*/bin/kicad.exe",),
+    flatpak_id="org.kicad.KiCad",
+    # What a `kicad` part points at is the STEP file KiCad's CLI generates from
+    # the board. The board is the project beside it, and that is what opening
+    # KiCad means.
+    companions=(".kicad_pro", ".kicad_pcb", ".kicad_sch"),
+)
+
+# The tools `pc open --with` accepts. Each is a row here, not a branch anywhere
+# below.
+TOOLS: Dict[str, Tool] = {tool.name: tool for tool in (FREECAD, GAZEBO, KICAD)}
 
 
 def tool_names() -> List[str]:
@@ -179,10 +262,11 @@ def open_file(
     resolved = os.path.abspath(os.path.expanduser(path))
     if not os.path.exists(resolved):
         raise ExternalToolError("No such file: %s" % resolved)
+    resolved = spec.file_for(resolved)
 
     native = native_command(spec)
     if native is not None:
-        command = list(native) + list(spec.args) + [resolved]
+        command = list(native) + list(spec.launch_args(native[-1])) + [resolved]
         say("Opening %s in %s..." % (resolved, spec.display_name))
         _spawn(command)
         return OpenResult(
@@ -305,7 +389,7 @@ def _open_in_container(spec: Tool, path: str, image: Optional[str], say: Callabl
         root,
         spec.container_name,
         binary,
-        *spec.args,
+        *spec.launch_args(binary),
         path,
     ]
     say("Opening %s in %s (container '%s', DISPLAY=%s)..." % (path, spec.display_name, spec.container_name, display))

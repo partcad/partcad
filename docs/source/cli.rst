@@ -71,20 +71,34 @@ Host commands
   The "Update PartCAD" command in the VS Code extension runs exactly this, so the two never drift apart.
 
 ``pc open``
-  Open a file in a third-party CAD application, on this machine::
+  Open a file in a third-party application, on this machine::
 
     pc open cube.step                       # in a locally installed FreeCAD
     pc open --use-docker cube.step          # or in a container, when there is none
+    pc open --with gazebo warehouse.world   # a scene, in Gazebo
+    pc open --with kicad Arduino_Nano.step  # a board, in KiCad
 
-  ``--with`` names the application (``freecad`` today, and the default). A locally installed one is always
+  ``--with`` names the application: ``freecad`` (the default), ``gazebo`` for a Gazebo world -- which is what
+  a :ref:`scene <scenes>` of type ``world`` is, and what ``pc export -S -t world`` writes -- and ``kicad`` for
+  a board. A locally installed one is always
   used when there is one: the command looks on the ``PATH``, in ``/Applications`` on macOS, under
-  ``Program Files`` on Windows, and for a flatpak on Linux.
+  ``Program Files`` on Windows, and for a flatpak on Linux. Gazebo is looked for under all three of the names
+  it has had (``gz sim``, ``ign gazebo``, ``gazebo``), and whichever the machine has is the one used.
+
+  KiCad is handed the board rather than the file named, when the two are not the same: a ``kicad`` part *is*
+  the STEP file KiCad's command line writes out of the board, so ``pc open --with kicad`` on it opens the
+  ``.kicad_pro`` (or ``.kicad_pcb``, or ``.kicad_sch``) beside it. Nothing is created and nothing is
+  converted -- ``pc open`` renders nothing -- so a file with no board beside it is handed over as it is.
 
   With ``--use-docker``, a machine that has no local installation runs the application in a container instead
-  — one container per application, named after it (``partcad-freecad``), created from the application's image
+  — one container per application, named after it (``partcad-freecad``, ``partcad-gazebo``,
+  ``partcad-kicad``), created from the application's image
   (``--docker-image`` overrides it; FreeCAD's is ``linuxserver/freecad:latest``, since the FreeCAD project
-  publishes no image of its own) the first time and reused afterwards, so a container you have prepared
-  keeps being the one that is used. Remove it (``docker rm -f partcad-freecad``) to have the next ``pc open``
+  publishes no image of its own, Gazebo's is ``gazebosim/gz-harmonic:latest``, and KiCad's is the
+  ``ghcr.io/partcad/partcad-container-kicad`` image PartCAD already builds for ``kicad`` parts) the first
+  time and reused afterwards, so a container you have prepared
+  keeps being the one that is used. Remove the application's own container (``docker rm -f partcad-freecad``,
+  ``partcad-gazebo``, ``partcad-kicad``) to have the next ``pc open``
   create a fresh one. The workspace and the directory holding this workspace's daemon socket are mounted **at
   the paths they have on the host**, which is what lets one path mean the same thing on both sides. A file
   that is not in this workspace gets its own workspace mounted instead, so that whatever is mounted always
@@ -128,7 +142,9 @@ Package commands
   Run linting checks on the files within packages. Use ``-r`` to check imported packages recursively and
   ``-f`` to run only checks whose name starts with a given prefix. ``--file PATH`` (repeatable) checks the
   named files instead, in this process rather than through the daemon; add ``--json`` for machine-readable
-  findings and ``--stdin`` to check unsaved content supplied on standard input.
+  findings and ``--stdin`` to check unsaved content supplied on standard input. ``--schema`` says which schema
+  an ASSY ``--file`` is checked against -- ``assembly``, ``scene`` (the same one with ``how:`` forbidden), or
+  ``auto``, the default, which reads the declaration out of the package that names the file.
 
 ***************
 Object commands
@@ -136,11 +152,11 @@ Object commands
 
 ``pc list``
   List components. Subcommands select what to list: ``all``, ``parts``, ``sketches``, ``assemblies``,
-  ``interfaces``, ``mates``, ``providers``, ``software``, and ``packages``.
+  ``scenes``, ``interfaces``, ``mates``, ``providers``, ``software``, and ``packages``.
 
 ``pc add``
-  Add an object to a package. Subcommands: ``dep`` (a dependency), ``sketch``, ``part``, ``assembly``, and
-  ``software``.
+  Add an object to a package. Subcommands: ``dep`` (a dependency), ``sketch``, ``part``, ``assembly``,
+  ``scene``, and ``software``.
 
   Each object subcommand takes a file the package already has, **or an http(s) URL**. Given a URL, the file is
   fetched once so that the declaration can be written with the ``fileHash`` of what came back -- an object
@@ -151,9 +167,11 @@ Object commands
 
 ``pc import``
   Import an existing object into a package. Subcommands: ``part`` (import an existing part and optionally
-  convert its format) and ``assembly`` (import an assembly from a file, creating the parts and an Assembly
-  YAML file). ``pc import assembly`` is a one-shot conversion; to keep reading the source file itself,
-  declare it as an assembly of the ``step`` type instead (see :ref:`assembly_step`).
+  convert its format), ``assembly`` (import an assembly from a file, creating the parts and an Assembly
+  YAML file), and ``scene`` (import a Gazebo world, creating the parts and an Assembly YAML scene).
+  ``pc import`` is a one-shot conversion; to keep reading the source file itself,
+  declare it as an assembly of the ``step`` type or a scene of the ``world`` type instead (see
+  :ref:`assembly_step` and :ref:`scenes`).
 
 ``pc test``
   Run tests on a part, assembly, or scene. Use ``-r`` to test imported packages recursively, ``-f`` to filter
@@ -182,7 +200,7 @@ Object commands
   Show detailed information about a part, assembly, scene, or software, including its parameters.
 
 ``pc bom``
-  Print the bill of materials of an assembly: every part it is made of, recursively, with how many of each
+  Print the bill of materials of an assembly or a scene: every part it is made of, recursively, with how many of each
   are needed and, where the object says so, the vendor and the SKU to order it by. Use ``-P`` to name the
   package the assembly comes from, ``-p <name>=<value>`` to set parameters, and ``-j``/``--json`` to produce
   JSON on standard output instead of a table.
@@ -199,16 +217,22 @@ Object commands
   again.
 
 ``pc convert``
-  Convert parts, sketches or assemblies to another format and update their type in the package. Subcommands:
-  ``part``, ``sketch`` and ``assembly``. An assembly converts between ``assy`` and ``urdf``: to URDF it writes
-  the ``.urdf`` file and the meshes it references; to ASSY it writes an ``stl`` part for every URDF link, an
-  interface pair for every joint, and an ``.assy`` that places the parts with ``connect:``.
+  Convert parts, sketches, assemblies or scenes to another format and update their type in the package.
+  Subcommands: ``part``, ``sketch``, ``assembly`` and ``scene``. An assembly converts between ``assy`` and
+  ``urdf``: to URDF it writes the ``.urdf`` file and the meshes it references; to ASSY it writes an ``stl``
+  part for every URDF link, an interface pair for every joint, and an ``.assy`` that places the parts with
+  ``connect:``. A scene converts between ``assy`` and ``world``: to a Gazebo world it writes the ``.world``
+  file and the meshes it references; to ASSY it copies every shape the world places into the package as a
+  part of its own and writes an ``.assy`` that places them.
 
 ``pc export``
-  Export a 3D view of parts, assemblies, or scenes. Choose the format with ``-t``:
-  ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, ``gltf``, ``iges``, ``urdf``, or any file type a
-  package implements itself (see :ref:`output-files`). Use ``-O`` to set the output directory and ``-r`` to
-  export recursively. ``urdf`` writes a ``.urdf`` file plus a directory of the mesh files it references. ``-e``
+  Export a 3D view of parts, assemblies, or scenes. Use ``-a`` for an assembly and ``-S`` for a scene.
+  Choose the format with ``-t``:
+  ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, ``gltf``, ``iges``, ``urdf``, ``world``, or any
+  file type a package implements itself (see :ref:`output-files`). Use ``-O`` to set the output directory and
+  ``-r`` to export recursively. ``urdf`` writes a ``.urdf`` file plus a directory of the mesh files it
+  references, and ``world`` writes a Gazebo ``.world`` file (SDFormat) the same way -- that is the format a
+  scene has. ``-e``
   names a further package whose ``export:`` options and implementations are used, which is how one package's
   exporter is applied to another package's objects.
 
@@ -283,4 +307,4 @@ Other commands
 
 ``pc search``
   Search for objects by keyword. Subcommands: ``all``, ``parts``, ``sketches``, ``assemblies``,
-  ``interfaces``, and ``packages``.
+  ``scenes``, ``interfaces``, and ``packages``.

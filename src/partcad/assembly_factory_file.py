@@ -35,20 +35,20 @@ class AssemblyFactoryFile(AssemblyFactory):
             # If the user did not supply a way to download the file,
             # check if the file exists
             if not os.path.exists(self.path):
-                raise Exception("ERROR: The assembly path (%s) must exist" % self.path)
+                raise Exception("ERROR: The %s path (%s) must exist" % (self.OBJECT_KIND, self.path))
         # Checked whether or not a download is configured, and so outside the
         # branch above: a path that exists but is a directory is a broken
         # configuration either way. When there is no file factory the path is
         # known to exist by now, so this still covers what devel checked there.
         if os.path.exists(self.path) and not os.path.isfile(self.path):
-            raise Exception("ERROR: The assembly path (%s) must be a file" % self.path)
+            raise Exception("ERROR: The %s path (%s) must be a file" % (self.OBJECT_KIND, self.path))
 
     def post_create(self) -> None:
         if self.path:
             self.assembly.path = self.path
             self.assembly.cache_dependencies.append(self.path)
         else:
-            pc_logging.warning(f"Assembly path is not set: {self.assembly.name}")
+            pc_logging.warning(f"The {self.OBJECT_KIND} path is not set: {self.assembly.name}")
         super().post_create()
 
     async def download_file_async(self, assembly) -> None:

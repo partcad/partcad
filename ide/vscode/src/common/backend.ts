@@ -214,12 +214,27 @@ class JsonRpcBackend implements PartcadBackend {
      * Check one file with `pc lint --file`, in a process of its own.
      *
      * The buffer travels on stdin so what is checked is what is on screen, not
-     * what was last saved. Reported back in the shape the LSP backend's command
-     * returns, so the caller cannot tell the two backends apart.
+     * what was last saved. `flavor`, when the caller knows it, says whether the
+     * file is an assembly or a scene; without it `pc lint` decides. Reported
+     * back in the shape the LSP backend's command returns, so the caller cannot
+     * tell the two backends apart.
      */
-    private async lintFile(arg: { path?: string; text?: string }): Promise<{ path: string; diagnostics: any[] }> {
+    private async lintFile(arg: {
+        path?: string;
+        text?: string;
+        flavor?: string;
+    }): Promise<{ path: string; diagnostics: any[] }> {
         const path = arg?.path ?? '';
-        const args = ['lint', '--file', path, ...(arg?.text === undefined ? [] : ['--stdin'])];
+        const args = [
+            'lint',
+            '--file',
+            path,
+            ...(arg?.text === undefined ? [] : ['--stdin']),
+            // Which schema to check against. Omitted when the caller does not
+            // know, and then `pc lint` works it out from the `partcad.yaml`
+            // files around the file -- see `PartcadLint.flavorOf`.
+            ...(arg?.flavor === undefined ? [] : ['--schema', arg.flavor]),
+        ];
         const stdout = await runCli(this.cliPath, [...args, '--json'], this.cwd, this.outputChannel, undefined, {
             stdin: arg?.text,
             // Findings are reported in the JSON; a non-zero exit only repeats
@@ -298,6 +313,7 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.showAssembly', (a) =>
             this.send('inspect.assembly', { package: a.pkg, name: a.name, params: a.params }),
         );
+        reg('partcad.showScene', (a) => this.send('inspect.scene', { package: a.pkg, name: a.name, params: a.params }));
         // What the PartCAD Viewer's tabs beside the 3D one are filled from. Each
         // is the CLI's own operation -- 'pc bom', the assembly instruction book
         // 'pc render -t html' writes, 'pc supply quote' -- asked for as data
@@ -328,11 +344,17 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.exportAssembly', (type, path, pkg, name, params) =>
             this.send('export.assembly', { type, path, package: pkg, name, params }),
         );
+        reg('partcad.exportScene', (type, path, pkg, name, params) =>
+            this.send('export.scene', { type, path, package: pkg, name, params }),
+        );
         reg('partcad.addPartReal', (a) =>
             this.send('add.part', { kind: a.kind, path: a.path, package: a.packageName, config: a.config }),
         );
         reg('partcad.addAssemblyReal', (a) =>
             this.send('add.assembly', { kind: a.kind, path: a.path, package: a.packageName }),
+        );
+        reg('partcad.addSceneReal', (a) =>
+            this.send('add.scene', { kind: a.kind, path: a.path, package: a.packageName }),
         );
         reg('partcad.packagePath', (a) => this.send('package.path', { package: a.packageName, callback: a.callback }));
         reg('partcad.inspectFile', (path) => this.send('inspect.file', { path: typeof path === 'string' ? path : '' }));

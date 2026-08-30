@@ -1,0 +1,101 @@
+<?xml version="1.0" ?>
+<!--
+  A Gazebo world (SDFormat) used directly as a PartCAD scene.
+
+  Only the models are read: the light, the ground plane and the physics
+  settings below are what a simulator needs and a static arrangement has
+  nowhere to put, so they are counted and reported rather than dropped in
+  silence. 'pc info warehouse' lists the tally.
+-->
+<sdf version="1.9">
+  <world name="warehouse">
+    <light name="sun" type="directional">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+
+    <model name="pallet_a">
+      <static>true</static>
+      <pose>0 0 0.06 0 0 0</pose>
+      <link name="link">
+        <inertial>
+          <mass>12.5</mass>
+        </inertial>
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>1.2 0.8 0.12</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>0.8</mu>
+              </ode>
+            </friction>
+          </surface>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>1.2 0.8 0.12</size>
+            </box>
+          </geometry>
+          <material>
+            <diffuse>0.72 0.53 0.30 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pallet_b">
+      <static>true</static>
+      <pose>1.5 0 0.06 0 0 1.5707963267948966</pose>
+      <link name="link">
+        <inertial>
+          <mass>12.5</mass>
+        </inertial>
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>1.2 0.8 0.12</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+
+    <model name="drum">
+      <pose>0.4 1.2 0.45 0 0 0</pose>
+      <link name="link">
+        <inertial>
+          <mass>60</mass>
+        </inertial>
+        <collision name="collision">
+          <geometry>
+            <cylinder>
+              <radius>0.29</radius>
+              <length>0.9</length>
+            </cylinder>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+  </world>
+</sdf>

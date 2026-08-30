@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""`pc open` -- open a file in a third-party CAD application.
+"""`pc open` -- open a file in a third-party application.
 
 Entirely in the client process, and deliberately so. Opening a file in FreeCAD
 is not work the daemon can do on anyone's behalf: a daemon can be remote, where
@@ -17,7 +17,9 @@ it and none should be added. Same reasoning as `pc lint --file` and
 That is also why it takes a path rather than a `<package>:<part>` name:
 resolving a name means loading the package graph, which is exactly the daemon
 round trip this command does not make. The VS Code extension's "Open in..."
-context menu passes the source file of the part or assembly the user clicked.
+context menu passes the source file of the object the user clicked -- and no
+more than that: which file KiCad is actually pointed at, given the STEP a
+`kicad` part is, is a fact about KiCad and lives in the tool table.
 
 The application is run from this machine when it is installed here, and
 otherwise -- with `--use-docker` -- from a container PartCAD keeps for it. The
@@ -30,7 +32,7 @@ import json
 import rich_click as click
 
 
-@click.command(help="Open a file in a third-party CAD application, on this machine.")
+@click.command(help="Open a file in a third-party application, on this machine.")
 @click.option(
     "--with",
     "tool",
@@ -38,7 +40,7 @@ import rich_click as click
     default="freecad",
     show_default=True,
     metavar="APPLICATION",
-    help="Which application to open the file in.",
+    help="Which application to open the file in: freecad, gazebo (a scene's world file) or kicad (a board).",
 )
 @click.option(
     "--use-docker",

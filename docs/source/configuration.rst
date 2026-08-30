@@ -216,6 +216,9 @@ PartCAD :ref:`packages` may contain the following objects:
 
 - :ref:`assemblies` are instructions how to put parts and other assemblies together to be used as a single object.
 
+- :ref:`scenes` are placed arrangements of objects - a workcell, a table, a simulation world - stating where things
+  are and not how they got there.
+
 - :ref:`software` is what the product ships with that is not geometry: a firmware image, a binary, a disk image.
   It is always a file.
 
@@ -416,7 +419,7 @@ being missing while the package is loaded.
 ``fileFrom`` and ``fileUrl`` must be declared together.
 They are recognized in :ref:`parts`, :ref:`sketches`, :ref:`assemblies`
 (an assembly's source file is pulled the same way, whether it is an ``.assy``
-file or a CAD file) and :ref:`software`.
+file or a CAD file), :ref:`scenes` and :ref:`software`.
 
 .. _file-hash:
 
@@ -1944,6 +1947,120 @@ An assembly embedded in the parent's own source file (the nested ``links:`` of
 an Assembly YAML file) is not an object of any package, so there is no name to
 order it by. Such an assembly is always procured as its contents, and declaring
 a vendor for it has no effect.
+
+.. _scenes:
+
+======
+Scenes
+======
+
+A **scene** is a placed arrangement of objects: a workcell, a table with the
+parts laid out on it, a simulation world. It is built the way an assembly is,
+out of the very same files, and everything that works on an assembly works on a
+scene -- it renders, it exports, it has a bill of materials, ``pc inspect``
+shows it.
+
+What separates the two is intent, and one rule follows from it. An assembly is a
+*product*: it says what it is made of and, through the ``how:`` section of each
+``connect:``, how it is put together, which is what the
+assembly instruction book (``pc render -t pdf``) is generated from. A scene
+states only an end state. Nothing in it was assembled, so there is nothing to
+say about the assembling, and ``how:`` is rejected rather than ignored (see
+:doc:`assy`).
+
+Declare scenes
+--------------
+
+.. code-block:: yaml
+
+  scenes:
+    <scene name>:
+      type: <assy|world>  # Assembly YAML read as a scene, or a Gazebo world file
+      desc: <(optional) textual description>
+      path: <(optional) the source file path>
+      fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
+      fileUrl: <(fileFrom=url only) the URL to download the source file from>
+      fileHash: <the bytes to expect; required with "fileFrom", see "Files">
+      parameters:  # (optional) same as for assemblies
+        <param name>:
+          type: <string|float|int|bool>
+          default: <default value>
+      dependencies: # (optional) the list of filenames the caching logic checks for changes
+        - <macros.j2>
+      offset: <(optional) OCCT Location object>
+      manufacturable: <(optional) false by default; a scene is not a product to be made>
+
+      # 'world' type only
+      ignoreCollision: <(optional) build a link from its visual geometry instead>
+      modelPaths: <(optional) roots to resolve 'model://' references against>
+
+The declaration points at the file that holds the scene and nothing else: there
+is no assembly object in between. An ``.assy`` file in an ``assemblies:``
+section is an assembly, and the very same file in a ``scenes:`` section is a
+scene.
+
+.. code-block:: yaml
+
+  scenes:
+    workcell:
+      type: assy
+      desc: The robot, the fixture and the bin, where they stand on the bench
+
+    warehouse:
+      type: world
+      desc: A Gazebo world, used where it lies
+
+Scenes take parameters, aliases and enriches exactly as assemblies do:
+
+.. code-block:: yaml
+
+  scenes:
+    workcell_wide:
+      type: enrich
+      source: :workcell
+      with:
+        spacing: 900
+
+Gazebo worlds
+-------------
+
+The ``world`` type reads an `SDFormat <http://sdformat.org/>`_ ``.world`` file --
+what Gazebo describes a simulation world in -- as a scene directly, with no
+conversion step. Every model is placed where its ``<pose>`` puts it, every link
+where its own pose puts it inside the model, and every shape becomes a part of
+the package named ``<scene>/<model>/<link>``. Those parts are ordinary parts:
+they can be inspected, rendered and exported on their own.
+
+.. note::
+
+   "SDF" means two unrelated things in PartCAD. The ``sdf`` *part* type is a
+   signed distance function. This is **SDFormat**, and PartCAD calls it
+   ``world`` throughout, after the files it lives in.
+
+It is a best-effort reader: SDFormat describes a running simulation and a scene
+describes where things are, so joints, lights, sensors, plugins, actors, physics
+settings and the ground plane are counted and reported rather than passed over
+in silence. ``pc info`` lists what was dropped. See :doc:`simulation` for the
+whole picture.
+
+The reverse direction is the ``world`` export file type:
+
+.. code-block:: shell
+
+  pc export -S -t world :workcell    # writes workcell.world plus its meshes
+
+and ``pc convert scene`` moves a scene between the two formats, rewriting the
+package around it:
+
+.. code-block:: shell
+
+  pc convert scene -t assy :warehouse   # the world's shapes become parts of the package
+  pc convert scene -t world :workcell   # the scene becomes a Gazebo world file
+
+``pc import scene warehouse.world`` does the first of those in one step for a
+file the package does not declare yet, leaving the package holding PartCAD's own
+objects. ``pc add scene world warehouse.world`` declares the file where it lies
+instead.
 
 .. _software:
 

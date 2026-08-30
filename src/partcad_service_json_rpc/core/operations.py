@@ -161,6 +161,20 @@ def inspect_assembly(session, params):
     return None
 
 
+def inspect_scene(session, params):
+    """Instantiate and show a scene."""
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    package, name = params["package"], params["name"]
+    with session.partcad.logging.Process("Inspect", package, name):
+        scene = ctx.get_scene(_qualified(package, name), params.get("params"))
+        if scene:
+            scene.show()
+    session.emitter.signal(events.SHOW_PART_DONE)
+    return None
+
+
 def inspect_file(session, params):
     """Find the object defined by a file path and ask the client to inspect it."""
     ctx = _ctx(session, params)
@@ -195,6 +209,19 @@ def _inspect_by_path(session, ctx, path):
     # session default.
     with session.partcad.logging.Process("InspectFile", path):
         for prj_name, prj in ctx.projects.items():
+            # Scenes first: an ASSY file a scene points at is not an assembly,
+            # and opening it should inspect what the package says it is.
+            for name, scene in prj.scenes.items():
+                if hasattr(scene, "orig_name") and scene.name != scene.orig_name:
+                    continue
+                if scene.path is not None and os.path.exists(scene.path) and os.path.samefile(scene.path, path):
+                    for paramed in _instances_of(prj.scenes, name):
+                        del prj.scenes[paramed]
+                    session.emitter.emit(
+                        events.EXECUTE,
+                        {"command": "partcad.inspectScene", "args": [{"name": name, "pkg": prj_name}, {}, True]},
+                    )
+                    return
             for name, assy in prj.assemblies.items():
                 if hasattr(assy, "orig_name") and assy.name != assy.orig_name:
                     continue
@@ -264,6 +291,20 @@ def export_assembly(session, params):
     return None
 
 
+def export_scene(session, params):
+    """Render a scene to a file."""
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    package, name = params["package"], params["name"]
+    with session.partcad.logging.Process("Export", package, name):
+        scene = ctx.get_scene(_qualified(package, name), params.get("params"))
+        if scene:
+            scene.render(ctx, params["type"], filepath=params["path"])
+    session.emitter.signal(events.EXPORT_PART_DONE)
+    return None
+
+
 # ---- authoring -------------------------------------------------------------
 
 
@@ -294,6 +335,19 @@ def add_assembly(session, params):
     return None
 
 
+def add_scene(session, params):
+    """Add a scene to a package from an existing file."""
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    kind, path, package = params["kind"], params["path"], params["package"]
+    session.emitter.info("Adding scene %s" % path)
+    with session.partcad.logging.Process("AddScene", path):
+        project = ctx.get_project(package)
+        project.add_scene(kind, path)
+    return None
+
+
 def _invalidate_context(session, params):
     """Drop the cached context after a mutation so the next command re-reads it.
 
@@ -320,13 +374,14 @@ def _invalidate_context(session, params):
 _ADD_SECTIONS = {
     "part": "parts",
     "assembly": "assemblies",
+    "scene": "scenes",
     "sketch": "sketches",
     "software": "software",
 }
 
 
 def add_object(session, params):
-    """Add a part, assembly or piece of software to a package.
+    """Add a part, assembly, scene or piece of software to a package.
 
     Two forms. Given ``path``, the package is pointed at a file it already has:
     the CLI resolves it to an absolute path (it and the daemon do not share a
@@ -388,6 +443,11 @@ def add_object(session, params):
         elif obj_kind == "software":
             with pc.logging.Process("AddSoftware", package_obj.name):
                 added = package_obj.add_software(path, config)
+        elif obj_kind == "scene":
+            with pc.logging.Process("AddScene", package_obj.name):
+                added = package_obj.add_scene(params["kind"], path, config)
+                if added:
+                    Path(path).touch()
         else:
             with pc.logging.Process("AddAssy", package_obj.name):
                 added = package_obj.add_assembly(params["kind"], path)
@@ -401,13 +461,14 @@ def add_object(session, params):
 
 
 def import_object(session, params):
-    """Import a part or assembly into a package, copying (and maybe converting) it.
+    """Import a part, assembly or scene into a package, copying (and maybe converting) it.
 
     Served by the daemon rather than the client because the work runs through
     sandboxed wrappers: importing an assembly drives ``wrapper_import_assy`` or
-    ``wrapper_import_urdf`` in a Python runtime, and ``--target-format``
-    converts through the same machinery. Those runtimes belong to the daemon's
-    environment and need not exist on the client side at all.
+    ``wrapper_import_urdf`` in a Python runtime, importing a scene drives
+    ``wrapper_import_world``, and ``--target-format`` converts through the same
+    machinery. Those runtimes belong to the daemon's environment and need not
+    exist on the client side at all.
     """
     from pathlib import Path
 
@@ -440,6 +501,19 @@ def import_object(session, params):
             except Exception as e:  # pylint: disable=broad-except
                 pc.logging.exception("Error importing part '%s' (%s)" % (name, part_type))
                 raise JsonRpcError(USAGE_ERROR, "Error importing part '%s' (%s): %s" % (name, part_type, e)) from e
+            return {"name": name}
+
+        if obj_kind == "scene":
+            from partcad.actions.scene import import_scene_action
+
+            for key in ("ignoreCollision", "modelPaths"):
+                if params.get(key) is not None:
+                    config[key] = params[key]
+            try:
+                name = import_scene_action(package_obj, params.get("scene_type", "world"), source, config)
+            except Exception as e:  # pylint: disable=broad-except
+                pc.logging.exception("Error importing scene")
+                raise JsonRpcError(USAGE_ERROR, "Error importing scene: %s" % e) from e
             return {"name": name}
 
         from partcad.actions.assembly import import_assy_action
@@ -512,6 +586,8 @@ def test(session, params):
         obj = project.get_part(object_name)
     elif project.get_assembly_config(object_name):
         obj = project.get_assembly(object_name)
+    elif project.get_scene_config(object_name):
+        obj = project.get_scene(object_name)
     else:
         session.emitter.error(f"Object {object_name} is not found in {package}")
         return None
@@ -547,6 +623,8 @@ def info(session, params):
                 "partsInstantiated": ctx.stats_parts_instantiated,
                 "assemblies": ctx.stats_assemblies,
                 "assembliesInstantiated": ctx.stats_assemblies_instantiated,
+                "scenes": ctx.stats_scenes,
+                "scenesInstantiated": ctx.stats_scenes_instantiated,
                 "size": ctx.stats_memory,
             },
             "version": session.partcad.__version__,
@@ -556,7 +634,7 @@ def info(session, params):
 
 
 def info_object(session, params):
-    """Show detailed information about a part, assembly, interface, sketch, or software.
+    """Show detailed information about a part, assembly, scene, interface, sketch, or software.
 
     Ported verbatim from the CLI `info` command: with no object name it reports
     the package's info, otherwise the object's configuration and info. Output is
@@ -588,6 +666,8 @@ def info_object(session, params):
 
     if params.get("assembly"):
         obj = ctx.get_assembly(path, params=param_list)
+    elif params.get("scene"):
+        obj = ctx.get_scene(path, params=param_list)
     elif params.get("interface"):
         obj = ctx.get_interface(path)
     elif params.get("sketch"):
@@ -693,6 +773,8 @@ async def _test_async(ctx, pc, packages, filter_prefix, sketch, interface, assem
                 shape = prj.get_sketch(obj)
             elif assembly:
                 shape = prj.get_assembly(obj)
+            elif scene:
+                shape = prj.get_scene(obj)
             else:
                 # Awaited, not 'get_part()': this is a coroutine, and a part a
                 # URDF or STEP assembly produces has to have that assembly
@@ -937,6 +1019,8 @@ def inspect_object(session, params):
         path = "%s:%s" % (package, object_name)
         if params.get("assembly"):
             obj = ctx.get_assembly(path, params=param_dict)
+        elif params.get("scene"):
+            obj = ctx.get_scene(path, params=param_dict)
         elif params.get("interface"):
             obj = ctx.get_interface(path)
         elif params.get("sketch"):
@@ -1270,7 +1354,7 @@ def package_refresh(session, params):
 
 
 def list_all(session, params):
-    """Load and report the contents (packages/sketches/interfaces/parts/assemblies/software)."""
+    """Load and report the contents (packages/sketches/interfaces/parts/assemblies/scenes/software)."""
     if session.partcad is None:
         session.emitter.error("Loading the package content while PartCAD is not loaded")
         return None
@@ -1294,6 +1378,7 @@ _LIST_LABELS = {
     "parts": "PartCAD parts",
     "sketches": "PartCAD sketches",
     "assemblies": "PartCAD assemblies",
+    "scenes": "PartCAD scenes",
     "interfaces": "PartCAD interfaces",
     "software": "PartCAD software",
 }
@@ -1513,7 +1598,7 @@ def list_mates(session, params):
 
 
 def bom(session, params):
-    """Print the bill of materials of an assembly.
+    """Print the bill of materials of an assembly or a scene.
 
     Returns the line items so the CLI can render them as JSON; the human-readable
     table is emitted here, through PartCAD logging, the way `pc list` renders its
@@ -1540,9 +1625,19 @@ def bom(session, params):
             param_dict[k] = v
 
     with pc.logging.Process("BoM", package, object_name):
-        assembly = ctx.get_assembly(path, params=param_dict)
+        # A scene lists what it holds the same way an assembly does, so it gets
+        # the same bill of materials. Which one the name refers to is read from
+        # the package's declarations rather than tried in turn: asking for the
+        # assembly first would report "not found" for every scene.
+        package_obj = ctx.get_project(package)
+        is_scene = (
+            package_obj is not None
+            and package_obj.get_assembly_config(object_name) is None
+            and package_obj.get_scene_config(object_name) is not None
+        )
+        assembly = ctx.get_scene(path, params=param_dict) if is_scene else ctx.get_assembly(path, params=param_dict)
         if assembly is None:
-            pc.logging.error("Assembly %s is not found" % path)
+            pc.logging.error("Object %s is not found" % path)
             return None
 
         bom_items = asyncio.run(
@@ -1896,6 +1991,7 @@ def search_objects(session, params):
         search_assemblies,
         search_interfaces,
         search_parts,
+        search_scenes,
         search_sketches,
     )
 
@@ -1903,6 +1999,7 @@ def search_objects(session, params):
         "parts": search_parts,
         "sketches": search_sketches,
         "assemblies": search_assemblies,
+        "scenes": search_scenes,
         "interfaces": search_interfaces,
         "packages": search_packages,
     }
@@ -1924,8 +2021,8 @@ def search_objects(session, params):
                 desc = desc.replace("\n", "\n" + " " * 68)
                 line += "%s" % desc
             else:
-                # Interfaces expose their package as `.project`; parts, sketches
-                # and assemblies carry a flat `.project_name` (matches the
+                # Interfaces expose their package as `.project`; parts, sketches,
+                # assemblies and scenes carry a flat `.project_name` (matches the
                 # per-command CLI behavior on devel).
                 project_name = obj.project.name if kind == "interfaces" else obj.project_name
                 line = "\t" + "%s %s" % (project_name, obj.name)
@@ -1968,7 +2065,7 @@ def _validate_output_format(pc, ctx, fmt, packages):
 
 
 def render_objects(session, params):
-    """Render/export parts, assemblies, sketches, or interfaces to files.
+    """Render/export parts, assemblies, scenes, sketches, or interfaces to files.
 
     Backs both `pc export` (3D formats) and `pc render` (2D projections); the CLI
     passes the ``format`` and the ``label`` ("Export"/"Render"). ``output_dir``,
@@ -2123,13 +2220,15 @@ async def _render_packages_async(
                     ignore_manufacturability=ignore_manufacturability,
                 )
             else:
-                sketches, interfaces, parts, assemblies = [], [], [], []
+                sketches, interfaces, parts, assemblies, scenes = [], [], [], [], []
                 if params.get("sketch"):
                     sketches.append(object_in_package)
                 elif params.get("interface"):
                     interfaces.append(object_in_package)
                 elif params.get("assembly"):
                     assemblies.append(object_in_package)
+                elif params.get("scene"):
+                    scenes.append(object_in_package)
                 else:
                     parts.append(object_in_package)
                 prj = ctx.get_project(package)
@@ -2138,6 +2237,7 @@ async def _render_packages_async(
                     interfaces=interfaces,
                     parts=parts,
                     assemblies=assemblies,
+                    scenes=scenes,
                     format=fmt,
                     output_dir=output_dir,
                     options_package=options_package,
@@ -2151,7 +2251,7 @@ async def _render_packages_async(
 
 
 def convert_object(session, params):
-    """Convert a part or sketch to another format and update its type."""
+    """Convert a part, sketch, assembly or scene to another format and update its type."""
     ctx = _ctx(session, params)
     if ctx is None:
         return None
@@ -2162,7 +2262,7 @@ def convert_object(session, params):
     output_dir = params.get("output_dir")
     dry_run = params.get("dry_run", False)
 
-    if kind in ("part", "assembly"):
+    if kind in ("part", "assembly", "scene"):
         package = ctx.resolve_package_path(params.get("package") or ".")
     else:
         package = params.get("package") if params.get("package") is not None else "."
@@ -2184,6 +2284,16 @@ def convert_object(session, params):
             dry_run,
         )
         done_msg = "Assembly conversion of '%s' completed." % object_name
+    elif kind == "scene":
+        from partcad.actions.scene import convert_scene_action
+
+        action = convert_scene_action
+        starting_msg = "Starting scene conversion: '%s' -> '%s', dry_run=%s" % (
+            object_name,
+            target_format,
+            dry_run,
+        )
+        done_msg = "Scene conversion of '%s' completed." % object_name
     elif kind == "part":
         action = convert_part_action
         starting_msg = "Starting conversion: '%s' -> '%s', dry_run=%s" % (object_name, target_format, dry_run)
@@ -2260,6 +2370,7 @@ def _load_package_contents(session, name="//"):
     interfaces = item_objs(project.interfaces, with_path=False)
     parts = item_objs(project.parts)
     assemblies = item_objs(project.assemblies)
+    scenes = item_objs(project.scenes)
     software = item_objs(project.software)
 
     # Objects the package declares but PartCAD could not create - most often one
@@ -2287,6 +2398,7 @@ def _load_package_contents(session, name="//"):
             "interfaces": interfaces,
             "parts": parts,
             "assemblies": assemblies,
+            "scenes": scenes,
             "software": software,
             "broken": broken,
         },

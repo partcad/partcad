@@ -434,6 +434,17 @@ def assy_to_urdf(project: Project, assembly_name: str, config: dict, out_dir: Pa
     return {"assemblies": {assembly_name: assembly_config}}
 
 
+# The sections a conversion or an import may write, and the object kind each
+# one declares. Shared with the scene actions, which write 'scenes:' the way
+# these write 'assemblies:'.
+SECTION_KINDS = {
+    "assemblies": "assembly",
+    "scenes": "scene",
+    "parts": "part",
+    "interfaces": "interface",
+}
+
+
 def apply_config(project: Project, sections: dict) -> None:
     """Merge the generated sections into the package's 'partcad.yaml'."""
     yaml = _yaml()
@@ -461,12 +472,17 @@ def apply_config(project: Project, sections: dict) -> None:
     os.replace(tmp_path, project.config_path)
 
     # Keep the loaded package in step with what was just written, so a daemon
-    # that goes on serving this context sees the converted assembly rather than
+    # that goes on serving this context sees the converted object rather than
     # the one it had already built.
     project.config_obj = config
-    instantiated = {"assembly": project.assemblies, "part": project.parts, "interface": project.interfaces}
+    instantiated = {
+        "assembly": project.assemblies,
+        "scene": project.scenes,
+        "part": project.parts,
+        "interface": project.interfaces,
+    }
     for section, entries in sections.items():
-        kind = {"assemblies": "assembly", "parts": "part", "interfaces": "interface"}[section]
+        kind = SECTION_KINDS[section]
         known = project._object_configs.get(kind)
         for name, entry in entries.items():
             if known is not None:

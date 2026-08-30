@@ -10,6 +10,13 @@ design files.
 NOTE: If you happen to have KiCad installed on your machine, you can use the `--use-docker-kicad=false` flag to run the
 KiCad locally.
 
+The same image is what `pc open --with kicad` -- the "Open in KiCad" item in the VS Code extension's context menu for a
+`kicad` part -- falls back to when the machine has no KiCad of its own. It is the same container either way: this image
+is `kicad/kicad` with PartCAD's environment on top, so it carries the GUI as well as `kicad-cli`, and there is one
+KiCad container in the product rather than two. A `kicad` part points at the STEP file `kicad-cli` writes out of the
+board, so what actually gets opened is the `.kicad_pro`, `.kicad_pcb` or `.kicad_sch` beside it (see `KICAD` in
+`partcad_client.external`).
+
 ## How To
 
 To add parts designed in KiCad, use the the part type `kicad` in the `partcad.yaml` file.

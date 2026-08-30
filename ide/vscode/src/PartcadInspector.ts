@@ -18,6 +18,7 @@ const KINDS = {
     interface: { command: 'partcad.showInterface', progress: 'Inspecting the interface...' },
     part: { command: 'partcad.showPart', progress: 'Inspecting the part...' },
     assembly: { command: 'partcad.showAssembly', progress: 'Inspecting the assembly...' },
+    scene: { command: 'partcad.showScene', progress: 'Inspecting the scene...' },
 } as const;
 
 type ItemKind = keyof typeof KINDS;
@@ -88,6 +89,10 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
 
     public async inspectAssembly(assembly: ItemData, params: Object) {
         await this.inspect('assembly', assembly, params);
+    }
+
+    public async inspectScene(scene: ItemData, params: Object) {
+        await this.inspect('scene', scene, params);
     }
 
     /**

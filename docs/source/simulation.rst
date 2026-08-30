@@ -1,9 +1,12 @@
-Simulation and URDF
-###################
+Simulation, URDF and SDFormat
+#############################
 
 PartCAD can read a `URDF <https://wiki.ros.org/urdf>`_ file as an assembly
 (``type: urdf``), write one back out (``pc export -t urdf``), and convert an
 assembly between URDF and ASSY in either direction (``pc convert assembly``).
+It does the same for `SDFormat <http://sdformat.org/>`_ -- what Gazebo describes
+a simulation *world* in -- against a :ref:`scene <scenes>` rather than an
+assembly: ``type: world``, ``pc export -S -t world``, ``pc convert scene``.
 This page is the design record for that work: what the conversions actually
 preserve, what they cannot, and what it would take for PartCAD to hold
 everything a physical simulation needs.
@@ -372,6 +375,76 @@ below it follows. That is a static assembly gaining the first half of a
 kinematic one, using machinery PartCAD already had. What is still missing is the
 other half - a *named configuration* of the whole assembly rather than a value
 written into one connection - which is item 5 below.
+
+Reading a Gazebo world
+======================
+
+A ``.world`` file reaches a package the same two ways a URDF does, and they mean
+the same two things. ``pc add scene world <path>`` *declares* it: the package
+points at the file, the file stays SDFormat, and the shapes its models place
+become parts as it is read. ``pc import scene <path>`` *converts* it: the
+package gains one part per shape and an ``.assy`` scene that places them, and
+nothing points at the world file afterwards.
+
+The two formats meet at the world's initial state. ``SceneFactoryWorld`` drives
+``wrapper_import_world`` in a python sandbox, which parses the XML with the
+standard library, places every model at its ``<pose>`` and every link at its own
+pose inside the model, and hands back plain data. The core registers one part
+per shape -- ``<scene>/<model>/<link>``, and ``<scene>/<model>/<link>/<n>`` for a
+link made of several -- and builds the very same tree an ASSY scene produces.
+
+Unlike the URDF reader, this one **keeps the nesting**: SDFormat's models are
+containers of links and of other models, which is exactly what a PartCAD
+sub-assembly is, so nothing has to be flattened. The URDF reader flattens
+because a URDF's tree is its *kinematics*, and that is a different thing from
+containment.
+
+Everything else is the same trade: a ``<mesh>`` becomes a part that reads the
+very file the world named, ``<box>``/``<cylinder>``/``<sphere>`` are written out
+as STEP under PartCAD's own state directory (the world file is not touched), and
+what a link says about itself -- mass, inertia, friction, contact, colour --
+becomes named PartCAD properties, the very same ones the URDF reader states.
+
+What a static arrangement cannot hold is counted and reported rather than passed
+over in silence: joints, lights, sensors, plugins, actors, physics settings, and
+the ``<plane>`` every ground plane is. ``pc info`` lists the tally.
+
+The one part most likely to come up empty is ``<include>``. It names a model by
+URI, and outside a Gazebo installation there is no model database to resolve one
+against; what is resolvable -- a relative path, a ``file://``, a ``model://``
+that lands in ``modelPaths`` or beside the world file -- is read, and the rest is
+reported.
+
+Writing a Gazebo world
+======================
+
+``pc export -S -t world`` writes a scene as a ``.world`` file plus the mesh files
+it references. Like the URDF exporter it is handed the assembly tree itself
+(``decode: false``), because the models, the links, the poses and the properties
+are built from what the tree says and decoding would throw all four away.
+
+Anything placed in the world is a ``<model>``, anything with a subtree is a
+``<model>`` wherever it sits, and a node that is geometry is a ``<link>`` with a
+``<visual>`` and a ``<collision>``. Meshes are written in millimetres and
+referenced with ``<scale>0.001 0.001 0.001</scale>``, and poses are in metres
+and radians, exactly as the URDF exporter does it.
+
+Two things the file gets that the scene never said, because a world without them
+is not usable: a ``sun`` light and a ground plane. Both are export parameters
+(``sun``, ``ground_plane``) and both can be turned off. Every model is written
+``<static>true</static>`` for the same kind of reason -- a scene states where
+things are, and a dynamic model would start falling the moment the world loaded
+-- and that too is a parameter (``static``).
+
+A PartCAD property SDFormat has no spelling for is reported at info level rather
+than dropped in silence, the mirror image of the reader refusing to invent one.
+
+.. note::
+
+   "SDF" is two unrelated things in PartCAD. The ``sdf`` *part* type is a signed
+   distance function. SDFormat is what this section is about, and it is called
+   ``world`` everywhere in PartCAD -- the scene type, the export file type, and
+   the extension of the files themselves.
 
 ==========================================
 What a physical simulation actually needs

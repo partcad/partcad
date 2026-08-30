@@ -5,7 +5,15 @@
 #
 """The package/object hierarchy built from an ``items`` notification."""
 
-from partcad_freecad.model import KIND_ASSEMBLY, KIND_PACKAGE, KIND_PART, KIND_SKETCH, Item, parse_items
+from partcad_freecad.model import (
+    KIND_ASSEMBLY,
+    KIND_PACKAGE,
+    KIND_PART,
+    KIND_SCENE,
+    KIND_SKETCH,
+    Item,
+    parse_items,
+)
 
 ITEMS = {
     "name": "//",
@@ -16,17 +24,19 @@ ITEMS = {
         {"name": "cube", "type": "cadquery", "desc": "A cube\nsecond line"},
     ],
     "assemblies": [{"name": "logo", "type": "assy"}],
+    "scenes": [{"name": "workcell", "type": "assy"}],
     "sketches": [{"name": "outline", "type": "dxf"}],
     "interfaces": [{"name": "point"}],
 }
 
 
-def test_sections_are_ordered_packages_assemblies_parts_interfaces_sketches():
+def test_sections_are_ordered_packages_assemblies_scenes_parts_interfaces_sketches():
     contents = parse_items(ITEMS)
 
     assert [item.kind for item in contents] == [
         KIND_PACKAGE,
         KIND_ASSEMBLY,
+        KIND_SCENE,
         KIND_PART,
         KIND_PART,
         KIND_PART,
@@ -57,11 +67,11 @@ def test_a_child_package_is_labelled_by_its_last_path_segment():
     assert package.qualified_name == "//pub/examples"
 
 
-def test_only_parts_and_assemblies_are_importable():
+def test_only_parts_assemblies_and_scenes_are_importable():
     contents = parse_items(ITEMS)
 
     importable = {item.name for item in contents if item.is_importable}
-    assert importable == {"cube", "cylinder", "box", "logo"}
+    assert importable == {"cube", "cylinder", "box", "logo", "workcell"}
 
 
 def test_an_empty_payload_yields_an_empty_package():

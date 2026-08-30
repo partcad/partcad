@@ -1,0 +1,17 @@
+# A scene: where the objects are. The same format an assembly uses, minus the
+# 'how' sections - see docs/source/assy.rst.
+links:
+  - package: ../produce_part_cadquery_primitive
+    part: cube
+    name: block
+    location: [[0, 0, 0], [0, 0, 1], 0]
+
+  - package: ../produce_part_cadquery_primitive
+    part: cylinder
+    name: post
+    location: [[30, 0, 0], [0, 0, 1], 0]
+
+  - package: ../produce_assembly_assy
+    assembly: primitive
+    name: stack
+    location: [[0, 40, 0], [0, 0, 1], 0]
