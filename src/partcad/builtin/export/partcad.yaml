@@ -110,6 +110,56 @@ export:
     tolerance: 0.1
     angularTolerance: 0.1
 
+  world:
+    desc: |
+      SDFormat, the XML Gazebo describes a simulation world in: a `.world` file
+      plus the mesh files it references. It is the format a **scene** is
+      exported to (`pc export -S -t world`), and, like `urdf` below, it is
+      handed the assembly *tree* itself rather than the geometry it decodes to
+      (`decode: false`) - one model per object placed in the scene, named,
+      placed and looked up by what the tree says.
+
+      Not to be confused with the `sdf` *part* type, which is a signed distance
+      function and has nothing to do with this. See
+      `builtin/export/export_world.py`.
+    path: export_world.py
+    extension: world
+    # 'decode: false' -- see wrappers/wrapper_export.py, and the same note on
+    # 'urdf' below.
+    decode: false
+    pythonRequirements:
+      - cadquery-ocp==7.9.3.1.1
+    # The meshes are written by this exporter itself, so it takes the mesh
+    # options too.
+    tolerance: 0.1
+    angularTolerance: 0.1
+    ascii: false
+    # Write an '<inertial>' for every link, computing one from the solid and
+    # 'density' (kg/m^3) for a part that does not state its own.
+    inertial: true
+    # A scene states where things are, so nothing in it is meant to move: every
+    # model is written '<static>true</static>' unless this is turned off.
+    static: true
+    # What makes the file usable rather than what the scene says: a world with
+    # no light renders black, and one with no ground has nothing to stand on.
+    sun: true
+    ground_plane: true
+    # 'world_name' defaults to the object's label, 'mesh_dir' to
+    # '<file stem>_meshes' next to the world file, 'mesh_prefix' to empty (which
+    # makes the mesh references relative to the world file; a Gazebo model
+    # database sets it to 'model://<name>/'), 'version' to the SDFormat version
+    # 'gazebo_common.SDF_VERSION' names, and 'density' to the exporter's own
+    # default.
+    # world_name: <name>
+    # mesh_dir: <directory>
+    # mesh_prefix: <prefix>
+    # version: "1.9"
+    # density: 2700.0
+    # Hand the exporter what the parts report about themselves - mass, inertia,
+    # friction, colour - so that it writes those rather than recomputing them or
+    # losing them. See 'wrappers/wrapper_export.properties_index()'.
+    properties: true
+
   urdf:
     desc: |
       Unified Robot Description Format: a URDF file plus the mesh files it

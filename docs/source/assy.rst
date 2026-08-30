@@ -377,6 +377,50 @@ Everything an object contributes to every connection it takes part in lives in
 that one `connect` section, rather than among the fields that describe the
 object itself.
 
+.. _assy-scenes:
+
+======
+Scenes
+======
+
+The same file format defines a **scene**: a placed arrangement of objects, such
+as a workcell, a table with parts laid out on it, or a simulation world. A
+package declares one by pointing at the file from its ``scenes:`` section rather
+than its ``assemblies:`` section (see :ref:`scenes`); there is no assembly object
+in between, and nothing about the file itself says which it is.
+
+.. code-block:: yaml
+
+  scenes:
+    workcell:
+      type: assy
+
+Everything above applies, with one exception: **a scene may not use** ``how``.
+An assembly is a product and says how it is put together, which is what the
+assembly instruction book is generated from. A scene states only an end state,
+and nothing in it was assembled, so there is nothing to say about the
+assembling. Declaring ``how`` in a scene is an error, both while the scene is
+being built and in the editor.
+
+The ``connect`` and ``connectPorts`` sections themselves stay. Placing a
+gripper against the fixture it holds is a statement about where things are, and
+saying it with the ports the two objects declare is better than saying it with
+coordinates somebody worked out by hand.
+
+  .. code-block:: yaml
+
+    links:
+      - part: //pub/robotics:bench
+        name: bench
+
+      - assembly: //pub/robotics:gripper
+        name: gripper
+        connect:
+          name: bench
+          with: mount
+          to: rail
+          # 'how' would be an error here
+
 ==========
 Validation
 ==========
@@ -386,6 +430,10 @@ ASSY files are checked against a JSON schema
 document *after* Jinja2 rendering: the node keys above, the shape of an OCCT
 location, and the fact that ``location``, ``connectPorts`` and ``connect`` -- or
 ``part``, ``assembly`` and ``links`` -- exclude one another.
+
+A file read as a **scene** is checked against the same schema with ``how``
+forbidden. The scene schema is derived from the one above rather than kept
+beside it, so the two cannot drift apart; only the one rule differs.
 
 Because the file on disk is a template rather than the YAML it renders to, the
 checker masks every Jinja2 construct before parsing: ``{{ expr }}`` becomes a
@@ -424,6 +472,18 @@ an editor checks the buffer on screen:
 
     pc lint --file logo.assy --stdin --json < draft.assy
 
+Whether a single file is checked as an assembly or as a scene is not something
+the file says, so ``pc lint --file`` works it out from the ``partcad.yaml``
+files around it: a file at least one scene declares and no assembly declares is
+a scene. Say so outright with ``--schema``:
+
+  .. code-block:: shell
+
+    pc lint --file workcell.assy --schema scene
+
 The `PartCAD extension for VS Code <https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_
 runs exactly that while an ASSY file is open and shows the findings in the
-Problems view. Set ``partcad.lint.enabled`` to ``false`` to turn that off.
+Problems view. It answers the same question from the package contents it has
+already loaded, which is the declaration itself rather than a guess at it, and
+falls back to the command's own answer for a file no loaded package mentions.
+Set ``partcad.lint.enabled`` to ``false`` to turn that off.

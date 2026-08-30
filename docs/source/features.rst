@@ -26,10 +26,10 @@ Packages
 Objects
 -------
 
-- **Add** a part, assembly, sketch, or interface.
-- **Import** a part, assembly, or sketch from an existing file.
-- **Display** (inspect) a part, assembly, sketch, or interface in the ``PartCAD Viewer``; parts can also be
-  opened for display and editing together, or their source edited directly.
+- **Add** a part, assembly, scene, sketch, or interface.
+- **Import** a part, assembly, scene, or sketch from an existing file.
+- **Display** (inspect) a part, assembly, scene, sketch, or interface in the ``PartCAD Viewer``; parts can
+  also be opened for display and editing together, or their source edited directly.
 - **Test** a part, assembly, or scene.
 
 The Explorer also lists the ``software`` a package ships. Selecting one shows its path and its ``fileHash``
@@ -40,7 +40,8 @@ Export
 ------
 
 Objects can be exported directly from the extension to any of the following formats: **SVG**, **PNG**,
-**JPEG**, **STEP**, **STL**, **3MF**, **ThreeJS**, **OBJ**, **IGES**, and **glTF**.
+**JPEG**, **STEP**, **STL**, **3MF**, **ThreeJS**, **OBJ**, **IGES**, and **glTF**. A scene can also be
+exported as a **Gazebo world** (SDFormat).
 
 =============================
 Procurement and Manufacturing

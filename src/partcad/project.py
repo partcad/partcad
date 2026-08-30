@@ -39,6 +39,8 @@ from . import (
     software as pc_software,
     software_config,
 )
+from . import scene, scene_config
+from . import scene_factory as scnf
 from . import sketch_factory_alias as sfa
 from . import tags as pc_tags
 from . import telemetry
@@ -61,12 +63,25 @@ if TYPE_CHECKING:
 # The kinds of first-class objects a package may contain, mapped to the
 # 'partcad.yaml' section that declares them. Kept as data so that introducing a
 # new kind of object does not require touching the per-kind accessor plumbing.
-OBJECT_KINDS = ("interface", "sketch", "part", "assembly", "provider", "repository", "software", "partType")
+OBJECT_KINDS = (
+    "interface",
+    "sketch",
+    "part",
+    "assembly",
+    "scene",
+    "provider",
+    "repository",
+    "software",
+    "partType",
+)
 OBJECT_KIND_SECTIONS = {
     "interface": "interfaces",
     "sketch": "sketches",
     "part": "parts",
     "assembly": "assemblies",
+    # A scene is a placed arrangement rather than a product, built out of the
+    # very same files an assembly is; see 'partcad.scene'.
+    "scene": "scenes",
     "provider": "providers",
     "repository": "repositories",
     # 'software' is the one kind of object that is neither a shape nor a plugin:
@@ -89,12 +104,21 @@ OBJECT_KIND_SECTIONS = {
 # what makes a chain of aliases and enriches work in any order.
 PARAMETER_PASSING_TYPES = ("alias", "enrich")
 
-# Assembly types whose parts the assembly itself materializes, rather than the
+# Object types whose parts the object itself materializes, rather than the
 # package declaring them: a STEP assembly's components become the parts
-# '<assembly>/<component>', and a URDF's links the parts '<assembly>/<link>'.
-# Such a part is only in 'Project.parts' once the assembly has been built, so
-# 'get_part' builds it on demand (see '_materialize_derived_part').
-PART_PRODUCING_ASSEMBLY_TYPES = ("step", "urdf")
+# '<assembly>/<component>', a URDF's links the parts '<assembly>/<link>', and a
+# Gazebo world's links the parts '<scene>/<model>/<link>'. Such a part is only
+# in 'Project.parts' once the object has been built, so 'get_part' builds it on
+# demand (see '_materialize_derived_part'). Keyed by the kind that declares the
+# object, because 'assemblies:' and 'scenes:' are separate namespaces and a
+# 'world' is only ever a scene.
+PART_PRODUCING_TYPES = {
+    "assembly": ("step", "urdf"),
+    "scene": ("world",),
+}
+# The historical name, kept because it is the assembly half every caller here
+# used to read.
+PART_PRODUCING_ASSEMBLY_TYPES = PART_PRODUCING_TYPES["assembly"]
 
 # How often a caller waiting on somebody else's derived-part build looks again.
 # It waits for a CAD build, so the granularity costs nothing next to what it is
@@ -141,6 +165,7 @@ class Project(project_config.Configuration):
     sketches: dict[str, sketch.Sketch]
     parts: dict[str, Part]
     assemblies: dict[str, assembly.Assembly]
+    scenes: dict[str, scene.Scene]
     providers: dict[str, plugin_provider.Provider]
     repositories: dict[str, plugin_repository.Repository]
     software: dict[str, pc_software.Software]
@@ -194,6 +219,20 @@ class Project(project_config.Configuration):
                 prj.assembly_locks[assembly_name] = threading.Lock()
             self.lock = prj.assembly_locks[assembly_name]
             prj.assembly_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
+
+    class SceneLock(object):
+        def __init__(self, prj, scene_name: str):
+            prj.scene_locks_lock.acquire()
+            if not scene_name in prj.scene_locks:
+                prj.scene_locks[scene_name] = threading.Lock()
+            self.lock = prj.scene_locks[scene_name]
+            prj.scene_locks_lock.release()
 
         def __enter__(self, *_args):
             self.lock.acquire()
@@ -322,6 +361,10 @@ class Project(project_config.Configuration):
         self.assembly_locks = {}
         self.assembly_locks_lock = threading.Lock()
 
+        self.scenes = {}
+        self.scene_locks = {}
+        self.scene_locks_lock = threading.Lock()
+
         self.providers = {}
         self.provider_locks = {}
         self.provider_locks_lock = threading.Lock()
@@ -334,14 +377,16 @@ class Project(project_config.Configuration):
         self.software_locks = {}
         self.software_locks_lock = threading.Lock()
 
-        # The assemblies already built to materialize a part of theirs (see
+        # The objects already built to materialize a part of theirs (see
         # '_materialize_derived_part'), and the lock that keeps two threads from
-        # building the same one.
-        self._derived_parts_attempted: set[str] = set()
+        # building the same one. Keyed by '(kind, name)': 'assemblies:' and
+        # 'scenes:' are separate namespaces, and both hold types that produce
+        # parts.
+        self._derived_parts_attempted: set[tuple] = set()
         # owner -> the event its builder sets when the build is over. A second
         # caller for the same owner waits on this instead of looking the part
         # up while 'children' is still being filled.
-        self._derived_parts_building: dict[str, threading.Event] = {}
+        self._derived_parts_building: dict[tuple, threading.Event] = {}
         self._derived_parts_lock = threading.Lock()
 
         if (
@@ -423,6 +468,7 @@ class Project(project_config.Configuration):
         self.init_mates()  # After interfaces
         self.init_parts()  # After sketches and interfaces, and mates
         self.init_assemblies()  # after parts
+        self.init_scenes()  # after parts and assemblies
         self.init_providers()  # after parts
         self.init_suppliers()  # after providers
         self.init_repositories()  # after parts
@@ -518,6 +564,10 @@ class Project(project_config.Configuration):
     @property
     def assembly_configs(self) -> dict:
         return self.object_configs("assembly")
+
+    @property
+    def scene_configs(self) -> dict:
+        return self.object_configs("scene")
 
     @property
     def provider_configs(self) -> dict:
@@ -762,6 +812,9 @@ class Project(project_config.Configuration):
     def get_assembly_config(self, assembly_name):
         return self.object_config("assembly", assembly_name)
 
+    def get_scene_config(self, scene_name):
+        return self.object_config("scene", scene_name)
+
     def get_provider_config(self, provider_name):
         return self.object_config("provider", provider_name)
 
@@ -804,6 +857,15 @@ class Project(project_config.Configuration):
             assembly_config.AssemblyConfiguration,
             afa.AssemblyFactoryAlias,
             self.get_assembly_config,
+        )
+
+    def init_scenes(self):
+        return self.init_objects(
+            "scene",
+            self.scene_configs,
+            scene_config.SceneConfiguration,
+            scnf.SceneFactoryAlias,
+            self.get_scene_config,
         )
 
     def init_providers(self):
@@ -1095,38 +1157,43 @@ class Project(project_config.Configuration):
         await self._materialize_derived_part_async(part_name)
         return self._part_object(part_name, func_params, quiet=quiet)
 
-    def _derived_part_owner(self, part_name: str) -> Optional[str]:
-        """The assembly whose parts are named '<this assembly>/<something>'.
+    def _derived_part_owner(self, part_name: str) -> Optional[tuple]:
+        """The object whose parts are named '<that object>/<something>'.
 
-        Only assemblies of a type that materializes parts qualify, and only when
-        the package really declares one under that name, so an ordinary part
-        called 'brackets/left' is not mistaken for one.
+        Returns '(kind, name)' - a Gazebo world declares its parts as a scene
+        does, a STEP or URDF assembly as an assembly does - or None. Only types
+        that materialize parts qualify, and only when the package really
+        declares one under that name, so an ordinary part called 'brackets/left'
+        is not mistaken for one.
 
         Read from the configs already known rather than through
         'get_assembly_config()': this runs on every part lookup, and that
         accessor would ask a plugin-backed package to go and fetch the name over
         the network before it could say it does not have it.
         """
-        known = self._object_configs.get("assembly") or {}
         prefix = part_name.split(";")[0]
         while "/" in prefix:
             prefix = prefix.rsplit("/", 1)[0]
-            config = known.get(prefix)
-            if config and config.get("type") in PART_PRODUCING_ASSEMBLY_TYPES:
-                return prefix
+            for kind, types in PART_PRODUCING_TYPES.items():
+                config = (self._object_configs.get(kind) or {}).get(prefix)
+                if config and config.get("type") in types:
+                    return kind, prefix
         return None
 
     def _derived_part_to_build(self, part_name: str):
-        """The assembly to build so that 'part_name' exists, or None.
+        """The object to build so that 'part_name' exists, or None.
 
         Cheap and synchronous: dictionary lookups and one set. Both accessors
         take this before deciding whether they need a loop at all, so the common
         path -- a part that is declared, or a name no assembly produces -- never
         pays for one.
 
-        Returns (owner, assembly), or None when there is nothing to build.
-        Claims nothing: '_claim_derived_part()' does that, and only once the
-        caller is known to be allowed to build at all.
+        Returns (owner, object), or None when there is nothing to build.
+        'owner' is the '(kind, name)' pair '_derived_part_owner()' hands back,
+        because 'assemblies:' and 'scenes:' are separate namespaces and both
+        hold types that produce parts. Claims nothing: '_claim_derived_part()'
+        does that, and only once the caller is known to be allowed to build at
+        all.
 
         Whoever ends up not building has to wait for whoever does, rather than
         go and look the part up. 'children' is filled as the factory works, so a
@@ -1146,12 +1213,13 @@ class Project(project_config.Configuration):
         owner = self._derived_part_owner(part_name)
         if owner is None:
             return None
-        owning_assembly = self.get_assembly(owner)
+        kind, name = owner
+        owning_assembly = self.get_scene(name) if kind == "scene" else self.get_assembly(name)
         if owning_assembly is None or owning_assembly.children:
             return None
         return owner, owning_assembly
 
-    def _claim_derived_part(self, owner: str):
+    def _claim_derived_part(self, owner: tuple):
         """Claim the right to build 'owner', or find out who already has it.
 
         Returns (done, claimed): the event to set when the build is over and
@@ -1175,7 +1243,7 @@ class Project(project_config.Configuration):
             self._derived_parts_building[owner] = done
             return done, True
 
-    def _finish_derived_part(self, owner: str, done) -> None:
+    def _finish_derived_part(self, owner: tuple, done) -> None:
         """Release whoever is waiting on this owner's build, however it went."""
         with self._derived_parts_lock:
             self._derived_parts_building.pop(owner, None)
@@ -1230,11 +1298,13 @@ class Project(project_config.Configuration):
             done.wait()
             return
 
-        pc_logging.debug("Building %s:%s to resolve the part %s", self.name, owner, part_name)
+        pc_logging.debug("Building %s:%s to resolve the part %s", self.name, owner[1], part_name)
         try:
             asyncio.run(owning_assembly.do_instantiate())
         except Exception as e:  # pylint: disable=broad-except
-            pc_logging.error("Failed to build %s:%s while resolving the part %s: %s" % (self.name, owner, part_name, e))
+            pc_logging.error(
+                "Failed to build %s:%s while resolving the part %s: %s" % (self.name, owner[1], part_name, e)
+            )
         finally:
             self._finish_derived_part(owner, done)
 
@@ -1264,11 +1334,13 @@ class Project(project_config.Configuration):
             while not done.is_set():
                 await asyncio.sleep(_DERIVED_PART_POLL_SECONDS)
             return
-        pc_logging.debug("Building %s:%s to resolve the part %s", self.name, owner, part_name)
+        pc_logging.debug("Building %s:%s to resolve the part %s", self.name, owner[1], part_name)
         try:
             await owning_assembly.do_instantiate()
         except Exception as e:  # pylint: disable=broad-except
-            pc_logging.error("Failed to build %s:%s while resolving the part %s: %s" % (self.name, owner, part_name, e))
+            pc_logging.error(
+                "Failed to build %s:%s while resolving the part %s: %s" % (self.name, owner[1], part_name, e)
+            )
         finally:
             self._finish_derived_part(owner, done)
 
@@ -1282,6 +1354,19 @@ class Project(project_config.Configuration):
             assembly_config.AssemblyConfiguration,
             afa.AssemblyFactoryAlias,
             assembly_name,
+            func_params,
+        )
+
+    def get_scene(self, scene_name, func_params=None) -> Optional[scene.Scene]:
+        return self.get_object(
+            "scene",
+            Project.SceneLock,
+            self.scenes,
+            self.scene_configs,
+            self.get_scene_config,
+            scene_config.SceneConfiguration,
+            scnf.SceneFactoryAlias,
+            scene_name,
             func_params,
         )
 
@@ -1776,6 +1861,17 @@ class Project(project_config.Configuration):
             config,
         )
 
+    def add_scene(self, kind: str, path: str, config={}) -> bool:
+        pc_logging.info("Adding the scene %s of type %s" % (self.rel_path(path), kind))
+        ext_by_kind = {}
+        return self._add_component(
+            kind,
+            path,
+            "scenes",
+            ext_by_kind,
+            config,
+        )
+
     def set_part_config(self, part_name, part_config):
         if "name" in part_config:
             del part_config["name"]
@@ -1847,6 +1943,7 @@ class Project(project_config.Configuration):
             (self.sketch_configs, self.get_sketch),
             (self.part_configs, self.get_part),
             (self.assembly_configs, self.get_assembly),
+            (self.scene_configs, self.get_scene),
         ]:
             tasks.extend(
                 asyncio.create_task(getattr(t, test_method)(tests, ctx, obj))
@@ -1902,6 +1999,7 @@ class Project(project_config.Configuration):
         output_dir: Optional[Path] = None,
         options_package: Optional[str] = None,
         ignore_manufacturability: bool = False,
+        scenes: Optional[List] = None,
     ):
         with pc_logging.Action("RenderPkg", self.name):
             # A skipped package has nothing to render, and must not be asked to:
@@ -1922,7 +2020,7 @@ class Project(project_config.Configuration):
             # '_output_cfg()', because it also has to take 'export:' and the
             # options package into account.
             render = self.config_obj.get("render") or {}
-            shapes: List[Shape] = self._enumerate_shapes(sketches, interfaces, parts, assemblies)
+            shapes: List[Shape] = self._enumerate_shapes(sketches, interfaces, parts, assemblies, scenes)
 
             if None in shapes:
                 raise EmptyShapesError
@@ -1981,18 +2079,32 @@ class Project(project_config.Configuration):
                             ignore_manufacturability,
                         )
 
-            # The package document is skipped when specific assemblies were asked
-            # for: their own documents are what was requested.
-            if (format == "readme" and not assemblies) or (format is None and "readme" in render):
+            # A scene lists what it holds exactly as an assembly does, so it
+            # gets the same document. It never gets an instruction book: an
+            # assembly guide is an account of putting something together, and
+            # nothing in a scene was put together (see 'partcad.scene').
+            for scene_name in self._assembly_documents_to_render(shapes, scenes, format, "readme", render, "scene"):
+                await self.render_assembly_readme_async(scene_name, render, output_dir, kind="scene")
+
+            # The package document is skipped when specific assemblies or scenes
+            # were asked for: their own documents are what was requested.
+            if (format == "readme" and not assemblies and not scenes) or (format is None and "readme" in render):
                 self.render_readme_async(render, output_dir)
 
-    def _assembly_documents_to_render(self, shapes, assemblies, format, document_format, render_cfg=None):
-        """Which assemblies get a document of the given kind out of this run."""
+    def _assembly_documents_to_render(
+        self, shapes, assemblies, format, document_format, render_cfg=None, kind="assembly"
+    ):
+        """Which assemblies get a document of the given kind out of this run.
+
+        'kind' selects which shapes are considered - "assembly" or "scene" -
+        because the two are declared in sections of their own and a document is
+        written per object of one kind, never per object of both.
+        """
         if format is not None and format != document_format:
             return []
         names = []
         for shape in shapes:
-            if shape.kind != "assembly":
+            if shape.kind != kind:
                 continue
             # A 'pdf' or 'html' somebody implements is a file of that assembly's
             # own, produced above like any other file type, and asking for it
@@ -2004,7 +2116,7 @@ class Project(project_config.Configuration):
                 names.append(shape.name)
         return names
 
-    def _enumerate_shapes(self, sketches, interfaces, parts, assemblies):
+    def _enumerate_shapes(self, sketches, interfaces, parts, assemblies, scenes=None):
         def get_keys(section, kind):
             # A section that is present but empty (e.g. `sketches:` with no
             # entries, as `pc init` writes it) parses as None; treat it as {}.
@@ -2023,6 +2135,7 @@ class Project(project_config.Configuration):
         # interfaces = sketches or get_keys("interfaces", "interface")
         parts = parts or get_keys("parts", "part")
         assemblies = assemblies or get_keys("assemblies", "assembly")
+        scenes = scenes or get_keys("scenes", "scene")
 
         shapes = []
         for name in sketches:
@@ -2031,6 +2144,8 @@ class Project(project_config.Configuration):
             shapes.append(self.get_part(name))
         for name in assemblies:
             shapes.append(self.get_assembly(name))
+        for name in scenes:
+            shapes.append(self.get_scene(name))
         # TODO(clairbee): interfaces are not yet renderable.
         # for name in interfaces: shapes.append(self.get_interface(name))
 
@@ -2043,6 +2158,7 @@ class Project(project_config.Configuration):
         plural_shape_kind = {
             "part": "parts",
             "assembly": "assemblies",
+            "scene": "scenes",
             "sketch": "sketches",
             "interface": "interfaces",
             "providers": "providers",
@@ -2068,6 +2184,7 @@ class Project(project_config.Configuration):
         output_dir: Optional[Path] = None,
         options_package: Optional[str] = None,
         ignore_manufacturability: bool = False,
+        scenes: Optional[list] = None,
     ):
         asyncio.run(
             self.render_async(
@@ -2079,6 +2196,7 @@ class Project(project_config.Configuration):
                 output_dir,
                 options_package,
                 ignore_manufacturability,
+                scenes,
             )
         )
 
@@ -2125,13 +2243,15 @@ class Project(project_config.Configuration):
         markup = '<img src="%s" alt="%s" style="%s">' % (src, name, pc_document.MARKDOWN_IMAGE_STYLE)
         return markup, test_image_path
 
-    def _assembly_document_target(self, format, extension, assembly_name, render_cfg=None, output_dir=None):
-        """Where a document of one assembly goes, and what it is about.
+    def _assembly_document_target(
+        self, format, extension, assembly_name, render_cfg=None, output_dir=None, kind="assembly"
+    ):
+        """Where a document of one assembly or scene goes, and what it is about.
 
         Returns '(assembly, path, dir_path, return_path, render_cfg, output_dir)',
-        or 'None' if this package has no such assembly.
+        or 'None' if this package has no such object of that kind.
         """
-        assembly = self.get_assembly(assembly_name)
+        assembly = self.get_scene(assembly_name) if kind == "scene" else self.get_assembly(assembly_name)
         if assembly is None:
             return None
 
@@ -2157,17 +2277,18 @@ class Project(project_config.Configuration):
         return_path = os.path.relpath(output_dir, dir_path)
         return assembly, path, dir_path, return_path, render_cfg, output_dir
 
-    async def render_assembly_readme_async(self, assembly_name, render_cfg=None, output_dir=None):
-        """Generate the markdown document of a single assembly.
+    async def render_assembly_readme_async(self, assembly_name, render_cfg=None, output_dir=None, kind="assembly"):
+        """Generate the markdown document of a single assembly or scene.
 
         Where the package document lists what the package declares, this one lists
         what the assembly is made of: every part and every sub-assembly it uses,
-        recursively, grouped by the package they come from and counted.
+        recursively, grouped by the package they come from and counted. A scene
+        ('kind="scene"') is documented the same way, and lists what it holds.
 
         Returns the path of the generated document, or 'None' if there is no such
-        assembly in this package.
+        object in this package.
         """
-        target = self._assembly_document_target("readme", ".md", assembly_name, render_cfg, output_dir)
+        target = self._assembly_document_target("readme", ".md", assembly_name, render_cfg, output_dir, kind)
         if target is None:
             return None
         assembly, path, dir_path, return_path, render_cfg, output_dir = target
@@ -2181,8 +2302,8 @@ class Project(project_config.Configuration):
             f.writelines(map(lambda s: s + "\n", lines))
         return path
 
-    def render_assembly_readme(self, assembly_name, render_cfg=None, output_dir=None):
-        return asyncio.run(self.render_assembly_readme_async(assembly_name, render_cfg, output_dir))
+    def render_assembly_readme(self, assembly_name, render_cfg=None, output_dir=None, kind="assembly"):
+        return asyncio.run(self.render_assembly_readme_async(assembly_name, render_cfg, output_dir, kind))
 
     async def render_assembly_guide_async(
         self,

@@ -163,8 +163,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // ASSY files are checked through the backend; the checker is created here so
     // the documents already open when the window came up get checked as soon as
-    // the backend registers `partcad.lintFile`.
-    partcadLint = new PartcadLint();
+    // the backend registers `partcad.lintFile`. The Explorer is handed over as a
+    // getter rather than a value: it does not exist yet, and what the checker
+    // wants from it - which ASSY files the packages declare as scenes - only
+    // arrives once a package has loaded.
+    partcadLint = new PartcadLint(() => partcadExplorer);
     context.subscriptions.push(partcadLint);
 
     const handleRestartServer = async (
@@ -291,15 +294,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 }),
                 lsClient.onNotification('?/partcad/items', async (items) => {
                     partcadExplorer?.setItems(items.name, items);
+                    // The package now says which of its ASSY files are scenes,
+                    // which is what decides the schema each is checked against.
+                    // Anything checked before this arrived was checked without
+                    // that (see 'PartcadLint.flavorOf').
+                    partcadLint?.refresh();
                     if (
                         items.packages.length === 0 &&
                         items.sketches.length === 0 &&
                         items.interfaces.length === 0 &&
                         items.parts.length === 0 &&
                         items.assemblies.length === 0 &&
-                        // Software counts too, and is optional because an older
-                        // PartCAD does not report it: a package of nothing but
-                        // software has something to show.
+                        // Scenes and software count too, and are optional
+                        // because an older PartCAD reports neither: a package of
+                        // nothing but software has something to show.
+                        (items.scenes ?? []).length === 0 &&
                         (items.software ?? []).length === 0 &&
                         // Objects that failed to load count as items too: a
                         // package of nothing but broken ones has something to
@@ -588,6 +597,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 'Import functionality is not yet implemented in VSCode UI. Please, use command line.',
             );
         }),
+        registerCommand(`partcad.importScene`, async () => {
+            await vscode.window.showWarningMessage(
+                'Import functionality is not yet implemented in VSCode UI. Please, use command line.',
+            );
+        }),
         registerCommand(`partcad.addInterface`, async () => {
             await vscode.window.showWarningMessage(
                 'Adding interface is not yet implemented in VSCode UI. Please, edit `partcad.yaml` manually.',
@@ -799,6 +813,78 @@ connect:
             await vscode.commands.executeCommand('vscode.open', uri);
             await vscode.commands.executeCommand('partcad.restart');
         }),
+        registerCommand(`partcad.addScene`, async () => {
+            await vscode.commands.executeCommand('partcad.packagePath', {
+                packageName: partcadExplorer?.root ?? '//',
+                callback: 'partcad.addScene2',
+            });
+        }),
+        registerCommand(`partcad.addScene2`, async ({ packageName, packagePath, isAbsolute }) => {
+            let startUri = undefined;
+            if (isAbsolute) {
+                startUri = vscode.Uri.file(packagePath);
+            } else {
+                let wsUri = undefined;
+                if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+                    wsUri = vscode.workspace.workspaceFolders[0].uri;
+                }
+                if (!wsUri) {
+                    await vscode.window.showWarningMessage('Failed to determine the package path');
+                    return;
+                }
+                startUri = vscode.Uri.joinPath(wsUri, packagePath);
+            }
+
+            const sceneName = await vscode.window.showInputBox({
+                title: 'Enter the name of new scene',
+                prompt: 'Enter the name of new scene',
+                placeHolder: 'Scene',
+                ignoreFocusOut: true,
+                password: false,
+            });
+            if (!sceneName) {
+                await vscode.window.showWarningMessage('No scene name provided.');
+                return;
+            }
+
+            const uri = vscode.Uri.joinPath(startUri, sceneName + '.assy');
+            const wsedit = new vscode.WorkspaceEdit();
+            wsedit.createFile(uri, {
+                ignoreIfExists: false,
+                contents: new TextEncoder()
+                    .encode(`# A scene states where things are. It is an Assembly YAML file like any other,
+# read as a scene rather than as an assembly: the 'connect*' sections are all
+# available, but 'how' is not - nothing here was assembled, so there is nothing
+# to say about the assembling.
+links:
+
+# There are one or more links in each list.
+# Each link is either a reference to an existing part or assembly,
+# or a group defined in place.
+
+- part: //pub/electromechanics/towerpro:servo/mg90s
+# 'name' is used to make references to this object within this file.
+name: motor
+location: [[0, 0, 0], [0, 0, 1], 0]
+
+- assembly: //pub/robotics/multimodal/openvmp/robots/don1:robot
+name: robot
+location: [[100, 0, 0], [0, 0, 1], 0]
+`),
+            });
+
+            await vscode.workspace.applyEdit(wsedit);
+
+            await vscode.commands.executeCommand('partcad.addSceneReal', {
+                kind: 'assy',
+                path: uri.fsPath,
+                packageName: packageName,
+            });
+            itemToSelectOnRestart = uri.fsPath;
+
+            await vscode.commands.executeCommand('vscode.open', uri);
+            await vscode.commands.executeCommand('partcad.restart');
+        }),
         registerCommand(`partcad.inspectPackage`, async (pkg) => {
             currentItemType = PartcadItem.ITEM_TYPE_PACKAGE;
             currentItemName = pkg.pkg;
@@ -857,6 +943,18 @@ connect:
             }
             await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', true);
             await partcadInspector?.inspectAssembly(assy, params);
+            await vscode.commands.executeCommand('partcad.getStats');
+        }),
+        registerCommand(`partcad.inspectScene`, async (scene, params, doNotMemorize) => {
+            if (!doNotMemorize) {
+                currentItemType = PartcadItem.ITEM_TYPE_SCENE;
+                currentItemName = scene.name;
+                currentItemPackage = scene.pkg;
+                currentItemParams = params;
+                itemToSelectOnRestart = scene.itemPath;
+            }
+            await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', true);
+            await partcadInspector?.inspectScene(scene, params);
             await vscode.commands.executeCommand('partcad.getStats');
         }),
         registerCommand(`partcad.inspectSoftware`, async (software) => {
@@ -993,6 +1091,8 @@ connect:
                 text += 'part';
             } else if (currentItemType === PartcadItem.ITEM_TYPE_ASSEMBLY) {
                 text += 'assembly';
+            } else if (currentItemType === PartcadItem.ITEM_TYPE_SCENE) {
+                text += 'scene';
             } else {
                 return [];
             }

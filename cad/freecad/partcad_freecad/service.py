@@ -176,13 +176,13 @@ class PartCadService:
         self._check("failed to create a package in %s" % self.package_dir)
 
     def export(self, item, path: str, params: Optional[dict] = None, format_name: str = "step") -> str:
-        """Render a part or an assembly to ``path``; return the path.
+        """Render a part, an assembly or a scene to ``path``; return the path.
 
-        ``export.part``/``export.assembly`` report a failed render through the
-        log stream and still return successfully, so the file itself is the
-        verdict.
+        ``export.part``/``export.assembly``/``export.scene`` report a failed
+        render through the log stream and still return successfully, so the file
+        itself is the verdict.
         """
-        method = "export.assembly" if item.kind == "assembly" else "export.part"
+        method = {"assembly": "export.assembly", "scene": "export.scene"}.get(item.kind, "export.part")
         self.call(
             method,
             {

@@ -136,11 +136,11 @@ Object commands
 
 ``pc list``
   List components. Subcommands select what to list: ``all``, ``parts``, ``sketches``, ``assemblies``,
-  ``interfaces``, ``mates``, ``providers``, ``software``, and ``packages``.
+  ``scenes``, ``interfaces``, ``mates``, ``providers``, ``software``, and ``packages``.
 
 ``pc add``
-  Add an object to a package. Subcommands: ``dep`` (a dependency), ``sketch``, ``part``, ``assembly``, and
-  ``software``.
+  Add an object to a package. Subcommands: ``dep`` (a dependency), ``sketch``, ``part``, ``assembly``,
+  ``scene``, and ``software``.
 
   Each object subcommand takes a file the package already has, **or an http(s) URL**. Given a URL, the file is
   fetched once so that the declaration can be written with the ``fileHash`` of what came back -- an object
@@ -151,9 +151,11 @@ Object commands
 
 ``pc import``
   Import an existing object into a package. Subcommands: ``part`` (import an existing part and optionally
-  convert its format) and ``assembly`` (import an assembly from a file, creating the parts and an Assembly
-  YAML file). ``pc import assembly`` is a one-shot conversion; to keep reading the source file itself,
-  declare it as an assembly of the ``step`` type instead (see :ref:`assembly_step`).
+  convert its format), ``assembly`` (import an assembly from a file, creating the parts and an Assembly
+  YAML file), and ``scene`` (import a Gazebo world, creating the parts and an Assembly YAML scene).
+  ``pc import`` is a one-shot conversion; to keep reading the source file itself,
+  declare it as an assembly of the ``step`` type or a scene of the ``world`` type instead (see
+  :ref:`assembly_step` and :ref:`scenes`).
 
 ``pc test``
   Run tests on a part, assembly, or scene. Use ``-r`` to test imported packages recursively, ``-f`` to filter
@@ -182,7 +184,7 @@ Object commands
   Show detailed information about a part, assembly, scene, or software, including its parameters.
 
 ``pc bom``
-  Print the bill of materials of an assembly: every part it is made of, recursively, with how many of each
+  Print the bill of materials of an assembly or a scene: every part it is made of, recursively, with how many of each
   are needed and, where the object says so, the vendor and the SKU to order it by. Use ``-P`` to name the
   package the assembly comes from, ``-p <name>=<value>`` to set parameters, and ``-j``/``--json`` to produce
   JSON on standard output instead of a table.
@@ -199,16 +201,22 @@ Object commands
   again.
 
 ``pc convert``
-  Convert parts, sketches or assemblies to another format and update their type in the package. Subcommands:
-  ``part``, ``sketch`` and ``assembly``. An assembly converts between ``assy`` and ``urdf``: to URDF it writes
-  the ``.urdf`` file and the meshes it references; to ASSY it writes an ``stl`` part for every URDF link, an
-  interface pair for every joint, and an ``.assy`` that places the parts with ``connect:``.
+  Convert parts, sketches, assemblies or scenes to another format and update their type in the package.
+  Subcommands: ``part``, ``sketch``, ``assembly`` and ``scene``. An assembly converts between ``assy`` and
+  ``urdf``: to URDF it writes the ``.urdf`` file and the meshes it references; to ASSY it writes an ``stl``
+  part for every URDF link, an interface pair for every joint, and an ``.assy`` that places the parts with
+  ``connect:``. A scene converts between ``assy`` and ``world``: to a Gazebo world it writes the ``.world``
+  file and the meshes it references; to ASSY it copies every shape the world places into the package as a
+  part of its own and writes an ``.assy`` that places them.
 
 ``pc export``
-  Export a 3D view of parts, assemblies, or scenes. Choose the format with ``-t``:
-  ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, ``gltf``, ``iges``, ``urdf``, or any file type a
-  package implements itself (see :ref:`output-files`). Use ``-O`` to set the output directory and ``-r`` to
-  export recursively. ``urdf`` writes a ``.urdf`` file plus a directory of the mesh files it references. ``-e``
+  Export a 3D view of parts, assemblies, or scenes. Use ``-a`` for an assembly and ``-S`` for a scene.
+  Choose the format with ``-t``:
+  ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, ``gltf``, ``iges``, ``urdf``, ``world``, or any
+  file type a package implements itself (see :ref:`output-files`). Use ``-O`` to set the output directory and
+  ``-r`` to export recursively. ``urdf`` writes a ``.urdf`` file plus a directory of the mesh files it
+  references, and ``world`` writes a Gazebo ``.world`` file (SDFormat) the same way -- that is the format a
+  scene has. ``-e``
   names a further package whose ``export:`` options and implementations are used, which is how one package's
   exporter is applied to another package's objects.
 

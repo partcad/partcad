@@ -123,7 +123,7 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
             if not assembly.children:
                 pc_logging.warning("Assembly is empty")
 
-            self.ctx.stats_assemblies_instantiated += 1
+            self.count_instantiated()
 
     async def read_async(self):
         """Read the URDF and return the wrapper's full result.

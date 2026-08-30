@@ -211,7 +211,7 @@ def test_a_slash_in_a_part_name_is_not_enough(tmp_path, monkeypatch):
     """Only a name whose prefix really is such an assembly triggers the build."""
     _, ctx = package(tmp_path, monkeypatch)
     project = ctx.get_project("")
-    assert project._derived_part_owner("AeroAssembly/AeroFrame_Plate") == "AeroAssembly"
+    assert project._derived_part_owner("AeroAssembly/AeroFrame_Plate") == ("assembly", "AeroAssembly")
     assert project._derived_part_owner("brackets/left") is None
     assert project._derived_part_owner("AeroFrame_Plate") is None
 

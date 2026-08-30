@@ -68,7 +68,7 @@ class AssemblyFactoryEnrich(afa.AssemblyFactoryAlias):
         # What this object reports, settled here rather than while it is built:
         # a shape that comes out of the cache is never instantiated, and an
         # enrich has to answer the same either way (see 'adopt_source_config').
-        source = self.ctx._get_assembly(self.source)
+        source = self.get_source_object(self.source)
         if source is None:
             raise Exception(f"Failed to find the assembly to enrich: {self.source}")
         adopt_source_config(assembly, source, self.source)

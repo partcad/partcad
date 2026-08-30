@@ -72,6 +72,8 @@ class Context:
     stats_parts_instantiated: int
     stats_assemblies: int
     stats_assemblies_instantiated: int
+    stats_scenes: int
+    stats_scenes_instantiated: int
     stats_plugins: int
     stats_plugin_queries: int
     stats_providers: int
@@ -168,6 +170,8 @@ class Context:
         self.stats_parts_instantiated = 0
         self.stats_assemblies = 0
         self.stats_assemblies_instantiated = 0
+        self.stats_scenes = 0
+        self.stats_scenes_instantiated = 0
         self.stats_plugins = 0
         self.stats_plugin_queries = 0
         self.stats_providers = 0
@@ -679,7 +683,11 @@ class Context:
             # instantiated dicts, so a plugin-backed package - which enumerates
             # lazily and does not instantiate up front - is counted correctly.
             projects = filter(
-                lambda x: x.object_count("sketch") + x.object_count("part") + x.object_count("assembly") > 0,
+                lambda x: x.object_count("sketch")
+                + x.object_count("part")
+                + x.object_count("assembly")
+                + x.object_count("scene")
+                > 0,
                 projects,
             )
         return list(
@@ -1103,6 +1111,39 @@ class Context:
         See 'Shape.convert()' for the supported part types and return types.
         """
         return asyncio.run(self._get_assembly(assembly_spec, params).convert(part_type, self, **kwargs))
+
+    def _get_scene(self, scene_spec, params=None):
+        project_name, scene_name = resolve_resource_path(
+            self.current_project_path,
+            scene_spec,
+        )
+        prj = self.get_project(project_name)
+        if prj is None:
+            pc_logging.error("Package %s not found" % project_name)
+            return None
+        pc_logging.debug("Retrieving %s from %s" % (scene_name, project_name))
+        return prj.get_scene(scene_name, params)
+
+    def get_scene(self, scene_spec, params=None):
+        return self._get_scene(scene_spec, params)
+
+    def get_scene_shape(self, scene_spec, params=None):
+        return asyncio.run(self._get_scene(scene_spec, params).get_wrapped(self))
+
+    def convert_scene(self, scene_spec, part_type, params=None, **kwargs):
+        """Convert the scene to 'part_type' and return the result in memory.
+
+        See 'Shape.convert()' for the supported part types and return types.
+        """
+        return asyncio.run(self._get_scene(scene_spec, params).convert(part_type, self, **kwargs))
+
+    def get_scene_cadquery(self, scene_spec, params=None):
+        """Thin alias for convert_scene(scene_spec, "cadquery", params)."""
+        return self.convert_scene(scene_spec, "cadquery", params)
+
+    def get_scene_build123d(self, scene_spec, params=None):
+        """Thin alias for convert_scene(scene_spec, "build123d", params)."""
+        return self.convert_scene(scene_spec, "build123d", params)
 
     def get_assembly_cadquery(self, assembly_spec, params=None):
         """Thin alias for convert_assembly(assembly_spec, "cadquery", params)."""

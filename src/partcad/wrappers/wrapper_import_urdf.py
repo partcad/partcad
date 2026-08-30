@@ -51,6 +51,7 @@ import sys
 import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
+import primitive_shapes  # noqa: E402
 import urdf_common  # noqa: E402
 import wrapper_common  # noqa: E402
 
@@ -177,53 +178,18 @@ def mesh_scale_factor(mesh, warnings):
 def primitive_file(geometry, kind, name, context):
     """Write a URDF box/cylinder/sphere out as a STEP file and return its path.
 
-    All three are centred on the link origin in URDF, which is not where OCCT's
-    primitive builders put them, so each is re-centred here - and then it is the
-    element's own ``<origin>`` that places it, exactly as it would place a mesh.
-    Identical primitives share one file: a URDF that repeats a shape (wheels,
-    bolts) should not produce a file per link.
+    Only the dimensions are read here; writing (and the re-centring every one of
+    these needs) is 'primitive_shapes.write_primitive_step', shared with the
+    world reader so the same box is the same file whichever format named it.
     """
-    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakeSphere
-    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
-    from OCP.STEPControl import STEPControl_AsIs, STEPControl_Writer
-
     mm = urdf_common.MM_PER_M
     if kind == "box":
-        size = tuple(round(float(v) * mm, 9) for v in geometry.size)
-        key = ("box",) + size
+        dimensions = tuple(float(v) * mm for v in geometry.size)
     elif kind == "cylinder":
-        radius, length = round(float(geometry.radius) * mm, 9), round(float(geometry.length) * mm, 9)
-        key = ("cylinder", radius, length)
+        dimensions = (float(geometry.radius) * mm, float(geometry.length) * mm)
     else:
-        radius = round(float(geometry.radius) * mm, 9)
-        key = ("sphere", radius)
-
-    cache = context["primitives"]
-    if key in cache:
-        return cache[key]
-
-    if kind == "box":
-        shape = BRepPrimAPI_MakeBox(gp_Pnt(-size[0] / 2.0, -size[1] / 2.0, -size[2] / 2.0), *size).Shape()
-    elif kind == "cylinder":
-        shape = BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(0, 0, -length / 2.0), gp_Dir(0, 0, 1)), radius, length).Shape()
-    else:
-        shape = BRepPrimAPI_MakeSphere(radius).Shape()
-
-    os.makedirs(context["output_folder"], exist_ok=True)
-    base = os.path.basename(name.replace("/", "_")) or kind
-    path = os.path.join(context["output_folder"], "%s.step" % base)
-    suffix = 1
-    while path in context["written"]:
-        path = os.path.join(context["output_folder"], "%s_%d.step" % (base, suffix))
-        suffix += 1
-    context["written"].add(path)
-
-    writer = STEPControl_Writer()
-    if writer.Transfer(shape, STEPControl_AsIs) != 1 or writer.Write(path) != 1:
-        raise ValueError("Failed to write the STEP file for a URDF primitive: %s" % path)
-
-    cache[key] = path
-    return path
+        dimensions = (float(geometry.radius) * mm,)
+    return primitive_shapes.write_primitive_step(kind, dimensions, name, context)
 
 
 #

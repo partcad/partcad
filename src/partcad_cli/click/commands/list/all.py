@@ -13,6 +13,7 @@ from .interfaces import cli as list_interfaces
 from .mates import cli as list_mates
 from .packages import cli as list_packages
 from .parts import cli as list_parts
+from .scenes import cli as list_scenes
 from .sketches import cli as list_sketches
 from .providers import cli as list_providers
 from .software import cli as list_software
@@ -45,6 +46,7 @@ def cli(cli_ctx: CliContext, recursive: bool, package: str) -> None:
     runner.invoke(list_interfaces, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     runner.invoke(list_parts, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     runner.invoke(list_assemblies, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
+    runner.invoke(list_scenes, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     runner.invoke(list_providers, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     runner.invoke(list_software, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     # TODO: @alexanderilyin: TypeError: startswith first arg must be str or a tuple of str, not Project

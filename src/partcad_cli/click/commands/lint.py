@@ -19,6 +19,12 @@ moment it most needs checking is when the package will not load *because* of it.
 So `--file` never leaves this process: it runs `partcad_client.lint` here, which
 is the same checker the daemon runs over a package, and is what the VS Code
 extension reaches by running this command.
+
+One thing the daemon does know and this side has to work out: whether the file
+is an assembly or a scene, because a scene is checked against the same schema
+with `how` forbidden. `--schema` says which; `auto`, the default, reads the
+`partcad.yaml` files around the file to find out (see
+`partcad_client.lint.detect_flavor`).
 """
 
 import json
@@ -72,12 +78,26 @@ from ..service import run
     is_flag=True,
     help="Print the findings of --file as JSON, with zero-based line/column numbers.",
 )
+@click.option(
+    "--schema",
+    "flavor",
+    type=click.Choice(["auto", "assembly", "scene"]),
+    default="auto",
+    show_default=True,
+    help=(
+        "Which schema to check an ASSY --file against: the full one ('assembly'), "
+        "the same one without 'how' ('scene'), or whichever the packages around the file "
+        "say it is ('auto')."
+    ),
+)
 @click.pass_context
-def cli(click_ctx, package: str, recursive: bool, filter: str, file_paths, stdin: bool, as_json: bool) -> None:
+def cli(
+    click_ctx, package: str, recursive: bool, filter: str, file_paths, stdin: bool, as_json: bool, flavor: str
+) -> None:
     if file_paths:
         if package or recursive:
             raise click.UsageError("--file checks the files named on the command line; --package/-r check a package")
-        _lint_files(click_ctx, list(file_paths), stdin, as_json)
+        _lint_files(click_ctx, list(file_paths), stdin, as_json, flavor)
         return
 
     if stdin or as_json:
@@ -91,7 +111,7 @@ def cli(click_ctx, package: str, recursive: bool, filter: str, file_paths, stdin
     )
 
 
-def _lint_files(click_ctx, paths: list, stdin: bool, as_json: bool) -> None:
+def _lint_files(click_ctx, paths: list, stdin: bool, as_json: bool, flavor: str = "auto") -> None:
     """Check the named files in this process and report what came back."""
     text = None
     if stdin:
@@ -104,7 +124,7 @@ def _lint_files(click_ctx, paths: list, stdin: bool, as_json: bool) -> None:
     from partcad_client import lint as client_lint
 
     try:
-        reports = client_lint.check_files(paths, text)
+        reports = client_lint.check_files(paths, text, None if flavor == "auto" else flavor)
     except (OSError, IOError, UnicodeDecodeError) as e:
         raise click.UsageError(str(e))
 

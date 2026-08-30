@@ -12,7 +12,7 @@ import rich_click as click
 from ..service import run
 
 
-@click.command(help="Print the bill of materials of an assembly")
+@click.command(help="Print the bill of materials of an assembly or a scene")
 @click.option(
     "-P",
     "--package",

@@ -1,0 +1,55 @@
+desc: Scene examples
+
+docs:
+  usage: |
+    A scene is a placed arrangement of objects - where things are, not how they
+    got there. It is built out of the same files an assembly is, and everything
+    that works on an assembly works on a scene:
+
+    ```shell
+    pc inspect -S bench
+    pc export -S -t step -O ./ bench
+    pc bom bench
+    ```
+
+    `bench` is an Assembly YAML file read as a scene: the package points at the
+    file from its `scenes:` section, with no assembly object in between. The
+    `connect*` sections are all available in it; `how` is not, because nothing
+    in a scene was assembled and there is nothing to say about the assembling.
+
+    `warehouse` is a Gazebo world (SDFormat) used directly, the way
+    `produce_assembly_urdf` uses a URDF. Every shape its models place becomes a
+    part of this package, named `<scene>/<model>/<link>`:
+
+    ```shell
+    pc inspect warehouse/pallet_a/link
+    pc info warehouse
+    ```
+
+    Either scene exports to a Gazebo world, which is the format a scene has:
+
+    ```shell
+    pc export -S -t world -O ./ bench
+    ```
+
+    And `pc convert scene` rewrites the package around one, in either
+    direction: to `assy` it copies every shape the world places into the package
+    as a part of its own, and to `world` it writes the `.world` file and the
+    meshes it references.
+
+    ```shell
+    pc convert scene -t assy warehouse
+    ```
+
+scenes:
+  bench:
+    type: assy
+    desc: Two primitives standing where they stand
+  warehouse:
+    type: world
+    desc: A Gazebo world (SDFormat) used directly as a PartCAD scene
+    # A link that states both a visual and a collision shape is built from the
+    # collision one, which is what a simulator resolves contact against.
+    # 'ignoreCollision: true' - or a list of link names - builds from the visual
+    # geometry instead.
+    ignoreCollision: false

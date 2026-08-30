@@ -14,6 +14,7 @@ import {
     ITEM_TYPE_NONE,
     ITEM_TYPE_ASSEMBLY,
     ITEM_TYPE_PACKAGE,
+    ITEM_TYPE_SCENE,
     ITEM_TYPE_SKETCH,
     ITEM_TYPE_INTERFACE,
     ITEM_TYPE_PART,
@@ -32,10 +33,18 @@ type ItemMetadata = {
     interfaces: PartConfig[];
     parts: PartConfig[];
     assemblies: PartConfig[];
-    // Optional: an older PartCAD LSP server does not report these.
+    // Optional: an older PartCAD service does not report any of these.
+    scenes?: PartConfig[];
     software?: PartConfig[];
     broken?: BrokenItem[];
 };
+
+/** The ASSY files an .assy-typed object of one kind points at. */
+function assyPaths(items: PartConfig[] | undefined): string[] {
+    return (items ?? [])
+        .filter((item) => item.type === 'assy' && item.item_path !== undefined)
+        .map((item) => item.item_path as string);
+}
 
 export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
     public static readonly viewType = 'partcadExplorer';
@@ -64,6 +73,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         vscode.commands.registerCommand(`partcad.exportToOBJ`, (item) => this.exportToOBJ(item));
         vscode.commands.registerCommand(`partcad.exportToIGES`, (item) => this.exportToIGES(item));
         vscode.commands.registerCommand(`partcad.exportToGLTF`, (item) => this.exportToGLTF(item));
+        vscode.commands.registerCommand(`partcad.exportToWorld`, (item) => this.exportToWorld(item));
 
         // One command per application rather than one that asks which: a context
         // menu is where the user says what they want, and a picker on top of a
@@ -74,6 +84,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
 
         vscode.commands.registerCommand(`partcad.addPartItem`, (item) => this.addPart(item));
         vscode.commands.registerCommand(`partcad.addAssemblyItem`, (item) => this.addAssembly(item));
+        vscode.commands.registerCommand(`partcad.addSceneItem`, (item) => this.addScene(item));
     }
 
     public async test(item: PartcadItem) {
@@ -115,6 +126,20 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         await vscode.commands.executeCommand('partcad.packagePath', {
             packageName: packageName,
             callback: 'partcad.addAssembly2',
+        });
+    }
+
+    public async addScene(item: PartcadItem) {
+        let packageName = this.root;
+        if (item.itemType === ITEM_TYPE_PACKAGE) {
+            packageName = item.name;
+        } else if (item.itemType !== ITEM_TYPE_NONE) {
+            packageName = item.pkg;
+        }
+
+        await vscode.commands.executeCommand('partcad.packagePath', {
+            packageName: packageName,
+            callback: 'partcad.addScene2',
         });
     }
 
@@ -188,6 +213,30 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         this.refresh();
     }
 
+    /**
+     * Which ASSY files the loaded packages say are scenes, and which assemblies.
+     *
+     * What the ASSY linter needs in order to pick a schema: a file only a scene
+     * points at is checked without `how`, and one an assembly points at is
+     * checked in full (see `PartcadLint`). This is a plain read of the package
+     * contents the tree already holds - the declaration itself, not a guess at
+     * it - which is why the extension answers this rather than leaving the
+     * client to work it out from the files on disk.
+     *
+     * Absent from both sets means "unknown", not "assembly": a package that has
+     * not loaded reports nothing, and a scene inside it must not be reported as
+     * a broken assembly in the meantime.
+     */
+    public assyFlavors(): { scenes: Set<string>; assemblies: Set<string> } {
+        const scenes = new Set<string>();
+        const assemblies = new Set<string>();
+        for (const items of Object.values(this.packages)) {
+            assyPaths(items.scenes).forEach((path) => scenes.add(path));
+            assyPaths(items.assemblies).forEach((path) => assemblies.add(path));
+        }
+        return { scenes, assemblies };
+    }
+
     getTreeItem(element: PartcadItem): vscode.TreeItem {
         return element;
     }
@@ -230,6 +279,24 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
                 filepath = assembly.item_path;
             }
             elements.push(new PartcadItem(dir, assembly.name, items.name, assembly, filepath, ITEM_TYPE_ASSEMBLY));
+        }
+
+        const scenes = (items.scenes ?? []).slice().sort((i1, i2) => {
+            if (i1.type === 'alias' && i2.type !== 'alias') {
+                return 1;
+            }
+            if (i1.type !== 'alias' && i2.type === 'alias') {
+                return -1;
+            }
+            return i1['name'].localeCompare(i2['name']);
+        });
+        for (const scene of scenes) {
+            let filepath = undefined;
+            // The scene types that *are* a file, so the tree can open one.
+            if (scene.type === 'assy' || scene.type === 'world') {
+                filepath = scene.item_path;
+            }
+            elements.push(new PartcadItem(dir, scene.name, items.name, scene, filepath, ITEM_TYPE_SCENE));
         }
 
         items.parts = items.parts.sort((i1, i2) => {
@@ -384,6 +451,12 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         await vscode.commands.executeCommand('partcad.getStats');
     }
 
+    /** Write a scene out as a Gazebo world (SDFormat) plus its mesh files. */
+    public async exportToWorld(item: PartcadItem) {
+        await this.doExportItem('world', 'Gazebo world files', 'world', item);
+        await vscode.commands.executeCommand('partcad.getStats');
+    }
+
     public async doExportItem(exportType: string, displayString: string, fileExt: string, item: PartcadItem) {
         const itemType = item.itemType;
         const itemPkg = item.pkg;
@@ -444,6 +517,15 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
                                 } else if (itemType === ITEM_TYPE_ASSEMBLY) {
                                     return vscode.commands.executeCommand(
                                         'partcad.exportAssembly',
+                                        exportType,
+                                        path,
+                                        itemPkg,
+                                        itemName,
+                                        params,
+                                    );
+                                } else if (itemType === ITEM_TYPE_SCENE) {
+                                    return vscode.commands.executeCommand(
+                                        'partcad.exportScene',
                                         exportType,
                                         path,
                                         itemPkg,

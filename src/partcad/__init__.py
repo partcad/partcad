@@ -101,6 +101,7 @@ from .globals import (
     _partcad_context,
     convert_assembly,
     convert_part,
+    convert_scene,
     convert_sketch,
     create_package,
     fini,
@@ -111,6 +112,9 @@ from .globals import (
     get_part_build123d,
     get_part_cadquery,
     get_part_sdf,
+    get_scene,
+    get_scene_build123d,
+    get_scene_cadquery,
     init,
     render,
 )
@@ -125,6 +129,7 @@ from .project import Project
 from .project_factory_git import ProjectFactoryGit
 from .project_factory_local import ProjectFactoryLocal
 from .project_factory_tar import ProjectFactoryTar
+from .scene import Scene
 from .shape import Shape
 from .software import Software
 from .user_config import UserConfig, user_config
@@ -152,6 +157,7 @@ __all__ = [
     "ProviderCart",
     "ProviderRequestQuote",
     "ProviderRequestCaps",
+    "Scene",
     "Shape",
     "Software",
     "UserConfig",
@@ -160,6 +166,7 @@ __all__ = [
     "context",
     "convert_assembly",
     "convert_part",
+    "convert_scene",
     "convert_sketch",
     "create_package",
     "exception",
@@ -171,6 +178,9 @@ __all__ = [
     "get_part_cadquery",
     "get_part_build123d",
     "get_part_sdf",
+    "get_scene",
+    "get_scene_cadquery",
+    "get_scene_build123d",
     "healthcheck",
     "init",
     "logging",

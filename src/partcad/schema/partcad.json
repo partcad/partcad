@@ -36,7 +36,7 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "enum": ["sketches", "interfaces", "parts", "assemblies"]
+                "enum": ["sketches", "interfaces", "parts", "assemblies", "scenes"]
               },
               "uniqueItems": true
             }
@@ -817,6 +817,73 @@
                 "connect": { "$ref": "#/definitions/connect" },
                 "properties": { "$ref": "#/definitions/shape-properties" },
                 "software": { "$ref": "#/definitions/software-refs" }
+              },
+              "required": ["type"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    "scenes": {
+      "type": "object",
+      "description": "Scenes: placed arrangements of objects - a workcell, a table, a simulation world - stating where things are and not how they got there. Declared by pointing at the file that holds one, with no assembly object in between",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["assy", "world", "alias", "enrich"],
+                  "description": "'assy' is an Assembly YAML file read as a scene, which is the same format without the 'how' sections; 'world' is a Gazebo world (SDFormat) file"
+                },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "ignoreCollision": {
+                  "oneOf": [
+                    { "type": "boolean" },
+                    { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                  ],
+                  "default": false,
+                  "description": "Build a link from its visual geometry rather than its collision geometry: true for every link, or a list of the link names it applies to ('world' type only)"
+                },
+                "modelPaths": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true,
+                  "description": "Roots to resolve 'model://' references against ('world' type only)"
+                },
+                "source": { "type": "string", "minLength": 1 },
+                "package": { "type": "string", "minLength": 1 },
+                "parameters": { "$ref": "#/definitions/shape-parameter"},
+                "with": {
+                  "type": "object",
+                  "patternProperties": {
+                    "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
+                  },
+                  "additionalProperties": false
+                },
+                "dependencies": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "render": { "$ref": "#/definitions/render" },
+                "export": { "$ref": "#/definitions/output-section" },
+                "manufacturable": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "A scene is not a product to be made, so it is not manufacturable unless it says so"
+                },
+                "unless": { "$ref": "#/definitions/unless" },
+                "properties": { "$ref": "#/definitions/shape-properties" }
               },
               "required": ["type"],
               "additionalProperties": false

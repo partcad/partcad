@@ -18,6 +18,14 @@ export const ITEM_TYPE_PART = 'part';
 export const ITEM_TYPE_ASSEMBLY = 'assembly';
 export const ITEM_TYPE_SOFTWARE = 'software';
 /**
+ * A placed arrangement of objects - a workcell, a table, a simulation world.
+ *
+ * Built out of the very same files an assembly is, and every operation that
+ * works on an assembly works on one; what separates them is that a scene states
+ * only where things are, never how they got there. See `partcad.scene`.
+ */
+export const ITEM_TYPE_SCENE = 'scene';
+/**
  * An object the package declares but PartCAD could not create.
  *
  * Shown rather than omitted: a package that lists nothing looks exactly like an
@@ -114,6 +122,17 @@ export class PartcadItem extends vscode.TreeItem {
             this.command = {
                 title: 'Inspect',
                 command: 'partcad.inspectInterface',
+                arguments: [{ name, pkg, config, itemPath }, {/*params*/}],
+            };
+        } else if (itemType === ITEM_TYPE_SCENE) {
+            this.iconPath = {
+                light: path.join(__filename, '..', '..', 'resources', 'light', 'globe.svg'),
+                dark: path.join(__filename, '..', '..', 'resources', 'dark', 'globe.svg'),
+            };
+            this.contextValue = itemPath === undefined ? 'scene' : 'sceneWithCode';
+            this.command = {
+                title: 'Inspect',
+                command: 'partcad.inspectScene',
                 arguments: [{ name, pkg, config, itemPath }, {/*params*/}],
             };
         } else if (itemType === ITEM_TYPE_ASSEMBLY) {

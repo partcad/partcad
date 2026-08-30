@@ -13,6 +13,7 @@ import ruamel.yaml as ruamel
 
 from .context import Context
 from .assembly import Assembly
+from .scene import Scene
 from .assembly_factory_assy import AssemblyFactoryAssy
 from .assembly_factory_alias import AssemblyFactoryAlias
 from .assembly_factory_enrich import AssemblyFactoryEnrich
@@ -46,6 +47,8 @@ from .part_factory_alias import PartFactoryAlias
 from .part_factory_enrich import PartFactoryEnrich
 from .part_factory_compound import PartFactoryCompound
 from .part_factory_wrapper import PartFactoryWrapper
+from .scene_factory import SceneFactoryAlias, SceneFactoryAssy, SceneFactoryEnrich
+from .scene_factory_world import SceneFactoryWorld
 from .sketch_factory_basic import SketchFactoryBasic
 from .sketch_factory_cadquery import SketchFactoryCadquery
 from .sketch_factory_build123d import SketchFactoryBuild123d
@@ -97,6 +100,12 @@ factory.register("assembly", "step", AssemblyFactoryStep)
 factory.register("assembly", "urdf", AssemblyFactoryUrdf)
 factory.register("assembly", "alias", AssemblyFactoryAlias)
 factory.register("assembly", "enrich", AssemblyFactoryEnrich)
+# A scene is declared by pointing at the file that holds it - an ASSY file, or
+# a Gazebo world - with no assembly object in between. See 'partcad.scene'.
+factory.register("scene", "assy", SceneFactoryAssy)
+factory.register("scene", "world", SceneFactoryWorld)
+factory.register("scene", "alias", SceneFactoryAlias)
+factory.register("scene", "enrich", SceneFactoryEnrich)
 factory.register("file", "url", FileFactoryUrl)
 factory.register("file", "plugin", FileFactoryPlugin)
 factory.register("provider", "manufacturer", PluginFactoryProviderManufacturer)
@@ -160,6 +169,29 @@ def get_assembly_cadquery(assembly_name, params=None) -> Assembly:
 def get_assembly_build123d(assembly_name, params=None) -> Assembly:
     """Get the assembly from the given project"""
     return init().get_assembly_build123d(assembly_name, params=params)
+
+
+def get_scene(scene_name, params=None) -> Scene:
+    """Get the scene from the given project"""
+    return init().get_scene(scene_name, params=params)
+
+
+def convert_scene(scene_name, part_type, params=None, **kwargs):
+    """Convert the scene to the given part type and return it in memory.
+
+    See 'partcad.Shape.convert()' for the supported part types and return types.
+    """
+    return init().convert_scene(scene_name, part_type, params=params, **kwargs)
+
+
+def get_scene_cadquery(scene_name, params=None) -> Scene:
+    """Get the scene from the given project"""
+    return init().get_scene_cadquery(scene_name, params=params)
+
+
+def get_scene_build123d(scene_name, params=None) -> Scene:
+    """Get the scene from the given project"""
+    return init().get_scene_build123d(scene_name, params=params)
 
 
 def get_part(part_name, params=None) -> Part:

@@ -85,7 +85,7 @@ class AssemblyFactoryStep(AssemblyFactoryFile):
             if not assembly.children:
                 pc_logging.warning("Assembly is empty")
 
-            self.ctx.stats_assemblies_instantiated += 1
+            self.count_instantiated()
 
     async def _read_async(self):
         """Run the STEP reader in a sandbox and return its data tree."""

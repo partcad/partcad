@@ -1,8 +1,8 @@
 # cad/freecad
 
-The **PartCAD** addon (workbench) for [FreeCAD](https://www.freecad.org/). It shows PartCAD packages, parts and
-assemblies as a hierarchy — the same one `pc list all -r` walks — asks for an object's parameters, and imports
-the result into the active FreeCAD document as a STEP file.
+The **PartCAD** addon (workbench) for [FreeCAD](https://www.freecad.org/). It shows PartCAD packages, parts,
+assemblies and scenes as a hierarchy — the same one `pc list all -r` walks — asks for an object's parameters,
+and imports the result into the active FreeCAD document as a STEP file.
 
 This directory *is* the addon: FreeCAD loads a directory under its `Mod/` folder by executing the `Init.py` and
 `InitGui.py` at its root, with that directory on `sys.path`. There is no wheel and no build step. See

@@ -668,6 +668,76 @@ Feature: `pc lint` command
     Then the command should exit with a status code of "1"
     And STDOUT should contain "logo.assy:2:5: expected at least one of 'links', 'part', 'assembly'"
 
+  @success
+  Scenario: An ASSY file a scene points at is checked without `how`
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package with a scene
+      scenes:
+        bench:
+          type: assy
+      """
+    And a file named "bench.assy" with content:
+      """
+      links:
+        - part: bone
+          package: //pub/examples
+          name: bone
+        - part: bone
+          package: //pub/examples
+          connect:
+            name: bone
+            how:
+              stage: "1"
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "bench.assy:9:7: 'how' is not allowed in a scene"
+
+  @success
+  Scenario: The same file, declared as an assembly, keeps its assembly instructions
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package with an assembly
+      assemblies:
+        bench:
+          type: assy
+      """
+    And a file named "bench.assy" with content:
+      """
+      links:
+        - part: bone
+          package: //pub/examples
+          name: bone
+        - part: bone
+          package: //pub/examples
+          connect:
+            name: bone
+            how:
+              stage: "1"
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+
+  @failure
+  Scenario: `pc lint --file --schema scene` says outright which schema to use
+    Given a file named "bench.assy" with content:
+      """
+      links:
+        - part: bone
+          name: bone
+        - part: bone
+          connect:
+            name: bone
+            how:
+              stage: "1"
+      """
+    When I run "pc lint --file bench.assy"
+    Then the command should exit with a status code of "0"
+    When I run "pc lint --file bench.assy --schema scene"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "bench.assy:7:7: 'how' is not allowed in a scene"
+
   @failure
   Scenario: `pc lint --file` rejects being mixed with the package options
     Given a file named "logo.assy" with content:

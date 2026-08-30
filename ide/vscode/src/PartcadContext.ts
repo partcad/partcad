@@ -25,6 +25,9 @@ type Stats = {
     partsInstantiated: number;
     assemblies: number;
     assembliesInstantiated: number;
+    // Optional: an older PartCAD service does not report these.
+    scenes?: number;
+    scenesInstantiated?: number;
 };
 
 let saved: {
@@ -44,6 +47,8 @@ let saved: {
         partsInstantiated: 0,
         assemblies: 0,
         assembliesInstantiated: 0,
+        scenes: 0,
+        scenesInstantiated: 0,
     },
     version: 'Loading...',
 };
@@ -148,6 +153,10 @@ export class PartcadContext implements vscode.WebviewViewProvider {
         <tr>
         <td>Assemblies:</td>
         <td id="num-assemblies" class="num-assemblies">${saved.stats.assemblies}&nbsp;(${saved.stats.assembliesInstantiated})</td>
+        </tr>
+        <tr>
+        <td>Scenes:</td>
+        <td id="num-scenes" class="num-scenes">${saved.stats.scenes ?? 0}&nbsp;(${saved.stats.scenesInstantiated ?? 0})</td>
         </tr>
         <tr>
         <td>Memory:</td>

@@ -1,4 +1,4 @@
-from . import add, part, shape, sketch, package, assembly
+from . import add, part, shape, sketch, package, assembly, scene
 
 __all__ = [
     "add",
@@ -7,4 +7,5 @@ __all__ = [
     "sketch",
     "package",
     "assembly",
+    "scene",
 ]

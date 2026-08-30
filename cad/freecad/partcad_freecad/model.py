@@ -9,26 +9,31 @@ The service reports a package's contents through the ``items`` notification (one
 level at a time, the same call ``pc list all -r`` walks recursively and the VS
 Code explorer expands lazily). This module turns that payload into plain objects
 and orders them the way the other PartCAD front ends do: packages first, then
-assemblies, parts, interfaces and sketches, with aliases after their originals.
+assemblies, scenes, parts, interfaces and sketches, with aliases after their
+originals.
 """
 
 from typing import Optional
 
 KIND_PACKAGE = "package"
 KIND_ASSEMBLY = "assembly"
+KIND_SCENE = "scene"
 KIND_PART = "part"
 KIND_INTERFACE = "interface"
 KIND_SKETCH = "sketch"
 
 # The kinds this addon can turn into geometry. Sketches and interfaces are shown
-# for orientation but have no STEP to import.
-IMPORTABLE_KINDS = (KIND_PART, KIND_ASSEMBLY)
+# for orientation but have no STEP to import. A scene is geometry like an
+# assembly is - it is one, with a different thing to say about itself - so it
+# imports the same way.
+IMPORTABLE_KINDS = (KIND_PART, KIND_ASSEMBLY, KIND_SCENE)
 
 # The `items` payload key each kind arrives under, and the order the explorer
 # lists them in.
 _SECTIONS = (
     ("packages", KIND_PACKAGE),
     ("assemblies", KIND_ASSEMBLY),
+    ("scenes", KIND_SCENE),
     ("parts", KIND_PART),
     ("interfaces", KIND_INTERFACE),
     ("sketches", KIND_SKETCH),

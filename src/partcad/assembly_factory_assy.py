@@ -172,7 +172,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             else:
                 pc_logging.warning("Assembly is empty")
 
-            self.ctx.stats_assemblies_instantiated += 1
+            self.count_instantiated()
 
     async def handle_node_list(self, assembly, node_list):
         tasks = []
@@ -194,6 +194,24 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 await wait_for_tasks()
             tasks.append(asyncio.create_task(self.handle_node(assembly, link)))
         await wait_for_tasks()
+
+    def connect_how(self, node, connect, name):
+        """The assembly instructions this link carries.
+
+        A hook, because the answer depends on what is being built rather than
+        on the file: an assembly is a product and says how it is put together,
+        while a scene states an end state and has no such account to give (see
+        'SceneFactoryAssy.connect_how').
+        """
+        return ConnectHow(
+            connect.get("how", None),
+            where="%s: connect %s to %s"
+            % (
+                self.name,
+                name or node.get("part", None) or node.get("assembly", None),
+                connect.get("name", None),
+            ),
+        )
 
     async def handle_node(self, assembly, node):
         # "name" is an optional parameter for both parts and assemblies
@@ -257,15 +275,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             # PartCAD interprets it: all instructions that are required to
             # perform the assembly belong in the other fields.
             connect_comment = connect.get("comment", None)
-            connect_how = ConnectHow(
-                connect.get("how", None),
-                where="%s: connect %s to %s"
-                % (
-                    self.name,
-                    name or node.get("part", None) or node.get("assembly", None),
-                    connect.get("name", None),
-                ),
-            )
+            connect_how = self.connect_how(node, connect, name)
 
         if connect_with_instance is not None and "*" in connect_with_instance:
             connect_with_instance_pattern = connect_with_instance

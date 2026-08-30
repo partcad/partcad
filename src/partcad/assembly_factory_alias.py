@@ -84,7 +84,7 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
         Resolving is the point: the source may live in another package, and
         asking the context for it loads - and so downloads - that package.
         """
-        source = self.ctx._get_assembly(self.source)
+        source = self.get_source_object(self.source)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")
         await source.prepare_async()
@@ -112,7 +112,7 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
 
     def instantiate(self, obj):
         with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_assembly_name}"):
-            source = self.ctx._get_assembly(self.source)
+            source = self.get_source_object(self.source)
             if not source:
                 pc_logging.error(f"The alias source {self.source} is not found")
                 return
@@ -136,7 +136,7 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
                 obj.children = source.children
 
     def get_final_config(self):
-        source = self.ctx._get_assembly(self.source)
+        source = self.get_source_object(self.source)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")
         return source.get_final_config()
