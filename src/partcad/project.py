@@ -89,6 +89,12 @@ PARAMETER_PASSING_TYPES = ("alias", "enrich")
 # 'get_part' builds it on demand (see '_materialize_derived_part').
 PART_PRODUCING_ASSEMBLY_TYPES = ("step", "urdf")
 
+# How often a caller waiting on somebody else's derived-part build looks again.
+# It waits for a CAD build, so the granularity costs nothing next to what it is
+# waiting for; what matters is that the wait yields to the loop instead of
+# occupying a thread.
+_DERIVED_PART_POLL_SECONDS = 0.01
+
 
 def _has_running_loop() -> bool:
     """Whether this thread is already running an event loop."""
@@ -288,6 +294,10 @@ class Project(project_config.Configuration):
         # '_materialize_derived_part'), and the lock that keeps two threads from
         # building the same one.
         self._derived_parts_attempted: set[str] = set()
+        # owner -> the event its builder sets when the build is over. A second
+        # caller for the same owner waits on this instead of looking the part
+        # up while 'children' is still being filled.
+        self._derived_parts_building: dict[str, threading.Event] = {}
         self._derived_parts_lock = threading.Lock()
 
         if (
@@ -1047,11 +1057,26 @@ class Project(project_config.Configuration):
         path -- a part that is declared, or a name no assembly produces -- never
         pays for one.
 
-        Each owner is claimed once. A build that failed, and a source file with
+        Each owner is built once. A build that failed, and a source file with
         nothing in it (a URDF with no links), both leave 'children' empty, and
         repeating the attempt on every later lookup would repeat the whole
-        sandboxed import; claiming it under a lock also keeps two threads that
-        resolve two children of the same assembly from building it twice.
+        sandboxed import.
+
+        Returns (owner, assembly, done, claimed), or None when there is
+        nothing to build. 'claimed' says which of the two callers this is: the
+        one that must build and then set 'done', or one that arrived while a
+        build was already running and has to wait on 'done' rather than go and
+        look the part up:
+        'children' is filled as the factory works, so a lookup made in the
+        middle of a build finds a part that is not registered yet and reports it
+        missing. 'AssemblyFactoryAssy.handle_node()' raises on that.
+
+        This is not hypothetical. 'handle_node_list()' dispatches its links with
+        'asyncio.create_task', so two derived parts of one assembly really are
+        resolved at the same time. It could not bite while materialization ran
+        on a thread the caller then joined -- that blocked the caller's loop, so
+        no second task of it could run at all -- which is precisely the blocking
+        this change removes.
         """
         if part_name in self.parts:
             return None
@@ -1062,10 +1087,22 @@ class Project(project_config.Configuration):
         if owning_assembly is None or owning_assembly.children:
             return None
         with self._derived_parts_lock:
+            building = self._derived_parts_building.get(owner)
+            if building is not None:
+                # Someone else's build. Wait for theirs; do not start another.
+                return owner, owning_assembly, building, False
             if owner in self._derived_parts_attempted:
                 return None
             self._derived_parts_attempted.add(owner)
-        return owner, owning_assembly
+            done = threading.Event()
+            self._derived_parts_building[owner] = done
+        return owner, owning_assembly, done, True
+
+    def _finish_derived_part(self, owner: str, done) -> None:
+        """Release whoever is waiting on this owner's build, however it went."""
+        with self._derived_parts_lock:
+            self._derived_parts_building.pop(owner, None)
+        done.set()
 
     def _materialize_derived_part(self, part_name: str) -> None:
         """Build the assembly that would produce 'part_name', if one would.
@@ -1078,7 +1115,13 @@ class Project(project_config.Configuration):
         target = self._derived_part_to_build(part_name)
         if target is None:
             return
-        owner, owning_assembly = target
+        owner, owning_assembly, done, claimed = target
+        if not claimed:
+            # Another caller is building this owner. Wait it out rather than
+            # look the part up mid-build; a synchronous caller owns no event
+            # loop, so this blocks nothing but itself.
+            done.wait()
+            return
         # Asked before the coroutine is even created, so that a caller on a loop
         # is told rather than left with an un-awaited coroutine object.
         #
@@ -1105,6 +1148,8 @@ class Project(project_config.Configuration):
             asyncio.run(owning_assembly.do_instantiate())
         except Exception as e:  # pylint: disable=broad-except
             pc_logging.error("Failed to build %s:%s while resolving the part %s: %s" % (self.name, owner, part_name, e))
+        finally:
+            self._finish_derived_part(owner, done)
 
     async def _materialize_derived_part_async(self, part_name: str) -> None:
         """'_materialize_derived_part()' for a caller already on a loop.
@@ -1118,12 +1163,23 @@ class Project(project_config.Configuration):
         target = self._derived_part_to_build(part_name)
         if target is None:
             return
-        owner, owning_assembly = target
+        owner, owning_assembly, done, claimed = target
+        if not claimed:
+            # Another caller is building this owner. Waited for by polling
+            # rather than by handing the wait to a thread: a thread would be one
+            # more of exactly what this change is removing, and would be blocked
+            # for the length of a CAD build. The wait is between two tasks of
+            # one command, and the thing waited on takes seconds.
+            while not done.is_set():
+                await asyncio.sleep(_DERIVED_PART_POLL_SECONDS)
+            return
         pc_logging.debug("Building %s:%s to resolve the part %s", self.name, owner, part_name)
         try:
             await owning_assembly.do_instantiate()
         except Exception as e:  # pylint: disable=broad-except
             pc_logging.error("Failed to build %s:%s while resolving the part %s: %s" % (self.name, owner, part_name, e))
+        finally:
+            self._finish_derived_part(owner, done)
 
     def get_assembly(self, assembly_name, func_params=None) -> Optional[assembly.Assembly]:
         return self.get_object(

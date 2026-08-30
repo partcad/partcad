@@ -69,6 +69,7 @@ def _bare_project(assembly, owner="robot"):
     prj._object_configs = {"assembly": {owner: {"type": "urdf"}}}
     prj._derived_parts_lock = threading.Lock()
     prj._derived_parts_attempted = set()
+    prj._derived_parts_building = {}
     prj.get_assembly = lambda name, *args, **kwargs: assembly
     return prj
 
@@ -201,3 +202,110 @@ def test_a_build_that_fails_is_reported_not_raised():
 
     prj._derived_parts_attempted.clear()
     asyncio.run(main())  # must not raise either
+
+
+# ---- two callers, one owner ---------------------------------------------------
+#
+# 'AssemblyFactoryAssy.handle_node_list()' dispatches its links with
+# 'asyncio.create_task', so two derived parts of one assembly really are resolved
+# at the same time. Whoever arrives second must wait for the build rather than go
+# and look its part up: 'children' is filled as the factory works, so a lookup
+# made mid-build finds a part that is not registered yet, and 'handle_node()'
+# raises "Part not found" on it.
+#
+# This could not bite while materialization ran on a thread the caller joined --
+# that blocked the caller's loop, so no second task of it could run at all --
+# which is exactly the blocking this change removes.
+
+
+class _RegisteringAssembly(_FakeAssembly):
+    """An assembly whose build registers its parts, slowly, like a real one."""
+
+    def __init__(self, project, names, delay=0.05):
+        super().__init__()
+        self.project = project
+        self.names = names
+        self.delay = delay
+        self.builds = 0
+
+    async def do_instantiate(self):
+        self.builds += 1
+        await asyncio.sleep(self.delay)
+        for name in self.names:
+            self.project.parts[name] = object()
+        await super().do_instantiate()
+
+
+def test_a_second_caller_waits_for_the_build_instead_of_looking_up_mid_build():
+    """Driven through get_part_async(), because the lookup is the point.
+
+    Waiting for both callers and *then* checking proves nothing: the builder has
+    finished by then, so the parts are registered whatever the second caller
+    did. What matters is the value that second caller returns, which it looks up
+    the instant materialization hands back.
+    """
+    names = ["robot/base", "robot/wheel"]
+    prj = _bare_project(None)
+    assembly = _RegisteringAssembly(prj, names)
+    prj.get_assembly = lambda name, *a, **k: assembly
+    # Stand in for get_object(): the registry lookup, without a real package.
+    prj._part_object = lambda name, *a, **k: prj.parts.get(name)
+
+    async def main():
+        return await asyncio.gather(*(prj.get_part_async(n) for n in names))
+
+    found = asyncio.run(main())
+
+    assert all(part is not None for part in found), (
+        "a caller was handed None for a part whose assembly was still being built; "
+        "AssemblyFactoryAssy.handle_node() raises 'Part not found' on that"
+    )
+    assert assembly.builds == 1, "the owner was built more than once"
+
+
+def test_the_waiter_does_not_rebuild_when_the_build_produced_nothing():
+    """An empty URDF leaves 'children' empty; that is still one attempt, not two."""
+    prj = _bare_project(None)
+    assembly = _RegisteringAssembly(prj, names=[])  # registers nothing
+    prj.get_assembly = lambda name, *a, **k: assembly
+
+    async def main():
+        await asyncio.gather(
+            prj._materialize_derived_part_async("robot/base"),
+            prj._materialize_derived_part_async("robot/wheel"),
+        )
+
+    asyncio.run(main())
+
+    assert assembly.builds == 1
+
+
+def test_a_failed_build_still_releases_the_waiter():
+    """The waiter must not be left waiting on an event nobody will set."""
+
+    class Failing(_FakeAssembly):
+        def __init__(self):
+            super().__init__()
+            self.builds = 0
+
+        async def do_instantiate(self):
+            self.builds += 1
+            await asyncio.sleep(0.01)
+            raise Exception("the URDF is unreadable")
+
+    prj = _bare_project(None)
+    assembly = Failing()
+    prj.get_assembly = lambda name, *a, **k: assembly
+
+    async def main():
+        await asyncio.wait_for(
+            asyncio.gather(
+                prj._materialize_derived_part_async("robot/base"),
+                prj._materialize_derived_part_async("robot/wheel"),
+            ),
+            timeout=10,
+        )
+
+    asyncio.run(main())  # must not hang
+
+    assert assembly.builds == 1
