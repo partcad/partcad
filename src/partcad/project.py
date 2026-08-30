@@ -1057,19 +1057,15 @@ class Project(project_config.Configuration):
         path -- a part that is declared, or a name no assembly produces -- never
         pays for one.
 
-        Each owner is built once. A build that failed, and a source file with
-        nothing in it (a URDF with no links), both leave 'children' empty, and
-        repeating the attempt on every later lookup would repeat the whole
-        sandboxed import.
+        Returns (owner, assembly), or None when there is nothing to build.
+        Claims nothing: '_claim_derived_part()' does that, and only once the
+        caller is known to be allowed to build at all.
 
-        Returns (owner, assembly, done, claimed), or None when there is
-        nothing to build. 'claimed' says which of the two callers this is: the
-        one that must build and then set 'done', or one that arrived while a
-        build was already running and has to wait on 'done' rather than go and
-        look the part up:
-        'children' is filled as the factory works, so a lookup made in the
-        middle of a build finds a part that is not registered yet and reports it
-        missing. 'AssemblyFactoryAssy.handle_node()' raises on that.
+        Whoever ends up not building has to wait for whoever does, rather than
+        go and look the part up. 'children' is filled as the factory works, so a
+        lookup made in the middle of a build finds a part that is not registered
+        yet and reports it missing; 'AssemblyFactoryAssy.handle_node()' raises
+        on that.
 
         This is not hypothetical. 'handle_node_list()' dispatches its links with
         'asyncio.create_task', so two derived parts of one assembly really are
@@ -1086,17 +1082,31 @@ class Project(project_config.Configuration):
         owning_assembly = self.get_assembly(owner)
         if owning_assembly is None or owning_assembly.children:
             return None
+        return owner, owning_assembly
+
+    def _claim_derived_part(self, owner: str):
+        """Claim the right to build 'owner', or find out who already has it.
+
+        Returns (done, claimed): the event to set when the build is over and
+        whether this caller is the one that must build, or None when the owner
+        has been attempted already and nothing is running.
+
+        Kept apart from '_derived_part_to_build()' because a caller has to be
+        *allowed* to build before it claims anything. A synchronous accessor
+        reached from a coroutine is not, and a claim it could not honour would
+        leave an event nobody ever sets and every later caller polling on it.
+        """
         with self._derived_parts_lock:
             building = self._derived_parts_building.get(owner)
             if building is not None:
                 # Someone else's build. Wait for theirs; do not start another.
-                return owner, owning_assembly, building, False
+                return building, False
             if owner in self._derived_parts_attempted:
                 return None
             self._derived_parts_attempted.add(owner)
             done = threading.Event()
             self._derived_parts_building[owner] = done
-        return owner, owning_assembly, done, True
+            return done, True
 
     def _finish_derived_part(self, owner: str, done) -> None:
         """Release whoever is waiting on this owner's build, however it went."""
@@ -1115,13 +1125,13 @@ class Project(project_config.Configuration):
         target = self._derived_part_to_build(part_name)
         if target is None:
             return
-        owner, owning_assembly, done, claimed = target
-        if not claimed:
-            # Another caller is building this owner. Wait it out rather than
-            # look the part up mid-build; a synchronous caller owns no event
-            # loop, so this blocks nothing but itself.
-            done.wait()
-            return
+        owner, owning_assembly = target
+        # Asked before anything is claimed and before anything is waited on,
+        # because a coroutine may do neither. Waiting would block the very loop
+        # the builder runs on, and claiming would leave an event nobody sets
+        # once the raise below unwinds -- both of which are worse than the
+        # blocking this change set out to remove.
+        #
         # Asked before the coroutine is even created, so that a caller on a loop
         # is told rather than left with an un-awaited coroutine object.
         #
@@ -1143,6 +1153,16 @@ class Project(project_config.Configuration):
                 "await get_part_async() instead of calling get_part()" % (self.name, part_name)
             )
 
+        claim = self._claim_derived_part(owner)
+        if claim is None:
+            return
+        done, claimed = claim
+        if not claimed:
+            # Another caller is building this owner. A synchronous caller owns
+            # no event loop, so blocking here blocks nothing but itself.
+            done.wait()
+            return
+
         pc_logging.debug("Building %s:%s to resolve the part %s", self.name, owner, part_name)
         try:
             asyncio.run(owning_assembly.do_instantiate())
@@ -1163,7 +1183,11 @@ class Project(project_config.Configuration):
         target = self._derived_part_to_build(part_name)
         if target is None:
             return
-        owner, owning_assembly, done, claimed = target
+        owner, owning_assembly = target
+        claim = self._claim_derived_part(owner)
+        if claim is None:
+            return
+        done, claimed = claim
         if not claimed:
             # Another caller is building this owner. Waited for by polling
             # rather than by handing the wait to a thread: a thread would be one

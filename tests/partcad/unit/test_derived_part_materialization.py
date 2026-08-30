@@ -309,3 +309,59 @@ def test_a_failed_build_still_releases_the_waiter():
     asyncio.run(main())  # must not hang
 
     assert assembly.builds == 1
+
+
+# ---- the synchronous accessor must claim nothing it cannot honour --------------
+#
+# Both of these deadlock rather than fail if the running-loop check is made after
+# the claim or after the wait, which is why each is bounded by a timeout: a
+# regression here has to show up as a failure, not as a suite that never ends.
+
+
+def test_a_coroutine_reaching_the_sync_accessor_mid_build_does_not_block_the_loop():
+    """It must be refused, not parked on the builder's event.
+
+    'done' is set by the builder, and the builder is a task on this very loop.
+    Blocking the loop to wait for it means it can never run -- the command
+    deadlocks outright, which is worse than the blocking this change removed.
+    """
+    prj = _bare_project(None)
+    assembly = _SlowAssembly(delay=0.05)
+    prj.get_assembly = lambda name, *a, **k: assembly
+
+    async def main():
+        builder = asyncio.create_task(prj._materialize_derived_part_async("robot/base"))
+        await asyncio.sleep(0.01)  # let the builder claim the owner
+        with pytest.raises(RuntimeError, match="get_part_async"):
+            prj._materialize_derived_part("robot/wheel")
+        await builder
+
+    asyncio.run(asyncio.wait_for(main(), timeout=10))
+
+
+def test_a_refused_sync_caller_leaves_no_claim_behind():
+    """Otherwise the owner is marked as building by a build that never starts.
+
+    The claim used to be taken before the caller was checked, so the raise
+    unwound past an event nobody would ever set, and every later async caller
+    polled on it for good.
+    """
+    prj = _bare_project(None)
+    assembly = _RegisteringAssembly(prj, ["robot/base"])
+    prj.get_assembly = lambda name, *a, **k: assembly
+
+    async def refused():
+        with pytest.raises(RuntimeError, match="get_part_async"):
+            prj._materialize_derived_part("robot/base")
+
+    asyncio.run(refused())
+
+    assert prj._derived_parts_building == {}, "a build was claimed by a caller that never ran one"
+    assert "robot" not in prj._derived_parts_attempted, "the owner was marked attempted without an attempt"
+
+    # And the owner is still buildable afterwards.
+    async def main():
+        await asyncio.wait_for(prj._materialize_derived_part_async("robot/base"), timeout=10)
+
+    asyncio.run(main())
+    assert "robot/base" in prj.parts
