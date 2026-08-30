@@ -33,7 +33,7 @@ IDE="${PARTCAD_IDE:-0}"
 UNINSTALL=0
 
 # The name of the application bundle, as `ide/standalone/build.sh` packs
-# it. Used on MacOS, where installing means putting this in an Applications
+# it. Used on macOS, where installing means putting this in an Applications
 # directory.
 IDE_APP_NAME="PartCAD IDE.app"
 
@@ -61,7 +61,7 @@ Options:
                         (default: ${XDG_DATA_HOME:-~/.local/share}/partcad).
   --bin-dir <dir>       Where to link the `pc` and `partcad` commands
                         (default: ~/.local/bin).
-  --app-dir <dir>       MacOS, with --ide: where to put the application
+  --app-dir <dir>       macOS, with --ide: where to put the application
                         (default: /Applications, or ~/Applications when that is
                         not writable).
   --base-url <url>      Directory holding the archives, instead of the GitHub
@@ -149,7 +149,7 @@ is_our_app() {
 
 if [ "${UNINSTALL}" = "1" ]; then
   # Where an installed IDE can be: the directory asked for, then the two an
-  # --ide install picks between on MacOS.
+  # --ide install picks between on macOS.
   APP_PATH=""
   for directory in "${APP_DIR}" "/Applications" "${HOME}/Applications"; do
     [ -n "${directory}" ] || continue
@@ -645,7 +645,7 @@ if [ "${IDE}" = "1" ]; then
     fi
     replace "${TMP_DIR}/${IDE_APP_NAME}" "${TARGET}"
 
-    # The bundle is signed ad-hoc rather than with a Developer ID, so MacOS
+    # The bundle is signed ad-hoc rather than with a Developer ID, so macOS
     # would refuse to open it while it carries the "downloaded from the
     # internet" flag. The user just asked for it by running this script, which
     # is the judgement Gatekeeper is asking for.

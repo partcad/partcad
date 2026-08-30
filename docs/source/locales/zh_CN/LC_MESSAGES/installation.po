@@ -31,9 +31,9 @@ msgstr "命令行工具"
 msgid ""
 "PartCAD command line tools are implemented in Python and, in theory, "
 "available on all platforms where Python is available. However, it is only"
-" getting tested on Linux, MacOS and Windows."
+" getting tested on Linux, macOS and Windows."
 msgstr ""
-"PartCAD 命令行工具使用 Python 实现，理论上可在所有支持 Python 的平台上使用。不过，目前仅在 Linux、MacOS 和 "
+"PartCAD 命令行工具使用 Python 实现，理论上可在所有支持 Python 的平台上使用。不过，目前仅在 Linux、macOS 和 "
 "Windows 上进行过测试。"
 
 #: ../../source/installation.rst:19
@@ -49,11 +49,11 @@ msgstr ""
 #: ../../source/installation.rst:25
 msgid ""
 "PartCAD works best when `conda <https://docs.conda.io/>`_ is installed. "
-"If that doesn't help (e.g. MacOS+arm64) then try ``mamba``. On Windows, "
+"If that doesn't help (e.g. macOS+arm64) then try ``mamba``. On Windows, "
 "PartCAD must be used inside a ``conda`` environment."
 msgstr ""
 "在安装了 `conda <https://docs.conda.io/>`_ 的情况下，PartCAD 的效果最好。如果这没有帮助（例如 "
-"MacOS+arm64），那么可以尝试 ``mamba`` 。在 Windows 上，PartCAD 必须在 ``conda`` 环境中使用。"
+"macOS+arm64），那么可以尝试 ``mamba`` 。在 Windows 上，PartCAD 必须在 ``conda`` 环境中使用。"
 
 #: ../../source/installation.rst:31
 msgid ""
@@ -126,8 +126,8 @@ msgid "Install"
 msgstr "安装"
 
 #: ../../source/installation.rst:111
-msgid "On Linux and MacOS:"
-msgstr "在 Linux 和 MacOS 上："
+msgid "On Linux and macOS:"
+msgstr "在 Linux 和 macOS 上："
 
 #: ../../source/installation.rst:117
 msgid ""
@@ -147,20 +147,20 @@ msgstr ""
 #: ../../source/installation.rst:123
 msgid ""
 "The bundle is around 875MB unpacked and 290MB to download on Linux, "
-"somewhat less on MacOS and Windows. Most of it is the OpenCASCADE "
+"somewhat less on macOS and Windows. Most of it is the OpenCASCADE "
 "geometry kernel, which the wheels download too, just at ``pip install`` "
 "time."
 msgstr ""
-"在 Linux 上，该捆绑包解压后约为 875MB，下载大小约为 290MB，在 MacOS 和 Windows 上略小一些。其中大部分是 "
+"在 Linux 上，该捆绑包解压后约为 875MB，下载大小约为 290MB，在 macOS 和 Windows 上略小一些。其中大部分是 "
 "OpenCASCADE 几何内核，wheel 包同样会下载它，只不过是在 ``pip install`` 时下载。"
 
 #: ../../source/installation.rst:126
 msgid ""
-"Supported platforms are Linux on x86_64, and MacOS on Apple silicon. "
+"Supported platforms are Linux on x86_64, and macOS on Apple silicon. "
 "Windows is covered by the ``.zip`` archive under :ref:`manual "
 "installation <standalone-manual>`."
 msgstr ""
-"受支持的平台为 x86_64 架构上的 Linux，以及 Apple 芯片上的 MacOS。Windows 则由 :ref:`手动安装 "
+"受支持的平台为 x86_64 架构上的 Linux，以及 Apple 芯片上的 macOS。Windows 则由 :ref:`手动安装 "
 "<standalone-manual>` 一节中的 ``.zip`` 归档文件来覆盖。"
 
 #: ../../source/installation.rst:130
@@ -350,12 +350,12 @@ msgstr ""
 
 #: ../../source/installation.rst:228
 msgid ""
-"On MacOS, downloading the archive with a browser marks it as quarantined,"
+"On macOS, downloading the archive with a browser marks it as quarantined,"
 " and Gatekeeper then refuses to run the unpacked commands. Installing "
 "with ``install.sh``, or downloading with ``curl``, avoids that. To clear "
 "it after the fact: ``xattr -dr com.apple.quarantine <directory>``."
 msgstr ""
-"在 MacOS 上，用浏览器下载该归档文件会将其标记为已隔离（quarantined），随后 Gatekeeper 会拒绝运行解压出来的命令。使用"
+"在 macOS 上，用浏览器下载该归档文件会将其标记为已隔离（quarantined），随后 Gatekeeper 会拒绝运行解压出来的命令。使用"
 " ``install.sh`` 安装，或使用 ``curl`` 下载，可以避免这一问题。若要事后清除该标记： ``xattr -dr "
 "com.apple.quarantine <directory>`` 。"
 
@@ -541,7 +541,7 @@ msgstr ""
 
 #: ../../source/installation.rst:349
 msgid ""
-"The ``Mod`` folder is ``~/Library/Preferences/FreeCAD/Mod/`` on MacOS and"
+"The ``Mod`` folder is ``~/Library/Preferences/FreeCAD/Mod/`` on macOS and"
 " ``%APPDATA%\\FreeCAD\\Mod\\`` on Windows. No Python setup is needed: the"
 " add-on drives the standalone ``partcad-json-rpc`` service, using an "
 "existing standalone installation if there is one and offering to download"

@@ -40,7 +40,7 @@ uses it, and pays nothing.
 Three things about how it is done:
 
 - **An entry point, not a launcher flag.** No launcher covers every start: the Linux desktop entry
-  `install.sh` writes runs the binary directly rather than `bin/partcad-ide`, and a MacOS bundle opened from
+  `install.sh` writes runs the binary directly rather than `bin/partcad-ide`, and a macOS bundle opened from
   Finder is passed no arguments at all. `package.json`'s `main` is the one path all of them go through.
 - **A dynamic `import`, because the application is `"type": "module"`.** A static import is hoisted above the
   statement it has to follow, so `main.js` would run *before* the switch was set and the whole thing would be

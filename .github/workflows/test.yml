@@ -1,4 +1,4 @@
-# CI on Linux, MacOS and Windows
+# CI on Linux, macOS and Windows
 name: CI # Keep the action badge icon short
 
 on:
