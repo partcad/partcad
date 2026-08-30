@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 
 import asyncio
+import contextlib
 import docker
 import os
 import subprocess
@@ -18,6 +19,34 @@ from .runtime_json_rpc import RuntimeJsonRpcClient
 from . import logging as pc_logging
 from .process_output import decode as decode_output
 from . import sandbox_lock
+
+
+async def communicate(p, stdin: bytes, timeout=None):
+    """``p.communicate(stdin)``, bounded by ``timeout`` and never orphaning ``p``.
+
+    Two things asyncio does not do for a subprocess it stops waiting for, and
+    both have cost this project a wedged CI job.
+
+    It does not bound the wait, so a sandbox interpreter that never finishes
+    holds its caller forever. ``timeout`` (seconds, ``None`` for no bound) is
+    that bound, and raises ``asyncio.TimeoutError`` when it passes.
+
+    And it does not kill the child when the await is cancelled -- by that
+    timeout, by a Ctrl-C, or by a runner cancelling the job. The process keeps
+    running, detached from anything that would reap it, which is what the
+    "Terminate orphan process: pid (7107) (python)" lines at the end of a
+    cancelled Actions run are. So kill it on the way out, whatever the way out
+    is. The event loop's child watcher reaps it from there.
+    """
+    try:
+        if timeout is None:
+            return await p.communicate(input=stdin)
+        return await asyncio.wait_for(p.communicate(input=stdin), timeout)
+    except BaseException:
+        if p.returncode is None:
+            with contextlib.suppress(ProcessLookupError, OSError):
+                p.kill()
+        raise
 
 
 async def wait_for_port(host, port, timeout=30):
@@ -235,6 +264,7 @@ class Runtime:
         input_files: list[str] = None,
         output_files: list[str] = None,
         env: dict = None,
+        timeout: float = None,
     ):
         if input_files is None:
             input_files = []
@@ -280,11 +310,7 @@ class Runtime:
                     cwd=cwd,
                     env=env,
                 )
-                stdout, stderr = await p.communicate(
-                    # TODO(clairbee): add timeout
-                    input=stdin.encode(),
-                    # TODO(clairbee): add timeout
-                )
+                stdout, stderr = await communicate(p, stdin.encode(), timeout)
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
