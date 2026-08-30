@@ -488,3 +488,64 @@ def test_a_clean_that_times_out_is_killed_and_reaped(tmp_path, monkeypatch):
     assert hanging.killed is True, "a timed-out conda clean was left running"
     assert hanging.reaped is True, "the killed process was never reaped"
     assert pc_logging.had_errors is False
+
+
+# ---- the marker can arrive on either stream -----------------------------------
+#
+# Which stream carries the complaint is not fixed. The code's own note on the
+# create path says it: a failed solve under "--json" is reported on *stdout* and
+# leaves stderr empty. Detection gated on stderr alone therefore misses exactly
+# the case conda documents, and the retry goes back into the same cache.
+
+_CORRUPT_ON_STDOUT = (
+    '{"success": false, "error": "Found incorrect download: pycairo. Aborting", '
+    '"caused_by": "Error when extracting package"}\n'
+)
+
+
+def test_a_corrupt_cache_named_only_on_stdout_still_cleans_the_create(tmp_path, scripted_commands):
+    commands, script = scripted_commands
+    script.append((1, _CORRUPT_ON_STDOUT, ""))  # non-zero, marker on stdout, stderr empty
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert [command[1] for command in commands] == ["create", "clean", "create", "install"], commands
+    assert pc_logging.had_errors is False
+
+
+def test_a_corrupt_cache_named_only_on_stdout_still_cleans_the_pip_install(tmp_path, scripted_commands):
+    commands, script = scripted_commands
+    script.append((0, "{}", ""))  # create succeeds
+    script.append((1, _CORRUPT_ON_STDOUT, ""))  # pip install fails, marker on stdout
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert runtime.conda_initialized is False
+    assert [command[1] for command in commands] == ["create", "install", "clean"], commands
+    assert pc_logging.had_errors is False
+
+
+def test_what_went_wrong_is_recorded_from_whichever_stream_carried_it(tmp_path, scripted_commands):
+    """The fatal message quotes conda_last_error, so it must not lose stdout."""
+    commands, script = scripted_commands
+    script.append((0, "{}", ""))
+    script.append((1, '{"success": false, "error": "no such package"}\n', ""))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert "no such package" in (runtime.conda_last_error or "")
+
+
+def test_a_clean_run_that_merely_mentions_a_marker_is_not_treated_as_a_failure(tmp_path, scripted_commands):
+    """Cleaning a shared cache costs every environment on the machine, so it is
+    reserved for runs that actually failed."""
+    commands, script = scripted_commands
+    script.append((0, _CORRUPT_ON_STDOUT, ""))  # exit 0, nothing wrong
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert [command[1] for command in commands] == ["create", "install"], commands

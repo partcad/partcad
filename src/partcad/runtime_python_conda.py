@@ -59,9 +59,20 @@ _CORRUPT_CONDA_CACHE_ERRORS = (
 )
 
 
-def _is_corrupt_cache(stderr: str) -> bool:
+def _is_corrupt_cache(diagnostics: str) -> bool:
     """Whether this failure means the shared package cache is unusable."""
-    return any(marker in stderr for marker in _CORRUPT_CONDA_CACHE_ERRORS)
+    return any(marker in diagnostics for marker in _CORRUPT_CONDA_CACHE_ERRORS)
+
+
+def _diagnostics(stdout, stderr) -> str:
+    """Both of a conda command's streams as one text.
+
+    Which one carries the complaint is not fixed: a failed solve under "--json"
+    is reported on *stdout* and leaves stderr empty, while libmamba's own
+    extraction errors go to stderr, and a run can produce both. Anything that
+    asks what went wrong therefore has to look at the pair.
+    """
+    return "\n".join(part for part in ((stdout or "").strip(), (stderr or "").strip()) if part)
 
 
 @telemetry.instrument()
@@ -444,20 +455,31 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     # that the CLI turns into a non-zero exit at the very end of
                     # the command -- so an error logged here failed a run that
                     # had already recovered, rendered everything and finished.
+                    # Asked first, of both streams together. A corrupt cache
+                    # is the failure a retry cannot clear on its own, and the
+                    # marker naming it can arrive on either one -- the branch
+                    # below this pair spells out why stdout carries a failed
+                    # "--json" solve with stderr empty. Gating on stderr alone
+                    # would let exactly that case through uncleaned, to be
+                    # retried against the cache that had just failed it.
+                    #
+                    # Nor is it nested under the sporadic check: the two lists
+                    # share only "Found incorrect download", so a failure naming
+                    # only the extraction or the record file would fail that
+                    # test and fall through to a bare warning.
+                    diagnostics = _diagnostics(stdout, stderr)
+                    failed = p.returncode != 0 or (stderr is not None and stderr.strip() != "")
+                    if failed and _is_corrupt_cache(diagnostics):
+                        self.conda_last_error = diagnostics
+                        pc_logging.warning(
+                            "conda env install error (dropping the cache and retrying): %s" % diagnostics
+                        )
+                        self._clean_package_cache()
+                        attempts += 1
+                        continue
+
                     if not stderr is None and stderr.strip() != "":
                         self.conda_last_error = stderr.strip()
-                        # A corrupt cache is asked about first, and not nested
-                        # under the sporadic check: the two lists share only
-                        # "Found incorrect download", so a failure that names
-                        # only the extraction or the record file would fail the
-                        # sporadic test and fall through to a bare warning --
-                        # left uncleaned, and then retried by the caller against
-                        # the very cache that failed it.
-                        if _is_corrupt_cache(stderr):
-                            pc_logging.warning("conda env install error (dropping the cache and retrying): %s" % stderr)
-                            self._clean_package_cache()
-                            attempts += 1
-                            continue
                         # Handle most common sporadic conda/mamba failures
                         if any(marker in stderr for marker in _SPORADIC_CONDA_ERRORS):
                             pc_logging.warning("conda env install error (retrying): %s" % stderr)
@@ -530,7 +552,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         shell=False,
                         encoding="utf-8",
                     )
-                    _, stderr = p.communicate()
+                    stdout, stderr = p.communicate()
 
                 if not stderr is None and stderr.strip() != "":
                     pc_logging.warning("conda pip install error: %s" % stderr)
@@ -538,10 +560,8 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     # A warning for the same reason as the create diagnostics
                     # above: this only means *this* attempt did not finish, and
                     # the caller decides whether that is fatal.
-                    self.conda_last_error = "conda pip install exited %s: %s" % (
-                        p.returncode,
-                        (stderr or "").strip(),
-                    )
+                    diagnostics = _diagnostics(stdout, stderr)
+                    self.conda_last_error = "conda pip install exited %s: %s" % (p.returncode, diagnostics)
                     pc_logging.warning("conda pip install return code: %s" % p.returncode)
                     # This half of the attempt had no equivalent of the create
                     # loop's sporadic-error handling, so a corrupt cache here
@@ -550,7 +570,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     # caller's next attempt a different attempt rather than a
                     # repeat of this one. Only the cache is cleaned -- whether
                     # the failure is fatal stays the caller's call.
-                    if _is_corrupt_cache(stderr or ""):
+                    if _is_corrupt_cache(diagnostics):
                         self._clean_package_cache()
                     self.conda_initialized = False
                 else:
