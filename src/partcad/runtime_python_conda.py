@@ -37,6 +37,32 @@ _SPORADIC_CONDA_ERRORS = (
     "netlink descriptor",
 )
 
+# The subset of the above that says the *package cache* is what is broken, not
+# the request: a tarball that did not survive its download, or an extracted
+# directory that cannot be read back. Retrying is futile while the bad entry is
+# still cached -- the next solve finds the same file and fails identically,
+# which is exactly what happened on ubuntu-24.04-arm64 in run 33293181928:
+#
+#   warning  libmamba Extracted package cache '.../pycairo-1.29.1-py311hbe9a378_0'
+#            has invalid 'repodata_record.json' file: [json.exception...]
+#   error    libmamba Error when extracting package: filesystem error:
+#            cannot remove all: Bad file descriptor [.../pycairo-...]
+#   Found incorrect download: pycairo. Aborting
+#
+# Both attempts failed with the same message, three minutes apart. The remedy
+# is to drop the cache before the retry, which is what _clean_package_cache()
+# below does.
+_CORRUPT_CONDA_CACHE_ERRORS = (
+    "Found incorrect download",
+    "repodata_record.json",
+    "Error when extracting package",
+)
+
+
+def _is_corrupt_cache(stderr: str) -> bool:
+    """Whether this failure means the shared package cache is unusable."""
+    return any(marker in stderr for marker in _CORRUPT_CONDA_CACHE_ERRORS)
+
 
 @telemetry.instrument()
 class CondaPythonRuntime(runtime_python.PythonRuntime):
@@ -310,6 +336,39 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 )
             )
 
+    def _clean_package_cache(self):
+        """Drop conda's shared package cache, best effort.
+
+        Called only when a failure names the cache itself (see
+        ``_is_corrupt_cache``). The cache is shared by every environment conda
+        manages on this machine, so this is not free -- the next solve
+        re-downloads what it needs -- but a corrupt entry is not repaired by
+        anything cheaper, and it fails every environment that wants that
+        package, not just this one.
+
+        Never fatal. It runs while an attempt is already failing, so the worst
+        it can do is leave the caller exactly where it was; a cleanup that
+        raised, or that hung, would replace a recoverable failure with a worse
+        one. Hence the bounded wait and the blanket except.
+        """
+        args = [self.conda_path, "clean", "--packages", "--tarballs", "-y"]
+        try:
+            with telemetry.start_as_current_span("CondaPythonRuntime._clean_package_cache"):
+                p = subprocess.Popen(
+                    args,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=False,
+                    encoding="utf-8",
+                )
+                _, stderr = p.communicate(timeout=300)
+            if p.returncode != 0:
+                pc_logging.warning("conda clean exited %s: %s" % (p.returncode, (stderr or "").strip()))
+            else:
+                pc_logging.warning("Dropped the conda package cache after a corrupt entry; it will be refetched")
+        except Exception as e:
+            pc_logging.warning("conda clean failed: %s" % e)
+
     # TODO(clairbee): Make an async version of this function
     def once_conda_locked_attempt(self):
         with pc_logging.Action("Conda", "create", self.version):
@@ -375,6 +434,10 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         # Handle most common sporadic conda/mamba failures
                         if any(marker in stderr for marker in _SPORADIC_CONDA_ERRORS):
                             pc_logging.warning("conda env install error (retrying): %s" % stderr)
+                            # A retry against the same broken cache reproduces
+                            # the same failure, so drop it first.
+                            if _is_corrupt_cache(stderr):
+                                self._clean_package_cache()
                             attempts += 1
                             continue
                         pc_logging.warning("conda env install error: %s" % stderr)
@@ -457,6 +520,15 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         (stderr or "").strip(),
                     )
                     pc_logging.warning("conda pip install return code: %s" % p.returncode)
+                    # This half of the attempt had no equivalent of the create
+                    # loop's sporadic-error handling, so a corrupt cache here
+                    # was retried by the caller against the very same cache and
+                    # failed the same way both times. Dropping it makes the
+                    # caller's next attempt a different attempt rather than a
+                    # repeat of this one. Only the cache is cleaned -- whether
+                    # the failure is fatal stays the caller's call.
+                    if _is_corrupt_cache(stderr or ""):
+                        self._clean_package_cache()
                     self.conda_initialized = False
                 else:
                     self.conda_initialized = True
