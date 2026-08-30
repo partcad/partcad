@@ -38,8 +38,12 @@ def file_is_served_over_http(context: Context, filename: str):
     to its own scenario, so the behave shards still run in parallel.
     """
     directory = tempfile.mkdtemp(prefix="pc-behave-http-")
-    with open(os.path.join(directory, filename), "w", encoding="utf-8") as served:
-        served.write(context.text)
+    # Written as bytes, because a scenario pins what is served with a 'fileHash'
+    # it names literally. A text-mode handle translates '\n' to '\r\n' on
+    # Windows, so the file the server served would not be the file the scenario
+    # hashed, and the assertion would fail there and only there.
+    with open(os.path.join(directory, filename), "wb") as served:
+        served.write(context.text.encode("utf-8"))
 
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=directory)
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)

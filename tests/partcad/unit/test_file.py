@@ -54,7 +54,7 @@ def test_file_url_assembly_1(tmp_path):
     """Download an ASSY file from a URL"""
     served = tmp_path / "served"
     served.mkdir()
-    (served / "downloaded.assy").write_text("links:\n  - part: cube\n")
+    (served / "downloaded.assy").write_bytes(b"links:\n  - part: cube\n")
 
     pkg = tmp_path / "pkg"
     pkg.mkdir()
@@ -126,16 +126,20 @@ def _package_with_downloaded_assembly(tmp_path, url, extra=""):
     return pkg
 
 
-ASSY_SOURCE = "links:\n  - part: cube\n"
+# Bytes, and written out as bytes, because these tests hash them. A text-mode
+# handle translates '\n' to '\r\n' on Windows, so the file the server serves
+# would not be the file that was hashed here, and every 'fileHash' assertion
+# below would fail there and only there.
+ASSY_SOURCE = b"links:\n  - part: cube\n"
 # sha256 of ASSY_SOURCE, which is what the server below serves.
-ASSY_SHA256 = hashlib.sha256(ASSY_SOURCE.encode()).hexdigest()
+ASSY_SHA256 = hashlib.sha256(ASSY_SOURCE).hexdigest()
 
 
 def test_file_url_hash_accepts_the_file_it_pins(tmp_path):
     """'fileHash' pins the bytes a URL serves, for any object, not only software."""
     served = tmp_path / "served"
     served.mkdir()
-    (served / "downloaded.assy").write_text(ASSY_SOURCE)
+    (served / "downloaded.assy").write_bytes(ASSY_SOURCE)
 
     with _serve(served) as url:
         pkg = _package_with_downloaded_assembly(tmp_path, url, "    fileHash: sha256:%s\n" % ASSY_SHA256)
@@ -148,7 +152,7 @@ def test_file_url_hash_may_omit_the_algorithm(tmp_path):
     """A bare digest is read as the algorithm its length names."""
     served = tmp_path / "served"
     served.mkdir()
-    (served / "downloaded.assy").write_text(ASSY_SOURCE)
+    (served / "downloaded.assy").write_bytes(ASSY_SOURCE)
 
     with _serve(served) as url:
         pkg = _package_with_downloaded_assembly(tmp_path, url, "    fileHash: %s\n" % ASSY_SHA256)
@@ -160,7 +164,7 @@ def test_file_url_hash_refuses_what_the_server_actually_served(tmp_path):
     """The whole point: a URL serves whatever it serves, and the hash decides."""
     served = tmp_path / "served"
     served.mkdir()
-    (served / "downloaded.assy").write_text("links:\n  - part: cube\n  - part: cube\n")
+    (served / "downloaded.assy").write_bytes(b"links:\n  - part: cube\n  - part: cube\n")
 
     with _serve(served) as url:
         # Pinned to the one-cube file above; the server has a two-cube one.
@@ -181,7 +185,7 @@ def test_file_url_without_a_hash_is_downloaded_unchecked(tmp_path):
     """'fileHash' is optional here. Only what is to be made has to be pinned."""
     served = tmp_path / "served"
     served.mkdir()
-    (served / "downloaded.assy").write_text(ASSY_SOURCE)
+    (served / "downloaded.assy").write_bytes(ASSY_SOURCE)
 
     with _serve(served) as url:
         pkg = _package_with_downloaded_assembly(tmp_path, url)
