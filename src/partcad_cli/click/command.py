@@ -595,6 +595,17 @@ cli.context_settings = {
 def process_result(click_ctx: click.Context, result, verbose, quiet, no_ansi, path, **kwargs):
     global cli_span
 
+    # Say why the command is about to fail, and say it *before* fini() detaches
+    # the renderer and click prints its bare "Aborted.". This callback runs after
+    # the command has done all of its work, so the error that set the flag can be
+    # thousands of lines back -- and where the code recovered from it, the log
+    # ends with the work succeeding and then an abort that names nothing at all.
+    if pc_logging.had_errors:
+        logging.getLogger("partcad").error(
+            "Exiting with an error status because of: %s",
+            pc_logging.first_error or "an error reported above",
+        )
+
     logging_remote_client.fini()
 
     # Abort if there was at least one error reported during the execution time.

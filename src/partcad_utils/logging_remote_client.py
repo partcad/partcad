@@ -64,6 +64,8 @@ def handle(event: dict) -> None:
         # must make the CLI exit non-zero (command.py checks logging.had_errors).
         if levelno >= logging.ERROR:
             _pc_logging.had_errors = True
+            if _pc_logging.first_error is None:
+                _pc_logging.first_error = event.get("message", "")
         # Pass the message as an argument so any '%' in it is never treated as a
         # format specifier.
         logging.getLogger("partcad").log(levelno, "%s", event.get("message", ""))
