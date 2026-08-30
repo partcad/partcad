@@ -18,12 +18,27 @@ interface WebviewObject {
 }
 
 /**
+ * The tabs the panel offers, and the daemon operation behind each.
+ *
+ * The 3D view is not here: its contents arrive over the viewer protocol from
+ * whichever 'partcad' asked for the shape to be shown, and are already in the
+ * webview by the time a tab is looked at. Everything else is a question about
+ * '<package>:<name>' that only this side can put to the daemon, so the renderer
+ * asks and this answers -- see 'fetchTab'.
+ */
+const TAB_COMMANDS: Record<string, string> = {
+    bom: 'partcad.bom',
+    instructions: 'partcad.assemblyGuide',
+    supply: 'partcad.supplyQuote',
+};
+
+/**
  * The "PartCAD Viewer" editor tab.
  *
  * A webview panel rather than a view in the side bar: a 3D model wants the whole
  * editor area, and it has to survive being switched away from, which is what
- * 'retainContextWhenHidden' buys (reloading the webview would drop the model and
- * the camera the user set up).
+ * 'retainContextWhenHidden' buys (reloading the webview would drop the model,
+ * the camera the user set up, and every tab already fetched).
  */
 export class PartcadViewer implements vscode.Disposable {
     public static readonly viewType = 'partcadViewer';
@@ -102,10 +117,53 @@ export class PartcadViewer implements vscode.Disposable {
             type: 'show',
             name: message.name ?? null,
             kind: message.kind ?? null,
+            // What the panel's other tabs are about. A 'partcad' that does not
+            // send it (an older one, or a shape belonging to no package) leaves
+            // the renderer showing the 3D view alone.
+            package: message.package ?? null,
             keepCamera: message.keepCamera === true,
             objects,
             markers: message.markers ?? [],
         });
+    }
+
+    /**
+     * Fill one of the panel's tabs in, on the renderer's request.
+     *
+     * 'token' is the renderer's generation of the object the request was made
+     * for; it comes back untouched so that an answer arriving after the user
+     * moved on can be dropped there rather than painted over what is now on
+     * screen. A refusal is an answer too: asking for the instructions of an
+     * assembly that has no assembly steps is told why, and the reader sees that
+     * instead of an empty tab.
+     */
+    private async fetchTab(tab: string, token: number): Promise<void> {
+        const post = (payload: { data?: unknown; error?: string }) =>
+            void this.panel?.webview.postMessage({ type: 'tabData', tab, token, ...payload });
+
+        const command = TAB_COMMANDS[tab];
+        if (command === undefined) {
+            post({ error: `There is nothing to fill the '${tab}' tab with.` });
+            return;
+        }
+        const target = this.lastShow;
+        if (!target?.package || !target.name) {
+            post({ error: 'PartCAD did not say which package this object belongs to.' });
+            return;
+        }
+
+        try {
+            // The commands are registered by the backend, so an absent one means
+            // no PartCAD is connected -- which is worth saying plainly rather
+            // than reporting as a missing command.
+            if (!(await vscode.commands.getCommands(true)).includes(command)) {
+                throw new Error('PartCAD is not connected. Use "Restart PartCAD" to reconnect.');
+            }
+            post({ data: await vscode.commands.executeCommand(command, { pkg: target.package, name: target.name }) });
+        } catch (error: any) {
+            traceError(`PartCAD Viewer: failed to fetch the '${tab}' tab: ${error?.message ?? error}`);
+            post({ error: `${error?.message ?? error}` });
+        }
     }
 
     private create(column: vscode.ViewColumn, preserveFocus: boolean): void {
@@ -127,18 +185,22 @@ export class PartcadViewer implements vscode.Disposable {
                 this.panel = undefined;
             }
         });
-        panel.webview.onDidReceiveMessage((message: { type: string; message?: string }) => {
-            if (message.type === 'error') {
-                traceError(`PartCAD Viewer: ${message.message}`);
-            } else if (message.type === 'ready' && this.lastShow !== undefined) {
-                // The webview finished booting after we had already been asked
-                // to show something (a restored tab, or a show that raced the
-                // panel's first paint).
-                this.handle(this.lastShow);
-            } else {
-                traceVerbose(`PartCAD Viewer: ${message.type}`);
-            }
-        });
+        panel.webview.onDidReceiveMessage(
+            (message: { type: string; message?: string; tab?: string; token?: number }) => {
+                if (message.type === 'error') {
+                    traceError(`PartCAD Viewer: ${message.message}`);
+                } else if (message.type === 'fetchTab') {
+                    void this.fetchTab(message.tab ?? '', message.token ?? 0);
+                } else if (message.type === 'ready' && this.lastShow !== undefined) {
+                    // The webview finished booting after we had already been asked
+                    // to show something (a restored tab, or a show that raced the
+                    // panel's first paint).
+                    this.handle(this.lastShow);
+                } else {
+                    traceVerbose(`PartCAD Viewer: ${message.type}`);
+                }
+            },
+        );
         this.panel = panel;
     }
 
@@ -169,9 +231,19 @@ export class PartcadViewer implements vscode.Disposable {
 				<title>${PartcadViewer.title}</title>
 			</head>
 			<body>
-				<div id="viewer" class="viewer">
-					<div id="overlay" class="overlay">Nothing to display yet.</div>
-					<div id="label" class="label"></div>
+				<div class="panel">
+					<div id="tabs" class="tabs" hidden></div>
+					<div class="panes">
+						<div id="pane-3d" class="pane pane-3d">
+							<div id="viewer" class="viewer">
+								<div id="overlay" class="overlay">Nothing to display yet.</div>
+								<div id="label" class="label"></div>
+							</div>
+						</div>
+						<div id="pane-bom" class="pane" hidden></div>
+						<div id="pane-instructions" class="pane" hidden></div>
+						<div id="pane-supply" class="pane" hidden></div>
+					</div>
 				</div>
 				<script nonce="${nonce}" src="${scriptUri}"></script>
 			</body>

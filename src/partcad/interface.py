@@ -615,7 +615,9 @@ class Interface:
         if len(components) != 0 or len(markers) != 0:
             from . import viewer
 
-            await viewer.show(ctx, components, name=self.name, kind="interface", markers=markers)
+            await viewer.show(
+                ctx, components, name=self.name, kind="interface", package=self.project.name, markers=markers
+            )
 
     def show(self, ctx=None):
         asyncio.run(self.show_async(ctx))

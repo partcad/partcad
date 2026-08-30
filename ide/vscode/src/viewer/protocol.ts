@@ -91,6 +91,16 @@ export interface ViewerMessage {
     id?: string;
     name?: string | null;
     kind?: string | null;
+    /**
+     * The package the shown object belongs to.
+     *
+     * The viewer shows more than geometry - what an assembly is made of, how it
+     * goes together, where to buy its parts - and asks the PartCAD daemon for
+     * all of it by '<package>:<name>', which a name on its own cannot spell.
+     * Absent for a shape that belongs to no package, and for a 'partcad' too old
+     * to send it; the tabs that need it are then not offered.
+     */
+    package?: string | null;
     keepCamera?: boolean;
     objects?: ViewerObject[];
     markers?: ViewerMarker[];

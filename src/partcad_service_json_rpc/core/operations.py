@@ -14,6 +14,7 @@ silently no-op when none is loaded, exactly as the legacy server did.
 """
 
 import hashlib
+import math
 import os
 from pathlib import Path
 from urllib.parse import urlparse
@@ -57,6 +58,28 @@ def _ctx(session, params):
 
 def _qualified(package: str, name: str) -> str:
     return package + ":" + name
+
+
+def _resolve_object(ctx, pc, params):
+    """The ``(package, name)`` of the object a request names.
+
+    ``package`` is the package that *owns* the object, which is not always the
+    one the request selected: an object given as ``//other/package:name`` is
+    produced there, whatever ``--package`` said. Returns ``None`` when the
+    selected package is not loaded, having said so, the way every other
+    context-aware operation reports it.
+    """
+    object_name = params.get("object")
+    if not object_name:
+        raise JsonRpcError(USAGE_ERROR, "No object is given")
+
+    package = ctx.resolve_package_path(params.get("package") or ".")
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+
+    return pc.utils.resolve_resource_path(package_obj.name, object_name)
 
 
 def _root_config_path(ctx) -> str:
@@ -1432,18 +1455,11 @@ def bom(session, params):
         return None
     pc = session.partcad
 
-    object_name = params.get("object")
-    if not object_name:
-        raise JsonRpcError(USAGE_ERROR, "No assembly is given")
-
-    package = ctx.resolve_package_path(params.get("package") or ".")
-    package_obj = ctx.get_project(package)
-    if not package_obj:
-        pc.logging.error("Package %s is not found" % package)
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
         return None
-
-    package, object_name = pc.utils.resolve_resource_path(package_obj.name, object_name)
-    path = "%s:%s" % (package, object_name)
+    package, object_name = resolved
+    path = _qualified(package, object_name)
 
     param_dict = {}
     for kv in params.get("params") or []:
@@ -1509,6 +1525,250 @@ def _bom_output(result: dict) -> str:
         output += line.rstrip() + "\n"
     output += "Total: %d\n" % result["total"]
     return output
+
+
+def assembly_guide(session, params):
+    """Return the assembly instruction book of an assembly as plain data.
+
+    The very document ``pc render -t html|pdf`` writes to a file (see
+    ``Project.render_assembly_guide_async``), handed over as the renderer-
+    independent model in ``partcad.document`` with every illustration inlined as
+    a data URI. That is for a reader with no file system in reach: the IDE's
+    viewer is a webview on the other side of this connection, and the pictures of
+    an instruction book live in a temporary directory that is deleted as soon as
+    the document has been built.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, object_name = resolved
+
+    from partcad.exception import AssemblyDocumentError
+
+    project = ctx.get_project(package)
+    if project is None:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+
+    with pc.logging.Process("Guide", package, object_name):
+        try:
+            document = asyncio.run(
+                project.assembly_guide_data_async(
+                    object_name,
+                    ignore_manufacturability=bool(params.get("ignore_manufacturability")),
+                )
+            )
+        except AssemblyDocumentError as e:
+            # Asking for the instructions of something that has no assembly
+            # steps, or that is not meant to be built: what the user asked for,
+            # not a failure of the machinery.
+            raise JsonRpcError(USAGE_ERROR, str(e)) from e
+        if document is None:
+            pc.logging.error("Assembly %s:%s is not found" % (package, object_name))
+            return None
+
+    return {"assembly": _qualified(package, object_name), "document": document}
+
+
+def supply_quote(session, params):
+    """Where to buy what an object is made of, and for how much.
+
+    One line item per thing to order -- a part, or a sub-assembly that is sold
+    assembled, exactly as ``pc supply quote`` fills its cart -- and, under each,
+    every supplier that has it, cheapest first. An object that is itself a part
+    is one line item with its own suppliers under it.
+
+    Each option is quoted from a cart holding that one line item, rather than
+    from one cart per supplier: a cart of the whole assembly comes back as a
+    single price for all of it, which cannot say what any one part costs.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, object_name = resolved
+    path = _qualified(package, object_name)
+
+    with pc.logging.Process("Supply", package, object_name):
+        result = asyncio.run(
+            _supply_quote_async(
+                pc,
+                ctx,
+                path,
+                qos=params.get("qos") or None,
+                recursive=bool(params.get("recursive")),
+            )
+        )
+    result["object"] = path
+    return result
+
+
+async def _supply_quote_async(pc, ctx, path, qos, recursive):
+    """The body of 'supply_quote', once the request has been made sense of."""
+    from partcad.plugin_provider_data_cart import ProviderCart, resolve_cart_object
+
+    cart = ProviderCart(qos=qos)
+    try:
+        await cart.add_object(ctx, path, recursive=recursive)
+    except Exception as e:
+        raise JsonRpcError(USAGE_ERROR, "Nothing to supply for %s: %s" % (path, e)) from e
+
+    items = []
+    for name, cart_item in sorted(cart.parts.items()):
+        options = []
+        for supplier_name in await _item_suppliers(pc, ctx, cart_item, cart):
+            option = await _supply_option(pc, ctx, cart_item, supplier_name, qos)
+            if option is not None:
+                options.append(option)
+        # Cheapest first: what this is read for is which of them to order from.
+        # A supplier that answered with no price at all sorts last rather than
+        # winning by comparing as zero.
+        options.sort(key=lambda option: (option.get("price") is None, option.get("price") or 0.0))
+
+        # What the line item is, for the reader: a cart item carries the store
+        # data and nothing that says what the thing is.
+        shape = resolve_cart_object(ctx, name)
+        items.append(
+            {
+                "name": name,
+                "kind": getattr(shape, "kind", None),
+                "desc": getattr(shape, "desc", None),
+                "count": cart_item.count,
+                "vendor": cart_item.vendor,
+                "sku": cart_item.sku,
+                "count_per_sku": cart_item.count_per_sku,
+                "suppliers": options,
+            }
+        )
+
+    return {"items": items, "totals": _supply_totals(items)}
+
+
+async def _item_suppliers(pc, ctx, cart_item, cart):
+    """The suppliers of one line item, without complaining when there are none.
+
+    ``Context.find_part_suppliers()`` reports "no suppliers" as an error, which
+    is right for ``pc supply find`` -- it was asked to find one -- but not here:
+    this is asked about whatever the viewer happens to be showing, and a package
+    that declares no supplier is the ordinary case rather than a failure. In the
+    IDE an error is a modal popup, one per part.
+    """
+    project_name, _ = pc.utils.resolve_resource_path(ctx.current_project_path, cart_item.name)
+    project = ctx.get_project(project_name)
+    if project is None or not project.get_suppliers():
+        return []
+    return await ctx.find_part_suppliers(cart_item, cart)
+
+
+async def _supply_option(pc, ctx, cart_item, provider_name, qos):
+    """What one supplier asks for one line item."""
+    from partcad.plugin_provider_data_cart import ProviderCart
+    from partcad.plugin_request_provider_quote import ProviderRequestQuote
+
+    provider = ctx.get_provider(provider_name)
+    if provider is None:
+        return None
+
+    cart = ProviderCart(qos=qos)
+    item = cart.add_item(cart_item)
+    option = {
+        "name": provider_name,
+        "desc": getattr(provider, "desc", None) or None,
+        "url": getattr(provider, "url", None),
+        "currency": _provider_currency(provider),
+    }
+
+    try:
+        # Loading is what makes it a supplier cart rather than a plain one: a
+        # manufacturer needs the CAD model in a format it accepts before it can
+        # say what making the part would cost.
+        await provider.load(item)
+        request = ProviderRequestQuote(cart)
+        request.set_result(await provider.query_quote(request))
+    except Exception as e:
+        # One supplier that will not quote is not a failure of the request: the
+        # others still have prices, and why this one did not is worth showing.
+        pc.logging.debug("No quote from %s for %s: %s" % (provider_name, cart_item.name, e))
+        option["error"] = str(e)
+        return option
+
+    result = request.result or {}
+    option.update(
+        {
+            "price": _as_price(result.get("price")),
+            "cartId": result.get("cartId"),
+            "expire": result.get("expire"),
+            "etaMin": result.get("etaMin"),
+            "etaMax": result.get("etaMax"),
+            "qos": result.get("qos"),
+        }
+    )
+    return option
+
+
+def _as_price(value):
+    """A quoted price as a number, or None when the provider did not give one.
+
+    A quote is whatever a provider's own script put in it, and everything
+    downstream of here treats the price as a number: the options are sorted by
+    it and the cheapest of each are added up. A string where a number belongs
+    would fail the whole request rather than the one supplier that sent it, so it
+    is read as "no price" instead.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        price = float(value)
+    except (TypeError, ValueError):
+        return None
+    # A quote of NaN or infinity sorts and sums as nonsense.
+    return price if math.isfinite(price) else None
+
+
+def _provider_currency(provider):
+    """What a provider quotes in, when its configuration says.
+
+    A quote carries 'price' as a bare number, so the unit has to come from
+    somewhere else; a store declares it as a parameter (see
+    ``examples/provider_store``).
+    """
+    config = getattr(provider, "config", None) or {}
+    currency = (config.get("parameters") or {}).get("currency")
+    if isinstance(currency, dict):
+        currency = currency.get("default")
+    if not isinstance(currency, str):
+        currency = (config.get("with") or {}).get("currency")
+    return currency if isinstance(currency, str) else None
+
+
+def _supply_totals(items):
+    """What ordering every line item from its cheapest supplier would come to.
+
+    Kept per currency rather than added up into one number: two suppliers that
+    quote in different currencies cannot be summed without an exchange rate, and
+    PartCAD has none.
+    """
+    totals = {}
+    for item in items:
+        best = item["suppliers"][0] if item["suppliers"] else None
+        if best is None or best.get("price") is None:
+            continue
+        currency = best.get("currency") or ""
+        totals[currency] = totals.get(currency, 0.0) + best["price"]
+    return [{"currency": currency or None, "price": price} for currency, price in sorted(totals.items())]
 
 
 def search_objects(session, params):

@@ -27,6 +27,8 @@ import copy
 import math
 import os
 import re
+import tempfile
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -601,6 +603,32 @@ async def build_guide_document_async(ctx, project, assembly, images: ImageSource
 
 def build_guide_document(ctx, project, assembly, images: ImageSource, dir_path=None) -> doc.Document:
     return asyncio.run(build_guide_document_async(ctx, project, assembly, images, dir_path))
+
+
+@asynccontextmanager
+async def guide_document_async(ctx, project, assembly, label, dir_path=None, ignore_manufacturability=False):
+    """The instruction book of an assembly, for as long as its pictures exist.
+
+    A context manager rather than a plain call because the illustrations are
+    files: most of them show something that is not an object of any package - a
+    pair of items pulled apart - so they are rendered into a directory of their
+    own and thrown away with it. Whoever asked for the document has to write it
+    down, or embed the pictures, before the block ends.
+
+    A module function and not a method of 'Project', although both of its callers
+    are: '@telemetry.instrument()' wraps every callable a class holds, and the
+    wrapper labels each positional argument by indexing the wrapped function's
+    'co_varnames'. What 'asynccontextmanager' leaves in the class is contextlib's
+    'helper(*args, **kwds)', whose 'co_varnames' has two entries, so a third
+    positional argument raises IndexError before the document is ever built.
+    """
+    assembly = resolve_alias(ctx, assembly)
+    check_source(assembly, ignore_manufacturability)
+
+    with pc_logging.Action("Guide%s" % label, project.name, assembly.name):
+        with tempfile.TemporaryDirectory() as assets_dir:
+            images = RenderedImages(ctx, project, assets_dir)
+            yield await build_guide_document_async(ctx, project, assembly, images, dir_path)
 
 
 async def _title_page(project, assembly, images, sections):

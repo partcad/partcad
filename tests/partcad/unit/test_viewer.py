@@ -62,12 +62,17 @@ def test_show_sends_the_tessellated_objects(monkeypatch, tessellated):
     client = FakeClient()
     monkeypatch.setattr(viewer, "_client", lambda: client)
 
-    assert asyncio.run(viewer.show(object(), [{"brep": "..."}], name="//pkg:part", kind="part")) is True
+    assert (
+        asyncio.run(viewer.show(object(), [{"brep": "..."}], name="//pkg:part", kind="part", package="//pkg")) is True
+    )
 
     objects, kwargs = client.calls[0]
     assert objects == tessellated
     assert kwargs["name"] == "//pkg:part"
     assert kwargs["kind"] == "part"
+    # What the viewer's tabs beside the 3D one are about: they ask the daemon
+    # about '<package>:<name>', which a name on its own cannot spell.
+    assert kwargs["package"] == "//pkg"
     assert kwargs["markers"] == []
     # First show of this shape: the camera is expected to reset.
     assert kwargs["keep_camera"] is False
@@ -164,8 +169,12 @@ def _interface_with_port(location):
     port.location = location
     port.sketch = FakeSketch()
 
+    class FakePackage:
+        name = "//pkg"
+
     interface = Interface.__new__(Interface)
     interface.name = "//pkg:iface"
+    interface.project = FakePackage()
     interface.lock = threading.RLock()
     interface.ports = {"port": port}
     return interface, port, envelope
@@ -218,8 +227,8 @@ def test_interface_show_sends_its_sketches_and_its_ports(monkeypatch):
 
     shown = {}
 
-    async def fake_show(ctx, components, name=None, kind=None, markers=None):
-        shown.update(ctx=ctx, components=components, name=name, kind=kind, markers=markers)
+    async def fake_show(ctx, components, name=None, kind=None, package=None, markers=None):
+        shown.update(ctx=ctx, components=components, name=name, kind=kind, package=package, markers=markers)
         return True
 
     monkeypatch.setattr(viewer, "show", fake_show)
@@ -228,6 +237,7 @@ def test_interface_show_sends_its_sketches_and_its_ports(monkeypatch):
 
     assert shown["kind"] == "interface"
     assert shown["name"] == "//pkg:iface"
+    assert shown["package"] == "//pkg"
     assert shown["markers"] == [{"name": "port", "location": port.location.as_packed()}]
     ((moved,),) = shown["components"]
     assert moved[shape_envelope.KEY_LOCATION] == port.location.as_packed()
@@ -287,8 +297,8 @@ def test_a_shape_sends_the_ports_of_its_interface_as_markers(monkeypatch):
 
     shown = {}
 
-    async def fake_show(ctx, components, name=None, kind=None, markers=None):
-        shown.update(components=components, name=name, kind=kind, markers=markers)
+    async def fake_show(ctx, components, name=None, kind=None, package=None, markers=None):
+        shown.update(components=components, name=name, kind=kind, package=package, markers=markers)
         return True
 
     monkeypatch.setattr(viewer, "show", fake_show)
@@ -296,6 +306,7 @@ def test_a_shape_sends_the_ports_of_its_interface_as_markers(monkeypatch):
     asyncio.run(shape.show_async(object()))
 
     assert shown["kind"] == "part"
+    assert shown["package"] == "//pkg"
     assert shown["markers"] == [{"name": "port", "location": port.location.as_packed()}]
 
 
@@ -344,14 +355,18 @@ def test_interface_show_survives_components_it_cannot_build(monkeypatch):
     port.location = None
     port.sketch = ExplodingSketch()
 
+    class FakePackage:
+        name = "//pkg"
+
     interface = Interface.__new__(Interface)
     interface.name = "//pkg:iface"
+    interface.project = FakePackage()
     interface.lock = threading.RLock()
     interface.ports = {"port": port}
 
     shown = {}
 
-    async def fake_show(ctx, components, name=None, kind=None, markers=None):
+    async def fake_show(ctx, components, name=None, kind=None, package=None, markers=None):
         shown.update(components=components, markers=markers)
         return True
 

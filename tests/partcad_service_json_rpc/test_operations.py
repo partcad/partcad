@@ -13,6 +13,7 @@ event emission, formatting) is exercised without a real CAD environment.
 """
 
 import contextlib
+import copy
 import sys
 import types
 
@@ -20,6 +21,7 @@ import pytest
 from partcad_service_json_rpc.core import events, operations
 from partcad_service_json_rpc.core.events import EventEmitter
 from partcad_service_json_rpc.core.session import Session
+from partcad_service_json_rpc.rpc.dispatcher import JsonRpcError
 
 # ---- fakes -----------------------------------------------------------------
 
@@ -186,12 +188,30 @@ class FakeProject:
         self.interfaces = {}
         self.providers = {}
         self.children = []
+        # The providers this package buys through, as `get_suppliers()` reports
+        # them: empty on a package that declares none, which is the ordinary
+        # case and the one the supply operation must not complain about.
+        self.suppliers = {}
+        # The assembly instruction books this package can produce, by assembly
+        # name, and the refusal to produce one (an assembly with no steps).
+        self.guides = {}
+        self.guide_error = None
+        self.guide_requests = []
         # A real package's parsed configuration carries its name, which is what
         # the client reads each row's label from.
         self.config_obj.setdefault("name", name)
 
     def get_child_project_names(self):
         return list(self.children)
+
+    def get_suppliers(self):
+        return dict(self.suppliers)
+
+    async def assembly_guide_data_async(self, assembly_name, ignore_manufacturability=False):
+        self.guide_requests.append((assembly_name, ignore_manufacturability))
+        if self.guide_error is not None:
+            raise self.guide_error
+        return self.guides.get(assembly_name)
 
     def add(self, kind, obj):
         getattr(self, kind)[obj.name] = obj
@@ -223,6 +243,13 @@ class FakeContext:
         self.current_project_path = name
         self.requested = []
         self.mates = {}
+        # What `ProviderCart.add_object()` puts in the cart, by object name: the
+        # line items an object breaks down into.
+        self.cart_contents = {}
+        # The suppliers of each line item, by item name, and the providers they
+        # name.
+        self.item_suppliers = {}
+        self.provider_plugins = {}
         self.stats_git_ops = 0
         self.user_config = FakeUserConfig()
         self.projects = {name: FakeProject(name=name)}
@@ -269,6 +296,12 @@ class FakeContext:
 
     def get_project(self, name):
         return self.projects.get(name)
+
+    async def find_part_suppliers(self, cart_item, cart=None):
+        return list(self.item_suppliers.get(cart_item.name, []))
+
+    def get_provider(self, name, params=None):
+        return self.provider_plugins.get(name)
 
     def get_current_project_path(self):
         return self.current_project_path
@@ -392,6 +425,8 @@ def test_inspect_part_without_context_is_a_silent_noop():
         (operations.convert_object, {"object_name": "widget"}),
         (operations.test_run, {}),
         (operations.lint_run, {}),
+        (operations.assembly_guide, {"object": "top"}),
+        (operations.supply_quote, {"object": "top"}),
     ],
 )
 def test_context_aware_operations_are_silent_noops_without_a_context(operation, params):
@@ -993,3 +1028,249 @@ def test_load_package_contents_skips_a_child_package_it_cannot_read():
     assert [p["name"] for p in items["packages"]] == ["//good"]
     warnings = [payload for event, payload in seen if event == events.WARNING]
     assert any("//missing" in w for w in warnings)
+
+
+# ---- the viewer's tabs -----------------------------------------------------
+#
+# What the PartCAD Viewer's panel shows beside the geometry: the assembly
+# instruction book, and where to buy what an object is made of.
+
+
+class FakeDocumentError(Exception):
+    """Stand-in for ``partcad.exception.AssemblyDocumentError``."""
+
+
+class FakeCartItem:
+    """Stand-in for ``partcad.plugin_provider_data_cart.ProviderCartItem``."""
+
+    def __init__(self, name, count=1, vendor=None, sku=None, count_per_sku=1):
+        self.name = name
+        self.count = count
+        self.vendor = vendor
+        self.sku = sku
+        self.count_per_sku = count_per_sku
+
+
+class FakeCart:
+    """Stand-in for ``partcad.plugin_provider_data_cart.ProviderCart``.
+
+    ``add_object()`` is what decides the line items -- an assembly becomes the
+    things it is made of, a part is one thing -- and the context says which,
+    raising for an object it does not know exactly as the real cart does.
+    """
+
+    def __init__(self, qos=None):
+        self.qos = qos
+        self.parts = {}
+
+    async def add_object(self, ctx, name, recursive=False):
+        self.recursive = recursive
+        if name not in ctx.cart_contents:
+            raise Exception("Part or assembly '%s' not found" % name)
+        for item in ctx.cart_contents[name]:
+            self.parts[item.name] = item
+
+    def add_item(self, item, count=1):
+        copied = copy.deepcopy(item)
+        self.parts[copied.name] = copied
+        return copied
+
+
+class FakeQuoteRequest:
+    """Stand-in for ``partcad.plugin_request_provider_quote.ProviderRequestQuote``."""
+
+    def __init__(self, cart):
+        self.cart = cart
+        self.result = None
+
+    def set_result(self, result):
+        self.result = result
+
+
+class FakeProvider:
+    def __init__(self, name, price=None, currency=None, url=None, desc=None, error=None):
+        self.name = name
+        self.desc = desc
+        self.url = url
+        self.config = {"parameters": {"currency": {"default": currency}}} if currency else {}
+        self.price = price
+        self.error = error
+        self.quoted = []
+
+    async def load(self, cart_item):
+        pass
+
+    async def query_quote(self, request):
+        if self.error is not None:
+            raise Exception(self.error)
+        # One cart per line item is what makes a per-part price possible at all.
+        self.quoted.append(sorted(request.cart.parts.keys()))
+        return {"price": self.price, "cartId": "cart-" + self.name, "qos": request.cart.qos}
+
+
+def install_fake_supply(monkeypatch):
+    install_fake_partcad_modules(
+        monkeypatch,
+        {
+            "partcad.plugin_provider_data_cart": {
+                "ProviderCart": FakeCart,
+                "resolve_cart_object": lambda ctx, name: ctx.cart_objects.get(name),
+            },
+            "partcad.plugin_request_provider_quote": {"ProviderRequestQuote": FakeQuoteRequest},
+        },
+    )
+
+
+def make_supply_session(monkeypatch):
+    """A package with an assembly of two parts, one of them sold by two stores."""
+    install_fake_supply(monkeypatch)
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    ctx.projects["//"].suppliers = {"//:cheap": {}, "//:dear": {}}
+    ctx.cart_contents = {
+        "//:top": [FakeCartItem("//:bolt", count=4, vendor="acme", sku="B-1"), FakeCartItem("//:nut", count=4)],
+        "//:bolt": [FakeCartItem("//:bolt", count=1, vendor="acme", sku="B-1")],
+    }
+    ctx.cart_objects = {
+        "//:bolt": FakeObject("bolt", desc="A bolt", project_name="//"),
+        "//:nut": FakeObject("nut", desc="A nut", project_name="//"),
+    }
+    ctx.item_suppliers = {"//:bolt": ["//:dear", "//:cheap"], "//:nut": []}
+    ctx.provider_plugins = {
+        "//:cheap": FakeProvider("//:cheap", price=1.5, currency="USD", url="https://cheap.example"),
+        "//:dear": FakeProvider("//:dear", price=4.0, currency="USD"),
+    }
+    return session, ctx
+
+
+def test_supply_lists_the_line_items_with_their_suppliers_cheapest_first(monkeypatch):
+    session, ctx = make_supply_session(monkeypatch)
+
+    result = operations.supply_quote(session, {"package": "//", "object": "top"})
+
+    assert result["object"] == "//:top"
+    assert [item["name"] for item in result["items"]] == ["//:bolt", "//:nut"]
+    bolt = result["items"][0]
+    assert (bolt["count"], bolt["vendor"], bolt["sku"], bolt["desc"]) == (4, "acme", "B-1", "A bolt")
+    # Cheapest first: what the tab is read for is which supplier to order from.
+    assert [option["name"] for option in bolt["suppliers"]] == ["//:cheap", "//:dear"]
+    assert bolt["suppliers"][0]["price"] == 1.5
+    assert bolt["suppliers"][0]["currency"] == "USD"
+    assert bolt["suppliers"][0]["url"] == "https://cheap.example"
+    assert bolt["suppliers"][0]["cartId"] == "cart-//:cheap"
+    # A line item with no supplier is still a line item: it has to be sourced.
+    assert result["items"][1]["suppliers"] == []
+    assert result["totals"] == [{"currency": "USD", "price": 1.5}]
+    assert ("Supply", "//") in session.partcad.logging.processes
+
+
+def test_supply_quotes_each_line_item_on_its_own(monkeypatch):
+    # A cart of the whole assembly comes back as one price for all of it, which
+    # cannot say what any one part costs.
+    session, ctx = make_supply_session(monkeypatch)
+
+    operations.supply_quote(session, {"package": "//", "object": "top"})
+
+    assert ctx.provider_plugins["//:cheap"].quoted == [["//:bolt"]]
+
+
+def test_supply_of_a_part_is_the_one_thing_to_order(monkeypatch):
+    session, _ = make_supply_session(monkeypatch)
+
+    result = operations.supply_quote(session, {"package": "//", "object": "bolt"})
+
+    assert [item["name"] for item in result["items"]] == ["//:bolt"]
+    assert result["items"][0]["count"] == 1
+
+
+def test_supply_says_nothing_when_the_package_declares_no_supplier(monkeypatch):
+    # In the IDE an error is a modal popup, one per part, and a package with no
+    # supplier is the ordinary case rather than a failure.
+    session, ctx = make_supply_session(monkeypatch)
+    ctx.projects["//"].suppliers = {}
+
+    result = operations.supply_quote(session, {"package": "//", "object": "top"})
+
+    assert all(item["suppliers"] == [] for item in result["items"])
+    assert result["totals"] == []
+    assert session.partcad.logging.messages("error") == []
+
+
+def test_supply_keeps_a_supplier_that_would_not_quote(monkeypatch):
+    session, ctx = make_supply_session(monkeypatch)
+    ctx.provider_plugins["//:cheap"] = FakeProvider("//:cheap", error="Not enough stock")
+
+    options = operations.supply_quote(session, {"package": "//", "object": "top"})["items"][0]["suppliers"]
+
+    # The one that answered wins the sort; the refusal is carried, not hidden.
+    assert [option["name"] for option in options] == ["//:dear", "//:cheap"]
+    assert options[1]["error"] == "Not enough stock"
+    assert "price" not in options[1]
+
+
+def test_supply_reads_a_price_that_is_not_a_number_as_no_price(monkeypatch):
+    """A quote is whatever a provider's own script put in it
+
+    Everything downstream treats the price as a number -- the options are sorted
+    by it and the cheapest of each are added up -- so a string where a number
+    belongs must cost that one supplier its price, not fail the whole request.
+    """
+    session, ctx = make_supply_session(monkeypatch)
+    ctx.provider_plugins["//:cheap"] = FakeProvider("//:cheap", price="$1.50", currency="USD")
+    ctx.provider_plugins["//:dear"] = FakeProvider("//:dear", price="4.00", currency="USD")
+
+    result = operations.supply_quote(session, {"package": "//", "object": "top"})
+
+    options = {option["name"]: option for option in result["items"][0]["suppliers"]}
+    assert options["//:cheap"]["price"] is None
+    # A number that merely arrived as a string is still a number.
+    assert options["//:dear"]["price"] == 4.0
+    # The one that could be read wins the sort, and is what the total is of.
+    assert [option["name"] for option in result["items"][0]["suppliers"]] == ["//:dear", "//:cheap"]
+    assert result["totals"] == [{"currency": "USD", "price": 4.0}]
+
+
+def test_supply_reports_an_object_that_cannot_be_ordered(monkeypatch):
+    session, _ = make_supply_session(monkeypatch)
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.supply_quote(session, {"package": "//", "object": "missing"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "Nothing to supply for //:missing" in str(caught.value)
+
+
+def test_assembly_guide_returns_the_document_of_the_assembly(monkeypatch):
+    install_fake_partcad_modules(monkeypatch, {"partcad.exception": {"AssemblyDocumentError": FakeDocumentError}})
+    session, _ = make_session()
+    document = {"title": "top", "pages": [{"title": "top", "blocks": []}]}
+    session.partcad_ctx.projects["//"].guides["top"] = document
+
+    result = operations.assembly_guide(session, {"package": "//", "object": "top"})
+
+    assert result == {"assembly": "//:top", "document": document}
+    assert session.partcad_ctx.projects["//"].guide_requests == [("top", False)]
+    assert ("Guide", "//") in session.partcad.logging.processes
+
+
+def test_assembly_guide_reports_a_refusal_as_a_usage_error(monkeypatch):
+    # An assembly PartCAD cannot write instructions for -- one that is not an
+    # ASSY file, or not meant to be built -- is what the user asked for, not a
+    # failure of the machinery, and the reader is told why.
+    install_fake_partcad_modules(monkeypatch, {"partcad.exception": {"AssemblyDocumentError": FakeDocumentError}})
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].guide_error = FakeDocumentError("//:top is a 'file' assembly")
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.assembly_guide(session, {"package": "//", "object": "top"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "is a 'file' assembly" in str(caught.value)
+
+
+def test_assembly_guide_reports_a_missing_assembly(monkeypatch):
+    install_fake_partcad_modules(monkeypatch, {"partcad.exception": {"AssemblyDocumentError": FakeDocumentError}})
+    session, _ = make_session()
+
+    assert operations.assembly_guide(session, {"package": "//", "object": "nope"}) is None
+    assert session.partcad.logging.messages("error") == ["Assembly //:nope is not found"]

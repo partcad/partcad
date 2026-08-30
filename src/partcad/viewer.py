@@ -113,12 +113,17 @@ async def tessellate(ctx, components, name=None, tolerance=None, angular_toleran
     return result.get("objects") or []
 
 
-async def show(ctx, components, name=None, kind=None, markers=None):
+async def show(ctx, components, name=None, kind=None, package=None, markers=None):
     """Tessellate 'components' and display them in the IDE's PartCAD Viewer.
 
     'markers' are bare coordinate frames with no geometry of their own - an
     interface's ports - carried as packed [[tx,ty,tz], [ax,ay,az], angle]
     locations for the viewer to draw axes at.
+
+    'package' names the package the shown object belongs to, so that the viewer
+    can ask the daemon the questions its other tabs answer - the bill of
+    materials, the assembly instructions, where to buy the parts - which take a
+    package and a name, not a name on its own.
 
     Never raises: a show is a side effect of browsing a package, and neither a
     missing IDE nor a shape that will not tessellate should fail the command
@@ -150,6 +155,7 @@ async def show(ctx, components, name=None, kind=None, markers=None):
             objects,
             name=name,
             kind=kind,
+            package=package,
             keep_camera=keep_camera,
             markers=list(markers or []),
         )

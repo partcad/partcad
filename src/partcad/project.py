@@ -13,7 +13,6 @@ import copy
 import decimal
 import os
 import re
-import tempfile
 import threading
 import typing
 
@@ -1936,25 +1935,43 @@ class Project(project_config.Configuration):
             return None
         assembly, path, dir_path, _return_path, render_cfg, output_dir = target
 
-        assembly = assembly_guide.resolve_alias(self.ctx, assembly)
-        assembly_guide.check_source(assembly, ignore_manufacturability)
-
-        with pc_logging.Action("Guide%s" % format.upper(), self.name, assembly.name):
-            # The illustrations exist for this document alone - most of them show
-            # something that is not an object of any package - so they are
-            # rendered into a directory of their own and thrown away with it.
-            with tempfile.TemporaryDirectory() as assets_dir:
-                images = assembly_guide.RenderedImages(self.ctx, self, assets_dir)
-                document = await assembly_guide.build_guide_document_async(self.ctx, self, assembly, images, dir_path)
-
-                self.ctx.ensure_dirs_for_file(path)
-                if format == "html":
-                    with open(path, "w") as f:
-                        f.write(pc_document.render_html(document))
-                else:
-                    await render_pdf_async(self.ctx, document, path)
+        async with assembly_guide.guide_document_async(
+            self.ctx, self, assembly, format.upper(), dir_path, ignore_manufacturability
+        ) as document:
+            self.ctx.ensure_dirs_for_file(path)
+            if format == "html":
+                with open(path, "w") as f:
+                    f.write(pc_document.render_html(document))
+            else:
+                await render_pdf_async(self.ctx, document, path)
 
         return path
+
+    async def assembly_guide_data_async(self, assembly_name, ignore_manufacturability=False):
+        """The assembly instruction book as plain data, pictures included.
+
+        The same document 'render_assembly_guide_async()' writes to a file, for a
+        reader that has no file system in reach: the IDE's viewer is a webview on
+        the other side of a JSON-RPC connection, so every illustration is carried
+        inline as a data URI (see 'document.to_data()').
+
+        For the same reason the document is built with no 'dir_path': the links a
+        generated document makes to the files of the package tree are relative to
+        where it was written, and this one is not written anywhere. What is left
+        is the links that are useful to a reader over a wire - the urls the
+        packages declare.
+        """
+        assembly = self.get_assembly(assembly_name)
+        if assembly is None:
+            return None
+
+        async with assembly_guide.guide_document_async(
+            self.ctx, self, assembly, "Data", ignore_manufacturability=ignore_manufacturability
+        ) as document:
+            return pc_document.to_data(document, embed_images=True)
+
+    def assembly_guide_data(self, assembly_name, ignore_manufacturability=False):
+        return asyncio.run(self.assembly_guide_data_async(assembly_name, ignore_manufacturability))
 
     def render_assembly_guide(
         self,

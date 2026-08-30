@@ -16,6 +16,7 @@ import {
     PARTCAD_IDE_PORT,
     ProtocolError,
     VERSION,
+    ViewerMessage,
     decodeGltf,
     decodeHeader,
     decodePayload,
@@ -34,12 +35,16 @@ function header(magic: string, version: number, kind: number, length: number): B
 
 suite('PartCAD Viewer protocol', () => {
     test('a frame round-trips', () => {
-        const message = { type: MSG_SHOW, id: 'abc', objects: [] };
+        // 'package' is what the panel's tabs beside the 3D one are about: they
+        // ask the daemon about '<package>:<name>', which a name cannot spell.
+        const message: ViewerMessage = { type: MSG_SHOW, id: 'abc', name: 'part', package: '//pkg', objects: [] };
         const frame = encodeFrame(message);
 
         const length = decodeHeader(frame.subarray(0, HEADER_LENGTH));
         assert.strictEqual(length, frame.length - HEADER_LENGTH);
-        assert.deepStrictEqual(decodePayload(frame.subarray(HEADER_LENGTH)), message);
+        const decoded = decodePayload(frame.subarray(HEADER_LENGTH));
+        assert.deepStrictEqual(decoded, message);
+        assert.strictEqual(decoded.package, '//pkg');
     });
 
     test('the header is self-describing', () => {

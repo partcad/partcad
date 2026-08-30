@@ -209,6 +209,30 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.showAssembly', (a) =>
             this.send('inspect.assembly', { package: a.pkg, name: a.name, params: a.params }),
         );
+        // What the PartCAD Viewer's tabs beside the 3D one are filled from. Each
+        // is the CLI's own operation -- 'pc bom', the assembly instruction book
+        // 'pc render -t html' writes, 'pc supply quote' -- asked for as data
+        // rather than as a file, because the panel has to draw it.
+        reg('partcad.bom', (a) =>
+            this.send('bom', {
+                package: a.pkg,
+                object: a.name,
+                params: a.params,
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                stop_at_purchasable: a.stopAtPurchasable,
+            }),
+        );
+        reg('partcad.assemblyGuide', (a) =>
+            this.send('assembly.guide', {
+                package: a.pkg,
+                object: a.name,
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                ignore_manufacturability: a.ignoreManufacturability,
+            }),
+        );
+        reg('partcad.supplyQuote', (a) =>
+            this.send('supply.quote', { package: a.pkg, object: a.name, qos: a.qos, recursive: a.recursive }),
+        );
         reg('partcad.exportPart', (type, path, pkg, name, params) =>
             this.send('export.part', { type, path, package: pkg, name, params }),
         );
