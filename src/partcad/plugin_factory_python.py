@@ -7,8 +7,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import asyncio
 import os
 import sys
+import typing
 
 from . import shape_envelope
 
@@ -20,6 +22,49 @@ from . import wrapper
 from . import logging as pc_logging
 from . import sandbox_versions
 from . import telemetry
+
+
+async def query_with_deadline(plugin: Plugin, run, timeout: int, subject: typing.Optional[str] = None):
+    """Await ``run()`` on behalf of ``plugin``, for at most ``timeout`` seconds.
+
+    A plugin script is third-party code doing whatever it likes in a sandbox of
+    its own, and PartCAD waited for it with nothing bounding the wait. That is
+    fine until a script is slow rather than broken: the LDraw repository plugin
+    that ``//pub/universe/lego/ldraw`` is served by enumerates a category by
+    fetching every part in it from ldraw.org, one HTTP request per part, and the
+    library has 104 categories and some twenty thousand parts. A recursive
+    listing of the public index asks it for every one of them, so ``pc list -r
+    //pub`` stopped printing anything and never came back.
+
+    Returns ``None`` when the deadline passes, which every caller here already
+    treats as "this plugin has no answer", and records the reason on the plugin
+    so that it is not asked again for the rest of this command (see
+    ``Plugin.deadline_is_current``). The second half matters as much as the first:
+    a package tree served by one plugin asks it once per sub-package per object
+    kind, so paying the deadline over and over is the same wedge in slower
+    motion -- LDraw's 104 categories, three kinds each, at three minutes apiece
+    is fifteen hours.
+
+    The deadline is over the *script*, not over the sandbox it runs in.
+    Provisioning a Python sandbox means creating a conda environment and
+    installing the CAD stack into it, which legitimately takes many minutes on a
+    cold machine and is shared by every package that uses it; that is why
+    ``run()`` carries the bound down to the interpreter run itself (see
+    PythonRuntime.run_async_onced) rather than it being applied out here.
+    """
+    try:
+        return await run()
+    except (asyncio.TimeoutError, TimeoutError):
+        # The long form is said once, where it happened; what the refused
+        # queries after it repeat is the short reason, because there is one of
+        # them per package the plugin serves.
+        plugin.mark_deadline_exceeded("skipped: the plugin script exceeded its %d second deadline" % timeout)
+        plugin.error(
+            "%s: the plugin script did not answer within %d seconds "
+            "(raise 'plugin.query.timeout' / PC_PLUGIN_QUERY_TIMEOUT to wait longer); "
+            "this plugin is not asked again" % (subject or plugin.name, timeout)
+        )
+        return None
 
 
 @telemetry.instrument()
@@ -91,12 +136,27 @@ class PluginFactoryPython(PluginFactoryFile):
                 if not sku:
                     sku = "None"
                 extra = vendor + ":" + sku
+        timeout = self.ctx.user_config.plugin_query_timeout
+        # What this particular query was for. A repository plugin serves a whole
+        # tree of packages, so its name alone would not say which of them the
+        # answer (or the refusal below) belongs to; the key does.
+        subject = plugin.name
+        if isinstance(request, dict) and request.get("key"):
+            subject += " '%s'" % request["key"]
         with pc_logging.Action(
             script_name.capitalize(),
             plugin.project_name,
             plugin.name,
             extra,
         ):
+            if plugin.deadline_is_current():
+                # Reported on every refused query rather than once: one plugin
+                # serves a whole tree of packages, and every one of them that
+                # comes out empty has to say why, or this command would print a
+                # listing that quietly is not the complete one it looks like.
+                plugin.error("%s: %s" % (subject, plugin.deadline_exceeded))
+                return None
+
             prepared = await self.prepare_script(plugin)
             if not prepared:
                 pc_logging.error("Failed to prepare %s of %s" % (script_name, plugin.name))
@@ -162,11 +222,20 @@ class PluginFactoryPython(PluginFactoryFile):
                 os.path.abspath(self.path),
                 os.path.abspath(cwd),
             ]
-            exitcode, response_serialized, errors = await self.runtime.run_async(
-                command,
-                request_serialized,
-                session=self.session,
+            completed = await query_with_deadline(
+                plugin,
+                lambda: self.runtime.run_async(
+                    command,
+                    request_serialized,
+                    session=self.session,
+                    timeout=timeout,
+                ),
+                timeout,
+                subject,
             )
+            if completed is None:
+                return None
+            exitcode, response_serialized, errors = completed
 
             if exitcode != 0 and len(errors) == 0:
                 errors = "%s: %s: Failed to instantiate" % (self.project.name, plugin.name)

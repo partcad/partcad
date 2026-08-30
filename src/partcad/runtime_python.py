@@ -652,11 +652,17 @@ class PythonRuntime(runtime.Runtime):
         exitcode, stdout, stderr = super().run(cmd, stdin=stdin, cwd=cwd)
         return exitcode, stdout, stderr
 
-    async def run_async(self, cmd, stdin="", cwd=None, session=None):
+    async def run_async(self, cmd, stdin="", cwd=None, session=None, timeout=None):
         await self.once_async()
-        return await self.run_async_onced(cmd, stdin=stdin, cwd=cwd, session=session)
+        return await self.run_async_onced(cmd, stdin=stdin, cwd=cwd, session=session, timeout=timeout)
 
-    async def run_async_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
+    async def run_async_onced(self, cmd, stdin="", cwd=None, session=None, path=None, timeout=None):
+        # 'timeout' bounds the interpreter run alone, deliberately: everything
+        # above it here -- waiting for the environment lock, creating the v-env,
+        # installing this session's dependencies -- is provisioning that is
+        # shared with every other caller of this sandbox and that legitimately
+        # takes minutes on a cold machine. A bound that covered it would fire on
+        # a slow install rather than on the script it is meant to bound.
         # Hold the environment lock across BOTH provisioning and execution so a
         # session's package installs and its interpreter run are one atomic
         # critical section. Two parts of the same package (e.g. a CadQuery part
@@ -724,10 +730,7 @@ class PythonRuntime(runtime.Runtime):
                         # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
                         cwd=cwd,
                     )
-                    stdout, stderr = await p.communicate(
-                        input=stdin.encode(),
-                        # TODO(clairbee): add timeout
-                    )
+                    stdout, stderr = await runtime.communicate(p, stdin.encode(), timeout)
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)

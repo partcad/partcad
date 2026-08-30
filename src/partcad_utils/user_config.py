@@ -304,6 +304,7 @@ OPTION_KEYS = (
     "git.clone.timeout",
     "git.clone.retry.max",
     "git.clone.retry.patience",
+    "plugin.query.timeout",
     "useDocker",
     "useDockerPython",
     "useDockerKicad",
@@ -528,6 +529,21 @@ class UserConfig(vyper.Vyper):
         # values: <int>
         # default: 180
         self.set_default("git.clone.timeout", 180)
+
+        # option: plugin.query.timeout
+        # description: how long one query to a package's plugin script may take
+        #              before PartCAD gives up on it, in seconds. A plugin
+        #              script is third-party code that PartCAD waits for; a
+        #              repository plugin that enumerates a category by fetching
+        #              every part in it over the network can run for hours, and
+        #              without a bound "pc list -r" simply stops producing
+        #              output and never returns. Three minutes, the same as
+        #              "git.clone.timeout" above and for the same reason: it is
+        #              what a whole network operation is allowed, and one
+        #              key/value query is far less than that.
+        # values: <int>
+        # default: 180
+        self.set_default("plugin.query.timeout", 180)
 
         self.set_default("useDocker", True)
         self.set_default("useDockerPython", False)
@@ -766,6 +782,16 @@ class UserConfig(vyper.Vyper):
         if not self.git_clone_timeout or self.git_clone_timeout <= 0:
             # An unset or nonsensical value must not turn the bound back off
             self.git_clone_timeout = 180
+
+        # option: plugin.query.timeout
+        # description: seconds one query to a plugin script may take
+        # values: <int>
+        # default: 180
+        self.bind_env("plugin.query.timeout", "PC_PLUGIN_QUERY_TIMEOUT")
+        self.plugin_query_timeout = self.get_int("plugin.query.timeout")
+        if not self.plugin_query_timeout or self.plugin_query_timeout <= 0:
+            # An unset or nonsensical value must not turn the bound back off
+            self.plugin_query_timeout = 180
 
         # option: telemetry
         # description: Telemetry configuration

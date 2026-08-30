@@ -536,19 +536,25 @@ class JavaScriptRuntime(runtime.Runtime):
         self.provision_onced_locked(session)
         return self.execute_onced_locked(cmd, stdin=stdin, cwd=cwd, session=session, path=path)
 
-    async def run_async(self, cmd, stdin="", cwd=None, session=None):
+    async def run_async(self, cmd, stdin="", cwd=None, session=None, timeout=None):
         await self.once_async()
-        return await self.run_async_onced(cmd, stdin=stdin, cwd=cwd, session=session)
+        return await self.run_async_onced(cmd, stdin=stdin, cwd=cwd, session=session, timeout=timeout)
 
-    async def run_async_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
+    async def run_async_onced(self, cmd, stdin="", cwd=None, session=None, path=None, timeout=None):
         # See the note in run_onced(): install and run are one critical section.
+        # 'timeout' bounds the Node.js run alone and not the provisioning above
+        # it, for the reason spelled out in PythonRuntime.run_async_onced.
         async with self.async_lock(session):
             await self.provision_async_onced_locked(session)
-            return await self.execute_async_onced_locked(cmd, stdin=stdin, cwd=cwd, session=session, path=path)
+            return await self.execute_async_onced_locked(
+                cmd, stdin=stdin, cwd=cwd, session=session, path=path, timeout=timeout
+            )
 
-    async def run_async_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None):
+    async def run_async_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None, timeout=None):
         await self.provision_async_onced_locked(session)
-        return await self.execute_async_onced_locked(cmd, stdin=stdin, cwd=cwd, session=session, path=path)
+        return await self.execute_async_onced_locked(
+            cmd, stdin=stdin, cwd=cwd, session=session, path=path, timeout=timeout
+        )
 
     def provision_onced_locked(self, session=None):
         """Materialize the environment a dirty session needs."""
@@ -610,7 +616,7 @@ class JavaScriptRuntime(runtime.Runtime):
 
         return self._finish(argv, p.returncode, decode_output(stdout), decode_output(stderr), package_path)
 
-    async def execute_async_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None):
+    async def execute_async_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None, timeout=None):
         argv, package_path = self.build_command(cmd, cwd, session, path)
         pc_logging.debug("Running: %s (in %s)", argv, package_path)
         with telemetry.start_as_current_span(
@@ -629,7 +635,7 @@ class JavaScriptRuntime(runtime.Runtime):
                 env=self._subprocess_env(),
                 cwd=package_path,
             )
-            stdout, stderr = await p.communicate(input=stdin.encode())
+            stdout, stderr = await runtime.communicate(p, stdin.encode(), timeout)
 
         return self._finish(argv, p.returncode, decode_output(stdout), decode_output(stderr), package_path)
 

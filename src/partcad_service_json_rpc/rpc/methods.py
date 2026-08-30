@@ -12,6 +12,8 @@ agnostic operation in :mod:`partcad_service_json_rpc.core.operations`. The
 summary taken from the operation's docstring.
 """
 
+import functools
+
 from ..core import operations
 
 # CLI-shaped method name -> operation callable.
@@ -67,9 +69,36 @@ def _summary(fn) -> str:
     return doc.split("\n", 1)[0] if doc else ""
 
 
+def _begins_a_command(fn):
+    """Wrap an operation so that one JSON-RPC request counts as one command.
+
+    PartCAD scopes a few things to "the command now running" -- so far, the
+    deadline latch that stops a runaway plugin script from being asked again
+    (:mod:`partcad.plugin`). A CLI process runs one command and exits, so
+    nothing there has to say where one ends. The daemon serves many, against
+    contexts it keeps warm indefinitely, so this is where it says so.
+
+    Wrapping the registry rather than, say, the shared ``_ctx()`` helper: every
+    method gets the same treatment whether or not it takes a context, and no
+    operation can be written later that quietly skips it.
+
+    Skipped while PartCAD is unimported -- there are no plugins to un-latch yet,
+    and a meta method like ``rpc.discover`` should not pay for the import.
+    """
+
+    @functools.wraps(fn)
+    def begin(session, params):
+        partcad = getattr(session, "partcad", None)
+        if partcad is not None:
+            partcad.plugin.begin_command()
+        return fn(session, params)
+
+    return begin
+
+
 def build_registry() -> dict:
     """Return the full method registry, including the meta method ``rpc.discover``."""
-    registry = dict(_OPERATIONS)
+    registry = {name: _begins_a_command(fn) for name, fn in _OPERATIONS.items()}
 
     def discover(session, params):  # pylint: disable=unused-argument
         return {"methods": [{"name": name, "summary": _summary(fn)} for name, fn in sorted(registry.items())]}

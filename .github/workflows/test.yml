@@ -134,7 +134,7 @@ env:
   # is the interpreter PartCAD itself runs on. 'test-pub-repo', which renders
   # the public index, uses PYTHONS_SANDBOX instead.
   PYTHONS_SLIM: '["3.10", "3.14"]'
-  VERSION: 0.8.13
+  VERSION: 0.8.14
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
   PC_TELEMETRY_PERFORMANCE: false
@@ -615,6 +615,21 @@ jobs:
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix-slim) }}
     runs-on: ${{ matrix.os }}
     # 45 -> 60: Windows was already at ~35-38 min and the new stack is slower.
+    #
+    # Deliberately NOT raised again, though it was tempting: Linux and macOS
+    # finish in 9-12 minutes and Windows in 42, of which 30 are 'list all'
+    # alone. Windows costs five times what the others do because there is no
+    # socket daemon there yet -- every operation opens a one-shot service over
+    # stdio (client.connect -> _connect_stdio), so each of the six listings
+    # 'pc list all' runs gets a cold context of its own and reloads the whole
+    # index, seven 'DONE: InitCtx' lines to Linux's one. Loading it is itself
+    # dearer than it was: '//pub/universe/lego/ldraw' is served by a repository
+    # plugin, so the index now runs a sandbox interpreter twice per LDraw
+    # category ('meta' and 'deps', 208 of them) and pays 'plugin.query.timeout'
+    # once for the enumeration nobody can wait out. Both are worth fixing
+    # rather than buying more minutes for -- and a longer budget is time a
+    # future wedge gets to burn before this job says so, which is the thing the
+    # deadline exists to prevent.
     timeout-minutes: 60
 
     steps:
@@ -646,8 +661,25 @@ jobs:
 
           # BEGIN PUBLIC REPO
           cd ./examples
+          # Both commands run whatever the other one does. The step is
+          # 'continue-on-error' precisely because the index carries packages
+          # this repository cannot fix, so a non-zero exit from the listing was
+          # never the signal here -- but under 'bash -e' it silently took the
+          # 'test' run below with it, and that is the more interesting half.
+          # It is not hypothetical: '//pub/universe/lego/ldraw' serves the LDraw
+          # library through a repository plugin that cannot answer within
+          # 'plugin.query.timeout', so the listing reports it and exits non-zero
+          # every time.
+          # Each exit code is reported rather than swallowed: 'continue-on-error'
+          # already keeps the job green, so the log is the only place a genuine
+          # regression in either command can show up.
+          set +e
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub
+          list_rc=$?
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --package //pub
+          test_rc=$?
+          set -e
+          echo "::notice title=Repo //pub::'list all' exited ${list_rc}, 'test' exited ${test_rc}"
           coverage combine
           # END PUBLIC REPO
 
