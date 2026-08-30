@@ -131,7 +131,7 @@ def test_a_marked_plugin_is_not_asked_again():
     factory = object.__new__(PluginFactoryPython)
     factory.ctx = pc.Context("examples")
     plugin = _plugin()
-    plugin.deadline_exceeded = "the plugin script did not answer within 180 seconds"
+    plugin.mark_deadline_exceeded("the plugin script did not answer within 180 seconds")
 
     result = asyncio.run(factory.query_script(plugin, "get", {"key": "Technic/objects/part"}))
 
@@ -139,12 +139,12 @@ def test_a_marked_plugin_is_not_asked_again():
 
 
 def test_a_refused_query_still_says_why():
-    """Otherwise the next command against the same warm daemon would report a
-    complete listing that quietly is not one."""
+    """Otherwise this command would print a listing that quietly is not the
+    complete one it looks like."""
     factory = object.__new__(PluginFactoryPython)
     factory.ctx = pc.Context("examples")
     plugin = _plugin()
-    plugin.deadline_exceeded = "skipped: the plugin script exceeded its 180 second deadline"
+    plugin.mark_deadline_exceeded("skipped: the plugin script exceeded its 180 second deadline")
 
     asyncio.run(factory.query_script(plugin, "get", {"key": "Technic/objects/part"}))
 
@@ -166,6 +166,70 @@ def test_the_long_explanation_is_said_once():
 
     assert "plugin.query.timeout" in plugin.errors[0]
     assert "plugin.query.timeout" not in plugin.deadline_exceeded
+
+
+# ---- how long the latch lasts ------------------------------------------------
+#
+# For the rest of the command that hit it, and not a moment longer. The daemon
+# keeps its contexts -- and the Plugin objects hanging off them -- warm
+# indefinitely, so a latch scoped to the object's lifetime would be scoped to
+# the daemon's: one transient timeout would mute a plugin until someone thought
+# to restart it, which no message suggests.
+
+
+def test_the_latch_holds_for_the_rest_of_its_own_command():
+    """Inside one command it must not be re-asked; that is the whole point."""
+    plugin = _plugin()
+
+    plugin.mark_deadline_exceeded("skipped: the plugin script exceeded its 180 second deadline")
+
+    assert plugin.deadline_is_current() is True
+
+
+def test_a_latch_from_an_earlier_command_is_stale():
+    plugin = _plugin()
+    plugin.mark_deadline_exceeded("skipped: the plugin script exceeded its 180 second deadline")
+
+    pc.plugin.begin_command()
+
+    assert plugin.deadline_is_current() is False
+    # The reason is kept rather than cleared: nothing reads it once the latch is
+    # stale, and keeping it makes the last failure legible to a debugger.
+    assert plugin.deadline_exceeded is not None
+
+
+def test_a_plugin_that_never_timed_out_is_never_latched():
+    """`deadline_generation` is None there, and None must not match a generation."""
+    plugin = _plugin()
+
+    assert plugin.deadline_is_current() is False
+
+    pc.plugin.begin_command()
+
+    assert plugin.deadline_is_current() is False
+
+
+def test_a_new_command_asks_the_plugin_again():
+    """The mirror of test_a_marked_plugin_is_not_asked_again.
+
+    Same bare factory, so reaching the factory's own state raises
+    AttributeError -- which here is the proof that the query went *past* the
+    refusal instead of short-circuiting at it.
+    """
+    factory = object.__new__(PluginFactoryPython)
+    factory.ctx = pc.Context("examples")
+    plugin = _plugin()
+    plugin.mark_deadline_exceeded("skipped: the plugin script exceeded its 180 second deadline")
+
+    pc.plugin.begin_command()
+
+    with pytest.raises(AttributeError):
+        asyncio.run(factory.query_script(plugin, "get", {"key": "Technic/objects/part"}))
+
+
+def test_each_command_gets_its_own_generation():
+    assert pc.plugin.begin_command() != pc.plugin.begin_command()
+    assert pc.plugin.command_generation() == pc.plugin.command_generation()
 
 
 # ---- the subprocess the deadline has to reclaim ------------------------------

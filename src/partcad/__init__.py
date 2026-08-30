@@ -68,6 +68,14 @@ from . import telemetry
 telemetry.init(__version__)
 
 from . import actions, exception, healthcheck, logging, tags, utils
+
+# Imported for the binding rather than for anything here: it makes
+# `partcad.plugin` resolve as an attribute of the package, which is how the
+# daemon marks the start of each command (see
+# partcad_service_json_rpc.rpc.methods._begins_a_command). It resolved anyway
+# while some other module happened to import it first, which is not something
+# to leave a request path depending on.
+from . import plugin  # noqa: F401
 from .assembly import Assembly
 from .assembly_connect import ConnectHold, ConnectHow
 from .consts import *

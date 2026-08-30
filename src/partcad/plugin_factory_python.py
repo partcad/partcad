@@ -38,7 +38,8 @@ async def query_with_deadline(plugin: Plugin, run, timeout: int, subject: typing
 
     Returns ``None`` when the deadline passes, which every caller here already
     treats as "this plugin has no answer", and records the reason on the plugin
-    so that it is not asked again. The second half matters as much as the first:
+    so that it is not asked again for the rest of this command (see
+    ``Plugin.deadline_is_current``). The second half matters as much as the first:
     a package tree served by one plugin asks it once per sub-package per object
     kind, so paying the deadline over and over is the same wedge in slower
     motion -- LDraw's 104 categories, three kinds each, at three minutes apiece
@@ -57,7 +58,7 @@ async def query_with_deadline(plugin: Plugin, run, timeout: int, subject: typing
         # The long form is said once, where it happened; what the refused
         # queries after it repeat is the short reason, because there is one of
         # them per package the plugin serves.
-        plugin.deadline_exceeded = "skipped: the plugin script exceeded its %d second deadline" % timeout
+        plugin.mark_deadline_exceeded("skipped: the plugin script exceeded its %d second deadline" % timeout)
         plugin.error(
             "%s: the plugin script did not answer within %d seconds "
             "(raise 'plugin.query.timeout' / PC_PLUGIN_QUERY_TIMEOUT to wait longer); "
@@ -148,11 +149,11 @@ class PluginFactoryPython(PluginFactoryFile):
             plugin.name,
             extra,
         ):
-            if plugin.deadline_exceeded:
-                # Reported on every refused query rather than once. A package
-                # that comes out empty has to say why every time it does, or the
-                # next command against the same warm daemon would report a
-                # complete listing that quietly is not one.
+            if plugin.deadline_is_current():
+                # Reported on every refused query rather than once: one plugin
+                # serves a whole tree of packages, and every one of them that
+                # comes out empty has to say why, or this command would print a
+                # listing that quietly is not the complete one it looks like.
                 plugin.error("%s: %s" % (subject, plugin.deadline_exceeded))
                 return None
 
