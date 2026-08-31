@@ -1277,12 +1277,65 @@ object it produces is the one it would have produced without it.
 Both are available for :ref:`sketches` and :ref:`assemblies` too, spelled the
 same way.
 
-Other Part Types
-----------------
+.. _part-types:
 
-Other methods to define parts are coming soon (e.g. `SDF <https://github.com/fogleman/sdf>`_).
-Please, express your interest in support for other formats by filing a corresponding issue on GitHub
-or sending an email to `support@partcad.org <mailto:support@partcad.org>`_.
+Part types the package defines itself
+-------------------------------------
+
+The types above are the ones PartCAD implements. A package can also declare a
+type of its own, in a ``partTypes`` section, and then build parts with it. This
+is worth doing when a family of parts is produced the same way every time --
+generated from a table, fetched from a catalogue, built by a modelling helper
+the package already has -- and the difference between them is a handful of
+parameters rather than a script each.
+
+.. code-block:: yaml
+
+  partTypes:
+    box:
+      kind: wrapper
+      path: box_wrapper.py
+
+  parts:
+    demo:
+      type: ":box"
+      parameters:
+        size:
+          type: float
+          default: 12
+
+``kind`` is ``wrapper``, which is the default and currently the only kind. Its
+``path`` (``<name>.py`` if left out) is a Python script that PartCAD runs in the
+sandbox once per part, with the part's ``request`` in its globals -- the
+resolved ``parameters`` among them -- and which leaves the geometry in a global
+``output``:
+
+.. code-block:: python
+
+  if __name__ == "__partcad_part__":
+      from build123d import Box
+
+      size = float(request["parameters"].get("size", 10))
+      output = {"shape": Box(size, size, size).wrapped}
+
+Because the script runs in a sandbox it may import OCP, build123d or CadQuery;
+``pythonRequirements`` on the ``partType`` says what that sandbox needs, exactly
+as it does for a package. This is the same mechanism as a custom output
+implementation (see :ref:`output-files`), pointed at building a shape rather
+than writing a file.
+
+A ``type`` beginning with ``:`` names a ``partType`` of the part's own package
+and is expanded to ``<package path>:<name>`` when the package is loaded. Write
+the package path out to use another package's type, which is what makes these
+shareable: a package that declares a ``partType`` is a package other people can
+import and build parts with. A ``partType`` is listed like any other object but
+is never a shape in its own right -- it is how parts are made, not one of them.
+
+See ``examples/produce_part_wrapper`` for the whole of the example above.
+
+Should PartCAD implement a type natively that you find yourself writing again
+and again, please file an issue on GitHub or write to
+`support@partcad.org <mailto:support@partcad.org>`_.
 
 .. _parameters:
 

@@ -70,6 +70,30 @@ Host commands
 
   The "Update PartCAD" command in the VS Code extension runs exactly this, so the two never drift apart.
 
+``pc daemon``
+  Manage the background daemon described above. There is one per workspace, it is started on demand by the
+  first command that needs it, and it is not normally something to think about — these are here for when it
+  is:
+
+  - ``pc daemon start`` — Start this workspace's daemon if it is not already running, and print the socket
+    path it serves on. This is also how the VS Code extension finds the daemon, so that "where is it" has one
+    implementation rather than one per language.
+  - ``pc daemon stop`` — Stop the daemon serving this workspace, and say whether one was running.
+  - ``pc daemon status`` — Display the state of the internal data the daemon holds.
+  - ``pc daemon reset`` — Drop that state. ``--repo-only``, ``--sandbox-only`` and ``--cache-only`` narrow it
+    to the cached dependencies, the sandboxed runtime environments, or the filesystem cache respectively;
+    without them all of it goes.
+  - ``pc daemon set telemetry`` — Set the daemon's telemetry settings (``type``, ``env``, ``sentryDsn``),
+    the daemon-side counterpart of ``pc system set``.
+
+  There is no daemon to restart after changing a setting: every command hands the daemon its own resolved user
+  configuration, as explained above. Stopping one is for upgrades and for clearing a wedged state.
+
+  .. note::
+
+    The socket daemon is not available on Windows yet. ``pc`` there runs a per-invocation service instead, and
+    ``pc daemon start``/``stop`` say so rather than pretending otherwise.
+
 ``pc open``
   Open a file in a third-party application, on this machine::
 

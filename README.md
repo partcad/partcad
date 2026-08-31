@@ -124,13 +124,14 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
 - Workflow acceleration by caching rendered models (including OpenSCAD, CadQuery, build123d and Chili3D)
   - [x] In memory
   - [x] On disk
-  - [ ] Local Server _(in progress)_
-  - [ ] Cloud _(in progress)_
+  - [x] A memcached server shared by a team or a CI fleet (`cacheRemote`)
+  - [x] An S3 bucket that outlives both (`cacheS3`)
 - Collaboration on designs
   - [x] Versioning of CAD designs using `Git` _(like it's 2025 for real)_
     - [x] Mechanical
     - [x] Electronics
-    - [ ] Software _(in progress)_
+    - [x] Software — firmware images, binaries and disk images shipped as objects of a package,
+          reproducible by vendor and SKU, by file, or by `fileHash`
   - [x] Automated generation of `Markdown` documentation
   - [x] Parametric (hardware and software) bill of materials
   - [x] Publish models online on PartCAD.org
@@ -141,13 +142,19 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
 - Assembly models (3D)
   - [x] Using specialized `Assembly YAML` format
     - [x] Automatically maintaining the bill of materials
-    - [ ] Generating user-friendly visual assembly instructions _(in progress)_
+    - [x] Generating user-friendly visual assembly instructions (`PDF` and `HTML` instruction books)
+  - [x] Using `URDF`, with links, joints and physics
+  - [x] Using a `STEP` file that stays the source
+- Scenes (3D) — placed arrangements of objects: a workcell, a table, a simulation world
+  - [x] Stating where things are, rather than how they got there
+  - [x] Exporting to a `Gazebo` world (SDFormat), and opening it in Gazebo
 - Part models (3D)
   - Using scripting languages
     - [x] [CadQuery]
     - [x] [build123d]
     - [x] [Chili3D]
     - [x] [OpenSCAD]
+    - [x] [SDF]
   - Using legacy CAD files
     - [x] `STEP`
     - [x] `BREP`
@@ -156,6 +163,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `OBJ`
   - Using file formats of third-party tools
     - [x] `KiCad EDA` (PCB)
+  - Using a part type the package defines itself (`partTypes`)
 - Part and interface blueprints (2D)
   - Using scripting languages
     - [x] [CadQuery]
@@ -175,11 +183,19 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] Free-form `comment:` context in `Assembly YAML`, written for whoever reads the assembly next
 - Other features
   - Object-Oriented Programming approach to maintaining part interfaces and mating information
-  - Live preview of 3D models while working in Visual Studio Code
-  - Render 2D and 3D to images
+  - Live preview of 3D models while working in Visual Studio Code, with the bill of materials, the assembly
+    instructions and supplier quotes on tabs beside the 3D view
+  - Open an object in the application that made it (`pc open`): `FreeCAD`, `Gazebo`, `KiCad` — installed
+    locally, or run in a container when it is not
+  - Render 2D projections, from any viewing angle (`--view`, or an arbitrary one), with the connection
+    ports and interfaces drawn on top if asked
     - [x] `SVG`
     - [x] `PNG`
     - [x] `JPEG`
+    - [x] `DXF`
+  - Generate documents
+    - [x] `Markdown` package and assembly documents
+    - [x] `PDF` and `HTML` assembly instruction books
   - Export 3D models to CAD files
     - [x] `STEP`
     - [x] `BREP`
@@ -189,6 +205,9 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `OBJ`
     - [x] `IGES`
     - [x] `glTF`
+    - [x] `URDF`
+    - [x] `Gazebo` world (SDFormat)
+  - Output types a package implements itself, for both `render:` and `export:`
 
 ## Installation
 
@@ -214,6 +233,10 @@ Already using Visual Studio Code? Install the extension into it instead of the I
 
 This extension can be installed by searching for `PartCAD` in the VS Code extension search form, or by browsing
 [its VS Code marketplace page](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad).
+
+Every [release](https://github.com/partcad/partcad/releases) also carries the packaged extension as
+`partcad-<version>.vsix`, to pin a version or to install where the marketplace is not reachable:
+`code --install-extension partcad-<version>.vsix`.
 
 Make sure to have Python configured and a [conda] environment set up in VS Code before using PartCAD.
 
@@ -292,6 +315,7 @@ Give us a star for our hard work!
 [build123d]: https://github.com/gumyr/build123d
 [Chili3D]: https://github.com/xiangechen/chili3d
 [OpenSCAD]: https://openscad.org/
+[SDF]: https://github.com/fogleman/sdf
 [STEP]: https://en.wikipedia.org/wiki/ISO_10303
 [BREP]: https://en.wikipedia.org/wiki/Boundary_representation
 [OpenCASCADE]: https://www.opencascade.com/

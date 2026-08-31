@@ -37,18 +37,29 @@ Options pass through the pipe with `sh -s --` (for example
 `... | sh -s -- --version 0.7.135`); the same knobs exist as environment
 variables (`PARTCAD_VERSION`, `PARTCAD_REPOSITORY`, `PARTCAD_BIN_DIR`, …).
 
-**There is no published standalone release yet.** Today the installer ends with a
-download 404:
+Every release publishes bundles for Linux (x86_64, arm64), macOS (Apple silicon)
+and Windows, along with a `platforms.json` manifest the installer reads to pick
+the right one for this machine. The download is around 57MB on Linux x86_64 and
+about half that on macOS and Linux arm64.
+
+Should the installer fail, report what it said and stop. Do not fall back to
+another install method and do not hand-roll one. The two failures worth
+recognizing:
 
 ```
 error: download failed.
        There may be no build of <version> for <platform>.
 ```
 
-(or *"could not determine the latest release"* if there is no release at all).
-When the standalone bundle is not published, report that **no published PartCAD
-installer is available** and stop. Do not fall back to another install method and
-do not hand-roll one.
+— no bundle for this platform in the release that was asked for. `--platform`
+names one explicitly; `--version` picks a different release.
+
+```
+error: could not determine the latest release
+```
+
+— the release list could not be reached at all, which is a network or rate-limit
+problem rather than a missing build.
 
 ## `python-module` — into the active Python environment
 

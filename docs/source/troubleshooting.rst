@@ -107,12 +107,19 @@ PartCAD Viewer
 ==============
 
 The ``PartCAD Viewer`` is a tab the extension opens when a part, assembly,
-sketch or interface is inspected. PartCAD tessellates the shape in a sandboxed
-runtime, and sends the result to the extension as compressed glTF over a socket
-on ``127.0.0.1:9137``. The Python side of that connection is the
+scene, sketch or interface is inspected. PartCAD tessellates the shape in a
+sandboxed runtime, and sends the result to the extension as compressed glTF over
+a socket on ``127.0.0.1:9137``. The Python side of that connection is the
 ``partcad_ide_client`` package, which ships inside ``partcad`` itself -- so
 ``pip install partcad`` is all that is needed, and there is nothing separate to
 install.
+
+Beside the 3D view the panel carries tabs for the questions that are about the
+object rather than its shape -- **Bill of Materials**, **Instructions** and
+**Supply**, each appearing where it applies. Those do not come over the socket
+above: they are answered by the PartCAD daemon and fetched the first time the
+tab is opened, so a failure in one of them is a daemon problem and says so in
+the tab, while the 3D view keeps working.
 
 Anything with a ``partcad`` that can reach that port can display into the same
 viewer -- including a ``pc`` run in a plain terminal, as long as a window with

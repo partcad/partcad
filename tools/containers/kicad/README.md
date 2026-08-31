@@ -85,7 +85,7 @@ providers:
 The manufacturability test of the PCBs using a `manufacturer` and the manufacturing methods starting with `pcb` is not
 implemented yet.
 
-````yaml
+```yaml
 parts:
   my-pcb:
     type: kicad
@@ -100,9 +100,7 @@ providers:
   pcbManufacturingProvider1:
     type: manufacturer
     ...
-
 ```
-
 
 ## Build Instructions
 
@@ -110,4 +108,4 @@ To build the container, run the following command:
 
 ```bash
 docker build -t partcad-integration-kicad -f tools/containers/kicad/Dockerfile tools/containers
-````
+```

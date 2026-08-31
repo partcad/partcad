@@ -100,9 +100,10 @@ a CAD addon, or documentation.
   so that an older `pip install partcad-cli` keeps working. Do not give it modules or entry points — two
   distributions owning one import name or one console script break each other on uninstall, silently.
 
-* [README.md](./README.md) and [docs](./docs/README.md):
+* [README.md](./README.md) and [docs/source](./docs/source):
 
-  Human-friendly documentation.
+  Human-friendly documentation. `docs/source` is the Sphinx tree published to
+  [Read the Docs](https://partcad.readthedocs.io/); `docs/source/index.rst` has its table of contents.
 
 ## Development process
 

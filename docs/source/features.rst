@@ -31,10 +31,30 @@ Objects
 - **Display** (inspect) a part, assembly, scene, sketch, or interface in the ``PartCAD Viewer``; parts can
   also be opened for display and editing together, or their source edited directly.
 - **Test** a part, assembly, or scene.
+- **Open in >** — Open the object's own source file in the application that made it: **FreeCAD** for a part
+  or an assembly, **Gazebo** for a scene of type ``world``, **KiCad** for a part of type ``kicad``. This runs
+  on your machine rather than on the daemon: the extension runs ``pc open`` (see :doc:`cli`), which starts an
+  application installed here, or runs one in a container when there is none and ``partcad.open.useDocker``
+  is on.
 
 The Explorer also lists the ``software`` a package ships. Selecting one shows its path and its ``fileHash``
 in the Inspector and leaves the ``PartCAD Viewer`` as it is: software is a file, not geometry, so there is
 nothing to render.
+
+The PartCAD Viewer
+------------------
+
+Displaying an object opens the ``PartCAD Viewer``, which is a strip of tabs over that one object rather than
+a bare canvas. Which tabs appear depends on what is being shown, and the 3D view is always the first:
+
+- **3D** — the shape itself, tessellated by PartCAD and drawn here. Always present.
+- **Bill of Materials** — for an assembly or a scene: every part it is made of, recursively, counted.
+- **Instructions** — for an assembly that declares its steps: the assembly guide, step by step.
+- **Supply** — what the objects in view can be bought from, and a quote per supplier.
+
+The 3D view arrives over the viewer protocol from whichever ``partcad`` asked for the shape to be shown; the
+other tabs are questions put to the PartCAD daemon, fetched the first time the tab is looked at and cached
+until the next object is shown. An object that belongs to no package gets the 3D view alone.
 
 Export
 ------
@@ -128,6 +148,47 @@ At the moment code-CAD caching is experimental and can be enabled by using the f
 
     # ~/.partcad/config.yaml
     cacheDependenciesIgnore: True
+
+Cache tiers
+-----------
+
+The cache is a hierarchy of tiers, each with its own switch, because what is
+worth keeping in memory is not what is worth a file, and neither is what is
+worth a network round trip:
+
+======================= ============================================================ ==========
+Tier                    Where it keeps things                                        Default
+======================= ============================================================ ==========
+``cacheMem``            This process's memory. Nearest, and lost on exit.            on
+``cacheFiles``          A directory under the internal state directory. Local.       on
+``cacheRemote``         A memcached server, shared by a team or a CI fleet.          off
+``cacheS3``             An S3 bucket, which outlives all of the above.               off
+======================= ============================================================ ==========
+
+A read walks them in that order and stops at the first hit; a write offers the
+entry to every tier whose size window accepts it. The two shared tiers are off
+by default because they need an address that only a deployment can supply:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    cacheRemote: True
+    cacheRemoteServer: memcached.example.com:11211
+
+    cacheS3: True
+    cacheS3Bucket: my-partcad-cache
+    cacheS3Region: us-east-1
+
+Each tier also takes ``...MaxEntrySize`` and ``...MinEntrySize`` to set the
+window of object sizes it accepts, and the memcached tier takes
+``cacheRemoteNamespace`` and ``cacheRemoteExpiration``. ``cacheS3`` additionally
+accepts ``cacheS3Prefix`` and ``cacheS3EndpointUrl``, the latter for an
+S3-compatible store that is not AWS.
+
+``cacheRemote`` needs nothing installed. ``cacheS3`` needs the ``aws`` extra
+(``pip install -U 'partcad[aws]'``); enabling it without that reports an error
+naming the package to install and leaves the remaining tiers working. See
+:doc:`installation` for both.
 
 ========
 Security
