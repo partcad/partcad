@@ -480,6 +480,19 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
     # their daemon-forwarded log events into, so in-process and thin-client
     # commands render identically.
     logging_remote_client.init(want_ansi=not no_ansi)
+    # Whatever it installed comes back off however this command ends. The
+    # 'result_callback' below calls fini() too, and deliberately: it has a last
+    # thing to say before the renderer goes away. But a result callback only
+    # runs when the command *returns* - a 'ClickException', a 'ctx.exit(1)' or
+    # any other exception skips it - and the renderer holds the stream it was
+    # given when it was installed, while init() is a no-op once something is
+    # installed. So a command that failed would leave that renderer attached to
+    # a stream nobody reads any more, and the next command in the same process
+    # would render into it and appear to print nothing at all. One process per
+    # command hides this from users; the test suite runs many through one
+    # process and does not (see tests/partcad_cli/unit/test_logging_teardown.py).
+    # fini() is idempotent, so being called twice on the way out costs nothing.
+    ctx.call_on_close(logging_remote_client.fini)
 
     if quiet:
         pc_logging.setLevel(logging.CRITICAL + 1)
