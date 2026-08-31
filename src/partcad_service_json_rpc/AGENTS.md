@@ -55,6 +55,12 @@ directory.
   the daemon's transport), `http.py` (optional HTTP+SSE).
 - `daemon.py` — workspace root discovery, hashing, socket path, liveness (`rpc.discover` probe), stale recovery,
   double-fork/detach, `daemon.stop`. `win_pipe.py` — the Windows named-pipe counterpart (untested on POSIX/CI).
+  Two things differ on Windows and both are load-bearing. The daemon is a **detached new process**, not a fork,
+  so `_launcher_argv` has to name the frozen bundle as itself rather than as `python -m` — the bundle takes the
+  service's own options and rejects `-m`, so the daemon simply was not there. And `ensure_daemon` **waits for
+  the pipe to answer** before printing it: the POSIX branch binds and listens in this very process, so the
+  socket exists the moment it is named, while a pipe does not exist until the new process gets that far, and
+  connecting to a pipe that is not there fails instead of queueing.
 - `client.py` — `DaemonClient` and `start_daemon`, used by the CLI (and any Python caller) to reach the daemon.
 - `__main__.py` — the `partcad-json-rpc` entry point: channel selection (`--socket` default, `--stdio`,
   `--http`) and CLI-style flags mirroring `pc` globals.

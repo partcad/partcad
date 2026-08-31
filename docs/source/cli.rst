@@ -75,9 +75,10 @@ Host commands
   first command that needs it, and it is not normally something to think about — these are here for when it
   is:
 
-  - ``pc daemon start`` — Start this workspace's daemon if it is not already running, and print the socket
-    path it serves on. This is also how the VS Code extension finds the daemon, so that "where is it" has one
-    implementation rather than one per language.
+  - ``pc daemon start`` — Start this workspace's daemon if it is not already running, and print the endpoint
+    it serves on — a socket path, or a named pipe on Windows. This is also how the VS Code extension finds the
+    daemon, so that "where is it" has one implementation rather than one per language. The endpoint is printed
+    once the daemon answers on it, so whoever reads it can connect straight away.
   - ``pc daemon stop`` — Stop the daemon serving this workspace, and say whether one was running.
   - ``pc daemon status`` — Display the state of the internal data the daemon holds.
   - ``pc daemon reset`` — Drop that state. ``--repo-only``, ``--sandbox-only`` and ``--cache-only`` narrow it
@@ -91,8 +92,10 @@ Host commands
 
   .. note::
 
-    The socket daemon is not available on Windows yet. ``pc`` there runs a per-invocation service instead, and
-    ``pc daemon start``/``stop`` say so rather than pretending otherwise.
+    On Windows the daemon serves a named pipe rather than a Unix socket, and it is started as a detached
+    process rather than by forking; ``pc daemon start``/``stop`` work the same way and print the same kind of
+    answer. ``pc`` itself does not use it yet — each command there still runs a service of its own — so what a
+    daemon buys on Windows today is the editor extension's warm context.
 
 ``pc open``
   Open a file in a third-party application, on this machine::

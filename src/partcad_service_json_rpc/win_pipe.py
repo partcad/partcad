@@ -30,13 +30,32 @@ from .rpc.dispatcher import Dispatcher
 from .rpc.methods import build_registry
 
 
+def _launcher_argv() -> list:
+    """How to run this service again as a new process.
+
+    The standalone bundle is a single executable that takes the service's own
+    options, so `sys.executable -m partcad_service_json_rpc` -- right for a
+    source checkout -- is exactly what it rejects: `-m` is not one of its
+    arguments, argparse exits, and the daemon that was supposed to serve the
+    pipe was never there. That bundle is what the editor extension downloads and
+    runs, which is who asks for this daemon.
+
+    `partcad_client.launcher_argv` answers the same question for a client and is
+    deliberately not imported here: this package does not depend on the client
+    (see AGENTS.md). Two lines are the price of that.
+    """
+    if getattr(sys, "frozen", False):
+        return [sys.executable]
+    return [sys.executable, "-m", "partcad_service_json_rpc"]
+
+
 def spawn_pipe_daemon(root_path: str) -> None:
     """Start a detached server process serving the workspace's named pipe."""
     creationflags = 0
     creationflags |= getattr(subprocess, "DETACHED_PROCESS", 0)
     creationflags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     subprocess.Popen(
-        [sys.executable, "-m", "partcad_service_json_rpc", "--serve-pipe", pipe_name(root_path)],
+        _launcher_argv() + ["--serve-pipe", pipe_name(root_path)],
         close_fds=True,
         creationflags=creationflags,
     )

@@ -22,6 +22,7 @@ import os
 import signal
 import socket
 import sys
+import time
 from typing import Callable, Optional
 
 from partcad_utils.workspace import (
@@ -74,6 +75,15 @@ def ensure_daemon(
         pipe = pipe_name(root)
         if not is_pipe_alive(pipe, liveness_timeout):
             spawn_pipe_daemon(root)
+            # Wait for it to answer before saying where it is. The POSIX branch
+            # below binds and listens in *this* process, so the socket is there
+            # the moment it is printed and a client that arrives early simply
+            # queues; the Windows daemon is a separate process that creates its
+            # pipe once it is ready, and connecting to a pipe that does not
+            # exist yet fails outright rather than waiting. Printing first
+            # therefore handed every client a name it could not connect to.
+            if not _wait_for_pipe(pipe, liveness_timeout):
+                raise RuntimeError("the PartCAD daemon did not start serving %s in %ss" % (pipe, START_TIMEOUT))
         print(pipe, flush=True)
         return pipe
 
@@ -99,6 +109,25 @@ def ensure_daemon(
 
     _serve_detached(server_sock, sock, wdir, build_session)
     return sock
+
+
+# How long to wait for a freshly spawned Windows daemon to answer. Generous:
+# it has to start a process, import PartCAD and build the warm session before
+# it can serve, and the alternative to waiting is telling the client to connect
+# to a pipe that is not there.
+START_TIMEOUT = 120.0
+
+
+def _wait_for_pipe(pipe: str, liveness_timeout: float) -> bool:  # pragma: no cover - Windows only
+    """True once the named-pipe daemon answers, False if it never does."""
+    from .win_pipe import is_pipe_alive
+
+    deadline = time.monotonic() + START_TIMEOUT
+    while time.monotonic() < deadline:
+        if is_pipe_alive(pipe, liveness_timeout):
+            return True
+        time.sleep(0.1)
+    return False
 
 
 def _serve_detached(server_sock: socket.socket, sock: str, wdir: str, build_session: Callable) -> None:
