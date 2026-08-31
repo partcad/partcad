@@ -19,6 +19,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
+import { pathKey } from '../../common/paths';
 import { pathEntries, resolveServicePath, selectPlatforms, serviceUnder } from '../../common/provision';
 
 const MANIFEST = {
@@ -132,6 +133,22 @@ suite('Where the service was looked for', () => {
             .update('servicePath', exe ?? '', vscode.ConfigurationTarget.Global);
     }
 
+    /**
+     * Whether the report names `target`, however this platform spells it.
+     *
+     * Not `String.includes` on the paths as they come: the storage directory
+     * reaches `resolveServicePath` as `globalStorageUri.fsPath`, and on Windows
+     * `Uri.fsPath` lower-cases the drive letter -- so the report says
+     * `c:\...\storage` where this test built `C:\...\storage`, and comparing
+     * the two strings said the extension had not looked there. Which is the
+     * very confusion `pathKey` exists for, arriving here by the same route it
+     * arrives everywhere else.
+     */
+    function names(searched: string[], target: string): boolean {
+        const needle = pathKey(target);
+        return searched.some((entry) => pathKey(entry).includes(needle));
+    }
+
     // `resolveServicePath` looks at this platform's installation directory and
     // in the home directory before it reaches PATH, so on a machine with PartCAD
     // installed it would return early and the search report would be one entry
@@ -198,7 +215,7 @@ suite('Where the service was looked for', () => {
             'the setting is the first thing checked and has to be named, set or not',
         );
         assert.ok(
-            searched.some((s) => s.includes(path.join(tmp, 'storage'))),
+            names(searched, path.join(tmp, 'storage')),
             "the extension's own download directory is checked and has to be named",
         );
         // The one that matters most: a user with PartCAD in a virtual
@@ -214,7 +231,7 @@ suite('Where the service was looked for', () => {
         await pointServicePathAt(undefined);
         const searched = searchedOn('linux');
         assert.ok(
-            searched.some((s) => s.includes(path.join(tmp, 'data', 'partcad'))),
+            names(searched, path.join(tmp, 'data', 'partcad')),
             '$XDG_DATA_HOME/partcad is where install.sh puts a bundle and has to be named',
         );
         assert.ok(
@@ -231,7 +248,7 @@ suite('Where the service was looked for', () => {
         await pointServicePathAt(undefined);
         const searched = searchedOn('win32');
         assert.ok(
-            searched.some((s) => s.includes(path.join(tmp, 'local', 'PartCAD'))),
+            names(searched, path.join(tmp, 'local', 'PartCAD')),
             '%LOCALAPPDATA%\\PartCAD is where a Windows installation goes and has to be named',
         );
         assert.ok(
