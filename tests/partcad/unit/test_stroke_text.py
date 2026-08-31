@@ -22,6 +22,7 @@ import stroke_text  # noqa: E402
 
 
 def _points(text):
+    """Every point of every stroke of 'text', in one flat list."""
     return [point for polyline in stroke_text.polylines(text) for point in polyline]
 
 
@@ -73,5 +74,6 @@ def test_the_text_starts_at_the_origin_and_advances_to_the_right():
 
 
 def test_a_space_draws_nothing_but_still_advances():
+    """A gap is a gap, not a glyph that happens to be blank."""
     assert stroke_text.polylines(" ") == []
     assert stroke_text.width("A A") > stroke_text.width("AA")

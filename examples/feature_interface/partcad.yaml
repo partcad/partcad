@@ -8,7 +8,7 @@ cover:
 
 docs:
   intro: |
-    ### Seeing the ports and the interfaces
+    ## Seeing the ports and the interfaces
 
     A port is a coordinate frame and an interface is a named set of them.
     Neither is geometry, so neither shows up in a drawing - which is exactly

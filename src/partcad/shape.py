@@ -995,7 +995,11 @@ class Shape(ShapeConfiguration):
 
         Failing to work it out must not cost the picture: an overlay is an
         annotation on a render, not the render. The failure is reported and the
-        file is written without it.
+        file is written without it - and it is *not* remembered, because what
+        failed may be only the half this file type asked for. Building a port's
+        boundary sketch can fail where locating the port cannot, and a cached
+        "nothing" would then take the markers off the next file type too, which
+        never asked for a boundary at all.
         """
         if True in cache:
             return cache[True]
@@ -1004,10 +1008,10 @@ class Shape(ShapeConfiguration):
 
         try:
             records = await render_overlay.collect_async(self, ctx, overlay)
-            render_overlay.report(self, records, overlay)
         except Exception as e:
             pc_logging.error("%s:%s: failed to locate the ports to draw: %s" % (self.project_name, self.name, e))
-            records = []
+            return []
+        render_overlay.report(self, records, overlay)
         cache[overlay.interfaces] = records
         return records
 

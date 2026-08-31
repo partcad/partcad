@@ -23,6 +23,7 @@ PACKAGE = "//pub/examples/partcad/feature_interface"
 
 
 def _collect(name, kind="part", overlay=None):
+    """The port records of one object of the example package."""
     ctx = pc.init(EXAMPLES)
     project = ctx.get_project(PACKAGE)
     shape = project.get_part(name) if kind == "part" else project.get_assembly(name)
@@ -30,6 +31,7 @@ def _collect(name, kind="part", overlay=None):
 
 
 def _implementation(section, config):
+    """A file type of the given section, configured as a package would."""
     return output.Implementation(section, "svg", config)
 
 
@@ -64,6 +66,7 @@ def test_the_option_adds_to_what_the_file_type_declared():
 
 
 def test_a_part_reports_every_port_it_implements():
+    """'implements:' has already placed them, so this is a lookup."""
     records = _collect("example-bracket")
     ports = [record["port"] for record in records]
     # Four bolt holes on each face of the bracket, plus the two slotted feet.
@@ -73,6 +76,7 @@ def test_a_part_reports_every_port_it_implements():
 
 
 def test_a_port_carries_the_interface_a_connect_would_name():
+    """A port is only useful on the picture if it says what selects it."""
     records = {record["port"]: record for record in _collect("example-bracket")}
     hole = records["outer-BR-3mm-thru-opening-m3"]
     assert hole["interface"] == PACKAGE + ":nema-17-motor-bracket-3"
@@ -88,6 +92,7 @@ def test_a_port_with_no_boundary_sketch_asked_for_carries_none():
 
 
 def test_an_assembly_reports_the_ports_of_everything_in_it():
+    """An assembly declares no ports of its own; its children do."""
     records = _collect("connect-mates", kind="assembly")
     ports = [record["port"] for record in records]
     assert "example-bracket:inner-TL-3mm-thru-opening-m3" in ports
@@ -132,3 +137,31 @@ def test_the_interfaces_overlay_brings_the_port_boundaries_along():
         for component in placed:
             assert shape_envelope.is_shape_envelope(component)
             assert component[shape_envelope.KEY_LOCATION] == record["location"]
+
+
+def test_a_failed_collection_is_not_remembered(monkeypatch):
+    """One file type's failure must not take the ports off the next one.
+
+    The two collections differ only in whether the port boundaries came along,
+    so the successful one is cached for both. A *failed* one must not be:
+    building a boundary sketch can fail where locating the port cannot, and
+    remembering that as "no ports" would empty a later file type that never
+    asked for a boundary.
+    """
+    from partcad import render_overlay
+
+    ctx = pc.init(EXAMPLES)
+    shape = ctx.get_project(PACKAGE).get_part("example-bracket")
+
+    async def collect(shape, ctx, overlay):
+        """Fail only where a port boundary would have to be built."""
+        if overlay.interfaces:
+            raise RuntimeError("a port boundary could not be built")
+        return [{"port": "only-when-asked-without-boundaries", "interface": None, "instance": None}]
+
+    monkeypatch.setattr(render_overlay, "collect_async", collect)
+
+    cache = {}
+    assert asyncio.run(shape._overlay_ports_async(ctx, Overlay(interfaces=True), cache)) == []
+    ports_only = asyncio.run(shape._overlay_ports_async(ctx, Overlay(ports=True), cache))
+    assert [record["port"] for record in ports_only] == ["only-when-asked-without-boundaries"]

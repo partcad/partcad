@@ -338,6 +338,7 @@ def _interface_shapes(request):
     shapes = []
 
     def collect(obj):
+        """Add every decoded shape under 'obj', which may be a list of them."""
         if isinstance(obj, list):
             for item in obj:
                 collect(item)

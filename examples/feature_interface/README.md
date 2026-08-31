@@ -5,7 +5,7 @@ can be defined in three slightly different ways
 using three approaches to connect parts to each other,
 and a fourth one that carries the instructions to assemble it.
 
-### Seeing the ports and the interfaces
+## Seeing the ports and the interfaces
 
 A port is a coordinate frame and an interface is a named set of them.
 Neither is geometry, so neither shows up in a drawing - which is exactly
