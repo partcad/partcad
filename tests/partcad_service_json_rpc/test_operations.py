@@ -207,6 +207,18 @@ class FakeProject:
     def get_child_project_names(self):
         return list(self.children)
 
+    def get_assembly_config(self, name):
+        # A real Project answers from its parsed 'partcad.yaml' whether it
+        # declares an object of this kind under this name; both return None for
+        # a name the package does not declare. That is what lets 'bom' tell an
+        # assembly from a scene without loading either of them.
+        obj = self.assemblies.get(name)
+        return obj.config if obj is not None else None
+
+    def get_scene_config(self, name):
+        obj = self.scenes.get(name)
+        return obj.config if obj is not None else None
+
     def get_suppliers(self):
         return dict(self.suppliers)
 
@@ -1341,6 +1353,28 @@ def test_assembly_guide_reports_a_missing_assembly(monkeypatch):
 
     assert operations.assembly_guide(session, {"package": "//", "object": "nope"}) is None
     assert session.partcad.logging.messages("error") == ["Assembly //:nope is not found"]
+
+
+def test_bom_names_the_assembly_it_could_not_find():
+    # A name the package declares as neither an assembly nor a scene is looked
+    # for as an assembly, and the refusal says so. Reporting a bare "Object"
+    # instead tells the reader the least useful true thing there is.
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].add("parts", FakeObject("cube"))
+
+    assert operations.bom(session, {"package": "//", "object": "cube"}) is None
+    assert session.partcad.logging.messages("error") == ["Assembly //:cube is not found"]
+
+
+def test_bom_names_the_scene_it_could_not_find():
+    # The other half of the same rule: a name the package declares as a scene is
+    # looked for as a scene, so a scene is what the refusal has to name.
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].add("scenes", FakeObject("world"))
+
+    assert operations.bom(session, {"package": "//", "object": "world"}) is None
+    assert session.partcad.logging.messages("error") == ["Scene //:world is not found"]
+
 
 def test_render_hands_the_resolved_viewport_to_the_context(monkeypatch):
     resolved = {"viewport_origin": [0, -100, 0], "viewport_up": [0, 0, 1]}
