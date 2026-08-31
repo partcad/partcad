@@ -309,11 +309,20 @@ jobs:
           # one that is missing "platforms.json" and half its archives and that
           # every client then fails on.
           #
-          # And created only when it is not there already, because the run that
-          # is re-run is the one that failed after creating it: "a release with
-          # that tag already exists" used to stop the re-run before it could
-          # finish the uploads it was re-run for.
-          if ! gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
+          # And a draft again if it is already there, rather than created:
+          # the run that gets re-run is the one that failed after creating the
+          # release, so "a release with that tag already exists" used to stop
+          # the re-run before it could finish the uploads it was re-run for.
+          # One that got as far as publishing has to go back to being a draft
+          # before its assets are replaced -- "--clobber" deletes each one
+          # before it sends it again, and on a published release that is a
+          # stretch of minutes in which clients resolve this release and find
+          # the archive they came for gone. Drafted first, they resolve the
+          # release before it instead, which is a complete one, and a re-run
+          # that fails again leaves them there rather than on this.
+          if gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
+            gh release edit "${TAG}" --repo "${REPO}" --draft=true
+          else
             gh release create "${TAG}" --repo "${REPO}" --draft --notes ""
           fi
           # Files, never a glob: "dist/**" and its siblings are `bash` globs
