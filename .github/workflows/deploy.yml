@@ -154,6 +154,14 @@ jobs:
       # Before the downloads: "actions/checkout" cleans the workspace, and the
       # artifacts are downloaded into it. This job needs the checkout only for
       # "dev-tools/release/platforms-manifest.sh".
+      #
+      # Which is why every download below lands under "release/", a directory
+      # this repository does not have: a download path that names one it *does*
+      # have merges the artifacts into the source tree instead of standing
+      # beside it. "path: ide" did exactly that in 0.8.25 -- the IDE archives
+      # unpacked next to "ide/standalone" and "ide/vscode", and the upload,
+      # which globbed the directory, tried to send the IDE's own source tree to
+      # the release and died on "is a directory" halfway through.
       - uses: actions/checkout@v7
 
       - name: Set up Python
@@ -181,14 +189,14 @@ jobs:
         with:
           pattern: partcad-standalone-*
           merge-multiple: true
-          path: standalone
+          path: release/standalone
 
       - name: Download the IDE
         uses: actions/download-artifact@v8
         with:
           pattern: partcad-ide-*
           merge-multiple: true
-          path: ide
+          path: release/ide
 
       # By name, not by pattern: there is exactly one of these, and the two
       # patterns above already claim every other "partcad-*" artifact this run
@@ -197,7 +205,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: partcad-vsix
-          path: vsix
+          path: release/vsix
 
       # "install.sh" derives an asset name from `uname` and fails for the user
       # if that asset is not on the release. Downloading artifacts does not fail
@@ -206,6 +214,17 @@ jobs:
       - name: Check the standalone bundles are complete
         run: |
           missing=0
+          # Nothing but the three download directories, and nothing but files in
+          # them. A "release/" that grew a directory would mean the checkout and
+          # the downloads had collided again, and every check below would be
+          # looking at source files -- so say so here, before the release
+          # exists, rather than by publishing the wrong assets.
+          stray="$(find release -mindepth 1 -type d \
+            ! -path release/standalone ! -path release/ide ! -path release/vsix)"
+          if [ -n "${stray}" ]; then
+            echo "::error::unexpected directories under release/: $(echo ${stray})"
+            missing=1
+          fi
           # The platforms built by "build-standalone.yml". Keep in sync with the
           # matrix there: a release missing one of these is a release some
           # machine cannot install, and the manifest generated below would
@@ -215,8 +234,8 @@ jobs:
             ubuntu-24.04-x86_64 ubuntu-24.04-arm64 \
             macos-15-arm64 macos-26-arm64 \
             windows-2022-x86_64; do
-            archive=$(find standalone -type f -name "partcad-*-${platform}.*" ! -name "*.sha256")
-            checksum=$(find standalone -type f -name "partcad-*-${platform}.*.sha256")
+            archive=$(find release/standalone -type f -name "partcad-*-${platform}.*" ! -name "*.sha256")
+            checksum=$(find release/standalone -type f -name "partcad-*-${platform}.*.sha256")
             if [ -z "${archive}" ] || [ -z "${checksum}" ]; then
               echo "::error::no standalone bundle for ${platform}"
               missing=1
@@ -233,19 +252,20 @@ jobs:
             windows-*) extension="zip" ;;
             *) extension="tar.gz" ;;
             esac
-            archive="$(find ide -type f -name "partcad-ide-*-${platform}.${extension}" | head -n 1)"
+            archive="$(find release/ide -type f -name "partcad-ide-*-${platform}.${extension}" | head -n 1)"
             if [ -z "${archive}" ] || [ ! -f "${archive}.sha256" ]; then
               echo "::error::no IDE archive for ${platform}"
               missing=1
             else
-              find ide -type f -name "partcad-ide-*-${platform}*" ! -name "*.sha256" \
+              find release/ide -type f -name "partcad-ide-*-${platform}*" ! -name "*.sha256" \
                 -printf "%p %s bytes\n"
             fi
           done
-          # And the extension. One file, no platform in its name -- but the
-          # upload below globs "vsix/**", and an empty glob would fail there,
-          # after the release has already been created.
-          vsix="$(find vsix -type f -name "partcad-*.vsix" | head -n 1)"
+          # And the extension. One file, no platform in its name -- and the
+          # upload below sends the files it finds, so an extension that was
+          # never built would not fail there: it would simply be absent from
+          # the release, for somebody to notice later.
+          vsix="$(find release/vsix -type f -name "partcad-*.vsix" | head -n 1)"
           if [ -z "${vsix}" ]; then
             echo "::error::no VS Code extension package"
             missing=1
@@ -264,9 +284,9 @@ jobs:
       - name: Build the release manifest
         run: |
           dev-tools/release/platforms-manifest.sh \
-            --bundles standalone --ide ide --output platforms.json
-          cat platforms.json
-          python3 -c 'import json; json.load(open("platforms.json"))'
+            --bundles release/standalone --ide release/ide --output release/platforms.json
+          cat release/platforms.json
+          python3 -c 'import json; json.load(open("release/platforms.json"))'
 
       - name: Determine the release tag
         if: github.ref == 'refs/heads/main'
@@ -279,13 +299,32 @@ jobs:
         if: github.ref == 'refs/heads/main'
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ env.MERGED_TAG }}
         run: |
-          gh release create '${{ env.MERGED_TAG }}' --repo '${{ github.repository }}' --notes "";
-          gh release upload '${{ env.MERGED_TAG }}' dist/** --repo '${{ github.repository }}'
-          gh release upload '${{ env.MERGED_TAG }}' standalone/** --repo '${{ github.repository }}'
-          gh release upload '${{ env.MERGED_TAG }}' ide/** --repo '${{ github.repository }}'
-          gh release upload '${{ env.MERGED_TAG }}' vsix/** --repo '${{ github.repository }}'
-          gh release upload '${{ env.MERGED_TAG }}' platforms.json --repo '${{ github.repository }}'
+          # A draft until every asset is on it. "pc upgrade", the VS Code
+          # extension and the FreeCAD addon all resolve what to install through
+          # "/releases/latest", which skips drafts -- so a run that dies partway
+          # leaves the previous, complete release as the latest one, instead of
+          # one that is missing "platforms.json" and half its archives and that
+          # every client then fails on.
+          #
+          # And created only when it is not there already, because the run that
+          # is re-run is the one that failed after creating it: "a release with
+          # that tag already exists" used to stop the re-run before it could
+          # finish the uploads it was re-run for.
+          if ! gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
+            gh release create "${TAG}" --repo "${REPO}" --draft --notes ""
+          fi
+          # Files, never a glob: "dist/**" and its siblings are `bash` globs
+          # that match directories as readily as files, and `gh` fails on a
+          # directory ("is a directory") -- after the release exists, with the
+          # assets it had already started uploading on it and the rest not.
+          # "--clobber" so that a re-run replaces what a failed run left behind
+          # rather than failing on it.
+          find dist release -type f -print0 |
+            xargs -0 gh release upload "${TAG}" --clobber --repo "${REPO}"
+          gh release edit "${TAG}" --repo "${REPO}" --draft=false
 
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
