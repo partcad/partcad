@@ -3,59 +3,24 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
+"""Converting a CAD or sketch file that belongs to no package.
 
-import asyncio
-from pathlib import Path
-import shutil
-import tempfile
+File in, file out: the input is wrapped in a throwaway package (see `adhoc.py`)
+and written back out as another format. Nothing is added to any package - that
+is `pc convert`, which also rewrites the object's definition, and `pc export`,
+which writes a file for an object a package already declares.
 
-from .. import logging as pc_logging
-from ..context import Context
+The 2D projections are the sibling module, `render.py`: a picture of a shape is
+not another way of storing it, and `pc adhoc convert` deliberately does not
+write one.
+"""
 
-
-def generate_partcad_config(temp_dir: Path, input_type: str, temp_input_path: Path, kind: str = "part") -> None:
-    """
-    Generate a temporary partcad.yaml configuration for processing.
-
-    Args:
-        temp_dir (Path): Temporary directory path.
-        input_type (str): Input file format type.
-        temp_input_path (Path): Path to the copied input file.
-        kind (str): Either "part" or "sketch" (default is "part")
-    """
-    section = "parts" if kind == "part" else "sketches"
-    name = "input_part" if kind == "part" else "input_sketch"
-
-    config = f"""
-{section}:
-  {name}:
-    type: {input_type}
-    path: '{temp_input_path}'
-    """
-    config_path = temp_dir / "partcad.yaml"
-    config_path.write_text(config.strip() + "\n", encoding="utf-8")
-
-
-# Formats that describe an assembly rather than a single shape. An ad-hoc
-# conversion is a file-in, file-out operation with a throwaway package around it;
-# these need a real one. A URDF resolves its meshes against the package that
-# holds them and produces a part per link, and an ASSY is nothing but references
-# to parts of a package - neither means anything on its own.
-PACKAGE_ONLY_TYPES = {
-    "urdf": "a URDF names the meshes of its links and becomes a part per link",
-    "assy": "an ASSY file is a set of references to the parts of a package",
-}
-
-
-def reject_package_only(input_type: str, output_type: str) -> None:
-    """Refuse the formats that only mean something inside a package."""
-    for role, part_type in (("from", input_type), ("to", output_type)):
-        reason = PACKAGE_ONLY_TYPES.get((part_type or "").lower())
-        if reason is not None:
-            raise ValueError(
-                "Cannot convert %s '%s' ad-hoc: %s, so it only means anything inside a package. "
-                "Use 'pc convert assembly' in a package instead." % (role, part_type, reason)
-            )
+from .adhoc import (  # noqa: F401  (re-exported: the historical import path)
+    PACKAGE_ONLY_TYPES,
+    generate_partcad_config,
+    reject_package_only,
+    write_output_file,
+)
 
 
 def convert_cad_file(input_filename: str, input_type: str, output_filename: str, output_type: str) -> None:
@@ -69,38 +34,7 @@ def convert_cad_file(input_filename: str, input_type: str, output_filename: str,
         output_type (str): Format of the output file.
     """
     reject_package_only(input_type, output_type)
-    input_path = Path(input_filename).resolve()
-    temp_dir = Path(tempfile.mkdtemp())
-
-    try:
-        generate_partcad_config(temp_dir, input_type, input_path, kind="part")
-
-        ctx = Context(root_path=temp_dir, search_root=False)
-        with pc_logging.Process("Convert", "adhoc"):
-            project = ctx.get_project("//")
-            part = project.get_part("input_part")
-            if not part:
-                raise RuntimeError("Failed to load the input part: no part returned")
-
-            shape = asyncio.run(part.get_wrapped(ctx))
-            # Errors first: when the factory failed - a missing module, a
-            # sandbox that would not install - that is the reason there is no
-            # shape, and it is the one worth reporting. "No shape returned" is
-            # what is left to say when nothing was recorded.
-            if part.errors:
-                raise RuntimeError(f"Failed to load the input part: {part.errors}")
-            if not shape:
-                raise RuntimeError("Failed to load the input part: no shape returned")
-
-            pc_logging.info(f"Loaded input part: {input_path}")
-            pc_logging.info(f"Shape: {type(shape)}")
-
-            part.render(ctx=ctx, format_name=output_type, project=project, filepath=output_filename)
-
-    except Exception as e:
-        raise RuntimeError(f"Failed to convert: {e}") from e
-    finally:
-        shutil.rmtree(temp_dir)
+    write_output_file(input_filename, input_type, output_filename, output_type, kind="part", verb="Convert")
 
 
 def convert_sketch_file(input_filename: str, input_type: str, output_filename: str, output_type: str) -> None:
@@ -113,33 +47,4 @@ def convert_sketch_file(input_filename: str, input_type: str, output_filename: s
         output_filename (str): Path to save the output file.
         output_type (str): Format of the output file (e.g., svg, dxf).
     """
-    input_path = Path(input_filename).resolve()
-    temp_dir = Path(tempfile.mkdtemp())
-
-    try:
-        generate_partcad_config(temp_dir, input_type, input_path, kind="sketch")
-
-        ctx = Context(root_path=temp_dir, search_root=False)
-        with pc_logging.Process("Convert", "adhoc-sketch"):
-            project = ctx.get_project("/")
-            sketch = project.get_sketch("input_sketch")
-            if not sketch:
-                raise RuntimeError("Failed to load the input sketch: no sketch returned")
-
-            shape = asyncio.run(sketch.get_wrapped(ctx))
-            # Errors first, for the same reason as in convert_cad_file().
-            if sketch.errors:
-                raise RuntimeError(f"Failed to load the input sketch: {sketch.errors}")
-            if not shape:
-                raise RuntimeError("Failed to load the input sketch: no shape returned")
-
-            pc_logging.debug(f"Loaded input sketch: {input_path}")
-
-            sketch.render(ctx=ctx, format_name=output_type, project=project, filepath=output_filename)
-
-    except Exception as e:
-        # The cause belongs in the message, not only in __cause__: this is what
-        # the CLI prints, and without it every sketch failure reads the same.
-        raise RuntimeError(f"Failed to convert sketch: {e}") from e
-    finally:
-        shutil.rmtree(temp_dir)
+    write_output_file(input_filename, input_type, output_filename, output_type, kind="sketch", verb="Convert")

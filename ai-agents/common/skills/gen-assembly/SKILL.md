@@ -21,7 +21,7 @@ ambiguities.
 ## 2. Inventory or generate the parts
 
 ```sh
-pc list parts          # what already exists to reuse
+pc --no-ansi list parts          # what already exists to reuse
 ```
 
 Reuse existing parts; generate any missing component with the `/pc:gen-part`
@@ -33,7 +33,7 @@ Scaffold (this creates the empty file and the `assemblies:` entry), then write
 `<name>.assy`:
 
 ```sh
-pc add assembly assy <name>.assy
+pc --no-ansi add assembly assy <name>.assy
 ```
 
 An ASSY file is a tree of nodes under `links:` (reference: PartCAD "Assembly YAML"
@@ -176,18 +176,49 @@ making a *part* and mean nothing here.) Marking it manufacturable instead makes
 `pc test` require that every part in it can be bought or made from a declared
 supplier — only do that when that is true.
 
-## 4. Validate, render, iterate
+## 4. Validate, render it from several angles, iterate
 
 ```sh
-pc test -a <name>                               # build gate: geometry instantiates
-mkdir -p /tmp/pc-render                         # the -O directory must already exist
-pc render -a -t png -O /tmp/pc-render <name>    # writes /tmp/pc-render/<name>.png
+pc --no-ansi test -a <name>          # build gate: geometry instantiates
 ```
 
-View `/tmp/pc-render/<name>.png`: check that components are positioned and
-oriented correctly and that nothing interpenetrates unintentionally, then adjust
-placements/mates. Iterate until it matches. `pc inspect -a <name>` gives an
-interactive view.
+That gate passes for an assembly whose parts are all in the wrong place, so the
+design is decided by looking at it — and one picture cannot decide it. An
+assembly is judged on *where* its components are, and position along the viewing
+direction is precisely what a projection collapses: a part offset into the
+screen, mirrored, or turned a quarter turn sits perfectly in the one view that
+hides the error. Render **four** — `front`, `top` and `right` to place things in
+all three axes, `iso` to see the product whole. A rendered file is named after
+the object, so give each view a directory of its own or they overwrite each
+other:
+
+```sh
+for view in front top right iso; do
+  mkdir -p /tmp/pc-render/$view                     # -O expects it to exist
+  pc --no-ansi render -a -t png --view $view -O /tmp/pc-render/$view <name>
+done
+```
+
+Each view directory gets `<name>.png` plus one file per sub-assembly, since a
+sub-assembly is an object in its own right. View all four of `<name>.png` — and
+the sub-assemblies' own views when a nesting is what went wrong — and check
+against the decomposition from §1:
+
+- every component is there, as many times as it should be, and nothing else is;
+- each one is where it belongs in all three axes — a placement is only confirmed
+  by two views that share no viewing direction;
+- each one is oriented as it belongs, including where a symmetric part hides it:
+  a flipped bracket reads the same from the front and differs from the top;
+- nothing interpenetrates that should not, and nothing floats where it should
+  seat — a gap and a contact look alike from the front and separate from the side.
+
+Add `back`, `left` or `bottom` when a component stays hidden behind another in
+all four, and `--viewport-origin X,Y,Z` / `--viewport-up X,Y,Z` to look along a
+joint no named view shows. `/pc:render` covers these options in full.
+
+Where a component is in the wrong place and the ASSY uses `connect:` rather
+than `location:`, the views tell you *that* it is wrong; the next section tells
+you *why*.
 
 ### When a connection comes out wrong
 
@@ -196,16 +227,30 @@ ports and interfaces are not geometry, so nothing about them is on the plain
 render. Draw them:
 
 ```sh
-pc render -a -t png -O /tmp/pc-render --with-ports <name>       # every port of every part
-pc render -a -t png -O /tmp/pc-render --with-interfaces <name>  # every interface, joined to its ports
-pc render -a -t png -O /tmp/pc-render --with-all <name>         # both
+mkdir -p /tmp/pc-render/ports
+# Every port of every part. Add --with-interfaces for each interface joined to
+# its ports, or --with-all for both.
+pc --no-ansi render -a -t png --view iso -O /tmp/pc-render/ports --with-ports <name>
 ```
+
+These write `<name>.png` like any other render, so an overlay needs a directory
+of its own or it lands on top of the plain views from above — and `--no-ansi`
+because the port names are reported on stderr, which is half of what makes the
+picture readable.
 
 On an assembly these walk everything inside it and place each child's ports
 where the assembly put the child, so both ends of a connection are on one
 picture. Each port is a coordinate frame whose **long arrow is `+Z`** — the
 direction a part travels along when it is connected through that port — and each
-is named `<part-instance>:<port>`. Read the picture:
+is named `<part-instance>:<port>`.
+
+Being a frame rather than geometry does not exempt it from what §4 is about: one
+projection still collapses the axis a port is offset along, so two frames a
+millimetre apart along the line of sight are drawn one on top of the other. When
+the `iso` view leaves that ambiguous, render the overlay from the same four
+views the geometry was checked from.
+
+Read the picture:
 
 - **Connected as intended**: the two frames coincide and their `+Z` arrows point
   in **opposite** directions.
@@ -224,7 +269,13 @@ is named `<part-instance>:<port>`. Read the picture:
   four ports, the interface is declared wrong.
 
 Iterate on the `--with-ports` render, not the plain one, for as long as a
-connection is the thing being fixed.
+connection is the thing being fixed. A part whose own port is in the wrong place
+is fixed in the part, not in the ASSY — render that part on its own with
+`--with-all` (`/pc:add-interfaces` covers reading it) before touching the
+assembly that uses it.
+
+Then adjust the placements or mates, re-test, and re-render. Iterate until every
+view matches. `pc inspect -a <name>` gives an interactive view.
 
 ## 5. Finalize
 

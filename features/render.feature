@@ -120,6 +120,36 @@ Feature: `pc render` command
     Then a file named "m4.png" should not exist
     Then a file named "m5.png" should not exist
 
+  # The viewing angle of a projection. `--view` is shorthand for the
+  # `viewport_origin`/`viewport_up` pair a `render:` file type is configured
+  # with, so what is worth a CLI round trip here is that the option survives one
+  # and reaches the implementation. Which way each name points, and that the
+  # override beats the configuration, are unit tests.
+  #
+  # `feature_render:cylinder` rather than any other part: it configures a
+  # viewport of its own, so a render that ignored `--view` would still succeed
+  # and this would still be looking at the picture the package asked for.
+  @type-image
+  Scenario: `pc render --view` aims the projection
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_render -t svg --view front -O ./ :cylinder"
+    Then the command should exit with a status code of "0"
+    Then a file named "cylinder.svg" should be created
+    Given a file named "partcad.yaml" does not exist
+    Then STDERR should contain "DONE: Render: //pub/examples/partcad/feature_render:"
+
+  # A request that cannot be aimed is refused before anything is rendered,
+  # rather than producing a picture of something else.
+  Scenario Outline: `pc render` refuses a viewport it cannot make sense of
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_render -t svg <options> -O ./ :cylinder"
+    Then the command should exit with a status code of "2"
+    Then a file named "cylinder.svg" should not exist
+
+    Examples: Bad viewports
+      |                    options |
+      |          --view isometric  |
+      |      --viewport-origin 1,2 |
+      |        --viewport-up 0,0,0 |
+
   @type-guide
   Scenario: `pc render -t pdf` refuses an assembly that is not meant to be built
     When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t pdf -O ./ -a :primitive"

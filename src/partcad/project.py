@@ -2003,6 +2003,7 @@ class Project(project_config.Configuration):
         ignore_manufacturability: bool = False,
         scenes: Optional[List] = None,
         overlay=None,
+        render_opts: Optional[dict] = None,
     ):
         with pc_logging.Action("RenderPkg", self.name):
             # A skipped package has nothing to render, and must not be asked to:
@@ -2058,6 +2059,15 @@ class Project(project_config.Configuration):
                                     output_dir=output_dir,
                                     options_package=options_package,
                                     overlay=overlay,
+                                    # One run's worth of export parameters (the
+                                    # viewport of 'pc render --view'), on top of
+                                    # everything the configuration resolved to.
+                                    # Handed to every file type: whether one
+                                    # means anything to a projection of a shape
+                                    # is the implementation's to decide, and a
+                                    # package may well implement one of its own
+                                    # that reads it.
+                                    **(render_opts or {}),
                                 )
                             )
 
@@ -2196,6 +2206,7 @@ class Project(project_config.Configuration):
         ignore_manufacturability: bool = False,
         scenes: Optional[list] = None,
         overlay=None,
+        render_opts: Optional[dict] = None,
     ):
         asyncio.run(
             self.render_async(
@@ -2209,6 +2220,7 @@ class Project(project_config.Configuration):
                 ignore_manufacturability,
                 scenes,
                 overlay,
+                render_opts,
             )
         )
 

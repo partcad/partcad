@@ -131,6 +131,51 @@ switch to ``4:2:0`` when a smaller file matters more than the edges.
 The rendered file is named after the object with the format's own extension,
 so ``jpeg`` produces ``<name>.jpg``.
 
+Which direction the object is looked at from is ``viewport_origin``, and which
+way is up in the resulting picture is ``viewport_up``. Both are accepted by
+every projection above (and by ``dxf``), on the package or on a single object:
+
+.. code-block:: yaml
+
+  render:
+    png:
+      viewport_origin: [0, -100, 0]   # look at it from the front
+      viewport_up: [0, 0, 1]          # with Z up
+
+  parts:
+    cylinder:
+      type: cadquery
+      render:
+        png:
+          viewport_origin: [0, 0, 100]  # ... but look at this one head-on
+          viewport_up: [0, 1, 0]
+
+Left unset, a part is drawn from the front-right-top corner (which is what makes
+it read as 3D) and a sketch head-on. PartCAD is Z-up with ``+Y`` pointing away
+from the front view, which is what puts ``+X`` on the right of it. The distance
+does not matter — the pair names a direction, and the projection is scaled to fit
+whatever it is written into.
+
+``pc render`` takes the same two as ``--viewport-origin``/``--viewport-up``, and
+names the common directions with ``--view`` (``front``, ``back``, ``left``,
+``right``, ``top``, ``bottom``, ``iso``), for a view that belongs to one command
+rather than to the package:
+
+.. code-block:: shell
+
+  pc render -t png --view front -O ./ bracket
+  pc render -t png --viewport-origin 120,-40,60 -O ./ bracket
+
+A file that is not in a package at all is rendered by ``pc adhoc render``, which
+takes the same three options. They are the only way to aim one, there being no
+``partcad.yaml`` to configure a viewport in; left off, the projection comes out
+the way the renderer draws one by default:
+
+.. code-block:: shell
+
+  pc adhoc render part --view top bracket.step bracket.png
+  pc adhoc render sketch outline.svg outline.png
+
 
 =============
 Export models

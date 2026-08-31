@@ -1165,6 +1165,29 @@ def install_fake_supply(monkeypatch):
     )
 
 
+# ---- the viewing angle of a render -----------------------------------------
+#
+# `pc render --view` (and the `--viewport-origin`/`--viewport-up` pair it is
+# shorthand for) reaches the daemon as three params, which `render_objects`
+# resolves into the very export parameters a `render:` file type is configured
+# with. What the names mean is `partcad.render`'s to say and is tested there;
+# what is tested here is the glue on either side of it.
+
+
+def _fake_render_module(monkeypatch, resolve_viewport):
+    install_fake_partcad_modules(
+        monkeypatch,
+        {
+            "partcad.render": {"resolve_viewport": resolve_viewport},
+            "partcad.exception": {"AssemblyDocumentError": type("AssemblyDocumentError", (Exception,), {})},
+            "partcad.render_overlay": {"Overlay": types.SimpleNamespace(of=lambda **kw: None)},
+            # How many packages are rendered at once: real here only because
+            # '_render_packages_async' sizes its semaphore from it.
+            "partcad.sandbox_lock": {"process_slots": types.SimpleNamespace(count=1)},
+        },
+    )
+
+
 def make_supply_session(monkeypatch):
     """A package with an assembly of two parts, one of them sold by two stores."""
     install_fake_supply(monkeypatch)
@@ -1318,3 +1341,284 @@ def test_assembly_guide_reports_a_missing_assembly(monkeypatch):
 
     assert operations.assembly_guide(session, {"package": "//", "object": "nope"}) is None
     assert session.partcad.logging.messages("error") == ["Assembly //:nope is not found"]
+
+def test_render_hands_the_resolved_viewport_to_the_context(monkeypatch):
+    resolved = {"viewport_origin": [0, -100, 0], "viewport_up": [0, 0, 1]}
+    _fake_render_module(monkeypatch, lambda view, origin, up: dict(resolved))
+
+    session, _ = make_session()
+    session.partcad.output = types.SimpleNamespace(
+        all_formats=lambda ctx: ["svg"],
+        NON_WRAPPER_FORMATS=set(),
+        SECTIONS=("export", "render"),
+        format_names=lambda section: [],
+    )
+    rendered = []
+
+    async def _render_async(**kwargs):
+        rendered.append(kwargs)
+
+    session.partcad_ctx.render_async = _render_async
+
+    operations.render_objects(session, {"package": "//", "format": "svg", "view": "front"})
+
+    assert rendered and rendered[0]["render_opts"] == resolved
+
+
+def test_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch):
+    """Nothing is rendered, rather than something aimed somewhere else.
+
+    The CLI rejects a typo of its own accord, but it is not the only client:
+    the editor extensions speak this protocol directly.
+    """
+
+    def _refuse(view, origin, up):
+        raise ValueError("Unknown view 'isometric'. Known views: front, back")
+
+    _fake_render_module(monkeypatch, _refuse)
+
+    session, _ = make_session()
+    rendered = []
+    session.partcad_ctx.render = lambda **kwargs: rendered.append(kwargs)
+
+    with pytest.raises(operations.JsonRpcError) as excinfo:
+        operations.render_objects(session, {"package": "//", "format": "svg", "view": "isometric"})
+
+    assert excinfo.value.code == operations.USAGE_ERROR
+    assert "Unknown view" in excinfo.value.message
+    assert rendered == []
+
+
+# ---- ad-hoc render ---------------------------------------------------------
+#
+# `pc adhoc render` is the sibling of `pc adhoc convert` for the other thing an
+# output file can be. The glue is the same shape -- infer what was left unsaid,
+# call through, report -- with two differences worth pinning: the *output* type
+# comes from the projections rather than the part/sketch types, and a viewport
+# rides along, because with no `partcad.yaml` there is nowhere else to say it.
+
+
+class FakeRenderer:
+    def __init__(self, error=None):
+        self.calls = []
+        self.error = error
+
+    def __call__(self, input_filename, input_type, output_filename, output_type, **options):
+        self.calls.append((input_filename, input_type, output_filename, output_type, options))
+        if self.error is not None:
+            raise self.error
+
+
+def install_fake_render(monkeypatch, part=None, sketch=None, resolve_viewport=None):
+    part = part if part is not None else FakeRenderer()
+    sketch = sketch if sketch is not None else FakeRenderer()
+    if resolve_viewport is None:
+
+        def resolve_viewport(view, origin, up):
+            return {"viewport_origin": [0, -100, 0], "viewport_up": [0, 0, 1]} if view else {}
+
+    install_fake_partcad_modules(
+        monkeypatch,
+        {
+            "partcad.adhoc.render": {"render_cad_file": part, "render_sketch_file": sketch},
+            "partcad.render": {"resolve_viewport": resolve_viewport},
+            # Mirrors partcad.shape. RENDER_EXTENSION_MAPPING is the set of
+            # built-in projections, which is what the output type is inferred
+            # from -- a part or sketch type never names one.
+            "partcad.shape": {
+                "PART_EXTENSION_MAPPING": {"step": "step", "stl": "stl", "scad": "scad"},
+                "SKETCH_EXTENSION_MAPPING": {"svg": "svg", "dxf": "dxf"},
+                "RENDER_EXTENSION_MAPPING": {"svg": "svg", "png": "png", "jpeg": "jpg", "dxf": "dxf"},
+            },
+        },
+    )
+    return part, sketch
+
+
+def test_adhoc_render_renders_a_part_and_reports_progress(monkeypatch, tmp_path):
+    part, sketch = install_fake_render(monkeypatch)
+    session, _ = make_session()
+    source, target = tmp_path / "bracket.step", tmp_path / "bracket.png"
+
+    operations.adhoc_render(
+        session,
+        {
+            "kind": "part",
+            "input_filename": str(source),
+            "output_filename": str(target),
+            "view": "front",
+        },
+    )
+
+    assert part.calls == [
+        (str(source), "step", str(target), "png", {"viewport_origin": [0, -100, 0], "viewport_up": [0, 0, 1]})
+    ]
+    assert sketch.calls == []
+    assert session.partcad.logging.messages("info") == [
+        "Rendering %s (step) to %s (png)..." % (source, target),
+        "Render complete: %s" % target,
+    ]
+
+
+def test_adhoc_render_without_a_viewport_passes_none(monkeypatch, tmp_path):
+    """A plain `pc adhoc render` leaves the implementation's own default alone."""
+    part, _ = install_fake_render(monkeypatch)
+    session, _ = make_session()
+
+    operations.adhoc_render(
+        session,
+        {
+            "kind": "part",
+            "input_filename": str(tmp_path / "bracket.step"),
+            "output_filename": str(tmp_path / "bracket.png"),
+        },
+    )
+
+    assert part.calls[0][4] == {}
+
+
+def test_adhoc_render_derives_the_output_path_from_the_projection(monkeypatch, tmp_path):
+    """'jpeg' is the format's name but '.jpg' is the file's."""
+    part, _ = install_fake_render(monkeypatch)
+    session, _ = make_session()
+    source = tmp_path / "bracket.step"
+
+    operations.adhoc_render(
+        session,
+        {"kind": "part", "input_filename": str(source), "output_filename": None, "output_type": "jpeg"},
+    )
+
+    expected = tmp_path / "bracket.jpg"
+    assert part.calls[0][2:4] == (str(expected), "jpeg")
+
+
+def test_adhoc_render_infers_jpeg_from_either_spelling(monkeypatch, tmp_path):
+    """A file already named '.jpeg' is as clearly a JPEG as one named '.jpg'."""
+    part, _ = install_fake_render(monkeypatch)
+    session, _ = make_session()
+
+    for name in ("a.jpg", "b.jpeg"):
+        operations.adhoc_render(
+            session,
+            {
+                "kind": "part",
+                "input_filename": str(tmp_path / "bracket.step"),
+                "output_filename": str(tmp_path / name),
+            },
+        )
+
+    assert [call[3] for call in part.calls] == ["jpeg", "jpeg"]
+
+
+def test_adhoc_render_reports_an_output_type_it_cannot_infer(monkeypatch, tmp_path):
+    """A part type is not a projection: '.stl' names nothing this can write."""
+    part, sketch = install_fake_render(monkeypatch)
+    session, _ = make_session()
+
+    operations.adhoc_render(
+        session,
+        {
+            "kind": "part",
+            "input_filename": str(tmp_path / "bracket.step"),
+            "output_filename": str(tmp_path / "bracket.stl"),
+        },
+    )
+
+    assert session.partcad.logging.messages("error") == [
+        "Cannot infer the projection to render. Please specify --output explicitly."
+    ]
+    assert part.calls == [] and sketch.calls == []
+
+
+def test_adhoc_render_refuses_a_kind_it_cannot_render(monkeypatch, tmp_path):
+    """An assembly is exactly what an ad-hoc render has no package for.
+
+    The CLI offers 'part' and 'sketch' as two subcommands and nothing else, so
+    this can only arrive from a client speaking the protocol directly -- and
+    answering it with a sketch of the file would be answering a different
+    question than the one asked.
+    """
+    part, sketch = install_fake_render(monkeypatch)
+    session, _ = make_session()
+
+    with pytest.raises(operations.JsonRpcError) as excinfo:
+        operations.adhoc_render(
+            session,
+            {
+                "kind": "assembly",
+                "input_filename": str(tmp_path / "robot.svg"),
+                "output_filename": str(tmp_path / "robot.png"),
+            },
+        )
+
+    assert excinfo.value.code == operations.USAGE_ERROR
+    assert "part, sketch" in str(excinfo.value)
+    assert part.calls == [] and sketch.calls == []
+
+
+def test_adhoc_render_refuses_a_projection_it_does_not_write(monkeypatch, tmp_path):
+    """Named outright rather than inferred, and with no output file to name it.
+
+    Without the check this reaches the extension lookup that derives the
+    default output path, where an unknown type is a KeyError -- a bad request
+    reported as an internal failure.
+    """
+    part, sketch = install_fake_render(monkeypatch)
+    session, _ = make_session()
+
+    with pytest.raises(operations.JsonRpcError) as excinfo:
+        operations.adhoc_render(
+            session,
+            {
+                "kind": "part",
+                "input_filename": str(tmp_path / "bracket.step"),
+                "output_type": "tiff",
+            },
+        )
+
+    assert excinfo.value.code == operations.USAGE_ERROR
+    assert "tiff" in str(excinfo.value)
+    assert part.calls == [] and sketch.calls == []
+
+
+def test_adhoc_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch, tmp_path):
+    """Nothing is rendered, rather than something aimed somewhere else."""
+
+    def _refuse(view, origin, up):
+        raise ValueError("Unknown view 'isometric'. Known views: front, back")
+
+    part, _ = install_fake_render(monkeypatch, resolve_viewport=_refuse)
+    session, _ = make_session()
+
+    with pytest.raises(operations.JsonRpcError) as excinfo:
+        operations.adhoc_render(
+            session,
+            {
+                "kind": "part",
+                "input_filename": str(tmp_path / "bracket.step"),
+                "output_filename": str(tmp_path / "bracket.png"),
+                "view": "isometric",
+            },
+        )
+
+    assert excinfo.value.code == operations.USAGE_ERROR
+    assert part.calls == []
+
+
+def test_adhoc_render_reports_a_failed_render(monkeypatch, tmp_path):
+    install_fake_render(monkeypatch, part=FakeRenderer(error=RuntimeError("shape is empty")))
+    session, _ = make_session()
+
+    result = operations.adhoc_render(
+        session,
+        {
+            "kind": "part",
+            "input_filename": str(tmp_path / "bracket.step"),
+            "output_filename": str(tmp_path / "bracket.png"),
+        },
+    )
+
+    assert result is None
+    log = session.partcad.logging
+    assert log.messages("error") == ["Failed to render: shape is empty"]
+    assert not any(m.startswith("Render complete") for m in log.messages("info"))

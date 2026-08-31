@@ -13,6 +13,7 @@ import os
 import rich_click as click
 
 from ..service import run
+from ..viewport import viewport_options, viewport_params
 
 
 # TODO-105: @alexanderilyin: Replace --scene, --interface, --assembly, --sketch with a single option --type
@@ -44,6 +45,7 @@ from ..service import run
     is_flag=True,
     show_envvar=True,
 )
+@viewport_options
 @click.option(
     "-P",
     "--package",
@@ -121,6 +123,9 @@ def cli(
     output_dir,
     format,
     ignore_manufacturability,
+    view,
+    viewport_origin,
+    viewport_up,
     package,
     options_package,
     recursive,
@@ -143,6 +148,7 @@ def cli(
             "output_dir": os.path.abspath(output_dir) if output_dir else None,
             "format": format,
             "ignore_manufacturability": ignore_manufacturability,
+            **viewport_params(view, viewport_origin, viewport_up),
             "package": package,
             "options_package": options_package,
             "recursive": recursive,
