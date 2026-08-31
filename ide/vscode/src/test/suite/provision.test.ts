@@ -143,10 +143,20 @@ suite('Where the service was looked for', () => {
      * the two strings said the extension had not looked there. Which is the
      * very confusion `pathKey` exists for, arriving here by the same route it
      * arrives everywhere else.
+     *
+     * And not a substring match either: an entry has to *be* the directory or
+     * be *inside* it. The report names the bundle root inside the storage
+     * directory rather than the directory itself, so an exact comparison alone
+     * would not do -- but a plain `includes` would let `<tmp>/storage-backup`
+     * answer for `<tmp>/storage`, and a test that cannot tell those apart
+     * cannot tell whether the extension looked where it said it did.
      */
     function names(searched: string[], target: string): boolean {
         const needle = pathKey(target);
-        return searched.some((entry) => pathKey(entry).includes(needle));
+        return searched.some((entry) => {
+            const key = pathKey(entry);
+            return key === needle || key.startsWith(needle + path.sep);
+        });
     }
 
     // `resolveServicePath` looks at this platform's installation directory and

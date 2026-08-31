@@ -996,6 +996,7 @@ async function openUrl(
     return response;
 }
 
+/** GET a URL and return the whole body. For the small ones: manifests, tags. */
 async function httpsGet(url: string, headers: Record<string, string> = {}): Promise<Buffer> {
     const response = await openUrl(url, headers);
     return new Promise((resolve, reject) => {
@@ -1006,6 +1007,7 @@ async function httpsGet(url: string, headers: Record<string, string> = {}): Prom
     });
 }
 
+/** GET a URL straight to a file, without holding the body in memory. */
 async function downloadFile(url: string, dest: string): Promise<void> {
     const response = await openUrl(url);
     return new Promise((resolve, reject) => {
