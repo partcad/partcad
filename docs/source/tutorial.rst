@@ -272,7 +272,7 @@ Install the extension
 ---------------------
 
 Install the
-`PartCAD <https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_
+`PartCAD <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_
 extension from the VS Code marketplace.
 
 Install PartCAD

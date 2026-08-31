@@ -75,11 +75,11 @@ msgstr "Visual Studio Code 扩展"
 #: ../../source/use_cases.rst:36
 msgid ""
 "The PartCAD extension is `available "
-"<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_ "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ "
 "in VS Code extension marketplace."
 msgstr ""
 "PartCAD 扩展在 VS Code 扩展市场中 `可获取 "
-"<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_ 。"
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ 。"
 
 #: ../../source/use_cases.rst:41
 msgid "Command line tools"

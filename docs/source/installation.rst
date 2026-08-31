@@ -579,7 +579,7 @@ For an editor you already have. To get the extension, the tools and an editor in
 see :ref:`the PartCAD IDE <partcad-ide>`.
 
 This extension is available through the VS Code marketplace.
-The corresponding marketplace page is `here <https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_.
+The corresponding marketplace page is `here <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_.
 
 Every `GitHub release <https://github.com/partcad/partcad/releases>`_ also carries the packaged extension as
 ``partcad-<version>.vsix``, next to the wheels and the bundles. Install it from the command line, or with
@@ -592,6 +592,17 @@ Every `GitHub release <https://github.com/partcad/partcad/releases>`_ also carri
 Use it to pin a particular version, to install where the marketplace is not reachable, or to try a release
 before the marketplace has it. One package serves every platform: the extension is a JSON-RPC client with no
 Python and nothing compiled in it.
+
+If you installed the extension before it moved
+----------------------------------------------
+
+The extension used to be published as ``OpenVMP.partcad``. It is ``PartCAD.partcad`` now, which the marketplace
+treats as a separate extension rather than as a rename.
+
+There is nothing to do. The old entry still exists and now depends on the new one, so it updates like any other
+extension and brings the extension in its new home with it. Your settings, which live in your ``settings.json``
+under the same ``partcad.*`` names, are untouched. You can remove ``PartCAD (moved)`` from the Extensions view
+once it has done its job.
 
 .. _freecad-addon:
 

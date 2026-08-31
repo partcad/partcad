@@ -9,15 +9,15 @@
     "name": "PartCAD",
     "module": "partcad"
   },
-  "publisher": "OpenVMP",
+  "publisher": "PartCAD",
   "license": "Apache-2.0",
   "homepage": "https://partcad.readthedocs.io/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/openvmp/partcad.git"
+    "url": "https://github.com/partcad/partcad.git"
   },
   "bugs": {
-    "url": "https://github.com/openvmp/partcad/issues"
+    "url": "https://github.com/partcad/partcad/issues"
   },
   "galleryBanner": {
     "color": "#1e415e",
@@ -939,7 +939,7 @@
       },
       {
         "view": "partcadExplorer",
-        "contents": "No PartCAD was found.\n\nThe extension needs a PartCAD to talk to. Install one below and it will be downloaded for you, or point the extension at a Python environment that already has one (`pip install partcad`).\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or find PartCAD](command:partcad.startInstall)",
+        "contents": "No PartCAD was found.\n\nThe extension needs a PartCAD to talk to. Install one below and it will be downloaded for you, or point the extension at a Python environment that already has one (`pip install partcad`).\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/partcad/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or find PartCAD](command:partcad.startInstall)",
         "when": "partcad.serviceMissing"
       },
       {

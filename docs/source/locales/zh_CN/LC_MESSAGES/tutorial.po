@@ -321,11 +321,11 @@ msgstr "安装该扩展"
 #: ../../source/tutorial.rst:267
 msgid ""
 "Install the `PartCAD "
-"<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_ "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ "
 "extension from the VS Code marketplace."
 msgstr ""
 "从 VS Code 市场安装 `PartCAD "
-"<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_ "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ "
 "扩展。"
 
 #: ../../source/tutorial.rst:272

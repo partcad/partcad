@@ -1,6 +1,12 @@
-# The VS Code extension: one build, one ".vsix".
+# The VS Code extension: one build, two ".vsix" packages.
 #
-# Called by "build.yml" (CD) and by "deploy.yml", which uploads the package to
+# The extension itself, published as "PartCAD.partcad", and the transition shim
+# in "ide/vscode-shim" published as "OpenVMP.partcad" -- the identity the
+# extension used to have, kept alive as a package that only depends on the new
+# one. Built together because they state one version and it has to be the same
+# version.
+#
+# Called by "build.yml" (CD) and by "deploy.yml", which uploads the packages to
 # the GitHub release. It deliberately has no "push"/"pull_request" triggers of
 # its own: adding it to those two workflows on top would build the same package
 # twice per commit. Exactly one run owns the build -- the same arrangement
@@ -58,23 +64,53 @@ jobs:
         working-directory: ide/vscode
         run: npm run vsce-package
 
-      # "npm run vsce-package" writes a fixed "partcad.vsix", because
-      # "ide/standalone/build.sh" looks for that exact name. A release
-      # asset cannot be version-less though -- every other asset on the release
-      # carries the version -- so the copy that gets uploaded is renamed here
-      # rather than by changing the script the IDE build depends on.
-      - name: Name the package after the version
-        working-directory: ide/vscode
+      # The "OpenVMP.partcad" transition shim, which is what the marketplace
+      # entry the extension used to be published under serves now: no code, one
+      # "extensionDependencies" on "PartCAD.partcad". See
+      # "ide/vscode-shim/AGENTS.md".
+      #
+      # No "npm ci" and no lockfile of its own: there is nothing to compile and
+      # nothing to bundle, so "vsce" comes from "npx" rather than from a second
+      # node project existing to hold one dev dependency. The version is pinned
+      # to the same "@vscode/vsce" the extension builds with.
+      - name: Package the transition shim
+        working-directory: ide/vscode-shim
+        run: npx --yes @vscode/vsce@3.9.2 package -o partcad-shim.vsix
+
+      # Both "vsce-package" scripts write a fixed name -- "partcad.vsix" because
+      # "ide/standalone/build.sh" looks for that exact one. A release asset
+      # cannot be version-less though -- every other asset on the release carries
+      # the version -- so the copies that get uploaded are renamed here rather
+      # than by changing the script the IDE build depends on.
+      #
+      # They are collected into one directory first. Handing "upload-artifact"
+      # two globs under different directories would make "ide/" their common
+      # ancestor and nest the artifact one level deeper on each side, which
+      # "deploy.yml" then uploads to the release as directories rather than as
+      # the two files it expects.
+      - name: Name the packages after the version
         run: |
-          version="$(jq -r .version package.json)"
+          version="$(jq -r .version ide/vscode/package.json)"
           if [ -z "${version}" ] || [ "${version}" = "null" ]; then
             echo "::error::no version in ide/vscode/package.json"
             exit 1
           fi
-          cp partcad.vsix "partcad-${version}.vsix"
-          ls -l "partcad-${version}.vsix"
+          # The shim is only delivered to an installation of the old entry if it
+          # is newer than what that entry was last published with, and the two
+          # move together in "dev-tools/bumpversion.toml" precisely so that it
+          # is. A shim left behind at an older version is not a broken build, so
+          # nothing else would notice it.
+          shim="$(jq -r .version ide/vscode-shim/package.json)"
+          if [ "${shim}" != "${version}" ]; then
+            echo "::error::ide/vscode-shim is at ${shim}, the extension at ${version}"
+            exit 1
+          fi
+          mkdir -p vsix
+          cp ide/vscode/partcad.vsix "vsix/partcad-${version}.vsix"
+          cp ide/vscode-shim/partcad-shim.vsix "vsix/partcad-shim-${version}.vsix"
+          ls -l vsix
 
-      - name: Upload the extension
+      - name: Upload the extensions
         uses: actions/upload-artifact@v7
         with:
           # Deliberately neither "partcad-ide-*" nor "partcad-standalone-*":
@@ -82,5 +118,5 @@ jobs:
           # directory, and a third name matching either would be merged into the
           # wrong one.
           name: partcad-vsix
-          path: ide/vscode/partcad-*.vsix
+          path: vsix/*.vsix
           if-no-files-found: error

@@ -368,11 +368,11 @@ msgstr "Die Erweiterung installieren"
 #: ../../source/tutorial.rst:267
 msgid ""
 "Install the `PartCAD "
-"<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_ "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ "
 "extension from the VS Code marketplace."
 msgstr ""
 "Installieren Sie die Erweiterung `PartCAD "
-"<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_ "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ "
 "aus dem VS-Code-Marketplace."
 
 #: ../../source/tutorial.rst:272
