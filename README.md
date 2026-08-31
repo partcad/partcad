@@ -12,7 +12,9 @@ Browse [our documentation] and visit [our website]. Watch our 💥💥[demos](ht
 
 ## What is PartCAD?
 
-[PartCAD] is the standard for documenting manufacturable physical products. It comes with a set of tools to maintain
+[PartCAD] is the programming language for things.
+
+It is the standard for documenting manufacturable physical products. It comes with a set of tools to maintain
 product information and to facilitate efficient and effective workflows at all product lifecycle phases.
 
 PartCAD is more than just a traditional CAD tool for drawing. In fact, it’s **not for drawing at all**. The letters
