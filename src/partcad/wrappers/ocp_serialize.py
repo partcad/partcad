@@ -339,8 +339,13 @@ def is_assembly_object(obj) -> bool:
     return isinstance(obj, dict) and KEY_ASSEMBLY in obj
 
 
-def _toploc_from_packed(packed):
-    """Build a TopLoc_Location from the packed [[t], [axis], angle] location form."""
+def toploc_from_packed(packed):
+    """Build a TopLoc_Location from the packed [[t], [axis], angle] location form.
+
+    Public because a render implementation is handed locations in this form too
+    (the ports "pc render --with-ports" draws), and there is no reason for it to
+    reimplement the arithmetic.
+    """
     import math
 
     from OCP.gp import gp_Trsf, gp_Ax1, gp_Pnt, gp_Dir, gp_Vec
@@ -357,7 +362,7 @@ def _apply_location(shape, packed):
     """Place 'shape' at the packed location, if one is carried; else return it as is."""
     if packed is None:
         return shape
-    return shape.Located(_toploc_from_packed(packed))
+    return shape.Located(toploc_from_packed(packed))
 
 
 def decode_shape(obj):

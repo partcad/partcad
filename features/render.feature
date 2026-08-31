@@ -58,6 +58,68 @@ Feature: `pc render` command
       |     pdf | primitive.pdf     |
       |    html | primitive.html    |
 
+  # A port is a coordinate frame and an interface is a named set of them, so
+  # neither is geometry and neither reaches a drawing without being asked for.
+  # `feature_interface` is the example that has them.
+  @type-image
+  Scenario Outline: `pc render` draws the ports and the interfaces
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_interface -t png -O ./ <option> example-bracket"
+    Then the command should exit with a status code of "0"
+    Then a file named "example-bracket.png" should be created
+    Given a file named "partcad.yaml" does not exist
+    # The report names which of the two overlays this invocation resolved to,
+    # so each option is told apart from the others rather than only from none.
+    Then STDERR should contain "<reported>: 10 port(s) drawn on the projection"
+    # Every port drawn is also named in the log, where it can be copied from
+    # into an ASSY file.
+    Then STDERR should contain "L-30mm-slotted-3mm-thru-opening-m4"
+
+    Examples: The three ways to ask
+      |            option |                           reported |
+      |      --with-ports |                       --with-ports |
+      | --with-interfaces |                  --with-interfaces |
+      |        --with-all | --with-ports and --with-interfaces |
+
+  # What the options put in the file, rather than in the log: the projection
+  # gains a layer per overlay, and only for the overlay that was asked for. SVG
+  # because it is the format that says so in text; the other three are the same
+  # projection converted (see `//builtin/render`).
+  @type-image
+  Scenario Outline: `pc render` writes a layer per overlay
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_interface -t svg -O ./ -a <option> connect-mates"
+    Then the command should exit with a status code of "0"
+    Then a file named "connect-mates.svg" should be created
+    Given a file named "partcad.yaml" does not exist
+    # The layer names of the projection, which is where they appear and the
+    # only place they do: the port names themselves are drawn as line segments.
+    Then a file named "connect-mates.svg" should contain "Visible"
+    Then a file named "connect-mates.svg" should contain "<present>"
+    Then a file named "connect-mates.svg" should not contain "<absent>"
+
+    Examples: One overlay at a time
+      |            option |    present |     absent |
+      |      --with-ports |      Ports | Interfaces |
+      | --with-interfaces | Interfaces |      Ports |
+
+  # Naming one object renders that object. The package holds four assemblies,
+  # three more parts and three sketches, none of which was asked for.
+  @type-image
+  Scenario: `pc render` of one object renders only that object
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_interface -t png -O ./ example-bracket"
+    Then the command should exit with a status code of "0"
+    Then a file named "example-bracket.png" should be created
+    Given a file named "partcad.yaml" does not exist
+    Then a file named "example-motor.png" should not exist
+    Then a file named "socket-head-m3-screw-6mm.png" should not exist
+    Then a file named "socket-head-m4-screw-6mm.png" should not exist
+    Then a file named "connect-ports.png" should not exist
+    Then a file named "connect-interfaces.png" should not exist
+    Then a file named "connect-mates.png" should not exist
+    Then a file named "connect-instructions.png" should not exist
+    Then a file named "m3.png" should not exist
+    Then a file named "m4.png" should not exist
+    Then a file named "m5.png" should not exist
+
   @type-guide
   Scenario: `pc render -t pdf` refuses an assembly that is not meant to be built
     When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t pdf -O ./ -a :primitive"

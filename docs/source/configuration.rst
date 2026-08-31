@@ -789,6 +789,15 @@ Here is how it will get visualized:
   :width: 50%
   :align: center
 
+The same two things are drawn on a rendered projection by
+``pc render --with-ports`` and ``--with-interfaces`` (``--with-all`` for both):
+a marker and a name at each port, and each interface instance named once with a
+line out to every port that belongs to it, over the port boundaries above. On an
+assembly or a :ref:`scene <scenes>` they walk everything inside it and place
+each child's ports where it put the child, which is how a connection that did
+not come out as intended is found. See :doc:`cli`, and `Drawing the ports and
+the interfaces`_ for asking a package to keep such a drawing checked in.
+
 Port matching
 -------------
 
@@ -2694,3 +2703,44 @@ URDF link per node, rather than the geometry the tree decodes to. Decoding keeps
 the shape of the tree but nothing else about it: every node's ``name`` and
 ``label`` is dropped, and its placement is baked into the geometry instead of
 staying readable as the joint origin. See :doc:`simulation`.
+
+Drawing the ports and the interfaces
+------------------------------------
+
+A port is a coordinate frame and an interface is a named set of them (see
+:ref:`interfaces`), so neither of them is geometry and neither shows up in a
+projection. The four projections ``//builtin/render`` implements draw them when
+the file type asks:
+
+.. code-block:: yaml
+
+  render:
+    svg:
+      with_ports: true        # a marker and a name at every port
+      with_interfaces: true   # every interface named, and joined to its ports
+      port_marker_size: 0.1   # the length of a port's +Z arrow ...
+      port_label_size: 0.035  # ... and the cap height of the names, as a
+                              # fraction of the projection's largest dimension
+
+``pc render --with-ports``, ``--with-interfaces`` and ``--with-all`` ask for the
+same thing for one invocation (see :doc:`cli`); declaring it on a file type asks
+for it permanently, which is how a package keeps a drawing of its connections
+checked in beside the plain one. The two add up rather than override: a file
+type declared with ``with_ports: true`` draws them whether or not the option was
+given.
+
+On an assembly -- or a :ref:`scene <scenes>`, which is built the same way --
+both walk everything inside it and place each child's ports where the assembly
+put the child, so a connection that went wrong is visible as two frames that
+should have met and did not.
+
+The two flags reach every ``render:`` file type, this package's own and
+another's alike, along with the ports themselves; what an implementation makes
+of them is its own business, and one that ignores them draws nothing extra.
+Nothing at all is collected for a file type that asks for neither -- and never
+for an ``export:`` type, which is a file of geometry rather than a picture.
+
+``examples/feature_interface`` declares four such drawings: two of a part and
+two of the assembly it belongs to, each naming ``render_svg.py`` in
+``//builtin/render`` as its implementation, in the manner of `Using another
+package's implementation`_.

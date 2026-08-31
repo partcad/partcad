@@ -74,3 +74,16 @@ def file_should_contain(context: Context, filename: str, text: str):
     with open(path, encoding="utf-8") as written:
         content = written.read()
     assert text in content, "'%s' does not contain %r:\n%s" % (filename, text, content)
+
+
+@then('a file named "{filename}" should not contain "{text}"')
+def file_should_not_contain(context: Context, filename: str, text: str):
+    """The negative of the step above: what the command did *not* write.
+
+    An output file that gains a section only when it was asked for can only be
+    held to that by looking for the section's absence as well as its presence.
+    """
+    path = os.path.join(context.test_dir, filename)
+    with open(path, encoding="utf-8") as written:
+        content = written.read()
+    assert text not in content, "'%s' contains %r:\n%s" % (filename, text, content)

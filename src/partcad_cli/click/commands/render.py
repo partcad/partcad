@@ -93,6 +93,26 @@ from ..service import run
     is_flag=True,
     show_envvar=True,
 )
+# Ports and interfaces are not geometry, so they are invisible in a projection
+# unless asked for. These three ask.
+@click.option(
+    "--with-ports",
+    help="Draw a labelled coordinate frame at every port of the object (and, for an assembly, of everything in it)",
+    is_flag=True,
+    show_envvar=True,
+)
+@click.option(
+    "--with-interfaces",
+    help="Draw the boundary of every port, labelled with the interface it belongs to",
+    is_flag=True,
+    show_envvar=True,
+)
+@click.option(
+    "--with-all",
+    help="Draw both the ports and the interfaces",
+    is_flag=True,
+    show_envvar=True,
+)
 @click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj
 def cli(
@@ -108,6 +128,9 @@ def cli(
     interface,
     assembly,
     scene,
+    with_ports,
+    with_interfaces,
+    with_all,
     object,
 ):
     run(
@@ -127,6 +150,9 @@ def cli(
             "interface": interface,
             "assembly": assembly,
             "scene": scene,
+            "with_ports": with_ports,
+            "with_interfaces": with_interfaces,
+            "with_all": with_all,
             "object": object,
         },
         needs_context=True,

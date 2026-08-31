@@ -242,6 +242,22 @@ Object commands
   itself (see :ref:`output-files`). ``-e`` works the same way as it does for ``pc export``, reading the
   ``render:`` options from another package.
 
+  ``--with-ports`` draws every port of the object on the projection: a coordinate frame at each, with the long
+  arrow along ``+Z`` — the direction a part travels along when it is connected through that port — and the
+  name a ``connectPorts:`` would have to use written beside it. ``--with-interfaces`` names each *instance* of
+  an interface once, draws a line from that name out to each port that belongs to it, and draws each port's
+  boundary sketch where the port is. ``--with-all`` draws both. On an assembly or a scene all three walk
+  everything inside it and place each child's ports where it put the child, which is how a connection that
+  went wrong is found: two frames that should have met and did not. Every port drawn is also listed in the
+  log, with the exact name to write in an Assembly YAML file.
+
+  The options apply to whichever format is being written — the projection is the same one underneath ``svg``,
+  ``png``, ``jpeg`` and ``dxf`` — and a package can ask for the same thing permanently, by declaring
+  ``with_ports:`` or ``with_interfaces:`` on a file type of its own (see :ref:`output-files`, and
+  ``examples/feature_interface``, which keeps four such drawings checked in). ``port_marker_size`` and
+  ``port_label_size`` set how big the markers and the names are, as a fraction of the projection's largest
+  dimension.
+
   ``-t readme`` generates a markdown document instead of a projection: the package document (``README.md``,
   listing what the package declares) or, when ``-a`` names an assembly, that assembly's own document
   (``<assembly>.md``, listing the bill of materials — every part and sub-assembly it is made of, recursively,
