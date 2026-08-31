@@ -12,9 +12,12 @@
 import * as cp from 'child_process';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
+import * as http from 'http';
 import * as https from 'https';
+import * as net from 'net';
 import * as os from 'os';
 import * as path from 'path';
+import * as tls from 'tls';
 import * as vscode from 'vscode';
 
 // HTTP header names are not camelCase; that is not a code-style choice.
@@ -28,6 +31,14 @@ const EXE = process.platform === 'win32' ? 'partcad-json-rpc.exe' : 'partcad-jso
 // What a release says it carries, published beside the archives by
 // `dev-tools/release/platforms-manifest.sh`.
 const MANIFEST_NAME = 'platforms.json';
+
+/**
+ * Set to "1" in a window that cannot answer a dialog -- the extension test run.
+ *
+ * There is one dialog in this extension that a window with no PartCAD always
+ * gets, and a test run is always such a window.
+ */
+const NO_PROMPTS_ENV = 'PARTCAD_EXTENSION_NO_PROMPTS';
 
 /**
  * The release manifest: `{version, bundle: {os: {arch: [platform, ...]}}, ide: ...}`,
@@ -208,6 +219,39 @@ export function selectPlatforms(
     return usable.length > 0 ? usable : [published[published.length - 1]];
 }
 
+/**
+ * Errors Windows raises while something else has a file open for a moment.
+ *
+ * Removing or renaming a directory fails there while any file in it is open,
+ * and something has one open more often than the code that wrote it expects:
+ * the virus scanner reading an executable that was just extracted, the search
+ * indexer, a file browser with the folder selected. It clears in milliseconds.
+ */
+const BUSY_CODES = ['EPERM', 'EACCES', 'EBUSY', 'ENOTEMPTY'];
+
+/** Retries: 100ms, 200ms, 400ms, 800ms -- about a second and a half in all. */
+const BUSY_RETRIES = 4;
+
+/**
+ * Run a filesystem operation, retrying briefly while Windows says it is busy.
+ *
+ * A refusal that outlives the retries is a real one -- a service still running
+ * out of the directory -- and is raised as it was: this turns a failed install
+ * into a slightly slower one, and must not turn a broken one into a hang.
+ */
+async function whenNotBusy<T>(operation: () => Promise<T>): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+        try {
+            return await operation();
+        } catch (e: any) {
+            if (attempt >= BUSY_RETRIES || !BUSY_CODES.includes(e?.code)) {
+                throw e;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 100 * 2 ** attempt));
+        }
+    }
+}
+
 function isFile(p: string): boolean {
     try {
         return !!p && fs.existsSync(p) && fs.statSync(p).isFile();
@@ -216,8 +260,26 @@ function isFile(p: string): boolean {
     }
 }
 
+/**
+ * The directories on PATH.
+ *
+ * Windows quotes an entry that contains a space -- `"C:\Program Files\..."` --
+ * and the quotes are part of what the variable holds rather than of the
+ * directory's name, so joining a filename onto one produces a path that cannot
+ * exist. Nothing on POSIX puts them there, and no directory is really named
+ * with a quote at each end, so stripping a matched pair is safe everywhere.
+ *
+ * Exported for the test suite.
+ */
+export function pathEntries(): string[] {
+    return (process.env.PATH ?? '')
+        .split(path.delimiter)
+        .map((entry) => entry.trim().replace(/^"(.*)"$/, '$1'))
+        .filter((entry) => entry.length > 0);
+}
+
 function whichOnPath(exe: string): string | undefined {
-    for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
+    for (const dir of pathEntries()) {
         const candidate = path.join(dir, exe);
         if (isFile(candidate)) {
             return candidate;
@@ -240,6 +302,28 @@ export function cliBeside(execPath: string): string | undefined {
 
 function cachedBundleRoot(context: vscode.ExtensionContext): string {
     return path.join(context.globalStorageUri.fsPath, 'partcad-bundle');
+}
+
+/**
+ * Where a standalone installation may already be, this platform's answers first.
+ *
+ * On POSIX these are `install.sh`'s: `$XDG_DATA_HOME/partcad`, defaulting to
+ * `~/.local/share/partcad`. `install.sh` does not run on Windows and nothing
+ * else writes there, so naming those on Windows only told a user the extension
+ * had searched somewhere nothing installs to -- `resolveServicePath` reports
+ * every place it looked, and a list of POSIX paths on Windows reads as noise.
+ * `%LOCALAPPDATA%\PartCAD` is where a per-user installation belongs there.
+ *
+ * The extension's own download directory is last either way: an installation
+ * the user chose outranks one this downloaded for them.
+ */
+function installRoots(context: vscode.ExtensionContext): string[] {
+    if (process.platform === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA;
+        return [...(localAppData ? [path.join(localAppData, 'PartCAD')] : []), cachedBundleRoot(context)];
+    }
+    const xdgData = process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
+    return [path.join(xdgData, 'partcad'), cachedBundleRoot(context)];
 }
 
 /** Compare two version strings numerically, oldest first. */
@@ -285,9 +369,10 @@ function newestBundleIn(root: string): string | undefined {
 
 /**
  * Return the path to a usable `partcad-json-rpc`, or undefined if none is
- * present. Checked in order: the explicit setting, the newest bundle at the
- * install.sh location, the newest bundle previously downloaded into the
- * extension's storage, the launcher symlink in `~/.local/bin`, then PATH.
+ * present. Checked in order: the explicit setting, the newest bundle at this
+ * platform's installation location (see `installRoots`), the newest bundle
+ * previously downloaded into the extension's storage, the launcher symlink in
+ * `~/.local/bin` where there is one, then PATH.
  *
  * `searched` collects a description of each place as it is tried, so that the
  * "no service available" report can say where it looked without keeping a
@@ -309,10 +394,7 @@ export function resolveServicePath(
         return configured;
     }
 
-    const home = os.homedir();
-    const xdgData = process.env.XDG_DATA_HOME || path.join(home, '.local', 'share');
-    const roots = [path.join(xdgData, 'partcad'), cachedBundleRoot(context)];
-    for (const root of roots) {
+    for (const root of installRoots(context)) {
         searched?.push(root);
         const found = newestBundleIn(root);
         if (found) {
@@ -320,17 +402,21 @@ export function resolveServicePath(
         }
     }
 
-    const linked = path.join(home, '.local', 'bin', EXE);
-    searched?.push(linked);
-    if (isFile(linked)) {
-        return linked;
+    // The launcher symlink `install.sh` puts on PATH. POSIX only: it is a
+    // symlink, made by a script that does not run on Windows.
+    if (process.platform !== 'win32') {
+        const linked = path.join(os.homedir(), '.local', 'bin', EXE);
+        searched?.push(linked);
+        if (isFile(linked)) {
+            return linked;
+        }
     }
 
     // Worth spelling out in the report: this is the PATH of the process VS Code
     // was started from, which is not the PATH of an integrated terminal and does
     // not contain an activated Python virtual environment unless VS Code itself
     // was launched from one.
-    searched?.push(`PATH as VS Code inherited it (${(process.env.PATH ?? '').split(path.delimiter).length} entries)`);
+    searched?.push(`PATH as VS Code inherited it (${pathEntries().length} entries)`);
     return whichOnPath(EXE);
 }
 
@@ -436,6 +522,16 @@ export async function ensureServiceExecutable(
     if (existing) {
         traceInfo(`PartCAD: using service executable at ${existing}`);
         return { kind: 'ready', execPath: existing };
+    }
+
+    if (process.env[NO_PROMPTS_ENV] === '1') {
+        // Nobody is going to answer. The extension test suite activates the
+        // extension on a machine with no PartCAD installed -- exactly the case
+        // this dialog is for -- and a modal dialog in a headless run is a window
+        // that stays open until the run gives up on it. Set by the test runner
+        // and by nothing else; a user never reaches this.
+        traceInfo('PartCAD: no installation found, and this window cannot be asked about it.');
+        return { kind: 'none' };
     }
 
     const choice = await vscode.window.showInformationMessage(
@@ -647,9 +743,9 @@ async function downloadAndExtract(
         throw new Error('the service executable was not found in the downloaded bundle');
     }
     const target = path.join(root, version);
-    await fs.promises.rm(target, { recursive: true, force: true });
-    await fs.promises.rename(unpacked, target);
-    await fs.promises.rm(staging, { recursive: true, force: true });
+    await whenNotBusy(() => fs.promises.rm(target, { recursive: true, force: true }));
+    await whenNotBusy(() => fs.promises.rename(unpacked, target));
+    await fs.promises.rm(staging, { recursive: true, force: true }).catch(() => undefined);
 
     const exe = path.join(target, EXE);
     if (process.platform !== 'win32') {
@@ -665,9 +761,12 @@ async function downloadAndExtract(
  * so leaving the superseded ones behind is not an option; failing to remove one
  * (a file still open on Windows) is, and is only logged.
  *
- * Callers stop the daemon first: `root` is the extension's own storage, so the
- * only thing that runs from these bundles is a PartCAD daemon this extension
- * started. A daemon in another window is stopped by its own reconnect.
+ * Callers stop the backend first -- the shared daemon *and* the private stdio
+ * process, which is the one that matters here: `root` is the extension's own
+ * storage, so the only thing running from these bundles is a service this
+ * window started, and on Windows a directory holding a running executable
+ * cannot be removed at all. A service in another window is stopped by its own
+ * reconnect, and `whenNotBusy` covers the moment in between.
  */
 async function pruneBundles(root: string, keep: string): Promise<void> {
     let entries: string[];
@@ -682,7 +781,7 @@ async function pruneBundles(root: string, keep: string): Promise<void> {
             continue;
         }
         try {
-            await fs.promises.rm(entry, { recursive: true, force: true });
+            await whenNotBusy(() => fs.promises.rm(entry, { recursive: true, force: true }));
             traceInfo(`PartCAD: removed the previous bundle at ${entry}`);
         } catch (e) {
             traceInfo(`PartCAD: could not remove the previous bundle at ${entry}: ${e}`);
@@ -776,50 +875,145 @@ async function latestRelease(repo: string): Promise<string> {
     return tag;
 }
 
-function httpsGet(url: string, headers: Record<string, string> = {}): Promise<Buffer> {
+/**
+ * The proxy to reach GitHub through, if this machine has one.
+ *
+ * VS Code's own setting first: a user behind a corporate proxy has already told
+ * the editor about it, and should not have to tell the extension separately.
+ * Then the environment variable every other tool reads, for a machine
+ * configured at the shell rather than in the editor. `https.get` consults
+ * neither on its own, which is why downloading the bundle used to fail with a
+ * bare connection error on a network where `pc` itself installs fine.
+ */
+function proxyFor(): URL | undefined {
+    const configured = vscode.workspace.getConfiguration('http').get<string>('proxy')?.trim();
+    const proxy = configured || process.env.HTTPS_PROXY || process.env.https_proxy;
+    if (!proxy) {
+        return undefined;
+    }
+    try {
+        return new URL(proxy);
+    } catch {
+        // A proxy setting with no scheme in it ("proxy.corp:3128") is a
+        // configuration mistake, not a reason to fail the download: without a
+        // proxy this reaches GitHub directly on most networks, and with a
+        // broken one it reaches nothing at all.
+        traceError(`PartCAD: ignoring an unusable proxy setting: ${proxy}`);
+        return undefined;
+    }
+}
+
+/**
+ * A socket to `target`, tunnelled through `proxy` with HTTP CONNECT.
+ *
+ * The TLS is still end to end: the proxy is asked for a raw tunnel and the
+ * caller wraps its own TLS around it, so nothing is decrypted on the way and no
+ * certificate check is relaxed. Credentials in the proxy URL travel as Basic
+ * proxy authorization, which is what they are for.
+ */
+function tunnel(target: URL, proxy: URL): Promise<net.Socket> {
     return new Promise((resolve, reject) => {
-        https
-            .get(url, { headers: { 'User-Agent': 'partcad-vscode', ...headers } }, (res) => {
-                const status = res.statusCode ?? 0;
-                if (status >= 300 && status < 400 && res.headers.location) {
-                    res.resume();
-                    resolve(httpsGet(res.headers.location, headers));
-                    return;
-                }
-                if (status !== 200) {
-                    res.resume();
-                    reject(new HttpError(status, url));
-                    return;
-                }
-                const chunks: Buffer[] = [];
-                res.on('data', (c) => chunks.push(c));
-                res.on('end', () => resolve(Buffer.concat(chunks)));
-            })
-            .on('error', reject);
+        const authority = `${target.hostname}:${target.port || 443}`;
+        const headers: Record<string, string> = { host: authority };
+        if (proxy.username) {
+            const credentials = `${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`;
+            headers['Proxy-Authorization'] = `Basic ${Buffer.from(credentials).toString('base64')}`;
+        }
+        const request = http.request({
+            host: proxy.hostname,
+            port: Number(proxy.port || (proxy.protocol === 'https:' ? 443 : 80)),
+            method: 'CONNECT',
+            path: authority,
+            headers,
+        });
+        request.once('connect', (response: http.IncomingMessage, socket: net.Socket) => {
+            if (response.statusCode !== 200) {
+                socket.destroy();
+                reject(
+                    new Error(
+                        `the proxy at ${proxy.origin} refused a tunnel to ${authority} (HTTP ${response.statusCode})`,
+                    ),
+                );
+                return;
+            }
+            resolve(socket);
+        });
+        request.once('error', reject);
+        request.end();
     });
 }
 
-function downloadFile(url: string, dest: string): Promise<void> {
+/** Redirects to follow before deciding something is looping. */
+const MAX_REDIRECTS = 5;
+
+/**
+ * GET a URL, following redirects and honouring the configured proxy, and hand
+ * the caller the response to read however it wants to.
+ *
+ * One implementation for both readers below: they differ in what they do with
+ * the body -- buffer it, or write it to a file -- and in nothing else, and the
+ * redirect and proxy handling is what neither of them should be carrying twice.
+ */
+async function openUrl(
+    url: string,
+    headers: Record<string, string> = {},
+    redirects = 0,
+): Promise<http.IncomingMessage> {
+    if (redirects > MAX_REDIRECTS) {
+        throw new Error(`too many redirects for ${url}`);
+    }
+    const target = new URL(url);
+    const options: https.RequestOptions = {
+        host: target.hostname,
+        port: target.port || 443,
+        path: `${target.pathname}${target.search}`,
+        headers: { 'User-Agent': 'partcad-vscode', ...headers },
+    };
+    const proxy = proxyFor();
+    if (proxy) {
+        const socket = await tunnel(target, proxy);
+        // The TLS is put on the tunnelled socket here rather than by an agent
+        // that would open its own connection. `servername` has to be said out
+        // loud for the same reason: there is no hostname to infer it from once
+        // the socket is already open.
+        options.agent = false;
+        options.createConnection = () => tls.connect({ socket, servername: target.hostname });
+    }
+
+    const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
+        https.get(options, resolve).on('error', reject);
+    });
+    const status = response.statusCode ?? 0;
+    if (status >= 300 && status < 400 && response.headers.location) {
+        response.resume();
+        // Resolved against the URL it came from: a redirect may be relative.
+        return openUrl(new URL(response.headers.location, url).toString(), headers, redirects + 1);
+    }
+    if (status !== 200) {
+        response.resume();
+        throw new HttpError(status, url);
+    }
+    return response;
+}
+
+async function httpsGet(url: string, headers: Record<string, string> = {}): Promise<Buffer> {
+    const response = await openUrl(url, headers);
     return new Promise((resolve, reject) => {
-        https
-            .get(url, { headers: { 'User-Agent': 'partcad-vscode' } }, (res) => {
-                const status = res.statusCode ?? 0;
-                if (status >= 300 && status < 400 && res.headers.location) {
-                    res.resume();
-                    downloadFile(res.headers.location, dest).then(resolve, reject);
-                    return;
-                }
-                if (status !== 200) {
-                    res.resume();
-                    reject(new HttpError(status, url));
-                    return;
-                }
-                const file = fs.createWriteStream(dest);
-                res.pipe(file);
-                file.on('finish', () => file.close((err) => (err ? reject(err) : resolve())));
-                file.on('error', reject);
-            })
-            .on('error', reject);
+        const chunks: Buffer[] = [];
+        response.on('data', (c) => chunks.push(c));
+        response.on('end', () => resolve(Buffer.concat(chunks)));
+        response.on('error', reject);
+    });
+}
+
+async function downloadFile(url: string, dest: string): Promise<void> {
+    const response = await openUrl(url);
+    return new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(dest);
+        response.on('error', reject);
+        response.pipe(file);
+        file.on('finish', () => file.close((err) => (err ? reject(err) : resolve())));
+        file.on('error', reject);
     });
 }
 
@@ -845,11 +1039,37 @@ function run(cmd: string, args: string[], cwd: string): Promise<void> {
     });
 }
 
+/** A string as a PowerShell single-quoted literal. */
+function powershellLiteral(value: string): string {
+    return `'${value.replace(/'/g, "''")}'`;
+}
+
 async function extract(archivePath: string, dest: string, ext: 'tar.xz' | 'zip'): Promise<void> {
     if (ext === 'zip') {
         if (process.platform === 'win32') {
-            // Windows 10+ ships bsdtar, which unpacks zip archives.
-            await run('tar', ['-xf', archivePath, '-C', dest], dest);
+            try {
+                // Windows 10 1803 and later ship bsdtar as `tar`, which unpacks
+                // zip archives.
+                await run('tar', ['-xf', archivePath, '-C', dest], dest);
+            } catch (e) {
+                // An older Windows, or one whose PATH has lost System32.
+                // PowerShell is on every Windows that runs VS Code and unpacks
+                // a zip on its own, so the download is not wasted over a
+                // missing archiver -- and the failure, if this fails too, names
+                // something the user has heard of.
+                traceInfo(`PartCAD: 'tar' did not unpack the bundle (${e}); using PowerShell`);
+                await run(
+                    'powershell',
+                    [
+                        '-NoProfile',
+                        '-NonInteractive',
+                        '-Command',
+                        `Expand-Archive -LiteralPath ${powershellLiteral(archivePath)} ` +
+                            `-DestinationPath ${powershellLiteral(dest)} -Force`,
+                    ],
+                    dest,
+                );
+            }
         } else {
             await run('unzip', ['-q', '-o', archivePath, '-d', dest], dest);
         }

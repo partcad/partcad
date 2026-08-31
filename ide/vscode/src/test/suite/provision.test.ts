@@ -19,7 +19,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-import { resolveServicePath, selectPlatforms, serviceUnder } from '../../common/provision';
+import { pathEntries, resolveServicePath, selectPlatforms, serviceUnder } from '../../common/provision';
 
 const MANIFEST = {
     version: '0.7.177',
@@ -132,20 +132,24 @@ suite('Where the service was looked for', () => {
             .update('servicePath', exe ?? '', vscode.ConfigurationTarget.Global);
     }
 
-    // `resolveServicePath` looks in `$XDG_DATA_HOME/partcad` and in the home
-    // directory before it reaches PATH, so on a machine with PartCAD installed
-    // by `install.sh` it would return early and the search report would be one
-    // entry long. Point both at the empty temporary directory for the duration:
-    // what is under test is the report, not this machine.
-    let savedXdg: string | undefined;
-    let savedHome: string | undefined;
+    // `resolveServicePath` looks at this platform's installation directory and
+    // in the home directory before it reaches PATH, so on a machine with PartCAD
+    // installed it would return early and the search report would be one entry
+    // long. Point every variable those are derived from at the empty temporary
+    // directory for the duration: what is under test is the report, not this
+    // machine. `HOME` alone is not enough -- `os.homedir()` reads `USERPROFILE`
+    // on Windows -- and neither is the home directory, since the Windows lookup
+    // starts at `%LOCALAPPDATA%`.
+    const SANDBOXED = ['XDG_DATA_HOME', 'HOME', 'USERPROFILE', 'LOCALAPPDATA'];
+    let saved: Map<string, string | undefined>;
 
     setup(() => {
         tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'partcad-provision-'));
-        savedXdg = process.env.XDG_DATA_HOME;
-        savedHome = process.env.HOME;
+        saved = new Map(SANDBOXED.map((name) => [name, process.env[name]]));
         process.env.XDG_DATA_HOME = path.join(tmp, 'data');
         process.env.HOME = path.join(tmp, 'home');
+        process.env.USERPROFILE = path.join(tmp, 'home');
+        process.env.LOCALAPPDATA = path.join(tmp, 'local');
     });
 
     function restore(name: string, value: string | undefined): void {
@@ -157,25 +161,45 @@ suite('Where the service was looked for', () => {
     }
 
     teardown(async () => {
-        restore('XDG_DATA_HOME', savedXdg);
-        restore('HOME', savedHome);
+        saved.forEach((value, name) => restore(name, value));
         await pointServicePathAt(undefined);
         fs.rmSync(tmp, { recursive: true, force: true });
     });
+
+    /**
+     * The report `resolveServicePath` would produce on `platform`.
+     *
+     * Which places are searched depends on the platform, and a CI leg only ever
+     * runs on one of them -- while the value of the report is precisely that it
+     * names what *this* platform looked at. `process.platform` is an own
+     * property of a plain object, so it can be made to say something else for
+     * the length of one synchronous call and put back afterwards.
+     */
+    function searchedOn(platform: NodeJS.Platform): string[] {
+        const original = process.platform;
+        Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+        try {
+            const searched: string[] = [];
+            resolveServicePath(fakeContext(), 'partcad', searched);
+            return searched;
+        } finally {
+            Object.defineProperty(process, 'platform', { value: original, configurable: true });
+        }
+    }
 
     test('every place tried is reported when nothing is found', async () => {
         await pointServicePathAt(undefined);
         const searched: string[] = [];
         resolveServicePath(fakeContext(), 'partcad', searched);
 
-        assert.ok(searched.length >= 5, `expected every lookup to be named, got ${searched.length}: ${searched}`);
+        assert.ok(searched.length >= 4, `expected every lookup to be named, got ${searched.length}: ${searched}`);
         assert.ok(
             searched.some((s) => s.includes('partcad.servicePath')),
             'the setting is the first thing checked and has to be named, set or not',
         );
         assert.ok(
-            searched.some((s) => s.includes(path.join('.local', 'bin'))),
-            'the ~/.local/bin launcher is checked and has to be named',
+            searched.some((s) => s.includes(path.join(tmp, 'storage'))),
+            "the extension's own download directory is checked and has to be named",
         );
         // The one that matters most: a user with PartCAD in a virtual
         // environment needs to be told which PATH was consulted, since it is not
@@ -183,6 +207,36 @@ suite('Where the service was looked for', () => {
         assert.ok(
             searched.some((s) => s.startsWith('PATH')),
             'PATH is the last resort and has to be named',
+        );
+    });
+
+    test("the POSIX lookup names install.sh's locations", async () => {
+        await pointServicePathAt(undefined);
+        const searched = searchedOn('linux');
+        assert.ok(
+            searched.some((s) => s.includes(path.join(tmp, 'data', 'partcad'))),
+            '$XDG_DATA_HOME/partcad is where install.sh puts a bundle and has to be named',
+        );
+        assert.ok(
+            searched.some((s) => s.includes(path.join('.local', 'bin'))),
+            'the ~/.local/bin launcher is checked and has to be named',
+        );
+    });
+
+    test('the Windows lookup names Windows locations and no others', async () => {
+        // Nothing installs to `~/.local/share` on Windows -- `install.sh` does
+        // not run there -- so reporting it as searched sends a user looking in a
+        // directory no installer of theirs has ever written to, which is the
+        // opposite of what this list is for.
+        await pointServicePathAt(undefined);
+        const searched = searchedOn('win32');
+        assert.ok(
+            searched.some((s) => s.includes(path.join(tmp, 'local', 'PartCAD'))),
+            '%LOCALAPPDATA%\\PartCAD is where a Windows installation goes and has to be named',
+        );
+        assert.ok(
+            !searched.some((s) => s.includes('.local')),
+            'the POSIX locations are not searched on Windows and must not be reported as searched',
         );
     });
 
@@ -252,5 +306,43 @@ suite('Finding the service in a directory the user picked', () => {
         // otherwise be handed to the spawn as if it were a program.
         fs.mkdirSync(path.join(tmp, 'trap', EXE), { recursive: true });
         assert.strictEqual(serviceUnder(path.join(tmp, 'trap')), undefined);
+    });
+});
+
+// A Windows PATH quotes an entry that contains a space, and the quotes belong to
+// the variable rather than to the directory. Joining `partcad-json-rpc.exe` onto
+// one produced a path that could not exist, so an installation in
+// `C:\Program Files\...` was invisible to the last-resort lookup.
+suite('Reading the PATH', () => {
+    let savedPath: string | undefined;
+
+    setup(() => {
+        savedPath = process.env.PATH;
+    });
+
+    teardown(() => {
+        if (savedPath === undefined) {
+            delete process.env.PATH;
+        } else {
+            process.env.PATH = savedPath;
+        }
+    });
+
+    test('a quoted entry is the directory inside the quotes', () => {
+        process.env.PATH = ['"/opt/with space"', '/usr/bin'].join(path.delimiter);
+        assert.deepStrictEqual(pathEntries(), ['/opt/with space', '/usr/bin']);
+    });
+
+    test('empty entries are not directories', () => {
+        // A trailing delimiter is normal on Windows, and an empty entry means
+        // the current directory to some shells -- never something to search
+        // for an executable to run.
+        process.env.PATH = ['/usr/bin', '', '  '].join(path.delimiter);
+        assert.deepStrictEqual(pathEntries(), ['/usr/bin']);
+    });
+
+    test('an unset PATH has no entries', () => {
+        delete process.env.PATH;
+        assert.deepStrictEqual(pathEntries(), []);
     });
 });

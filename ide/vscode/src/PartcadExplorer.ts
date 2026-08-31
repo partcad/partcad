@@ -8,6 +8,7 @@
 //
 
 import * as vscode from 'vscode';
+import { pathKey } from './common/paths';
 import {
     PartcadItem,
     PartConfig,
@@ -231,13 +232,19 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
      * Absent from both sets means "unknown", not "assembly": a package that has
      * not loaded reports nothing, and a scene inside it must not be reported as
      * a broken assembly in the meantime.
+     *
+     * Both sets hold `pathKey`s, not paths: the caller looks a document up by
+     * the editor's spelling of its path, which is not PartCAD's on Windows.
      */
     public assyFlavors(): { scenes: Set<string>; assemblies: Set<string> } {
         const scenes = new Set<string>();
         const assemblies = new Set<string>();
         for (const items of Object.values(this.packages)) {
-            assyPaths(items.scenes).forEach((path) => scenes.add(path));
-            assyPaths(items.assemblies).forEach((path) => assemblies.add(path));
+            // Keyed rather than stored as they came: these are PartCAD's
+            // spelling of the path and the caller has the editor's, which are
+            // the same file spelled two ways on Windows (see `pathKey`).
+            assyPaths(items.scenes).forEach((path) => scenes.add(pathKey(path)));
+            assyPaths(items.assemblies).forEach((path) => assemblies.add(pathKey(path)));
         }
         return { scenes, assemblies };
     }

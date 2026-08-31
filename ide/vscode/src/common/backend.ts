@@ -22,6 +22,7 @@
 
 import * as cp from 'child_process';
 import * as net from 'net';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { Disposable } from 'vscode';
 import {
@@ -85,7 +86,10 @@ class JsonRpcBackend implements PartcadBackend {
 
     constructor(
         private readonly connection: MessageConnection,
-        private readonly cleanup: () => void,
+        // May be asynchronous: the stdio channel's cleanup terminates a process
+        // and waits for it to be gone, because the caller that stops a backend
+        // before an update is about to replace the files it runs from.
+        private readonly cleanup: () => void | Promise<void>,
         private readonly outputChannel: vscode.LogOutputChannel,
         cli: CliAccess = {},
     ) {
@@ -182,7 +186,7 @@ class JsonRpcBackend implements PartcadBackend {
         } catch {
             // ignore
         }
-        this.cleanup();
+        await this.cleanup();
     }
 
     async stopDaemon(): Promise<void> {
@@ -431,6 +435,30 @@ function serviceEnv(serverId: string): NodeJS.ProcessEnv {
 }
 
 /**
+ * The environment a `pc` invocation runs in: the caller's, with the child's
+ * text encoding pinned to UTF-8.
+ *
+ * What travels between the two processes is UTF-8 either way -- Node writes a
+ * string to a pipe as UTF-8 and decodes what comes back the same way -- but
+ * Python chooses the encoding of its own streams from the locale, which is
+ * UTF-8 on Linux and macOS and the ANSI code page on Windows. So a `pc lint
+ * --stdin` there was handed an editor buffer it decoded with cp1252: a
+ * description with an umlaut in it arrived as mojibake, and a byte the code
+ * page has no character for killed the decoder and took the findings with it.
+ * `pc` reads its own end as UTF-8 as well (see `_lint_files`); this is the
+ * other half of the same agreement, and covers every `pc` this runs.
+ */
+function utf8Env(env?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+    return {
+        ...(env ?? process.env),
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        PYTHONUTF8: '1',
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        PYTHONIOENCODING: 'utf-8',
+    };
+}
+
+/**
  * Run a `pc` subcommand and resolve with its stdout.
  *
  * `--no-ansi` because the progress renderer would otherwise interleave control
@@ -450,7 +478,7 @@ function runCli(
             reject(new Error('no `pc` executable beside the PartCAD service'));
             return;
         }
-        const proc = cp.execFile(cliPath, ['--no-ansi', ...args], { cwd, env }, (err, stdout, stderr) => {
+        const proc = cp.execFile(cliPath, ['--no-ansi', ...args], { cwd, env: utf8Env(env) }, (err, stdout, stderr) => {
             if (stderr) {
                 outputChannel.append(stderr);
             }
@@ -465,6 +493,37 @@ function runCli(
         // cannot tell "nothing yet" from "nothing at all".
         proc.stdin?.end(options?.stdin ?? '');
     });
+}
+
+/**
+ * This installation has no daemon to connect to, whatever the setting says.
+ *
+ * Not the same thing as a daemon that failed to start: it means `pc` answered
+ * the question and the answer was "not here". The caller runs a service of its
+ * own over stdio instead, which is what the user gets either way -- the daemon
+ * only makes it warm and shared.
+ */
+class NoDaemonChannel extends Error {}
+
+/**
+ * The endpoint in `pc daemon start`'s output, or undefined if it printed none.
+ *
+ * It prints one line: an absolute path to a Unix socket, or a `\\.\pipe\...`
+ * name on Windows. A `pc` with no daemon for this platform answers with a
+ * sentence saying so instead -- on stdout, with a zero exit status -- and
+ * "the first non-empty line" handed that sentence to `net.connect`, which
+ * reported ENOENT about a filename made of English and left the window with no
+ * backend at all. So what is printed has to look like an endpoint before it is
+ * treated as one; anything else means no daemon channel here.
+ *
+ * Exported for the test suite: this is the parse that decides whether a
+ * platform has a daemon, and it cannot be exercised from a machine that has one.
+ */
+export function daemonEndpointIn(stdout: string): string | undefined {
+    return stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => /^\\\\[.?]\\pipe\\./.test(line) || (line.length > 0 && path.isAbsolute(line)));
 }
 
 /**
@@ -484,11 +543,51 @@ async function daemonEndpoint(
     outputChannel: vscode.LogOutputChannel,
 ): Promise<string> {
     const stdout = await runCli(cliPath, [...args, 'daemon', 'start'], cwd, outputChannel, env);
-    const line = stdout.split(/\r?\n/).find((l) => l.trim().length > 0);
-    if (!line) {
-        throw new Error('`pc daemon start` did not print a socket path');
+    const endpoint = daemonEndpointIn(stdout);
+    if (!endpoint) {
+        const said = stdout.trim().split(/\r?\n/)[0];
+        throw new NoDaemonChannel(`\`pc daemon start\` printed no endpoint: ${said || '(nothing)'}`);
     }
-    return line.trim();
+    return endpoint;
+}
+
+/** How long to keep trying an endpoint `pc` has said is being served. */
+const CONNECT_TIMEOUT_MS = 10000;
+const CONNECT_RETRY_MS = 100;
+
+/** Connect failures worth trying again: the endpoint is not there *yet*. */
+const CONNECT_RETRY_CODES = ['ENOENT', 'ECONNREFUSED', 'EBUSY', 'EAGAIN'];
+
+/**
+ * Connect to the daemon's endpoint, retrying while it is not there yet.
+ *
+ * `pc daemon start` waits for the daemon to answer before printing where it is,
+ * so the first attempt normally succeeds and this costs nothing. It is for the
+ * moment either side of that -- and for the difference between the two
+ * transports: a POSIX daemon binds and listens before it prints, so a client
+ * that arrives early simply queues, while a Windows daemon is a separate
+ * process whose named pipe does not exist until it is ready, and connecting to
+ * a pipe that is not there fails outright rather than waiting.
+ */
+async function connectEndpoint(endpoint: string): Promise<net.Socket> {
+    const deadline = Date.now() + CONNECT_TIMEOUT_MS;
+    for (;;) {
+        try {
+            return await new Promise<net.Socket>((resolve, reject) => {
+                const socket = net.connect(endpoint);
+                socket.once('connect', () => resolve(socket));
+                socket.once('error', (e) => {
+                    socket.destroy();
+                    reject(e);
+                });
+            });
+        } catch (e: any) {
+            if (!CONNECT_RETRY_CODES.includes(e?.code) || Date.now() >= deadline) {
+                throw e;
+            }
+            await new Promise((resolve) => setTimeout(resolve, CONNECT_RETRY_MS));
+        }
+    }
 }
 
 async function connectSocket(
@@ -499,15 +598,70 @@ async function connectSocket(
     outputChannel: vscode.LogOutputChannel,
 ): Promise<JsonRpcBackend> {
     const cliPath = cliBeside(execPath);
+    if (!cliPath) {
+        // Where the daemon is, and whether one is running, is `pc`'s to answer
+        // -- the extension deliberately keeps no second copy of those rules. No
+        // `pc` is therefore not a broken daemon but no daemon channel at all,
+        // and the service beside it still serves this window perfectly well
+        // over stdio.
+        throw new NoDaemonChannel(`there is no \`pc\` beside ${execPath} to ask where the daemon is`);
+    }
     const socketPath = await daemonEndpoint(cliPath, args, cwd, env, outputChannel);
     traceInfo(`PartCAD service: connecting to daemon at ${socketPath}`);
-    const socket: net.Socket = await new Promise((resolve, reject) => {
-        const s = net.connect(socketPath);
-        s.once('connect', () => resolve(s));
-        s.once('error', reject);
-    });
+    const socket = await connectEndpoint(socketPath);
     const connection = createMessageConnection(new StreamMessageReader(socket), new StreamMessageWriter(socket));
-    return new JsonRpcBackend(connection, () => socket.destroy(), outputChannel, { cliPath, cwd, sharedDaemon: true });
+    return new JsonRpcBackend(
+        connection,
+        () => {
+            socket.destroy();
+        },
+        outputChannel,
+        { cliPath, cwd, sharedDaemon: true },
+    );
+}
+
+/** How long to wait for a terminated service process to actually be gone. */
+const TERMINATE_TIMEOUT_MS = 5000;
+
+/**
+ * Stop the private service process, and everything it started.
+ *
+ * `kill()` signals the process itself, which is the whole story on POSIX: the
+ * service and the sandboxed runtimes it launched share a process group and go
+ * down together. Windows has no such group -- the children of a terminated
+ * process keep running, and they keep the bundle directory open, which is the
+ * one thing that makes replacing it fail there -- so the tree is taken down by
+ * pid instead. `taskkill` is part of Windows; a machine without it, or a
+ * process that has already exited, falls through to `kill()`.
+ */
+async function terminate(proc: cp.ChildProcess): Promise<void> {
+    if (proc.exitCode !== null || proc.signalCode !== null) {
+        return;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const exited = new Promise<void>((resolve) => {
+        proc.once('exit', () => resolve());
+        // Waiting is not the same as waiting forever: a service wedged in a
+        // signal handler must not hold up the window's shutdown.
+        timer = setTimeout(resolve, TERMINATE_TIMEOUT_MS);
+    });
+    let killed = false;
+    if (process.platform === 'win32' && proc.pid !== undefined) {
+        killed = await new Promise<boolean>((resolve) => {
+            cp.execFile('taskkill', ['/pid', String(proc.pid), '/t', '/f'], (err) => resolve(!err));
+        });
+    }
+    if (!killed) {
+        try {
+            proc.kill();
+        } catch {
+            // Already gone.
+        }
+    }
+    await exited;
+    if (timer !== undefined) {
+        clearTimeout(timer);
+    }
 }
 
 function connectStdio(
@@ -518,7 +672,10 @@ function connectStdio(
     outputChannel: vscode.LogOutputChannel,
 ): JsonRpcBackend {
     traceInfo(`PartCAD service: launching ${execPath} --stdio`);
-    const proc = cp.spawn(execPath, ['--stdio', ...args], { cwd, env }) as cp.ChildProcessWithoutNullStreams;
+    const proc = cp.spawn(execPath, ['--stdio', ...args], {
+        cwd,
+        env: utf8Env(env),
+    }) as cp.ChildProcessWithoutNullStreams;
     proc.stderr.on('data', (d: Buffer) => outputChannel.append(d.toString()));
     // Without an 'error' listener, a failed launch (ENOENT/EACCES) is emitted
     // asynchronously as an uncaught exception in the extension host rather than
@@ -536,13 +693,7 @@ function connectStdio(
     );
     return new JsonRpcBackend(
         connection,
-        () => {
-            try {
-                proc.kill();
-            } catch {
-                // ignore
-            }
-        },
+        () => terminate(proc),
         outputChannel,
         // A private service process, so `pc daemon stop` must not be used on it
         // -- but `pc lint --file` still is: it acts on a file, not on a daemon.
@@ -646,6 +797,20 @@ export async function restartBackend(
         }
         return await connectSocket(execPath, args, cwd, env, outputChannel);
     } catch (e) {
+        if (e instanceof NoDaemonChannel) {
+            // The installation has no daemon for this platform. That is a
+            // reason to run the service a different way, not a reason to leave
+            // the window with no PartCAD in it: everything works over stdio,
+            // just per-window and cold. Said out loud, because a user who set
+            // `partcad.serviceChannel` to "socket" is entitled to know they did
+            // not get it.
+            traceInfo(`PartCAD: ${e.message}; running a dedicated service over stdio instead`);
+            writeTerminal(
+                `WARNING: This PartCAD has no daemon to share, so this window runs a service of its own.\r\n` +
+                    `WARNING: ${e.message}\r\n`,
+            );
+            return connectStdio(execPath, args, cwd, env, outputChannel);
+        }
         // Invisible for the same reason as the case above: this leaves the
         // window with no backend, and the output channel is not open.
         traceError(`Failed to start the PartCAD service: ${e}`);

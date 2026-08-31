@@ -44,6 +44,7 @@
 
 import * as vscode from 'vscode';
 import { traceVerbose } from './common/log/logging';
+import { pathKey } from './common/paths';
 import { PartcadExplorer } from './PartcadExplorer';
 
 // How long to wait after the last keystroke before re-checking. Long enough not
@@ -134,11 +135,14 @@ export class PartcadLint implements vscode.Disposable {
             traceVerbose(`Failed to read the package contents: ${e}`);
             return undefined;
         }
-        const path = document.uri.fsPath;
-        if (flavors.assemblies.has(path)) {
+        // By key, not by path: `Uri.fsPath` and the path PartCAD reports are
+        // the same file spelled differently on Windows, and comparing the two
+        // strings there answered "unknown" for every file (see `pathKey`).
+        const key = pathKey(document.uri.fsPath);
+        if (flavors.assemblies.has(key)) {
             return 'assembly';
         }
-        if (flavors.scenes.has(path)) {
+        if (flavors.scenes.has(key)) {
             return 'scene';
         }
         return undefined;
