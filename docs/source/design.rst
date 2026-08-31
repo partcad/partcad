@@ -167,7 +167,8 @@ Object IDs
 ==========
 
 PartCAD packages contain objects of different types: *sketches*, *parts*,
-*assemblies*, *scenes*, *interfaces*, *providers* and so on.
+*assemblies*, *scenes*, *interfaces*, *mates*, *providers*, *software* and
+*partTypes*.
 All of them need to get referenced.
 
 Single object
@@ -253,10 +254,19 @@ PartCAD CLI tools get installed using the PyPI package ``partcad``, which also
 carries the Python module and the JSON-RPC service. The main tool is called ``pc``.
 The CLI tools are supposed to provide the complete set of PartCAD features.
 
-Visual Studio Code extension
-============================
+Graphical interfaces
+====================
 
-The PartCAD extension for ``vscode`` is designed to be the primary tool.
+The PartCAD extension for ``vscode`` is designed to be the primary graphical
+tool. The **PartCAD IDE** is that extension, the editor and the command line
+tools in one application, for a machine with neither Python nor an editor set
+up. A **FreeCAD** add-on browses the same packages inside FreeCAD and imports
+objects into the open document.
+
+None of the three carries PartCAD itself. Each is a client of the
+``partcad-json-rpc`` service, which owns the warm context and the sandboxes, so
+they all see the same packages and the same cache as ``pc`` does on the same
+machine. See :doc:`installation` for all three.
 
 
 ========================

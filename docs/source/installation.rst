@@ -64,8 +64,11 @@ The commands and options supported by PartCAD CLI:
 
   Host commands:
     version      Display the versions of the PartCAD Python Module and CLI, then exit
+    upgrade      Upgrade PartCAD itself to the latest version
     config       Show the current user configuration
     system       PartCAD system commands (reset, set, status, telemetry)
+    daemon       Manage the PartCAD background daemon (start, stop, status, reset, set)
+    open         Open a file in a third-party application, on this machine
 
   Package commands:
     init         Create a new PartCAD package in the current directory
@@ -74,13 +77,16 @@ The commands and options supported by PartCAD CLI:
     lint         Run linting checks on files within packages
 
   Object commands:
-    list         List components (parts, sketches, assemblies, interfaces, mates, packages)
-    add          Add a dependency, sketch, part, or assembly
+    list         List components (parts, sketches, assemblies, scenes, interfaces, mates,
+                 providers, software, packages)
+    search       Search for parts, sketches, assemblies, or scenes
+    add          Add a dependency, sketch, part, assembly, scene, or software
     import       Import a dependency, sketch, part, or assembly
     test         Run tests on a part, assembly, or scene
     inspect      View a part, assembly, or scene visually
     info         Show detailed information about a part, assembly, or scene
-    convert      Convert parts or sketches to another format and update their type
+    bom          Print the bill of materials of an assembly or a scene
+    convert      Convert parts, sketches or assemblies to another format and update their type
     export       Export a 3D view of parts, assemblies, or scenes
     render       Render a 2D projection of parts, assemblies, or scenes onto a plane
 
@@ -90,7 +96,6 @@ The commands and options supported by PartCAD CLI:
   Other commands:
     adhoc        Ad-hoc operations that do not require a package
     healthcheck  Check the host system for known issues
-    search       Search for parts, sketches, or assemblies
 
 Common options apply to every command, including ``-v``/``-q`` to raise or lower verbosity, ``--no-ansi`` for
 plain-text logs, and ``-p PATH`` to select the package (a ``partcad.yaml`` file or a directory that contains
@@ -287,9 +292,14 @@ missing.
 What is included, and what is not
 =================================
 
-The bundle carries everything the wheels would install, including the optional extras that the wheels leave
-to the user: the Python linter (``lint``). A frozen bundle cannot be extended afterwards, so it ships
-complete.
+The bundle carries the optional extras that the wheels leave to the user, because a frozen bundle cannot be
+extended afterwards: the Python linter (``lint``) is in it, ready to run.
+
+What it does **not** carry is a CAD kernel. The bundle is three console programs, not a library to import, and
+every shape those programs build, render, export or tessellate is produced in the conda sandbox PartCAD
+provisions and comes back as geometry the commands never open themselves. So ``conda`` (or ``mamba``) is as
+much a prerequisite here as it is for the wheels, and leaving OpenCASCADE out is most of why the bundle is
+around 180MB rather than around 1GB.
 
 On Linux x86_64 and on Windows it also carries **OpenSCAD**, which PartCAD runs as an external program to
 build ``.scad`` parts. The bundled copy is used in preference to any OpenSCAD installed on the machine, so that the
@@ -443,8 +453,9 @@ The installer is not signed, so SmartScreen shows a warning: choose "More info",
 ``partcad-ide-<version>-windows-x86_64.zip`` is published next to it, for unpacking somewhere and running
 ``partcad-ide.exe`` without installing anything.
 
-The download is around 1GB: an editor, a Python interpreter, the OpenCASCADE geometry kernel and the
-extensions, all in one archive.
+It unpacks to around 500MB: an editor, a Python interpreter, the command line tools and the extensions, all
+in one archive. Like the standalone bundle inside it, it carries no CAD kernel -- shapes are built in a conda
+sandbox, so ``conda`` (or ``mamba``) is still expected on the machine.
 
 What is inside
 ==============
@@ -569,6 +580,18 @@ see :ref:`the PartCAD IDE <partcad-ide>`.
 
 This extension is available through the VS Code marketplace.
 The corresponding marketplace page is `here <https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_.
+
+Every `GitHub release <https://github.com/partcad/partcad/releases>`_ also carries the packaged extension as
+``partcad-<version>.vsix``, next to the wheels and the bundles. Install it from the command line, or with
+"Install from VSIX..." in the Extensions view:
+
+.. code-block:: shell
+
+  $ code --install-extension partcad-<version>.vsix
+
+Use it to pin a particular version, to install where the marketplace is not reachable, or to try a release
+before the marketplace has it. One package serves every platform: the extension is a JSON-RPC client with no
+Python and nothing compiled in it.
 
 .. _freecad-addon:
 

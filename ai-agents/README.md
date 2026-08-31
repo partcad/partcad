@@ -40,8 +40,8 @@ The plugin folder is named `claude`, but the command namespace comes from
   installs the standalone PyInstaller build from the latest GitHub release via
   the official `install.sh`; `python-module` installs the `partcad` wheel
   into the active Python environment (run as `python -m partcad_cli.click.command`).
-  Until a standalone release is published, `executable` reports that no published
-  installer is available and stops.
+  Releases publish bundles for Linux (x86_64, arm64), macOS (Apple silicon) and
+  Windows, and a `platforms.json` the installer reads to pick this machine's.
 - **`/pc:gen <description>`** — decides whether the request is a part, an
   assembly, or a 2D sketch and follows the matching flow below.
 - **`/pc:gen-part <description>`** — generates a single part: the agent picks a
@@ -89,6 +89,13 @@ The plugin folder is named `claude`, but the command namespace comes from
   `//pub/feature/render/draftwright` (through `pc render -e`) for a dimensioned
   technical drawing, so the numbers in the description are read off the drawing
   instead of estimated from pixels.
+- **`/pc:add-interfaces <part>`** — adds `interfaces`, ports and `implements:`
+  to an existing part so PartCAD can mate it by connection rather than by
+  hand-placed coordinates. The agent works the port positions out of the
+  geometry and then proves them twice: by drawing them on the part
+  (`pc render --with-all`) and by mating two instances in a throwaway assembly
+  and rendering that. The part has to pass `pc test` and the validation assembly
+  has to come out correctly connected.
 - **`/pc:search <query>`** — finds existing parts and assemblies in the catalog
   whose name, description, or source matches the query (`pc search parts` /
   `pc search assemblies`), lists the matches, and can inspect or render a chosen

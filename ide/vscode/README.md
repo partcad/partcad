@@ -18,13 +18,27 @@ Also, make sure to visit [our website](https://partcad.org/) and browse [the rep
 
 ## PartCAD Viewer
 
-Selecting a part, assembly, sketch or interface opens it in the **PartCAD Viewer** tab. PartCAD tessellates the
-shape in a sandboxed runtime and sends the result to this extension as compressed glTF over a socket on
-`127.0.0.1:9137`, so the viewer needs no CAD library of its own. The Python side of that connection is the
-`partcad_ide_client` package, which ships inside `partcad` itself.
+Selecting a part, assembly, scene, sketch or interface opens it in the **PartCAD Viewer** tab. PartCAD
+tessellates the shape in a sandboxed runtime and sends the result to this extension as compressed glTF over a
+socket on `127.0.0.1:9137`, so the viewer needs no CAD library of its own. The Python side of that connection
+is the `partcad_ide_client` package, which ships inside `partcad` itself.
 
 Anything that can reach that port displays into the same viewer, including a `pc inspect` run in a plain
 terminal. Set `PARTCAD_IDE_PORT` to move both ends off the default port.
+
+The panel is a strip of tabs over the one object, not just a canvas. The 3D view is always the first; the rest
+appear where they apply:
+
+| tab | what it shows |
+| --- | --- |
+| **3D** | The shape, drawn here from what arrived over the socket above. |
+| **Bill of Materials** | For an assembly or a scene: every part it is made of, recursively, counted. |
+| **Instructions** | For an assembly that declares its steps: the assembly guide, step by step. |
+| **Supply** | Where the objects in view can be bought, and a quote per supplier. |
+
+Only the 3D view comes over the viewer protocol. The others are questions about `<package>:<name>` that this
+extension puts to the PartCAD daemon, fetched the first time a tab is looked at and cached until the next
+object is shown — so an object belonging to no package gets the 3D view alone.
 
 ## The command line in the integrated terminal
 
