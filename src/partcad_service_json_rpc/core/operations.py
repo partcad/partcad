@@ -1731,7 +1731,11 @@ def bom(session, params):
         )
         assembly = ctx.get_scene(path, params=param_dict) if is_scene else ctx.get_assembly(path, params=param_dict)
         if assembly is None:
-            pc.logging.error("Object %s is not found" % path)
+            # Name the kind that was looked for. 'is_scene' has already decided
+            # which of the two this is, so there is nothing to be vague about,
+            # and "Object" tells a user asking for an assembly the least useful
+            # true thing: that something of some unnamed kind is missing.
+            pc.logging.error("%s %s is not found" % ("Scene" if is_scene else "Assembly", path))
             return None
 
         bom_items = asyncio.run(
