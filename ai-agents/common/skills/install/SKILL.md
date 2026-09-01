@@ -20,9 +20,18 @@ The plugin these skills ship in is released by PartCAD's own release, under
 PartCAD's own version: the `version` in the plugin's `.claude-plugin/plugin.json`
 names the release they were written against. Installing the newest release is
 the default and is normally right — the skills use documented commands, which do
-not disappear. Install that exact one (`--version <version>` below, or
-`PARTCAD_VERSION`) when a newer PartCAD turns out to behave differently from what
-a skill describes, and say why.
+not disappear. Install that exact one when a newer PartCAD turns out to behave
+differently from what a skill describes, and say why. How to pin depends on the
+mode, and the two do not share a knob:
+
+| Mode | Pin the plugin's version with |
+| --- | --- |
+| `executable` | `... \| sh -s -- --version <version>`, or `PARTCAD_VERSION=<version>` |
+| `python-module` | `python -m pip install -U "partcad==<version>"` |
+
+`--version` and `PARTCAD_VERSION` are `install.sh` options and do nothing in
+`python-module` mode, where the version is part of the requirement `pip` is
+given.
 
 ## 0. Skip if already installed
 

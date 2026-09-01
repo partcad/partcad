@@ -119,6 +119,7 @@ CLAUDE_PLUGIN_MANIFEST = REPO_ROOT / "ai-agents" / "claude" / ".claude-plugin" /
 
 
 def test_the_claude_plugin_states_the_release_version():
+    """The plugin is published by the release, so it states the release."""
     version = json.loads(CLAUDE_PLUGIN_MANIFEST.read_text(encoding="utf-8"))["version"]
     assert version == _bumpversion()["current_version"], (
         "ai-agents/claude/.claude-plugin/plugin.json is out of step with the release. The plugin is "

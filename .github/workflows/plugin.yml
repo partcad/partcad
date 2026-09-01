@@ -90,9 +90,14 @@ jobs:
       - name: Assert every skill arrived as a real file
         run: |
           missing=0
+          count=0
+          # The glob, never `ls`: a name is a pathname, and the word splitting
+          # that `for name in $(ls ...)` does to one would break on a space and
+          # then glob what it produced a second time.
           for source in ai-agents/common/skills/*/SKILL.md; do
             name="$(basename "$(dirname "${source}")")"
             shipped="ai-agents/.build/marketplace/pc/skills/${name}/SKILL.md"
+            count=$((count + 1))
             if [ ! -f "${shipped}" ]; then
               echo "::error::${name} is in the library but not in the artifact"
               missing=1
@@ -102,7 +107,7 @@ jobs:
             fi
           done
           if [ "${missing}" -eq 0 ]; then
-            echo "OK: $(ls -1 ai-agents/common/skills | wc -l) skills shipped byte for byte"
+            echo "OK: ${count} skills shipped byte for byte"
           fi
           exit "${missing}"
 
@@ -117,14 +122,21 @@ jobs:
           claude plugin install pc@partcad
           claude plugin details pc | tee details.txt
 
-          expected="$(ls -1 ai-agents/common/skills | wc -l)"
+          # Counted and iterated from the one glob, for the reason the step
+          # above gives: `ls` in a command substitution hands a pathname to
+          # word splitting and then to a second round of globbing.
+          expected=0
+          for source in ai-agents/common/skills/*/SKILL.md; do
+            expected=$((expected + 1))
+          done
           if ! grep -q "Skills (${expected})" details.txt; then
             echo "::error::the installed plugin does not report ${expected} skills"
             exit 1
           fi
           # Each name as a whole token, so that "gen" is not satisfied by
           # "gen-part" appearing in the inventory.
-          for name in $(ls -1 ai-agents/common/skills); do
+          for source in ai-agents/common/skills/*/SKILL.md; do
+            name="$(basename "$(dirname "${source}")")"
             if ! grep -qE "(^|[ ,])${name}([ ,]|$)" details.txt; then
               echo "::error::${name} is not in the installed plugin's inventory"
               exit 1

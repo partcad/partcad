@@ -41,14 +41,17 @@ FRONT_MATTER = re.compile(r"\A---\n(?P<body>.*?)\n---\n", re.DOTALL)
 
 
 def _skill_dirs():
+    """Every skill in the library, as a directory, sorted for stable test ids."""
     return sorted(p for p in SKILLS.iterdir() if p.is_dir())
 
 
 def _skill_ids():
+    """The names pytest parametrizes over, which are also the `/pc:<name>` commands."""
     return [p.name for p in _skill_dirs()]
 
 
 def _front_matter(skill: Path) -> dict:
+    """The skill's YAML front matter, parsed the way a session loading it would."""
     match = FRONT_MATTER.match((skill / "SKILL.md").read_text(encoding="utf-8"))
     assert match, "%s/SKILL.md has no `---` front matter block at the top of the file" % skill.name
     parsed = yaml.safe_load(match.group("body"))
@@ -63,6 +66,7 @@ def test_there_are_skills_to_ship():
 
 @pytest.mark.parametrize("name", _skill_ids())
 def test_every_skill_directory_holds_a_skill(name):
+    """A directory with no SKILL.md ships as a component that loads nothing."""
     assert (SKILLS / name / "SKILL.md").is_file(), "ai-agents/common/skills/%s has no SKILL.md" % name
 
 

@@ -175,6 +175,14 @@ To rebuild the artifacts without cutting a release, run the `Plugin` workflow
 from the Actions tab. To republish `plugin-dist` alone, re-run the `Deployment`
 run of the release it should carry.
 
+The publish is a force-push, so it is guarded twice against moving the branch
+backwards. Concurrent releases are serialized by a concurrency group on that job
+alone, and — because a re-run of an older release is not concurrent with
+anything — the job reads the version `plugin-dist` currently carries and refuses
+to publish an older one over it. Republishing an *earlier* release therefore
+fails on purpose, with the version it found; delete the branch if that is really
+what you want.
+
 ### Build the artifact locally
 
 ```bash
@@ -182,8 +190,12 @@ ai-agents/scripts/materialize.sh          # writes ai-agents/.build/marketplace
 ```
 
 Produces a self-contained `pc/` plugin (real `skills/` files), a
-`marketplace.json` pointing at it, and `pc-<version>.zip`. It validates both
-manifests, so the Claude Code CLI has to be on `PATH`.
+`marketplace.json` pointing at it, and `pc-<version>.zip`. Two prerequisites,
+both of which the script checks rather than working around: the Claude Code CLI
+on `PATH`, because it validates both manifests, and `zip`, because the archive
+is what the release attaches — it is a required output, so a machine without
+`zip` gets an error here rather than a partial artifact and a puzzling failure
+later.
 
 Note: because the `skills` symlink escapes the plugin directory into `common/`, a
 lightweight `git-subdir` marketplace source will **not** work (the sparse clone

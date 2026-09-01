@@ -404,6 +404,19 @@ jobs:
     permissions:
       contents: write
 
+    # Serialize this job across runs, so that two releases going out close
+    # together cannot interleave their force-pushes. Not "cancel-in-progress":
+    # cancelling a publish mid-push is the thing to avoid, and the queue is one
+    # deep in practice. This does not cover a *re-run* of an older release
+    # weeks later -- nothing concurrent about that -- which is what the version
+    # check below is for. Job-level, not workflow-level, deliberately: a group
+    # over the whole of "deploy.yml" would queue or cancel the builds and the
+    # PyPI upload as well, and this job is the only one here that overwrites
+    # something that already exists.
+    concurrency:
+      group: publish-plugin-dist
+      cancel-in-progress: false
+
     steps:
       # No checkout: the branch this pushes shares no history with the source
       # tree, and the artifact is the whole of what goes on it.
@@ -446,6 +459,37 @@ jobs:
             echo "::error::no version in the plugin manifest"
             exit 1
           fi
+
+          # Never move the branch backwards. The push below is a force-push, so
+          # on its own it would happily restore an older plugin: re-running the
+          # Deployment run of an earlier release -- which is exactly how this
+          # branch is republished by hand -- would take "plugin-dist" back to
+          # that release's contents and leave every rolling install downgraded,
+          # silently. The concurrency group above orders concurrent runs; this
+          # is what stops an old one whenever it runs.
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          # A shallow fetch into a scratch repository, because there is no
+          # checkout here and "git archive --remote" does not work against
+          # GitHub over https. An absent branch -- the first publish -- fetches
+          # nothing and leaves "published" empty, which is not an error.
+          probe="$(mktemp -d)"
+          published="$(
+            git -C "${probe}" init -q &&
+            git -C "${probe}" fetch -q --depth 1 "${remote}" plugin-dist 2>/dev/null &&
+            git -C "${probe}" show FETCH_HEAD:pc/.claude-plugin/plugin.json 2>/dev/null |
+              sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1 || true
+          )"
+          rm -rf "${probe}"
+          if [ -n "${published}" ] && [ "${published}" != "${version}" ]; then
+            newest="$(printf '%s\n%s\n' "${published}" "${version}" | sort -V | tail -n 1)"
+            if [ "${newest}" = "${published}" ]; then
+              echo "::error::'plugin-dist' carries ${published}; refusing to publish ${version} over it."
+              echo "::error::Re-run the Deployment for the newest release instead, or delete the branch to reset it."
+              exit 1
+            fi
+          fi
+          echo "Publishing ${version} over ${published:-an empty branch}."
+
           cd marketplace
           # A fresh history every time, force-pushed. The branch is a pointer to
           # one state, not a record of how it got there -- the repository's own

@@ -19,7 +19,7 @@
 #   OUT_DIR/.claude-plugin/marketplace.json   catalog, source ./pc
 #   OUT_DIR/pc/.claude-plugin/plugin.json     the plugin manifest
 #   OUT_DIR/pc/skills/<name>/SKILL.md         real files (no symlinks)
-#   OUT_DIR/pc-<version>.zip                  plugin archive (if `zip` present)
+#   OUT_DIR/pc-<version>.zip                  plugin archive (`zip` required)
 #
 # The archive carries the version, like every other asset on a PartCAD release,
 # and that version is the repository's: "dev-tools/bumpversion.toml" moves
@@ -102,10 +102,18 @@ claude plugin validate "$OUT_DIR"
 echo "==> Validating materialized plugin"
 claude plugin validate "$OUT_DIR/$PLUGIN_NAME"
 
-if command -v zip >/dev/null 2>&1; then
-  ARCHIVE="$PLUGIN_NAME-$PLUGIN_VERSION.zip"
-  ( cd "$OUT_DIR" && rm -f "$ARCHIVE" && zip -qr "$ARCHIVE" "$PLUGIN_NAME" )
-  echo "==> Wrote plugin archive: $OUT_DIR/$ARCHIVE"
+# The archive is a required output, not a bonus. It used to be written only
+# "if command -v zip", which was harmless while nothing read it; the release
+# attaches it now, and the workflow that builds it fails on a missing *file*.
+# So a machine without "zip" reported "no files found" from an upload step
+# several steps later, naming neither the tool nor this script.
+if ! command -v zip >/dev/null 2>&1; then
+  echo "ERROR: 'zip' is required to write $PLUGIN_NAME-$PLUGIN_VERSION.zip. Install it and run again." >&2
+  exit 1
 fi
+
+ARCHIVE="$PLUGIN_NAME-$PLUGIN_VERSION.zip"
+( cd "$OUT_DIR" && rm -f "$ARCHIVE" && zip -qr "$ARCHIVE" "$PLUGIN_NAME" )
+echo "==> Wrote plugin archive: $OUT_DIR/$ARCHIVE"
 
 echo "==> Done. Symlink-free artifact at: $OUT_DIR ($PLUGIN_NAME $PLUGIN_VERSION)"
