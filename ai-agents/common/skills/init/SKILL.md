@@ -30,8 +30,8 @@ echo "PARTCAD=${PARTCAD:-<none>}"
 If `PARTCAD` is empty, PartCAD is not available. Stop and tell the user to
 install it first — do not fabricate a `partcad.yaml`:
 
-> PartCAD is not installed. Run `/pc:install executable` for the standalone
-> build, or `/pc:install python-module` to install it into the current Python
+> PartCAD is not installed. Run `/pc:setup executable` for the standalone
+> build, or `/pc:setup python-module` to install it into the current Python
 > environment, then re-run `/pc:init`.
 
 ## 3. Run init

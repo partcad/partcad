@@ -55,8 +55,8 @@ The plugin folder is named `claude`, but the command namespace comes from
 - **`/pc:init`** — initializes a PartCAD package by delegating to the installed
   CLI (`pc init` / `partcad init`). It resolves the command from `PATH` or the
   active Python environment (`python -m partcad_cli.click.command`); if PartCAD
-  is missing it points the user at `/pc:install` instead of hand-writing files.
-- **`/pc:install <mode>`** — makes `pc`/`partcad` available. `executable`
+  is missing it points the user at `/pc:setup` instead of hand-writing files.
+- **`/pc:setup <mode>`** — makes `pc`/`partcad` available. `executable`
   installs the standalone PyInstaller build from the latest GitHub release via
   the official `install.sh`; `python-module` installs the `partcad` wheel
   into the active Python environment (run as `python -m partcad_cli.click.command`).
@@ -65,6 +65,20 @@ The plugin folder is named `claude`, but the command namespace comes from
   The same release publishes this plugin, so the plugin's version names the
   PartCAD the skills were written against, and is what `--version` pins if the
   newest one ever behaves differently.
+
+  It then installs the **PartCAD extension** too, but only when the session is
+  running in an editor that can host it: `TERM_PROGRAM=vscode` and the editor's
+  own command line tool on `PATH` are what say which one, since Visual Studio
+  Code, VSCodium and the PartCAD IDE are indistinguishable otherwise. The IDE
+  already carries the extension and is left alone. VS Code gets
+  `OpenVMP.partcad` from the Visual Studio Marketplace; VSCodium gets the
+  release's `.vsix`, because its gallery is Open VSX — where PartCAD does not
+  publish — and the Marketplace's terms restrict it to Microsoft's own products
+  (see *Licensing* in [`ide/standalone`](../ide/standalone/README.md)).
+
+  Not named `install`: `pc install` is PartCAD's `npm install`, which fetches a
+  package's imports and needs PartCAD to already be here. This skill is what
+  puts it here.
 - **`/pc:gen <description>`** — decides whether the request is a part, an
   assembly, or a 2D sketch and follows the matching flow below.
 - **`/pc:gen-part <description>`** — generates a single part: the agent picks a

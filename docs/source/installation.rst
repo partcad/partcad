@@ -17,9 +17,10 @@ install the command line tools below for you.
   /plugin marketplace add partcad/partcad@plugin-dist
   /plugin install pc@partcad
 
-Then ``/pc:install`` puts ``pc`` on this machine, ``/pc:init`` starts a package, and
-``/pc:gen a mounting bracket with four M4 holes`` writes the CAD script, renders four views of what came
-out and checks them against what was asked. The skills run the same commands documented in
+Then ``/pc:setup`` puts ``pc`` on this machine -- and, when it is run from a Visual Studio Code or
+VSCodium terminal, :ref:`the extension <vscode-extension>` into that editor -- ``/pc:init`` starts a
+package, and ``/pc:gen a mounting bracket with four M4 holes`` writes the CAD script, renders four views
+of what came out and checks them against what was asked. The skills run the same commands documented in
 :doc:`cli`, so nothing they produce depends on the agent that produced it.
 
 .. note::
@@ -622,6 +623,10 @@ Visual Studio Code extension
 For an editor you already have. To get the extension, the tools and an editor in one download instead,
 see :ref:`the PartCAD IDE <partcad-ide>`.
 
+Running ``/pc:setup`` from a terminal inside Visual Studio Code or VSCodium installs this extension along
+with the command line tools, by whichever of the routes below fits that editor. The rest of this section is
+how to do it by hand.
+
 This extension is available through the VS Code marketplace.
 The corresponding marketplace page is `here <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_.
 
@@ -636,6 +641,13 @@ Every `GitHub release <https://github.com/partcad/partcad/releases>`_ also carri
 Use it to pin a particular version, to install where the marketplace is not reachable, or to try a release
 before the marketplace has it. One package serves every platform: the extension is a JSON-RPC client with no
 Python and nothing compiled in it.
+
+.. note::
+
+  On **VSCodium** the ``.vsix`` is the only route. VSCodium's gallery is `Open VSX <https://open-vsx.org/>`_,
+  where PartCAD does not publish, and the Visual Studio Marketplace's terms restrict its use to Microsoft's
+  own products. Install the same file with ``codium --install-extension``. The
+  :ref:`PartCAD IDE <partcad-ide>` needs none of this -- it ships the extension inside the application.
 
 If you installed the extension before it moved
 ==============================================

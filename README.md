@@ -180,7 +180,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
           `/pc:gen-sketch`) -- the agent authors the CAD script and validates it by rendering
     - [x] Describe an existing object (`/pc:describe`), search the catalog (`/pc:search`), add interfaces
           (`/pc:add-interfaces`)
-    - [x] Set a project up (`/pc:init`, `/pc:install`)
+    - [x] Set a project up (`/pc:init`, `/pc:setup`)
   - [x] `--no-ansi` output on every command, so an agent parses plain text rather than progress bars
   - [x] Free-form `comment:` context in `Assembly YAML`, written for whoever reads the assembly next
 - Other features
@@ -227,7 +227,8 @@ and search what a package already has, and set up the tools themselves:
 /plugin install pc@partcad
 ```
 
-Then `/pc:install` puts the command line tools on the machine, `/pc:init` starts a package, and
+Then `/pc:setup` puts the command line tools on the machine -- and, when it is run from a Visual Studio Code
+or VSCodium terminal, the extension below into that editor -- `/pc:init` starts a package, and
 `/pc:gen a mounting bracket with four M4 holes` writes the CAD script, renders four views of what came out and
 checks them against what was asked. The skills drive the same `pc` commands documented below, so nothing they
 produce is locked to the agent that produced it.
@@ -264,7 +265,11 @@ This extension can be installed by searching for `PartCAD` in the VS Code extens
 
 Every [release](https://github.com/partcad/partcad/releases) also carries the packaged extension as
 `partcad-<version>.vsix`, to pin a version or to install where the marketplace is not reachable:
-`code --install-extension partcad-<version>.vsix`.
+`code --install-extension partcad-<version>.vsix`. On VSCodium that file is the only route -- its gallery is
+[Open VSX](https://open-vsx.org/), where PartCAD does not publish, and the Visual Studio Marketplace's terms
+restrict its use to Microsoft's own products.
+
+`/pc:setup` above does either of these for you when it is run from a terminal inside the editor.
 
 Make sure to have Python configured and a [conda] environment set up in VS Code before using PartCAD.
 
