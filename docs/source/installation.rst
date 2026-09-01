@@ -457,6 +457,33 @@ It unpacks to around 500MB: an editor, a Python interpreter, the command line to
 in one archive. Like the standalone bundle inside it, it carries no CAD kernel -- shapes are built in a conda
 sandbox, so ``conda`` (or ``mamba``) is still expected on the machine.
 
+The first start
+===============
+
+There is nothing to set up after installing. The first time the IDE starts, it runs ``pc init`` in
+``~/.partcad/projects/start`` -- ``%USERPROFILE%\.partcad\projects\start`` on Windows -- and opens that
+folder as the workspace, so the window you get has a package in it rather than an empty editor. A welcome
+window opens beside it with the six things worth doing first: add a part, look at it in 3D, render the
+package, use ``pc`` in the terminal.
+
+The package is an ordinary one in an ordinary folder. It is under ``~/.partcad`` rather than inside the
+application, so ``pc`` in any terminal works with the same package, and uninstalling the IDE does not take
+it with it. Move it, put it in git, or leave it and make your own with ``pc init`` somewhere else.
+
+The editor asks whether you trust the authors of a folder before it runs anything from it, and this folder
+is no exception -- the answer for the one it just made for you is yes.
+
+This happens once. Afterwards the IDE opens where you left it, like any editor:
+
+* ``PartCAD IDE: Open the starter package`` in the Command Palette opens the package again, and creates it
+  if it is not there.
+* ``PartCAD IDE: Welcome`` opens the welcome window again.
+* ``partcadIde.createStarterPackage``, in the settings, turns the whole thing off for a fresh installation:
+  the IDE then starts in an empty window.
+
+Opening the IDE on a folder of your own -- from "Open with PartCAD IDE", or by starting it with a path --
+skips it too. It never takes over a window that already has something in it.
+
 What is inside
 ==============
 

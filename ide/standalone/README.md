@@ -42,8 +42,9 @@ than dropping it quietly.
   `../.vscode/extensions.json`.
 - `product.overlay.json` - the branding, merged into the editor's `product.json`.
 - `installer/partcad-ide.iss` - the Windows installer, compiled by Inno Setup.
-- `bootstrap/` - a small extension that ships only in this IDE: it opens the PartCAD workbench on startup and
-  points the PartCAD extension at the tools in the same application.
+- `bootstrap/` - a small extension that ships only in this IDE: it opens the PartCAD workbench on startup,
+  points the PartCAD extension at the tools in the same application, and creates and opens the package the
+  IDE starts in. `bootstrap/media/` is the text of the welcome window's steps.
 - `tools/` - the parts of the build that are more than a shell one-liner, each with its own tests.
 - `tests/` - `pytest` tests for `tools/`.
 
@@ -160,6 +161,47 @@ It is a separate extension rather than a few lines in `ide/vscode` on purpose. T
 activates when a workspace looks like a PartCAD project; making it activate on startup, everywhere, to check
 whether it is running inside this IDE would slow down every other Visual Studio Code that has it installed.
 
+## The first start, and the welcome window
+
+An editor that opens on an empty window asks the user to go and find something to open. This one has just
+been installed by somebody who has, by assumption, no PartCAD package to find -- so on its first start
+`bootstrap/` makes one: `pc init` in `~/.partcad/projects/start`, opened as the workspace, with the welcome
+window beside it.
+
+**The package goes under `~/.partcad`, not under `~/.partcad-ide`.** It is the user's first design, not
+editor state: `pc` in a terminal works with the same package, and uninstalling the IDE leaves it alone.
+
+**It runs the bundled `pc`, not the JSON-RPC service.** `pc init` writes a template and adds the "Render"
+command to `.vscode/launch.json`; going through the service would mean starting a daemon to write two files.
+The exit code is not what says whether it worked -- `pc init` reports a refusal by logging it and exiting 0 --
+so the check is that `partcad.yaml` is there afterwards.
+
+**It happens in the editor rather than in the installers.** There are three of those (`install.sh`, the
+Windows setup program, and a .dmg the user drags to Applications, which is no installer at all), and the
+folder has to be opened by the editor in any case. One implementation, in the one place that runs on every
+platform and every way of installing.
+
+**It happens once**, and it never takes over a window that has something in it: an IDE started on a folder --
+"Open with PartCAD IDE", or a path on the command line -- records that the first start has happened and
+leaves the user where they are. The record is in `globalState`, which is why the welcome window survives
+`vscode.openFolder` reopening the workbench: the walkthrough cannot be opened before the reload, because an
+editor belongs to the window it was opened in, so it is left as a note for the activation that follows.
+
+The welcome window itself is a walkthrough (`bootstrap/package.json`, with the text of its steps in
+`bootstrap/media/`), and `workbench.startupEditor` is `welcomePageInEmptyWorkbench` rather than `none`: with a
+package open the workbench is what the user came for, and with no folder open there is nothing else to show.
+It is what the editor calls "Welcome", so `Help > Welcome` and `PartCAD IDE: Welcome` reach it afterwards.
+
+`partcadIde.createStarterPackage` turns the whole thing off. Without the command line tools -- a developer
+build -- there is no `pc` to run, so the IDE says so in its output channel, shows the welcome window and
+starts in an empty window.
+
+One thing the IDE cannot do for the user: the folder it just created is still a folder the editor has not
+been told to trust, so the trust prompt appears on it. `bootstrap` supports untrusted workspaces (it reads
+nothing from the workspace), so the welcome window is there to explain what is asking. Turning workspace
+trust off in `product.overlay.json` would remove the prompt for every package the user ever opens, including
+the ones they download, and PartCAD runs the code in those.
+
 ## Where things end up on the user's machine
 
 | | Linux | macOS | Windows |
@@ -167,6 +209,7 @@ whether it is running inside this IDE would slow down every other Visual Studio 
 | The application | `~/.local/share/partcad/<version>-ide` | `/Applications/PartCAD IDE.app` | wherever the .zip was unpacked |
 | Settings, state, extensions the user installs | `~/.partcad-ide` | `~/.partcad-ide` | `%USERPROFILE%\.partcad-ide` |
 | PartCAD's own cache and configuration | `~/.partcad` | `~/.partcad` | `%USERPROFILE%\.partcad` |
+| The package the IDE starts in | `~/.partcad/projects/start` | `~/.partcad/projects/start` | `%USERPROFILE%\.partcad\projects\start` |
 
 `~/.partcad-ide` is what keeps this IDE from sharing anything with a Visual Studio Code or VSCodium on the same
 machine. `~/.partcad` is deliberately shared: it is PartCAD's, not the editor's, and a package installed from

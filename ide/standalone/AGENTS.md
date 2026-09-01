@@ -55,12 +55,19 @@ does not contain the switch -- each of which leaves an IDE that either has no so
 ## Test
 
 ```bash
-python -m pytest ide/standalone/tests -o addopts=       # the build tooling
+python -m pytest ide/standalone/tests -o addopts=              # the build tooling
+node --test ide/standalone/bootstrap/test/*.test.js           # the IDE bootstrap extension
 ```
 
 `-o addopts=` because the repository-wide `pyproject.toml` options pull in coverage and reporting plugins these
 tests have no use for. They are not part of the `pytest tests` run or of the `pre-commit` hook;
 `.github/workflows/build-ide-standalone.yml` runs them, before it spends an hour building.
+
+The bootstrap tests need nothing installed -- `node --test` is in Node, and `test/vscode-stub.js` is as much of
+the `vscode` module as the extension touches. They cover the first start (the package it creates, the workspace
+it opens, the welcome window that follows the window reopening), which is otherwise only visible in a built and
+installed IDE. Pass the files rather than the directory: `node --test <dir>` is not the same thing in every
+Node release.
 
 There is no unit test for `build.sh` itself. What checks it is `tools/verify_bundle.py`, which the build runs on
 its own result, and the `install` job in that workflow, which installs the archive and runs what comes out.
@@ -71,8 +78,14 @@ its own result, and the `install` job in that workflow, which installs the archi
   installed from Open VSX or cannot be redistributed, and say which in the `reason`.
 - **Branding, or a default setting**: `product.overlay.json`. A `null` removes a key; `${VERSION}` is the
   PartCAD version.
-- **What the IDE does on startup**: `bootstrap/extension.js`. It is plain JavaScript, packaged as it is -- no
-  compile step, so keep it that way.
+- **What the IDE does on startup**: `bootstrap/extension.js` -- including the package it creates in
+  `~/.partcad/projects/start` and opens as the first workspace. It is plain JavaScript, packaged as it is --
+  no compile step, so keep it that way.
+- **The welcome window**: the walkthrough in `bootstrap/package.json`, with the text of its steps in
+  `bootstrap/media/`. `tests/test_bootstrap.py` checks that its buttons run commands that exist and that its
+  steps point at files that are there; moving the starter package means moving it in the install jobs of
+  `.github/workflows/build-ide-standalone.yml` and in `docs/source/installation.rst` too, which that test
+  also enforces.
 - **What the Windows installer sets up**: `installer/partcad-ide.iss`. Never change its `AppId`: Windows
   recognizes an upgrade, and an uninstall, by that and nothing else.
 - **The VSCodium release**: `build.sh --vscodium-version <tag> --record`, then restore the comments `--record`

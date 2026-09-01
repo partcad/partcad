@@ -1,0 +1,128 @@
+#
+# PartCAD, 2026
+#
+# Author: PartCAD (support@partcad.org)
+#
+# Licensed under Apache License, Version 2.0.
+#
+
+"""
+The bootstrap extension: the welcome window, and the package the IDE starts in.
+
+Everything here is a link between two files that nothing else keeps together --
+a walkthrough addressed by a string in JavaScript, a button that runs a command
+another extension contributes, a starter package whose path the installer tests
+and the documentation both spell out. Each of them breaks into an IDE that
+starts and looks right, with a welcome window whose buttons do nothing.
+"""
+
+import json
+import re
+
+import pytest
+from conftest import COMPONENT_ROOT, REPO_ROOT
+
+BOOTSTRAP = COMPONENT_ROOT / "bootstrap"
+EXTENSION_JS = (BOOTSTRAP / "extension.js").read_text(encoding="utf-8")
+
+# The commands a walkthrough may use without any extension contributing them:
+# the editor's own. Prefixes rather than a list -- what this is really checking
+# is that a `partcad.*` command in a button is one that exists.
+BUILT_IN_COMMAND_PREFIXES = ("workbench.", "vscode.", "editor.")
+
+
+@pytest.fixture(scope="module")
+def manifest():
+    return json.loads((BOOTSTRAP / "package.json").read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="module")
+def walkthrough(manifest):
+    (only,) = manifest["contributes"]["walkthroughs"]
+    return only
+
+
+def javascript_constant(name):
+    """The string a `const NAME = '...'` in extension.js is set to."""
+    match = re.search(rf"^const {name} = '([^']*)';$", EXTENSION_JS, re.MULTILINE)
+    assert match, f"extension.js no longer declares {name}"
+    return match.group(1)
+
+
+def command_links(text):
+    return re.findall(r"\(command:([^)]+)\)", text)
+
+
+def test_the_walkthrough_is_the_one_the_extension_opens(manifest, walkthrough):
+    # `workbench.action.openWalkthrough` takes the id the editor gives a
+    # walkthrough, which is assembled from three fields in three places. An id
+    # that is not registered opens an empty editor and reports nothing.
+    identifier = f"{manifest['publisher']}.{manifest['name']}#{walkthrough['id']}"
+    assert javascript_constant("WALKTHROUGH") == identifier
+
+
+def test_every_step_has_the_media_it_names(walkthrough):
+    for step in walkthrough["steps"]:
+        (kind, value), *rest = step["media"].items()
+        assert not rest, f"step {step['id']} declares more than one kind of media"
+        assert kind in ("markdown", "image", "svg"), f"step {step['id']} has media the editor does not render"
+        assert (BOOTSTRAP / value).is_file(), f"step {step['id']} points at {value}, which is not there"
+
+
+def test_every_button_runs_a_command_that_exists(manifest, walkthrough):
+    ours = {command["command"] for command in manifest["contributes"]["commands"]}
+    extension = json.loads((REPO_ROOT / "ide" / "vscode" / "package.json").read_text(encoding="utf-8"))
+    theirs = {command["command"] for command in extension["contributes"]["commands"]}
+
+    for step in walkthrough["steps"]:
+        for command in command_links(step["description"]):
+            if command.startswith(BUILT_IN_COMMAND_PREFIXES):
+                continue
+            assert command in ours or command in theirs, f"step {step['id']} runs {command}, which nothing contributes"
+
+
+def test_every_completion_event_names_something_that_happens(manifest, walkthrough):
+    ours = {command["command"] for command in manifest["contributes"]["commands"]}
+    extension = json.loads((REPO_ROOT / "ide" / "vscode" / "package.json").read_text(encoding="utf-8"))
+    theirs = {command["command"] for command in extension["contributes"]["commands"]}
+
+    for step in walkthrough["steps"]:
+        for event in step.get("completionEvents", []):
+            if not event.startswith("onCommand:"):
+                continue
+            command = event[len("onCommand:") :]
+            if command.startswith(BUILT_IN_COMMAND_PREFIXES):
+                continue
+            # A step that waits for a command nobody can run never completes.
+            assert command in ours or command in theirs, f"step {step['id']} waits for {command}, which does not exist"
+
+
+def test_the_extension_registers_the_commands_it_contributes(manifest):
+    contributed = {command["command"] for command in manifest["contributes"]["commands"]}
+    registered = set(re.findall(r"registerCommand\('([^']+)'", EXTENSION_JS))
+    # One without the other is either a palette entry that fails when it is
+    # chosen, or a command that only the code knows about.
+    assert contributed == registered
+
+
+def test_the_settings_the_extension_reads_are_declared(manifest):
+    declared = set(manifest["contributes"]["configuration"]["properties"])
+    read = {f"partcadIde.{name}" for name in re.findall(r"configuration\.get\('([^']+)'", EXTENSION_JS)}
+    assert read <= declared, "extension.js reads a setting that is in no settings UI and has no default"
+
+
+def test_the_starter_package_is_where_everything_else_expects_it():
+    # The path is spelled out in four places that cannot import each other: the
+    # extension, the settings description, the documentation, and the workflow
+    # that starts an installed IDE and waits for the package to appear. The
+    # workflow is the one that matters -- moving the package without it silently
+    # stops testing anything.
+    path = re.search(r"const STARTER_PACKAGE_PATH = \[([^\]]+)\];", EXTENSION_JS)
+    assert path, "extension.js no longer declares STARTER_PACKAGE_PATH"
+    directory = "/".join(re.findall(r"'([^']+)'", path.group(1)))
+    assert directory == ".partcad/projects/start"
+
+    workflow = (REPO_ROOT / ".github" / "workflows" / "build-ide-standalone.yml").read_text(encoding="utf-8")
+    assert directory in workflow, "the install jobs no longer check the directory the IDE creates"
+    documentation = (REPO_ROOT / "docs" / "source" / "installation.rst").read_text(encoding="utf-8")
+    assert directory in documentation, "the documentation no longer tells the user where the package is"

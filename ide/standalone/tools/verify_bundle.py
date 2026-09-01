@@ -32,10 +32,13 @@ import jsonc  # noqa: E402  (the path has to be set up first)
 
 SERVICE_EXECUTABLES = ("partcad-json-rpc", "partcad-json-rpc.exe")
 
+# The extension that carries the welcome window (`../bootstrap`).
+BOOTSTRAP_EXTENSION = "partcad.partcad-ide-bootstrap"
 
-def installed_extensions(extensions_dir: pathlib.Path) -> dict[str, dict]:
-    """Map `publisher.name` (lowercased) to its manifest, for every extension found."""
-    found: dict[str, dict] = {}
+
+def installed_extension_entries(extensions_dir: pathlib.Path) -> dict[str, tuple[pathlib.Path, dict]]:
+    """Map `publisher.name` (lowercased) to (directory, manifest), for every extension found."""
+    found: dict[str, tuple[pathlib.Path, dict]] = {}
     if not extensions_dir.is_dir():
         return found
     for entry in sorted(extensions_dir.iterdir()):
@@ -49,8 +52,63 @@ def installed_extensions(extensions_dir: pathlib.Path) -> dict[str, dict]:
         publisher = package.get("publisher")
         name = package.get("name")
         if publisher and name:
-            found[f"{publisher}.{name}".lower()] = package
+            found[f"{publisher}.{name}".lower()] = (entry, package)
     return found
+
+
+def installed_extensions(extensions_dir: pathlib.Path) -> dict[str, dict]:
+    """Map `publisher.name` (lowercased) to its manifest, for every extension found."""
+    return {identifier: package for identifier, (_, package) in installed_extension_entries(extensions_dir).items()}
+
+
+def media_files(step: dict) -> list[str]:
+    """The files a walkthrough step's media points at.
+
+    `image` may be one path or one per theme, `svg` and `markdown` are a path,
+    and `altText` is text rather than a file.
+    """
+    files = []
+    for kind, value in (step.get("media") or {}).items():
+        if kind == "altText":
+            continue
+        if isinstance(value, dict):
+            files.extend(str(path) for path in value.values())
+        else:
+            files.append(str(value))
+    return files
+
+
+def check_welcome(extensions_dir: pathlib.Path, problems: list[str], notes: list[str]) -> None:
+    """The welcome window: the walkthrough the IDE opens the first time it starts.
+
+    A walkthrough is data in a manifest pointing at files beside it, so it fails
+    the way data fails -- the editor renders an empty step and says nothing. The
+    check is that the extension carrying it shipped both halves: a packaging
+    rule that took the manifest and left the media behind produces an IDE whose
+    welcome window is a list of empty pages.
+    """
+    entry = installed_extension_entries(extensions_dir).get(BOOTSTRAP_EXTENSION)
+    if entry is None:
+        # Absent altogether is reported against the plan, with the reason.
+        return
+    directory, manifest = entry
+
+    walkthroughs = manifest.get("contributes", {}).get("walkthroughs", [])
+    if not walkthroughs:
+        problems.append(f"{BOOTSTRAP_EXTENSION} contributes no walkthrough; the IDE has no welcome window")
+        return
+
+    for walkthrough in walkthroughs:
+        for step in walkthrough.get("steps", []):
+            for name in media_files(step):
+                if not (directory / name).is_file():
+                    problems.append(
+                        f"welcome window: step {step.get('id')} shows {name}, which is not in the extension"
+                    )
+        notes.append(
+            f"welcome window: {walkthrough.get('title')} ({len(walkthrough.get('steps', []))} steps, "
+            f"from {BOOTSTRAP_EXTENSION})"
+        )
 
 
 def activity_bar_containers(extensions: dict[str, dict]) -> list[tuple[str, str, str]]:
@@ -188,6 +246,8 @@ def main(argv: list[str] | None = None) -> int:
     for entry in plan["skip"]:
         if entry["id"].lower() in present:
             problems.append(f"extension {entry['id']} was installed although the policy skips it: {entry['reason']}")
+
+    check_welcome(extensions_dir, problems, notes)
 
     if args.expect_tools:
         tools = args.resources / "partcad-cli"
