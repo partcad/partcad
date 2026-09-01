@@ -95,3 +95,49 @@ def test_ignore_bundled_returns_none_when_the_host_has_none(bundle, monkeypatch)
     _make_payload(bundle)
     monkeypatch.setattr(pc_openscad.shutil, "which", lambda _name: None)
     assert pc_openscad.find_executable(ignore_bundled=True) is None
+
+
+# The macOS installer. Homebrew disabled the "openscad" cask on 2026-09-01 for
+# failing the Gatekeeper check, and until then this ran `brew install openscad`
+# -- so the auto-fix could not install OpenSCAD on any Mac, and CI, which ran
+# the same command, could not either. None of that is visible from a Linux test
+# run, and the command is a list of strings nothing here executes, so the cask
+# it names is pinned rather than left to be rediscovered the next time the one
+# it names goes away.
+
+
+@pytest.fixture
+def homebrew(tmp_path, monkeypatch):
+    """Capture the command ``MacOpenSCADCheck.fix`` runs, and run nothing.
+
+    ``Path.home`` is redirected too, and not for isolation alone: before
+    installing, ``fix`` deletes cached ``*openscad*.dmg`` files out of the real
+    Homebrew download directory, which is not something a unit test may do to
+    the machine running it.
+    """
+    calls = []
+
+    class _Completed:
+        returncode = 0
+        stderr = b""
+
+    def _run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return _Completed()
+
+    monkeypatch.setattr(pc_openscad.subprocess, "run", _run)
+    monkeypatch.setattr(pc_openscad.Path, "home", staticmethod(lambda: tmp_path))
+    return calls
+
+
+def test_macos_installs_the_cask_homebrew_still_has(homebrew):
+    """`openscad` is disabled for good; `openscad@snapshot` is the maintained one."""
+    assert pc_openscad.MacOpenSCADCheck().fix() is True
+    assert [command for command, _ in homebrew] == [["brew", "install", "--cask", "openscad@snapshot"]]
+
+
+def test_macos_install_does_not_let_homebrew_update_itself(homebrew):
+    """One install stays one install rather than becoming a full `brew update`."""
+    pc_openscad.MacOpenSCADCheck().fix()
+    _, kwargs = homebrew[0]
+    assert kwargs["env"]["HOMEBREW_NO_AUTO_UPDATE"] == "1"
