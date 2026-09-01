@@ -305,6 +305,26 @@ function cachedBundleRoot(context: vscode.ExtensionContext): string {
 }
 
 /**
+ * Where this extension's downloads went before it changed publisher.
+ *
+ * `globalStorageUri` is named after the extension's identity, so moving from the
+ * `OpenVMP` publisher to `PartCAD` renamed the directory: it is
+ * `globalStorage/partcad.partcad/` now and everything downloaded before the move
+ * is under `globalStorage/openvmp.partcad/`, next door. Without this an upgrade
+ * across the move tells a user whose PartCAD is sitting right there that none
+ * was found, and downloads a second copy of it.
+ *
+ * Read-only, and deliberately not the download target: `downloadLatest` and
+ * `pc upgrade` install into the current root, so the old directory is superseded
+ * rather than kept in step. Same reasoning as the flat layout `newestBundleIn`
+ * still accepts -- an installation that predates a change keeps working, and
+ * loses nothing by not being the place new ones go.
+ */
+function legacyBundleRoot(context: vscode.ExtensionContext): string {
+    return path.join(path.dirname(context.globalStorageUri.fsPath), 'openvmp.partcad', 'partcad-bundle');
+}
+
+/**
  * Where a standalone installation may already be, this platform's answers first.
  *
  * On POSIX these are `install.sh`'s: `$XDG_DATA_HOME/partcad`, defaulting to
@@ -314,16 +334,23 @@ function cachedBundleRoot(context: vscode.ExtensionContext): string {
  * every place it looked, and a list of POSIX paths on Windows reads as noise.
  * `%LOCALAPPDATA%\PartCAD` is where a per-user installation belongs there.
  *
- * The extension's own download directory is last either way: an installation
- * the user chose outranks one this downloaded for them.
+ * The extension's own download directory comes after those either way: an
+ * installation the user chose outranks one this downloaded for them. And
+ * `legacyBundleRoot` comes last, for the same reason it is not the download
+ * target -- what is there predates the publisher move, so anything in the
+ * current root supersedes it.
  */
 function installRoots(context: vscode.ExtensionContext): string[] {
     if (process.platform === 'win32') {
         const localAppData = process.env.LOCALAPPDATA;
-        return [...(localAppData ? [path.join(localAppData, 'PartCAD')] : []), cachedBundleRoot(context)];
+        return [
+            ...(localAppData ? [path.join(localAppData, 'PartCAD')] : []),
+            cachedBundleRoot(context),
+            legacyBundleRoot(context),
+        ];
     }
     const xdgData = process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
-    return [path.join(xdgData, 'partcad'), cachedBundleRoot(context)];
+    return [path.join(xdgData, 'partcad'), cachedBundleRoot(context), legacyBundleRoot(context)];
 }
 
 /** Compare two version strings numerically, oldest first. */
@@ -371,8 +398,9 @@ function newestBundleIn(root: string): string | undefined {
  * Return the path to a usable `partcad-json-rpc`, or undefined if none is
  * present. Checked in order: the explicit setting, the newest bundle at this
  * platform's installation location (see `installRoots`), the newest bundle
- * previously downloaded into the extension's storage, the launcher symlink in
- * `~/.local/bin` where there is one, then PATH.
+ * previously downloaded into the extension's storage, the same under the storage
+ * directory this extension had before it changed publisher, the launcher symlink
+ * in `~/.local/bin` where there is one, then PATH.
  *
  * `searched` collects a description of each place as it is tried, so that the
  * "no service available" report can say where it looked without keeping a

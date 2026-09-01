@@ -78,7 +78,17 @@ a CAD addon, or documentation.
 
   Visual Studio Code extension for navigating through objects in a `partcad` project and UI interface to some
   of `partcad` functionality. Hosts the `PartCAD Viewer`. It is a **JSON-RPC client and nothing else** — it
-  talks to `partcad-json-rpc` and contains no Python of its own.
+  talks to `partcad-json-rpc` and contains no Python of its own. Published as `PartCAD.partcad`.
+
+* [ide/vscode-shim](./ide/vscode-shim/AGENTS.md):
+
+  The `OpenVMP.partcad` marketplace entry, as a transition shim: no code, one `extensionDependencies` on
+  `PartCAD.partcad`. The extension above used to be published by the `OpenVMP` publisher, and a publisher is
+  half of an extension's identity — the new entry is a *different* extension as far as the marketplace and the
+  editor are concerned, and nothing carries an installation across. So the old entry is not abandoned; it is
+  replaced by a package that pulls the new one in, and an existing installation updates into it. Same shape as
+  `shim/` below, and temporary in the same way. Do not give it a `main` or a `contributes`: both extensions are
+  installed at once afterwards, and anything it contributed would be contributed twice.
 
 * [ide/standalone](./ide/standalone/AGENTS.md):
 
@@ -205,7 +215,8 @@ Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.to
 Five artifacts ship from this repo: **one Python wheel** (`partcad`, carrying all six packages and all three
 entry points, with a `partcad-cli` shim published beside it from `shim/` so the older install instruction keeps
 working), the standalone PyInstaller bundles for users who have no Python, the PartCAD IDE, which carries those
-bundles inside it, the VS Code extension's `.vsix`, and the snap, which wraps the Linux bundle and is built but
+bundles inside it, the VS Code extension's `.vsix` (with the `ide/vscode-shim` `.vsix` published beside it, for
+the same reason the wheel has one), and the snap, which wraps the Linux bundle and is built but
 not published yet.
 
 There used to be five wheels pinning each other at `==`. Do not add a second distribution back: within one
@@ -217,7 +228,10 @@ before doing any of those. Note that the bundles fan out over
 that nothing keeps in sync; the README says which, and which of them a pull request skips without `#deepTest`. The
 `.vsix` is built once by `.github/workflows/vsix.yml`, which `build.yml` and `deploy.yml` both call, and
 `ide/standalone/build.sh` runs the same `npm run vsce-package` for the copy inside the IDE. One build
-serves every platform: the extension is a JSON-RPC client with no Python and no compiled content in it. Changing `.vscode/extensions.json` changes what the IDE ships with — see
+serves every platform: the extension is a JSON-RPC client with no Python and no compiled content in it. The
+same workflow packages the transition shim beside it, under the extension's version — which the shim does not
+state anywhere, but reads at package time, so the two cannot drift. A shim older than the entry it replaces is
+one the marketplace never delivers, and a second literal to bump is how that happens. Changing `.vscode/extensions.json` changes what the IDE ships with — see
 `ide/standalone/README.md`. The snap carries whatever the bundle carries, so it needs nothing extra of its
 own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
 

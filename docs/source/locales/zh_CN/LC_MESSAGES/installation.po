@@ -521,10 +521,10 @@ msgstr "Visual Studio Code 扩展"
 msgid ""
 "This extension is available through the VS Code marketplace. The "
 "corresponding marketplace page is `here "
-"<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_."
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_."
 msgstr ""
 "此扩展可通过 VS Code 市场获取。对应的市场页面在 `此处 "
-"<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_ 。"
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ 。"
 
 #: ../../source/installation.rst:338
 msgid "FreeCAD add-on"

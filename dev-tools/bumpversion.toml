@@ -121,6 +121,13 @@ filename = "ide/vscode/package.json"
 search = "version\": \"{current_version}\""
 replace = "version\": \"{new_version}\""
 
+# "ide/vscode-shim" is deliberately absent. The transition shim ships under the
+# release version like everything else, but it does not *state* it: its
+# "package.json" holds a placeholder and "vsix.yml" hands "vsce" the version it
+# reads from "ide/vscode/package.json". An entry here would be one more literal
+# whose only job is to agree with another literal -- which is the arrangement
+# the five-distribution layout was unpicked to be rid of.
+
 # The Explorer's welcome view used to state the release ("PartCAD v0.8.15 is not
 # found"), which is why it was bumped here. It no longer names a version: the
 # view it lived in fired whenever the extension was connected but not yet loaded,

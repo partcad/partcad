@@ -1,0 +1,36 @@
+{
+  "name": "partcad",
+  "displayName": "PartCAD (moved)",
+  "description": "Moved to the PartCAD publisher. This package installs the extension in its new home and does nothing else.",
+  "version": "0.0.0",
+  "publisher": "OpenVMP",
+  "license": "Apache-2.0",
+  "homepage": "https://partcad.readthedocs.io/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/partcad/partcad.git"
+  },
+  "bugs": {
+    "url": "https://github.com/partcad/partcad/issues"
+  },
+  "galleryBanner": {
+    "color": "#1e415e",
+    "theme": "dark"
+  },
+  "keywords": [
+    "partcad",
+    "cad"
+  ],
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionDependencies": [
+    "PartCAD.partcad"
+  ],
+  "scripts": {
+    "vsce-package": "npx --yes @vscode/vsce@3.9.2 package \"$(node -p \"require('../vscode/package.json').version\")\" --no-update-package-json --no-git-tag-version -o partcad-shim.vsix"
+  }
+}

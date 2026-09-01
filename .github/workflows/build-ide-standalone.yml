@@ -573,8 +573,11 @@ jobs:
           fi
           ls "${resources}/app/extensions"
           # Matched without regard to case: the editor lowercases the directory
-          # it installs an extension into.
-          find "${resources}/app/extensions" -maxdepth 1 -iname "openvmp.partcad-*" | grep -q . || {
+          # it installs an extension into. The version, not a bare "*", is what
+          # follows the id: "PartCAD.partcad-ide-bootstrap" is installed here too
+          # and a trailing "*" alone would accept it in place of the extension
+          # this is checking for.
+          find "${resources}/app/extensions" -maxdepth 1 -iname "partcad.partcad-[0-9]*" | grep -q . || {
             echo "::error::the installed IDE has no PartCAD extension"
             exit 1
           }
@@ -625,10 +628,15 @@ jobs:
           if (-not (Test-Path $app)) { throw "nothing installed at $app" }
           & (Join-Path $app "bin\partcad-ide.cmd") --version
           & (Join-Path $app "resources\partcad-cli\pc.exe") version
-          # Matched without regard to case: the editor lowercases the directory
-          # it installs an extension into.
+          # Matched without regard to case (`-match` is, and the editor
+          # lowercases the directory it installs an extension into). The version,
+          # not a bare "*", is what follows the id: "PartCAD.partcad-ide-bootstrap"
+          # is installed here too and a trailing "*" alone would accept it in
+          # place of the extension this is checking for. `-Filter` cannot express
+          # that -- it takes wildcards, not character classes -- so this filters
+          # in PowerShell instead.
           $extensions = Join-Path $app "resources\app\extensions"
-          if (-not (Get-ChildItem $extensions -Filter "openvmp.partcad-*")) {
+          if (-not (Get-ChildItem $extensions -Directory | Where-Object { $_.Name -match "^partcad\.partcad-\d" })) {
             throw "the installed IDE has no PartCAD extension"
           }
           # The PATH entries the installer adds for a new terminal.

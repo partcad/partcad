@@ -261,17 +261,23 @@ jobs:
                 -printf "%p %s bytes\n"
             fi
           done
-          # And the extension. One file, no platform in its name -- and the
-          # upload below sends the files it finds, so an extension that was
-          # never built would not fail there: it would simply be absent from
-          # the release, for somebody to notice later.
-          vsix="$(find release/vsix -type f -name "partcad-*.vsix" | head -n 1)"
-          if [ -z "${vsix}" ]; then
-            echo "::error::no VS Code extension package"
-            missing=1
-          else
-            echo "${vsix} $(stat -c%s "${vsix}") bytes"
-          fi
+          # And the extension, which is two packages: the extension itself and
+          # the "OpenVMP.partcad" transition shim published beside it. Neither
+          # has a platform in its name -- and the upload below sends the files
+          # it finds, so an extension that was never built would not fail
+          # there: it would simply be absent from the release, for somebody to
+          # notice later. Each is checked by its own name rather than by one
+          # "partcad-*.vsix" glob, which the shim also matches: that would
+          # report a release carrying only the shim as complete.
+          for package in "partcad" "partcad-shim"; do
+            vsix="$(find release/vsix -type f -name "${package}-[0-9]*.vsix" | head -n 1)"
+            if [ -z "${vsix}" ]; then
+              echo "::error::no ${package} VS Code extension package"
+              missing=1
+            else
+              echo "${vsix} $(stat -c%s "${vsix}") bytes"
+            fi
+          done
           exit "${missing}"
 
       # What the release carries, written down for the clients that download

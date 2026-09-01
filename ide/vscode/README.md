@@ -9,12 +9,12 @@ PartCAD is constantly evolving, with new features and integrations being added a
 ## PartCAD VSCode Extension
 
 This extension helps create PartCAD packages and explore packages that are already published.
-To learn more about PartCAD, see [the documentation](https://partcad.readthedocs.io/) or [the project repo](https://github.com/openvmp/partcad).
+To learn more about PartCAD, see [the documentation](https://partcad.readthedocs.io/) or [the project repo](https://github.com/partcad/partcad).
 Also, make sure to visit [our website](https://partcad.org/) and browse [the repository of published 3D models](https://partcad.org/repository).
 
-![Screenshot 1](https://github.com/openvmp/partcad/blob/main/docs/source/images/vscode1.png?raw=true)
+![Screenshot 1](https://github.com/partcad/partcad/blob/main/docs/source/images/vscode1.png?raw=true)
 
-![Screenshot 2](https://github.com/openvmp/partcad/blob/main/docs/source/images/vscode2.png?raw=true)
+![Screenshot 2](https://github.com/partcad/partcad/blob/main/docs/source/images/vscode2.png?raw=true)
 
 ## PartCAD Viewer
 

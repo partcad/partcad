@@ -34,7 +34,7 @@ Visual Studio Code extension
 ----------------------------
 
 The PartCAD extension is
-`available <https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_
+`available <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_
 in VS Code extension marketplace.
 
 Command line tools

@@ -33,12 +33,13 @@ exist until it is ready, and connecting to a pipe that is not there fails rather
 Where the executable comes from is `resolveServicePath`: the `partcad.servicePath` setting, then an existing
 standalone install (`$XDG_DATA_HOME/partcad`, or `%LOCALAPPDATA%\PartCAD` on Windows — `install.sh` does not
 run there, so naming the POSIX locations in the report only sent Windows users looking somewhere nothing
-installs to), then the extension's own download directory, then `~/.local/bin` where there is one, then a
+installs to), then the extension's own download directory, then the download directory it had before it
+changed publisher (see "The marketplace identity" below), then `~/.local/bin` where there is one, then a
 plain `PATH` lookup (quoted entries and all: Windows quotes a `PATH` entry containing a space, and the quotes
 are not part of the directory's name). That last one is why a user with their own Python needs no download at all -- `pip install partcad`
 puts `partcad-json-rpc` on the `PATH`.
 
-**The dialog appears if and only if none of those five resolves.** Anything found is used, silently: an
+**The dialog appears if and only if none of those six resolves.** Anything found is used, silently: an
 installation the user already has is never a question. When there is none, `ensureServiceExecutable` offers
 exactly the two things that can produce one -- `Download` the standalone bundle, or `Find installed PartCAD` and
 point at an environment that already has PartCAD in it. There is no third option, and in particular no silent
@@ -412,8 +413,36 @@ ships inside the PartCAD IDE. It used to be `nox --session build_package`, which
 first and had to run per platform because those were compiled wheels. There is no Python in this package any
 more, so one build serves every platform.
 
+The same workflow packages `ide/vscode-shim` beside it, into the same artifact and onto the same release. That
+is the marketplace entry this extension used to be published under -- see "The marketplace identity" below.
+
 After changing `partcad` core code while developing through this extension, click "Restart PartCAD" in the
 PartCAD `Context` view (or restart VS Code) to pick up the change.
+
+## The marketplace identity
+
+This extension is `PartCAD.partcad`. It used to be `OpenVMP.partcad`, and a publisher is half of an
+extension's identity, so that was a different extension rather than an earlier name for this one -- nothing
+in the marketplace or the editor carries an installation across.
+
+Two things follow, and both are already done:
+
+* **The old entry is not abandoned.** `ide/vscode-shim` is published to it: no code, one
+  `extensionDependencies` on `PartCAD.partcad`, so an installation of the old entry updates into a dependency
+  on this one. Its `AGENTS.md` has the rest, including the ordering rule -- **this extension has to be
+  published first**, because the editor fails an install whose dependency cannot be resolved.
+
+* **`globalStorageUri` moved with the identity.** It is named after the extension, so bundles this extension
+  had downloaded into `globalStorage/openvmp.partcad/` are not in `globalStorage/partcad.partcad/` where it
+  now looks. `resolveServicePath` reads the old root as a fallback (`legacyBundleRoot` in
+  `src/common/provision.ts`) -- without it, an upgrade across the move tells a user whose PartCAD is sitting
+  right there that none was found, and downloads a second copy. It is a fallback and not the download target:
+  new bundles go to the current root, so the old directory is superseded rather than kept in step.
+
+The extension id appears outside this package too -- `ide/standalone/build.sh` installs it into the IDE by id,
+`.github/workflows/build-ide-standalone.yml` checks the built IDE contains it (matched case-insensitively,
+since the editor lowercases the directory it installs into), and `.devcontainer/devcontainer.json` lists it.
+Those are the places to change together if it ever moves again.
 
 ## Commit
 
