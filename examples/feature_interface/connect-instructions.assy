@@ -2,7 +2,7 @@
 {% set other_placement = opposite[param_placement] %}
 links:
   # The bracket is the fixture: everything else is connected to it, so it is
-  # placed rather than connected and is held by its own foot.
+  # placed rather than connected and is held by its own side webs.
   - part: example-bracket
 
   - part: example-motor
@@ -19,13 +19,20 @@ links:
         not by this step.
       how:
         stage: seat-the-motor
-        # A straight push: "turnTorqueMax" stays at its default of zero.
+        # A straight push: "turnTorqueMax" stays at its default of zero, which
+        # is also what makes a "driver" here a contradiction rather than an
+        # unused field. This one is seated by hand, from both sides.
         pushForceMax: 30.0
-        holdWith: nema-17-motor-mount
+        # Both hands on the motor and both on the bracket. The empty list is
+        # what asks for that: every place a finger meets the object, which is
+        # every instance of "//builtin:grip" it implements. Naming them one by
+        # one would be the same thing until somebody adds a third grip.
+        holdWith:
+          //builtin:finger: []
         holdWithForceMin: 8.0
         holdWithForceMax: 20.0
-        holdTo: nema-17-motor-bracket-3
-        holdToInstance: {{ param_placement }}
+        holdTo:
+          //builtin:finger: []
 
   {% for corner in ['TL', 'BR', 'TR', 'BL'] %}
   - part: socket-head-m3-screw-6mm
@@ -45,6 +52,21 @@ links:
         stage: m3-snug
         turnDirection: cw
         turnTorqueMax: 0.4
+        # One hand pinches the head of the screw while the other holds the
+        # bracket; the driver goes in the 2.5mm socket in the top of the head.
+        # The screw is a 5.5mm head between two fingers, so the two flats are
+        # named rather than enumerated: the socket is a place a finger must not
+        # go.
+        holdWith:
+          //builtin:finger: [L, R]
+        holdTo:
+          //builtin:finger: []
+        # "driver" belongs to a connection that is turned in, which this one is:
+        # "turnTorqueMax" above is what says so. The screwdriver is the only tool
+        # here that can turn anything - a finger declares no "torqueMax" - and
+        # naming a tool that cannot is reported by `pc test`.
+        driver:
+          //builtin:screwdriver-hex: [socket]
   {% endfor %}
 
   {% for side in ['R', 'L'] %}
@@ -65,7 +87,14 @@ links:
         stage: m4-final
         turnDirection: cw
         turnTorqueMax: 1.7
-        # The bracket is held by the other slot while this one is driven.
-        holdTo: m4-slotted-30-thru-3
-        holdToInstance: {{ 'L' if side == 'R' else 'R' }}
+        holdWith:
+          //builtin:finger: [L, R]
+        # The bracket is held by the web on the other side while this screw is
+        # driven. "L" and "R" name instances of "//builtin:grip" here rather
+        # than of "m4-slotted-30-thru-3", which uses the same two names: the
+        # tool decides, because a finger mates to a grip and not to a bolt slot.
+        holdTo:
+          //builtin:finger: ["{{ 'L' if side == 'R' else 'R' }}"]
+        driver:
+          //builtin:screwdriver-hex: [socket]
   {% endfor %}

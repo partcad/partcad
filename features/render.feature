@@ -69,7 +69,7 @@ Feature: `pc render` command
     Given a file named "partcad.yaml" does not exist
     # The report names which of the two overlays this invocation resolved to,
     # so each option is told apart from the others rather than only from none.
-    Then STDERR should contain "<reported>: 10 port(s) drawn on the projection"
+    Then STDERR should contain "<reported>: 12 port(s) drawn on the projection"
     # Every port drawn is also named in the log, where it can be copied from
     # into an ASSY file.
     Then STDERR should contain "L-30mm-slotted-3mm-thru-opening-m4"

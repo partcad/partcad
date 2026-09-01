@@ -99,6 +99,8 @@ def test_connect_how_all_fields():
     assert how.turn_torque_max == 1.2
     assert how.thread_step == 0.5
     assert how.info() == {
+        # Not a field of its own: a connection that is turned is screwed in.
+        "method": "screw",
         "pushForceMax": 2.5,
         "pushDistance": None,
         "pushDirection": None,
@@ -135,6 +137,8 @@ def test_connect_how_deprecated_field_still_works():
     how = ConnectHow({"pushTorqueMax": 2.5}).resolve()
     assert how.push_force_max == 2.5
     assert how.info() == {
+        # Nothing is asked to turn, so the connection is a straight push.
+        "method": "push",
         "pushForceMax": 2.5,
         "pushDistance": None,
         "pushDirection": None,
@@ -696,3 +700,220 @@ def test_connect_test_passes_and_fails():
     assert asyncio.run(test.test([], ctx, bad)) == test.TEST_FAILED
     # Anything that is not an assembly has no connections to check.
     assert asyncio.run(test.test([], ctx, ctx.get_part(":screw"))) == test.TEST_PASSED
+
+
+#
+# The tool form of "holdWith"/"holdTo"/"driver"
+#
+
+
+def _tool_ctx():
+    return pc.init(CONNECT_HOW_PACKAGE)
+
+
+def _tool(name):
+    return "//:" + name
+
+
+def _screw_with_tools():
+    """A screw with two flats to pinch and one socket to turn it by."""
+    return _FakeItem(
+        interfaces={
+            "//:grip": {"L": {"grip": "L-grip"}, "R": {"grip": "R-grip"}},
+            "//:drive": {"socket": {"drive": "socket-drive"}},
+        },
+        project_name="//",
+        name="screw",
+    )
+
+
+def _plate_with_grips():
+    return _FakeItem(
+        interfaces={
+            "//:grip": {"left": {"grip": "left-grip"}, "right": {"grip": "right-grip"}},
+            "//:m3-thru": {"left": {"m3": "left-m3"}},
+        },
+        project_name="//",
+        name="plate",
+    )
+
+
+def test_tool_form_names_the_tool_and_where_it_acts():
+    """A mapping says which tool holds the object, and at which instances"""
+    ctx = _tool_ctx()
+    how = ConnectHow(
+        {
+            "holdWith": {_tool("finger"): ["L", "R"]},
+            "holdTo": {_tool("finger"): ["left"]},
+        },
+        where="test",
+    ).resolve(_screw_with_tools(), _plate_with_grips(), ctx=ctx)
+
+    assert [(h.tool, h.interface, h.instance, h.ports) for h in how.hold_with] == [
+        (_tool("finger"), "//:grip", "L", ["L-grip"]),
+        (_tool("finger"), "//:grip", "R", ["R-grip"]),
+    ]
+    assert [(h.tool, h.instance) for h in how.hold_to] == [(_tool("finger"), "left")]
+    assert how.problems == []
+
+
+def test_tool_form_with_no_places_enumerates_every_one_it_mates_to():
+    """An empty list is 'everywhere this tool fits', not 'nowhere'"""
+    ctx = _tool_ctx()
+    how = ConnectHow({"holdTo": {_tool("finger"): []}}, where="test").resolve(
+        None, _plate_with_grips(), ctx=ctx
+    )
+
+    # Every instance of "grip", which is what the finger mates to - and not the
+    # instance of "m3-thru", which it does not.
+    assert [(h.interface, h.instance) for h in how.hold_to] == [
+        ("//:grip", "left"),
+        ("//:grip", "right"),
+    ]
+    assert how.problems == []
+
+
+def test_tool_form_disambiguates_by_what_the_tool_mates_to():
+    """One instance name in two interfaces is not ambiguous once the tool is known"""
+    ctx = _tool_ctx()
+    item = _FakeItem(
+        interfaces={
+            "//:grip": {"L": {"grip": "L-grip"}},
+            "//:m3-thru": {"L": {"m3": "L-m3"}},
+        },
+        project_name="//",
+    )
+    how = ConnectHow({"holdWith": {_tool("finger"): ["L"]}}, where="test").resolve(item, None, ctx=ctx)
+    assert [(h.interface, h.instance) for h in how.hold_with] == [("//:grip", "L")]
+    assert how.problems == []
+
+
+def test_tool_form_takes_an_interface_and_instance_pair():
+    """The pair form says which interface was meant when the name is not enough"""
+    ctx = _tool_ctx()
+    how = ConnectHow(
+        {"holdWith": {_tool("finger"): [["//:m3-thru", "left"]]}},
+        where="test",
+    ).resolve(_plate_with_grips(), None, ctx=ctx)
+    assert [(h.interface, h.instance, h.ports) for h in how.hold_with] == [("//:m3-thru", "left", ["left-m3"])]
+
+
+def test_tool_form_reports_a_place_the_object_does_not_have():
+    ctx = _tool_ctx()
+    how = ConnectHow({"holdWith": {_tool("finger"): ["nowhere"]}}, where="test").resolve(
+        _screw_with_tools(), None, ctx=ctx
+    )
+    assert any("no such instance" in problem for problem in how.problems)
+
+
+def test_tool_form_reports_a_tool_that_meets_the_object_nowhere():
+    """Asked to hold it everywhere, and there is no 'everywhere'"""
+    ctx = _tool_ctx()
+    how = ConnectHow({"holdWith": {_tool("finger"): []}}, where="test").resolve(
+        _FakeItem(interfaces={"//:m3-thru": {"TL": {"m3": "TL-m3"}}}, project_name="//"),
+        None,
+        ctx=ctx,
+    )
+    assert how.hold_with == []
+    assert any("does not meet" in problem for problem in how.problems)
+
+
+def test_tool_form_reports_an_unknown_tool():
+    ctx = _tool_ctx()
+    how = ConnectHow({"holdWith": {"//:nonexistent": ["L"]}}, where="test").resolve(
+        _screw_with_tools(), None, ctx=ctx
+    )
+    assert any("the tool is not found" in problem for problem in how.problems)
+    # The place the author named is still honoured.
+    assert [(h.tool, h.instance) for h in how.hold_with] == [("//:nonexistent", "L")]
+
+
+def test_only_a_mechanical_tool_holds_anything():
+    ctx = _tool_ctx()
+    how = ConnectHow({"holdWith": {_tool("extruder"): []}}, where="test").resolve(
+        _screw_with_tools(), None, ctx=ctx
+    )
+    assert any("only a mechanical one" in problem for problem in how.problems)
+
+
+def test_hold_instance_says_nothing_beside_the_tool_form(caplog):
+    """The places are already instances; a positional list on top is a mistake"""
+    ConnectHow(
+        {"holdWith": {_tool("finger"): ["L"]}, "holdWithInstance": "R"},
+        where="test",
+    )
+    assert "says nothing next to the tool form" in caplog.text
+
+
+def test_the_older_spelling_still_means_interfaces():
+    """A bare name in 'holdWith' is an interface, as it was before tools existed"""
+    ctx = _tool_ctx()
+    how = ConnectHow({"holdWith": "grip", "holdWithInstance": "R"}, where="test").resolve(
+        _screw_with_tools(), None, ctx=ctx
+    )
+    assert [(h.tool, h.interface, h.instance) for h in how.hold_with] == [(None, "//:grip", "R")]
+    assert how.problems == []
+
+
+#
+# "driver"
+#
+
+
+def test_driver_resolves_where_the_tool_turns_the_object():
+    ctx = _tool_ctx()
+    how = ConnectHow(
+        {"turnTorqueMax": 0.4, "driver": {_tool("driver"): ["socket"]}},
+        where="test",
+    ).resolve(_screw_with_tools(), None, ctx=ctx)
+
+    assert how.method == "screw"
+    assert [(h.tool, h.interface, h.instance, h.ports) for h in how.driver] == [
+        (_tool("driver"), "//:drive", "socket", ["socket-drive"]),
+    ]
+    assert how.problems == []
+    assert how.info()["driver"] == [
+        {
+            "interface": "//:drive",
+            "instance": "socket",
+            "tool": _tool("driver"),
+            "ports": ["socket-drive"],
+        }
+    ]
+
+
+def test_driver_takes_a_bare_tool_name():
+    """A name with no places is the same as mapping it to an empty list"""
+    ctx = _tool_ctx()
+    how = ConnectHow({"turnTorqueMax": 0.4, "driver": _tool("driver")}, where="test").resolve(
+        _screw_with_tools(), None, ctx=ctx
+    )
+    assert [(h.interface, h.instance) for h in how.driver] == [("//:drive", "socket")]
+
+
+def test_driver_on_a_push_is_a_contradiction():
+    """Nothing is turned, so there is nothing for a driver to do"""
+    ctx = _tool_ctx()
+    how = ConnectHow({"driver": _tool("driver")}, where="test").resolve(_screw_with_tools(), None, ctx=ctx)
+    assert how.method == "push"
+    assert how.driver == []
+    assert any("is pushed" in problem for problem in how.problems)
+
+
+def test_a_tool_that_cannot_turn_is_not_a_driver():
+    """A finger declares no torque, and that is what disqualifies it"""
+    ctx = _tool_ctx()
+    how = ConnectHow(
+        {"turnTorqueMax": 0.4, "driver": {_tool("finger"): []}},
+        where="test",
+    ).resolve(_screw_with_tools(), None, ctx=ctx)
+    assert any("cannot turn anything" in problem for problem in how.problems)
+
+
+def test_a_connection_with_tools_is_not_a_default():
+    """'pc info' leaves out a connection that says nothing; this one says a lot"""
+    ctx = _tool_ctx()
+    how = ConnectHow({"holdWith": {_tool("finger"): ["L"]}}, where="test").resolve(
+        _screw_with_tools(), None, ctx=ctx
+    )
+    assert not how.is_default()

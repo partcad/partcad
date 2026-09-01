@@ -14,6 +14,14 @@ two sections handled here say *how* the assembler is expected to get it there
 'comment' is supplementary context for a human or an LLM reading the assembly.
 It is never parsed and never required to assemble anything: every instruction
 that the assembler needs must be codified in the other ASSY fields.
+
+'how' says which *tools* the step is performed with, too. 'holdWith', 'holdTo'
+and 'driver' each map a mechanical tool (see 'partcad.tool') to the places on
+the object that tool acts on, so that "hold the screw by its head with a finger
+and turn it with a hex driver" is data rather than a sentence in 'comment'. The
+places are interface instances the object already declares, which is what makes
+them locations as well as names: an assembly instruction book draws the tool at
+the port of the instance it holds.
 """
 
 import math
@@ -58,7 +66,15 @@ HOW_FIELDS = (
     "holdToForce",
     "holdToForceMin",
     "holdToForceMax",
+    "driver",
 )
+
+# What a connection does to the object it adds. A push is a straight insertion;
+# a screw is turned in, which is the only kind of connection a 'driver' means
+# anything for. Which of the two it is follows from 'turnTorqueMax': a
+# connection nothing is asked to turn is not a screwed one.
+METHOD_PUSH = "push"
+METHOD_SCREW = "screw"
 
 # Fields that were renamed, and the field that replaces each of them. They are
 # still accepted, so that the ASSY files written against the earlier spelling
@@ -155,24 +171,44 @@ def _as_list(value):
 
 
 class ConnectHold:
-    """One interface (and the instance of it) to hold an object by while connecting."""
+    """One place on an object a tool acts on while the connection is made.
 
-    def __init__(self, interface: str, instance=None):
+    'interface' and 'instance' say where - an instance of an interface the
+    object implements - and 'ports' are the ports of that instance, which is
+    what turns the name into a location: a document drawing the tool puts it at
+    one of them.
+
+    'tool' is the tool that acts there, when the ASSY file named one. It is None
+    for a hold that only says which interface to hold by and leaves the choice
+    of tool to whoever performs the assembly, which is what every 'holdWith' and
+    'holdTo' meant before tools existed and what an object's own 'hold' still
+    means.
+    """
+
+    def __init__(self, interface: str, instance=None, tool: str = None, ports=None):
         self.interface = interface
         self.instance = instance
+        self.tool = tool
+        self.ports = list(ports) if ports else []
 
     def info(self):
-        return {"interface": self.interface, "instance": self.instance}
+        info = {"interface": self.interface, "instance": self.instance}
+        if self.tool is not None:
+            info["tool"] = self.tool
+        if self.ports:
+            info["ports"] = list(self.ports)
+        return info
 
     def __eq__(self, other):
         if not isinstance(other, ConnectHold):
             return NotImplemented
-        return self.interface == other.interface and self.instance == other.instance
+        return self.interface == other.interface and self.instance == other.instance and self.tool == other.tool
 
     def __repr__(self):
-        if self.instance:
-            return "%s[%s]" % (self.interface, self.instance)
-        return str(self.interface)
+        where = self.interface if not self.instance else "%s[%s]" % (self.interface, self.instance)
+        if self.tool is None:
+            return str(where)
+        return "%s with %s" % (where, self.tool)
 
 
 class ConnectHow:
@@ -231,15 +267,46 @@ class ConnectHow:
         # assembly's coordinates. Deduced from the connection: see 'resolve()'.
         self.push_direction = None
 
+        # What the connection does to the object it adds. Not a field of its
+        # own: a connection nothing is asked to turn is a straight push, and one
+        # that is turned is screwed in. It is what decides whether a 'driver'
+        # means anything here.
+        self.method = METHOD_SCREW if self.turn_torque_max > 0.0 else METHOD_PUSH
+
         # The requested holds, before they are matched against the objects being
         # connected. 'resolve()' turns these into 'ConnectHold' lists.
-        self._hold_with_spec = _as_list(config.get("holdWith", None))
+        #
+        # Two spellings, and they are told apart by shape rather than by a flag.
+        # A mapping is the tool form - '{<tool>: [<where it acts>, ...]}' - and
+        # a string or a list of them is the older one, naming interfaces and
+        # leaving the tool to whoever performs the assembly. 'driver' has no
+        # older spelling, so a bare string there is a tool with nothing said
+        # about where it acts.
+        self._hold_with_tools = self._tool_spec(config, "holdWith")
+        self._hold_to_tools = self._tool_spec(config, "holdTo")
+        self._driver_tools = self._tool_spec(config, "driver", tools_only=True)
+
+        self._hold_with_spec = [] if self._hold_with_tools is not None else _as_list(config.get("holdWith", None))
         self._hold_with_instance_spec = _as_list(config.get("holdWithInstance", None))
-        self._hold_to_spec = _as_list(config.get("holdTo", None))
+        self._hold_to_spec = [] if self._hold_to_tools is not None else _as_list(config.get("holdTo", None))
         self._hold_to_instance_spec = _as_list(config.get("holdToInstance", None))
+
+        for field, tools, instances in (
+            ("holdWith", self._hold_with_tools, self._hold_with_instance_spec),
+            ("holdTo", self._hold_to_tools, self._hold_to_instance_spec),
+        ):
+            if tools is not None and instances:
+                pc_logging.error(
+                    "%s: 'how.%sInstance' says nothing next to the tool form of 'how.%s', ignoring"
+                    % (self.where, field, field)
+                )
 
         self.hold_with: list[ConnectHold] = []
         self.hold_to: list[ConnectHold] = []
+        # Where the tool that turns the object acts, once resolved. Empty for a
+        # connection that names none, and for one that is pushed rather than
+        # screwed in - see 'method' above.
+        self.driver: list[ConnectHold] = []
 
         # The holding forces, before the object-level defaults are folded in.
         self._hold_force_spec = {
@@ -285,6 +352,45 @@ class ConnectHow:
         pc_logging.error("%s: 'how.stage' must be a non-empty string, ignoring: %s" % (self.where, value))
         return None
 
+    def _tool_spec(self, config, field, tools_only=False):
+        """The '{tool: [where it acts]}' mapping of one field, or None.
+
+        None means the field is not in the tool form at all: absent, or written
+        the older way as an interface name or a list of them. That distinction
+        is the whole point of the method - a caller that gets None falls through
+        to the interface form, and one that gets a mapping (empty included)
+        does not.
+
+        'tools_only' is for 'driver', which has no older spelling: a bare string
+        there names the tool, with nothing said about where it acts, and a list
+        of strings names several.
+        """
+        value = config.get(field, None)
+        if value is None:
+            return None
+
+        if isinstance(value, dict):
+            spec = {}
+            for tool, where in value.items():
+                if not isinstance(tool, str) or not tool.strip():
+                    pc_logging.error("%s: 'how.%s' must be keyed by tool, ignoring: %s" % (self.where, field, tool))
+                    continue
+                spec[tool.strip()] = _as_list(where)
+            return spec
+
+        if tools_only:
+            spec = {}
+            for tool in _as_list(value):
+                if not isinstance(tool, str) or not tool.strip():
+                    pc_logging.error("%s: 'how.%s' must name a tool, ignoring: %s" % (self.where, field, tool))
+                    continue
+                # No list of places: every place the tool mates to, which is what
+                # an empty list means in the mapping form as well.
+                spec[tool.strip()] = []
+            return spec
+
+        return None
+
     def _turn_direction(self, config):
         value = config.get("turnDirection", None)
         if value is None:
@@ -305,6 +411,7 @@ class ConnectHow:
         mated_frame=None,
         source_interface=None,
         target_interface=None,
+        ctx=None,
     ):
         """Match the requested holds against the objects that are being connected.
 
@@ -323,6 +430,15 @@ class ConnectHow:
 
         'source_interface' and 'target_interface' are the two interface objects
         being mated. They are what an unspecified 'threadStep' is inherited from.
+
+        'ctx' is what the tools named by 'holdWith'/'holdTo'/'driver' are looked
+        up in. Without it the tool form still resolves to the places it names,
+        but nothing is known about the tools themselves - so a tool that only
+        said which object it acts on ('holdWith: {//builtin:finger: []}') has
+        nothing to enumerate, and neither a missing tool nor one that cannot
+        turn anything is reported. Every caller that has a context passes it;
+        the parameter is optional so that the field can be read from a
+        configuration alone.
         """
         self.problems = []
         self._push_item = source_item
@@ -330,20 +446,27 @@ class ConnectHow:
         self.push_direction = _push_direction(mated_frame)
         self._resolve_thread_step(source_interface, target_interface)
 
-        self.hold_with = _resolve_holds(
-            self._hold_with_spec,
-            self._hold_with_instance_spec,
-            source_item,
-            self.where,
-            "holdWith",
-        )
-        self.hold_to = _resolve_holds(
-            self._hold_to_spec,
-            self._hold_to_instance_spec,
-            target_item,
-            self.where,
-            "holdTo",
-        )
+        if self._hold_with_tools is not None:
+            self.hold_with = self._resolve_tool_holds(self._hold_with_tools, source_item, "holdWith", ctx)
+        else:
+            self.hold_with = _resolve_holds(
+                self._hold_with_spec,
+                self._hold_with_instance_spec,
+                source_item,
+                self.where,
+                "holdWith",
+            )
+        if self._hold_to_tools is not None:
+            self.hold_to = self._resolve_tool_holds(self._hold_to_tools, target_item, "holdTo", ctx)
+        else:
+            self.hold_to = _resolve_holds(
+                self._hold_to_spec,
+                self._hold_to_instance_spec,
+                target_item,
+                self.where,
+                "holdTo",
+            )
+        self.driver = self._resolve_driver(source_item, ctx)
 
         specified = False
         for side, item in (("holdWith", source_item), ("holdTo", target_item)):
@@ -355,6 +478,138 @@ class ConnectHow:
                 self.hold_to_force_min, self.hold_to_force_max = minimum, maximum
         self.hold_force_specified = specified
         return self
+
+    def _resolve_tool_holds(self, spec, item, field, ctx, must_drive=False):
+        """Turn '{tool: [where it acts]}' into the places on 'item' it acts on.
+
+        Each place is either an instance name on its own, or the pair
+        '[<interface>, <instance>]' for an object that names one instance in two
+        interfaces. An empty list is not "nowhere": it asks for **every** place
+        the tool mates to, which is what makes the common case - hold this by
+        whatever a finger fits - a line with nothing in it to keep up to date as
+        the object grows another grip.
+
+        'must_drive' holds the tools to being able to turn what they hold, which
+        is what a 'driver' is. Checked here rather than by the caller so that
+        each tool is looked up once and a tool that does not resolve is reported
+        once.
+        """
+        available = _item_interfaces(item)
+        where = _item_name(item) or "the object"
+
+        holds = []
+        for tool_ref, places in spec.items():
+            tool = self._tool(tool_ref, field, ctx)
+            if must_drive and tool is not None and not tool.can_drive():
+                self._problem("'%s': %s cannot turn anything ('torqueMax' is zero)" % (field, tool_ref))
+
+            # What the tool says it meets an object through, matched against
+            # what this object implements. A tool that said nothing - and one
+            # PartCAD could not find - constrains nothing, and every interface
+            # the object has is a candidate.
+            candidates = _tool_interfaces(tool, available, item)
+            constrained = bool(getattr(tool, "mates", None))
+
+            if not places:
+                enumerated = _enumerate_instances(
+                    tool_ref, candidates if constrained else list(available.keys()), available
+                )
+                if not enumerated:
+                    self._problem("'%s': %s does not meet %s anywhere" % (field, tool_ref, where))
+                holds += enumerated
+                continue
+
+            for place in places:
+                hold = self._resolve_place(place, tool_ref, candidates, constrained, available, where, field)
+                if hold is not None:
+                    holds.append(hold)
+        return holds
+
+    def _resolve_place(self, place, tool_ref, candidates, constrained, available, where, field):
+        """One entry of a tool's list of places, as a 'ConnectHold'."""
+        interface = None
+        if isinstance(place, (list, tuple)):
+            if len(place) != 2 or not all(isinstance(part, str) for part in place):
+                self._problem("'%s': a place is an instance name or [interface, instance], not %r" % (field, place))
+                return None
+            interface, instance = place[0], place[1]
+        elif isinstance(place, str):
+            instance = place
+        else:
+            self._problem("'%s': a place is an instance name or [interface, instance], not %r" % (field, place))
+            return None
+
+        if interface is not None:
+            matched = _match_interface(interface, available)
+            if matched is None:
+                if available:
+                    self._problem("'%s': the object does not implement the interface: %s" % (field, interface))
+                matched = interface
+        else:
+            # Only the instance was named. It has to belong to one of the
+            # interfaces the tool meets the object through, and to exactly one
+            # of them: the same name under two of them is a place this cannot
+            # pick between, and guessing would put the tool somewhere the author
+            # did not mean.
+            search = candidates if constrained else list(available.keys())
+            owners = [name for name in search if instance in (available.get(name) or {})]
+            if not owners:
+                if available:
+                    self._problem(
+                        "'%s': %s has no such instance for %s to act on: %s" % (field, where, tool_ref, instance)
+                    )
+                return ConnectHold(None, instance, tool=tool_ref)
+            if len(owners) > 1:
+                self._problem(
+                    "'%s': the instance '%s' belongs to more than one interface (%s); name the interface as well"
+                    % (field, instance, ", ".join(sorted(owners)))
+                )
+            matched = owners[0]
+
+        return ConnectHold(matched, instance, tool=tool_ref, ports=_instance_ports(available, matched, instance))
+
+    def _resolve_driver(self, source_item, ctx):
+        """Where the tool that turns the object acts, or nothing.
+
+        'driver' belongs to a connection that is screwed in. On one that is
+        pushed there is nothing to turn, so a 'driver' there is a contradiction
+        rather than an unused field: it is reported, and dropped.
+        """
+        if self._driver_tools is None:
+            return []
+        if self.method != METHOD_SCREW:
+            self._problem(
+                "'driver' applies to a connection that is turned in, and this one is pushed"
+                " ('turnTorqueMax' is zero)"
+            )
+            return []
+
+        return self._resolve_tool_holds(self._driver_tools, source_item, "driver", ctx, must_drive=True)
+
+    def _tool(self, tool_ref, field, ctx):
+        """The tool a reference names, with what is wrong with it reported.
+
+        None whenever the tool cannot be had - there is no context to look it up
+        in, the reference resolves to nothing, or what it resolves to is not a
+        mechanical tool. The places the ASSY file named are still honoured in
+        that case: what the author wrote about this step is not made worthless
+        by a tool PartCAD could not find.
+        """
+        if ctx is None:
+            return None
+        from .tool import MechanicalTool
+
+        tool = ctx.get_tool(tool_ref, quiet=True)
+        if tool is None:
+            self._problem("'%s': the tool is not found: %s" % (field, tool_ref))
+            return None
+        if not isinstance(tool, MechanicalTool):
+            self._problem(
+                "'%s': %s is a '%s' tool; only a mechanical one holds or turns anything"
+                % (field, tool_ref, tool.category)
+            )
+            return None
+        return tool
 
     def _resolve_thread_step(self, source_interface, target_interface):
         """Inherit 'threadStep' from the interfaces, and check that they agree.
@@ -478,10 +733,17 @@ class ConnectHow:
 
     def is_default(self):
         """Whether the ASSY file said nothing at all about how to connect."""
-        return not self.specified and not self.hold_with and not self.hold_to and not self.hold_force_specified
+        return (
+            not self.specified
+            and not self.hold_with
+            and not self.hold_to
+            and not self.driver
+            and not self.hold_force_specified
+        )
 
     def info(self):
         info = {
+            "method": self.method,
             "pushForceMax": self.push_force_max,
             # None means "not derived yet": see 'resolve_push_distance()'.
             "pushDistance": self.push_distance,
@@ -500,6 +762,8 @@ class ConnectHow:
             info["holdWith"] = [hold.info() for hold in self.hold_with]
         if self.hold_to:
             info["holdTo"] = [hold.info() for hold in self.hold_to]
+        if self.driver:
+            info["driver"] = [hold.info() for hold in self.driver]
         return info
 
 
@@ -593,7 +857,7 @@ def _resolve_holds(interfaces_spec, instances_spec, item, where, field):
 
         requested = instances_spec[index] if index < len(instances_spec) else None
         instance = _resolve_instance(resolved, requested, defaults, available, where, field)
-        holds.append(ConnectHold(resolved, instance))
+        holds.append(ConnectHold(resolved, instance, ports=_instance_ports(available, resolved, instance)))
 
     return holds
 
@@ -635,6 +899,66 @@ def _item_interfaces(item):
         # the assembly: 'how' is documentation for the assembler, not geometry.
         pc_logging.debug("Failed to enumerate the interfaces to hold by: %s" % e)
         return {}
+
+
+def _item_name(item):
+    """What to call an object in a message about it."""
+    if item is None:
+        return None
+    name = getattr(item, "name", None)
+    project = getattr(item, "project_name", None)
+    if name and project:
+        return "%s:%s" % (project, name)
+    return name
+
+
+def _tool_interfaces(tool, available, item=None):
+    """The object's interfaces this tool meets it through.
+
+    A tool says what it mates to; this is that list matched against what the
+    object actually implements. Empty when the tool is unknown or declares no
+    'mates' at all, which is not the same as "none of them": the caller falls
+    back to every interface the object has, because a tool that never said what
+    it fits cannot rule anything out.
+    """
+    mates = list(getattr(tool, "mates", None) or [])
+    matched = []
+    for mate in mates:
+        candidate = _match_interface(mate, available, item)
+        if candidate is not None and candidate not in matched:
+            matched.append(candidate)
+    return matched
+
+
+def _instance_ports(available, interface, instance):
+    """The ports of one instance of one interface, in declaration order.
+
+    They are what turns a hold into a location: a document drawing the tool puts
+    it at the first of them (see 'assembly_guide'), and an instance of the
+    interfaces a tool mates to has exactly one.
+    """
+    return list((((available.get(interface) or {}).get(instance)) or {}).values())
+
+
+def _enumerate_instances(tool_ref, interfaces, available):
+    """Every instance of 'interfaces' the object has, as holds by 'tool_ref'.
+
+    This is what an empty list of places asks for. Order is the object's own,
+    which is the order its interfaces were declared in: a picture drawn from it
+    is the same picture every time.
+    """
+    holds = []
+    for interface in interfaces:
+        for instance in (available.get(interface) or {}).keys():
+            holds.append(
+                ConnectHold(
+                    interface,
+                    instance,
+                    tool=tool_ref,
+                    ports=_instance_ports(available, interface, instance),
+                )
+            )
+    return holds
 
 
 def _short_name(interface: str):

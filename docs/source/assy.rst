@@ -127,7 +127,7 @@ and so is the section itself: an omitted field means the default below.
       turnDirection: <(optional) "cw" (clockwise) or "ccw" (counterclockwise), default: "cw">
       turnTorqueMax: <(optional) maximum torque, in N*m, default: 0>
       threadStep: <(optional) axial distance per full turn, in mm, default: 0.00>
-      holdWith: <(optional) interface, or list of interfaces, to hold this object by>
+      holdWith: <(optional) the tools this object is held with, or the interfaces to hold it by>
       holdWithInstance: <(optional) instance of each interface listed in "holdWith">
       holdWithForceMin: <(optional) least force to hold this object with, in N, default: 3>
       holdWithForceMax: <(optional) most force to hold this object with, in N, default: 7>
@@ -265,6 +265,76 @@ it. They are matched positionally against `holdWith` and `holdTo`. When omitted,
 the instance defaults to the `holdInstance` field of that same section, and,
 failing that, to the first instance of the interface.
 
+.. _assy-tools:
+
+Which tools the step is performed with
+--------------------------------------
+
+Written the way above, `holdWith` and `holdTo` say *where* to hold and leave the
+choice of tool to whoever performs the assembly. Written as a mapping, they say
+which **tool** holds it, and where that tool acts:
+
+  .. code-block:: yaml
+
+    - part: socket-head-m3-screw-6mm
+      connect:
+        name: example-bracket
+        to: m3-thru-3
+        toInstance: outer-TL
+        how:
+          turnTorqueMax: 0.4
+          holdWith:
+            //builtin:finger: [L, R]
+          holdTo:
+            //builtin:finger: []
+          driver:
+            //builtin:screwdriver-hex: [socket]
+
+Each key is a **mechanical** tool (see :ref:`tools`); no other category holds or
+turns anything, and naming one is reported. Each value is the list of places on
+the object that tool acts on, and a place is either
+
+* the name of an **interface instance** the object implements (`L`, `socket`), or
+* the pair ``[<interface>, <instance>]``, for an object that uses one instance
+  name in more than one interface.
+
+An empty list is not "nowhere": it asks for **every** place that tool mates to,
+which is every instance of the interfaces the tool's `mates` names (see
+:ref:`tool-mates`). That is what makes "hold this by whatever a finger fits" one
+line with nothing in it to keep up to date as the object grows another grip.
+
+An instance name on its own is looked up among the interfaces the tool mates to,
+so `L` above is an instance of `//builtin:grip` even on an object that also has
+an `L` instance of a bolt-slot interface: the tool decides, because a finger
+mates to a grip and not to a slot. When a name is still ambiguous, it is
+reported, and the pair form is the way to say which was meant.
+
+`holdWithInstance` and `holdToInstance` say nothing next to the tool form -- the
+places are already instances -- and are reported and ignored if given with it.
+
+`driver` names the tool that **turns** the object into place, and takes the same
+mapping. It also takes a bare name, or a list of them, which is the same as
+mapping each to an empty list:
+
+  .. code-block:: yaml
+
+    how:
+      turnTorqueMax: 0.4
+      driver: //builtin:screwdriver-hex
+
+`driver` belongs to a connection that is turned in rather than pushed. Which of
+the two a connection is follows from `turnTorqueMax`: a connection nothing is
+asked to turn is a push, and a `driver` on one is a contradiction rather than an
+unused field -- it is reported, and dropped. So is a tool that cannot turn
+anything, which is a tool whose `torqueMax` is zero.
+
+Everything resolved here is reported by ``pc info -a <assembly>`` under
+``Connections``, with the tool, the interface, the instance and the ports of
+that instance on every entry. The ports are what turn a hold into a location:
+the assembly instruction book draws the tool's `visual` at the first port of the
+instance it acts on (see :ref:`tool-visual`), so a step of the book shows the
+hands and the driver rather than two bare shapes floating apart.
+
 `holdWithForceMin` and `holdWithForceMax` bound the force each end is held
 with, in newtons - enough to keep the object from moving, not so much as to
 damage it. `holdWithForce` sets both at once, and `holdToForce*` are the same
@@ -342,6 +412,13 @@ What it rejects today:
   minimum above a maximum is a contradiction rather than a range.
 * two interfaces that disagree about their `threadStep` with neither declaring
   `selfScrew`.
+* a `holdWith`/`holdTo`/`driver` that names a tool PartCAD cannot find, or one
+  that is not a mechanical tool.
+* a place named in one of them that the object has no such instance of, or one
+  whose name belongs to more than one of the interfaces the tool mates to.
+* a tool that meets the object nowhere at all, asked to hold it everywhere.
+* a `driver` on a connection that is pushed rather than turned in, or one that
+  names a tool whose `torqueMax` is zero.
 
 .. code-block:: shell
 

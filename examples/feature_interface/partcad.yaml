@@ -53,6 +53,39 @@ docs:
     `--with-interfaces` are the same thing asked for once, on the command line,
     for any object and any output format.
 
+    ## Holding it while you build it
+
+    Two of the interfaces on the drawings above are not features of the parts at
+    all: `GRIP/L` and `GRIP/R` say where a hand goes. They are instances of
+    `//builtin:grip`, an interface PartCAD itself declares, and the screws carry
+    an instance of `//builtin:drive-hex` as well - the socket in the top of the
+    head.
+
+    That is what lets `connect-instructions` say which *tools* each step is
+    performed with rather than only where the parts end up:
+
+    ```yaml
+    how:
+      turnTorqueMax: 0.4
+      holdWith:
+        //builtin:finger: [L, R]    # a finger on each flat of the head
+      holdTo:
+        //builtin:finger: []        # every place a finger fits on the bracket
+      driver:
+        //builtin:screwdriver-hex: [socket]
+    ```
+
+    `//builtin:finger` and `//builtin:screwdriver-hex` are *tools* (see the
+    `tools:` section of `//builtin`), and each of them carries a `visual` - a
+    part that stands for it in a picture. The assembly instruction book draws
+    that part at the port of the instance the tool acts on, so every step of
+
+    ```shell
+    pc render -a -t html connect-instructions
+    ```
+
+    shows the two hands and the driver on the joint being made.
+
   usage: |
     ```shell
     # placement == "outer"
@@ -73,6 +106,13 @@ docs:
     pc render -t png --with-ports example-bracket
     pc render -t png --with-interfaces example-bracket
     pc render -a -t png --with-all connect-mates
+
+    # the instruction book, with a hand and a driver drawn on every step
+    pc render -a -t html connect-instructions
+
+    # the tools those steps name
+    pc list tools //builtin
+    pc info --tool //builtin:screwdriver-hex
     ```
 
     Every port drawn is also listed in the log, with the exact name to write in
@@ -253,10 +293,21 @@ parts:
     type: step
     implements:
       m3-screw-6mm: [[0.0, 0.0, -12.0], [0.0, 1.0, 0.0], 180.0]
+      # The head, said twice over: the two flats of it a pair of fingers pinches,
+      # and the socket in its top that a driver turns it by. Both are interfaces
+      # that PartCAD itself declares (`//builtin:grip` and `//builtin:drive-hex`),
+      # so the tools that meet them are declared once as well - see the "how"
+      # sections of `connect-instructions.assy`.
+      //builtin:grip:
+        L: [[-2.75, 0.0, -13.5], [0.0, 1.0, 0.0], 90.0]
+        R: [[2.75, 0.0, -13.5], [0.0, 1.0, 0.0], -90.0]
+      //builtin:drive-hex:
+        # 2.5mm across the flats, at the top of the head, pointing down into it.
+        socket: [[0.0, 0.0, -15.0], [0.0, 0.0, 1.0], 0.0]
     connect:
       # A screw is held by its own head, and gently: the driver has to be able
       # to turn it.
-      hold: m3-screw-6mm
+      hold: //builtin:grip
       holdForceMin: 2.0
       holdForceMax: 5.0
 
@@ -268,8 +319,14 @@ parts:
     type: step
     implements:
       m4-screw-6mm: [[0.0, 0.0, -6.0], [0.0, 1.0, 0.0], 180.0]
+      //builtin:grip:
+        L: [[-3.5, 0.0, -8.0], [0.0, 1.0, 0.0], 90.0]
+        R: [[3.5, 0.0, -8.0], [0.0, 1.0, 0.0], -90.0]
+      //builtin:drive-hex:
+        # 3mm across the flats: the same driver family, one size up.
+        socket: [[0.0, 0.0, -10.0], [0.0, 0.0, 1.0], 0.0]
     connect:
-      hold: m4-screw-6mm
+      hold: //builtin:grip
       holdForceMin: 2.0
       holdForceMax: 6.0
 
@@ -281,9 +338,18 @@ parts:
     type: step
     implements:
       nema-17-motor: [[0.0, 0.0, 60.0], [1.0, 0.0, 0.0], 180.0]
+      # Where a hand takes hold of it: the two long sides of the body, which are
+      # the faces nothing else needs. The +Z of each points into the motor, so a
+      # finger drawn there presses on it from outside.
+      //builtin:grip:
+        L: [[-21.16, 0.0, 31.0], [0.0, 1.0, 0.0], 90.0]
+        R: [[21.16, 0.0, 31.0], [0.0, 1.0, 0.0], -90.0]
     connect:
-      # The motor is held by its own mounting face, firmly: it is heavy.
-      hold: nema-17-motor-mount
+      # The motor is held by its sides, firmly: it is heavy. Only one instance
+      # of the interface is named here, because that is all "hold" can say; an
+      # assembly step that wants both hands on it asks for every place a finger
+      # fits (see `connect-instructions.assy`).
+      hold: //builtin:grip
       holdForceMin: 8.0
       holdForceMax: 20.0
 
@@ -327,9 +393,8 @@ parts:
         precision: 4
     connect:
       # The bracket is the fixture everything else is connected to: it is held
-      # by its foot, which is the part of it nothing else needs.
-      hold: m4-slotted-30-thru-3
-      holdInstance: L
+      # by its two side webs, which are the faces nothing else needs.
+      hold: //builtin:grip
       holdForceMin: 10.0
       holdForceMax: 25.0
     implements:
@@ -343,6 +408,12 @@ parts:
         R: # top right
           location: [[15.0, -27.0, 27.0], [1.0, 0.0, 0.0], 90.0]
           # params: {offset: -15}
+      # The two side webs, 265mm2 apiece and in the way of nothing: this is
+      # where the bracket is picked up and where it is held while the motor is
+      # seated and the screws are driven.
+      //builtin:grip:
+        L: [[-25.0, -19.0, 11.0], [0.0, 1.0, 0.0], 90.0]
+        R: [[25.0, -19.0, 11.0], [0.0, 1.0, 0.0], -90.0]
 
 assemblies:
   connect-ports:

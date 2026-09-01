@@ -183,6 +183,52 @@ def _slug(text):
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", text).strip("-") or "image"
 
 
+def _tool_names(holds) -> list:
+    """The tools of a list of holds, in order and without repeats."""
+    names = []
+    for hold in holds or []:
+        if hold.tool is not None and hold.tool not in names:
+            names.append(hold.tool)
+    return names
+
+
+def _join(names) -> str:
+    """A human-readable list: "a", "a and b", "a, b and c"."""
+    names = list(names)
+    if len(names) <= 1:
+        return "".join(names)
+    return "%s and %s" % (", ".join(names[:-1]), names[-1])
+
+
+def _tool_location(item, hold, placement: Location) -> Optional[Location]:
+    """Where a tool acting on 'item' through 'hold' sits in the assembly.
+
+    A tool visual puts its working end at the origin and extends along -Z (see
+    the scripts in 'partcad/builtin/tool'), and a port's +Z points into the
+    object it belongs to - so composing the two puts the tool outside the
+    material, facing in, without either end knowing anything about the other.
+
+    None when the hold names no port PartCAD can place: the illustration then
+    goes without that tool rather than the step going without its illustration.
+    """
+    with_ports = getattr(item, "with_ports", None)
+    if with_ports is None or not hold.ports:
+        return None
+    try:
+        ports = with_ports.get_ports() or {}
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.debug("Failed to place a tool: %s" % e)
+        return None
+    # The first port of the instance: an instance of an interface a tool mates
+    # to has exactly one, and a tool is drawn once wherever it acts.
+    port = ports.get(hold.ports[0])
+    if port is None:
+        pc_logging.debug("No such port to place a tool at: %s" % hold.ports[0])
+        return None
+    port_location = port.location if port.location is not None else Location()
+    return (placement or Location()) * port_location
+
+
 #
 # The steps of an assembly
 #
@@ -200,6 +246,10 @@ class GuideStep:
     counterpart_name: str
     counterpart_location: Location
     connection: Optional[dict] = None
+    # The resolved 'how' section of the step, when the ASSY file carried one.
+    # It is what says which tools the step is performed with and where each of
+    # them acts, which is what puts a finger and a driver in the illustration.
+    how: object = None
     # Where the two are pulled apart to, and the line that shows the gap.
     direction: tuple = (0.0, 0.0, 1.0)
     distance: float = FALLBACK_EXPLODED_DISTANCE
@@ -227,6 +277,50 @@ class GuideStep:
                 self.counterpart_name,
             )
         return "Add %s to %s." % (self.item_name, self.counterpart_name)
+
+    def tool_placements(self) -> list:
+        """Every tool this step is performed with, and where it goes.
+
+        One entry per place a tool acts on, as
+        '(tool reference, the object it acts on, that object's placement, hold)'.
+        The object matters as much as the tool: 'holdWith' and 'driver' act on
+        the item being added - which in an exploded view is not where it ends up
+        - and 'holdTo' on what it is joined to.
+        """
+        if self.how is None:
+            return []
+        placements = []
+        for holds, target, location in (
+            (getattr(self.how, "hold_with", None), self.item, self.exploded_location()),
+            (getattr(self.how, "driver", None), self.item, self.exploded_location()),
+            (getattr(self.how, "hold_to", None), self.counterpart, self.counterpart_location),
+        ):
+            for hold in holds or []:
+                if hold.tool is None:
+                    # A hold that names no tool says which interface to hold by
+                    # and leaves the choice to whoever performs the assembly.
+                    # There is nothing to draw.
+                    continue
+                placements.append((hold.tool, target, location, hold))
+        return placements
+
+    def tool_sentence(self) -> Optional[str]:
+        """What holds this step's items and what turns them, in words."""
+        if self.how is None:
+            return None
+        clauses = []
+        held = _tool_names(getattr(self.how, "hold_with", None))
+        if held:
+            clauses.append("Hold %s with %s" % (self.item_name, _join(held)))
+        held_to = _tool_names(getattr(self.how, "hold_to", None))
+        if held_to:
+            clauses.append("hold %s with %s" % (self.counterpart_name, _join(held_to)))
+        driven = _tool_names(getattr(self.how, "driver", None))
+        if driven:
+            clauses.append("turn it with %s" % _join(driven))
+        if not clauses:
+            return None
+        return ", ".join(clauses) + "."
 
 
 @dataclass
@@ -337,6 +431,7 @@ async def _build_section(ctx, assembly, content=None, top=False):
             counterpart_name=counterpart_name,
             counterpart_location=counterpart_location,
             connection=child.connection,
+            how=child.how,
         )
         await _resolve_step_geometry(ctx, step)
         section.steps.append(step)
@@ -440,8 +535,18 @@ def _normalized(vector):
     return tuple(float(value) / length for value in vector)
 
 
-def exploded_assembly(step: GuideStep) -> Assembly:
-    """The two items of a step, connected but held apart."""
+def exploded_assembly(step: GuideStep, ctx=None) -> Assembly:
+    """The two items of a step, held apart, with the tools that perform it.
+
+    The tools are what makes this a picture of the step rather than of two
+    shapes: a hand on each side of the joint and a driver on the screw say, at a
+    glance, what the words underneath spell out. They are likenesses and nothing
+    more - never counted, never ordered, never manufactured - so they are added
+    to this throwaway assembly and to nothing else.
+
+    Without a 'ctx' there is nowhere to look a tool up, and the picture is the
+    two items alone, which is what it was before tools existed.
+    """
     project_name = getattr(step.counterpart, "project_name", None) or getattr(step.item, "project_name", "")
     pair = Assembly(
         project_name,
@@ -454,7 +559,37 @@ def exploded_assembly(step: GuideStep) -> Assembly:
     pair.instantiate = lambda _: True
     pair.add(step.counterpart, step.counterpart_name, step.counterpart_location)
     pair.add(step.item, step.item_name, step.exploded_location())
+    for index, (tool_ref, item, placement, hold) in enumerate(step.tool_placements()):
+        visual, location = _tool_visual(ctx, tool_ref, item, hold, placement)
+        if visual is None:
+            continue
+        # Named after where it acts as well as what it is: one step may hold an
+        # object at two places with the same tool, and two children of one
+        # assembly may not share a name.
+        pair.add(visual, "%s-%d" % (_slug(tool_ref), index), location)
     return pair
+
+
+def _tool_visual(ctx, tool_ref, item, hold, placement):
+    """The part that stands for a tool, and where it goes, or (None, None).
+
+    Everything here is best-effort: a tool that does not resolve, has no visual
+    or acts at a port that cannot be placed costs the picture that one tool. The
+    step is still documented, and the reason is already in the log - 'get_tool'
+    and 'Tool.get_visual' report it once each.
+    """
+    if ctx is None:
+        return None, None
+    location = _tool_location(item, hold, placement)
+    if location is None:
+        return None, None
+    tool = ctx.get_tool(tool_ref, quiet=True)
+    if tool is None:
+        return None, None
+    visual = tool.get_visual(ctx)
+    if visual is None:
+        return None, None
+    return visual, location
 
 
 #
@@ -637,7 +772,7 @@ async def build_guide_document_async(ctx, project, assembly, images: ImageSource
     pages.append(doc.Page(title="Bill of Materials", blocks=_bom_page_blocks(project, grouped, dir_path)))
 
     for section in sections:
-        pages += await _section_pages(project, section, images, len(sections))
+        pages += await _section_pages(project, section, images, len(sections), ctx)
 
     pages.append(_links_page(project, assembly, grouped, dir_path))
 
@@ -707,7 +842,7 @@ def _bom_page_blocks(project, grouped, dir_path):
     return blocks
 
 
-async def _section_pages(project, section: GuideSection, images: ImageSource, section_count):
+async def _section_pages(project, section: GuideSection, images: ImageSource, section_count, ctx=None):
     title = "Assembly: %s" % section.name if not section.top else section.name
     blocks = [doc.Heading(title, level=1)]
 
@@ -732,12 +867,12 @@ async def _section_pages(project, section: GuideSection, images: ImageSource, se
     pages = [doc.Page(title=section.name, blocks=blocks)]
 
     for step in section.steps:
-        pages.append(await _step_page(section, step, images))
+        pages.append(await _step_page(section, step, images, ctx))
 
     return pages
 
 
-async def _step_page(section: GuideSection, step: GuideStep, images: ImageSource):
+async def _step_page(section: GuideSection, step: GuideStep, images: ImageSource, ctx=None):
     blocks = [doc.Heading("%s: step %d of %d" % (section.name, step.number, len(section.steps)), level=1)]
 
     row = []
@@ -756,9 +891,12 @@ async def _step_page(section: GuideSection, step: GuideStep, images: ImageSource
         blocks.append(doc.ImageRow(row, height=0.3))
 
     blocks.append(doc.Paragraph(step.description()))
+    tools = step.tool_sentence()
+    if tools:
+        blocks.append(doc.Paragraph(tools))
 
     exploded = await images.shape_image_async(
-        exploded_assembly(step),
+        exploded_assembly(step, ctx),
         key="%s-step-%d-exploded" % (section.name, step.number),
         alt="%s exploded" % step.item_name,
         caption="Exploded view: the two are shown %.1fmm apart." % step.distance,

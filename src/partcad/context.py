@@ -875,6 +875,25 @@ class Context:
     def get_interface_shape(self, interface_spec):
         return asyncio.run(self._get_interface(interface_spec).get_wrapped(self))
 
+    def get_tool(self, tool_spec, quiet: bool = False):
+        """The tool a reference points at, or None once the miss is reported.
+
+        Resolved against the package the caller is in, like every other object
+        reference. 'partcad.tool.lookup' is the fully qualified counterpart, for
+        the callers that already hold an absolute reference and want the package
+        back as well.
+        """
+        project_name, tool_name = resolve_resource_path(
+            self.current_project_path,
+            tool_spec,
+        )
+        prj = self.get_project(project_name)
+        if prj is None:
+            if not quiet:
+                pc_logging.error("Package %s not found" % project_name)
+            return None
+        return prj.get_tool(tool_name, quiet=quiet)
+
     async def find_suppliers(self, cart: ProviderCart) -> dict[str, list[str]]:
         """Find suppliers for each of the parts in the cart"""
         suppliers = {}

@@ -36,7 +36,7 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "enum": ["sketches", "interfaces", "parts", "assemblies", "scenes"]
+                "enum": ["sketches", "interfaces", "parts", "assemblies", "scenes", "software", "tools"]
               },
               "uniqueItems": true
             }
@@ -297,6 +297,16 @@
       "description": "A force to hold this object with, in N. The default for the 'holdWithForce*'/'holdToForce*' fields in the 'how' section of an ASSY 'connect*' node.",
       "type": "number",
       "minimum": 0
+    },
+    "tool-visual": {
+      "description": "The part that stands for this tool in a picture. Only ever a likeness: it is never manufactured, never ordered and never counted, so the part it names does not have to be manufacturable.",
+      "type": "string",
+      "minLength": 1
+    },
+    "tool-visual-short-form": {
+      "description": "The short form of a tool: the part that stands for it. A tool with nothing else to say about itself - a finger has no torque rating - is written this way.",
+      "type": "string",
+      "minLength": 1
     },
     "connect": {
       "description": "What this part or assembly contributes to every connection it takes part in. The defaults for the 'how' section of an ASSY 'connect*' node.",
@@ -669,7 +679,7 @@
                 "implements": {
                   "type": "object",
                   "patternProperties": {
-                    "^[a-zA-Z0-9_/./-]+$": {
+                    "^[a-zA-Z0-9_/.:-]+$": {
                       "oneOf": [
                         { "type": "string" },
                         { "type": "null" },
@@ -1052,7 +1062,7 @@
             "inherits":{
               "type": "object",
               "patternProperties":{
-                "^[a-zA-Z0-9_/./-]+$":{
+                "^[a-zA-Z0-9_/.:-]+$":{
                   "oneOf": [
                     { "type": "null" },
                     { "type": "string", "minLength": 1 },
@@ -1195,6 +1205,157 @@
               "additionalProperties": false
             }
           ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "tools": {
+      "description": "The tools this package declares: what a product is made *with* rather than of - a finger, a driver, an extruder, an end mill. Unlike every other section, this one does not enumerate its objects: it holds one sub-section per category, and the sub-section name becomes the 'category' property of every tool declared inside it. The category also decides what a tool may say about itself, because each of them is a class of its own.",
+      "type": "object",
+      "properties": {
+        "mechanical": {
+          "description": "Tools that hold, turn or press something. The one category an assembly step may name in its 'how' section (see docs/source/assy.rst).",
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_/./-]+$": {
+              "oneOf": [
+                { "$ref": "#/definitions/tool-visual-short-form" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "desc": { "type": "string", "maxLength": 1000 },
+                    "url": { "$ref": "#/definitions/url" },
+                    "visual": { "$ref": "#/definitions/tool-visual" },
+                    "mates": {
+                      "description": "The interface, or the list of interfaces, this tool meets an object through. It is what lets an assembly step ask to be held by this tool and say nothing else: every instance of these interfaces the object implements is then a place the tool fits.",
+                      "oneOf": [
+                        { "type": "string", "minLength": 1 },
+                        { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                      ]
+                    },
+                    "forceMin": {
+                      "description": "The least force this tool can usefully apply, in newtons (N).",
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "forceMax": {
+                      "description": "The most force this tool can apply, in newtons (N).",
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "torqueMax": {
+                      "description": "The most torque this tool can apply, in newton-metres (N*m). A tool that cannot turn what it holds leaves this at zero, which is what disqualifies it from being a connection's 'driver'.",
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "unless": { "$ref": "#/definitions/unless" }
+                  },
+                  "required": ["visual"],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "additive": {
+          "description": "Tools that put material down: an extruder, a laser sintering a bed.",
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_/./-]+$": {
+              "oneOf": [
+                { "$ref": "#/definitions/tool-visual-short-form" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "desc": { "type": "string", "maxLength": 1000 },
+                    "url": { "$ref": "#/definitions/url" },
+                    "visual": { "$ref": "#/definitions/tool-visual" },
+                    "process": {
+                      "description": "How the material is put down: 'fdm', 'sla', 'sls', 'dmls', and whatever else a package needs to name.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "material": { "type": "string", "minLength": 1 },
+                    "layerHeight": {
+                      "description": "The thickness of one layer, in millimeters.",
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "spotSize": {
+                      "description": "The width of what the tool lays down in one pass, in millimeters: a nozzle bore, a laser spot.",
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "buildVolume": {
+                      "description": "How much fits, as [x, y, z] in millimeters.",
+                      "type": "array",
+                      "items": { "type": "number", "minimum": 0 },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "unless": { "$ref": "#/definitions/unless" }
+                  },
+                  "required": ["visual"],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "subtractive": {
+          "description": "Tools that take material away: an end mill, a drill, a laser cutting.",
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_/./-]+$": {
+              "oneOf": [
+                { "$ref": "#/definitions/tool-visual-short-form" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "desc": { "type": "string", "maxLength": 1000 },
+                    "url": { "$ref": "#/definitions/url" },
+                    "visual": { "$ref": "#/definitions/tool-visual" },
+                    "process": {
+                      "description": "How the material is taken away: 'milling', 'turning', 'drilling', 'laser', 'waterjet', 'edm', and whatever else a package needs to name.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "diameter": {
+                      "description": "The cutting diameter, in millimeters.",
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "length": {
+                      "description": "The usable cutting length, in millimeters.",
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "flutes": {
+                      "description": "How many cutting edges the tool has.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "spindleSpeedMax": {
+                      "description": "The most the tool may be turned at, in rpm.",
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "feedRateMax": {
+                      "description": "The most the tool may be fed at, in mm/min.",
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "unless": { "$ref": "#/definitions/unless" }
+                  },
+                  "required": ["visual"],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

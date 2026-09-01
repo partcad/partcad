@@ -12,11 +12,17 @@
 # here. It declares the same format in its own `export:`/`render:` section with
 # a `path` of its own, which replaces the built-in implementation for that
 # package (see `docs/source/configuration.rst`).
+#
+# This package itself declares the tools every product is made *with* and
+# nobody wants to declare twice: a finger and a screwdriver, and the interfaces
+# that say where on an object one of them fits. A package that has a tool of its
+# own declares it in its own `tools:` section, exactly as it would a part.
 
 name: //builtin
 desc: |
   The packages PartCAD ships with itself: the built-in ways of producing output
-  files, declared in `//builtin/export` and `//builtin/render`.
+  files, declared in `//builtin/export` and `//builtin/render`, and the tools
+  every product is assembled with.
 
 dependencies:
   export:
@@ -25,3 +31,138 @@ dependencies:
   render:
     type: local
     path: render
+
+# What the ports below are drawn as. Nothing is built out of them: a port's
+# sketch is its boundary, which is what `pc render --with-interfaces` draws.
+sketches:
+  grip:
+    type: basic
+    desc: The patch a fingertip covers
+    circle: 6.0
+  drive:
+    type: basic
+    desc: The recess a driver engages
+    circle: 2.0
+
+# Deliberately not abstract, unlike the base interfaces of a bolt pattern: an
+# object implements one of these directly, naming the places it can be held or
+# turned, and there is nothing more specific for it to inherit first. An
+# abstract interface is dropped from what an object implements (see
+# `WithPorts.instantiate_interfaces`), which is exactly what must not happen
+# here.
+#
+# The +Z of every port points *into* the object, as it does everywhere in
+# PartCAD, so a tool drawn at one of them stands outside the material facing in.
+interfaces:
+  grip:
+    desc: |
+      A place an object may be held by while something else is done to it.
+      The tool `//builtin:finger` mates to it.
+    ports:
+      grip:
+        sketch: grip
+  drive:
+    abstract: True
+    desc: A place a tool turns an object from.
+    ports:
+      drive:
+        sketch: drive
+  drive-hex:
+    desc: |
+      A hex socket a driver turns the object from - the recess of a socket head
+      screw. The tool `//builtin:screwdriver-hex` mates to it.
+    inherits:
+      drive: hex
+  drive-philips:
+    desc: |
+      A Phillips recess a driver turns the object from. The tool
+      `//builtin:screwdriver-philips` mates to it.
+    inherits:
+      drive: philips
+  drive-slotted:
+    desc: |
+      A slot a driver turns the object from. The tool
+      `//builtin:screwdriver-slotted` mates to it.
+    inherits:
+      drive: slotted
+
+# The likenesses the tools below are drawn as. They are parts like any other -
+# built, cached and projected by the same machinery - and they are the reason
+# `manufacturable: false` is here: nothing is made out of a picture of a finger,
+# so nothing should hold it to being makeable.
+#
+# Every one of them puts its working end at the origin and extends along -Z,
+# which is the convention that lets a tool be placed at a port without knowing
+# anything about the object the port belongs to. See the scripts.
+parts:
+  finger:
+    type: build123d
+    path: tool/finger.py
+    desc: The last joint of a finger, for drawing where something is held by hand
+    manufacturable: false
+  screwdriver-philips:
+    type: build123d
+    path: tool/screwdriver.py
+    desc: A screwdriver with a Phillips bit, for drawing where a screw is driven
+    manufacturable: false
+    parameters:
+      tip:
+        type: string
+        enum: [philips, hex, slotted]
+        default: philips
+      tip_size: 4.0
+  screwdriver-hex:
+    type: build123d
+    path: tool/screwdriver.py
+    desc: A screwdriver with a hex bit, for drawing where a socket head screw is driven
+    manufacturable: false
+    parameters:
+      tip:
+        type: string
+        enum: [philips, hex, slotted]
+        default: hex
+      tip_size: 3.0
+  screwdriver-slotted:
+    type: build123d
+    path: tool/screwdriver.py
+    desc: A screwdriver with a flat bit, for drawing where a slotted screw is driven
+    manufacturable: false
+    parameters:
+      tip:
+        type: string
+        enum: [philips, hex, slotted]
+        default: slotted
+      tip_size: 4.0
+
+tools:
+  mechanical:
+    finger:
+      desc: |
+        A human finger - or whatever a machine holds things with in its place.
+        It grips, it does not turn: `torqueMax` stays at zero, which is what
+        keeps it out of a connection's `driver`.
+      visual: finger
+      mates: grip
+      forceMin: 1.0
+      forceMax: 30.0
+    screwdriver-philips:
+      desc: A screwdriver with a Phillips bit.
+      visual: screwdriver-philips
+      mates: drive-philips
+      forceMin: 5.0
+      forceMax: 50.0
+      torqueMax: 5.0
+    screwdriver-hex:
+      desc: A screwdriver with a hex bit, for socket head screws.
+      visual: screwdriver-hex
+      mates: drive-hex
+      forceMin: 5.0
+      forceMax: 50.0
+      torqueMax: 8.0
+    screwdriver-slotted:
+      desc: A screwdriver with a flat bit.
+      visual: screwdriver-slotted
+      mates: drive-slotted
+      forceMin: 5.0
+      forceMax: 50.0
+      torqueMax: 3.0

@@ -55,6 +55,31 @@ isort --check src/partcad tests/partcad
   polled rather than blocked on: they are taken from several event loops at once (a part is instantiated on a
   worker thread running a loop of its own), and a task that blocked its own loop waiting for a lock the task
   beside it is about to release would never see it released.
+- **A tool is not a shape either** (`tool.py`, `tool_config.py`, `tool_factory.py`): a package's `tools:` section
+  declares what a product is made *with* rather than of -- a finger, a driver, an extruder, an end mill -- and
+  `Tool` is deliberately not a `Shape` for the same reason `Software` is not. What can be drawn is the part its
+  `visual` names, and that part goes through the part machinery like any other; a tool is never manufactured,
+  never ordered and never counted.
+
+  Two things about the section are unlike every other one. It does not enumerate its objects: it holds a
+  sub-section per **category** and the tools go inside those, which `Project._tool_configs` flattens, copying the
+  sub-section name into each declaration as `category`. And the category decides the *class* -- `MechanicalTool`,
+  `AdditiveTool`, `SubtractiveTool` -- because what a mechanical tool has to say about itself is nothing like what
+  an additive one has to. `ToolConfiguration.normalize` mirrors `category` into `type` so the generic object
+  plumbing dispatches on it, which is why a sub-section PartCAD does not know fails as an unknown type rather than
+  producing a tool of no class at all.
+
+  A **mechanical** tool is the one an assembly step can name: `assembly_connect.ConnectHow` reads `holdWith`,
+  `holdTo` and `driver` as `{tool: [where it acts]}`, where a place is an instance of an interface the object
+  implements and an empty list means every instance of what the tool's `mates` names. `torqueMax` is what makes a
+  tool a `driver` -- a finger leaves it at zero -- and a `driver` only means anything on a connection that is
+  turned in rather than pushed (`ConnectHow.method`). The older spelling of `holdWith`/`holdTo`, a bare interface
+  name or a list of them, still means what it meant and is told apart by shape rather than by a flag.
+
+  Every tool visual puts its **working end at the origin and extends along -Z**, because a port's +Z points into
+  the object it belongs to. That one convention is what lets `assembly_guide` place a tool at a port without
+  knowing anything about the object -- see `builtin/tool/finger.py`.
+
 - **Location/coordinate format**: 3D locations (OpenCASCADE `TopLoc_Location`) are represented as
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.

@@ -28,6 +28,11 @@ interfaces:
     ports:
       grip:
         sketch: m3
+  drive:
+    desc: The recess a driver turns the object from
+    ports:
+      drive:
+        sketch: m3
 
 parts:
   plate:
@@ -52,9 +57,55 @@ parts:
     implements:
       m3-screw: [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], 180.0]
       grip: [[0.0, 0.0, 5.0], [0.0, 0.0, 1.0], 0.0]
+      drive:
+        socket: [[0.0, 0.0, 8.0], [0.0, 0.0, 1.0], 0.0]
     connect:
       hold: grip
       holdForce: 4.5
+
+  # What the tools below are drawn as. One part for all of them: nothing in the
+  # unit tests builds it, and what is being tested is which tool acts where, not
+  # what it looks like.
+  tool-visual:
+    type: cadquery
+    desc: A stand-in for a tool in a picture
+    path: tool_visual.py
+    manufacturable: false
+
+tools:
+  mechanical:
+    finger:
+      desc: Holds, does not turn
+      visual: tool-visual
+      mates: grip
+      forceMin: 1.0
+      forceMax: 20.0
+    driver:
+      desc: Turns what it holds
+      visual: tool-visual
+      mates: drive
+      torqueMax: 2.0
+    # The short form: the visual alone.
+    thumb: tool-visual
+  additive:
+    extruder:
+      desc: Puts material down, and holds nothing
+      visual: tool-visual
+      process: fdm
+      material: PLA
+      layerHeight: 0.2
+      spotSize: 0.4
+      buildVolume: [220.0, 220.0, 250.0]
+  subtractive:
+    end-mill:
+      desc: Takes material away
+      visual: tool-visual
+      process: milling
+      diameter: 3.0
+      length: 12.0
+      flutes: 2
+      spindleSpeedMax: 18000.0
+      feedRateMax: 900.0
 
 assemblies:
   connect_how:

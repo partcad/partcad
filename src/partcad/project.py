@@ -38,6 +38,8 @@ from . import (
     sketch_config,
     software as pc_software,
     software_config,
+    tool as pc_tool,
+    tool_config,
 )
 from . import scene, scene_config
 from . import scene_factory as scnf
@@ -72,6 +74,7 @@ OBJECT_KINDS = (
     "provider",
     "repository",
     "software",
+    "tool",
     "partType",
 )
 OBJECT_KIND_SECTIONS = {
@@ -89,6 +92,10 @@ OBJECT_KIND_SECTIONS = {
     # geometry or a way of getting geometry. The section is named the same in
     # the singular and the plural, which is why this entry looks like a no-op.
     "software": "software",
+    # A tool is what the product is made *with* rather than of. Its section is
+    # the one that does not enumerate its objects directly: it holds a
+    # sub-section per category, and those hold the tools. See '_tool_configs'.
+    "tool": "tools",
     # A 'partType' is a package-defined way to construct parts (e.g. a wrapper
     # script). It is enumerable like any other object, but it is not a shape and
     # is never instantiated: parts whose 'type' references it are constructed by
@@ -169,6 +176,7 @@ class Project(project_config.Configuration):
     providers: dict[str, plugin_provider.Provider]
     repositories: dict[str, plugin_repository.Repository]
     software: dict[str, pc_software.Software]
+    tools: dict[str, pc_tool.Tool]
 
     class InterfaceLock(object):
         def __init__(self, prj, interface_name: str):
@@ -282,6 +290,20 @@ class Project(project_config.Configuration):
         def __exit__(self, *_args):
             self.lock.release()
 
+    class ToolLock(object):
+        def __init__(self, prj, tool_name: str):
+            prj.tool_locks_lock.acquire()
+            if tool_name not in prj.tool_locks:
+                prj.tool_locks[tool_name] = threading.Lock()
+            self.lock = prj.tool_locks[tool_name]
+            prj.tool_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
+
     def __init__(
         self,
         ctx: Context,
@@ -377,6 +399,10 @@ class Project(project_config.Configuration):
         self.software_locks = {}
         self.software_locks_lock = threading.Lock()
 
+        self.tools = {}
+        self.tool_locks = {}
+        self.tool_locks_lock = threading.Lock()
+
         # The objects already built to materialize a part of theirs (see
         # '_materialize_derived_part'), and the lock that keeps two threads from
         # building the same one. Keyed by '(kind, name)': 'assemblies:' and
@@ -414,8 +440,70 @@ class Project(project_config.Configuration):
             # counts, the getters - agree that there is nothing in it, without
             # any of them having to know about tags.
             return {}
-        cfg = self.config_obj.get(OBJECT_KIND_SECTIONS[kind])
+        if kind == "tool":
+            cfg = self._tool_configs()
+        else:
+            cfg = self.config_obj.get(OBJECT_KIND_SECTIONS[kind])
         return {} if cfg is None else self._filter_skipped(kind, cfg)
+
+    def _tool_configs(self) -> typing.Optional[dict]:
+        """The 'tools:' section flattened into the {name: config} every kind has.
+
+        'tools:' is the one section that does not enumerate its objects: it
+        holds a sub-section per category and the tools go inside those. The
+        sub-section name is copied into each declaration as 'category', which is
+        both what the tool reports about itself and what decides its class (see
+        'partcad.tool'), so this is the only place that has to know the section
+        is shaped differently from the rest.
+
+        A category PartCAD does not know is reported and its tools are dropped:
+        the alternative is a tool of no class at all. A name declared under two
+        categories is one name for two things, so the first one wins and the
+        second is reported - the same rule 'register_object' applies, said
+        earlier because both declarations are in one file.
+        """
+        section = self.config_obj.get(OBJECT_KIND_SECTIONS["tool"])
+        if section is None:
+            return None
+        if not isinstance(section, dict):
+            pc_logging.error("%s: 'tools' must hold a section per category, ignoring" % self.name)
+            return {}
+
+        configs = {}
+        for category, tools in section.items():
+            if category not in pc_tool.CATEGORIES:
+                pc_logging.error(
+                    "%s: unknown tool category '%s', ignoring. PartCAD supports: %s"
+                    % (self.name, category, ", ".join(pc_tool.CATEGORIES))
+                )
+                continue
+            if tools is None:
+                continue
+            if not isinstance(tools, dict):
+                pc_logging.error("%s: 'tools.%s' must declare tools by name, ignoring" % (self.name, category))
+                continue
+            for name, config in tools.items():
+                if name in configs:
+                    pc_logging.error(
+                        "%s: the tool '%s' is declared under two categories ('%s' and '%s'), ignoring the second one"
+                        % (self.name, name, configs[name].get("category"), category)
+                    )
+                    continue
+                if config is None:
+                    config = {}
+                elif isinstance(config, str):
+                    # The short form, which 'ToolConfiguration.normalize' reads
+                    # as the 'visual'. Kept as it is; only the category is
+                    # added, once it has a mapping to add it to.
+                    config = {"visual": config}
+                elif isinstance(config, dict):
+                    config = dict(config)
+                else:
+                    pc_logging.error("%s: the tool '%s' is not a section, ignoring" % (self.name, name))
+                    continue
+                config["category"] = category
+                configs[name] = config
+        return configs
 
     def _skipped_by(self, kind: str, name: str, config) -> typing.Optional[str]:
         """The 'unless' clause excluding this object here, remembering it, or None.
@@ -463,6 +551,10 @@ class Project(project_config.Configuration):
         # here depends on it having been read, and a part that references one
         # resolves it by name when asked rather than at load time.
         self.init_software()
+        # Tools are what the product is made with, so nothing that is made
+        # depends on them having been read; an assembly step that names one
+        # resolves it by name when asked.
+        self.init_tools()
         self.init_sketches()
         self.init_interfaces()  # After sketches
         self.init_mates()  # After interfaces
@@ -580,6 +672,10 @@ class Project(project_config.Configuration):
     @property
     def software_configs(self) -> dict:
         return self.object_configs("software")
+
+    @property
+    def tool_configs(self) -> dict:
+        return self.object_configs("tool")
 
     # TODO(clairbee): Implement get_cover()
     # def get_cover(self):
@@ -824,6 +920,9 @@ class Project(project_config.Configuration):
     def get_software_config(self, software_name):
         return self.object_config("software", software_name)
 
+    def get_tool_config(self, tool_name):
+        return self.object_config("tool", tool_name)
+
     def get_part_type_config(self, part_type_name):
         return self.object_config("partType", part_type_name)
 
@@ -893,6 +992,15 @@ class Project(project_config.Configuration):
             software_config.SoftwareConfiguration,
             None,
             self.get_software_config,
+        )
+
+    def init_tools(self):
+        return self.init_objects(
+            "tool",
+            self.tool_configs,
+            tool_config.ToolConfiguration,
+            None,
+            self.get_tool_config,
         )
 
     def record_broken_object(self, kind: str, name: str, reason) -> None:
@@ -1021,6 +1129,9 @@ class Project(project_config.Configuration):
 
     def init_software_by_config(self, config, source_project=None):
         self.init_object_by_config("software", software_config.SoftwareConfiguration, None, config, source_project)
+
+    def init_tool_by_config(self, config, source_project=None):
+        self.init_object_by_config("tool", tool_config.ToolConfiguration, None, config, source_project)
 
     def materialize_part_by_config(self, config) -> Optional[Part]:
         """The part an assembly materializes, created on first use.
@@ -1408,6 +1519,20 @@ class Project(project_config.Configuration):
             software_config.SoftwareConfiguration,
             None,
             software_name,
+            func_params,
+            quiet=quiet,
+        )
+
+    def get_tool(self, tool_name, func_params=None, quiet=False) -> Optional[pc_tool.Tool]:
+        return self.get_object(
+            "tool",
+            Project.ToolLock,
+            self.tools,
+            self.tool_configs,
+            self.get_tool_config,
+            tool_config.ToolConfiguration,
+            None,
+            tool_name,
             func_params,
             quiet=quiet,
         )
@@ -2701,6 +2826,30 @@ class Project(project_config.Configuration):
                         file_text,
                         "`%s`" % _readme_cell(declared_hash) if declared_hash else "",
                         _readme_cell(software.desc or ""),
+                    )
+                ]
+            lines += [""]
+
+        if self.tools and "tools" not in exclude:
+            # A table, for the same reason the software one is: a tool has no
+            # image of its own - what can be drawn is the part its 'visual'
+            # points at, which the package documents in its own right - and what
+            # a reader needs of it is a few short columns.
+            lines += ["## Tools"]
+            lines += [""]
+            lines += [
+                "| Tool | Category | Visual | Description |",
+                "| --- | --- | --- | --- |",
+            ]
+            for name in sorted(self.tools.keys()):
+                tool = self.tools[name]
+                lines += [
+                    "| %s | %s | %s | %s |"
+                    % (
+                        _readme_cell(name),
+                        _readme_cell(tool.category or ""),
+                        "`%s`" % _readme_cell(tool.visual) if tool.visual else "",
+                        _readme_cell(tool.desc or ""),
                     )
                 ]
             lines += [""]

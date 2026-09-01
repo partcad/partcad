@@ -57,6 +57,7 @@ from .sketch_factory_svg import SketchFactorySvg
 from .sketch_factory_alias import SketchFactoryAlias
 from .sketch_factory_enrich import SketchFactoryEnrich
 from .software_factory_raw import SoftwareFactoryRaw
+from .tool_factory import FACTORIES as TOOL_FACTORIES
 
 from .part import Part
 from . import consts
@@ -118,6 +119,12 @@ factory.register("repository", "enrich", PluginFactoryRepositoryEnrich)
 # The software a package ships. 'raw' is the file handed over as it is; the
 # types that follow it name a firmware flashing procedure for the same file.
 factory.register("software", "raw", SoftwareFactoryRaw)
+# The tools a package declares. A tool's "type" is its category, which is the
+# sub-section of "tools:" it was declared under, so these three are what makes
+# an unknown sub-section fail as an unknown type rather than silently produce a
+# tool of no class at all.
+for _tool_category, _tool_factory in TOOL_FACTORIES.items():
+    factory.register("tool", _tool_category, _tool_factory)
 
 
 def init(config_path=None, search_root=True, user_config=UserConfig()) -> Context:

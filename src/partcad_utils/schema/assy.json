@@ -49,6 +49,36 @@
         { "type": "array", "items": { "type": "string", "minLength": 1 } }
       ]
     },
+    "toolPlace": {
+      "description": "One place on an object a tool acts on: the name of an interface instance, or the pair [interface, instance] where one instance name belongs to more than one interface.",
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      ]
+    },
+    "toolPlaces": {
+      "description": "The tools a step is performed with, each mapped to the places on the object it acts on. An empty list is not \"nowhere\": it asks for every place that tool mates to, so that holding an object by whatever a finger fits needs nothing kept up to date as the object grows another grip.",
+      "type": "object",
+      "patternProperties": {
+        "^[^ ]+$": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/toolPlace" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "holdWithTools": {
+      "description": "Either the tools this end is held with, each mapped to the places it holds (see \"toolPlaces\"), or - the older spelling - the interface to hold the object by, or the list of them, leaving the tool to whoever performs the assembly.",
+      "anyOf": [
+        { "$ref": "#/definitions/toolPlaces" },
+        { "$ref": "#/definitions/holdInterfaces" }
+      ]
+    },
     "how": {
       "description": "How the object is expected to be brought into place. Every field is optional; an omitted one means its documented default. See docs/source/assy.rst.",
       "type": "object",
@@ -88,16 +118,24 @@
           "type": "number",
           "minimum": 0
         },
-        "holdWith": { "$ref": "#/definitions/holdInterfaces" },
+        "holdWith": { "$ref": "#/definitions/holdWithTools" },
         "holdWithInstance": { "$ref": "#/definitions/holdInterfaces" },
         "holdWithForce": { "$ref": "#/definitions/force" },
         "holdWithForceMin": { "$ref": "#/definitions/force" },
         "holdWithForceMax": { "$ref": "#/definitions/force" },
-        "holdTo": { "$ref": "#/definitions/holdInterfaces" },
+        "holdTo": { "$ref": "#/definitions/holdWithTools" },
         "holdToInstance": { "$ref": "#/definitions/holdInterfaces" },
         "holdToForce": { "$ref": "#/definitions/force" },
         "holdToForceMin": { "$ref": "#/definitions/force" },
-        "holdToForceMax": { "$ref": "#/definitions/force" }
+        "holdToForceMax": { "$ref": "#/definitions/force" },
+        "driver": {
+          "description": "The tool that turns the object into place, mapped to the places on the object it engages. A bare name, or a list of them, names the tools and leaves the places to be enumerated. Only meaningful on a connection that is turned in rather than pushed - one whose \"turnTorqueMax\" is above zero.",
+          "anyOf": [
+            { "$ref": "#/definitions/toolPlaces" },
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "items": { "type": "string", "minLength": 1 } }
+          ]
+        }
       },
       "additionalProperties": false
     },

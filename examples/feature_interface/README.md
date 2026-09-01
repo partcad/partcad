@@ -50,6 +50,39 @@ and `connect-mates` each declare two file types of their own in
 `--with-interfaces` are the same thing asked for once, on the command line,
 for any object and any output format.
 
+## Holding it while you build it
+
+Two of the interfaces on the drawings above are not features of the parts at
+all: `GRIP/L` and `GRIP/R` say where a hand goes. They are instances of
+`//builtin:grip`, an interface PartCAD itself declares, and the screws carry
+an instance of `//builtin:drive-hex` as well - the socket in the top of the
+head.
+
+That is what lets `connect-instructions` say which *tools* each step is
+performed with rather than only where the parts end up:
+
+```yaml
+how:
+  turnTorqueMax: 0.4
+  holdWith:
+    //builtin:finger: [L, R]    # a finger on each flat of the head
+  holdTo:
+    //builtin:finger: []        # every place a finger fits on the bracket
+  driver:
+    //builtin:screwdriver-hex: [socket]
+```
+
+`//builtin:finger` and `//builtin:screwdriver-hex` are *tools* (see the
+`tools:` section of `//builtin`), and each of them carries a `visual` - a
+part that stands for it in a picture. The assembly instruction book draws
+that part at the port of the instance the tool acts on, so every step of
+
+```shell
+pc render -a -t html connect-instructions
+```
+
+shows the two hands and the driver on the joint being made.
+
 
 ## Usage
 ```shell
@@ -71,6 +104,13 @@ pc inspect -a -p placement=inner connect-mates
 pc render -t png --with-ports example-bracket
 pc render -t png --with-interfaces example-bracket
 pc render -a -t png --with-all connect-mates
+
+# the instruction book, with a hand and a driver drawn on every step
+pc render -a -t html connect-instructions
+
+# the tools those steps name
+pc list tools //builtin
+pc info --tool //builtin:screwdriver-hex
 ```
 
 Every port drawn is also listed in the log, with the exact name to write in

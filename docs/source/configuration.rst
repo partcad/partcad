@@ -222,6 +222,9 @@ PartCAD :ref:`packages` may contain the following objects:
 - :ref:`software` is what the product ships with that is not geometry: a firmware image, a binary, a disk image.
   It is always a file.
 
+- :ref:`tools` are what a product is made *with* rather than of: a finger, a driver, an extruder, an end mill.
+  A tool is never manufactured and never appears in a bill of materials.
+
 - :ref:`providers` are implementations of a way to get parts and assemblies (to purchase them or to manufacture them).
 
 ===============
@@ -2304,6 +2307,159 @@ their own run of the test.
 
 Software is otherwise absent from procurement -- ``pc supply`` walks the
 hardware only, because nobody sells a firmware image.
+
+.. _tools:
+
+=====
+Tools
+=====
+
+A part is what the product is made **of**; a tool is what somebody -- or
+something -- holds while making it. A finger, a screwdriver, a 3D printer's
+extruder and an end mill are all tools, and none of them ends up in the bill of
+materials: a tool acts on the product and then goes back in the drawer.
+
+Two things make ``tools`` unlike every other section. It does not enumerate its
+objects: it holds one sub-section per **category**, and the tools go inside
+those, so a tool never has to repeat what kind of tool it is. And the category
+decides what a tool may say about itself, because each category is a class of
+its own -- what a mechanical tool has to state (what it grips, how hard, how
+much torque) is nothing like what an additive one has to (which process, which
+material, how fine a layer).
+
+.. code-block:: yaml
+
+  tools:
+    mechanical:
+      <tool name>:
+        desc: <(optional) textual description>
+        url: <(optional) where to read about it>
+        visual: <the part that stands for this tool in a picture>
+        mates: <(optional) the interface, or the list of them, this tool meets an object through>
+        forceMin: <(optional) the least force it can usefully apply, in N>
+        forceMax: <(optional) the most force it can apply, in N>
+        torqueMax: <(optional) the most torque it can apply, in N*m; default: 0>
+    additive:
+      <tool name>:
+        visual: <...>
+        process: <(optional) "fdm", "sla", "sls", "dmls", ...>
+        material: <(optional) what it puts down>
+        layerHeight: <(optional) the thickness of one layer, in mm>
+        spotSize: <(optional) the width of one pass, in mm>
+        buildVolume: <(optional) [x, y, z], in mm>
+    subtractive:
+      <tool name>:
+        visual: <...>
+        process: <(optional) "milling", "turning", "drilling", "laser", ...>
+        diameter: <(optional) the cutting diameter, in mm>
+        length: <(optional) the usable cutting length, in mm>
+        flutes: <(optional) how many cutting edges it has>
+        spindleSpeedMax: <(optional) in rpm>
+        feedRateMax: <(optional) in mm/min>
+
+A tool with nothing to say beyond what it looks like -- a finger has no torque
+rating -- is written in the short form, which is the ``visual`` alone:
+
+.. code-block:: yaml
+
+  tools:
+    mechanical:
+      finger: finger
+
+.. _tool-visual:
+
+The visual
+----------
+
+``visual`` names a **part** that stands for the tool in a picture. It is only
+ever a likeness: it is never manufactured, never ordered and never counted, so
+the part it names does not have to be manufacturable -- and a package that
+declares one usually marks it ``manufacturable: false`` to say so.
+
+A visual is drawn at the port of the interface instance the tool acts on, and
+that only works if every tool agrees where its own working end is. The
+convention is:
+
+  **the working end of the tool is at the origin, and the tool extends along
+  -Z.**
+
+A port's ``+Z`` points *into* the object it belongs to (see :ref:`interfaces`),
+so composing the two puts the tool outside the material facing in, without
+either end knowing anything about the other. The scripts under
+``src/partcad/builtin/tool`` are the worked examples.
+
+.. _tool-mates:
+
+What a tool fits
+----------------
+
+``mates`` lists the interfaces the tool meets an object through. It is what
+lets an assembly step ask to be held by a finger and say nothing else: every
+instance of those interfaces the object implements is then a place the finger
+fits (see :ref:`assy-tools`).
+
+``torqueMax`` is what separates a driver from everything else. A tool that
+cannot turn what it holds leaves it at zero, which is exactly what disqualifies
+it from being a connection's ``driver`` -- a finger is not a screwdriver.
+
+.. _builtin-tools:
+
+The tools PartCAD ships
+-----------------------
+
+``//builtin`` declares the tools nobody wants to declare twice, and the
+interfaces that say where on an object one of them fits:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Object
+     - What it is
+   * - ``//builtin:grip``
+     - An interface: a place an object may be held by. ``//builtin:finger``
+       mates to it.
+   * - ``//builtin:drive-hex``
+     - An interface: a hex socket a driver turns the object from.
+   * - ``//builtin:drive-philips``
+     - An interface: a Phillips recess a driver turns the object from.
+   * - ``//builtin:drive-slotted``
+     - An interface: a slot a driver turns the object from.
+   * - ``//builtin:finger``
+     - A mechanical tool: a human finger, or whatever holds things in its place.
+   * - ``//builtin:screwdriver-hex``
+     - A mechanical tool, for socket head screws.
+   * - ``//builtin:screwdriver-philips``
+     - A mechanical tool.
+   * - ``//builtin:screwdriver-slotted``
+     - A mechanical tool.
+
+A part says where those fit on it in its own ``implements`` section, the same
+way it declares any other interface:
+
+.. code-block:: yaml
+
+  parts:
+    socket-head-m3-screw-6mm:
+      type: step
+      implements:
+        m3-screw-6mm: [[0.0, 0.0, -12.0], [0.0, 1.0, 0.0], 180.0]
+        //builtin:grip:
+          L: [[-2.75, 0.0, -13.5], [0.0, 1.0, 0.0], 90.0]
+          R: [[2.75, 0.0, -13.5], [0.0, 1.0, 0.0], -90.0]
+        //builtin:drive-hex:
+          socket: [[0.0, 0.0, -15.0], [0.0, 0.0, 1.0], 0.0]
+
+``examples/feature_interface`` does exactly this, for both screws, the motor and
+the bracket, and its ``connect-instructions`` assembly is what puts the tools to
+work.
+
+Listing them
+------------
+
+.. code-block:: shell
+
+  pc list tools //builtin
+  pc info --tool //builtin:screwdriver-hex
 
 .. _providers:
 

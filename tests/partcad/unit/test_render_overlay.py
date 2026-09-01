@@ -69,10 +69,12 @@ def test_a_part_reports_every_port_it_implements():
     """'implements:' has already placed them, so this is a lookup."""
     records = _collect("example-bracket")
     ports = [record["port"] for record in records]
-    # Four bolt holes on each face of the bracket, plus the two slotted feet.
-    assert len(ports) == 10
+    # Four bolt holes on each face of the bracket, the two slotted feet, and the
+    # two side webs a hand takes hold of.
+    assert len(ports) == 12
     assert "inner-TL-3mm-thru-opening-m3" in ports
     assert "L-30mm-slotted-3mm-thru-opening-m4" in ports
+    assert "L-grip" in ports
 
 
 def test_a_port_carries_the_interface_a_connect_would_name():

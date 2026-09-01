@@ -132,6 +132,7 @@ from .project_factory_tar import ProjectFactoryTar
 from .scene import Scene
 from .shape import Shape
 from .software import Software
+from .tool import AdditiveTool, MechanicalTool, SubtractiveTool, Tool
 from .user_config import UserConfig, user_config
 
 
@@ -144,11 +145,13 @@ class PluginExportPngReportlab:
 plugins = PluginExportPngReportlab()
 
 __all__ = [
+    "AdditiveTool",
     "Assembly",
     "ConnectHold",
     "ConnectHow",
     "Context",
     "Location",
+    "MechanicalTool",
     "Part",
     "Project",
     "ProjectFactoryGit",
@@ -160,6 +163,8 @@ __all__ = [
     "Scene",
     "Shape",
     "Software",
+    "SubtractiveTool",
+    "Tool",
     "UserConfig",
     "add_render_configuration",
     "config",
@@ -187,6 +192,7 @@ __all__ = [
     "part",
     "shape",
     "tags",
+    "tool",
     "scene",
     "telemetry",
     "user_config",

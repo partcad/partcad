@@ -18,6 +18,7 @@ from partcad import assembly_factory_assy
 from partcad import assembly_guide
 from partcad import document as pc_document
 from partcad.assembly import Assembly
+from partcad.assembly_connect import ConnectHow
 from partcad.exception import NotAnAssemblyFileError, NotManufacturableError
 from partcad.geom import Location
 
@@ -25,6 +26,11 @@ from partcad.geom import Location
 # which is what an assembly instruction book is made of.
 CONNECT_PACKAGE = "//feature_interface"
 CONNECT_ASSEMBLY = "connect-ports"
+
+# The fixture package that declares tools, the interfaces they mate to, and
+# parts carrying instances of both. Its geometry is never built here: an
+# exploded view is assembled out of objects, and only rendering one needs CAD.
+TOOL_PACKAGE = "tests/partcad/unit/data/connect_how/partcad.yaml"
 
 
 def make_assembly(name="test", **config):
@@ -499,3 +505,103 @@ def test_render_assembly_guide_refuses_a_non_manufacturable_assembly():
         prj.render_assembly_guide("logo", "pdf", output_dir=output_dir)
 
     assert not os.path.exists(os.path.join(output_dir, "logo.pdf"))
+
+
+#
+# The tools a step is performed with
+#
+
+
+def _tool_step(how_config):
+    """One step of a screw going into a plate, with 'how' resolved against both."""
+    ctx = pc.init(TOOL_PACKAGE)
+    screw = ctx.get_part(":screw")
+    plate = ctx.get_part(":plate")
+    how = ConnectHow(how_config, where="test").resolve(screw, plate, ctx=ctx)
+    step = assembly_guide.GuideStep(
+        number=1,
+        item=screw,
+        item_name="screw",
+        location=Location(),
+        counterpart=plate,
+        counterpart_name="plate",
+        counterpart_location=Location([[0, 0, 3], [0, 0, 1], 0]),
+        how=how,
+        direction=(0.0, 0.0, 1.0),
+        distance=10.0,
+    )
+    return ctx, step
+
+
+def test_the_step_carries_the_tools_it_is_performed_with():
+    """'how' reaches the guide, which is what puts a hand in the picture"""
+    _, step = _tool_step(
+        {
+            "turnTorqueMax": 0.4,
+            "holdWith": {"//:finger": []},
+            "holdTo": {"//:finger": ["left"]},
+            "driver": {"//:driver": ["socket"]},
+        }
+    )
+
+    placements = step.tool_placements()
+    assert [tool for tool, _, _, _ in placements] == ["//:finger", "//:driver", "//:finger"]
+    # 'holdWith' and 'driver' act on the item being added, 'holdTo' on what it
+    # is joined to - and on the item at the place the exploded view moves it to.
+    assert [item.name for _, item, _, _ in placements] == ["screw", "screw", "plate"]
+    assert placements[0][2].translation == pytest.approx(step.exploded_location().translation)
+    assert placements[2][2].translation == pytest.approx((0.0, 0.0, 3.0))
+
+
+def test_a_hold_without_a_tool_draws_nothing():
+    """The older spelling leaves the choice of tool to the assembler"""
+    _, step = _tool_step({"holdWith": "grip"})
+    assert step.how.hold_with  # it did resolve to a place
+    assert step.tool_placements() == []
+    assert step.tool_sentence() is None
+
+
+def test_the_step_says_which_tools_in_words():
+    _, step = _tool_step(
+        {
+            "turnTorqueMax": 0.4,
+            "holdWith": {"//:finger": []},
+            "holdTo": {"//:finger": ["left"]},
+            "driver": {"//:driver": ["socket"]},
+        }
+    )
+    sentence = step.tool_sentence()
+    assert sentence == "Hold screw with //:finger, hold plate with //:finger, turn it with //:driver."
+
+
+def test_the_exploded_view_places_the_tool_at_the_port_it_acts_on():
+    """A tool is drawn where it acts, which is what makes it worth drawing"""
+    ctx, step = _tool_step({"turnTorqueMax": 0.4, "driver": {"//:driver": ["socket"]}})
+
+    pair = assembly_guide.exploded_assembly(step, ctx)
+    names = [child.name for child in pair.children]
+    assert names[:2] == ["plate", "screw"]
+    assert len(names) == 3
+
+    tool_child = pair.children[2]
+    assert tool_child.item is ctx.get_tool("//:driver").get_visual(ctx)
+    # The screw's "drive" instance sits at z=8 in its own coordinates, and the
+    # exploded view holds the screw 10mm off the joint.
+    port = step.item.with_ports.get_ports()["socket-drive"]
+    expected = step.exploded_location() * port.location
+    assert tool_child.location.translation == pytest.approx(expected.translation)
+
+
+def test_the_exploded_view_is_the_two_items_alone_without_a_context():
+    """Nowhere to look a tool up is not a reason to lose the illustration"""
+    _, step = _tool_step({"turnTorqueMax": 0.4, "driver": {"//:driver": ["socket"]}})
+    pair = assembly_guide.exploded_assembly(step)
+    assert [child.name for child in pair.children] == ["plate", "screw"]
+
+
+def test_two_tools_at_two_places_get_names_of_their_own():
+    """Two children of one assembly may not share a name"""
+    ctx, step = _tool_step({"holdTo": {"//:finger": []}})
+    pair = assembly_guide.exploded_assembly(step, ctx)
+    names = [child.name for child in pair.children]
+    assert len(names) == len(set(names)) == 4

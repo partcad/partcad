@@ -634,7 +634,7 @@ def info(session, params):
 
 
 def info_object(session, params):
-    """Show detailed information about a part, assembly, scene, interface, sketch, or software.
+    """Show detailed information about a part, assembly, scene, interface, sketch, software, or tool.
 
     Ported verbatim from the CLI `info` command: with no object name it reports
     the package's info, otherwise the object's configuration and info. Output is
@@ -678,6 +678,12 @@ def info_object(session, params):
         # parameters, instantiation, the shape cache - applies to a file.
         project = ctx.get_project(package)
         obj = project.get_software(object_name) if project is not None else None
+    elif params.get("tool"):
+        # Through the package for the same reason software is: a tool has no
+        # geometry of its own, so none of what 'ctx.get_*' does for a shape
+        # applies. What can be drawn is the part its 'visual' names.
+        project = ctx.get_project(package)
+        obj = project.get_tool(object_name) if project is not None else None
     else:
         obj = ctx.get_part(path, params=param_list)
 
@@ -1475,17 +1481,18 @@ _LIST_LABELS = {
     "scenes": "PartCAD scenes",
     "interfaces": "PartCAD interfaces",
     "software": "PartCAD software",
+    "tools": "PartCAD tools",
 }
 
 # The kinds whose recursive listing walks every package rather than only the
 # ones with geometry in them. A package of firmware images has nothing to render
 # and would be filtered out of the walk exactly as a package of interfaces is
 # (see 'Context.get_packages', and the TODO there about the two).
-_LIST_EVERY_PACKAGE = ("interfaces", "software")
+_LIST_EVERY_PACKAGE = ("interfaces", "software", "tools")
 
 
 def list_objects(session, params):
-    """List a package's parts, sketches, assemblies, interfaces or software."""
+    """List a package's parts, sketches, assemblies, interfaces, software or tools."""
     ctx = _ctx(session, params)
     if ctx is None:
         return None

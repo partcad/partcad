@@ -17,6 +17,7 @@ from .scenes import cli as list_scenes
 from .sketches import cli as list_sketches
 from .providers import cli as list_providers
 from .software import cli as list_software
+from .tools import cli as list_tools
 
 
 @click.option(
@@ -49,5 +50,6 @@ def cli(cli_ctx: CliContext, recursive: bool, package: str) -> None:
     runner.invoke(list_scenes, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     runner.invoke(list_providers, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     runner.invoke(list_software, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
+    runner.invoke(list_tools, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     # TODO: @alexanderilyin: TypeError: startswith first arg must be str or a tuple of str, not Project
     # runner.invoke(list_mates, options, catch_exceptions=catch_exceptions, obj=ctx)

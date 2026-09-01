@@ -926,6 +926,10 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     mated_frame=mated_frame,
                     source_interface=source_iface_obj,
                     target_interface=target_iface_obj,
+                    # The tools named by "holdWith"/"holdTo"/"driver" are objects
+                    # of a package like anything else, so resolving them takes a
+                    # context to resolve them in.
+                    ctx=self.ctx,
                 )
 
         if item is not None:
