@@ -154,11 +154,20 @@ class MacOpenSCADCheck(OpenSCADCheck):
         return platform.system().lower() == "darwin"
 
     def fix(self) -> bool:
-        """Attempt to install OpenSCAD using Homebrew."""
+        """Attempt to install OpenSCAD using Homebrew.
+
+        The snapshot cask rather than the release one: Homebrew disabled
+        ``openscad`` on 2026-09-01 because the pinned 2021.01 release does not
+        pass the macOS Gatekeeper check, so ``brew install openscad`` cannot
+        succeed on any machine any more. 2021.01 is also x86_64 only -- the
+        reason ``dev-tools/pyinstaller/build.sh`` does not bundle OpenSCAD on
+        macOS -- so on Apple Silicon it was the wrong build to reach for even
+        while it installed.
+        """
         env = os.environ.copy()
         env["HOMEBREW_NO_AUTO_UPDATE"] = "1"
 
-        install_cmd = ["brew", "install", "-f", "openscad"]
+        install_cmd = ["brew", "install", "--cask", "openscad@snapshot"]
         cache_dir = Path.home() / "Library" / "Caches" / "Homebrew" / "downloads"
 
         try:
