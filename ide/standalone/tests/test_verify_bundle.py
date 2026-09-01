@@ -8,6 +8,7 @@
 
 import json
 import os
+import shutil
 import stat
 
 import brand
@@ -224,3 +225,131 @@ def test_a_wrapper_that_does_not_enable_it_is_a_problem(tmp_path, capsys):
 
     assert run(resources, tmp_path) != 0
     assert "does not enable software WebGL" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# The welcome window. It is a walkthrough contributed by the bootstrap
+# extension: a manifest entry pointing at files packaged beside it, which fails
+# by rendering nothing rather than by failing.
+# ---------------------------------------------------------------------------
+
+
+EXAMPLES = [
+    {"package": "a_part", "label": "A part", "detail": "...", "open": "cube.py"},
+    {"package": "an_assembly", "label": "An assembly", "detail": "...", "open": "it.assy", "requires": ["a_part"]},
+]
+
+
+def add_example(directory, name, files):
+    package = directory / "examples" / name
+    package.mkdir(parents=True)
+    (package / "partcad.yaml").write_text("parts:\n", encoding="utf-8")
+    for name in files:
+        (package / name).write_text("# example\n", encoding="utf-8")
+
+
+def add_bootstrap(extensions_dir, steps, examples=EXAMPLES, with_examples=True):
+    directory = extensions_dir / "PartCAD.partcad-ide-bootstrap-1.0.0"
+    directory.mkdir(parents=True)
+    (directory / "package.json").write_text(
+        json.dumps(
+            {
+                "publisher": "PartCAD",
+                "name": "partcad-ide-bootstrap",
+                "version": "1.0.0",
+                "contributes": {
+                    "walkthroughs": [{"id": "partcadStart", "title": "Start with PartCAD", "steps": steps}]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    if examples is not None:
+        (directory / "examples.json").write_text(json.dumps({"examples": examples}), encoding="utf-8")
+    if with_examples:
+        add_example(directory, "a_part", ["cube.py"])
+        add_example(directory, "an_assembly", ["it.assy"])
+    return directory
+
+
+def test_the_welcome_window_is_reported(tmp_path, capsys):
+    resources = make_bundle(tmp_path)
+    directory = add_bootstrap(
+        resources / "app" / "extensions", [{"id": "package", "media": {"markdown": "media/package.md"}}]
+    )
+    (directory / "media").mkdir()
+    (directory / "media" / "package.md").write_text("# hello\n", encoding="utf-8")
+
+    assert run(resources, tmp_path) == 0
+    assert "welcome window: Start with PartCAD (1 steps" in capsys.readouterr().out
+
+
+def test_a_walkthrough_step_whose_media_was_not_packaged_fails(tmp_path, capsys):
+    # What a `.vscodeignore`, or a build that copies the manifest and not the
+    # directory beside it, produces: a welcome window of empty pages.
+    resources = make_bundle(tmp_path)
+    add_bootstrap(resources / "app" / "extensions", [{"id": "package", "media": {"markdown": "media/package.md"}}])
+
+    assert run(resources, tmp_path) == 1
+    assert "step package shows media/package.md, which is not in the extension" in capsys.readouterr().out
+
+
+def test_a_bootstrap_extension_with_no_walkthrough_fails(tmp_path, capsys):
+    resources = make_bundle(tmp_path)
+    add_bootstrap(resources / "app" / "extensions", [])
+    manifest = resources / "app" / "extensions" / "PartCAD.partcad-ide-bootstrap-1.0.0" / "package.json"
+    package = json.loads(manifest.read_text(encoding="utf-8"))
+    package["contributes"] = {}
+    manifest.write_text(json.dumps(package), encoding="utf-8")
+
+    assert run(resources, tmp_path) == 1
+    assert "contributes no walkthrough" in capsys.readouterr().out
+
+
+def test_the_examples_are_reported(tmp_path, capsys):
+    resources = make_bundle(tmp_path)
+    directory = add_bootstrap(
+        resources / "app" / "extensions", [{"id": "package", "media": {"markdown": "media/package.md"}}]
+    )
+    (directory / "media").mkdir()
+    (directory / "media" / "package.md").write_text("# hello\n", encoding="utf-8")
+
+    assert run(resources, tmp_path) == 0
+    assert "welcome window: 2 example package(s) to open" in capsys.readouterr().out
+
+
+def test_an_example_whose_packages_were_not_copied_fails(tmp_path, capsys):
+    # The welcome window would offer it and opening it would find nothing.
+    resources = make_bundle(tmp_path)
+    add_bootstrap(resources / "app" / "extensions", [], with_examples=False)
+
+    assert run(resources, tmp_path) == 1
+    assert "the a_part example is offered, but a_part was not packaged with it" in capsys.readouterr().out
+
+
+def test_an_assembly_example_without_its_parts_fails(tmp_path, capsys):
+    # An example that names other packages is only shipped if they are too:
+    # an assembly whose parts were left behind loads no better than a missing one.
+    resources = make_bundle(tmp_path)
+    directory = add_bootstrap(resources / "app" / "extensions", [])
+    shutil.rmtree(directory / "examples" / "a_part")
+
+    assert run(resources, tmp_path) == 1
+    assert "the an_assembly example is offered, but a_part was not packaged with it" in capsys.readouterr().out
+
+
+def test_an_example_missing_the_file_it_opens_fails(tmp_path, capsys):
+    resources = make_bundle(tmp_path)
+    directory = add_bootstrap(resources / "app" / "extensions", [])
+    (directory / "examples" / "a_part" / "cube.py").unlink()
+
+    assert run(resources, tmp_path) == 1
+    assert "the a_part example has no cube.py to open" in capsys.readouterr().out
+
+
+def test_a_bootstrap_extension_with_no_examples_manifest_fails(tmp_path, capsys):
+    resources = make_bundle(tmp_path)
+    add_bootstrap(resources / "app" / "extensions", [], examples=None)
+
+    assert run(resources, tmp_path) == 1
+    assert "no examples.json" in capsys.readouterr().out

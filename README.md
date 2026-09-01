@@ -219,7 +219,9 @@ installing or using any PartCAD tool, then make sure to install [conda].
 ### PartCAD IDE
 
 The whole thing in one application: the editor, the PartCAD extension, and the command line tools. No Python,
-no extensions to pick, no environment to set up. It opens in the PartCAD workbench.
+no extensions to pick, no environment to set up. It opens in the PartCAD workbench, and the first time it
+starts it creates a package for you and opens that -- so there is something to render before there is anything
+to read.
 
 ```shell
 curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh -s -- --ide

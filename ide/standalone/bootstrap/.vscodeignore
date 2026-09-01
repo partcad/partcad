@@ -1,1 +1,5 @@
+# What `vsce package` leaves out of the extension the IDE ships. Everything else
+# here goes in as it is -- there is no compile step, so what is in this
+# directory is what runs.
+test/**
 .vscodeignore

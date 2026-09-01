@@ -17,10 +17,33 @@
   },
   "homepage": "https://partcad.org/",
   "main": "./extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "description": "This extension does not read or run anything from the workspace: it points the PartCAD extension at the tools shipped beside the editor, and creates the package the IDE starts in. It is supported in a restricted window so that the welcome window is there to explain the one asking to be trusted."
+    }
+  },
   "activationEvents": [
     "onStartupFinished"
   ],
   "contributes": {
+    "commands": [
+      {
+        "command": "partcadIde.openStarterPackage",
+        "title": "Open the starter package",
+        "category": "PartCAD IDE"
+      },
+      {
+        "command": "partcadIde.openExample",
+        "title": "Open an example",
+        "category": "PartCAD IDE"
+      },
+      {
+        "command": "partcadIde.showWelcome",
+        "title": "Welcome",
+        "category": "PartCAD IDE"
+      }
+    ],
     "configuration": {
       "title": "PartCAD IDE",
       "properties": {
@@ -33,8 +56,103 @@
           "type": "boolean",
           "default": true,
           "description": "Use the PartCAD command line tools that ship with this IDE: point the PartCAD extension at the bundled service, and put `pc` on the PATH of the integrated terminal. Turn this off to use a PartCAD installation of your own."
+        },
+        "partcadIde.createStarterPackage": {
+          "type": "boolean",
+          "default": true,
+          "description": "The first time the IDE starts, create a PartCAD package in `~/.partcad/projects/start` and open it as the workspace. Turn this off to start in an empty window instead; the package can still be created from `PartCAD IDE: Open the starter package`."
         }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "partcadStart",
+        "title": "Start with PartCAD",
+        "description": "Design manufacturable products in code. Your first package is open already -- add a part to it, look at it in 3D, and render the whole package.",
+        "featuredFor": [
+          "**/partcad.yaml"
+        ],
+        "steps": [
+          {
+            "id": "package",
+            "title": "Your first package",
+            "description": "The first time it starts, the IDE creates a PartCAD package in `~/.partcad/projects/start` and opens it as the workspace. It is an ordinary folder with a `partcad.yaml` in it, so `pc` in a terminal works with the same package.\n[Open the starter package](command:partcadIde.openStarterPackage)\n[What a package declares](https://partcad.readthedocs.io/en/latest/configuration.html)",
+            "media": {
+              "markdown": "media/package.md"
+            },
+            "completionEvents": [
+              "onCommand:partcadIde.openStarterPackage",
+              "onContext:partcad.packageLoaded"
+            ]
+          },
+          {
+            "id": "example",
+            "title": "Start from an example",
+            "description": "Packages that already work, to read and change: parts in CadQuery, build123d and OpenSCAD, and an assembly built out of other packages. The one you pick is copied into your package -- with whatever it uses -- and opened.\n[Open an example](command:partcadIde.openExample)\n[The tutorial](https://partcad.readthedocs.io/en/latest/tutorial.html)",
+            "media": {
+              "markdown": "media/example.md"
+            },
+            "completionEvents": [
+              "onCommand:partcadIde.openExample"
+            ]
+          },
+          {
+            "id": "part",
+            "title": "Add a part",
+            "description": "A part is a CAD script -- CadQuery, build123d or OpenSCAD -- or a file PartCAD imports. Adding one writes the script and registers it in `partcad.yaml`.\n[Add a part](command:partcad.addPart)\n[How parts are declared](https://partcad.readthedocs.io/en/latest/configuration.html)",
+            "media": {
+              "markdown": "media/part.md"
+            },
+            "completionEvents": [
+              "onCommand:partcad.addPart"
+            ]
+          },
+          {
+            "id": "viewer",
+            "title": "See it in 3D",
+            "description": "The PartCAD Viewer shows the shape the script produces, and reloads it when you save. Select a part in the PartCAD Explorer to display it.\n[Open the PartCAD Viewer](command:partcad.viewer)\n[What the workbench does](https://partcad.readthedocs.io/en/latest/features.html)",
+            "media": {
+              "markdown": "media/viewer.md"
+            },
+            "completionEvents": [
+              "onCommand:partcad.viewer"
+            ]
+          },
+          {
+            "id": "render",
+            "title": "Render the package",
+            "description": "Rendering turns the package into the files other tools want: SVG and PNG projections, a PDF or an HTML document, STEP and STL through `pc export`. \"Render\" is in the Run and Debug view, put there when the package was created.\n[Open Run and Debug](command:workbench.view.debug)\n[pc render and pc export](https://partcad.readthedocs.io/en/latest/cli.html)",
+            "media": {
+              "markdown": "media/render.md"
+            },
+            "completionEvents": [
+              "onCommand:workbench.view.debug"
+            ]
+          },
+          {
+            "id": "terminal",
+            "title": "The same thing from a terminal",
+            "description": "`pc` is the PartCAD command line, and this IDE carries it: no installation, no Python environment, already on the PATH of the terminal below.\n[Open a terminal](command:workbench.action.terminal.new)\n[Every command there is](https://partcad.readthedocs.io/en/latest/cli.html)",
+            "media": {
+              "markdown": "media/terminal.md"
+            },
+            "completionEvents": [
+              "onCommand:workbench.action.terminal.new"
+            ]
+          },
+          {
+            "id": "documentation",
+            "title": "Where to go next",
+            "description": "The tutorial builds a package from nothing, and the documentation covers the file formats, the part types and the public package index.\n[Read the documentation](https://partcad.readthedocs.io/)\n[Installing PartCAD elsewhere](https://partcad.readthedocs.io/en/latest/installation.html)",
+            "media": {
+              "markdown": "media/documentation.md"
+            },
+            "completionEvents": [
+              "onLink:https://partcad.readthedocs.io/"
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

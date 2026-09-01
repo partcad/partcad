@@ -72,6 +72,16 @@ jobs:
       - name: Run the tests
         run: python -m pytest ide/standalone/tests -o addopts= -v
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+
+      # The IDE bootstrap extension: what it does on the first start, against a
+      # stubbed editor. No dependencies -- `node --test` is in Node itself.
+      - name: Run the bootstrap extension's tests
+        run: node --test ide/standalone/bootstrap/test/*.test.js
+
   # Where the command line bundles that go inside the IDE come from.
   #
   # They are the same bundles `install.sh` installs, frozen by the "Standalone"
@@ -530,7 +540,9 @@ jobs:
           - os: macos-latest
             platform: macos-arm64
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # The first start below runs the editor and waits for a PyInstaller bundle
+    # to unpack itself, which the rest of this job does not.
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v7
@@ -582,6 +594,92 @@ jobs:
             exit 1
           }
           test -x "${resources}/partcad-cli/partcad-json-rpc"
+          # The examples the welcome window offers to open, packaged into the
+          # bootstrap extension by the build.
+          bootstrap=$(find "${resources}/app/extensions" -maxdepth 1 -iname "partcad.partcad-ide-bootstrap-*" | head -n 1)
+          test -n "${bootstrap}" || {
+            echo "::error::the installed IDE has no PartCAD IDE bootstrap extension"
+            exit 1
+          }
+          test -f "${bootstrap}/examples/produce_part_cadquery_primitive/partcad.yaml"
+
+      # A display for the editor. Nothing here looks at what it draws; it does
+      # not start at all without one.
+      - name: Install Xvfb
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes xvfb
+
+      # What the IDE does for someone who has just installed it: `pc init` a
+      # package in ~/.partcad/projects/start and open it as the workspace.
+      # Started the way a user starts it, with no arguments -- and with a user
+      # data directory of its own, so that this is a first start however many
+      # times the job is re-run, and so that the state the editor writes is
+      # somewhere this job can read it.
+      - name: Start it once
+        shell: bash
+        run: |
+          export PATH="${HOME}/partcad-bin:${PATH}"
+          user_data="${RUNNER_TEMP}/ide-user-data"
+          starter="${HOME}/.partcad/projects/start"
+          rm -rf "${user_data}" "${starter}"
+
+          # Killed however this ends: on the way out this job uninstalls the
+          # application the editor is running from. Matched loosely and without
+          # regard to case, because on macOS the process is the executable
+          # inside "PartCAD IDE.app" rather than the launcher's name.
+          #
+          # The launcher spawns the editor and returns, so its own output says
+          # nothing; what the editor has to say is in its log directory.
+          diagnose() {
+            pkill -if "partcad.ide" || true
+            echo "--- what the editor logged:"
+            find "${user_data}/logs" -name "*.log" -exec sh -c 'echo "== $1"; tail -n 40 "$1"' _ {} \; 2>/dev/null || true
+          }
+          trap diagnose EXIT
+
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            # Started here rather than through `xvfb-run`: the launcher returns
+            # as soon as it has spawned the editor, and `xvfb-run` takes the
+            # display down with the command it was given.
+            Xvfb :99 -screen 0 1280x1024x24 >/dev/null 2>&1 &
+            export DISPLAY=:99
+            # The runner image restricts unprivileged user namespaces, which is
+            # what Chromium's sandbox is built on. A property of this machine
+            # rather than of the IDE.
+            partcad-ide --no-sandbox --user-data-dir "${user_data}"
+          else
+            partcad-ide --user-data-dir "${user_data}"
+          fi
+
+          # Five minutes: `pc init` writes a template, but it runs out of a
+          # PyInstaller bundle that unpacks itself first, on a machine that has
+          # just written a gigabyte to disk.
+          package="${starter}/partcad.yaml"
+          for _ in $(seq 60); do
+            [ -f "${package}" ] && break
+            sleep 5
+          done
+          if [ ! -f "${package}" ]; then
+            echo "::error::the IDE did not create ${package} on its first start"
+            exit 1
+          fi
+          head -n 5 "${package}"
+
+          # And opened it: the editor writes the folder a window belongs to
+          # beside that window's storage, as it opens it. The path is a URI in
+          # there, so it is spelled with forward slashes.
+          opened=""
+          for _ in $(seq 36); do
+            if grep -rls "\.partcad/projects/start" "${user_data}/User/workspaceStorage" 2>/dev/null | grep -q .; then
+              opened="yes"
+              break
+            fi
+            sleep 5
+          done
+          if [ -z "${opened}" ]; then
+            echo "::error::the IDE did not open the starter package as its workspace"
+            exit 1
+          fi
 
       - name: Uninstall with install.sh
         shell: bash
@@ -601,7 +699,9 @@ jobs:
     name: "Install (windows-x86_64)"
     needs: build
     runs-on: windows-latest
-    timeout-minutes: 30
+    # The first start below runs the editor and waits for a PyInstaller bundle
+    # to unpack itself, which the rest of this job does not.
+    timeout-minutes: 40
 
     steps:
       - name: Download the IDE
@@ -639,9 +739,65 @@ jobs:
           if (-not (Get-ChildItem $extensions -Directory | Where-Object { $_.Name -match "^partcad\.partcad-\d" })) {
             throw "the installed IDE has no PartCAD extension"
           }
+          # The examples the welcome window offers to open, packaged into the
+          # bootstrap extension by the build.
+          $bootstrap = Get-ChildItem $extensions -Filter "partcad.partcad-ide-bootstrap-*" | Select-Object -First 1
+          if (-not $bootstrap) { throw "the installed IDE has no PartCAD IDE bootstrap extension" }
+          $example = Join-Path $bootstrap.FullName "examples\produce_part_cadquery_primitive\partcad.yaml"
+          if (-not (Test-Path $example)) { throw "the welcome window's examples were not installed" }
           # The PATH entries the installer adds for a new terminal.
           $path = (Get-ItemProperty -Path "HKCU:\Environment" -Name Path).Path
           if ($path -notlike "*PartCAD IDE\bin*") { throw "the installer did not add bin to PATH" }
+
+      # The same first start as the job above, on the platform where the setup
+      # program is the installer: `pc init` in %USERPROFILE%\.partcad\projects\start,
+      # and that folder opened as the workspace.
+      - name: Start it once
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE"
+          $userData = Join-Path $env:RUNNER_TEMP "ide-user-data"
+          $starter = Join-Path $env:USERPROFILE ".partcad/projects/start"
+          $log = Join-Path $env:RUNNER_TEMP "ide.log"
+          Remove-Item -Recurse -Force $userData, $starter -ErrorAction SilentlyContinue
+
+          Start-Process -FilePath (Join-Path $app "partcad-ide.exe") `
+            -ArgumentList "--user-data-dir", $userData `
+            -RedirectStandardOutput $log -RedirectStandardError "$log.err" | Out-Null
+          try {
+            # Five minutes: `pc init` writes a template, but it runs out of a
+            # PyInstaller bundle that unpacks itself first, on a machine that
+            # has just written a gigabyte to disk.
+            $package = Join-Path $starter "partcad.yaml"
+            $deadline = (Get-Date).AddMinutes(5)
+            while (-not (Test-Path $package) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 5 }
+            if (-not (Test-Path $package)) {
+              throw "the IDE did not create $package on its first start"
+            }
+            Get-Content $package -TotalCount 5
+
+            # And opened it: the editor writes the folder a window belongs to
+            # beside that window's storage, as it opens it. The path is a URI
+            # in there, so it is spelled with forward slashes.
+            $storage = Join-Path $userData "User\workspaceStorage"
+            $deadline = (Get-Date).AddMinutes(3)
+            $opened = $false
+            while (-not $opened -and (Get-Date) -lt $deadline) {
+              $opened = $null -ne (Get-ChildItem $storage -Recurse -Filter workspace.json -ErrorAction SilentlyContinue |
+                Select-String -SimpleMatch -Pattern ".partcad/projects/start")
+              if (-not $opened) { Start-Sleep -Seconds 5 }
+            }
+            if (-not $opened) {
+              throw "the IDE did not open the starter package as its workspace"
+            }
+          } finally {
+            # Stopped however this ends: the uninstaller below cannot remove an
+            # application that is running.
+            Stop-Process -Name partcad-ide -Force -ErrorAction SilentlyContinue
+            Write-Host "--- the editor said:"
+            Get-Content $log -Tail 40 -ErrorAction SilentlyContinue
+            Get-Content "$log.err" -Tail 40 -ErrorAction SilentlyContinue
+          }
 
       - name: Uninstall
         shell: pwsh

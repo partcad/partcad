@@ -54,10 +54,14 @@
   "configurationDefaults": {
     "update.mode": "none",
     "telemetry.telemetryLevel": "off",
-    // The PartCAD workbench is what this IDE opens into (see
-    // `bootstrap/extension.js`), so an editor tab covering it on every start is
-    // in the way.
-    "workbench.startupEditor": "none",
+    // The welcome window, when there is no folder open to show instead. It is
+    // PartCAD's own: `bootstrap/` contributes the walkthrough on it, and opens
+    // it on the first start (see "The first start" in README.md). "none" was
+    // right while the welcome page was the editor's generic one -- an editor
+    // tab covering the PartCAD workbench for no reason -- and
+    // "welcomePageInEmptyWorkbench" rather than "welcomePage" for the same
+    // reason: with a package open, the workbench is what the user came for.
+    "workbench.startupEditor": "welcomePageInEmptyWorkbench",
     // The backend that needs no Python environment on the user's machine. The
     // IDE ships the executable it runs, and the bootstrap extension points the
     // setting below at it.
