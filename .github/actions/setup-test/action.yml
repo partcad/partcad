@@ -28,14 +28,45 @@ runs:
       if: runner.os == 'macOS'
       shell: bash -el {0}
       run: |
-        # The below "rm" command does not have "-f" on purpose:
-        # the second "brew install" command is only needed when the dmg file is psesent but corrupted
-        which openscad \
-          || HOMEBREW_NO_AUTO_UPDATE=1 brew install -f openscad \
-          || ( \
-            rm /Users/$USER/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg \
-            && HOMEBREW_NO_AUTO_UPDATE=1 brew install -f openscad \
-          )
+        # Homebrew disabled the "openscad" cask on 2026-09-01: the pinned
+        # 2021.01 release does not pass the macOS Gatekeeper check. That makes
+        # `brew install openscad` fail outright, and the retry beneath it --
+        # which existed for a *corrupted cached* .dmg -- fail with it, so the
+        # step could not succeed on any macOS runner.
+        #
+        # The snapshot cask is the maintained one, and on these runners it is
+        # the only candidate: they are arm64, and 2021.01 ships an x86_64-only
+        # .dmg. "dev-tools/pyinstaller/build.sh" says so, and declines to
+        # bundle OpenSCAD on macOS for exactly that reason -- so fetching that
+        # release directly would quietly require Rosetta 2 rather than fix
+        # anything.
+        set -euo pipefail
+
+        if ! command -v openscad >/dev/null 2>&1; then
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install --cask openscad@snapshot
+        fi
+
+        # A cask need not put a binary on PATH, and the .app it installs is not
+        # named identically across versions, so look for the executable rather
+        # than assuming either. `-iname`, because the binary inside the bundle
+        # is "OpenSCAD" while what the tests invoke is "openscad".
+        if ! command -v openscad >/dev/null 2>&1; then
+          binary="$(find /Applications -maxdepth 4 -path '*/Contents/MacOS/*' \
+            -type f -perm -111 -iname 'openscad' 2>/dev/null | head -n 1)"
+          if [ -z "${binary}" ]; then
+            echo "::error::openscad@snapshot installed but no OpenSCAD executable was found under /Applications"
+            exit 1
+          fi
+          mkdir -p "${HOME}/.local/bin"
+          ln -sf "${binary}" "${HOME}/.local/bin/openscad"
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          export PATH="${HOME}/.local/bin:${PATH}"
+        fi
+
+        # Proves the thing runs on this architecture, rather than that a file
+        # of the right name exists. An x86_64 build on an arm64 runner with no
+        # Rosetta fails here, which is the failure worth seeing.
+        openscad --version
 
     - name: Install OpenSCAD (Windows)
       if: runner.os == 'Windows'
