@@ -154,15 +154,20 @@ the `PATH` of those terminals. That pair is what tells them apart:
 EDITOR_CLI=""
 if [ "${TERM_PROGRAM:-}" = "vscode" ]; then
   # The built-in Git extension names the executable of the window this terminal
-  # belongs to. Complete by construction: anything in this family that is
-  # neither the PartCAD IDE nor VSCodium is Visual Studio Code, so there is no
-  # list of VS Code paths to keep up to date and nothing falls through a gap.
-  case "${VSCODE_GIT_ASKPASS_NODE:-}" in
-    "")                     EDITOR_CLI="" ;;
-    *partcad-ide*)          EDITOR_CLI="partcad-ide" ;;
-    *odium*|*Odium*)        EDITOR_CLI="codium" ;;
-    *insiders*|*Insiders*)  EDITOR_CLI="code-insiders" ;;
-    *)                      EDITOR_CLI="code" ;;
+  # belongs to. Matched case-folded and with spaces and hyphens removed, because
+  # the same application spells itself differently per platform: the PartCAD IDE
+  # is "partcad-ide" on Linux and Windows, where its executable is renamed, and
+  # "PartCAD IDE.app" on macOS, where nothing inside the bundle is renamed and
+  # only the bundle directory carries the name. Complete by construction after
+  # that: anything in this family that is neither the IDE nor VSCodium is Visual
+  # Studio Code, so there is no list of VS Code paths to keep up to date.
+  marker="$(printf '%s' "${VSCODE_GIT_ASKPASS_NODE:-}" | tr '[:upper:]' '[:lower:]' | tr -d ' -')"
+  case "${marker}" in
+    "")             EDITOR_CLI="" ;;
+    *partcadide*)   EDITOR_CLI="partcad-ide" ;;
+    *odium*)        EDITOR_CLI="codium" ;;
+    *insiders*)     EDITOR_CLI="code-insiders" ;;
+    *)              EDITOR_CLI="code" ;;
   esac
   # Unset (the Git extension can be disabled), or naming a build whose command
   # line tool is not installed: take the first of these on `PATH`, left to
@@ -191,9 +196,12 @@ from the command palette adds it). Say nothing about extensions and stop.
 
 ### 2. Stop if there is nothing to do
 
-`partcad-ide` is the **PartCAD IDE**, which already carries this extension
-inside the application and versions it with the IDE — a new one arrives with a
-new IDE, not from here. Report that and stop.
+`partcad-ide` is the **PartCAD IDE**, which already ships this extension inside
+the application and versions it with the IDE — a new one arrives with a new IDE,
+not from here. There is nothing to install and nothing to check: report that and
+stop. Installing anyway would not even land in the same place, since the IDE
+keeps its extensions in the application and its state in `~/.partcad-ide`,
+sharing neither with a Visual Studio Code or VSCodium on the machine.
 
 Otherwise, check whether it is installed already, by its extension id:
 
