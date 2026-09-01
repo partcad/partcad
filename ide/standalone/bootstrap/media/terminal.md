@@ -13,3 +13,9 @@ environment, no Python at all.
 
 `pc --help` lists the commands. They are the same ones the extension runs for
 you, and both talk to the same PartCAD service.
+
+### Documentation
+
+* [CLI command reference](https://partcad.readthedocs.io/en/latest/cli.html)
+* [Installing PartCAD elsewhere](https://partcad.readthedocs.io/en/latest/installation.html)
+* [When something does not work](https://partcad.readthedocs.io/en/latest/troubleshooting.html)

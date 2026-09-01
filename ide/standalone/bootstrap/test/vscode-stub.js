@@ -14,9 +14,9 @@
 const Module = require('node:module');
 const path = require('node:path');
 
-// What the editor reports as registered by default: the PartCAD extension's
-// view container is there, because in this IDE it always is.
-const REGISTERED_COMMANDS = ['workbench.view.extension.partcad-container'];
+// What the editor reports as registered by default: the commands the PartCAD
+// extension contributes, because in this IDE it is always installed.
+const REGISTERED_COMMANDS = ['workbench.view.extension.partcad-container', 'partcad.refresh'];
 
 /** A `vscode` module, plus a record of everything the extension did to it. */
 function makeVscode({ appRoot, workspaceFolders = [], commands = REGISTERED_COMMANDS } = {}) {
@@ -31,9 +31,12 @@ function makeVscode({ appRoot, workspaceFolders = [], commands = REGISTERED_COMM
         settings,
         version: '1.82.0',
 
-        env: { appRoot },
+        env: {
+            appRoot,
+            openExternal: async (target) => calls.push(['openExternal', target.toString()]),
+        },
 
-        Uri: { file: uri },
+        Uri: { file: uri, parse: (value) => ({ scheme: 'https', toString: () => value }) },
 
         ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
         ProgressLocation: { Notification: 15, Window: 10 },
@@ -59,6 +62,18 @@ function makeVscode({ appRoot, workspaceFolders = [], commands = REGISTERED_COMM
         window: {
             createOutputChannel: () => ({ appendLine: (line) => calls.push(['log', line]) }),
             showErrorMessage: (message) => calls.push(['error', message]),
+            // What the test said the user would press, or nothing.
+            showInformationMessage: async (message, ...items) => {
+                calls.push(['information', message, ...items]);
+                return items.find((item) => item === api.window.pressed);
+            },
+            // The item a test wants chosen from the next quick pick.
+            showQuickPick: async (items) => {
+                calls.push(['quickPick', items.map((item) => item.label)]);
+                return items.find((item) => item.label === api.window.picked);
+            },
+            picked: undefined,
+            pressed: undefined,
             showTextDocument: (document) => calls.push(['showTextDocument', document.fsPath]),
             withProgress: (options, task) => task(),
         },
@@ -80,9 +95,10 @@ function makeVscode({ appRoot, workspaceFolders = [], commands = REGISTERED_COMM
 }
 
 /** The `ExtensionContext` the editor passes to `activate`. */
-function makeContext() {
+function makeContext(extensionPath) {
     const state = new Map();
     return {
+        extensionPath,
         subscriptions: [],
         environmentVariableCollection: { prepend: () => {}, description: undefined },
         globalState: {

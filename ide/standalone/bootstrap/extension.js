@@ -47,6 +47,18 @@ const STARTER_DESCRIPTION = 'A PartCAD package to start from';
 const STARTER_DONE_KEY = 'partcadIde.starterPackage.done';
 const WELCOME_PENDING_KEY = 'partcadIde.welcome.pending';
 
+// The examples the welcome window offers. `examples.json` is checked in beside
+// this file; `examples/` is filled by `tools/copy_examples.py` when the IDE is
+// built, out of the packages under `examples/` in the repository. An IDE built
+// without them -- a developer build -- has the manifest and no packages, which
+// is why what is on disk decides what is offered.
+const EXAMPLES_MANIFEST = 'examples.json';
+const EXAMPLES_DIRECTORY = 'examples';
+
+// The command the PartCAD extension registers for "Reload the package". An
+// example copied into the open workspace is a package the Explorer has not seen.
+const REFRESH_COMMAND = 'partcad.refresh';
+
 // `pc init` writes a template to disk: no network, no CAD kernel, no sandbox.
 // It is slow anyway the first time, because it runs out of a PyInstaller bundle
 // that unpacks itself before `main` -- on the cold filesystem of a machine that
@@ -268,6 +280,131 @@ async function setUpStarterPackage(context, tools) {
 }
 
 /**
+ * The examples this IDE carries, in the order the manifest lists them.
+ *
+ * Only those that are actually there: the manifest ships with the extension and
+ * the packages are put beside it by the build, so an IDE built without them has
+ * a list of things it cannot open. Reporting that once here beats four entries
+ * in a menu that fail when they are chosen.
+ */
+function shippedExamples(context) {
+    let manifest;
+    try {
+        manifest = JSON.parse(fs.readFileSync(path.join(context.extensionPath, EXAMPLES_MANIFEST), 'utf-8'));
+    } catch (error) {
+        log(`Could not read ${EXAMPLES_MANIFEST}: ${error}`);
+        return [];
+    }
+    const examples = (manifest.examples || []).filter((example) =>
+        fs.existsSync(path.join(context.extensionPath, EXAMPLES_DIRECTORY, example.package, PACKAGE_CONFIGURATION)),
+    );
+    if (!examples.length) {
+        log('This PartCAD IDE was built without the example packages.');
+    }
+    return examples;
+}
+
+/** Copy a directory, as `fs.cp` would in a Node this extension cannot count on. */
+async function copyDirectory(source, destination) {
+    await fs.promises.mkdir(destination, { recursive: true });
+    for (const entry of await fs.promises.readdir(source, { withFileTypes: true })) {
+        const from = path.join(source, entry.name);
+        const to = path.join(destination, entry.name);
+        if (entry.isDirectory()) {
+            await copyDirectory(from, to);
+        } else if (entry.isFile()) {
+            await fs.promises.copyFile(from, to);
+        }
+    }
+}
+
+/**
+ * Put an example, and the packages it uses, inside `destination`.
+ *
+ * They go in as sibling directories of each other, which is what makes an
+ * assembly's `../<package>` references resolve after the copy -- and, because
+ * PartCAD imports every subdirectory that holds a `partcad.yaml`, what makes
+ * them appear in the PartCAD Explorer under the package they were copied into.
+ *
+ * A copy that is already there is left alone: it is the user's now, and they may
+ * have changed it.
+ */
+async function copyExample(context, example, destination) {
+    const shipped = path.join(context.extensionPath, EXAMPLES_DIRECTORY);
+    for (const name of [example.package, ...(example.requires || [])]) {
+        const target = path.join(destination, name);
+        if (fs.existsSync(target)) {
+            log(`${target} is already there; leaving it as it is.`);
+            continue;
+        }
+        log(`Copying the ${name} example into ${destination}`);
+        await copyDirectory(path.join(shipped, name), target);
+    }
+    return path.join(destination, example.package);
+}
+
+/**
+ * "PartCAD IDE: Open an example", and the button the welcome window's example
+ * step carries: pick one of the packages this IDE ships, copy it into the
+ * starter package, and open the file worth reading first.
+ */
+async function openExample(context) {
+    const examples = shippedExamples(context);
+    if (!examples.length) {
+        vscode.window.showErrorMessage(
+            'This PartCAD IDE was built without the example packages. ' +
+                'The examples are at https://github.com/partcad/partcad/tree/main/examples.',
+        );
+        return;
+    }
+
+    const picked = await vscode.window.showQuickPick(
+        examples.map((example) => ({ label: example.label, detail: example.detail, example })),
+        { title: 'Which example would you like to open?', matchOnDetail: true },
+    );
+    if (!picked) {
+        return;
+    }
+
+    const starter = await createStarterPackage(bundledToolsDirectory());
+    if (!starter) {
+        vscode.window.showErrorMessage(
+            `PartCAD could not create a package in ${starterPackageDirectory()} to copy the example into. ` +
+                'The "PartCAD IDE" output channel has the details.',
+        );
+        return;
+    }
+
+    const directory = await copyExample(context, picked.example, starter);
+    const document = await vscode.workspace.openTextDocument(path.join(directory, picked.example.open));
+    await vscode.window.showTextDocument(document);
+
+    // The Explorer reads the package when the workspace is opened, so a
+    // subdirectory that appeared afterwards is one it does not know about. Done
+    // before the notification below, which stays on screen until it is
+    // answered.
+    if (isOpenWorkspace(starter)) {
+        const commands = await vscode.commands.getCommands(true);
+        if (commands.includes(REFRESH_COMMAND)) {
+            await vscode.commands.executeCommand(REFRESH_COMMAND);
+        }
+    }
+
+    // Where it went, and what explains it. The file is open in front of the
+    // user, but the package it belongs to is not necessarily the workspace they
+    // are in, and the manifest is where the documentation for each example is
+    // recorded.
+    const documentation = picked.example.documentation;
+    const chosen = await vscode.window.showInformationMessage(
+        `The ${picked.example.label} example is in ${directory}.`,
+        ...(documentation ? ['Documentation'] : []),
+    );
+    if (chosen === 'Documentation') {
+        await vscode.env.openExternal(vscode.Uri.parse(documentation));
+    }
+}
+
+/**
  * "PartCAD IDE: Open the starter package", and the button the welcome window's
  * first step carries. Creates the package if it is not there -- the first start
  * can have run without the command line tools, or before the user had a home
@@ -296,6 +433,7 @@ async function activate(context) {
     const configuration = vscode.workspace.getConfiguration('partcadIde');
 
     context.subscriptions.push(vscode.commands.registerCommand('partcadIde.openStarterPackage', openStarterPackage));
+    context.subscriptions.push(vscode.commands.registerCommand('partcadIde.openExample', () => openExample(context)));
     context.subscriptions.push(vscode.commands.registerCommand('partcadIde.showWelcome', showWelcome));
 
     if (configuration.get('useBundledTools', true)) {

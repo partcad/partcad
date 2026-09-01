@@ -25,6 +25,10 @@ from conftest import COMPONENT_ROOT, REPO_ROOT
 BOOTSTRAP = COMPONENT_ROOT / "bootstrap"
 EXTENSION_JS = (BOOTSTRAP / "extension.js").read_text(encoding="utf-8")
 
+# The documentation the welcome window sends people to. Every page it names is a
+# page in `docs/source`, which is what this repository publishes there.
+DOCUMENTATION = re.compile(r"https://partcad\.readthedocs\.io/en/latest/([a-z_]+)\.html")
+
 # The commands a walkthrough may use without any extension contributing them:
 # the editor's own. Prefixes rather than a list -- what this is really checking
 # is that a `partcad.*` command in a button is one that exists.
@@ -40,6 +44,11 @@ def manifest():
 def walkthrough(manifest):
     (only,) = manifest["contributes"]["walkthroughs"]
     return only
+
+
+@pytest.fixture(scope="module")
+def examples():
+    return json.loads((BOOTSTRAP / "examples.json").read_text(encoding="utf-8"))["examples"]
 
 
 def javascript_constant(name):
@@ -126,3 +135,46 @@ def test_the_starter_package_is_where_everything_else_expects_it():
     assert directory in workflow, "the install jobs no longer check the directory the IDE creates"
     documentation = (REPO_ROOT / "docs" / "source" / "installation.rst").read_text(encoding="utf-8")
     assert directory in documentation, "the documentation no longer tells the user where the package is"
+
+
+def test_the_welcome_window_offers_the_examples(walkthrough):
+    # The step that hands a new user something that already works.
+    steps = {step["id"]: step for step in walkthrough["steps"]}
+    assert "example" in steps, "the welcome window no longer offers an example to open"
+    assert "partcadIde.openExample" in command_links(steps["example"]["description"])
+
+
+def test_every_step_points_at_the_documentation(walkthrough):
+    # Every step is somebody's first encounter with what it describes, so each
+    # one carries the page that explains it rather than leaving the reader to
+    # find the documentation from the last step.
+    for step in walkthrough["steps"]:
+        assert "partcad.readthedocs.io" in step["description"], f"step {step['id']} links to no documentation"
+
+
+def test_every_example_points_at_the_documentation(examples):
+    for example in examples:
+        assert "partcad.readthedocs.io" in example.get("documentation", ""), f"{example['package']} has no docs link"
+
+
+def test_the_documentation_links_are_pages_that_exist(manifest, examples):
+    # A link to a page that was renamed or never existed is a 404 in front of
+    # somebody who has just installed the IDE. The pages are the sources of
+    # https://partcad.readthedocs.io, in this repository.
+    text = json.dumps(manifest) + json.dumps(examples)
+    for media in sorted((BOOTSTRAP / "media").glob("*.md")):
+        text += media.read_text(encoding="utf-8")
+
+    pages = set(DOCUMENTATION.findall(text))
+    assert pages, "nothing links to the documentation any more"
+    for page in sorted(pages):
+        assert (REPO_ROOT / "docs" / "source" / f"{page}.rst").is_file(), f"there is no {page} page to link to"
+
+
+def test_the_examples_are_the_ones_the_build_ships(examples):
+    # `copy_examples.py` reads the same manifest and copies what it names into
+    # the extension; the extension offers what it finds there. Two readers, one
+    # list, and `test_copy_examples.py` checks it against `examples/`.
+    assert re.search(r"const EXAMPLES_MANIFEST = 'examples\.json';", EXTENSION_JS)
+    assert javascript_constant("EXAMPLES_DIRECTORY") == "examples"
+    assert examples, "the manifest offers nothing"

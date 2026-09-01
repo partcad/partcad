@@ -23,3 +23,9 @@ they are.
 
 Parts take parameters, so one script can be a family of parts. Assemblies put
 parts together, and are added the same way.
+
+### Documentation
+
+* [Parts, and every type of them](https://partcad.readthedocs.io/en/latest/configuration.html)
+* [Tutorial: add a part](https://partcad.readthedocs.io/en/latest/tutorial.html)
+* [Parameters and interfaces](https://partcad.readthedocs.io/en/latest/configuration.html)

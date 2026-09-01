@@ -15,3 +15,9 @@ the Explorer's context menu has the same formats under "Export".
 
 The "Render" entry in the Run and Debug view runs `pc render` in this
 workspace. `pc init` put it there when it created the package.
+
+### Documentation
+
+* [`pc render`, `pc export` and their options](https://partcad.readthedocs.io/en/latest/cli.html)
+* [What a package declares to render](https://partcad.readthedocs.io/en/latest/configuration.html)
+* [Tutorial: export the part](https://partcad.readthedocs.io/en/latest/tutorial.html)

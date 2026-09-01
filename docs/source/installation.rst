@@ -463,8 +463,9 @@ The first start
 There is nothing to set up after installing. The first time the IDE starts, it runs ``pc init`` in
 ``~/.partcad/projects/start`` -- ``%USERPROFILE%\.partcad\projects\start`` on Windows -- and opens that
 folder as the workspace, so the window you get has a package in it rather than an empty editor. A welcome
-window opens beside it with the six things worth doing first: add a part, look at it in 3D, render the
-package, use ``pc`` in the terminal.
+window opens beside it with the things worth doing first: open an example that already works, add a part of
+your own, look at it in 3D, render the package, use ``pc`` in the terminal -- each with a link to the page
+here that explains it.
 
 The package is an ordinary one in an ordinary folder. It is under ``~/.partcad`` rather than inside the
 application, so ``pc`` in any terminal works with the same package, and uninstalling the IDE does not take
@@ -473,10 +474,33 @@ it with it. Move it, put it in git, or leave it and make your own with ``pc init
 The editor asks whether you trust the authors of a folder before it runs anything from it, and this folder
 is no exception -- the answer for the one it just made for you is yes.
 
+Start from an example
+---------------------
+
+The welcome window's second step, and ``PartCAD IDE: Open an example`` in the Command Palette, offer
+packages that already work:
+
+* **A part in CadQuery** -- a cube and a cylinder as scripts, and the same cube declared again at other
+  dimensions, which is how a package reuses a shape instead of copying it.
+* **A part in build123d** -- the smallest package there is: one script, one entry under ``parts:``.
+* **A part in OpenSCAD** -- a ``.scad`` file used as it is, and a parameterized module PartCAD instantiates
+  with arguments from ``partcad.yaml``.
+* **An assembly** -- parts placed relative to each other in an ``.assy`` file, taken from *other* packages,
+  which come with it.
+
+They are the examples this project publishes -- the packages under
+`examples/ <https://github.com/partcad/partcad/tree/main/examples>`_ -- copied into
+``~/.partcad/projects/start`` next to your own package, where they show up in the PartCAD Explorer and are
+yours to change. A copy you have already edited is never overwritten.
+
+Every step of the welcome window also links to the page of this documentation that explains it, and the last
+one lists them all.
+
 This happens once. Afterwards the IDE opens where you left it, like any editor:
 
 * ``PartCAD IDE: Open the starter package`` in the Command Palette opens the package again, and creates it
   if it is not there.
+* ``PartCAD IDE: Open an example`` copies another example in beside it.
 * ``PartCAD IDE: Welcome`` opens the welcome window again.
 * ``partcadIde.createStarterPackage``, in the settings, turns the whole thing off for a fresh installation:
   the IDE then starts in an empty window.

@@ -32,8 +32,12 @@ import jsonc  # noqa: E402  (the path has to be set up first)
 
 SERVICE_EXECUTABLES = ("partcad-json-rpc", "partcad-json-rpc.exe")
 
-# The extension that carries the welcome window (`../bootstrap`).
+# The extension that carries the welcome window (`../bootstrap`), and the
+# examples it offers to open (`copy_examples.py` puts them there).
 BOOTSTRAP_EXTENSION = "partcad.partcad-ide-bootstrap"
+EXAMPLES_MANIFEST = "examples.json"
+EXAMPLES_DIRECTORY = "examples"
+PACKAGE_CONFIGURATION = "partcad.yaml"
 
 
 def installed_extension_entries(extensions_dir: pathlib.Path) -> dict[str, tuple[pathlib.Path, dict]]:
@@ -78,6 +82,42 @@ def media_files(step: dict) -> list[str]:
     return files
 
 
+def check_examples(directory: pathlib.Path, problems: list[str], notes: list[str]) -> None:
+    """The example packages the welcome window offers to open.
+
+    The manifest ships with the extension and the packages are copied in beside
+    it when the IDE is built, so the two part company silently: the welcome
+    window offers four examples and opening one finds nothing. An example that
+    names other packages is checked with them -- an assembly whose parts were
+    left behind loads no better than one that is missing itself.
+    """
+    manifest_path = directory / EXAMPLES_MANIFEST
+    if not manifest_path.is_file():
+        problems.append(f"welcome window: no {EXAMPLES_MANIFEST} in {directory}")
+        return
+    try:
+        examples = json.loads(manifest_path.read_text(encoding="utf-8")).get("examples") or []
+    except (ValueError, UnicodeDecodeError) as error:
+        problems.append(f"welcome window: {manifest_path} is not readable: {error}")
+        return
+    if not examples:
+        problems.append(f"welcome window: {manifest_path} offers no examples")
+        return
+
+    for example in examples:
+        package = example.get("package")
+        for name in [package, *example.get("requires", [])]:
+            if not (directory / EXAMPLES_DIRECTORY / name / PACKAGE_CONFIGURATION).is_file():
+                problems.append(
+                    f"welcome window: the {package} example is offered, but {name} was not packaged with it"
+                )
+        source = directory / EXAMPLES_DIRECTORY / package / example.get("open", "")
+        if not source.is_file():
+            problems.append(f"welcome window: the {package} example has no {example.get('open')} to open")
+
+    notes.append(f"welcome window: {len(examples)} example package(s) to open")
+
+
 def check_welcome(extensions_dir: pathlib.Path, problems: list[str], notes: list[str]) -> None:
     """The welcome window: the walkthrough the IDE opens the first time it starts.
 
@@ -109,6 +149,8 @@ def check_welcome(extensions_dir: pathlib.Path, problems: list[str], notes: list
             f"welcome window: {walkthrough.get('title')} ({len(walkthrough.get('steps', []))} steps, "
             f"from {BOOTSTRAP_EXTENSION})"
         )
+
+    check_examples(directory, problems, notes)
 
 
 def activity_bar_containers(extensions: dict[str, dict]) -> list[tuple[str, str, str]]:

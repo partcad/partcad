@@ -594,6 +594,14 @@ jobs:
             exit 1
           }
           test -x "${resources}/partcad-cli/partcad-json-rpc"
+          # The examples the welcome window offers to open, packaged into the
+          # bootstrap extension by the build.
+          bootstrap=$(find "${resources}/app/extensions" -maxdepth 1 -iname "partcad.partcad-ide-bootstrap-*" | head -n 1)
+          test -n "${bootstrap}" || {
+            echo "::error::the installed IDE has no PartCAD IDE bootstrap extension"
+            exit 1
+          }
+          test -f "${bootstrap}/examples/produce_part_cadquery_primitive/partcad.yaml"
 
       # A display for the editor. Nothing here looks at what it draws; it does
       # not start at all without one.
@@ -731,6 +739,12 @@ jobs:
           if (-not (Get-ChildItem $extensions -Directory | Where-Object { $_.Name -match "^partcad\.partcad-\d" })) {
             throw "the installed IDE has no PartCAD extension"
           }
+          # The examples the welcome window offers to open, packaged into the
+          # bootstrap extension by the build.
+          $bootstrap = Get-ChildItem $extensions -Filter "partcad.partcad-ide-bootstrap-*" | Select-Object -First 1
+          if (-not $bootstrap) { throw "the installed IDE has no PartCAD IDE bootstrap extension" }
+          $example = Join-Path $bootstrap.FullName "examples\produce_part_cadquery_primitive\partcad.yaml"
+          if (-not (Test-Path $example)) { throw "the welcome window's examples were not installed" }
           # The PATH entries the installer adds for a new terminal.
           $path = (Get-ItemProperty -Path "HKCU:\Environment" -Name Path).Path
           if ($path -notlike "*PartCAD IDE\bin*") { throw "the installer did not add bin to PATH" }

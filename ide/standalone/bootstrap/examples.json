@@ -1,0 +1,33 @@
+{
+  "examples": [
+    {
+      "package": "produce_part_cadquery_primitive",
+      "label": "A part in CadQuery",
+      "detail": "A cube and a cylinder, and the same cube declared again with other dimensions",
+      "open": "cube.py",
+      "documentation": "https://partcad.readthedocs.io/en/latest/configuration.html"
+    },
+    {
+      "package": "produce_part_build123d_primitive",
+      "label": "A part in build123d",
+      "detail": "The smallest package there is: one script, one declaration",
+      "open": "cube.py",
+      "documentation": "https://partcad.readthedocs.io/en/latest/configuration.html"
+    },
+    {
+      "package": "produce_part_openscad",
+      "label": "A part in OpenSCAD",
+      "detail": "A .scad file, and a module PartCAD instantiates with parameters of its own",
+      "open": "parametric_box.scad",
+      "documentation": "https://partcad.readthedocs.io/en/latest/configuration.html"
+    },
+    {
+      "package": "produce_assembly_assy",
+      "label": "An assembly",
+      "detail": "Parts from other packages, placed and parameterized -- those packages come with it",
+      "open": "primitive.assy",
+      "requires": ["produce_part_cadquery_primitive", "produce_part_cadquery_logo", "produce_part_step"],
+      "documentation": "https://partcad.readthedocs.io/en/latest/assy.html"
+    }
+  ]
+}

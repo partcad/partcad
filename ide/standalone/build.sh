@@ -404,6 +404,16 @@ build_bootstrap_vsix() {
   rm -rf "${staging}"
   cp -R "${SCRIPT_DIR}/bootstrap" "${staging}"
   cp "${REPO_ROOT}/LICENSE.txt" "${staging}/LICENSE.txt"
+  # The examples the welcome window offers, taken from `examples/` in this
+  # repository rather than kept as a second copy of them: those are rendered and
+  # compared byte for byte by CI, so what the IDE hands a user is what the
+  # project publishes. Which ones, and what each brings with it, is
+  # `bootstrap/examples.json`; a manifest that does not match what is in
+  # `examples/` fails here rather than in a user's Explorer.
+  "${PYTHON}" "${SCRIPT_DIR}/tools/copy_examples.py" \
+    --repo-root "${REPO_ROOT}" \
+    --manifest "${staging}/examples.json" \
+    --output "${staging}/examples"
   # The bootstrap extension has no version of its own: it is part of the IDE,
   # and saying so makes an installed IDE self-describing in the Extensions view.
   "${PYTHON}" -c "

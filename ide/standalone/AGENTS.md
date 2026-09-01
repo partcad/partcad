@@ -82,7 +82,11 @@ its own result, and the `install` job in that workflow, which installs the archi
   `~/.partcad/projects/start` and opens as the first workspace. It is plain JavaScript, packaged as it is --
   no compile step, so keep it that way.
 - **The welcome window**: the walkthrough in `bootstrap/package.json`, with the text of its steps in
-  `bootstrap/media/`. `tests/test_bootstrap.py` checks that its buttons run commands that exist and that its
+  `bootstrap/media/`. Every step links to the page of `partcad.readthedocs.io` that explains it, and the test
+  below fails on a link to a page that is not in `docs/source`.
+- **Which examples it offers**: `bootstrap/examples.json`. The packages themselves stay in `examples/` --
+  `tools/copy_examples.py` copies the ones it names, and whatever they reference, into the extension at build
+  time, and fails the build when the two disagree. `tests/test_bootstrap.py` checks that its buttons run commands that exist and that its
   steps point at files that are there; moving the starter package means moving it in the install jobs of
   `.github/workflows/build-ide-standalone.yml` and in `docs/source/installation.rst` too, which that test
   also enforces.

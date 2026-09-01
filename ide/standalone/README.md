@@ -44,7 +44,8 @@ than dropping it quietly.
 - `installer/partcad-ide.iss` - the Windows installer, compiled by Inno Setup.
 - `bootstrap/` - a small extension that ships only in this IDE: it opens the PartCAD workbench on startup,
   points the PartCAD extension at the tools in the same application, and creates and opens the package the
-  IDE starts in. `bootstrap/media/` is the text of the welcome window's steps.
+  IDE starts in. `bootstrap/media/` is the text of the welcome window's steps, and `bootstrap/examples.json`
+  is the examples it offers to open.
 - `tools/` - the parts of the build that are more than a shell one-liner, each with its own tests.
 - `tests/` - `pytest` tests for `tools/`.
 
@@ -191,6 +192,36 @@ The welcome window itself is a walkthrough (`bootstrap/package.json`, with the t
 `bootstrap/media/`), and `workbench.startupEditor` is `welcomePageInEmptyWorkbench` rather than `none`: with a
 package open the workbench is what the user came for, and with no folder open there is nothing else to show.
 It is what the editor calls "Welcome", so `Help > Welcome` and `PartCAD IDE: Welcome` reach it afterwards.
+Every step carries the page of https://partcad.readthedocs.io that explains it; `tests/test_bootstrap.py`
+fails on a link to a page that is not in `docs/source`.
+
+## The examples the welcome window offers
+
+"Start from an example" (`PartCAD IDE: Open an example`) is a list of packages that already work: parts in
+CadQuery, build123d and OpenSCAD, and an assembly. The one the user picks is copied into their starter package
+and the file worth reading first is opened.
+
+**They are the packages under `examples/` in this repository, not a copy of them.** `tools/copy_examples.py`
+copies the ones `bootstrap/examples.json` names into the extension when the IDE is built. Those packages are
+rendered by the `Examples (PartCAD)` job and their output is checked in, so what the IDE hands a user is what
+the project publishes and keeps working; a second copy would be a second thing to keep current, and would not
+be.
+
+**An example brings what it references.** A package may name a sibling (`../produce_part_cadquery_primitive`,
+in an assembly that places parts from it), which is a reference that means nothing once the directory is
+copied out of `examples/` on its own. So the manifest declares what each entry needs, `copy_examples.py`
+checks that declaration against what the `partcad.yaml` and `.assy` files actually reference -- transitively,
+because the package an assembly's parts come from may name a third -- and both the copy into the extension and
+the copy onto the user's disk take the whole set. The build fails on a manifest that does not match; a user
+would otherwise find a package in the Explorer that cannot load.
+
+**They land in the starter package**, as subdirectories, because PartCAD imports every subdirectory that holds
+a `partcad.yaml`: the example appears in the Explorer under the package the user is in, with no edit to any
+`partcad.yaml` and nothing for the daemon to do. A copy that is already there is left alone -- it is the
+user's by then, and may have been changed.
+
+`verify_bundle.py` checks that a built IDE carries every package its manifest offers, and the file each one
+opens.
 
 `partcadIde.createStarterPackage` turns the whole thing off. Without the command line tools -- a developer
 build -- there is no `pc` to run, so the IDE says so in its output channel, shows the welcome window and

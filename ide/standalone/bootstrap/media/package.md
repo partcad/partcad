@@ -20,3 +20,9 @@ PartCAD stays quiet until you give it.
 
 Nothing here is special to the IDE. Copy the folder somewhere else, put it in
 git, or make another one with `pc init` -- it is a package either way.
+
+### Documentation
+
+* [Packages and dependencies](https://partcad.readthedocs.io/en/latest/configuration.html)
+* [Tutorial: create a package](https://partcad.readthedocs.io/en/latest/tutorial.html)
+* [What `pc init` writes](https://partcad.readthedocs.io/en/latest/cli.html)

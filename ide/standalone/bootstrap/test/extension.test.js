@@ -238,3 +238,109 @@ test('the command opens the package, and shows its configuration when it is open
         [['showTextDocument', path.join(starter, 'partcad.yaml')]],
     );
 });
+
+// ---------------------------------------------------------------------------
+// The examples the welcome window offers. They are packages copied into the
+// extension when the IDE is built (`tools/copy_examples.py`), and copied again
+// -- with whatever they reference -- into the user's own package when one is
+// chosen.
+// ---------------------------------------------------------------------------
+
+/** An extension directory carrying two examples, one of which needs the other. */
+function bundleExamples({ withPackages = true } = {}) {
+    const extension = fs.mkdtempSync(path.join(os.tmpdir(), 'partcad-ide-ext-'));
+    fs.writeFileSync(
+        path.join(extension, 'examples.json'),
+        JSON.stringify({
+            examples: [
+                { package: 'a_part', label: 'A part', detail: 'one script', open: 'cube.py' },
+                {
+                    package: 'an_assembly',
+                    label: 'An assembly',
+                    detail: 'parts from another package',
+                    open: 'it.assy',
+                    requires: ['a_part'],
+                    documentation: 'https://partcad.readthedocs.io/en/latest/assy.html',
+                },
+            ],
+        }),
+    );
+    if (withPackages) {
+        for (const [name, file] of [
+            ['a_part', 'cube.py'],
+            ['an_assembly', 'it.assy'],
+        ]) {
+            const directory = path.join(extension, 'examples', name);
+            fs.mkdirSync(directory, { recursive: true });
+            fs.writeFileSync(path.join(directory, 'partcad.yaml'), 'parts:\n');
+            fs.writeFileSync(path.join(directory, file), '# from the IDE\n');
+        }
+    }
+    return extension;
+}
+
+test('an example is copied into the starter package, with what it needs', posix, async () => {
+    const appRoot = bundleTools();
+    const extension = bundleExamples();
+    const vscode = makeVscode({ appRoot, workspaceFolders: [path.join(home, STARTER)] });
+    vscode.window.picked = 'An assembly';
+    vscode.window.pressed = 'Documentation';
+
+    const context = makeContext(extension);
+    await loadExtension(vscode).activate(context);
+    await vscode.commands.registered.get('partcadIde.openExample')();
+
+    const starter = path.join(home, STARTER);
+    assert.ok(fs.existsSync(path.join(starter, 'an_assembly', 'it.assy')));
+    assert.ok(fs.existsSync(path.join(starter, 'a_part', 'partcad.yaml')), 'the package its parts come from too');
+
+    assert.deepStrictEqual(
+        vscode.calls.filter((call) => call[0] === 'showTextDocument'),
+        [['showTextDocument', path.join(starter, 'an_assembly', 'it.assy')]],
+    );
+    // The Explorer read the package when the workspace was opened, so a
+    // subdirectory that appeared afterwards is one it has not seen.
+    assert.ok(commandsRun(vscode).some((call) => call[0] === 'partcad.refresh'));
+    assert.deepStrictEqual(
+        vscode.calls.filter((call) => call[0] === 'openExternal'),
+        [['openExternal', 'https://partcad.readthedocs.io/en/latest/assy.html']],
+    );
+
+    fs.rmSync(extension, { recursive: true, force: true });
+});
+
+test('a copy the user has already edited is left alone', posix, async () => {
+    const appRoot = bundleTools();
+    const extension = bundleExamples();
+    const starter = path.join(home, STARTER);
+    fs.mkdirSync(path.join(starter, 'a_part'), { recursive: true });
+    fs.writeFileSync(path.join(starter, 'a_part', 'partcad.yaml'), '# mine now\n');
+    fs.writeFileSync(path.join(starter, 'a_part', 'cube.py'), '# mine now\n');
+
+    const vscode = makeVscode({ appRoot, workspaceFolders: [starter] });
+    vscode.window.picked = 'A part';
+    await loadExtension(vscode).activate(makeContext(extension));
+    await vscode.commands.registered.get('partcadIde.openExample')();
+
+    assert.strictEqual(fs.readFileSync(path.join(starter, 'a_part', 'cube.py'), 'utf-8'), '# mine now\n');
+
+    fs.rmSync(extension, { recursive: true, force: true });
+});
+
+test('an IDE built without the examples says so rather than offering them', posix, async () => {
+    const appRoot = bundleTools();
+    const extension = bundleExamples({ withPackages: false });
+    const vscode = makeVscode({ appRoot, workspaceFolders: [path.join(home, STARTER)] });
+
+    await loadExtension(vscode).activate(makeContext(extension));
+    await vscode.commands.registered.get('partcadIde.openExample')();
+
+    assert.deepStrictEqual(
+        vscode.calls.filter((call) => call[0] === 'quickPick'),
+        [],
+        'nothing was offered',
+    );
+    assert.match(vscode.calls.find((call) => call[0] === 'error')[1], /built without the example packages/);
+
+    fs.rmSync(extension, { recursive: true, force: true });
+});
