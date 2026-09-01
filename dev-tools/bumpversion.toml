@@ -135,6 +135,17 @@ replace = "version\": \"{new_version}\""
 # that it was not found. What replaced it describes the state instead, and a
 # state needs no version in it.
 
+# The Claude Code plugin, `pc`, which the release publishes as a marketplace
+# branch and as an archive on the release itself. Nothing pins it and it is not
+# a distribution, so it could have kept a version of its own -- and did, sitting
+# at the 0.1.0 it was created with while everything around it moved, which is
+# exactly the failure the comment at the top of this file describes. It is one
+# artifact of one release now, and states that release.
+[[tool.bumpversion.files]]
+filename = "ai-agents/claude/.claude-plugin/plugin.json"
+search = "\"version\": \"{current_version}\""
+replace = "\"version\": \"{new_version}\""
+
 [[tool.bumpversion.files]]
 filename = "docs/source/contributing.rst"
 search = "Installing the current project: partcad ({current_version})"

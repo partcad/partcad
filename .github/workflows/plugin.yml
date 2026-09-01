@@ -1,0 +1,228 @@
+# The Claude Code plugin: one build, one archive.
+#
+# Called by "build.yml" (CI) and by "deploy.yml", which attaches the archive to
+# the GitHub release and pushes the same tree to the "plugin-dist" branch. Like
+# "vsix.yml" it deliberately has no "push"/"pull_request" triggers of its own:
+# adding them on top of those two callers would build the same artifact twice
+# per commit, and the version bump now touches "plugin.json", so every bump
+# commit would do it.
+#
+# This replaces "ai-agents.yml" and "ai-agents-release.yml". The plugin used to
+# be released on a tag train of its own ("pc--v<version>"), which is why it
+# still stated 0.1.0 twenty-three releases after it was written: nobody ever
+# pushed that tag. It carries the repository's version now -- see the entry for
+# it in "dev-tools/bumpversion.toml" -- so it is released by the release, and a
+# second train would be a second thing to forget.
+#
+# NO CREDENTIALS. Everything here runs offline: `claude plugin validate`,
+# `materialize.sh`, and the install smoke test, which installs from a directory
+# on this runner. This workflow must never reference ANTHROPIC_API_KEY, a login,
+# or any repository secret.
+name: Plugin # Keep the action badge icon short
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+# No "concurrency" block, on purpose. A called workflow evaluates
+# `github.workflow` as the *caller's* name, so a group keyed on it would compute
+# the group the caller is already holding and `cancel-in-progress` would kill the
+# run that started this one. See the note on `concurrency` in
+# "build-standalone.yml", which is where that was learned.
+
+env:
+  DISABLE_AUTOUPDATER: "1"
+  DISABLE_TELEMETRY: "1"
+  DISABLE_ERROR_REPORTING: "1"
+
+jobs:
+  build:
+    name: "Build and validate"
+    # ubuntu-24.04 is still the newest generally available Ubuntu LTS runner
+    # image (ubuntu-26.04 is preview only), so this stays pinned. One runner is
+    # correct rather than merely cheap: the plugin is Markdown and JSON, so the
+    # archive this produces is the one every platform gets.
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Install Claude Code CLI (no login required)
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Show version
+        run: claude --version
+
+      # The catalog as it is committed. The plugin as it is committed cannot be
+      # validated here and is not: `claude plugin validate ai-agents/claude`
+      # warns that "skills" is a symlink, reads nothing through it, and passes.
+      # What gets validated instead is the materialized copy below, whose files
+      # are real -- and "tests/partcad_cli/unit/test_ai_agent_skills.py" checks
+      # the front matter of every "SKILL.md" in the pytest run, which is where
+      # a contributor sees it first.
+      - name: Validate the marketplace catalog
+        run: claude plugin validate .
+
+      # Dereferences the "skills" symlink into real files and validates both
+      # halves of the result. Everything below inspects what this produced.
+      - name: Materialize the symlink-free artifact
+        run: ai-agents/scripts/materialize.sh
+
+      - name: Assert the shipped artifact contains no symlinks
+        run: |
+          if find ai-agents/.build -type l | grep -q .; then
+            echo "::error::Materialized artifact still contains symlinks"
+            find ai-agents/.build -type l
+            exit 1
+          fi
+          echo "OK: no symlinks in the artifact"
+
+      # A symlink that git did not materialize comes through as a small text
+      # file holding its target, and `cp -RL` copies that text file happily. So
+      # this checks that every skill arrived as content, not that a path exists:
+      # "skills/init/SKILL.md" being present is what the old workflow asserted,
+      # and a 16-byte "../common/skills" would have satisfied it.
+      - name: Assert every skill arrived as a real file
+        run: |
+          missing=0
+          for source in ai-agents/common/skills/*/SKILL.md; do
+            name="$(basename "$(dirname "${source}")")"
+            shipped="ai-agents/.build/marketplace/pc/skills/${name}/SKILL.md"
+            if [ ! -f "${shipped}" ]; then
+              echo "::error::${name} is in the library but not in the artifact"
+              missing=1
+            elif ! cmp -s "${source}" "${shipped}"; then
+              echo "::error::${shipped} differs from ${source}"
+              missing=1
+            fi
+          done
+          if [ "${missing}" -eq 0 ]; then
+            echo "OK: $(ls -1 ai-agents/common/skills | wc -l) skills shipped byte for byte"
+          fi
+          exit "${missing}"
+
+      # Validation reads the manifests; this installs the artifact the way a
+      # user does and asks what the session would actually load. A plugin whose
+      # manifests are valid and whose skills do not load is the failure that
+      # only shows up here.
+      - name: Smoke test — install the artifact and inventory it
+        run: |
+          set -euo pipefail
+          claude plugin marketplace add "${PWD}/ai-agents/.build/marketplace" --scope user
+          claude plugin install pc@partcad
+          claude plugin details pc | tee details.txt
+
+          expected="$(ls -1 ai-agents/common/skills | wc -l)"
+          if ! grep -q "Skills (${expected})" details.txt; then
+            echo "::error::the installed plugin does not report ${expected} skills"
+            exit 1
+          fi
+          # Each name as a whole token, so that "gen" is not satisfied by
+          # "gen-part" appearing in the inventory.
+          for name in $(ls -1 ai-agents/common/skills); do
+            if ! grep -qE "(^|[ ,])${name}([ ,]|$)" details.txt; then
+              echo "::error::${name} is not in the installed plugin's inventory"
+              exit 1
+            fi
+          done
+          echo "OK: ${expected} skills installed and inventoried"
+
+      # Named after the version, like every other release asset. "deploy.yml"
+      # downloads this one by name into a directory of its own and attaches it
+      # to the release.
+      - name: Upload the plugin archive
+        uses: actions/upload-artifact@v7
+        with:
+          # Deliberately not "partcad-standalone-*" or "partcad-ide-*":
+          # "deploy.yml" downloads those two by pattern, each into its own
+          # directory, and a name matching either would be merged into the
+          # wrong one.
+          name: partcad-plugin
+          path: ai-agents/.build/marketplace/pc-*.zip
+          if-no-files-found: error
+
+      # The same content unpacked, which is what the "plugin-dist" branch is:
+      # a marketplace at the root of a branch, so that
+      # `/plugin marketplace add partcad/partcad@plugin-dist` finds it. The
+      # archive is excluded -- a branch that carries a zip of itself is a branch
+      # every clone pays for twice.
+      - name: Upload the marketplace tree
+        uses: actions/upload-artifact@v7
+        with:
+          name: partcad-plugin-dist
+          path: |
+            ai-agents/.build/marketplace
+            !ai-agents/.build/marketplace/*.zip
+          if-no-files-found: error
+          # Without this the catalog does not travel: ".claude-plugin" is a
+          # hidden directory and hidden files are excluded by default, silently
+          # and with only a warning. What would arrive is a "pc" directory and
+          # no "marketplace.json" naming it -- which is not a marketplace, and
+          # which is why the job that publishes it asserts the catalog is there
+          # before it pushes anything.
+          include-hidden-files: true
+
+  # Windows is the whole reason "materialize.sh" exists: git there may not
+  # create the "skills" symlink, which would install an empty plugin. That was
+  # asserted only on Linux, where the symlink always works and the failure it
+  # guards against cannot happen. This unpacks the published archive on Windows
+  # and checks the files are there, which is the property the whole exercise is
+  # for.
+  verify-windows:
+    name: "Verify on Windows"
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Install Claude Code CLI (no login required)
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Download the plugin archive
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-plugin
+          path: plugin
+
+      - name: Unpack it
+        shell: pwsh
+        run: |
+          $archive = (Get-ChildItem plugin/pc-*.zip | Select-Object -First 1).FullName
+          Write-Host "Unpacking $archive"
+          Expand-Archive -Path $archive -DestinationPath extracted -Force
+
+      - name: Assert every skill is here, with its contents
+        shell: bash
+        run: |
+          missing=0
+          for source in ai-agents/common/skills/*/SKILL.md; do
+            name="$(basename "$(dirname "${source}")")"
+            shipped="extracted/pc/skills/${name}/SKILL.md"
+            # Line endings are the reason this compares sizes rather than bytes:
+            # the checkout may have converted the source and the archive holds
+            # what Linux packed. A truncated or stubbed file is orders of
+            # magnitude smaller, which is what this is looking for.
+            if [ ! -s "${shipped}" ]; then
+              echo "::error::${name} did not survive the trip to Windows"
+              missing=1
+            elif [ "$(wc -c < "${shipped}")" -lt 200 ]; then
+              echo "::error::${shipped} is $(wc -c < "${shipped}") bytes -- a symlink that became a text file?"
+              missing=1
+            fi
+          done
+          exit "${missing}"
+
+      - name: Validate the unpacked plugin
+        shell: bash
+        run: claude plugin validate extracted/pc

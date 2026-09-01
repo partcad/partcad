@@ -216,6 +216,32 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
 Note, it's not required but highly recommended that you have [conda] installed. If you experience any difficulty
 installing or using any PartCAD tool, then make sure to install [conda].
 
+### Plugin for Claude Code
+
+Already using [Claude Code](https://claude.com/claude-code)? This is the shortest way in, and it installs
+everything else for you. The `pc` plugin adds skills that generate parts, assemblies and 2D sketches, describe
+and search what a package already has, and set up the tools themselves:
+
+```shell
+/plugin marketplace add partcad/partcad@plugin-dist
+/plugin install pc@partcad
+```
+
+Then `/pc:install` puts the command line tools on the machine, `/pc:init` starts a package, and
+`/pc:gen a mounting bracket with four M4 holes` writes the CAD script, renders four views of what came out and
+checks them against what was asked. The skills drive the same `pc` commands documented below, so nothing they
+produce is locked to the agent that produced it.
+
+This repository *is* the marketplace -- there is no hosted catalog to search. The `plugin-dist` branch above
+carries the latest release, symlink-free so that it installs the same way on Windows. Two alternatives:
+`/plugin marketplace add partcad/partcad` installs straight from the source tree (git has to be able to create
+symlinks, which on Windows means `git config core.symlinks true`), and every
+[release](https://github.com/partcad/partcad/releases) carries a `pc-<version>.zip` that
+`claude --plugin-url <url>` loads for a single session, to try one version without installing it.
+
+The skills are plain [Agent Skills](https://code.claude.com/docs/en/skills), so any `SKILL.md`-aware agent can
+read them out of [`ai-agents/`](./ai-agents/README.md) without the plugin.
+
 ### PartCAD IDE
 
 The whole thing in one application: the editor, the PartCAD extension, and the command line tools. No Python,

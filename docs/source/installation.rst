@@ -2,6 +2,50 @@ Installation
 ############
 
 
+.. _claude-plugin:
+
+======================
+Plugin for Claude Code
+======================
+
+If you use `Claude Code <https://claude.com/claude-code>`_, start here: the ``pc`` plugin adds skills
+that generate parts, assemblies and 2D sketches, describe and search what a package already has, and
+install the command line tools below for you.
+
+.. code-block:: text
+
+  /plugin marketplace add partcad/partcad@plugin-dist
+  /plugin install pc@partcad
+
+Then ``/pc:install`` puts ``pc`` on this machine, ``/pc:init`` starts a package, and
+``/pc:gen a mounting bracket with four M4 holes`` writes the CAD script, renders four views of what came
+out and checks them against what was asked. The skills run the same commands documented in
+:doc:`cli`, so nothing they produce depends on the agent that produced it.
+
+.. note::
+
+  This repository is the marketplace -- there is no hosted catalog to search for PartCAD in. The
+  ``plugin-dist`` branch is republished by every release and contains no symlinks, which is what makes it
+  install identically on Windows.
+
+Two other ways to install the same plugin:
+
+* ``/plugin marketplace add partcad/partcad`` reads the catalog out of the source tree. That copy shares
+  its skills with the vendor-neutral library through a symlink, so it needs a checkout where git created
+  one -- on Windows, ``git config core.symlinks true`` before cloning.
+* Every `release <https://github.com/partcad/partcad/releases>`_ carries a ``pc-<version>.zip``, and
+  ``claude --plugin-url <url>`` loads one for a single session. That is how to try a version without
+  installing it.
+
+The plugin is versioned with everything else in the release that publishes it, so the plugin and the
+``pc`` command line tool state the same version when they came from the same release.
+
+.. note::
+
+  The skills are plain `Agent Skills <https://code.claude.com/docs/en/skills>`_ -- a directory of
+  ``SKILL.md`` files -- and the plugin is a thin wrapper that ships them to Claude Code. Any other agent
+  that reads ``SKILL.md`` can use the same library, from ``ai-agents/common/skills`` in the repository.
+
 ==================
 Command line tools
 ==================

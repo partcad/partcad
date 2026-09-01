@@ -14,6 +14,16 @@ so.
 | `executable` | Standalone PyInstaller bundle from the latest GitHub release (no Python needed) | `pc` / `partcad` on `PATH` |
 | `python-module` | The `partcad` wheel into the **active** Python environment | `python -m partcad_cli.click.command` |
 
+## Which version
+
+The plugin these skills ship in is released by PartCAD's own release, under
+PartCAD's own version: the `version` in the plugin's `.claude-plugin/plugin.json`
+names the release they were written against. Installing the newest release is
+the default and is normally right — the skills use documented commands, which do
+not disappear. Install that exact one (`--version <version>` below, or
+`PARTCAD_VERSION`) when a newer PartCAD turns out to behave differently from what
+a skill describes, and say why.
+
 ## 0. Skip if already installed
 
 Check whether PartCAD is already available, using the same resolution `/pc:init`
