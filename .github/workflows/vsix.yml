@@ -73,9 +73,17 @@ jobs:
       # nothing to bundle, so "vsce" comes from "npx" rather than from a second
       # node project existing to hold one dev dependency. The version is pinned
       # to the same "@vscode/vsce" the extension builds with.
+      #
+      # The version is the extension's, read here and handed to "vsce" rather
+      # than written down in the shim's "package.json" (which holds an obvious
+      # placeholder). "--no-update-package-json" is what keeps it out of the
+      # file: the argument reaches the built ".vsix" and nothing on disk moves.
+      # See "The version is not its own" in "ide/vscode-shim/AGENTS.md" for why
+      # a second copy of the release version is a thing this repository has
+      # already decided not to keep.
       - name: Package the transition shim
         working-directory: ide/vscode-shim
-        run: npx --yes @vscode/vsce@3.9.2 package -o partcad-shim.vsix
+        run: npm run vsce-package
 
       # Both "vsce-package" scripts write a fixed name -- "partcad.vsix" because
       # "ide/standalone/build.sh" looks for that exact one. A release asset
@@ -93,16 +101,6 @@ jobs:
           version="$(jq -r .version ide/vscode/package.json)"
           if [ -z "${version}" ] || [ "${version}" = "null" ]; then
             echo "::error::no version in ide/vscode/package.json"
-            exit 1
-          fi
-          # The shim is only delivered to an installation of the old entry if it
-          # is newer than what that entry was last published with, and the two
-          # move together in "dev-tools/bumpversion.toml" precisely so that it
-          # is. A shim left behind at an older version is not a broken build, so
-          # nothing else would notice it.
-          shim="$(jq -r .version ide/vscode-shim/package.json)"
-          if [ "${shim}" != "${version}" ]; then
-            echo "::error::ide/vscode-shim is at ${shim}, the extension at ${version}"
             exit 1
           fi
           mkdir -p vsix

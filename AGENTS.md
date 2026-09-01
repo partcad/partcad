@@ -229,9 +229,9 @@ that nothing keeps in sync; the README says which, and which of them a pull requ
 `.vsix` is built once by `.github/workflows/vsix.yml`, which `build.yml` and `deploy.yml` both call, and
 `ide/standalone/build.sh` runs the same `npm run vsce-package` for the copy inside the IDE. One build
 serves every platform: the extension is a JSON-RPC client with no Python and no compiled content in it. The
-same workflow packages the transition shim beside it; the two state one version and it has to be the same
-version, so `dev-tools/bumpversion.toml` moves both and the workflow refuses to package them if they have
-drifted — a shim older than the entry it replaces is one the marketplace never delivers. Changing `.vscode/extensions.json` changes what the IDE ships with — see
+same workflow packages the transition shim beside it, under the extension's version — which the shim does not
+state anywhere, but reads at package time, so the two cannot drift. A shim older than the entry it replaces is
+one the marketplace never delivers, and a second literal to bump is how that happens. Changing `.vscode/extensions.json` changes what the IDE ships with — see
 `ide/standalone/README.md`. The snap carries whatever the bundle carries, so it needs nothing extra of its
 own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
 

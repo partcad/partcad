@@ -121,15 +121,12 @@ filename = "ide/vscode/package.json"
 search = "version\": \"{current_version}\""
 replace = "version\": \"{new_version}\""
 
-# The "OpenVMP.partcad" transition shim, which has to move with the extension it
-# points at rather than merely alongside it. The marketplace delivers an update
-# only to an installation holding an older version, so a shim that stopped
-# moving is a shim nobody receives -- and since it builds and packages perfectly
-# well at any version, nothing but this entry would notice.
-[[tool.bumpversion.files]]
-filename = "ide/vscode-shim/package.json"
-search = "version\": \"{current_version}\""
-replace = "version\": \"{new_version}\""
+# "ide/vscode-shim" is deliberately absent. The transition shim ships under the
+# release version like everything else, but it does not *state* it: its
+# "package.json" holds a placeholder and "vsix.yml" hands "vsce" the version it
+# reads from "ide/vscode/package.json". An entry here would be one more literal
+# whose only job is to agree with another literal -- which is the arrangement
+# the five-distribution layout was unpicked to be rid of.
 
 # The Explorer's welcome view used to state the release ("PartCAD v0.8.15 is not
 # found"), which is why it was bumped here. It no longer names a version: the
