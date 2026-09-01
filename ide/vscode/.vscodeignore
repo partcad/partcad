@@ -1,4 +1,5 @@
 .vscode-test/**
+sampleWorkspace/**
 coverage/**
 out/**
 **/node_modules/**

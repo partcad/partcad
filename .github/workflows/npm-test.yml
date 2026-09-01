@@ -15,12 +15,19 @@ on:
 jobs:
   build:
     strategy:
-      # Don't let one OS failing cancel the other: a green Linux run was being
+      # Don't let one OS failing cancel the others: a green Linux run was being
       # reported as failed only because it was canceled when the macOS job
-      # failed. Keep both statuses independent (matches build.yml).
+      # failed. Keep the statuses independent (matches build.yml).
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest] # windows-latest for some reason doesn't run test suite.
+        # Windows is here because the extension ships to it. It was dropped as
+        # "for some reason doesn't run test suite", and the reason was the modal
+        # "shall I download PartCAD?" dialog that activation puts up on a runner
+        # with no PartCAD installed: nothing headless can answer it, and the
+        # window never closed. `.vscode-test.js` now tells the extension not to
+        # ask (PARTCAD_EXTENSION_NO_PROMPTS), and the sample workspace the runner
+        # opens is a directory that actually exists.
+        os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout

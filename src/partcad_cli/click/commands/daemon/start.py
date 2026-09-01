@@ -12,22 +12,20 @@ and connects. One implementation of "where is the daemon", in
 """
 
 import logging
-import os
 
 import rich_click as click
 from partcad_client import client
 
 
-@click.command(help="Start the PartCAD daemon for this workspace (if needed) and print its socket path")
+@click.command(help="Start the PartCAD daemon for this workspace (if needed) and print its endpoint")
 def cli() -> None:
-    if os.name == "nt":
-        click.echo(
-            "The PartCAD socket daemon is not available on Windows yet; "
-            "commands run a per-invocation service instead."
-        )
-        return
-    path = client.start_daemon(extra_args=daemon_args())
-    click.echo(path)
+    # Every platform, including Windows: the daemon is an AF_UNIX socket on
+    # POSIX and a named pipe there (`partcad_service_json_rpc.daemon`
+    # implements both), and the endpoint is printed the same way either way.
+    # This used to answer Windows with a sentence saying there was no daemon --
+    # on stdout, with a zero exit status, which is where the endpoint goes. The
+    # editor extension connected to the sentence.
+    click.echo(client.start_daemon(extra_args=daemon_args()))
 
 
 def daemon_args() -> list:

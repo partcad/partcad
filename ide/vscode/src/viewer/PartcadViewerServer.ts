@@ -20,6 +20,51 @@ import {
 } from './protocol';
 
 /**
+ * Where SO_REUSEPORT can be asked for.
+ *
+ * libuv implements the option only where it also load-balances the incoming
+ * connections -- Linux, FreeBSD, DragonFly, Solaris 11.4, AIX 7.2.5 -- and
+ * *rejects the bind* with ENOTSUP everywhere else, rather than ignoring it.
+ * Only the one this is exercised on is listed: an AIX or Solaris too old for it
+ * would fail the bind exactly as Windows does, and what is bought is an
+ * optimisation, not the viewer.
+ */
+const REUSEPORT_PLATFORMS: ReadonlySet<string> = new Set(['linux']);
+
+/**
+ * How to bind the viewer port on this platform.
+ *
+ * SO_REUSEPORT lets two windows each hold the port and have the kernel hand
+ * each connection to one of them, instead of the second window losing the race
+ * and having no viewer at all. It is asked for only where it exists: `listen`
+ * fails outright with ENOTSUP on a platform libuv does not support it on, and
+ * that is not a failure this can shrug off -- it is the whole viewer, silently,
+ * with only a line in the output channel to show for it. It went unnoticed
+ * because Node ignored the option until 22.12 and VS Code shipped an older one;
+ * a VS Code on Node 22.12 or later takes the viewer down on Windows and macOS.
+ *
+ * There is nothing to ask for instead on Windows. Node's `listen` has no
+ * `reuseAddr` option (`dgram` has one, for UDP sockets, and this is TCP), and
+ * libuv deliberately sets neither SO_REUSEADDR nor SO_EXCLUSIVEADDRUSE for a
+ * TCP server there -- on Windows SO_REUSEADDR does not mean "rebind a port in
+ * TIME_WAIT", it means "take a port another process is using". So the second
+ * window falls back to what it always did: the EADDRINUSE branch of the error
+ * handler, which says another window is serving the viewer.
+ *
+ * Exported for the test suite, which has to check the platforms it is not
+ * running on.
+ */
+export function listenOptions(port: number, host: string): net.ListenOptions {
+    const options: net.ListenOptions = { port, host };
+    if (REUSEPORT_PLATFORMS.has(process.platform)) {
+        // Not in the object literal above: `reusePort` reached Node's typings
+        // in 22.12, and this compiles against the older ones VS Code ships.
+        (options as net.ListenOptions & { reusePort?: boolean }).reusePort = true;
+    }
+    return options;
+}
+
+/**
  * Listens for PartCAD processes that want to display something.
  *
  * The IDE is the server half of the protocol: 'partcad' runs in a subprocess (or
@@ -74,14 +119,7 @@ export class PartcadViewerServer implements vscode.Disposable {
             });
             server.once('error', () => resolve());
 
-            // 'reusePort' asks for SO_REUSEPORT, and libuv already sets
-            // SO_REUSEADDR for every TCP server it binds on non-Windows. Node
-            // gained the option in 22.12; VS Code ships an older Node, where an
-            // unknown listen option is simply ignored and only SO_REUSEADDR
-            // applies. Passing it regardless is what makes the behaviour right
-            // on the runtimes that do support it, at no cost on the ones that
-            // do not.
-            server.listen({ port: this.port, host: this.host, reusePort: true } as net.ListenOptions);
+            server.listen(listenOptions(this.port, this.host));
         });
     }
 

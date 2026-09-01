@@ -111,13 +111,42 @@ def cli(
     )
 
 
+def _read_stdin() -> str:
+    """The buffer on standard input, decoded as UTF-8.
+
+    Decoded here rather than by ``sys.stdin``, which uses the locale encoding:
+    UTF-8 on Linux and macOS, but the ANSI code page on Windows. What arrives is
+    an editor's unsaved file -- the VS Code extension writes the buffer as UTF-8
+    and reads this command's JSON back the same way -- so on Windows a
+    description with an umlaut in it came out as mojibake, and a byte the code
+    page has no character for killed the decoder and took the findings with it.
+    The extension pins ``PYTHONIOENCODING`` for the same reason; this makes the
+    command right on its own, whoever runs it.
+
+    ``utf-8-sig`` because a file piped in on Windows may still carry a byte
+    order mark, which is not part of the text and is not what column 1 of line 1
+    is. A ``sys.stdin`` a caller has replaced (a test, an embedding) has no
+    binary buffer, and its text is taken as it comes.
+    """
+    raw = getattr(sys.stdin, "buffer", None)
+    if raw is None:
+        return sys.stdin.read()
+    return raw.read().decode("utf-8-sig")
+
+
 def _lint_files(click_ctx, paths: list, stdin: bool, as_json: bool, flavor: str = "auto") -> None:
     """Check the named files in this process and report what came back."""
     text = None
     if stdin:
         if len(paths) != 1:
             raise click.UsageError("--stdin supplies the content of one file; name exactly one --file")
-        text = sys.stdin.read()
+        try:
+            text = _read_stdin()
+        except UnicodeDecodeError as e:
+            # A clean message rather than a traceback: the caller is usually an
+            # editor parsing this command's output, and a traceback is neither
+            # the JSON it expects nor something it can show a user.
+            raise click.UsageError("--stdin expects UTF-8 text: %s" % e)
 
     # Deferred: `pc --help` imports every command module to print its short help,
     # and this one pulls in jsonschema and jinja2.

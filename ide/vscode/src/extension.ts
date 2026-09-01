@@ -503,6 +503,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 // fallback download path, which does not, and this connection
                 // has to go either way.
                 await lsClient?.stopDaemon?.();
+                // And the service process itself, before anything replaces the
+                // files it is running from. `stopDaemon` stops the *shared*
+                // daemon; the stdio channel owns a private process instead, and
+                // nothing stopped that until the reconnect at the end of this
+                // command -- long after the bundle it runs from had been
+                // deleted and replaced. On Windows that deletion simply fails
+                // (a directory with a running executable in it cannot be
+                // removed), so every update left another ~180MB behind.
+                const running = lsClient;
+                lsClient = undefined;
+                await running?.stop();
                 const result = await updateServiceBundle(context, serverId, outputChannel);
                 // `pc upgrade` installs beside the running bundle and deletes
                 // every superseded one, so the directory this put on the PATH

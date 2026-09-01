@@ -8,13 +8,16 @@
 Used by the CLI (a thin client), by the VS Code extension through
 `pc daemon start`/`pc daemon stop`, and available to any other Python caller.
 
-On POSIX, :func:`connect` uses the shared per-workspace **socket daemon** (a warm
-context): ``start_daemon`` runs the ``partcad-json-rpc`` launcher and returns its
-socket path. On Windows, where the socket daemon is not yet available, it falls
-back to launching a one-shot ``partcad-json-rpc --stdio`` service and talking to
-it over its pipes. Either way the caller stays a thin client that does not import
-``partcad``; :class:`DaemonClient` speaks framed JSON-RPC and delivers server
-notifications to an optional callback while waiting for the matching response.
+On POSIX, :func:`connect` uses the shared per-workspace **daemon** (a warm
+context): ``start_daemon`` runs the ``partcad-json-rpc`` launcher and returns the
+endpoint it printed. On Windows it falls back to launching a one-shot
+``partcad-json-rpc --stdio`` service and talking to it over its pipes -- not
+because there is no daemon there (the service serves a named pipe, and
+``start_daemon`` starts it for `pc daemon start` and the editor extension) but
+because the CLI has not been moved onto it yet. Either way the caller stays a
+thin client that does not import ``partcad``; :class:`DaemonClient` speaks framed
+JSON-RPC and delivers server notifications to an optional callback while waiting
+for the matching response.
 """
 
 import os
@@ -47,10 +50,16 @@ def launcher_argv() -> list:
 
 
 def start_daemon(cwd: Optional[str] = None, extra_args=()) -> str:
-    """Ensure a socket daemon serves the workspace at ``cwd``; return its path.
+    r"""Ensure a daemon serves the workspace at ``cwd``; return its endpoint.
 
-    POSIX only (the socket daemon uses AF_UNIX and fork). On Windows use the
-    stdio fallback via :func:`connect`.
+    An AF_UNIX socket path on POSIX, a ``\\.\pipe\...`` name on Windows: the
+    service implements both (``partcad_service_json_rpc.daemon``) and prints
+    whichever it served. The endpoint it prints is live -- the launcher waits
+    for the daemon to answer before naming it -- so a caller can connect to it
+    straight away.
+
+    :func:`connect` below still runs a one-shot stdio service on Windows; this
+    is what `pc daemon start` and the editor extension use.
     """
     result = subprocess.run(
         launcher_argv() + ["--socket", *extra_args],
@@ -149,7 +158,9 @@ def connect(cwd: Optional[str] = None, extra_args=()) -> DaemonClient:
 
     POSIX: the shared per-workspace socket daemon (warm context), falling back to
     a one-shot stdio service if it cannot be started. Windows: a one-shot stdio
-    service (the socket daemon is not available there yet).
+    service. The named-pipe daemon there works -- `pc daemon start` starts one
+    and the editor extension connects to it -- but this has not been moved onto
+    it, and the cost of trying and failing is paid by every `pc` invocation.
     """
     if os.name != "nt":
         try:

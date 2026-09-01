@@ -11,14 +11,31 @@ executable, translating each `partcad.*` command the UI issues into the CLI-shap
 the service's notifications back under the `?/partcad/*` names the handlers listen on. See
 `src/common/backend.ts` and `src/common/provision.ts`.
 
-By default it connects over the per-workspace socket **daemon** (`partcad.serviceChannel: socket`): it runs
-`pc daemon start`, reads the printed socket path, and connects. `partcad.serviceChannel: stdio` runs a
-dedicated process over stdin/stdout instead. "Restart PartCAD"/reset runs `pc daemon stop` to tear down the
-warm context.
+By default it connects over the per-workspace **daemon** (`partcad.serviceChannel: socket`): it runs
+`pc daemon start`, reads the printed endpoint, and connects — a socket path on POSIX, a `\\.\pipe\...` name on
+Windows, which `net.connect` takes either way. `partcad.serviceChannel: stdio` runs a dedicated process over
+stdin/stdout instead. "Restart PartCAD"/reset runs `pc daemon stop` to tear down the warm context.
+
+**What `pc daemon start` prints is checked before it is connected to** (`daemonEndpointIn`). A `pc` with no
+daemon for its platform answers with a *sentence* saying so — on stdout, with a zero exit status, which is
+where the endpoint goes. Windows `pc` did exactly that until the daemon there was un-gated, and "the first
+non-empty line" handed that sentence to `net.connect`: ENOENT about a filename made of English, and a window
+with no backend at all. So an answer that is neither an absolute path nor a pipe name means "this installation
+has no daemon", and the backend falls back to `stdio` — one service for this window, cold rather than shared,
+which is a downgrade and not a failure. It says so in the terminal view, because a user who asked for `socket`
+did not get it.
+
+The connect itself retries for a few seconds (`connectEndpoint`). The endpoint `pc` prints is live by the time
+it prints it, on both platforms; the retry covers the difference in *how* — a POSIX daemon binds and listens
+before it forks, so an early client queues, while the Windows daemon is a separate process whose pipe does not
+exist until it is ready, and connecting to a pipe that is not there fails rather than waits.
 
 Where the executable comes from is `resolveServicePath`: the `partcad.servicePath` setting, then an existing
-standalone install, then the extension's own download directory, then `~/.local/bin`, then a plain `PATH`
-lookup. That last one is why a user with their own Python needs no download at all -- `pip install partcad`
+standalone install (`$XDG_DATA_HOME/partcad`, or `%LOCALAPPDATA%\PartCAD` on Windows — `install.sh` does not
+run there, so naming the POSIX locations in the report only sent Windows users looking somewhere nothing
+installs to), then the extension's own download directory, then `~/.local/bin` where there is one, then a
+plain `PATH` lookup (quoted entries and all: Windows quotes a `PATH` entry containing a space, and the quotes
+are not part of the directory's name). That last one is why a user with their own Python needs no download at all -- `pip install partcad`
 puts `partcad-json-rpc` on the `PATH`.
 
 **The dialog appears if and only if none of those five resolves.** Anything found is used, silently: an
@@ -127,6 +144,15 @@ Four things about it are load-bearing:
 - **Two webpack bundles, two tsconfigs.** The extension host is CommonJS; the webview is a browser context and
   three.js ships its addons as ES modules only, so `src/webview` compiles under `tsconfig.webview.json` (and is
   excluded from `tsconfig.json`). `npm run compile` builds both.
+- **The listen options are platform-specific, and getting that wrong is silent.** `SO_REUSEPORT` lets a second
+  window share the viewer port instead of losing it, and libuv implements it only where it also load-balances
+  — Linux and the BSDs — *rejecting the bind with ENOTSUP everywhere else*. Asking for it unconditionally
+  therefore took the whole viewer down on Windows and macOS, with one line in the output channel to show for
+  it, from the moment VS Code shipped a Node new enough to pass the option through (22.12). There is nothing
+  to ask for instead on Windows: `listen` has no `reuseAddr` (that is `dgram`, for UDP), and libuv sets
+  neither `SO_REUSEADDR` nor `SO_EXCLUSIVEADDRUSE` for a TCP server there on purpose, since `SO_REUSEADDR` on
+  Windows means "take a port another process is using". `listenOptions` decides, and the second window falls
+  back to the `EADDRINUSE` branch, which is what it always did.
 - **The panel's CSP forbids network access.** Geometry arrives over `postMessage` and is parsed from memory;
   three.js is bundled rather than loaded from a CDN. Do not add an asset that is fetched at runtime — that is
   what rules out drei's `environment` presets, and why the renderer uses `RoomEnvironment`.
@@ -288,7 +314,11 @@ reasoning as `pc daemon stop`: defer to the CLI rather than keep a second copy h
 An ASSY file a **scene** points at is checked against the same schema with `how` forbidden, and which of the
 two a given file is is not a property of the file. `PartcadLint.flavorOf` answers it from the package contents
 the Explorer has already loaded -- the declaration itself -- and leaves the question to `pc lint` for a file no
-loaded package mentions. Both lean the same way when they cannot tell: unknown means assembly, because reading
+loaded package mentions. Both sides go through `pathKey` (`common/paths.ts`) rather than comparing paths as
+strings: `Uri.fsPath` lower-cases a Windows drive letter and PartCAD does not, so the editor's spelling of a
+document and the daemon's spelling of the same file never matched there and every scene was checked as an
+assembly. The daemon answers the same question with `os.path.samefile`; this one has to work on a buffer that
+has never been saved, so it normalises instead of asking the filesystem. Both lean the same way when they cannot tell: unknown means assembly, because reading
 an assembly as a scene would put a false error on correct code.
 
 The checker is `partcad_utils.assy_lint` (schema: `src/partcad_utils/schema/assy.json`), shared
@@ -356,6 +386,18 @@ npm run lint                                # eslint on src/**/*.ts
 npm run format-check                        # prettier check
 npm test                                    # vscode-test extension tests (xvfb-run -a npm test on Linux)
 ```
+
+`npm test` downloads a VS Code and opens `sampleWorkspace/` in it -- a directory that has to exist and has to
+be free of PartCAD content, or the extension activates through `workspaceContains` before the test that
+activates it. `.vscode-test.js` sets `PARTCAD_EXTENSION_NO_PROMPTS=1`, because a runner has no PartCAD
+installed and activation would otherwise put up the modal "shall I download it?" dialog that nothing headless
+can answer. Both of those are why the suite now runs on `windows-latest` in `npm-test.yml`, where it had been
+disabled as "for some reason doesn't run test suite".
+
+**Windows and macOS behaviour is tested from the Linux runner where it can be.** A platform-specific decision
+belongs in a pure function that takes the platform (`pathKey`, `listenOptions`, `daemonEndpointIn`,
+`resolveServicePath`'s `searched` list) so a test can ask what it would do somewhere else. Everything in this
+file that starts "on Windows" was shipped broken at some point precisely because nothing asked.
 
 ## Build / package
 
