@@ -3,7 +3,27 @@
 Skills for AI coding agents that work on PartCAD projects. The skills themselves
 are vendor-neutral [Agent Skills](https://code.claude.com/docs/en/skills)
 (`SKILL.md` folders) so any `SKILL.md`-aware agent can consume them; the Claude
-plugin is a thin wrapper that ships the same files to the Claude marketplace.
+plugin is a thin wrapper that ships the same files to Claude Code.
+
+## Install
+
+```text
+/plugin marketplace add partcad/partcad@plugin-dist
+/plugin install pc@partcad
+```
+
+There is no hosted catalog to search: a marketplace is a git repository with a
+`.claude-plugin/marketplace.json` in it, and this repository is one.
+`plugin-dist` is a branch every PartCAD release republishes — the same plugin
+with the `skills` symlink dereferenced into real files, so that it installs
+identically where git does not create symlinks.
+
+Two alternatives. `/plugin marketplace add partcad/partcad` reads the catalog
+straight out of the source tree, which needs a checkout where that symlink
+exists (see *Windows contributors* below). And every
+[release](https://github.com/partcad/partcad/releases) carries a
+`pc-<version>.zip` that `claude --plugin-url <url>` loads for one session, to
+try a version without installing it.
 
 ## Layout
 
@@ -13,7 +33,7 @@ ai-agents/
 │   └── skills/                     # source of truth: one SKILL.md folder per skill
 │       └── init/SKILL.md           #   → usable by any agent that reads SKILL.md
 ├── claude/                         # the Claude plugin (name: pc)
-│   ├── .claude-plugin/plugin.json
+│   ├── .claude-plugin/plugin.json  # version: the repository's, bumped with it
 │   └── skills -> ../common/skills  # symlink: no duplication
 └── scripts/
     └── materialize.sh              # publish-time: deref the symlink into real files
@@ -35,13 +55,32 @@ The plugin folder is named `claude`, but the command namespace comes from
 - **`/pc:init`** — initializes a PartCAD package by delegating to the installed
   CLI (`pc init` / `partcad init`). It resolves the command from `PATH` or the
   active Python environment (`python -m partcad_cli.click.command`); if PartCAD
-  is missing it points the user at `/pc:install` instead of hand-writing files.
-- **`/pc:install <mode>`** — makes `pc`/`partcad` available. `executable`
+  is missing it points the user at `/pc:setup` instead of hand-writing files.
+- **`/pc:setup <mode>`** — makes `pc`/`partcad` available. `executable`
   installs the standalone PyInstaller build from the latest GitHub release via
   the official `install.sh`; `python-module` installs the `partcad` wheel
   into the active Python environment (run as `python -m partcad_cli.click.command`).
   Releases publish bundles for Linux (x86_64, arm64), macOS (Apple silicon) and
   Windows, and a `platforms.json` the installer reads to pick this machine's.
+  The same release publishes this plugin, so the plugin's version names the
+  PartCAD the skills were written against, and is what `--version` pins if the
+  newest one ever behaves differently.
+
+  It then installs the **PartCAD extension** too, but only when the session is
+  running in an editor that can host it: `TERM_PROGRAM=vscode` and the editor's
+  own command line tool on `PATH` are what say which one, since Visual Studio
+  Code, VSCodium and the PartCAD IDE are indistinguishable otherwise. The IDE
+  already carries the extension and is left alone. The other two both install
+  `PartCAD.partcad` — the same command, each resolving it against its own
+  gallery: the Visual Studio Marketplace, and Open VSX for VSCodium, which is
+  not pointed at the Marketplace because its terms restrict it to Microsoft's
+  own products (see *Licensing* in
+  [`ide/standalone`](../ide/standalone/README.md)). The release's `.vsix` is the
+  fallback when a gallery cannot be reached or a version has to be pinned.
+
+  Not named `install`: `pc install` is PartCAD's `npm install`, which fetches a
+  package's imports and needs PartCAD to already be here. This skill is what
+  puts it here.
 - **`/pc:gen <description>`** — decides whether the request is a part, an
   assembly, or a 2D sketch and follows the matching flow below.
 - **`/pc:gen-part <description>`** — generates a single part: the agent picks a
@@ -112,41 +151,53 @@ Open the repo root as the workspace and accept the trust prompt. Claude loads
 - After editing a `SKILL.md`, changes are live; structural changes need
   `/reload-plugins`.
 
-## Shipping to the Claude marketplace
+## Versioning
 
-Installs on macOS/Linux dereference the `skills` symlink automatically, but
+The plugin has no version of its own.
+`ai-agents/claude/.claude-plugin/plugin.json` is listed in
+[`dev-tools/bumpversion.toml`](../dev-tools/bumpversion.toml), so it moves with
+the wheel, the VS Code extension, the FreeCAD addon and everything else the
+moment a release is cut — `pc` the plugin and `pc` the command line tool it
+drives state the same version when they came from the same release.
+
+It used to carry a version of its own, and that is precisely why it sat at
+`0.1.0` for twenty-three releases: publishing it meant remembering to push a
+`pc--v<version>` tag, and nobody ever did.
+`tests/partcad_cli/unit/test_versions.py` fails now if the manifest falls out of
+step, or if it stops being declared.
+
+## How it is published
+
+Nothing to do by hand — the release publishes the plugin.
+
+[`.github/workflows/plugin.yml`](../.github/workflows/plugin.yml) builds it:
+materialize, validate both manifests, install the result and check that every
+skill in the library is in the installed inventory, and then unpack the archive
+on Windows to prove the files survived a filesystem with no symlinks.
+`build.yml` calls it on every pull request. `deploy.yml` calls it for a release,
+and then
+
+- attaches `pc-<version>.zip` to the GitHub release, beside the wheels and the
+  `.vsix`, and
+- force-pushes the materialized marketplace to the `plugin-dist` branch — last,
+  so that the "latest" pointer only moves once the release it names exists.
+
+Installs on macOS and Linux dereference the `skills` symlink by themselves, but
 **Windows git checkouts may not preserve symlinks**, which would ship an empty
-plugin. The release automation publishes a materialized (symlink-free) artifact,
-so what users install is safe everywhere.
+plugin. That is what the materialized artifact is for, and why both published
+forms are symlink-free.
 
-### Cut a release
+To rebuild the artifacts without cutting a release, run the `Plugin` workflow
+from the Actions tab. To republish `plugin-dist` alone, re-run the `Deployment`
+run of the release it should carry.
 
-From a clean working tree, bump `version` in
-`ai-agents/claude/.claude-plugin/plugin.json`, commit, then:
-
-```bash
-claude plugin tag ai-agents/claude --push   # creates & pushes pc--v<version>
-```
-
-`claude plugin tag` validates that the manifest and the marketplace entry agree,
-then pushes a `pc--v<version>` tag. That fires
-`.github/workflows/ai-agents-release.yml`, which re-validates, runs
-`materialize.sh`, and publishes two ways:
-
-- **`plugin-dist` branch** — the symlink-free marketplace at its root (rolling
-  "latest"):
-  ```
-  /plugin marketplace add <owner>/<repo>@plugin-dist
-  /plugin install pc@partcad
-  ```
-- **GitHub Release** — `pc.zip` attached to the `pc--v<version>` release
-  (immutable, pin-able):
-  ```
-  claude --plugin-url https://github.com/<owner>/<repo>/releases/download/pc--v<version>/pc.zip
-  ```
-
-The release step needs no Anthropic credentials — it uses only the automatic
-`GITHUB_TOKEN` (no PAT, no stored secret).
+The publish is a force-push, so it is guarded twice against moving the branch
+backwards. Concurrent releases are serialized by a concurrency group on that job
+alone, and — because a re-run of an older release is not concurrent with
+anything — the job reads the version `plugin-dist` currently carries and refuses
+to publish an older one over it. Republishing an *earlier* release therefore
+fails on purpose, with the version it found; delete the branch if that is really
+what you want.
 
 ### Build the artifact locally
 
@@ -154,8 +205,13 @@ The release step needs no Anthropic credentials — it uses only the automatic
 ai-agents/scripts/materialize.sh          # writes ai-agents/.build/marketplace
 ```
 
-Produces a self-contained `pc/` plugin (real `skills/` files), a `marketplace.json`
-pointing at it, and `pc.zip`.
+Produces a self-contained `pc/` plugin (real `skills/` files), a
+`marketplace.json` pointing at it, and `pc-<version>.zip`. Two prerequisites,
+both of which the script checks rather than working around: the Claude Code CLI
+on `PATH`, because it validates both manifests, and `zip`, because the archive
+is what the release attaches — it is a required output, so a machine without
+`zip` gets an error here rather than a partial artifact and a puzzling failure
+later.
 
 Note: because the `skills` symlink escapes the plugin directory into `common/`, a
 lightweight `git-subdir` marketplace source will **not** work (the sparse clone
@@ -163,9 +219,17 @@ misses `common/`); use the materialized artifact or a full-repo `github` source.
 
 ## CI
 
-`.github/workflows/ai-agents.yml` validates the catalog and plugin with
-`claude plugin validate`, runs the materialization, and asserts the artifact is
-symlink-free. It uses **no credentials** — validation is fully offline.
+`plugin.yml` is the whole of it, and it uses **no credentials**:
+`claude plugin validate`, the materialization and the install smoke test all run
+offline against a directory on the runner. It must never reference
+`ANTHROPIC_API_KEY`, a login, or any repository secret.
+
+`tests/partcad_cli/unit/test_ai_agent_skills.py` covers what validation cannot
+see. Run against `ai-agents/claude`, `claude plugin validate` warns that `skills`
+is a symlink, reads nothing through it, and passes — so a `SKILL.md` with no
+front matter, or with a `name` that does not match its directory, would get as
+far as whoever installed the plugin. The pytest run reads every one of them for
+real, on commit.
 
 ## Windows contributors
 

@@ -180,7 +180,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
           `/pc:gen-sketch`) -- the agent authors the CAD script and validates it by rendering
     - [x] Describe an existing object (`/pc:describe`), search the catalog (`/pc:search`), add interfaces
           (`/pc:add-interfaces`)
-    - [x] Set a project up (`/pc:init`, `/pc:install`)
+    - [x] Set a project up (`/pc:init`, `/pc:setup`)
   - [x] `--no-ansi` output on every command, so an agent parses plain text rather than progress bars
   - [x] Free-form `comment:` context in `Assembly YAML`, written for whoever reads the assembly next
 - Other features
@@ -216,6 +216,33 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
 Note, it's not required but highly recommended that you have [conda] installed. If you experience any difficulty
 installing or using any PartCAD tool, then make sure to install [conda].
 
+### Plugin for Claude Code
+
+Already using [Claude Code](https://claude.com/claude-code)? This is the shortest way in, and it installs
+everything else for you. The `pc` plugin adds skills that generate parts, assemblies and 2D sketches, describe
+and search what a package already has, and set up the tools themselves:
+
+```shell
+/plugin marketplace add partcad/partcad@plugin-dist
+/plugin install pc@partcad
+```
+
+Then `/pc:setup` puts the command line tools on the machine -- and, when it is run from a Visual Studio Code
+or VSCodium terminal, the extension below into that editor -- `/pc:init` starts a package, and
+`/pc:gen a mounting bracket with four M4 holes` writes the CAD script, renders four views of what came out and
+checks them against what was asked. The skills drive the same `pc` commands documented below, so nothing they
+produce is locked to the agent that produced it.
+
+This repository *is* the marketplace -- there is no hosted catalog to search. The `plugin-dist` branch above
+carries the latest release, symlink-free so that it installs the same way on Windows. Two alternatives:
+`/plugin marketplace add partcad/partcad` installs straight from the source tree (git has to be able to create
+symlinks, which on Windows means `git config core.symlinks true`), and every
+[release](https://github.com/partcad/partcad/releases) carries a `pc-<version>.zip` that
+`claude --plugin-url <url>` loads for a single session, to try one version without installing it.
+
+The skills are plain [Agent Skills](https://code.claude.com/docs/en/skills), so any `SKILL.md`-aware agent can
+read them out of [`ai-agents/`](./ai-agents/README.md) without the plugin.
+
 ### PartCAD IDE
 
 The whole thing in one application: the editor, the PartCAD extension, and the command line tools. No Python,
@@ -236,11 +263,17 @@ On Windows, download and run `partcad-ide-<version>-windows-x86_64-setup.exe` fr
 Already using Visual Studio Code? Install the extension into it instead of the IDE above.
 
 This extension can be installed by searching for `PartCAD` in the VS Code extension search form, or by browsing
-[its VS Code marketplace page](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad).
+[its VS Code marketplace page](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad). From a
+terminal it is `code --install-extension PartCAD.partcad`.
 
 Every [release](https://github.com/partcad/partcad/releases) also carries the packaged extension as
 `partcad-<version>.vsix`, to pin a version or to install where the marketplace is not reachable:
-`code --install-extension partcad-<version>.vsix`.
+`code --install-extension partcad-<version>.vsix`. On VSCodium it comes from [Open VSX](https://open-vsx.org/)
+-- the gallery VSCodium ships with, and where PartCAD publishes the extension for it, the Visual Studio
+Marketplace's terms restricting that one to Microsoft's own products:
+`codium --install-extension PartCAD.partcad`.
+
+`/pc:setup` above does this for you when it is run from a terminal inside the editor.
 
 Make sure to have Python configured and a [conda] environment set up in VS Code before using PartCAD.
 

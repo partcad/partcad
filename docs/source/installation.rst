@@ -2,6 +2,51 @@ Installation
 ############
 
 
+.. _claude-plugin:
+
+======================
+Plugin for Claude Code
+======================
+
+If you use `Claude Code <https://claude.com/claude-code>`_, start here: the ``pc`` plugin adds skills
+that generate parts, assemblies and 2D sketches, describe and search what a package already has, and
+install the command line tools below for you.
+
+.. code-block:: text
+
+  /plugin marketplace add partcad/partcad@plugin-dist
+  /plugin install pc@partcad
+
+Then ``/pc:setup`` puts ``pc`` on this machine -- and, when it is run from a Visual Studio Code or
+VSCodium terminal, :ref:`the extension <vscode-extension>` into that editor -- ``/pc:init`` starts a
+package, and ``/pc:gen a mounting bracket with four M4 holes`` writes the CAD script, renders four views
+of what came out and checks them against what was asked. The skills run the same commands documented in
+:doc:`cli`, so nothing they produce depends on the agent that produced it.
+
+.. note::
+
+  This repository is the marketplace -- there is no hosted catalog to search for PartCAD in. The
+  ``plugin-dist`` branch is republished by every release and contains no symlinks, which is what makes it
+  install identically on Windows.
+
+Two other ways to install the same plugin:
+
+* ``/plugin marketplace add partcad/partcad`` reads the catalog out of the source tree. That copy shares
+  its skills with the vendor-neutral library through a symlink, so it needs a checkout where git created
+  one -- on Windows, ``git config core.symlinks true`` before cloning.
+* Every `release <https://github.com/partcad/partcad/releases>`_ carries a ``pc-<version>.zip``, and
+  ``claude --plugin-url <url>`` loads one for a single session. That is how to try a version without
+  installing it.
+
+The plugin is versioned with everything else in the release that publishes it, so the plugin and the
+``pc`` command line tool state the same version when they came from the same release.
+
+.. note::
+
+  The skills are plain `Agent Skills <https://code.claude.com/docs/en/skills>`_ -- a directory of
+  ``SKILL.md`` files -- and the plugin is a thin wrapper that ships them to Claude Code. Any other agent
+  that reads ``SKILL.md`` can use the same library, from ``ai-agents/common/skills`` in the repository.
+
 ==================
 Command line tools
 ==================
@@ -629,8 +674,16 @@ Visual Studio Code extension
 For an editor you already have. To get the extension, the tools and an editor in one download instead,
 see :ref:`the PartCAD IDE <partcad-ide>`.
 
+Running ``/pc:setup`` from a terminal inside Visual Studio Code or VSCodium installs this extension along
+with the command line tools. The rest of this section is how to do it by hand.
+
 This extension is available through the VS Code marketplace.
 The corresponding marketplace page is `here <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_.
+Install it from the Extensions view, or by id from a terminal:
+
+.. code-block:: shell
+
+  $ code --install-extension PartCAD.partcad
 
 Every `GitHub release <https://github.com/partcad/partcad/releases>`_ also carries the packaged extension as
 ``partcad-<version>.vsix``, next to the wheels and the bundles. Install it from the command line, or with
@@ -643,6 +696,14 @@ Every `GitHub release <https://github.com/partcad/partcad/releases>`_ also carri
 Use it to pin a particular version, to install where the marketplace is not reachable, or to try a release
 before the marketplace has it. One package serves every platform: the extension is a JSON-RPC client with no
 Python and nothing compiled in it.
+
+.. note::
+
+  **VSCodium** installs it from `Open VSX <https://open-vsx.org/>`_, the gallery VSCodium comes configured
+  with and where PartCAD publishes the extension for it. It is not pointed at the Visual Studio Marketplace,
+  whose terms restrict its use to Microsoft's own products. Search for ``PartCAD`` in the Extensions view, or
+  run ``codium --install-extension PartCAD.partcad``; the ``.vsix`` above works there too. The
+  :ref:`PartCAD IDE <partcad-ide>` needs neither gallery -- it ships the extension inside the application.
 
 If you installed the extension before it moved
 ==============================================

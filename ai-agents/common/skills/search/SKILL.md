@@ -27,7 +27,7 @@ new object, use `/pc:gen` instead.
 
 Resolve a command as `/pc:init` does (`pc`, then `partcad`, then
 `python -m partcad_cli.click.command`). If none is found, stop and run
-`/pc:install executable` first.
+`/pc:setup executable` first.
 
 ## 3. Search
 

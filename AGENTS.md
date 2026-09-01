@@ -212,12 +212,12 @@ Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.to
 
 ### Packaging
 
-Five artifacts ship from this repo: **one Python wheel** (`partcad`, carrying all six packages and all three
+Six artifacts ship from this repo: **one Python wheel** (`partcad`, carrying all six packages and all three
 entry points, with a `partcad-cli` shim published beside it from `shim/` so the older install instruction keeps
 working), the standalone PyInstaller bundles for users who have no Python, the PartCAD IDE, which carries those
 bundles inside it, the VS Code extension's `.vsix` (with the `ide/vscode-shim` `.vsix` published beside it, for
-the same reason the wheel has one), and the snap, which wraps the Linux bundle and is built but
-not published yet.
+the same reason the wheel has one), the `pc` plugin for Claude Code, and the snap, which wraps the Linux
+bundle and is built but not published yet.
 
 There used to be five wheels pinning each other at `==`. Do not add a second distribution back: within one
 distribution a pin is an import, and two distributions owning one import name break each other on uninstall
@@ -231,8 +231,14 @@ that nothing keeps in sync; the README says which, and which of them a pull requ
 serves every platform: the extension is a JSON-RPC client with no Python and no compiled content in it. The
 same workflow packages the transition shim beside it, under the extension's version — which the shim does not
 state anywhere, but reads at package time, so the two cannot drift. A shim older than the entry it replaces is
-one the marketplace never delivers, and a second literal to bump is how that happens. Changing `.vscode/extensions.json` changes what the IDE ships with — see
-`ide/standalone/README.md`. The snap carries whatever the bundle carries, so it needs nothing extra of its
+one the marketplace never delivers, and a second literal to bump is how that happens. Changing
+`.vscode/extensions.json` changes what the IDE ships with — see `ide/standalone/README.md`. The plugin is built
+the same way, by `.github/workflows/plugin.yml`, and published two ways by `deploy.yml`: `pc-<version>.zip` on
+the release, and the `plugin-dist` branch, which is what `/plugin marketplace add partcad/partcad@plugin-dist`
+reads. It has no version of its own — `plugin.json` is in `dev-tools/bumpversion.toml` like everything else —
+and it must not get one back: it had one, and stayed at 0.1.0 for twenty-three releases because publishing it
+meant remembering a tag nobody pushed. See `ai-agents/README.md`. The snap carries whatever the bundle carries,
+so it needs nothing extra of its
 own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
 
 ### Committing

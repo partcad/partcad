@@ -54,6 +54,15 @@ jobs:
   build-vscode-extension:
     uses: ./.github/workflows/vsix.yml
 
+  # The Claude Code plugin: one archive, attached to the same release, and the
+  # same tree pushed to the "plugin-dist" branch by the last job below. Both
+  # carry this release's version -- "dev-tools/bumpversion.toml" moves the
+  # plugin manifest with everything else -- so there is no separate plugin
+  # release to remember. There used to be, on a "pc--v*" tag of its own; it was
+  # never once pushed, which is why the plugin still said 0.1.0.
+  build-claude-plugin:
+    uses: ./.github/workflows/plugin.yml
+
   # Keep the "build" job identical to "python-build.yml".
   # TODO(clairbee): include "python-build.yml" instead
   build:
@@ -146,6 +155,10 @@ jobs:
       # release that is missing an asset the documentation points at is a
       # release someone has to go and fix by hand.
       - build-vscode-extension
+      # And the plugin, for that same reason: the installation instructions
+      # name the archive on the release, so a release without it is one the
+      # documentation lies about.
+      - build-claude-plugin
     runs-on: ubuntu-24.04
     environment:
       name: pypi
@@ -207,6 +220,15 @@ jobs:
           name: partcad-vsix
           path: release/vsix
 
+      # By name for the same reason, and into a directory of its own: the
+      # marketplace tree goes to a branch rather than to the release, so only
+      # the archive is downloaded here.
+      - name: Download the Claude Code plugin
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-plugin
+          path: release/plugin
+
       # "install.sh" derives an asset name from `uname` and fails for the user
       # if that asset is not on the release. Downloading artifacts does not fail
       # when none match, so check here, before the release exists, rather than
@@ -220,7 +242,8 @@ jobs:
           # looking at source files -- so say so here, before the release
           # exists, rather than by publishing the wrong assets.
           stray="$(find release -mindepth 1 -type d \
-            ! -path release/standalone ! -path release/ide ! -path release/vsix)"
+            ! -path release/standalone ! -path release/ide ! -path release/vsix \
+            ! -path release/plugin)"
           if [ -n "${stray}" ]; then
             echo "::error::unexpected directories under release/: $(echo ${stray})"
             missing=1
@@ -278,6 +301,15 @@ jobs:
               echo "${vsix} $(stat -c%s "${vsix}") bytes"
             fi
           done
+          # And the plugin. Named after the version like everything else here,
+          # so the documented `--plugin-url .../pc-<version>.zip` resolves.
+          plugin="$(find release/plugin -type f -name "pc-*.zip" | head -n 1)"
+          if [ -z "${plugin}" ]; then
+            echo "::error::no Claude Code plugin archive"
+            missing=1
+          else
+            echo "${plugin} $(stat -c%s "${plugin}") bytes"
+          fi
           exit "${missing}"
 
       # What the release carries, written down for the clients that download
@@ -354,3 +386,122 @@ jobs:
             }}"
           user: __token__
           password: "${{ github.ref == 'refs/heads/main' &&  secrets.PYPI_KEY || secrets.TEST_PYPI_KEY }}"
+
+  # The rolling marketplace branch: this release's plugin, symlink-free, at the
+  # root of a branch, which is what `/plugin marketplace add
+  # partcad/partcad@plugin-dist` reads. It is the "latest" everyone who
+  # installed the plugin that way follows.
+  #
+  # Last, and only on "main", for the reason the release is a draft until its
+  # assets are on it: this pointer should move to a release that exists. A run
+  # that dies before this leaves users on the previous plugin, which is a
+  # complete one.
+  publish-plugin-dist:
+    name: Publish the plugin marketplace
+    needs: publish-to-pypi
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    # Serialize this job across runs, so that two releases going out close
+    # together cannot interleave their force-pushes. Not "cancel-in-progress":
+    # cancelling a publish mid-push is the thing to avoid, and the queue is one
+    # deep in practice. This does not cover a *re-run* of an older release
+    # weeks later -- nothing concurrent about that -- which is what the version
+    # check below is for. Job-level, not workflow-level, deliberately: a group
+    # over the whole of "deploy.yml" would queue or cancel the builds and the
+    # PyPI upload as well, and this job is the only one here that overwrites
+    # something that already exists.
+    concurrency:
+      group: publish-plugin-dist
+      cancel-in-progress: false
+
+    steps:
+      # No checkout: the branch this pushes shares no history with the source
+      # tree, and the artifact is the whole of what goes on it.
+      - name: Download the marketplace tree
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-plugin-dist
+          path: marketplace
+
+      - name: Check the marketplace is complete
+        run: |
+          missing=0
+          # The catalog is under a hidden directory, and hidden files are
+          # excluded from an artifact unless asked for. A tree that lost it
+          # still looks plausible -- a "pc" directory with every skill in it --
+          # and installs as nothing, because there is no marketplace to add.
+          if [ ! -f marketplace/.claude-plugin/marketplace.json ]; then
+            echo "::error::no .claude-plugin/marketplace.json in the artifact"
+            missing=1
+          fi
+          if find marketplace -type l | grep -q .; then
+            echo "::error::the tree contains symlinks; it must not"
+            find marketplace -type l
+            missing=1
+          fi
+          if ! find marketplace/pc/skills -name SKILL.md -print -quit | grep -q .; then
+            echo "::error::no skills in the plugin"
+            missing=1
+          fi
+          exit "${missing}"
+
+      - name: Push it to "plugin-dist"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+            marketplace/pc/.claude-plugin/plugin.json | head -n 1)"
+          if [ -z "${version}" ]; then
+            echo "::error::no version in the plugin manifest"
+            exit 1
+          fi
+
+          # Never move the branch backwards. The push below is a force-push, so
+          # on its own it would happily restore an older plugin: re-running the
+          # Deployment run of an earlier release -- which is exactly how this
+          # branch is republished by hand -- would take "plugin-dist" back to
+          # that release's contents and leave every rolling install downgraded,
+          # silently. The concurrency group above orders concurrent runs; this
+          # is what stops an old one whenever it runs.
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          # A shallow fetch into a scratch repository, because there is no
+          # checkout here and "git archive --remote" does not work against
+          # GitHub over https. An absent branch -- the first publish -- fetches
+          # nothing and leaves "published" empty, which is not an error.
+          probe="$(mktemp -d)"
+          published="$(
+            git -C "${probe}" init -q &&
+            git -C "${probe}" fetch -q --depth 1 "${remote}" plugin-dist 2>/dev/null &&
+            git -C "${probe}" show FETCH_HEAD:pc/.claude-plugin/plugin.json 2>/dev/null |
+              sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1 || true
+          )"
+          rm -rf "${probe}"
+          if [ -n "${published}" ] && [ "${published}" != "${version}" ]; then
+            newest="$(printf '%s\n%s\n' "${published}" "${version}" | sort -V | tail -n 1)"
+            if [ "${newest}" = "${published}" ]; then
+              echo "::error::'plugin-dist' carries ${published}; refusing to publish ${version} over it."
+              echo "::error::Re-run the Deployment for the newest release instead, or delete the branch to reset it."
+              exit 1
+            fi
+          fi
+          echo "Publishing ${version} over ${published:-an empty branch}."
+
+          cd marketplace
+          # A fresh history every time, force-pushed. The branch is a pointer to
+          # one state, not a record of how it got there -- the repository's own
+          # history is that -- and an orphan commit keeps it from growing a
+          # copy of every release anyone ever clones.
+          git init -q
+          git checkout -q -b plugin-dist
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -qm "PartCAD ${version}"
+          git push -f \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            plugin-dist
+          echo "Published the 'pc' plugin ${version} to the 'plugin-dist' branch."

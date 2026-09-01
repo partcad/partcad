@@ -52,7 +52,7 @@ silently.
 
 Resolve a command as `/pc:init` does (`pc`, then `partcad`, then
 `python -m partcad_cli.click.command`). If none is found, stop and run
-`/pc:install executable` first.
+`/pc:setup executable` first.
 
 Pass `--no-ansi` on every run so the output is plain text. It is a global flag
 and goes before the subcommand, and it routes the logs to **stderr** — so

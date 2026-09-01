@@ -23,6 +23,7 @@ It reads `bumpversion.toml` rather than hardcoding a list, so a package added
 later is covered the moment it is declared there, and is caught if it is not.
 """
 
+import json
 import re
 from pathlib import Path
 
@@ -107,6 +108,30 @@ def test_every_bumpversion_search_string_still_matches():
         if entry["search"].replace("{current_version}", current) not in text:
             unmatched.append("%s: %s" % (entry["filename"], entry["search"]))
     assert not unmatched, "bumpversion entries that match nothing:\n  " + "\n  ".join(unmatched)
+
+
+# The Claude Code plugin, which ships from this repository as the `pc` plugin of
+# the `partcad` marketplace. None of the tests above can see it: `PACKAGES` maps
+# importable modules, and the self-pin scan reads requirements files. Nothing
+# imports a plugin manifest and nothing pins it, which is why it sat at the
+# 0.1.0 it was created with while twenty-three releases went out around it.
+CLAUDE_PLUGIN_MANIFEST = REPO_ROOT / "ai-agents" / "claude" / ".claude-plugin" / "plugin.json"
+
+
+def test_the_claude_plugin_states_the_release_version():
+    """The plugin is published by the release, so it states the release."""
+    version = json.loads(CLAUDE_PLUGIN_MANIFEST.read_text(encoding="utf-8"))["version"]
+    assert version == _bumpversion()["current_version"], (
+        "ai-agents/claude/.claude-plugin/plugin.json is out of step with the release. The plugin is "
+        "published by the same release as the wheel and states the same version."
+    )
+
+
+def test_the_claude_plugin_is_declared_in_bumpversion():
+    """Declared, so that it moves; the test above only says that it has."""
+    filenames = {entry["filename"] for entry in _bumpversion()["files"]}
+    expected = "ai-agents/claude/.claude-plugin/plugin.json"
+    assert expected in filenames, "%s is not in dev-tools/bumpversion.toml" % expected
 
 
 # The two distributions this repository publishes. Scoped deliberately: an

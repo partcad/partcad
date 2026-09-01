@@ -169,3 +169,15 @@ jobs:
     name: "VS Code extension"
     if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     uses: ./.github/workflows/vsix.yml
+
+  # The Claude Code plugin, on the same footing as the extension above: built
+  # once, on one runner, and attached to the release by "deploy.yml".
+  #
+  # It used to have a workflow of its own, "ai-agents.yml", on path-filtered
+  # "push"/"pull_request" triggers. Those are gone for the reason the extension's
+  # are: the version bump now rewrites "plugin.json", so every bump commit
+  # matched that path filter and would have built the plugin here and there both.
+  build-claude-plugin:
+    name: "Claude Code plugin"
+    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    uses: ./.github/workflows/plugin.yml
