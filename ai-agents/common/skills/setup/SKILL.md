@@ -178,28 +178,39 @@ new IDE, not from here. Report that and stop.
 Otherwise, check whether it is installed already, by its extension id:
 
 ```sh
-"${EDITOR_CLI}" --list-extensions | grep -qix "openvmp.partcad" && echo "already installed"
+"${EDITOR_CLI}" --list-extensions | grep -qix "partcad.partcad" && echo "already installed"
 ```
+
+`openvmp.partcad` in that list is not it. That is the identity the extension
+was published under before it moved, and it is now a stub whose only content is
+a dependency on `PartCAD.partcad` — so an installation holding it has either
+pulled the real extension in already or will on its next update. Installing
+`PartCAD.partcad` is what the stub is for, done now instead of whenever that
+update arrives, so treat the extension as missing unless `partcad.partcad`
+itself is listed.
 
 ### 3. Install it
 
-Use `${EDITOR_CLI}` rather than a literal name in both of these: it is what
-distinguishes an Insiders build from a stable one, and installing into the wrong
-one leaves the window the user is looking at without the extension.
-
-**Visual Studio Code** (`code`, `code-insiders`) installs it from the Visual
-Studio Marketplace by id:
+The extension's id is `PartCAD.partcad`, and each editor resolves it against
+its own gallery: Visual Studio Code against the Visual Studio Marketplace,
+VSCodium against [Open VSX](https://open-vsx.org/), where PartCAD publishes it
+for exactly that reason — the Marketplace's terms restrict its use to
+Microsoft's own products, so a VSCodium pointed at that one would be in the
+wrong. Which gallery answers is therefore the editor's business and not this
+skill's, and the command is the same either way:
 
 ```sh
-"${EDITOR_CLI}" --install-extension OpenVMP.partcad
+"${EDITOR_CLI}" --install-extension PartCAD.partcad
 ```
 
-**VSCodium** (`codium`, `codium-insiders`) does not, and must not: its gallery
-is [Open VSX](https://open-vsx.org/), where PartCAD does not publish, and the
-Visual Studio Marketplace's terms restrict its use to Microsoft's own products.
-Install the `.vsix` from the GitHub release instead — the same package, and one
-build serves every platform because the extension is a JSON-RPC client with no
-Python and nothing compiled in it:
+Use `${EDITOR_CLI}` rather than a literal name: it is what distinguishes an
+Insiders build from a stable one, and installing into the wrong one leaves the
+window the user is looking at without the extension.
+
+Should the gallery be unreachable, or should the user want a particular version,
+every [release](https://github.com/partcad/partcad/releases) carries the same
+package — one build for every platform, the extension being a JSON-RPC client
+with no Python and nothing compiled in it:
 
 ```sh
 version="$(curl -fsSL https://api.github.com/repos/partcad/partcad/releases/latest |
@@ -214,11 +225,15 @@ else
 fi
 ```
 
+`partcad-<version>.vsix` is the extension. The `partcad-shim-<version>.vsix`
+beside it is the old `OpenVMP.partcad` entry, which is nothing but a dependency
+on the real one — installing that here would send the editor back to the gallery
+this route exists to do without.
+
 Name a release in place of `${version}` to pin one, the same way `--version`
-pins the tools above. If either step fails, report what it said and stop — these
+pins the tools above. If either step fails, report what it said and stop: these
 are the same two failures `install.sh` names, a release that cannot be resolved
-and an asset that cannot be downloaded, and neither is a reason to reach for the
-Marketplace.
+and an asset that cannot be downloaded.
 
 ### 4. Report
 

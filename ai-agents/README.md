@@ -70,11 +70,13 @@ The plugin folder is named `claude`, but the command namespace comes from
   running in an editor that can host it: `TERM_PROGRAM=vscode` and the editor's
   own command line tool on `PATH` are what say which one, since Visual Studio
   Code, VSCodium and the PartCAD IDE are indistinguishable otherwise. The IDE
-  already carries the extension and is left alone. VS Code gets
-  `OpenVMP.partcad` from the Visual Studio Marketplace; VSCodium gets the
-  release's `.vsix`, because its gallery is Open VSX — where PartCAD does not
-  publish — and the Marketplace's terms restrict it to Microsoft's own products
-  (see *Licensing* in [`ide/standalone`](../ide/standalone/README.md)).
+  already carries the extension and is left alone. The other two both install
+  `PartCAD.partcad` — the same command, each resolving it against its own
+  gallery: the Visual Studio Marketplace, and Open VSX for VSCodium, which is
+  not pointed at the Marketplace because its terms restrict it to Microsoft's
+  own products (see *Licensing* in
+  [`ide/standalone`](../ide/standalone/README.md)). The release's `.vsix` is the
+  fallback when a gallery cannot be reached or a version has to be pinned.
 
   Not named `install`: `pc install` is PartCAD's `npm install`, which fetches a
   package's imports and needs PartCAD to already be here. This skill is what

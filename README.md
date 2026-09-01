@@ -265,11 +265,12 @@ This extension can be installed by searching for `PartCAD` in the VS Code extens
 
 Every [release](https://github.com/partcad/partcad/releases) also carries the packaged extension as
 `partcad-<version>.vsix`, to pin a version or to install where the marketplace is not reachable:
-`code --install-extension partcad-<version>.vsix`. On VSCodium that file is the only route -- its gallery is
-[Open VSX](https://open-vsx.org/), where PartCAD does not publish, and the Visual Studio Marketplace's terms
-restrict its use to Microsoft's own products.
+`code --install-extension partcad-<version>.vsix`. On VSCodium it comes from [Open VSX](https://open-vsx.org/)
+-- the gallery VSCodium ships with, and where PartCAD publishes the extension for it, the Visual Studio
+Marketplace's terms restricting that one to Microsoft's own products:
+`codium --install-extension PartCAD.partcad`.
 
-`/pc:setup` above does either of these for you when it is run from a terminal inside the editor.
+`/pc:setup` above does this for you when it is run from a terminal inside the editor.
 
 Make sure to have Python configured and a [conda] environment set up in VS Code before using PartCAD.
 

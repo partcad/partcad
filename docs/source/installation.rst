@@ -624,8 +624,7 @@ For an editor you already have. To get the extension, the tools and an editor in
 see :ref:`the PartCAD IDE <partcad-ide>`.
 
 Running ``/pc:setup`` from a terminal inside Visual Studio Code or VSCodium installs this extension along
-with the command line tools, by whichever of the routes below fits that editor. The rest of this section is
-how to do it by hand.
+with the command line tools. The rest of this section is how to do it by hand.
 
 This extension is available through the VS Code marketplace.
 The corresponding marketplace page is `here <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_.
@@ -644,10 +643,11 @@ Python and nothing compiled in it.
 
 .. note::
 
-  On **VSCodium** the ``.vsix`` is the only route. VSCodium's gallery is `Open VSX <https://open-vsx.org/>`_,
-  where PartCAD does not publish, and the Visual Studio Marketplace's terms restrict its use to Microsoft's
-  own products. Install the same file with ``codium --install-extension``. The
-  :ref:`PartCAD IDE <partcad-ide>` needs none of this -- it ships the extension inside the application.
+  **VSCodium** installs it from `Open VSX <https://open-vsx.org/>`_, the gallery VSCodium comes configured
+  with and where PartCAD publishes the extension for it. It is not pointed at the Visual Studio Marketplace,
+  whose terms restrict its use to Microsoft's own products. Search for ``PartCAD`` in the Extensions view, or
+  run ``codium --install-extension PartCAD.partcad``; the ``.vsix`` above works there too. The
+  :ref:`PartCAD IDE <partcad-ide>` needs neither gallery -- it ships the extension inside the application.
 
 If you installed the extension before it moved
 ==============================================
