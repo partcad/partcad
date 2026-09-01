@@ -628,6 +628,11 @@ with the command line tools. The rest of this section is how to do it by hand.
 
 This extension is available through the VS Code marketplace.
 The corresponding marketplace page is `here <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_.
+Install it from the Extensions view, or by id from a terminal:
+
+.. code-block:: shell
+
+  $ code --install-extension PartCAD.partcad
 
 Every `GitHub release <https://github.com/partcad/partcad/releases>`_ also carries the packaged extension as
 ``partcad-<version>.vsix``, next to the wheels and the bundles. Install it from the command line, or with

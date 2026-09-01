@@ -261,7 +261,8 @@ On Windows, download and run `partcad-ide-<version>-windows-x86_64-setup.exe` fr
 Already using Visual Studio Code? Install the extension into it instead of the IDE above.
 
 This extension can be installed by searching for `PartCAD` in the VS Code extension search form, or by browsing
-[its VS Code marketplace page](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad).
+[its VS Code marketplace page](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad). From a
+terminal it is `code --install-extension PartCAD.partcad`.
 
 Every [release](https://github.com/partcad/partcad/releases) also carries the packaged extension as
 `partcad-<version>.vsix`, to pin a version or to install where the marketplace is not reachable:

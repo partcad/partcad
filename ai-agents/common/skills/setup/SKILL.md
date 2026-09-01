@@ -39,7 +39,7 @@ mode, and the two do not share a knob:
 | Mode | Pin the plugin's version with |
 | --- | --- |
 | `executable` | `... \| sh -s -- --version <version>`, or `PARTCAD_VERSION=<version>` |
-| `python-module` | `python -m pip install -U "partcad==<version>"` |
+| `python-module` | `"${PY}" -m pip install -U "partcad==<version>"` |
 
 `--version` and `PARTCAD_VERSION` are `install.sh` options and do nothing in
 `python-module` mode, where the version is part of the requirement `pip` is
@@ -49,11 +49,31 @@ given.
 
 Check whether PartCAD is already available, using the same resolution `/pc:init`
 uses; if so, report it and go on to *The editor extension* below — do not
-reinstall unless the user asked for it:
+reinstall unless the user asked for it.
+
+Resolve the interpreter first and keep it as `PY`, because `/pc:init` tries
+`python` **and** `python3` and this has to agree with it. A machine can have
+either name, both, or a `python` that is Python 2; a check that only ever runs
+`python` misses an installed `partcad_cli` on any machine where `python3` is
+the only one — which is most Linux distributions and every current macOS — and
+then reinstalls PartCAD over a working installation:
 
 ```sh
-command -v pc || command -v partcad || python -c "import partcad_cli" 2>/dev/null && echo "already installed"
+PY=""
+for candidate in python python3; do
+  if "${candidate}" -c "import sys; sys.exit(0 if sys.version_info[0] == 3 else 1)" >/dev/null 2>&1; then
+    PY="${candidate}"; break
+  fi
+done
+
+if command -v pc >/dev/null 2>&1 || command -v partcad >/dev/null 2>&1 ||
+   { [ -n "${PY}" ] && "${PY}" -c "import partcad_cli" >/dev/null 2>&1; }; then
+  echo "already installed"
+fi
 ```
+
+`PY` empty means no Python 3 at all, which rules `python-module` out entirely
+and leaves `executable` — which needs none.
 
 ## `executable` — standalone build from GitHub releases
 
@@ -96,12 +116,12 @@ problem rather than a missing build.
 ## `python-module` — into the active Python environment
 
 Only when the user explicitly asks for this mode. Install the `partcad` wheel
-with the current interpreter's pip (use `python3` if `python` is absent or
-Python 2). It carries the CLI, the JSON-RPC service and the viewer client, so
-this one install is everything:
+with the pip of `PY`, the interpreter resolved in step 0 — never a bare
+`python`, for the reason given there. It carries the CLI, the JSON-RPC service
+and the viewer client, so this one install is everything:
 
 ```sh
-python -m pip install -U partcad
+"${PY}" -m pip install -U partcad
 ```
 
 If pip refuses on a permissions or externally-managed-environment error, retry
@@ -109,7 +129,7 @@ with `--user`, or use `pipx install partcad` or a virtualenv. Verify and
 report the result:
 
 ```sh
-python -m partcad_cli.click.command --version
+"${PY}" -m partcad_cli.click.command --version
 ```
 
 ## The editor extension
