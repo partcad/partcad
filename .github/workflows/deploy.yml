@@ -228,6 +228,51 @@ jobs:
         with:
           name: partcad-plugin
           path: release/plugin
+      # The version this run is releasing, read from the tree it checked out.
+      # `bump-my-version` keeps it in "dev-tools/bumpversion.toml" and names the
+      # tag after exactly that value (`tag_name = "{new_version}"` there), so the
+      # tree and the tag cannot disagree unless somebody moved one by hand.
+      #
+      # This used to be `git describe --abbrev=0` in a clone made further down,
+      # after the manifest. `git clone` checks out the *default* branch --
+      # `devel` -- so what it described was the newest tag on `devel`, not the
+      # commit being released. Every release so far was named correctly only
+      # because `main` was fast-forwarded to `devel`'s tip in the same minute;
+      # promoting `main` to anything older would have published that commit's
+      # archives, and its wheel, under `devel`'s version.
+      #
+      # Not gated on `main`: a tag build is the rehearsal of a release, so it
+      # checks the naming too, and the checks below pin their globs to this.
+      #
+      # The distributions are checked against it because `skip-existing` on the
+      # PyPI upload below would quietly do nothing, rather than fail, if "dist"
+      # held a version that is already published.
+      - name: Determine the release version
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^current_version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+            dev-tools/bumpversion.toml)"
+          if [ -z "${version}" ]; then
+            echo "::error::no current_version in dev-tools/bumpversion.toml"
+            exit 1
+          fi
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ] && [ "${GITHUB_REF_NAME:-}" != "${version}" ]; then
+            echo "::error::this run is tagged ${GITHUB_REF_NAME:-} but its tree is ${version}"
+            exit 1
+          fi
+          # The four files "dist" holds: the wheel and sdist of each of the two
+          # distributions, all four named after the version that built them.
+          for name in \
+            "partcad-${version}-py3-none-any.whl" "partcad-${version}.tar.gz" \
+            "partcad_cli-${version}-py3-none-any.whl" "partcad_cli-${version}.tar.gz"; do
+            if [ ! -f "dist/${name}" ]; then
+              echo "::error::dist/${name} is missing -- this run mixed the artifacts of two builds"
+              ls -l dist
+              exit 1
+            fi
+          done
+          echo "RELEASE_VERSION=${version}" >> "${GITHUB_ENV}"
+          echo "Releasing ${version}."
 
       # "install.sh" derives an asset name from `uname` and fails for the user
       # if that asset is not on the release. Downloading artifacts does not fail
@@ -252,13 +297,20 @@ jobs:
           # matrix there: a release missing one of these is a release some
           # machine cannot install, and the manifest generated below would
           # faithfully describe the gap rather than close it.
+          #
+          # By version, not by "partcad-*": an archive left over from another
+          # build satisfies the loose glob, and the release would then carry two
+          # versions -- which only "platforms-manifest.sh" would notice, after
+          # the assets were already checked.
           for platform in \
             ubuntu-22.04-x86_64 ubuntu-22.04-arm64 \
             ubuntu-24.04-x86_64 ubuntu-24.04-arm64 \
             macos-15-arm64 macos-26-arm64 \
             windows-2022-x86_64; do
-            archive=$(find release/standalone -type f -name "partcad-*-${platform}.*" ! -name "*.sha256")
-            checksum=$(find release/standalone -type f -name "partcad-*-${platform}.*.sha256")
+            archive=$(find release/standalone -type f \
+              -name "partcad-${RELEASE_VERSION}-${platform}.*" ! -name "*.sha256")
+            checksum=$(find release/standalone -type f \
+              -name "partcad-${RELEASE_VERSION}-${platform}.*.sha256")
             if [ -z "${archive}" ] || [ -z "${checksum}" ]; then
               echo "::error::no standalone bundle for ${platform}"
               missing=1
@@ -275,12 +327,14 @@ jobs:
             windows-*) extension="zip" ;;
             *) extension="tar.gz" ;;
             esac
-            archive="$(find release/ide -type f -name "partcad-ide-*-${platform}.${extension}" | head -n 1)"
+            archive="$(find release/ide -type f \
+              -name "partcad-ide-${RELEASE_VERSION}-${platform}.${extension}" | head -n 1)"
             if [ -z "${archive}" ] || [ ! -f "${archive}.sha256" ]; then
               echo "::error::no IDE archive for ${platform}"
               missing=1
             else
-              find release/ide -type f -name "partcad-ide-*-${platform}*" ! -name "*.sha256" \
+              find release/ide -type f -name "partcad-ide-${RELEASE_VERSION}-${platform}*" \
+                ! -name "*.sha256" \
                 -printf "%p %s bytes\n"
             fi
           done
@@ -292,8 +346,13 @@ jobs:
           # notice later. Each is checked by its own name rather than by one
           # "partcad-*.vsix" glob, which the shim also matches: that would
           # report a release carrying only the shim as complete.
+          #
+          # By version, like the archives above. "vsix.yml" names both packages
+          # after the version in "ide/vscode/package.json", so this is also what
+          # now catches that file lagging behind the bump -- the drift the shim
+          # stopped stating a version of its own to avoid.
           for package in "partcad" "partcad-shim"; do
-            vsix="$(find release/vsix -type f -name "${package}-[0-9]*.vsix" | head -n 1)"
+            vsix="$(find release/vsix -type f -name "${package}-${RELEASE_VERSION}.vsix" | head -n 1)"
             if [ -z "${vsix}" ]; then
               echo "::error::no ${package} VS Code extension package"
               missing=1
@@ -302,8 +361,10 @@ jobs:
             fi
           done
           # And the plugin. Named after the version like everything else here,
-          # so the documented `--plugin-url .../pc-<version>.zip` resolves.
-          plugin="$(find release/plugin -type f -name "pc-*.zip" | head -n 1)"
+          # so the documented `--plugin-url .../pc-<version>.zip` resolves -- by
+          # that version rather than "pc-*.zip", which is what would catch
+          # "plugin.json" lagging behind the bump the way it sat at 0.1.0.
+          plugin="$(find release/plugin -type f -name "pc-${RELEASE_VERSION}.zip" | head -n 1)"
           if [ -z "${plugin}" ]; then
             echo "::error::no Claude Code plugin archive"
             missing=1
@@ -324,22 +385,41 @@ jobs:
           dev-tools/release/platforms-manifest.sh \
             --bundles release/standalone --ide release/ide --output release/platforms.json
           cat release/platforms.json
-          python3 -c 'import json; json.load(open("release/platforms.json"))'
-
-      - name: Determine the release tag
-        if: github.ref == 'refs/heads/main'
-        run: |
-          git clone https://github.com/partcad/partcad partcad-git;
-          cd partcad-git;
-          echo "MERGED_TAG=$(git describe --abbrev=0)" >> "${GITHUB_ENV}"
+          # Valid JSON, and the version the archives carry -- which the script
+          # takes from the archive names and refuses to write if they disagree
+          # with each other. This is the other half of that: they have to agree
+          # with the tree this job checked out, and so with the wheel.
+          python3 -c '
+          import json, os, sys
+          manifest = json.load(open("release/platforms.json"))
+          want = os.environ["RELEASE_VERSION"]
+          if manifest["version"] != want:
+              sys.exit("::error::platforms.json says %s, but this run is releasing %s" % (manifest["version"], want))
+          '
 
       - name: Create GitHub Release
         if: github.ref == 'refs/heads/main'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          TAG: ${{ env.MERGED_TAG }}
+          TAG: ${{ env.RELEASE_VERSION }}
         run: |
+          # The tag has to be the one on the commit this run built. `gh release
+          # create` does not check: given a tag that does not exist it makes
+          # one, on the repository's default branch -- `devel` -- and publishes
+          # these archives against a tree nobody built. So resolve it first and
+          # refuse if it names anything else. "/commits/<ref>" resolves a tag,
+          # annotated ones included, to the commit it points at.
+          tagged="$(gh api "repos/${REPO}/commits/${TAG}" --jq .sha || true)"
+          if [ -z "${tagged}" ]; then
+            echo "::error::cannot resolve tag ${TAG} -- see the error above; a 404 means the"
+            echo "::error::version bump that creates the tag never landed on this commit"
+            exit 1
+          fi
+          if [ "${tagged}" != "${GITHUB_SHA}" ]; then
+            echo "::error::tag ${TAG} is on ${tagged}, not on ${GITHUB_SHA}, which is what this run built"
+            exit 1
+          fi
           # A draft until every asset is on it. "pc upgrade", the VS Code
           # extension and the FreeCAD addon all resolve what to install through
           # "/releases/latest", which skips drafts -- so a run that dies partway
