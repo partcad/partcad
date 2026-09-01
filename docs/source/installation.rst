@@ -594,7 +594,7 @@ before the marketplace has it. One package serves every platform: the extension 
 Python and nothing compiled in it.
 
 If you installed the extension before it moved
-----------------------------------------------
+==============================================
 
 The extension used to be published as ``OpenVMP.partcad``. It is ``PartCAD.partcad`` now, which the marketplace
 treats as a separate extension rather than as a rename.
