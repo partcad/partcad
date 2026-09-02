@@ -62,27 +62,42 @@ fi
 
 # '--kill-after' is the backstop for a process that ignores SIGABRT or dies
 # inside the fault handler: SIGKILL a minute later, so the step still ends.
+started=$(date +%s)
 PYTHONFAULTHANDLER=1 timeout --signal=ABRT --kill-after=60 "${TIMEOUT}" "$@" && status=0 || status=$?
+elapsed=$(( $(date +%s) - started ))
 
-# Which statuses mean "this wrapper stopped it", and which mean "it stopped on
-# its own". Getting this wrong is worse here than anywhere else: the whole point
-# of the file is to say accurately why a command ended.
+# Whether *this wrapper* stopped the command, decided by the clock as well as by
+# the exit status, because the status alone cannot carry that.
 #
-#   124  'timeout' fired. It reports this whatever signal it sent, so it is the
-#        normal outcome of the SIGABRT above -- not 134, which is what the shell
-#        would report for a process killed by SIGABRT if 'timeout' were not in
-#        the way. Verified against GNU coreutils 9.x rather than assumed.
-#   137  'timeout' fired, the command ignored SIGABRT, and '--kill-after' had to
-#        SIGKILL it a minute later. Also this wrapper's doing.
-#   134  the command aborted *by itself*, with no timeout involved -- a C
-#        extension calling abort(), a glibc assertion, OpenCASCADE giving up.
-#        Claiming a timeout here would send someone looking for a hang that
-#        never happened, so it is passed through with everything else.
-case "${status}" in
-124 | 137)
+# 'timeout' answers 124 when it fires and 137 when '--kill-after' had to
+# escalate to SIGKILL -- but it also passes a command's own status straight
+# through, and those two values are not reserved. A render killed by the OOM
+# killer exits 137 with no timeout involved, which on this workload is a real
+# possibility rather than a hypothetical (see the '--threads-max 4' note in
+# "test.yml"); a command that chooses to exit 124 is rarer but no less
+# misleading. Either would otherwise be announced as "produced no result within
+# 2400s" thirty seconds into a run.
+#
+# So the clock has to agree. It settles the other direction too: 134 here is a
+# command that aborted by itself -- a C extension calling abort(), a glibc
+# assertion, OpenCASCADE giving up -- and is passed through with everything else.
+#
+# One second of slack, because 'timeout' fires at the boundary and 'date'
+# resolves to the second.
+timed_out=""
+if [ "${elapsed}" -ge $(( TIMEOUT - 1 )) ]; then
+  case "${status}" in
+  124 | 137) timed_out="yes" ;;
+  esac
+fi
+
+if [ -n "${timed_out}" ]; then
   echo "::error::'$1' produced no result within ${TIMEOUT}s and was aborted." >&2
   echo "The traceback above, if there is one, is every thread's stack at that moment." >&2
-  ;;
-esac
+elif [ "${status}" -ne 0 ]; then
+  # Said plainly, so that a status this wrapper did *not* cause is not read as
+  # one it did.
+  echo "'$1' exited ${status} after ${elapsed}s; it was not stopped by this wrapper." >&2
+fi
 
 exit "${status}"
