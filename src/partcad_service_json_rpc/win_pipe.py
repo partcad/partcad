@@ -15,11 +15,10 @@ The pipe's name, and the client side of talking to it, are in
 ``partcad_utils.win_pipe`` -- the rendezvous both ends have to agree on.
 
 NOTE: serving is Windows-only, and Windows-specific APIs are reached only inside
-functions so the module still imports on POSIX. There is no Windows runner in
-CI, so what can be checked without one is: `test_win_pipe.py` drives
+functions so the module still imports on POSIX. `test_win_pipe.py` drives
 :func:`spawn_pipe_daemon` with a stand-in ``Popen`` and pins the argv and the
-redirection the daemon is started with, since neither is a Windows API and both
-have been wrong.
+redirection the daemon is started with: neither is a Windows API, both have been
+wrong, and pinning them without one means a POSIX run catches it too.
 """
 
 import asyncio

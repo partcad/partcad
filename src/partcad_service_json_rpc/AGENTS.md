@@ -56,11 +56,17 @@ directory.
 - `daemon.py` — workspace root discovery, hashing, socket path, liveness (`rpc.discover` probe), stale recovery,
   double-fork/detach, `daemon.stop`. `win_pipe.py` — the Windows named-pipe counterpart.
 
-  There is no Windows runner in CI, so everything about that counterpart that is *not* a Windows API is
-  driven from POSIX instead: `tests/partcad_service_json_rpc/test_win_pipe.py` pins the argv and the
-  redirection the spawn is given, and `test_daemon.py` runs `ensure_daemon`'s Windows branch with `os.name`
-  forced to `"nt"`. Keep it that way. Every bug listed below reached users because nothing executed the branch,
-  and each is one assertion in those files.
+  CI **does** run Windows (`windows-latest` and `windows-2022` in `test.yml`), which is worth knowing because
+  it is not what kept these bugs alive. `test_daemon.py` and `test_client.py` guard themselves on
+  `socket.AF_UNIX`, which CPython does not define on Windows, so the daemon's own tests are skipped on exactly
+  the platform this counterpart is for — and nothing else called into it. Every bug listed below reached users
+  that way: not unrunnable, just unrun.
+
+  So the tests for it are written to need no Windows kernel and live where nothing skips them:
+  `test_win_pipe.py` pins the argv and the redirection the spawn is given behind a stand-in `Popen`, and
+  `test_daemon_windows.py` — a module of its own, deliberately without the AF_UNIX guard — drives
+  `ensure_daemon`'s Windows branch, taking it for real on the Windows legs and with `os.name` forced to `"nt"`
+  on POSIX. Keep it that way: a test only Windows can run is a test that was not protecting this code before.
 
   Because the daemon is a **detached new process** rather than a fork, it inherits nothing, and each of these
   had to be handed to it explicitly:

@@ -68,8 +68,8 @@ def _every_setting_flag() -> list:
 
     Read off the parser rather than listed here on purpose: a setting added to
     the service is then a setting this test starts checking, which is the whole
-    point -- one that `settings_argv` forgets is one the Windows daemon silently
-    drops, and there is no Windows runner in CI to notice.
+    point -- one that `settings_argv` forgets is one the Windows daemon takes
+    the default for, silently, and no suite starts a real one to notice.
 
     ``_actions`` is private, and argparse offers nothing public that enumerates
     a parser's options.

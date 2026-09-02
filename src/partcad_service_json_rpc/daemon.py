@@ -84,8 +84,9 @@ def ensure_daemon(
         # `is_pipe_alive` used to be imported from `.win_pipe`, which does not
         # define one -- so on Windows this raised ImportError on the first line
         # of the branch, before anything was spawned, and the launcher exited 1.
-        # There is no Windows runner in CI to catch that; the test below runs
-        # this branch with `os.name` forced to "nt" instead.
+        # CI runs Windows, but `test_daemon.py` skips itself where there is no
+        # `socket.AF_UNIX`, so the daemon's tests are skipped on the platform
+        # this branch is for. `test_daemon_windows.py` has no such guard.
         from partcad_utils.win_pipe import is_pipe_alive, pipe_name
 
         from .win_pipe import spawn_pipe_daemon

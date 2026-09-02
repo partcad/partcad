@@ -68,5 +68,12 @@ def test_a_launcher_that_prints_no_endpoint_reports_its_output(monkeypatch):
 
 
 def test_the_endpoint_is_the_first_line_the_launcher_prints(monkeypatch):
-    monkeypatch.setattr(client, "launcher_argv", _launcher(r"print('\n\\\\.\\pipe\\partcad-0123\n')"))
+    # A Windows pipe name with blank lines around it. Handed to the child in the
+    # environment rather than embedded in the script: an argument with no spaces
+    # reaches a Windows child unquoted, where whether its backslashes survive
+    # depends on the C runtime's argv rules, and nothing here should.
+    monkeypatch.setenv("PC_TEST_ENDPOINT", r"\\.\pipe\partcad-0123")
+    monkeypatch.setattr(
+        client, "launcher_argv", _launcher("import os; print('\\n' + os.environ['PC_TEST_ENDPOINT'] + '\\n')")
+    )
     assert client.start_daemon() == r"\\.\pipe\partcad-0123"

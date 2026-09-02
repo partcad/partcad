@@ -6,12 +6,16 @@
 """How the Windows named-pipe daemon is started.
 
 Windows has no `fork`, so the daemon is a *new process* rather than a copy of
-this one -- which means the argv that starts it has to be right, and there is no
-Windows runner in CI to notice when it is not. It was not: the frozen bundle is
-a single executable that takes the service's own options, and it was being run
-as `sys.executable -m partcad_service_json_rpc`, which it rejects. That bundle is
+this one -- which means the argv that starts it has to be right, and nothing
+noticed when it was not. It was not: the frozen bundle is a single executable
+that takes the service's own options, and it was being run as
+`sys.executable -m partcad_service_json_rpc`, which it rejects. That bundle is
 what the editor extension downloads and runs, so on Windows the daemon it asked
 for was never there.
+
+CI does run Windows, so these run there as well as on POSIX -- but a spawn that
+only Windows can check is a spawn nothing checks on a pull request that fails
+earlier, so everything here is behind a stand-in ``Popen``.
 
 The spawn itself is Windows-only (detached process creation flags -- 0 on POSIX,
 where they are asked for with `getattr`). What is pinned here is everything
@@ -49,10 +53,13 @@ WORKSPACE = r"C:\ws"
 def spawns(monkeypatch, tmp_path):
     """Records ``(argv, kwargs)`` of every spawn, and starts no process.
 
-    ``HOME`` is redirected because the spawn now opens the workspace's
-    ``daemon.log`` before it starts anything.
+    The home directory is redirected because the spawn now opens the workspace's
+    ``daemon.log`` before it starts anything. Both variables, because this test
+    runs on the Windows legs of the matrix too and ``ntpath.expanduser`` reads
+    ``USERPROFILE`` there -- it never consults ``HOME``.
     """
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     calls = []
     monkeypatch.setattr(subprocess, "Popen", lambda argv, **kwargs: calls.append((argv, kwargs)))
