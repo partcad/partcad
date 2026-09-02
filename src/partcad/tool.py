@@ -394,6 +394,26 @@ BED_LEVELING = ("none", "auto", "mesh")
 # The axes a machine may be told to home, in the order the sequence names them.
 AXES = ("x", "y", "z")
 
+# What the machine does with the material when it stops putting it down.
+#
+# A machine that can pull the filament back does not string between the places
+# it prints; one that cannot leaves a thread behind on every travel move. That
+# is a property of the extruder - a Bowden tube needs several millimetres where
+# a direct drive needs a fraction of one - so it belongs to the machine and not
+# to the part, exactly like 'positioning'.
+#
+# Declaring the section at all is the *capability*: a machine that says nothing
+# here is one nothing may pull filament back on, which is the safe reading for a
+# pellet extruder, a resin printer, or simply a machine nobody has measured yet.
+# 'distance' is what makes it meaningful, so a section without one retracts
+# nothing.
+RETRACTION_FIELDS = (
+    "distance",
+    "feedRate",
+    "zHop",
+    "minTravel",
+)
+
 
 @telemetry.instrument()
 class AdditiveTool(Tool):
@@ -417,6 +437,11 @@ class AdditiveTool(Tool):
     it writes. It is a closed set of named properties in PartCAD's own units
     (millimetres, mm/min for a feed rate, degrees Celsius), never the G-codes
     themselves - which machine dialect they become is the plugin's business.
+
+    'retraction' is the same kind of thing for the other end of a move: what the
+    machine pulls the material back by when it stops putting it down, so that it
+    does not string across the gap. Declaring the section is the capability - a
+    machine that says nothing there is one nothing retracts on.
     """
 
     process: typing.Optional[str]
@@ -425,6 +450,7 @@ class AdditiveTool(Tool):
     step_size: typing.Optional[list]
     ranges: dict
     positioning: dict
+    retraction: dict
 
     def __init__(self, project_name: str, config: dict[str, typing.Any] = {}) -> None:
         super().__init__(project_name, config)
@@ -442,6 +468,7 @@ class AdditiveTool(Tool):
                 self.ranges[field] = parsed
 
         self.positioning = self._positioning()
+        self.retraction = self._retraction()
 
     def _materials(self) -> list:
         """What this machine can put down, as a list of material names.
@@ -563,6 +590,42 @@ class AdditiveTool(Tool):
             prime[field] = float(item)
         return prime or None
 
+    def _retraction(self) -> dict:
+        """What this machine pulls back, and how, or nothing.
+
+        Empty where the section is absent, and empty where it is present but
+        says no distance: both mean the same thing to whoever writes the
+        instructions - do not retract - and collapsing them here saves every
+        plugin from deciding it again.
+        """
+        section = self.config.get("retraction", None)
+        if section is None:
+            return {}
+        if not isinstance(section, dict):
+            self.error("'retraction' must be a section, ignoring: %s" % (section,))
+            return {}
+
+        retraction = {}
+        for field, value in section.items():
+            if field not in RETRACTION_FIELDS:
+                self.error("unknown 'retraction' field, ignoring: %s" % field)
+                continue
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0.0:
+                self.error("'retraction.%s' must be a non-negative number, ignoring: %s" % (field, value))
+                continue
+            retraction[field] = float(value)
+
+        if not retraction.get("distance"):
+            if retraction:
+                self.error("'retraction' says no 'distance', so nothing is pulled back: %s" % (section,))
+            return {}
+        return retraction
+
+    @property
+    def retracts(self) -> bool:
+        """Whether this machine pulls the material back when it stops."""
+        return bool(self.retraction)
+
     def range_of(self, field: str) -> typing.Optional[ToolRange]:
         """What this machine can do for one of 'ADDITIVE_RANGES', or None."""
         return self.ranges.get(field)
@@ -601,6 +664,8 @@ class AdditiveTool(Tool):
             data[field] = dict(allowed.info(), unit=ADDITIVE_RANGES[field])
         if self.positioning:
             data["positioning"] = copy.deepcopy(self.positioning)
+        if self.retraction:
+            data["retraction"] = dict(self.retraction)
         return data
 
     def properties_info(self) -> dict:
@@ -618,6 +683,8 @@ class AdditiveTool(Tool):
                 info[field[0].upper() + field[1:]] = dict(self.ranges[field].info(), unit=unit)
         if self.positioning:
             info["Positioning"] = dict(self.positioning)
+        if self.retraction:
+            info["Retraction"] = dict(self.retraction)
         return info
 
 

@@ -2479,6 +2479,33 @@ carried -- this section is about to be handed to a machine, and a plugin handed
 something it cannot act on writes a preamble that does not do what the package
 said.
 
+.. _tool-retraction:
+
+Pulling the material back
+-------------------------
+
+``retraction`` is the other end of a move: what the machine pulls the material
+back by when it stops putting it down, so that it does not leave a thread across
+the gap to wherever it prints next.
+
+.. code-block:: yaml
+
+  retraction:
+    distance: 1.0      # mm of filament pulled back
+    feedRate: 2400     # mm/min
+    zHop: 0.4          # mm to lift while travelling; 0, or absent, stays down
+    minTravel: 1.5     # mm; a shorter hop is not worth retracting for
+
+Like ``positioning``, it describes the **machine** and not the part: a Bowden
+tube needs several millimetres where a direct drive needs a fraction of one, and
+which of those a part is printed on is not the part's business.
+
+**Declaring the section is the capability.** A machine that says nothing here is
+one nothing is retracted on, which is the right reading for a pellet extruder, a
+resin printer, or a machine nobody has measured yet -- and it is what every tool
+declared before this section existed keeps meaning. ``distance`` is what makes
+the rest meaningful, so a section without one retracts nothing and says so.
+
 .. _additive-manufacturing:
 
 What a part asks the machine for

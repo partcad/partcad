@@ -322,6 +322,29 @@
       "minItems": 3,
       "maxItems": 3
     },
+    "tool-retraction": {
+      "description": "What the machine pulls the material back by when it stops putting it down, so it does not string across the gap to where it prints next. A property of the extruder rather than of the part - a Bowden tube needs several millimeters where a direct drive needs a fraction of one. Declaring this section is the capability: a machine that says nothing here is one nothing is retracted on.",
+      "type": "object",
+      "properties": {
+        "distance": {
+          "type": "number",
+          "minimum": 0,
+          "description": "How much material to pull back, in millimeters of filament. Without it nothing is retracted, whatever else the section says."
+        },
+        "feedRate": { "type": "number", "minimum": 0, "description": "How fast to pull it back, in mm/min." },
+        "zHop": {
+          "type": "number",
+          "minimum": 0,
+          "description": "How far to lift the tool while travelling with the material pulled back, in millimeters. Zero, or absent, travels at printing height."
+        },
+        "minTravel": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The shortest travel worth retracting for, in millimeters. A hop shorter than this strings less than the retraction itself costs."
+        }
+      },
+      "additionalProperties": false
+    },
     "tool-positioning": {
       "description": "What the machine has to be told before it can put anything down: the sequence that gets the tool to a known point over the bed, which is what a CAM plugin turns into the preamble of the file it writes. Named for what each one is rather than for the G-code that carries it.",
       "type": "object",
@@ -1444,6 +1467,7 @@
                       "description": "At the bed, in degrees Celsius."
                     },
                     "positioning": { "$ref": "#/definitions/tool-positioning" },
+                    "retraction": { "$ref": "#/definitions/tool-retraction" },
                     "unless": { "$ref": "#/definitions/unless" }
                   },
                   "required": ["visual"],

@@ -129,6 +129,11 @@ tools:
         origin: [0.0, 0.0, 0.0]
         bedLeveling: auto
         prime: { length: 100.0, extrude: 8.0, feedRate: 1200 }
+      retraction:
+        distance: 1.2
+        feedRate: 2400
+        zHop: 0.4
+        minTravel: 1.5
   subtractive:
     end-mill:
       desc: Takes material away

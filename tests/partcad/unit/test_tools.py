@@ -305,6 +305,62 @@ def test_a_positioning_field_partcad_cannot_read_is_dropped(caplog):
     assert "unknown 'positioning' field" in caplog.text
 
 
+def test_an_additive_tool_says_what_it_pulls_back(project):
+    """Retraction belongs to the extruder, so the machine states it"""
+    _, prj = project
+    printer = prj.get_tool("extruder")
+    assert printer.retracts
+    assert printer.retraction == {"distance": 1.2, "feedRate": 2400.0, "zHop": 0.4, "minTravel": 1.5}
+    # And it reaches a plugin under the name the package wrote.
+    assert printer.request_data()["retraction"]["distance"] == 1.2
+
+
+def test_a_machine_that_says_nothing_retracts_nothing():
+    """Which is what every tool declared before the section existed means"""
+    project = _project({"tools": {"additive": {"printer": {"visual": "plate"}}}})
+    printer = project.get_tool("printer")
+    assert printer.retraction == {}
+    assert not printer.retracts
+    # Absent rather than empty: a plugin reads "no retraction" from not being
+    # told about it, and an empty section would be one more thing to check.
+    assert "retraction" not in printer.request_data()
+
+
+def test_a_retraction_with_no_distance_pulls_nothing_back(caplog):
+    """A zHop on its own is a lift, not a retraction, and saying so is the point"""
+    project = _project(
+        {
+            "tools": {
+                "additive": {
+                    "printer": {"visual": "plate", "retraction": {"zHop": 0.4, "feedRate": 2400}},
+                }
+            }
+        }
+    )
+    assert project.get_tool("printer").retraction == {}
+    assert "no 'distance'" in caplog.text
+
+
+def test_a_retraction_field_partcad_cannot_read_is_dropped(caplog):
+    """The same rule as 'positioning', and for the same reason"""
+    project = _project(
+        {
+            "tools": {
+                "additive": {
+                    "printer": {
+                        "visual": "plate",
+                        "retraction": {"distance": 1.0, "feedRate": -5, "wipe": True},
+                    }
+                }
+            }
+        }
+    )
+    retraction = project.get_tool("printer").retraction
+    assert retraction == {"distance": 1.0}
+    assert "retraction.feedRate" in caplog.text
+    assert "unknown 'retraction' field" in caplog.text
+
+
 def test_the_build_volume_says_what_does_not_fit(project):
     """And says it per axis, because that is what has to be changed"""
     _, prj = project
