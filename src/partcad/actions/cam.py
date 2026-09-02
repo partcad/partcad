@@ -202,6 +202,11 @@ async def cam_async(
 
     if force or not os.path.exists(package_path):
         ctx.ensure_dirs_for_file(package_path)
+        # What the shape has to say about itself so far. An implementation that
+        # fails is reported rather than raised - the same as for 'pc export' and
+        # 'pc render' - so the reason is in here, and saying "it wrote nothing"
+        # without it would blame the wrong thing for a missing dependency.
+        reported = len(shape.errors)
         await shape.cam_async(
             ctx,
             format_name,
@@ -212,8 +217,10 @@ async def cam_async(
             **kwargs,
         )
         if not os.path.exists(package_path):
+            why = shape.errors[reported:]
             raise Exception(
-                "The '%s' implementation reported success but wrote nothing: %s" % (format_name, package_path)
+                "The '%s' implementation wrote nothing to %s: %s"
+                % (format_name, package_path, "; ".join(why) if why else "it reported success and produced no file")
             )
     else:
         pc_logging.info("Reusing the instructions the package already has: %s" % package_path)
