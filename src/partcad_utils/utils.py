@@ -8,6 +8,7 @@
 
 import os
 import re
+import stat
 import sys
 from types import ModuleType, FunctionType
 from gc import get_referents
@@ -172,6 +173,58 @@ def resolve_resource_path(current_project_name, pattern: str):
 def normalize_resource_path(current_project_name, pattern: str):
     project_pattern, item_pattern = resolve_resource_path(current_project_name, pattern)
     return f"{project_pattern}:{item_pattern}"
+
+
+def directory_size(path) -> int:
+    """The number of bytes the regular files under 'path' occupy.
+
+    Here, and shared, because the two things that report it -- 'pc system status'
+    and the daemon's 'daemon status' -- had a copy each, and both copies had the
+    bug below.
+
+    What it walks is PartCAD's internal state directory: git clones, unpacked
+    tarballs, and conda sandboxes being built and torn down by whatever else is
+    running. So a name 'os.walk' just listed can be gone by the time this asks
+    how big it is, and 'os.path.getsize' raises FileNotFoundError when it is.
+    That is not an error to report -- the file is not there, so it contributes
+    nothing -- but unhandled it aborted the whole report, which is how
+    'test_system_status_reports_the_local_state' failed on macOS in CI with a
+    dangling 'sandbox/pc-py-conda-3.9/include/python3.9/cellobject.h'.
+
+    Regular files, and nothing else. 'os.walk' puts every non-directory entry in
+    'filenames', so a socket, a FIFO or a device node arrives here alongside the
+    files -- and 'st_size' means something different for each of them, none of it
+    disk usage. They occupy no space worth reporting, so they are left out rather
+    than counted as whatever their size field happens to hold.
+
+    Symlinks are left out for a different reason: their target is either counted
+    where it lives or outside this tree entirely, and following them would
+    double-count a conda environment's hardlink farm.
+
+    One 'os.lstat' answers both questions and asks the filesystem once, where
+    'islink' followed by 'getsize' asked it twice and followed the link on the
+    second ask. 'os.walk' swallows its own errors by default, so a directory
+    that disappears needs nothing extra; a path that was never there yields no
+    entries and the total is zero, which is the right answer for a cache that
+    has not been created yet.
+    """
+    total = 0
+    for dirpath, _dirnames, filenames in os.walk(path):
+        for name in filenames:
+            file_path = os.path.join(dirpath, name)
+            try:
+                info = os.lstat(file_path)
+            except OSError:
+                # Gone, or unreadable, between the listing and the question.
+                continue
+            if stat.S_ISREG(info.st_mode):
+                total += info.st_size
+    return total
+
+
+def directory_size_mb(path) -> float:
+    """'directory_size', in the megabytes both status reports print."""
+    return directory_size(path) / 1048576.0
 
 
 def total_size(obj, verbose=False):

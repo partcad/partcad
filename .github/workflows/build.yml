@@ -14,8 +14,14 @@ on:
 permissions:
   contents: write
 
+# Version bumps get a concurrency group of their own, keyed by commit, exactly
+# as in "test.yml" -- see the longer note beside the same block there. A bump is
+# the only push to "devel" this workflow runs at all, and its artifacts are that
+# version's; superseding it with the next bump leaves that version with none,
+# which is what happened to 0.8.30 and 0.8.31 when five of them landed in forty
+# minutes and the runs for the middle three were cancelled.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ startsWith(github.event.head_commit.message, 'Version updated') && format('-{0}', github.sha) || '' }}
   cancel-in-progress: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
 
 # The same four lists as "test.yml", with the same meanings, because this
@@ -65,7 +71,10 @@ jobs:
   set-matrix:
     name: "Set matrix"
     runs-on: ubuntu-latest
-    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    # As in "test.yml": a push to "devel" runs this only for a version bump, and
+    # the event name leads because a "schedule" carries no "head_commit" -- see
+    # the long note there.
+    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -97,7 +106,10 @@ jobs:
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
-    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    # As in "test.yml": a push to "devel" runs this only for a version bump, and
+    # the event name leads because a "schedule" carries no "head_commit" -- see
+    # the long note there.
+    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     env:
       # 'startsWith', not '== windows-latest': the matrix now also contains a
       # pinned windows-2022, which needs the very same venv layout.
@@ -167,7 +179,10 @@ jobs:
   # skips it, exactly as it skips everything else here.
   build-vscode-extension:
     name: "VS Code extension"
-    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    # As in "test.yml": a push to "devel" runs this only for a version bump, and
+    # the event name leads because a "schedule" carries no "head_commit" -- see
+    # the long note there.
+    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     uses: ./.github/workflows/vsix.yml
 
   # The Claude Code plugin, on the same footing as the extension above: built
@@ -179,5 +194,8 @@ jobs:
   # matched that path filter and would have built the plugin here and there both.
   build-claude-plugin:
     name: "Claude Code plugin"
-    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    # As in "test.yml": a push to "devel" runs this only for a version bump, and
+    # the event name leads because a "schedule" carries no "head_commit" -- see
+    # the long note there.
+    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     uses: ./.github/workflows/plugin.yml

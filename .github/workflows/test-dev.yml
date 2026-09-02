@@ -39,7 +39,10 @@ env:
 jobs:
   devcontainer:
     name: "Build: Dev Container"
-    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    # As in "test.yml": a push to "devel" runs this only for a version bump, and
+    # the event name leads because a "schedule" carries no "head_commit" -- see
+    # the long note there.
+    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

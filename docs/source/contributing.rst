@@ -693,7 +693,10 @@ Linux rate. What stays is Ubuntu 24.04 on x86_64 and arm64, both Windows images,
 
 The full matrix runs on the nightly schedule, on a manual workflow run, and on a push, which includes the
 release. A push to ``devel`` is the exception: it runs no matrix at all unless its head commit message starts
-with ``Version updated``, which is the release commit.
+with ``Version updated``, which is the release commit. That exception applies to pushes and to nothing else --
+the nightly run has no head commit to read a message from, so the guard leads with the event name and lets
+every other trigger through. It did not, from the day the guard was written until 0.8.32, and the nightly was
+skipped every night in between: if you change that condition, keep the event-name clause first.
 To run it on a pull request before it merges, put ``#deepTest`` anywhere in the pull request title or
 description and re-run the checks. Worth doing when the change touches packaging, dependencies, the standalone
 bundle or the snap, or anything else where an older OS version could behave differently.

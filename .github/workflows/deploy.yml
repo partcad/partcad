@@ -103,7 +103,19 @@ jobs:
           (. .venv/build/${{ env.BIN_DIR }}/activate && python -m pip install --upgrade pip build && deactivate)
           python -m venv .venv/install
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --upgrade pip build && deactivate)
-          sudo apt install --yes libcairo2-dev python3-dev
+          # "apt-get update" first, and it is not optional. The runner image
+          # ships an apt index that is days old, and Ubuntu's archive keeps only
+          # the current build of a package: the moment one of these -- or, as in
+          # 0.8.32, something they depend on -- is rebuilt, the stale index names
+          # a .deb that is no longer there and the install dies on a 404.
+          #
+          # That is what left 0.8.32 unreleased. This job is what "publish-to-pypi"
+          # needs first, so one 404 on "libbz2-dev" skipped the publish, the
+          # release, and the plugin marketplace behind it, and the version that
+          # went out was the previous one. Every other "apt-get install" in this
+          # repository already updates first; this was the one that did not.
+          sudo apt-get update
+          sudo apt-get install --yes libcairo2-dev python3-dev
       # Two distributions: the `partcad` wheel, and the `partcad-cli`
       # compatibility shim that depends on it. This used to be five, built in
       # dependency order because each pinned the ones below it at `==` and none
