@@ -27,7 +27,16 @@ class CamAdditiveSolidTest(Test):
             self.debug(shape, "Not applicable")
             return self.TEST_PASSED
 
-        # TODO(clairbee): Utilize the data provided in the config
+        # What the part asks the machine for, against what the machine says it
+        # can do. The bounding box goes along because "does it fit" is the one
+        # question of the lot that the geometry answers rather than the
+        # configuration - and it is the question that decides whether this part
+        # can be printed on this machine at all.
+        box = await shape.get_bounding_box_async(ctx)
+        extent = None if box is None else [box[3] - box[0], box[4] - box[1], box[5] - box[2]]
+        problems = manufacturing_data.problems(ctx, extent=extent)
+        if problems:
+            return self.failed(shape, "; ".join(problems))
 
         # TODO(clairbee): Improve and extend the below
         # The manufacturability analysis runs in a sandbox (see cam_analysis), so

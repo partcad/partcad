@@ -16,7 +16,7 @@ import yaml
 
 from . import telemetry
 from .assembly import Assembly, AssemblyChild
-from .assembly_connect import ConnectHow, check_stage_sequence
+from .assembly_connect import ConnectHow, check_stage_sequence, resolve_hold_until
 from .assembly_factory_file import AssemblyFactoryFile
 from .geom import Location
 from . import logging as pc_logging
@@ -194,6 +194,13 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 await wait_for_tasks()
             tasks.append(asyncio.create_task(self.handle_node(assembly, link)))
         await wait_for_tasks()
+
+        # Only now: a "holdUntil" is a statement about the steps that come after
+        # the one declaring it, so it cannot be resolved while that step is
+        # being built. Every child of this assembly is in place by here, in the
+        # order it is assembled in, which is exactly what the span is measured
+        # against.
+        resolve_hold_until(assembly.children, self.name)
 
     def connect_how(self, node, connect, name):
         """The assembly instructions this link carries.

@@ -1,0 +1,31 @@
+links:
+  - part: plate
+
+  - part: screw
+    name: screw-tl
+    connect:
+      name: plate
+      to: m3-thru
+      toInstance: TL
+      how:
+        stage: snug
+        turnTorqueMax: 1.2
+        holdWith:
+          //:finger: [""]
+        holdTo:
+          //:finger: [left]
+        # The plate is held from here until the second screw is in, so the hand
+        # on it is drawn on that step too.
+        holdUntil: screw-tr
+
+  - part: screw
+    name: screw-tr
+    connect:
+      name: plate
+      to: m3-thru
+      toInstance: TR
+      how:
+        stage: snug
+        turnTorqueMax: 1.2
+        driver:
+          //:driver: [socket]

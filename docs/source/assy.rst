@@ -137,6 +137,8 @@ and so is the section itself: an omitted field means the default below.
       holdToForceMin: <(optional) least force to hold the target object with, in N, default: 3>
       holdToForceMax: <(optional) most force to hold the target object with, in N, default: 7>
       holdToForce: <(optional) sets both "holdToForceMin" and "holdToForceMax">
+      holdUntil: <(optional) the later step, by "name", this step's holds stay on until>
+      holdUntilStage: <(optional) the stage whose last step they stay on until>
 
 The units are SI, with the exception of lengths, which are in millimetres like
 everywhere else in PartCAD:
@@ -351,6 +353,55 @@ first of these that gives it:
 A minimum that ends up above its maximum is a contradiction rather than a
 range: it is reported, and both bounds fall back to the defaults.
 
+.. _assy-hold-until:
+
+Holds that outlast their own step
+---------------------------------
+
+A hold is on for its own step and let go of at the end of it - unless the step
+says otherwise. `holdUntil` names a later step by its `name`, and `holdTo`\ 's
+and `holdWith`\ 's holds stay on, exactly as declared, through every step up to
+and including that one:
+
+  .. code-block:: yaml
+
+    - part: example-motor
+      connect:
+        name: example-bracket
+        how:
+          holdWith:
+            //builtin:finger: []
+          holdTo:
+            //builtin:finger: []
+          # Both hands stay where they are until the last M3 screw is snug.
+          holdUntilStage: m3-snug
+
+`holdUntilStage` says the same thing about a **stage**: the hold lasts to the
+last step of it, wherever that turns out to be. It is the one to reach for when
+what ends the hold is a group of steps rather than one - four screws going in,
+of which any could be last. Both are inclusive: the step that ends the hold is
+the last one performed with it still on.
+
+They are two ways of saying one thing, so declaring both is reported and
+`holdUntil` is the one used.
+
+What ends up held is resolved against the assembly's own steps, once all of
+them are known, and reported by ``pc info -a`` under ``holdUntilSteps``. Three
+things fail ``pc test``:
+
+* a `holdUntil` naming no step that comes after this one - including one that
+  names a step already performed;
+* a `holdUntilStage` naming no stage that any later step is in;
+* either of them on a step that holds neither end, which is telling the
+  assembler to keep doing something it was never told to start.
+
+In the instruction book, every step a hold reaches says what is still on it
+("Still held from earlier: example-motor with ``//builtin:finger`` (step 1)"),
+and the step that declared it says how far it goes. The tool is *drawn* on those
+later steps too, wherever what it holds is in that step's illustration - a hand
+on the motor is worth saying on the page about the third screw, but drawing it
+there would put a hand on a part that is not on the page.
+
 .. _interface-thread:
 
 The thread of an interface
@@ -407,6 +458,8 @@ nothing at all** and takes every default.
 
 What it rejects today:
 
+* a ``holdUntil``/``holdUntilStage`` that reaches no later step, or that is
+  declared on a step holding neither end (see :ref:`assy-hold-until`).
 * a ``*Min`` above its corresponding ``*Max`` - ``holdWithForceMin`` above
   ``holdWithForceMax``, or ``holdToForceMin`` above ``holdToForceMax``. A
   minimum above a maximum is a contradiction rather than a range.

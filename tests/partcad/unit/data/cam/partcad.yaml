@@ -1,0 +1,60 @@
+desc: |
+  A package to exercise the 'cam:' section: what a part is made with, and the
+  two entry points an implementation may have.
+
+parts:
+  block:
+    type: cadquery
+    desc: A part with instructions to make it
+    manufacturable: true
+    properties:
+      material: PLA
+    manufacturing:
+      method: additive
+      tool: printer
+      layerHeight: 0.2
+      infill: 0.2
+
+  # The same part, declared not to be made: what 'pc cam' refuses, because
+  # instructions for making something nobody makes are instructions for nothing.
+  bought:
+    type: cadquery
+    path: block.py
+    manufacturable: false
+    vendor: acme
+    sku: BLK-1
+
+tools:
+  additive:
+    printer:
+      desc: The machine the block is made on
+      visual: block
+      process: fdm
+      materials: [PLA]
+      buildVolume: [200.0, 200.0, 200.0]
+      layerHeight: [0.1, 0.3, 0.2]
+      spotSize: [0.3, 0.5, 0.4]
+      positioning:
+        units: mm
+        absolute: true
+        home: [z, x, y]
+        safeZ: 4.0
+        origin: [0.0, 0.0, 0.0]
+
+cam:
+  # A whole implementation in one file, which is what a 'cam:' plugin is. This
+  # one writes what it was told rather than a real program: the point of the
+  # fixture is the plumbing - which entry point is called, what the request
+  # carries, where the file lands - and a slicer would only obscure it.
+  gcode:
+    desc: What the machine is told, as this fixture pretends it
+    path: cam_test.py
+    extension: gcode
+    visual: stl
+
+  # A second kind, so that a package declaring more than one has to be asked
+  # which. It draws nothing.
+  plain:
+    desc: The same, with no picture of itself
+    path: cam_test.py
+    extension: txt

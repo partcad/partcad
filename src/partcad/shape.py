@@ -233,7 +233,7 @@ class Shape(ShapeConfiguration):
 
         # Check for a match in other files associated with this shape
         if self.path and os.path.exists(self.path):
-            with open(self.path, errors='replace') as f:
+            with open(self.path, errors="replace") as f:
                 if keyword and keyword.lower() in f.read().lower():
                     return True
         return False
@@ -876,7 +876,9 @@ class Shape(ShapeConfiguration):
             filepath = os.path.join(filepath, self.name + extension)
         return filepath
 
-    def output_getopts(self, ctx, format_name, project=None, filepath=None, options_project=None, output_dir=None):
+    def output_getopts(
+        self, ctx, format_name, project=None, filepath=None, options_project=None, output_dir=None, visual=False
+    ):
         """Resolve one output file type: its implementation, options and path.
 
         This is the whole of what a format's configuration means, in one place:
@@ -895,7 +897,7 @@ class Shape(ShapeConfiguration):
             # the file goes, not the file.
             output_dir, filepath = filepath, None
 
-        impl = output.Implementation(section, format_name, opts)
+        impl = output.Implementation(section, format_name, opts, visual=visual)
         # 'jpeg' is the format's name but '.jpg' is the file's; the render-only
         # mapping is consulted first so a format whose extension differs from
         # its name keeps it even when no configuration spells 'extension' out.
@@ -1037,9 +1039,16 @@ class Shape(ShapeConfiguration):
         kwargs,
         overlay=None,
         ports_cache=None,
+        visual=False,
     ):
         """Produce one output file, whatever its type."""
-        impl, final_filepath = self.output_getopts(ctx, format_name, project, filepath, options_project, output_dir)
+        impl, final_filepath = self.output_getopts(
+            ctx, format_name, project, filepath, options_project, output_dir, visual=visual
+        )
+        if visual and not impl.supports_visual:
+            raise Exception(
+                "The '%s' implementation draws nothing: it declares no 'visual' file type to write one as" % format_name
+            )
         final_filepath = os.path.abspath(final_filepath)
         # Create the output directory for the resolved path (the incoming
         # 'filepath' is None when called from Project.render_async) using the
@@ -1065,6 +1074,10 @@ class Shape(ShapeConfiguration):
         # and places every joint from that), none of which decoding carries over
         # into the geometry it builds.
         request[output.DECODE_KEY] = impl.decode
+        # Which of the implementation's entry points to call. The instructions
+        # and the picture of them are the same knowledge of the same machine, so
+        # they are two functions in one script rather than two scripts.
+        request[output.ENTRY_KEY] = impl.entry
         request_serialized = shape_envelope.serialize(request)
 
         runtime = ctx.get_python_runtime(version=impl.python_version())
@@ -1193,6 +1206,115 @@ class Shape(ShapeConfiguration):
                     overlay=overlay,
                     ports_cache=ports_cache,
                 )
+
+    #
+    # Manufacturing instructions: 'pc cam'
+    #
+    # A third output section beside 'export:' and 'render:', and everything
+    # above serves it unchanged: the same layering, the same meta-wrapper, the
+    # same sandbox. What is its own is what the implementation is told - the
+    # machine that makes this object and what the object asks that machine for -
+    # and that a plugin may be asked for a picture of the instructions instead
+    # of the instructions.
+
+    def cam_formats(self, ctx, project=None, options_project=None) -> list:
+        """The 'cam:' file types declared for this object, in declaration order.
+
+        Every layer that configures this object is read, the way the options
+        themselves are layered: the package that implements the type, the
+        package the object belongs to, and the object. A type named by more than
+        one of them is one type.
+        """
+        formats = []
+        if project is None:
+            # The object's own package, whose 'cam:' section is where a package
+            # declares its file types. Resolved here for the same reason
+            # 'render_async' resolves it: a caller that names no package still
+            # means this one.
+            project = ctx.get_project(self.project_name)
+        layers = [
+            config_obj
+            for config_obj in (getattr(source, "config_obj", None) for source in (options_project, project))
+            if config_obj
+        ]
+        layers.append(self.config)
+        for config_obj in layers:
+            for name in output.format_names(config_obj.get(output.CAM)):
+                if name not in formats:
+                    formats.append(name)
+        return formats
+
+    async def cam_request(self, ctx) -> dict:
+        """What a CAM implementation is told beside the shape.
+
+        The two halves of the answer to "how is this made": what the object says
+        about it ('manufacturing' - the method, the settings) and what the
+        machine named there says it can do ('tool'). A plugin needs both, and
+        neither is on the shape.
+
+        Empty where the object states nothing, which is not an error here: a
+        plugin may well know what to do with a shape and its own file type
+        parameters alone.
+        """
+        from .part import Part
+
+        if not isinstance(self, Part):
+            return {}
+        from .part_config import PartConfiguration
+
+        manufacturing = PartConfiguration.get_manufacturing_data(self)
+        if manufacturing.method is None:
+            return {}
+        request = {"manufacturing": manufacturing.info()}
+        tool = manufacturing.resolve_tool(ctx)
+        if tool is not None:
+            request["tool"] = tool.request_data()
+        return request
+
+    async def cam_async(
+        self,
+        ctx: Context,
+        format_name: str,
+        project: Optional[Project] = None,
+        filepath=None,
+        options_package: Optional[str] = None,
+        output_dir=None,
+        visual: bool = False,
+        **kwargs,
+    ) -> None:
+        """Write the manufacturing instructions for this object, or a picture of them.
+
+        'visual' asks the implementation for a 3D model of what the instructions
+        do rather than for the instructions, through the second entry point a
+        plugin declares by naming what that model is written as. An
+        implementation that declares none refuses rather than writing the
+        instructions under a name that promises a picture.
+        """
+        if project is None:
+            project = ctx.get_project(self.project_name)
+
+        options_project = ctx.get_project(options_package) if options_package else None
+        if options_package and options_project is None:
+            raise Exception("The options package is not found: %s" % options_package)
+
+        with pc_logging.Action("Cam%s" % ("Visual" if visual else ""), self.project_name, self.name):
+            obj = await self.get_wrapped(ctx)
+            if obj is None:
+                raise Exception("Cannot produce the instructions for '%s': shape is empty" % self.name)
+
+            request = await self.cam_request(ctx)
+            request.update(kwargs)
+            await self._render_one_async(
+                ctx,
+                obj,
+                format_name,
+                project,
+                filepath,
+                options_project,
+                output_dir,
+                request,
+                visual=visual,
+            )
 
     def render(
         self,

@@ -29,6 +29,11 @@ interface WebviewObject {
 const TAB_COMMANDS: Record<string, string> = {
     bom: 'partcad.bom',
     instructions: 'partcad.assemblyGuide',
+    // What the object's CAM plugin draws of the instructions it writes, already
+    // converted to glTF by PartCAD. Producing it means running the plugin in a
+    // sandbox, which is why the tab is filled in on demand like every other one
+    // rather than pushed with the geometry.
+    cam: 'partcad.camVisual',
     supply: 'partcad.supplyQuote',
 };
 
@@ -46,6 +51,16 @@ export class PartcadViewer implements vscode.Disposable {
 
     private panel: vscode.WebviewPanel | undefined;
     private lastShow: ViewerMessage | undefined;
+
+    /**
+     * Which object is on screen, counted the way the renderer counts it.
+     *
+     * The renderer bumps its own generation on every 'show' and every 'clear',
+     * and drops anything that arrives for an older one, so a late answer about a
+     * tab has to carry the same number to be believed. The two stay in step
+     * because this is bumped for exactly the same two messages.
+     */
+    private generation = 0;
 
     constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -78,6 +93,10 @@ export class PartcadViewer implements vscode.Disposable {
     public handle(message: ViewerMessage): void {
         if (message.type === MSG_CLEAR) {
             this.lastShow = undefined;
+            // The renderer counts a 'clear' as a change of object like any
+            // other, so this has to count it too or the two drift apart and
+            // every later answer this side mints a token for is dropped.
+            this.generation += 1;
             void this.panel?.webview.postMessage({ type: 'clear' });
             return;
         }
@@ -125,6 +144,42 @@ export class PartcadViewer implements vscode.Disposable {
             objects,
             markers: message.markers ?? [],
         });
+
+        // Whether this object has a CAM view is a question for the daemon, and
+        // the geometry must not wait on the answer - so it is asked afterwards
+        // and the tab appears when it arrives. Only for a part: an assembly is
+        // put together out of parts that each have their own instructions.
+        this.generation += 1;
+        if (message.package && message.name && (message.kind ?? 'part') === 'part') {
+            void this.offerCamTab(message.package, message.name, this.generation);
+        }
+    }
+
+    /**
+     * Add the CAM tab, if this object turns out to have one.
+     *
+     * 'cam.info' reads configuration and builds nothing, so this costs a round
+     * trip and no work. An object whose package declares no 'cam:' file type -
+     * which is most of them - gets no tab and no message about not having one.
+     */
+    private async offerCamTab(pkg: string, name: string, token: number): Promise<void> {
+        let visual: string | null = null;
+        try {
+            if ((await vscode.commands.getCommands(true)).includes('partcad.camInfo')) {
+                const info = (await vscode.commands.executeCommand('partcad.camInfo', { pkg, name })) as
+                    { visual?: string | null } | undefined;
+                visual = info?.visual ?? null;
+            }
+        } catch (error: any) {
+            // Not worth telling the user about: the tab is an extra, and the
+            // object is on screen either way.
+            traceVerbose(`PartCAD Viewer: no CAM view for ${pkg}:${name}: ${error?.message ?? error}`);
+        }
+        if (token !== this.generation) {
+            // Something else is on screen by now.
+            return;
+        }
+        void this.panel?.webview.postMessage({ type: 'tabs', token, cam: visual });
     }
 
     /**
@@ -242,6 +297,7 @@ export class PartcadViewer implements vscode.Disposable {
 						</div>
 						<div id="pane-bom" class="pane" hidden></div>
 						<div id="pane-instructions" class="pane" hidden></div>
+						<div id="pane-cam" class="pane" hidden></div>
 						<div id="pane-supply" class="pane" hidden></div>
 					</div>
 				</div>

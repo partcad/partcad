@@ -1,0 +1,49 @@
+# The 'cam:' section, and nothing in it.
+#
+# PartCAD ships implementations of the formats it can write itself -- the CAD
+# files of `//builtin/export`, the projections of `//builtin/render` -- and it
+# ships none here on purpose. Manufacturing instructions are not a format: they
+# are a program for one machine, and what a machine wants said to it is the
+# business of whoever knows that machine. `//pub/feature/cam/gscrib` is the
+# first package to know one.
+#
+# So what this package provides is the section itself. It is the bottom layer
+# every `cam:` configuration is merged onto (see `partcad.output`), which is
+# what makes `cam:` a section a package can declare a file type in at all, and
+# it is where the contract an implementation is written against is written down.
+#
+# An implementation is a Python script, run in a PartCAD sandbox by the same
+# meta-wrapper the export and render implementations run under
+# (`wrappers/wrapper_export.py`). It is handed two globals -- `request`, holding
+# the shape and every parameter the file type declares, and `path`, the file to
+# write -- and reports what happened by returning a dict from `process()`:
+#
+#     def process(path, request):
+#         ...
+#         return {"success": True}
+#
+# A plugin that can also draw what it is about to do defines a second entry
+# point beside it, and says in the file type what that drawing is written as:
+#
+#     cam:
+#       gcode:
+#         path: cam_gscrib.py
+#         extension: gcode
+#         visual: stl          # `process_visual()` writes an STL of the toolpath
+#
+# `pc cam --visual` then produces the model instead of the instructions, and the
+# PartCAD Viewer's CAM tab shows it.
+#
+# The request carries, beside the shape, what the part says about how it is made
+# (`manufacturing`) and what the machine that makes it says it can do (`tool`).
+# See `docs/source/configuration.rst`.
+
+name: //builtin/cam
+desc: |
+  The `cam:` section: the manufacturing instructions `pc cam` writes. PartCAD
+  ships no implementation of its own - a machine is somebody else's to know -
+  so this package declares the section and nothing else.
+
+# Empty, and spelled as an empty mapping rather than a bare key: the section is
+# what this package provides, and a section that parses as null is not one.
+cam: {}

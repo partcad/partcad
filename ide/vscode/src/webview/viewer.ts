@@ -30,7 +30,8 @@ import { renderBom } from './bom';
 import { DocumentView } from './document';
 import { el, empty, placeholder } from './dom';
 import { fetchTab, ready, reportError } from './host';
-import { BomData, GuideData, HostMessage, ShowMessage, SupplyData, TabId } from './messages';
+import { BomData, CamData, GuideData, HostMessage, ShowMessage, SupplyData, TabId } from './messages';
+import { ModelView, base64ToArrayBuffer } from './model';
 import { clearGeometry, resizeCanvas, showGeometry } from './scene';
 import { SupplyView } from './supply';
 import { TabSpec, Tabs } from './tabs';
@@ -40,10 +41,14 @@ const panes: Record<TabId, HTMLElement> = {
     '3d': byId('pane-3d'),
     bom: byId('pane-bom'),
     instructions: byId('pane-instructions'),
+    cam: byId('pane-cam'),
     supply: byId('pane-supply'),
 };
 
 const supplyView = new SupplyView(panes.supply);
+// Built on first use: a WebGL context is not something to hold open for a tab
+// most objects never have.
+let camView: ModelView | undefined;
 const tabs = new Tabs(byId('tabs'), onTabSelected);
 
 /** What the panel is showing, or undefined when it is empty. */
@@ -65,6 +70,14 @@ const requested = new Set<TabId>();
 
 /** The instructions, once they have arrived: it owns the paging. */
 let instructions: DocumentView | undefined;
+
+/**
+ * What this object's CAM visualization is written as, once the host has said.
+ *
+ * Undefined until the answer arrives and null when there is none, and those are
+ * not the same: the tab is offered only for the first.
+ */
+let camVisual: string | null | undefined;
 
 function byId(id: string): HTMLElement {
     return document.getElementById(id) as HTMLElement;
@@ -106,6 +119,12 @@ function tabsFor(message: ShowMessage): TabSpec[] {
         // show. See 'partcad.scene'.
         specs.push({ id: 'instructions', label: 'Instructions', pane: panes.instructions });
     }
+    if (camVisual) {
+        // Only where the object's package declares a 'cam:' file type whose
+        // implementation can draw what it writes. Most packages declare none,
+        // and a tab that could only ever say so is worse than no tab.
+        specs.push({ id: 'cam', label: 'CAM', pane: panes.cam });
+    }
     specs.push({ id: 'supply', label: 'Supply', pane: panes.supply });
     return specs;
 }
@@ -115,7 +134,9 @@ function show(message: ShowMessage): void {
     generation += 1;
     requested.clear();
     instructions = undefined;
-    for (const tab of ['bom', 'instructions', 'supply'] as TabId[]) {
+    camVisual = undefined;
+    camView?.dispose();
+    for (const tab of ['bom', 'instructions', 'cam', 'supply'] as TabId[]) {
         reset(tab);
     }
 
@@ -130,8 +151,10 @@ function clear(): void {
     generation += 1;
     requested.clear();
     instructions = undefined;
+    camVisual = undefined;
+    camView?.dispose();
     clearGeometry();
-    for (const tab of ['bom', 'instructions', 'supply'] as TabId[]) {
+    for (const tab of ['bom', 'instructions', 'cam', 'supply'] as TabId[]) {
         reset(tab);
     }
     tabs.setTabs([{ id: '3d', label: '3D', pane: panes['3d'] }]);
@@ -145,6 +168,10 @@ function onTabSelected(tab: TabId): void {
         return;
     }
     if (requested.has(tab)) {
+        // Same for the CAM canvas, which is a second WebGL context of its own.
+        if (tab === 'cam') {
+            camView?.resize();
+        }
         return;
     }
     requested.add(tab);
@@ -188,12 +215,41 @@ function render(tab: TabId, pane: HTMLElement, data: unknown): void {
         case 'instructions':
             instructions = new DocumentView(pane, (data as GuideData).document);
             return;
+        case 'cam':
+            renderCam(pane, data as CamData);
+            return;
         case 'supply':
             supplyView.render(data as SupplyData, shown?.kind ?? null);
             return;
         default:
             return;
     }
+}
+
+/**
+ * Draw the CAM model, and say what it is.
+ *
+ * A caption, because what is on screen is easy to mistake for the part: it is
+ * what the machine will actually lay down or take away, which is a different
+ * shape and the reason for looking at it.
+ */
+function renderCam(pane: HTMLElement, data: CamData): void {
+    pane.className = 'pane pane-cam';
+    const caption = el('p', 'caption', 'What the manufacturing instructions produce, not the part itself.');
+    pane.appendChild(caption);
+    if (camView === undefined) {
+        camView = new ModelView();
+    }
+    pane.appendChild(camView.element);
+    void camView.show(base64ToArrayBuffer(data.gltf));
+}
+
+function onTabs(token: number, cam: string | null): void {
+    if (token !== generation || shown === undefined) {
+        return;
+    }
+    camVisual = cam;
+    tabs.setTabs(tabsFor(shown));
 }
 
 window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
@@ -204,6 +260,8 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
         show(message);
     } else if (message.type === 'tabData') {
         onTabData(message.tab, message.token, message.data, message.error);
+    } else if (message.type === 'tabs') {
+        onTabs(message.token, message.cam);
     }
 });
 

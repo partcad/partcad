@@ -128,6 +128,20 @@
         "holdToForce": { "$ref": "#/definitions/force" },
         "holdToForceMin": { "$ref": "#/definitions/force" },
         "holdToForceMax": { "$ref": "#/definitions/force" },
+        "holdUntil": {
+          "description": "Keep holding this step's ends, exactly as described above, through every step that follows, up to and including the one whose \"name\" is this. Inclusive: the step named here is the last one performed with the hold still on.",
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "number" }
+          ]
+        },
+        "holdUntilStage": {
+          "description": "The same, up to and including the last step of the named \"stage\". Two ways of saying one thing, so declaring both is reported and \"holdUntil\" wins.",
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "number" }
+          ]
+        },
         "driver": {
           "description": "The tool that turns the object into place, mapped to the places on the object it engages. A bare name, or a list of them, names the tools and leaves the places to be enumerated. Only meaningful on a connection that is turned in rather than pushed - one whose \"turnTorqueMax\" is above zero.",
           "anyOf": [

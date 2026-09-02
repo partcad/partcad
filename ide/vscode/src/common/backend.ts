@@ -339,6 +339,13 @@ class JsonRpcBackend implements PartcadBackend {
                 ignore_manufacturability: a.ignoreManufacturability,
             }),
         );
+        // The CAM view of a part: whether it has one, and what it looks like.
+        // 'cam.info' reads configuration only, which is why the viewer can ask
+        // it on every show; 'cam.visual' runs the plugin in a sandbox and
+        // converts what it writes to glTF, which is why the tab asks for it once
+        // the reader opens it.
+        reg('partcad.camInfo', (a) => this.send('cam.info', { package: a.pkg, object: a.name, params: a.params }));
+        reg('partcad.camVisual', (a) => this.send('cam.visual', { package: a.pkg, object: a.name, params: a.params }));
         reg('partcad.supplyQuote', (a) =>
             this.send('supply.quote', { package: a.pkg, object: a.name, qos: a.qos, recursive: a.recursive }),
         );

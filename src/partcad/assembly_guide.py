@@ -235,6 +235,23 @@ def _tool_location(item, hold, placement: Location) -> Optional[Location]:
 
 
 @dataclass
+class CarriedHold:
+    """A hold put on by an earlier step that is still on during this one.
+
+    What 'holdUntil'/'holdUntilStage' produce: the step that declared the hold,
+    the object being held, where that object is by now - in place, not pulled
+    apart, because it was assembled in an earlier step - and the holds
+    themselves.
+    """
+
+    step_number: int
+    object_name: str
+    item: object
+    location: Location
+    holds: list = field(default_factory=list)
+
+
+@dataclass
 class GuideStep:
     """One item joined to one other item."""
 
@@ -250,6 +267,10 @@ class GuideStep:
     # It is what says which tools the step is performed with and where each of
     # them acts, which is what puts a finger and a driver in the illustration.
     how: object = None
+    # The holds an earlier step put on and has not let go of yet. Filled in by
+    # '_build_section' once every step of the assembly is known, because how far
+    # a hold reaches is a statement about the steps that come after it.
+    carried: list = field(default_factory=list)
     # Where the two are pulled apart to, and the line that shows the gap.
     direction: tuple = (0.0, 0.0, 1.0)
     distance: float = FALLBACK_EXPLODED_DISTANCE
@@ -302,7 +323,45 @@ class GuideStep:
                     # There is nothing to draw.
                     continue
                 placements.append((hold.tool, target, location, hold))
+        placements += self.carried_placements()
         return placements
+
+    def carried_placements(self) -> list:
+        """The same, for the holds an earlier step has not let go of.
+
+        The object each one holds is where the assembly put it, not where this
+        step's exploded view pulls anything to: it was assembled steps ago and
+        the hand on it has not moved.
+
+        Only the ones holding something this step's illustration actually shows.
+        A hand on the motor is worth *saying* on a page about a screw and the
+        bracket - it is still on the motor - but drawing it there would put a
+        tool on a part that is not on the page. The words are 'carried_sentence',
+        which has no such limit.
+        """
+        placements = []
+        for carried in self.carried:
+            if not self.shows(carried.item):
+                continue
+            for hold in carried.holds:
+                if hold.tool is None:
+                    continue
+                placements.append((hold.tool, carried.item, carried.location, hold))
+        return placements
+
+    def shows(self, item) -> bool:
+        """Whether an object is in this step's illustration at all.
+
+        The two items of the step are, and so is anything inside the partial
+        assembly a step is joined to when it names no target of its own (see
+        '_counterpart').
+        """
+        if item is self.item or item is self.counterpart:
+            return True
+        counterpart = self.counterpart
+        if isinstance(counterpart, Assembly) and counterpart.config.get("child", False):
+            return any(child.item is item for child in counterpart.children)
+        return False
 
     def tool_sentence(self) -> Optional[str]:
         """What holds this step's items and what turns them, in words."""
@@ -321,6 +380,35 @@ class GuideStep:
         if not clauses:
             return None
         return ", ".join(clauses) + "."
+
+    def hold_until_sentence(self) -> Optional[str]:
+        """How long this step's holds stay on, when it says so."""
+        covered = getattr(self.how, "hold_until_steps", None) or []
+        if not covered:
+            return None
+        if len(covered) == 1:
+            return "Keep this step's holds on through the next step, %s." % covered[0]
+        return "Keep this step's holds on through the next %d steps, up to and including %s." % (
+            len(covered),
+            covered[-1],
+        )
+
+    def carried_sentence(self) -> Optional[str]:
+        """What is still being held from an earlier step, in words.
+
+        Said whether or not the object is in the picture: a hand that has been
+        on the motor since step 1 is still on it, and the page showing the third
+        screw is exactly where somebody would otherwise let go.
+        """
+        clauses = []
+        for carried in self.carried:
+            tools = _tool_names(carried.holds)
+            if not tools:
+                continue
+            clauses.append("%s with %s (step %d)" % (carried.object_name, _join(tools), carried.step_number))
+        if not clauses:
+            return None
+        return "Still held from earlier: %s." % _join(clauses)
 
 
 @dataclass
@@ -414,7 +502,10 @@ async def _build_section(ctx, assembly, content=None, top=False):
     section = GuideSection(assembly=assembly, name=_display_name(assembly), top=top)
 
     placed = []
-    for child in content.children:
+    # Which step each child became, so that a hold declared on one of them can
+    # be carried onto the steps it reaches (see 'resolve_hold_until').
+    steps_by_child = {}
+    for index, child in enumerate(content.children):
         if not placed:
             # The first item is what everything else is added to; there is
             # nothing yet to connect it to.
@@ -435,9 +526,71 @@ async def _build_section(ctx, assembly, content=None, top=False):
         )
         await _resolve_step_geometry(ctx, step)
         section.steps.append(step)
+        steps_by_child[index] = step
         placed.append(child)
 
+    _carry_holds(content.children, steps_by_child)
     return section
+
+
+def _carry_holds(children, steps_by_child) -> None:
+    """Put each step's carried holds on it, once every step is known.
+
+    A hold that reaches past its own step is drawn on the later ones too - but
+    only where what it holds is in the picture. A hand on the motor says nothing
+    on a page showing a screw and the bracket, and drawing it there would put a
+    tool on a part that is not on the page.
+    """
+    for index, child in enumerate(children):
+        how = child.how
+        last = getattr(how, "hold_until_last", None)
+        source = steps_by_child.get(index)
+        if how is None or last is None or source is None:
+            continue
+        for covered in range(index + 1, last + 1):
+            step = steps_by_child.get(covered)
+            if step is None:
+                continue
+            own = _own_holds(step)
+            for holds, item, location, name in (
+                (how.hold_with, source.item, source.location, source.item_name),
+                (how.hold_to, source.counterpart, source.counterpart_location, source.counterpart_name),
+            ):
+                # What the covered step re-declares for itself is not carried:
+                # the same tool at the same place on the same object is one hand,
+                # said twice, and it would be drawn twice and read as two.
+                held = [
+                    hold
+                    for hold in holds or []
+                    if hold.tool is not None and (id(item), hold.tool, hold.interface, hold.instance) not in own
+                ]
+                if not held:
+                    continue
+                step.carried.append(
+                    CarriedHold(
+                        step_number=source.number,
+                        object_name=name,
+                        item=item,
+                        location=location or Location(),
+                        holds=held,
+                    )
+                )
+
+
+def _own_holds(step: GuideStep) -> set:
+    """Every place this step holds by itself, as (object, tool, interface, instance)."""
+    own = set()
+    how = step.how
+    if how is None:
+        return own
+    for holds, item in (
+        (getattr(how, "hold_with", None), step.item),
+        (getattr(how, "driver", None), step.item),
+        (getattr(how, "hold_to", None), step.counterpart),
+    ):
+        for hold in holds or []:
+            own.add((id(item), hold.tool, hold.interface, hold.instance))
+    return own
 
 
 def _counterpart(assembly, placed, child):
@@ -891,9 +1044,15 @@ async def _step_page(section: GuideSection, step: GuideStep, images: ImageSource
         blocks.append(doc.ImageRow(row, height=0.3))
 
     blocks.append(doc.Paragraph(step.description()))
+    carried = step.carried_sentence()
+    if carried:
+        blocks.append(doc.Paragraph(carried))
     tools = step.tool_sentence()
     if tools:
         blocks.append(doc.Paragraph(tools))
+    hold_until = step.hold_until_sentence()
+    if hold_until:
+        blocks.append(doc.Paragraph(hold_until))
 
     exploded = await images.shape_image_async(
         exploded_assembly(step, ctx),

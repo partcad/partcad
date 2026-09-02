@@ -129,15 +129,36 @@ isort --check src/partcad tests/partcad
   corrected `fileHash` has to move the cache key, or `pc test` answers the new declaration with the old one's
   failure.
 
-- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships two packages inside itself, reachable from
-  every context as `//builtin/export` and `//builtin/render` (loaded on demand by `Context.get_project`, see
-  `output.py`). They declare the file types `pc export` and `pc render` write, in exactly the form a user's
-  package declares one — a `path` to a script, its `pythonRequirements`, and the export parameters. So adding a
-  format, changing its defaults or changing which dependencies it needs is an edit to `builtin/*/partcad.yaml`, not
-  to `shape.py`. The scripts run in a sandbox through `wrappers/wrapper_export.py`; they are data files, so
-  anything new under `builtin/` has to be listed in `pyproject.toml`'s `package-data` and in the PyInstaller
-  spec (see "Packaging" in the root [AGENTS.md](../../AGENTS.md)). The requirement strings there are the versions
-  `sandbox_versions.py` pins, which `tests/partcad/unit/test_output.py` enforces.
+- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships packages inside itself, reachable from
+  every context as `//builtin` and its children (loaded on demand by `Context.get_project`, see
+  `output.py`). `//builtin/export` and `//builtin/render` declare the file types `pc export` and `pc render`
+  write, in exactly the form a user's package declares one — a `path` to a script, its `pythonRequirements`,
+  and the export parameters. So adding a format, changing its defaults or changing which dependencies it needs
+  is an edit to `builtin/*/partcad.yaml`, not to `shape.py`. The scripts run in a sandbox through
+  `wrappers/wrapper_export.py`; they are data files, so anything new under `builtin/` has to be listed in
+  `pyproject.toml`'s `package-data` and in the PyInstaller spec (see "Packaging" in the root
+  [AGENTS.md](../../AGENTS.md)). The requirement strings there are the versions `sandbox_versions.py` pins,
+  which `tests/partcad/unit/test_output.py` enforces.
+
+  `//builtin/cam` is the third, and it declares **no file type at all**. `cam:` is the section `pc cam` reads:
+  what it holds is not a file another tool opens and not a document about the part but a program for one
+  machine, correct only for that machine, so which machine and what it wants said to it is knowledge that lives
+  in somebody else's package (`//pub/feature/cam/gscrib` is the first). What the built-in package provides is
+  the section -- the bottom layer every `cam:` configuration is merged onto -- and the contract an
+  implementation is written against, which is the same meta-wrapper the other two use. It has one addition:
+  a plugin that can draw what it is about to do defines `process_visual(path, request)` beside `process()` and
+  says in `visual:` what that drawing is written as, which is what `pc cam --visual` and the editor's CAM tab
+  produce. `//builtin` itself declares the tools, interfaces and visual parts described above.
+
+- **What a part is made *with*** (`part_config_manufacturing.py`, `actions/cam.py`): a part's `manufacturing:`
+  section names the method, the machine (`tool:`, an `additive` tool - see `tool.py`) and the values it is made
+  at; the machine states a *range* for each of those, and `PartConfigManufacturing.problems()` is where the two
+  are held to each other (`pc test`'s `cam-additive` check calls it, with the bounding box, because "does it
+  fit the build volume" is the one question the geometry answers rather than the configuration).
+
+  `pc cam` writes the file **twice**, and the difference is the point: once in the package next to the part,
+  written once and reused afterwards so the instructions are something a repository can hold, and once where
+  the command was run, which is the copy to feed to a machine.
 
 - **Drawing ports and interfaces** (`./src/partcad/render_overlay.py`, `./src/partcad/wrappers/stroke_text.py`):
   `pc render --with-ports`/`--with-interfaces` draws the connection metadata on top of a projection.

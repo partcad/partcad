@@ -605,3 +605,73 @@ def test_two_tools_at_two_places_get_names_of_their_own():
     pair = assembly_guide.exploded_assembly(step, ctx)
     names = [child.name for child in pair.children]
     assert len(names) == len(set(names)) == 4
+
+
+#
+# Holds that outlast their own step
+#
+
+
+def _hold_until_section():
+    ctx = pc.init(TOOL_PACKAGE)
+    assembly = ctx._get_assembly(":connect_how_hold_until")
+    return ctx, asyncio.run(assembly_guide.collect_sections_async(ctx, assembly))[0]
+
+
+def test_a_hold_reaches_the_steps_it_was_told_to():
+    """The second step is told what the first one is still holding"""
+    _, section = _hold_until_section()
+    first, second = section.steps
+
+    assert first.carried == []
+    assert first.hold_until_sentence() == "Keep this step's holds on through the next step, screw-tr."
+
+    # Both ends of the first step: the screw it added and the plate it held it
+    # against. The second step declares no hold of its own, so neither is a
+    # repeat and both carry.
+    carried = second.carried
+    assert [entry.object_name for entry in carried] == ["screw-tl", "plate"]
+    assert all(entry.step_number == 1 for entry in carried)
+    assert second.carried_sentence() == (
+        "Still held from earlier: screw-tl with //:finger (step 1) and plate with //:finger (step 1)."
+    )
+
+
+def test_what_the_step_holds_itself_is_not_carried_on_top():
+    """One hand at one place is one hand, however many steps say so"""
+    _, section = _hold_until_section()
+    second = section.steps[1]
+    # The plate is held by the first step until this one *and* is this step's
+    # own counterpart - but this step declares no hold of its own, so the
+    # carried one stands. What is dropped is a repeat, which is checked by the
+    # placements never naming one place twice.
+    places = [(tool, id(item), hold.interface, hold.instance) for tool, item, _, hold in second.tool_placements()]
+    assert len(places) == len(set(places))
+
+
+def test_a_carried_hold_is_drawn_only_where_its_object_is_shown():
+    """A hand on something that is not on the page would be a tool on nothing"""
+    _, section = _hold_until_section()
+    second = section.steps[1]
+
+    drawn = second.carried_placements()
+    for _, item, _, _ in drawn:
+        assert second.shows(item)
+    # Said either way: the sentence has no such limit.
+    assert second.carried_sentence() is not None
+
+
+def test_the_step_page_says_what_is_still_held():
+    """Both halves reach the document: the span, and what it left held"""
+    ctx, section = _hold_until_section()
+    pages = asyncio.run(assembly_guide._section_pages(ctx.get_project("//"), section, ImagelessSource(), 1, ctx))
+    text = " ".join(block.text for page in pages for block in page.blocks if isinstance(block, pc_document.Paragraph))
+    assert "Keep this step's holds on through the next step, screw-tr." in text
+    assert "Still held from earlier: screw-tl with //:finger (step 1) and plate with //:finger (step 1)." in text
+
+
+class ImagelessSource(assembly_guide.ImageSource):
+    """An image source that produces none, so a page is only its words."""
+
+    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None):
+        return None

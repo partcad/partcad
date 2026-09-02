@@ -29,6 +29,11 @@ or by defining a function, which is called with the same two values:
 
     def process(path, request): ...                   # returns the dict above
 
+A 'cam:' implementation may define a second entry point beside it,
+'process_visual(path, request)', which writes a 3D model of what the
+instructions do rather than the instructions. It is asked for by name (see
+ENTRY_KEY) and reports what happened exactly as 'process' does.
+
 Both '__file__' and the run name '__partcad_export__' are set on the script, so
 it can gate any top-level work ("if __name__ == '__partcad_export__':") and
 remain importable by its siblings - which is how the PNG and DXF renderers
@@ -62,6 +67,14 @@ SCRIPT_KEY = "__script__"
 # decoding keeps the tree's shape but only its geometry: names and labels are
 # gone and placements are baked in rather than left as data.
 DECODE_KEY = "__decode__"
+
+# The key naming the function to enter the implementation script through, which
+# is "process" unless the request says otherwise. A 'cam:' implementation is
+# asked for a picture of what it is about to do through a second entry point of
+# its own ("process_visual"), because the instructions and the drawing of them
+# are the same knowledge of the same machine.
+ENTRY_KEY = "__entry__"
+DEFAULT_ENTRY = "process"
 
 # The parameter a file type sets to 'true' to be handed what the shapes it is
 # given report about themselves, keyed by the full name ("<package>:<name>")
@@ -115,7 +128,7 @@ def _failed(exception):
     return {"success": False, "exception": wrapper_common.exception_to_str(exception)}
 
 
-def process(script, path, request):
+def process(script, path, request, entry=DEFAULT_ENTRY):
     try:
         result = runpy.run_path(
             script,
@@ -126,12 +139,17 @@ def process(script, path, request):
         wrapper_common.handle_exception(e, script)
         return _failed(e)
 
-    output = result.get("output")
+    # 'output' is only the answer for the default entry point: a script asked
+    # for one of its other entry points is being asked for something specific,
+    # and what it happened to leave in 'output' at import time is not it.
+    output = result.get("output") if entry == DEFAULT_ENTRY else None
     if output is None:
-        entry_point = result.get("process")
+        entry_point = result.get(entry)
         if not callable(entry_point):
             return _failed(
-                Exception("%s: neither set 'output' nor defined 'process(path, request)'" % os.path.basename(script))
+                Exception(
+                    "%s: neither set 'output' nor defined '%s(path, request)'" % (os.path.basename(script), entry)
+                )
             )
         try:
             output = entry_point(path, request)
@@ -162,6 +180,7 @@ if __name__ == "__main__":
     # choice travels inside the request itself.
     path, request = wrapper_common.handle_input(decode=False)
     script = request.pop(SCRIPT_KEY, None)
+    entry = request.pop(ENTRY_KEY, None) or DEFAULT_ENTRY
     # Before the decode, while the envelopes - and so the properties they carry
     # - are still there to be read.
     if request.get(PROPERTIES_KEY) is True:
@@ -171,5 +190,5 @@ if __name__ == "__main__":
     if script is None:
         result = _failed(Exception("No implementation script was passed to the export wrapper"))
     else:
-        result = process(script, path, request)
+        result = process(script, path, request, entry)
     wrapper_common.handle_output(result)

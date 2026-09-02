@@ -760,9 +760,7 @@ def test_tool_form_names_the_tool_and_where_it_acts():
 def test_tool_form_with_no_places_enumerates_every_one_it_mates_to():
     """An empty list is 'everywhere this tool fits', not 'nowhere'"""
     ctx = _tool_ctx()
-    how = ConnectHow({"holdTo": {_tool("finger"): []}}, where="test").resolve(
-        None, _plate_with_grips(), ctx=ctx
-    )
+    how = ConnectHow({"holdTo": {_tool("finger"): []}}, where="test").resolve(None, _plate_with_grips(), ctx=ctx)
 
     # Every instance of "grip", which is what the finger mates to - and not the
     # instance of "m3-thru", which it does not.
@@ -820,9 +818,7 @@ def test_tool_form_reports_a_tool_that_meets_the_object_nowhere():
 
 def test_tool_form_reports_an_unknown_tool():
     ctx = _tool_ctx()
-    how = ConnectHow({"holdWith": {"//:nonexistent": ["L"]}}, where="test").resolve(
-        _screw_with_tools(), None, ctx=ctx
-    )
+    how = ConnectHow({"holdWith": {"//:nonexistent": ["L"]}}, where="test").resolve(_screw_with_tools(), None, ctx=ctx)
     assert any("the tool is not found" in problem for problem in how.problems)
     # The place the author named is still honoured.
     assert [(h.tool, h.instance) for h in how.hold_with] == [("//:nonexistent", "L")]
@@ -830,9 +826,7 @@ def test_tool_form_reports_an_unknown_tool():
 
 def test_only_a_mechanical_tool_holds_anything():
     ctx = _tool_ctx()
-    how = ConnectHow({"holdWith": {_tool("extruder"): []}}, where="test").resolve(
-        _screw_with_tools(), None, ctx=ctx
-    )
+    how = ConnectHow({"holdWith": {_tool("extruder"): []}}, where="test").resolve(_screw_with_tools(), None, ctx=ctx)
     assert any("only a mechanical one" in problem for problem in how.problems)
 
 
@@ -913,7 +907,131 @@ def test_a_tool_that_cannot_turn_is_not_a_driver():
 def test_a_connection_with_tools_is_not_a_default():
     """'pc info' leaves out a connection that says nothing; this one says a lot"""
     ctx = _tool_ctx()
-    how = ConnectHow({"holdWith": {_tool("finger"): ["L"]}}, where="test").resolve(
-        _screw_with_tools(), None, ctx=ctx
-    )
+    how = ConnectHow({"holdWith": {_tool("finger"): ["L"]}}, where="test").resolve(_screw_with_tools(), None, ctx=ctx)
     assert not how.is_default()
+
+
+#
+# "holdUntil" / "holdUntilStage": how long a hold stays on
+#
+
+
+class _FakeChild:
+    """The bare minimum of an 'AssemblyChild' that 'resolve_hold_until' reads."""
+
+    def __init__(self, name, how=None, item=None):
+        self.name = name
+        self.how = how
+        self.item = item
+
+
+def _held(config, ctx=None):
+    """A resolved 'how' that holds the screw somewhere, plus whatever else."""
+    how = ConnectHow(dict({"holdWith": "grip"}, **config), where="test")
+    return how.resolve(_screw_with_tools() if ctx else _plate(), None, ctx=ctx)
+
+
+def test_hold_until_reaches_the_step_it_names():
+    """The hold covers every step up to that one, inclusive"""
+    from partcad.assembly_connect import resolve_hold_until
+
+    first = _held({"holdUntil": "third"})
+    children = [_FakeChild("first", first), _FakeChild("second"), _FakeChild("third"), _FakeChild("fourth")]
+    resolve_hold_until(children, "test")
+
+    assert first.hold_until_last == 2
+    assert first.hold_until_steps == ["second", "third"]
+    assert first.problems == []
+
+
+def test_hold_until_stage_reaches_the_last_step_of_it():
+    """A stage is a group, so holding until it ends means holding through it"""
+    from partcad.assembly_connect import resolve_hold_until
+
+    first = _held({"holdUntilStage": "snug"})
+    children = [
+        _FakeChild("first", first),
+        _FakeChild("second", ConnectHow({"stage": "snug"}).resolve()),
+        _FakeChild("third", ConnectHow({"stage": "snug"}).resolve()),
+        _FakeChild("fourth", ConnectHow({"stage": "final"}).resolve()),
+    ]
+    resolve_hold_until(children, "test")
+
+    assert first.hold_until_last == 2
+    assert first.hold_until_steps == ["second", "third"]
+
+
+def test_hold_until_names_the_first_later_step_of_that_name():
+    """A name repeated further down does not extend the hold past the one meant"""
+    from partcad.assembly_connect import resolve_hold_until
+
+    first = _held({"holdUntil": "screw"})
+    children = [_FakeChild("first", first), _FakeChild("screw"), _FakeChild("other"), _FakeChild("screw")]
+    resolve_hold_until(children, "test")
+    assert first.hold_until_last == 1
+
+
+def test_hold_until_pointing_backwards_is_reported():
+    """A hold cannot reach a step that has already been performed"""
+    from partcad.assembly_connect import resolve_hold_until
+
+    second = _held({"holdUntil": "first"})
+    children = [_FakeChild("first"), _FakeChild("second", second)]
+    resolve_hold_until(children, "test")
+
+    assert second.hold_until_last is None
+    assert any("no step that comes after this one" in problem for problem in second.problems)
+
+
+def test_hold_until_stage_that_never_comes_is_reported():
+    from partcad.assembly_connect import resolve_hold_until
+
+    first = _held({"holdUntilStage": "polish"})
+    children = [_FakeChild("first", first), _FakeChild("second", ConnectHow({"stage": "snug"}).resolve())]
+    resolve_hold_until(children, "test")
+
+    assert first.hold_until_last is None
+    assert any("no stage that comes after this step" in problem for problem in first.problems)
+
+
+def test_keeping_a_hold_that_was_never_put_on_is_reported():
+    """There is nothing to keep doing if the step holds neither end"""
+    from partcad.assembly_connect import resolve_hold_until
+
+    how = ConnectHow({"holdUntil": "second"}, where="test").resolve(_FakeItem(), None)
+    children = [_FakeChild("first", how), _FakeChild("second")]
+    resolve_hold_until(children, "test")
+
+    assert how.hold_until_last is None
+    assert any("nothing to keep holding" in problem for problem in how.problems)
+
+
+def test_the_two_hold_until_fields_are_one_thing_said_twice():
+    """Declaring both is a contradiction, reported once, at the declaration"""
+    how = ConnectHow({"holdUntil": "third", "holdUntilStage": "snug"}, where="test")
+    assert how.hold_until == "third"
+    assert how.hold_until_stage is None
+    assert any("two ways of saying the same thing" in problem for problem in how._declared_problems)
+    # And it survives a resolution, which starts the problem list over.
+    how.resolve(_plate(), None)
+    assert any("two ways of saying the same thing" in problem for problem in how.problems)
+
+
+def test_a_hold_until_is_not_a_default_connection():
+    """'pc info' leaves out a connection that says nothing; this one says when to let go"""
+    how = ConnectHow({"holdUntil": "second"}, where="test").resolve(_plate(), None)
+    assert not how.is_default()
+    assert how.info()["holdUntil"] == "second"
+
+
+def test_the_package_resolves_hold_until_across_the_assy_file():
+    """End to end: the ASSY file's own steps are what the span is measured against"""
+    ctx = pc.init(CONNECT_HOW_PACKAGE)
+    assembly = ctx._get_assembly(":connect_how_hold_until")
+    children = _get_children(assembly)
+
+    first = children["screw-tl"].how
+    assert first.hold_until == "screw-tr"
+    assert first.hold_until_steps == ["screw-tr"]
+    assert first.problems == []
+    assert children["screw-tr"].how.hold_until_last is None

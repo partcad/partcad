@@ -69,6 +69,58 @@ def test_valid_sources_report_nothing(text):
     assert check(text) == []
 
 
+def test_the_tool_form_of_how_is_valid():
+    """'holdWith'/'holdTo'/'driver' as tools, and the two ways a hold ends"""
+    text = """
+links:
+  - part: plate
+  - part: screw
+    name: screw-tl
+    connect:
+      name: plate
+      how:
+        stage: snug
+        turnTorqueMax: 0.4
+        holdWith:
+          //builtin:finger: [L, R]
+        holdTo:
+          //builtin:finger: []
+        driver:
+          //builtin:screwdriver-hex: [socket]
+        holdUntil: screw-tr
+  - part: screw
+    name: screw-tr
+    connect:
+      name: plate
+      how:
+        stage: snug
+        turnTorqueMax: 0.4
+        # The other spellings: an interface pair for an ambiguous instance name,
+        # a bare tool name for a driver, and a stage rather than a step.
+        holdWith:
+          //builtin:finger: [[//builtin:grip, L]]
+        driver: //builtin:screwdriver-hex
+        holdUntilStage: snug
+"""
+    assert check(text) == []
+
+
+def test_the_older_spelling_of_hold_is_still_valid():
+    """An interface name, or a list of them, with the tool left to the assembler"""
+    text = """
+links:
+  - part: plate
+  - part: screw
+    connect:
+      name: plate
+      how:
+        holdWith: m3-screw-6mm
+        holdWithInstance: head
+        holdTo: [grip, m3-thru]
+"""
+    assert check(text) == []
+
+
 def test_examples_shipped_with_partcad_are_clean(tmp_path):
     # The nesting, `connect:` and multi-level `links:` of a real file, in one go.
     text = """

@@ -128,16 +128,31 @@ send (`PartcadViewer`). `src/webview/` is what runs *inside* that webview: `view
 `scene.ts` the three.js renderer, and one module per tab beside it.
 
 **The panel is a strip of tabs over one object, not a canvas.** 3D first, then the bill of materials and the
-assembly instructions for an assembly, then supply information for anything that can be bought. Only the 3D
-view comes over the viewer protocol; every other tab is a question about `<package>:<name>` that the renderer
-cannot ask itself -- the CSP forbids network access and the daemon is behind the host's JSON-RPC connection --
-so it asks the host (`fetchTab`) and the host answers (`tabData`), on first look. Which is why the show
-message carries the object's **package**: without it the panel offers the 3D view alone.
+assembly instructions for an assembly, the CAM view for a part whose package says how it is made, then supply
+information for anything that can be bought. Only the 3D view comes over the viewer protocol; every other tab
+is a question about `<package>:<name>` that the renderer cannot ask itself -- the CSP forbids network access
+and the daemon is behind the host's JSON-RPC connection -- so it asks the host (`fetchTab`) and the host
+answers (`tabData`), on first look. Which is why the show message carries the object's **package**: without it
+the panel offers the 3D view alone.
 
-None of those three is implemented here. `bom`, `assembly.guide` and `supply.quote` are the CLI's own operations
-(`pc bom`, the book `pc render -t html` writes, the cart `pc supply quote` fills), asked for as data rather
-than as a file -- the same rule as everywhere else in this extension: extend the one backend, do not
-reimplement it in TypeScript.
+None of them is implemented here. `bom`, `assembly.guide`, `cam.visual` and `supply.quote` are the CLI's own
+operations (`pc bom`, the book `pc render -t html` writes, `pc cam --visual`, the cart `pc supply quote`
+fills), asked for as data rather than as a file -- the same rule as everywhere else in this extension: extend
+the one backend, do not reimplement it in TypeScript.
+
+**The CAM tab is offered rather than always present**, and that is the one thing about the strip that is not
+decided by the show message. Whether an object has a CAM view is a question for the daemon -- does its package
+declare a `cam:` file type, and can that implementation draw what it writes -- so `PartcadViewer` asks
+`cam.info` *after* posting the show (geometry must not wait on it) and posts a `tabs` message when the answer
+comes back. The renderer adds the tab if it is still on the same object, keeping whichever tab the reader is
+looking at. `cam.info` reads configuration and builds nothing, which is what makes it cheap enough to ask on
+every show; `cam.visual` runs the plugin in a sandbox and converts what it writes to glTF, which is why it
+waits for the tab to be opened.
+
+`model.ts` draws it, and is deliberately not `scene.ts`. That renderer exists to make a part look the way
+partcad.org makes it look, down to the lights it borrows; a toolpath is read for its structure -- where the
+walls are, where the fill goes, where the gaps between them are -- so it is drawn plainly, lit evenly, and not
+auto-rotated.
 
 Four things about it are load-bearing:
 

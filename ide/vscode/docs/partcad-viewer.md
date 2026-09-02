@@ -7,6 +7,7 @@ The panel is a strip of tabs over one object, not a canvas:
 | **3D** | everything | the viewer protocol, from whichever `partcad` asked for the shape to be shown |
 | **Bill of Materials** | assemblies | the daemon's `bom` (what `pc bom` prints) |
 | **Instructions** | assemblies | the daemon's `assembly.guide` (the book `pc render -t html\|pdf` writes) |
+| **CAM** | parts whose package says how they are made | the daemon's `cam.visual` (what `pc cam --visual` writes) |
 | **Supply** | everything | the daemon's `supply.quote` (the cart `pc supply quote` fills) |
 
 The 3D view is always the first: "show this part" means the geometry. The rest are questions about
@@ -78,6 +79,7 @@ the protocol has no authentication.
 | `src/webview/scene.ts` | The three.js renderer behind the 3D tab |
 | `src/webview/bom.ts` | The Bill of Materials tab |
 | `src/webview/document.ts` | The Instructions tab: `partcad/document.py`'s model, drawn |
+| `src/webview/model.ts` | The CAM tab: a plain three.js view of one glTF model |
 | `src/webview/supply.ts` | The Supply tab: the list, and one item's suppliers |
 | `src/partcad/assembly_guide.py` | The instruction book, built once for every format |
 | `src/partcad/document.py` | The renderer-independent document model |
@@ -139,6 +141,24 @@ at a time. The illustrations are inlined as data URIs rather than pointed at, be
 directory that is deleted as soon as the document is built — and because the CSP forbids fetching anything
 anyway. An assembly PartCAD cannot write instructions for (not an ASSY file, or not meant to be built) is
 refused with the reason, and the tab shows that.
+
+**CAM** is what the part's manufacturing instructions *produce*, not the part: the beads an FDM printer lays,
+the volume a mill takes away. A `cam:` plugin that can draw what it is about to do writes a 3D model of it in
+whatever format it finds natural, and PartCAD converts that to glTF with its own exporter before it reaches
+here (`partcad.actions.cam.visual_model_async`), so this side neither knows nor cares what the plugin chose.
+
+It is the one tab that is not decided by the show message. Whether an object has a CAM view is a question for
+the daemon — does its package declare a `cam:` file type, and can that implementation draw itself — so
+`PartcadViewer` asks `cam.info` *after* posting the show, and posts a `tabs` message when the answer comes
+back; the renderer adds the tab if it is still on the same object. `cam.info` reads configuration and builds
+nothing, which is what makes it cheap enough to ask every time; producing the model runs the plugin in a
+sandbox, which is why that waits for the tab to be opened.
+
+`model.ts` draws it rather than `scene.ts`, and deliberately. That renderer exists to make a part look the way
+partcad.org makes it look, down to the lights it borrows from `react-partcad-prerendered`; a toolpath is read
+for its structure — where the walls are, where the fill goes, where the gaps between them are — so this one is
+plain, evenly lit and not auto-rotated, and it is built on first use because a WebGL context is not something
+to hold open for a tab most objects never have.
 
 **Supply** fills a `ProviderCart` exactly as `pc supply quote` does — an assembly becomes the things to order,
 a part is one thing — and asks every supplier of each line item **on its own**. One cart per line item, not one

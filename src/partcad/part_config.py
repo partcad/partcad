@@ -27,5 +27,16 @@ class PartConfiguration(Configuration, ShapeConfiguration):
 
     @staticmethod
     def get_manufacturing_data(part) -> PartConfigManufacturing:
+        """How this part is made, as its own configuration states it.
+
+        The part is passed rather than only its configuration because the
+        section names things - a tool - relative to the package that declared
+        them, and because what it says has to be reported against the object it
+        was declared on.
+        """
         final_config = part.get_final_config()
-        return PartConfigManufacturing(final_config)
+        return PartConfigManufacturing(
+            final_config,
+            project_name=getattr(part, "project_name", "") or "",
+            where="%s:%s" % (getattr(part, "project_name", ""), getattr(part, "name", "")),
+        )

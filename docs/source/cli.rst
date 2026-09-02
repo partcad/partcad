@@ -349,6 +349,37 @@ Object commands
   assembly that is not meant to be built at all (``manufacturable: false``, on the assembly or inherited from
   its package) is refused too; pass ``--ignore-manufacturability`` to generate the document anyway.
 
+``pc cam``
+  Produce the manufacturing instructions for a **part** -- the program that makes
+  it, on the machine its ``manufacturing:`` section names. What that program is
+  and what it says is the business of a ``cam:`` plugin;
+  ``//pub/feature/cam/gscrib`` is the first, and writes the G-code that prints a
+  part. See :ref:`cam`.
+
+  The file is produced **twice over**, and on purpose. The package keeps a copy
+  next to the part -- written once and reused afterwards, so the instructions are
+  something a repository can hold and diff -- and the command leaves a copy where
+  it was run, which is the one to feed to a machine.
+
+  .. code-block:: shell
+
+    pc cam bracket                 # bracket.gcode, here and in the package
+    pc cam --visual bracket        # the plugin's model of what it will produce
+    pc cam -o job1.gcode bracket   # name the copy
+    pc cam -t gcode bracket        # when the package declares more than one kind
+
+  ``--visual`` asks the plugin for a 3D model of what the instructions *do* --
+  the beads a printer lays, the volume a mill takes away -- rather than for the
+  instructions. Only a plugin that declares it can draw one; the same model is
+  what the VS Code extension shows in the PartCAD Viewer's **CAM** tab. ``-f``
+  rewrites the package's copy; ``-O`` and ``-o`` place and name the other one;
+  ``-e`` reads the ``cam:`` configuration from a further package, exactly as it
+  does for ``pc export`` and ``pc render``.
+
+  A part that is not declared manufacturable is refused; pass
+  ``--ignore-manufacturability`` to produce the instructions anyway. An assembly
+  is refused outright: it is put together out of parts that each have their own.
+
 *****************
 Workflow commands
 *****************

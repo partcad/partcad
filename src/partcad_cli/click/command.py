@@ -151,6 +151,7 @@ command_groups = [
             "convert",
             "export",
             "render",
+            "cam",
         ],
     },
     {

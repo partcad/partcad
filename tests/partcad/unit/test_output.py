@@ -29,6 +29,12 @@ EXAMPLES = "examples"
 CUSTOM_EXAMPLE = "//feature_export_custom"
 BUILTIN_DIR = os.path.join(os.path.dirname(os.path.abspath(pc.__file__)), "builtin")
 
+# The sections PartCAD ships file types of its own in. '//builtin/cam' is the
+# exception: it declares the 'cam:' section and puts nothing in it, because
+# manufacturing instructions are a program for one machine and a machine is
+# somebody else's to know. See 'builtin/cam/partcad.yaml'.
+IMPLEMENTED_SECTIONS = (output.EXPORT, output.RENDER)
+
 
 @pytest.fixture(scope="module")
 def ctx():
@@ -41,7 +47,7 @@ def ctx():
 
 
 def test_builtin_packages_are_reachable(ctx):
-    """'//builtin/export' and '//builtin/render' resolve in any context."""
+    """Every section's built-in package resolves in any context."""
     for section in output.SECTIONS:
         project = ctx.get_project(output.BUILTIN_PACKAGES[section])
         assert project is not None
@@ -72,7 +78,13 @@ def test_every_builtin_format_has_an_implementation_on_disk(ctx):
     for section in output.SECTIONS:
         project = ctx.get_project(output.BUILTIN_PACKAGES[section])
         formats = project.config_obj[section]
-        assert formats, section
+        if section in IMPLEMENTED_SECTIONS:
+            assert formats, "%s: the built-in package declares no file type" % section
+        else:
+            assert not formats, (
+                "%s: the built-in package now ships a file type of its own; if that is "
+                "deliberate, say so in IMPLEMENTED_SECTIONS" % section
+            )
         for format_name, config in formats.items():
             script = os.path.join(project.config_dir, config["path"])
             assert os.path.isfile(script), "%s: %s" % (format_name, script)

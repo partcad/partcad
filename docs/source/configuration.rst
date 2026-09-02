@@ -1546,6 +1546,8 @@ A file type that has a way to state these declares ``properties: true`` in its
 ``export:`` section, and is handed them keyed by the full name of the shape they
 belong to. URDF is the one built-in format that does.
 
+.. _manufacturing-methods:
+
 Manufacturing methods
 ---------------------
 
@@ -1569,6 +1571,10 @@ together rather than made, and has a single method of its own -- see
 
 A part that is bought rather than made carries ``vendor`` and ``sku`` instead of
 a method.
+
+Beside the method, the section says **which machine** makes the part and what it
+is made at. Only ``additive`` has those settings so far; see
+:ref:`additive-manufacturing`.
 
 .. _procurement:
 
@@ -2343,10 +2349,15 @@ material, how fine a layer).
       <tool name>:
         visual: <...>
         process: <(optional) "fdm", "sla", "sls", "dmls", ...>
-        material: <(optional) what it puts down>
-        layerHeight: <(optional) the thickness of one layer, in mm>
-        spotSize: <(optional) the width of one pass, in mm>
-        buildVolume: <(optional) [x, y, z], in mm>
+        materials: <(optional) what it can put down; "material" is the one-entry form>
+        buildVolume: <(optional) how much fits, as [x, y, z] in mm>
+        stepSize: <(optional) the smallest move on each axis, as [x, y, z] in mm>
+        layerHeight: <(optional) range, in mm>
+        spotSize: <(optional) range, in mm>
+        speed: <(optional) range, in mm/s>
+        temperature: <(optional) range, in degrees C, at the tool>
+        bedTemperature: <(optional) range, in degrees C, at the bed>
+        positioning: # (optional) see below
     subtractive:
       <tool name>:
         visual: <...>
@@ -2401,6 +2412,119 @@ fits (see :ref:`assy-tools`).
 ``torqueMax`` is what separates a driver from everything else. A tool that
 cannot turn what it holds leaves it at zero, which is exactly what disqualifies
 it from being a connection's ``driver`` -- a finger is not a screwdriver.
+
+.. _additive-tools:
+
+What a machine can do
+---------------------
+
+An **additive** tool describes a machine rather than a hand, so what it states
+about itself are **ranges**: a printer prints layers from 0.08 to 0.32mm, and
+which of them a given part is printed at is that part's business. Five
+properties are ranges, each in PartCAD's own unit -- ``layerHeight`` and
+``spotSize`` in millimetres, ``speed`` in mm/s, ``temperature`` and
+``bedTemperature`` in degrees Celsius -- and each is written in whichever of
+these four ways says what is meant:
+
+.. code-block:: yaml
+
+  layerHeight: 0.2                                  # a fixed value
+  layerHeight: [0.08, 0.32]                         # a range
+  layerHeight: [0.08, 0.32, 0.20]                   # and the value it uses by default
+  layerHeight: { min: 0.08, max: 0.32, default: 0.2 }
+
+A ``default`` is what the machine uses when nothing asks for anything. It is
+optional and never invented: a range without one leaves the property unset
+rather than having PartCAD pick a layer height.
+
+A plugin is handed each range with its ``unit`` beside it, so that a machine
+whose G-code wants a feed rate in mm/min is given one by the plugin that knows
+that machine rather than by the package that described it.
+
+``buildVolume`` is how much fits, and ``stepSize`` the smallest move the machine
+can make on each axis -- the resolution of its motion system, which is what says
+whether a feature is reachable at all. Both are ``[x, y, z]`` in millimetres.
+
+.. _tool-positioning:
+
+The initial positioning sequence
+--------------------------------
+
+``positioning`` is what the machine has to be told before it can put anything
+down: the sequence that gets the tool from wherever it was to a known point over
+the bed. It is what a :ref:`CAM plugin <cam>` turns into the preamble of the
+file it writes.
+
+.. code-block:: yaml
+
+  positioning:
+    units: mm                # or "inch"; default: mm
+    absolute: true           # absolute coordinates rather than relative
+    home: [z, x, y]          # which axes to home, in order; [] to home none
+    homeFeedRate: 3000       # mm/min
+    travelFeedRate: 9000     # mm/min
+    safeZ: 5.0               # how far above the bed the tool travels, mm
+    origin: [0.0, 0.0, 0.0]  # where the tool starts, mm
+    bedLeveling: auto        # "none", "auto" or "mesh"
+    prime:                   # the purge line drawn before the first layer
+      length: 100.0          # mm
+      extrude: 8.0           # mm of filament
+      feedRate: 1200         # mm/min
+
+Every field is named for **what it is** rather than for the G-code that carries
+it: which dialect ``home`` becomes is the plugin's business, and a machine that
+references itself with something other than ``G28`` still homes. The set is
+closed, and a field PartCAD cannot read is reported and dropped rather than
+carried -- this section is about to be handed to a machine, and a plugin handed
+something it cannot act on writes a preamble that does not do what the package
+said.
+
+.. _additive-manufacturing:
+
+What a part asks the machine for
+--------------------------------
+
+A part says how it is made in its own ``manufacturing`` section (see
+:ref:`manufacturing methods <manufacturing-methods>`). For an additive part that
+is the machine and the values it is made at, each of which the machine has a
+range for:
+
+.. code-block:: yaml
+
+  parts:
+    bracket:
+      type: build123d
+      manufacturable: true
+      properties:
+        material: PLA
+        color: "#1c8f3a"
+      manufacturing:
+        method: additive
+        tool: //pub/feature/cam/gscrib:fdm   # the machine that makes it
+        layerHeight: 0.2     # mm
+        spotSize: 0.4        # mm
+        speed: 60            # mm/s
+        temperature: 215     # degrees C, at the tool
+        bedTemperature: 60   # degrees C, at the bed
+        infill: 0.2          # a fraction between 0 and 1
+        perimeters: 3
+        supports: false
+
+``material`` and ``color`` may be set here too, and they mean something
+different from the ones in :ref:`properties`. There they are what the finished
+part **is** -- what a bill of materials and an exported model report. Here they
+are what the machine is **loaded with** to make it. They are usually the same
+thing, which is why this one defaults to that one; they come apart when a part
+is printed in whatever is on the spool and painted afterwards.
+
+``pc test`` is where the two halves are held to each other. Its ``cam-additive``
+check fails a part whose setting is outside the machine's range, whose material
+the machine does not take, whose tool is not an additive one or does not resolve
+at all, and -- the one question the geometry answers rather than the
+configuration -- whose bounding box does not fit the build volume. The part is
+not turned to make it fit: which way up something is printed decides how it is
+supported and how strong it comes out, so that is the package's choice and not
+something to work around.
 
 .. _builtin-tools:
 
@@ -2651,9 +2775,10 @@ HTTP-backed repository) and ``examples/plugin_repository_tree`` (a hierarchy).
 Output files
 ============
 
-``pc export`` writes 3D and CAD files; ``pc render`` writes 2D projections. Both
-are configured by a section of ``partcad.yaml`` named after the command --
-``export:`` and ``render:`` -- with one subsection per output file type:
+``pc export`` writes 3D and CAD files; ``pc render`` writes 2D projections;
+``pc cam`` writes the instructions that make a part. Each is configured by a
+section of ``partcad.yaml`` named after the command -- ``export:``, ``render:``
+and ``cam:`` -- with one subsection per output file type:
 
 .. code-block:: yaml
 
@@ -2676,7 +2801,12 @@ are configured by a section of ``partcad.yaml`` named after the command --
     <file type>:
       ... # the same fields, for the 2D projections
 
-The two sections behave identically. Which one a file type belongs to is
+  cam:
+    <file type>:
+      ... # the same fields, for the manufacturing instructions
+      visual: <(optional) what the implementation's picture of them is written as>
+
+The three sections behave identically. Which one a file type belongs to is
 decided by whichever built-in package implements it (see `Built-in
 implementations`_) -- ``step`` is an ``export:`` type wherever it is written
 down, ``svg`` is a ``render:`` one. For a file type no built-in package
@@ -2702,13 +2832,74 @@ they read: a file type declared only under ``render:`` is produced by
 ``pc export -t <type>`` just as well, because the section follows the
 declaration and not the command.
 
-What the two sections do say is what a file type *is*, and that is worth
-getting right when publishing a package. Declare a type under ``export:`` and
-you are promising geometry another tool can go on working with; declare it
-under ``render:`` and you are promising an output file, nothing more. A drawing,
-a picture or a report is the latter -- so declare it under ``render:``, where it
+What the sections do say is what a file type *is*, and that is worth getting
+right when publishing a package. Declare a type under ``export:`` and you are
+promising geometry another tool can go on working with; declare it under
+``render:`` and you are promising an output file, nothing more. A drawing, a
+picture or a report is the latter -- so declare it under ``render:``, where it
 stays reachable from both commands, rather than under ``export:``, where it
 would promise a part it cannot deliver.
+
+.. _cam:
+
+Manufacturing instructions
+--------------------------
+
+``cam:`` is the third section, and it neither falls back to the other two nor is
+fallen back to. What it holds is not a file another tool opens and not a
+document about the part: it is a **program for one machine**, correct only for
+that machine. G-code is the example -- nothing downstream can load it as
+geometry, and it is wrong on any printer but the one it was written for.
+
+That is also why PartCAD ships no ``cam:`` implementation of its own.
+``//builtin/cam`` declares the section and nothing in it: which machine, and
+what it wants said to it, is knowledge that lives in a package somebody else
+publishes. ``//pub/feature/cam/gscrib`` is the first one, and writes the G-code
+that prints a part.
+
+.. code-block:: yaml
+
+  cam:
+    gcode:
+      package: //pub/feature/cam/gscrib
+      path: cam_gscrib.py
+      extension: gcode
+      visual: stl        # what "process_visual()" writes, when it has one
+
+An implementation is a Python script run in a sandbox by the same meta-wrapper
+the export and render implementations run under. It is handed ``request`` and
+``path`` and defines ``process(path, request)``, exactly as they do. Beside the
+shape and the file type's own parameters, its request carries the two halves of
+"how is this made": ``manufacturing`` (what the part says -- the method, the
+settings) and ``tool`` (what the machine named there says it can do, ranges and
+positioning sequence included). See :ref:`additive-manufacturing`.
+
+A plugin that can draw what it is about to do defines a second entry point,
+``process_visual(path, request)``, and declares in ``visual`` what that drawing
+is written as. It is a 3D model of the *instructions* -- the beads a printer
+lays, the volume a mill takes away -- rather than of the part, which is the
+thing worth looking at before committing a machine to it.
+
+.. code-block:: shell
+
+  pc cam <part>                 # the instructions
+  pc cam --visual <part>        # the plugin's model of them
+  pc cam -o job1.gcode <part>   # the copy, under a name of your own
+  pc cam -t gcode <part>        # when the package declares more than one kind
+
+``pc cam`` produces the file **twice over**, and on purpose. The package keeps a
+copy next to the part -- written once and reused afterwards, so the instructions
+are something a repository can hold and diff -- and the command leaves a copy
+where it was run, which is the one to feed to a machine. ``-f`` rewrites the
+package's copy; ``-O`` and ``-o`` place and name the other one.
+
+It is a part only. An assembly is put together out of parts that each have their
+own instructions, and the part has to be manufacturable unless
+``--ignore-manufacturability`` says otherwise.
+
+In the VS Code extension, a part whose package declares a ``cam:`` type that can
+draw itself gets a **CAM** tab in the PartCAD Viewer, showing that model beside
+the 3D view of the part.
 
 The short form ``<file type>: <path>`` is the same as ``prefix: <path>``.
 

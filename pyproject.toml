@@ -102,6 +102,9 @@ aws = {file = ["requirements-aws.txt"]}
 "partcad.builtin" = ["*.yaml"]
 "partcad.builtin.export" = ["*.py", "*.yaml"]
 "partcad.builtin.render" = ["*.py", "*.yaml"]
+# Declares the 'cam:' section and no file type: what a package's own CAM
+# implementation is layered onto. See the package's own partcad.yaml.
+"partcad.builtin.cam" = ["*.py", "*.yaml"]
 # The parts that stand for the built-in tools in a picture. Scripts, like the
 # two above, executed by path in a sandbox.
 "partcad.builtin.tool" = ["*.py"]

@@ -10,6 +10,7 @@ PartCAD writes output files in two flavours, each declared in a section of
 
     'export:'   the 3D and CAD formats 'pc export' writes
     'render:'   the 2D projections 'pc render' writes
+    'cam:'      the manufacturing instructions 'pc cam' writes
 
 A section has one subsection per file type, whose fields are that type's
 parameters. Some of them are not parameters but say how the file is produced -
@@ -28,9 +29,13 @@ that reaches the merged options from a calling package is inert (see
 'Implementation.python_version()').
 
 The built-in implementations are not special-cased anywhere: they are declared
-in exactly this form by two packages that ship inside 'partcad' itself and that
-every context can reach, '//builtin/export' and '//builtin/render' (see
-'builtin/'). Resolving a file type means layering the configuration of the
+in exactly this form by the packages that ship inside 'partcad' itself and that
+every context can reach, '//builtin/export', '//builtin/render' and
+'//builtin/cam' (see 'builtin/'). The last of those declares no file type at
+all, and deliberately: PartCAD has no opinion on how a part is machined or
+printed, so every 'cam:' implementation comes from a package somebody else
+published. What the built-in package provides is the section itself and the
+contract an implementation is written against. Resolving a file type means layering the configuration of the
 package that asked for it on top of the built-in package's, so a package that
 declares 'path' for a type replaces the implementation for itself and one that
 declares only a parameter keeps the built-in implementation and re-tunes it.
@@ -48,7 +53,8 @@ from . import sandbox_versions
 # The two output sections, which are also the two built-in packages' names.
 EXPORT = "export"
 RENDER = "render"
-SECTIONS = (EXPORT, RENDER)
+CAM = "cam"
+SECTIONS = (EXPORT, RENDER, CAM)
 
 # Where the built-in packages live, both as package paths and on disk. They are
 # inside the 'partcad' Python package so that they ship with it and are always
@@ -57,12 +63,14 @@ BUILTIN_ROOT_PACKAGE = "//builtin"
 BUILTIN_PACKAGES = {
     EXPORT: "//builtin/export",
     RENDER: "//builtin/render",
+    CAM: "//builtin/cam",
 }
 BUILTIN_ROOT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin")
 BUILTIN_PATHS = {
     BUILTIN_ROOT_PACKAGE: BUILTIN_ROOT_PATH,
     BUILTIN_PACKAGES[EXPORT]: os.path.join(BUILTIN_ROOT_PATH, EXPORT),
     BUILTIN_PACKAGES[RENDER]: os.path.join(BUILTIN_ROOT_PATH, RENDER),
+    BUILTIN_PACKAGES[CAM]: os.path.join(BUILTIN_ROOT_PATH, CAM),
 }
 
 # File types declared in a 'render:' section like any other, but which no
@@ -122,7 +130,7 @@ def is_document_format(format_name: str, section_obj) -> bool:
 # What is left over is what the implementation is handed, so adding a field here
 # hides it from every implementation - including the ones packages write.
 IMPLEMENTATION_KEYS = frozenset({"path", "package", "pythonRequirements", "pythonVersion", "decode"})
-OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
+OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir", "visual"})
 RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 
 # The request key the implementation script's path travels under. It is passed
@@ -142,6 +150,25 @@ SCRIPT_KEY = "__script__"
 # placement is baked into the shape instead of staying readable as data.
 DECODE_KEY = "__decode__"
 
+# The request key naming the function the implementation script is entered
+# through. It travels beside the script path for the same reason: the wrapper
+# has to know before it calls anything.
+#
+# What it exists for is the second thing a 'cam:' implementation may produce.
+# The instructions themselves are a file no viewer can draw - G-code, a tool
+# path - so a plugin may also offer a *picture* of them: a 3D model of where the
+# tool goes, in whatever format it finds natural. That is one more entry point
+# in the same script rather than a second script, because it is the same
+# knowledge of the same machine either way.
+ENTRY_KEY = "__entry__"
+DEFAULT_ENTRY = "process"
+VISUAL_ENTRY = "process_visual"
+
+# What the visualization is written as when the file type says it has one but
+# not what it is. STL because a tool path is a shape and nothing else, and
+# because everything downstream can read it.
+DEFAULT_VISUAL_EXTENSION = "stl"
+
 
 class Implementation:
     """Who writes a file of a given type, and with what.
@@ -151,12 +178,27 @@ class Implementation:
     'Shape._materialize_output_script()', which also fills 'project' in.
     """
 
-    def __init__(self, section: str, format_name: str, config: dict, project=None):
+    def __init__(self, section: str, format_name: str, config: dict, project=None, visual: bool = False):
         self.section = section
         self.format_name = format_name
         self.config = config
         self.project = project
         self.script = config.get("path")
+        # Whether this is the picture of the instructions rather than the
+        # instructions, and what the picture is written as. 'visual' on the file
+        # type is the extension of the model the implementation writes; a file
+        # type that does not declare it has no visualization to produce.
+        self.visual = visual
+        # 'visual' is the extension the picture is written as. 'true' says only
+        # that there is one, which is a reasonable thing to write and means the
+        # default rather than a file called '<name>.True'.
+        declared = config.get("visual")
+        if declared is None or declared is False:
+            self.visual_extension = None
+        elif declared is True:
+            self.visual_extension = DEFAULT_VISUAL_EXTENSION
+        else:
+            self.visual_extension = str(declared).lstrip(".") or DEFAULT_VISUAL_EXTENSION
         # Whether the sandbox decodes the envelopes into live geometry for this
         # implementation. Off for one that needs the assembly tree's structure
         # rather than the compound it decodes to.
@@ -167,7 +209,19 @@ class Implementation:
         """The fields handed to the implementation as its 'request'."""
         return {key: value for key, value in self.config.items() if key not in RESERVED_KEYS}
 
+    @property
+    def supports_visual(self) -> bool:
+        """Whether this implementation can draw what it is about to write."""
+        return self.visual_extension is not None
+
+    @property
+    def entry(self) -> str:
+        """The function in the implementation script to call."""
+        return VISUAL_ENTRY if self.visual else DEFAULT_ENTRY
+
     def extension(self, default: str) -> str:
+        if self.visual:
+            return self.visual_extension or DEFAULT_VISUAL_EXTENSION
         return self.config.get("extension") or default
 
     def _declared(self, key):
@@ -286,6 +340,9 @@ def config_sections(section: str) -> tuple:
     section before 'export:' existed, and packages configured their STEP and
     STL output there; those configurations keep working.
 
+    'cam:' falls back to nothing and nothing falls back to it: manufacturing
+    instructions are neither a part nor a picture of one.
+
     'render:' falls back to 'export:' because an export implementation is
     usable as a render one. An export format is a file a CAD tool can open as a
     part or a sketch, which is a stricter thing to be than an output file in
@@ -294,6 +351,11 @@ def config_sections(section: str) -> tuple:
     'export:' request never falls back to a 'render:' implementation for a
     format that 'render:' owns.
     """
+    if section == CAM:
+        # No fallback either way. Manufacturing instructions are not a file
+        # another tool opens as a part, and neither an export nor a render
+        # implementation has any idea what to do with a machine.
+        return (CAM,)
     return (RENDER, EXPORT) if section == EXPORT else (EXPORT, RENDER)
 
 
@@ -330,6 +392,9 @@ def all_formats(ctx) -> list:
     in, and 2D first is deliberate: it is what the README generator needs.
     """
     formats = []
+    # 'cam:' is not among them: 'pc render' produces every output file an object
+    # has, and a G-code program is not one of those - it is asked for by name,
+    # for one part, by 'pc cam'.
     for section in (RENDER, EXPORT):
         formats.extend(name for name in format_names(builtin_formats(ctx, section)) if name not in formats)
     return formats

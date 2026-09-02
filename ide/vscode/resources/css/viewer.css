@@ -81,6 +81,28 @@ body {
     overflow: hidden;
 }
 
+/* The CAM view: a line saying what is on screen, over a canvas showing it. The
+   canvas takes what the caption leaves, which "height: 100%" alone would not -
+   that is a fraction of the pane rather than of what is left of it. */
+.pane-cam {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.pane-cam .caption {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0.5em 0.75em;
+    opacity: 0.75;
+    font-style: italic;
+}
+
+.pane-cam .viewer {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
 .viewer {
     position: relative;
     width: 100%;

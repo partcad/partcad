@@ -33,6 +33,12 @@ links:
         holdWithForceMax: 20.0
         holdTo:
           //builtin:finger: []
+        # The motor is not screwed to anything yet, so letting go of it here
+        # drops it out of the bracket. Both hands stay where they are until the
+        # last of the four M3 screws is snug - which is what the "m3-snug" stage
+        # below is - and the instruction book draws them on every one of those
+        # steps rather than only on this one.
+        holdUntilStage: m3-snug
 
   {% for corner in ['TL', 'BR', 'TR', 'BL'] %}
   - part: socket-head-m3-screw-6mm

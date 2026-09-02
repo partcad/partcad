@@ -298,6 +298,75 @@
       "type": "number",
       "minimum": 0
     },
+    "tool-range": {
+      "description": "What a machine can do along one property: a range, not a value. A bare number is a fixed value, [min, max] a range, and [min, max, default] a range with the value the machine uses when nothing asks for one.",
+      "anyOf": [
+        { "type": "number" },
+        { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 3 },
+        {
+          "type": "object",
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" },
+            "default": { "type": "number" }
+          },
+          "required": ["min", "max"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "tool-extent": {
+      "description": "[x, y, z] in millimeters.",
+      "type": "array",
+      "items": { "type": "number", "minimum": 0 },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "tool-positioning": {
+      "description": "What the machine has to be told before it can put anything down: the sequence that gets the tool to a known point over the bed, which is what a CAM plugin turns into the preamble of the file it writes. Named for what each one is rather than for the G-code that carries it.",
+      "type": "object",
+      "properties": {
+        "units": { "type": "string", "enum": ["mm", "inch"], "default": "mm" },
+        "absolute": {
+          "type": "boolean",
+          "default": true,
+          "description": "Absolute coordinates rather than relative ones."
+        },
+        "home": {
+          "description": "The axes to home, in the order they are homed in. An empty list means the machine is already referenced and must not be homed.",
+          "anyOf": [
+            { "type": "string", "enum": ["x", "y", "z"] },
+            { "type": "array", "items": { "type": "string", "enum": ["x", "y", "z"] } }
+          ]
+        },
+        "homeFeedRate": { "type": "number", "minimum": 0, "description": "In mm/min." },
+        "travelFeedRate": { "type": "number", "minimum": 0, "description": "In mm/min." },
+        "safeZ": {
+          "type": "number",
+          "minimum": 0,
+          "description": "How far above the bed the tool travels, in millimeters."
+        },
+        "origin": {
+          "description": "Where the tool starts, as [x, y, z] in millimeters.",
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "bedLeveling": { "type": "string", "enum": ["none", "auto", "mesh"] },
+        "prime": {
+          "description": "The purge line the machine draws before the first layer.",
+          "type": "object",
+          "properties": {
+            "length": { "type": "number", "minimum": 0, "description": "In millimeters." },
+            "extrude": { "type": "number", "minimum": 0, "description": "In millimeters of filament." },
+            "feedRate": { "type": "number", "minimum": 0, "description": "In mm/min." }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "tool-visual": {
       "description": "The part that stands for this tool in a picture. Only ever a likeness: it is never manufactured, never ordered and never counted, so the part it names does not have to be manufacturable.",
       "type": "string",
@@ -414,6 +483,38 @@
           ]
         }
       }
+    },
+    "cam": {
+      "description": "The 'cam:' section: the manufacturing instructions 'pc cam' writes. Not a file another tool opens as geometry and not a document about the part, but a program for one machine, correct only for that machine - which is why PartCAD ships no implementation of it and every file type here comes from a package that knows a machine.",
+      "allOf": [
+        { "$ref": "#/definitions/output-section" },
+        {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_.-]+$": { "$ref": "#/definitions/cam-output-type" }
+          }
+        }
+      ]
+    },
+    "cam-output-type": {
+      "description": "One kind of manufacturing instructions. Every field of an output type, plus the one thing that is only meaningful here.",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string" },
+        {
+          "type": "object",
+          "properties": {
+            "visual": {
+              "description": "What the implementation's picture of these instructions is written as - the file type its 'process_visual(path, request)' entry point produces, which is a 3D model of what the instructions do rather than of the part. Absent where the implementation draws nothing; 'true' means the default, STL. Produced by 'pc cam --visual' and shown in the editor's CAM tab.",
+              "anyOf": [
+                { "type": "string", "minLength": 1 },
+                { "type": "boolean" }
+              ]
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
     },
     "render": {
       "description": "The 'render:' section: the 2D projections and documents 'pc render' writes. Its file types are open-ended, like every output section, but the raster options of the built-in formats are still checked.",
@@ -535,6 +636,7 @@
       "additionalProperties": false
     },
     "render": { "$ref": "#/definitions/render" },
+    "cam": { "$ref": "#/definitions/cam" },
     "export": { "$ref": "#/definitions/output-section" },
     "dependencies": {
       "type": "object",
@@ -664,14 +766,39 @@
                 },
                 "parameters": { "$ref": "#/definitions/shape-parameter"},
                 "render": { "$ref": "#/definitions/render" },
+                "cam": { "$ref": "#/definitions/cam" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
                 "manufacturing": {
+                  "description": "How this part is made. 'method' is the kind of process; everything else is what that process has to be told. Only 'additive' takes settings so far, and each of them is a value the machine named by 'tool' has a range for.",
                   "type": "object",
                   "properties": {
-                    "method": { "type": "string", "enum": ["additive", "subtractive", "forming", "pcbBasic"] }
+                    "method": { "type": "string", "enum": ["additive", "subtractive", "forming", "pcbBasic"] },
+                    "tool": {
+                      "description": "The machine that makes this part: a reference to a tool of the matching category - an 'additive' tool for an additive part.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "material": {
+                      "description": "What the machine is loaded with. Defaults to 'properties.material', which is what the finished part is made of; the two come apart when a part is printed in whatever is on the spool and painted afterwards.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "color": {
+                      "description": "The colour it is made in. Defaults to 'properties.color'.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "layerHeight": { "type": "number", "minimum": 0, "description": "In millimeters." },
+                    "spotSize": { "type": "number", "minimum": 0, "description": "In millimeters." },
+                    "speed": { "type": "number", "minimum": 0, "description": "In mm/s." },
+                    "temperature": { "type": "number", "minimum": 0, "description": "In degrees Celsius, at the tool." },
+                    "bedTemperature": { "type": "number", "minimum": 0, "description": "In degrees Celsius, at the bed." },
+                    "infill": { "type": "number", "minimum": 0, "maximum": 1, "description": "A fraction between 0 and 1." },
+                    "perimeters": { "type": "integer", "minimum": 0 },
+                    "supports": { "type": "boolean" }
                   },
                   "required":["method"],
                   "additionalProperties": false
@@ -1276,24 +1403,47 @@
                       "type": "string",
                       "minLength": 1
                     },
-                    "material": { "type": "string", "minLength": 1 },
-                    "layerHeight": {
-                      "description": "The thickness of one layer, in millimeters.",
-                      "type": "number",
-                      "minimum": 0
+                    "materials": {
+                      "description": "What this machine can put down. 'material' in the singular is the one-entry form.",
+                      "anyOf": [
+                        { "type": "string", "minLength": 1 },
+                        { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                      ]
                     },
-                    "spotSize": {
-                      "description": "The width of what the tool lays down in one pass, in millimeters: a nozzle bore, a laser spot.",
-                      "type": "number",
-                      "minimum": 0
+                    "material": {
+                      "description": "The one-entry form of 'materials'.",
+                      "type": "string",
+                      "minLength": 1
                     },
                     "buildVolume": {
-                      "description": "How much fits, as [x, y, z] in millimeters.",
-                      "type": "array",
-                      "items": { "type": "number", "minimum": 0 },
-                      "minItems": 3,
-                      "maxItems": 3
+                      "allOf": [{ "$ref": "#/definitions/tool-extent" }],
+                      "description": "How much fits, as [x, y, z] in millimeters."
                     },
+                    "stepSize": {
+                      "allOf": [{ "$ref": "#/definitions/tool-extent" }],
+                      "description": "The smallest move the machine can make on each axis, as [x, y, z] in millimeters: the resolution of its motion system, which is what says whether a feature is reachable at all."
+                    },
+                    "layerHeight": {
+                      "allOf": [{ "$ref": "#/definitions/tool-range" }],
+                      "description": "The thickness of one layer, in millimeters."
+                    },
+                    "spotSize": {
+                      "allOf": [{ "$ref": "#/definitions/tool-range" }],
+                      "description": "The width of what the tool lays down in one pass, in millimeters: a nozzle bore, a laser spot."
+                    },
+                    "speed": {
+                      "allOf": [{ "$ref": "#/definitions/tool-range" }],
+                      "description": "How fast it puts material down, in mm/s."
+                    },
+                    "temperature": {
+                      "allOf": [{ "$ref": "#/definitions/tool-range" }],
+                      "description": "At the tool, in degrees Celsius."
+                    },
+                    "bedTemperature": {
+                      "allOf": [{ "$ref": "#/definitions/tool-range" }],
+                      "description": "At the bed, in degrees Celsius."
+                    },
+                    "positioning": { "$ref": "#/definitions/tool-positioning" },
                     "unless": { "$ref": "#/definitions/unless" }
                   },
                   "required": ["visual"],

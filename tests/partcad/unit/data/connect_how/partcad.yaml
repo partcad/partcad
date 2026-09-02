@@ -35,6 +35,25 @@ interfaces:
         sketch: m3
 
 parts:
+  printed-plate:
+    type: cadquery
+    desc: The same plate, printed rather than bought
+    path: plate.py
+    manufacturable: true
+    properties:
+      material: PLA
+      color: "#1c8f3a"
+    manufacturing:
+      method: additive
+      tool: extruder
+      layerHeight: 0.2
+      speed: 60
+      temperature: 215
+      bedTemperature: 60
+      infill: 0.2
+      perimeters: 3
+      supports: false
+
   plate:
     type: cadquery
     desc: A plate with two through holes
@@ -92,10 +111,24 @@ tools:
       desc: Puts material down, and holds nothing
       visual: tool-visual
       process: fdm
-      material: PLA
-      layerHeight: 0.2
-      spotSize: 0.4
+      materials: [PLA, PETG]
       buildVolume: [220.0, 220.0, 250.0]
+      stepSize: [0.0125, 0.0125, 0.0025]
+      layerHeight: [0.08, 0.32, 0.2]
+      spotSize: { min: 0.25, max: 0.8, default: 0.4 }
+      speed: [10, 200, 60]
+      temperature: [170, 300, 215]
+      bedTemperature: [0, 120, 60]
+      positioning:
+        units: mm
+        absolute: true
+        home: [z, x, y]
+        homeFeedRate: 3000
+        travelFeedRate: 9000
+        safeZ: 5.0
+        origin: [0.0, 0.0, 0.0]
+        bedLeveling: auto
+        prime: { length: 100.0, extrude: 8.0, feedRate: 1200 }
   subtractive:
     end-mill:
       desc: Takes material away
@@ -111,6 +144,11 @@ assemblies:
   connect_how:
     type: assy
     desc: Two screws connected to a plate, with assembly instructions
+  connect_how_hold_until:
+    type: assy
+    desc: |
+      Two screws, with the plate held from the first step until the second one
+      is done - which is what "holdUntil" and "holdUntilStage" say.
   connect_how_broken:
     type: assy
     desc: |

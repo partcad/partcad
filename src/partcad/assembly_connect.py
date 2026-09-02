@@ -25,6 +25,7 @@ the port of the instance it holds.
 """
 
 import math
+import typing
 
 from . import logging as pc_logging
 
@@ -67,6 +68,8 @@ HOW_FIELDS = (
     "holdToForceMin",
     "holdToForceMax",
     "driver",
+    "holdUntil",
+    "holdUntilStage",
 )
 
 # What a connection does to the object it adds. A push is a straight insertion;
@@ -330,7 +333,37 @@ class ConnectHow:
         # What makes these instructions invalid, for 'pc test' to report. Every
         # one of them is also repaired in place, so that an assembly still
         # builds; the list is what says the repair happened.
+        #
+        # Seeded from the problems the declaration itself has, which are found
+        # here rather than in 'resolve()' - that method starts the list over
+        # every time it runs, and a contradiction between two fields is a fact
+        # about the file that no amount of resolving changes.
+        self._declared_problems: list[str] = []
         self.problems: list[str] = []
+
+        # How long the hold declared on this step lasts. Without either field it
+        # lasts for this step alone, which is what a hold meant before these
+        # existed. 'holdUntil' names a later step by its 'name:'; 'holdUntilStage'
+        # names a stage, and the hold lasts to the last step of it. Both are
+        # inclusive: the step that ends the hold is the last one performed with
+        # it still on.
+        self.hold_until = self._name(config, "holdUntil")
+        self.hold_until_stage = self._name(config, "holdUntilStage")
+        if self.hold_until is not None and self.hold_until_stage is not None:
+            self._declare_problem(
+                "'holdUntil' and 'holdUntilStage' are two ways of saying the same thing;"
+                " using 'holdUntil' (%s) and ignoring 'holdUntilStage' (%s)" % (self.hold_until, self.hold_until_stage)
+            )
+            self.hold_until_stage = None
+
+        # The steps this hold carries through, resolved against the rest of the
+        # assembly once every one of them is known: see 'resolve_hold_until()'.
+        # Empty for a hold that ends with its own step.
+        self.hold_until_steps: list[str] = []
+        # The last step the hold covers, as an index into the assembly's own
+        # children. None until it is resolved, and for a hold that ends with its
+        # own step - which an instruction book reads as "not carried".
+        self.hold_until_last: typing.Optional[int] = None
 
     def _number(self, config, field, default):
         value = config.get(field, None)
@@ -351,6 +384,34 @@ class ConnectHow:
             return str(value)
         pc_logging.error("%s: 'how.stage' must be a non-empty string, ignoring: %s" % (self.where, value))
         return None
+
+    def _name(self, config, field):
+        """A field naming something else in the assembly, or None.
+
+        A step's name and a stage's are both labels, so a bare number in YAML is
+        as good a name as a word and is read as one - the same rule 'how.stage'
+        itself follows.
+        """
+        value = config.get(field, None)
+        if value is None:
+            return None
+        if isinstance(value, str) and value != "":
+            return value
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return str(value)
+        pc_logging.error("%s: 'how.%s' must be a non-empty string, ignoring: %s" % (self.where, field, value))
+        return None
+
+    def _declare_problem(self, message):
+        """Record what is wrong with the declaration itself, and report it.
+
+        Kept apart from 'problems' because 'resolve()' clears that list every
+        time it runs and these findings do not depend on what is being connected.
+        They are copied back in at the start of each resolution, unlogged: this
+        is where they were reported.
+        """
+        self._declared_problems.append(message)
+        pc_logging.error("%s: %s" % (self.where, message))
 
     def _tool_spec(self, config, field, tools_only=False):
         """The '{tool: [where it acts]}' mapping of one field, or None.
@@ -440,7 +501,7 @@ class ConnectHow:
         the parameter is optional so that the field can be read from a
         configuration alone.
         """
-        self.problems = []
+        self.problems = list(self._declared_problems)
         self._push_item = source_item
         self._push_frame = source_frame
         self.push_direction = _push_direction(mated_frame)
@@ -739,6 +800,8 @@ class ConnectHow:
             and not self.hold_to
             and not self.driver
             and not self.hold_force_specified
+            and self.hold_until is None
+            and self.hold_until_stage is None
         )
 
     def info(self):
@@ -764,7 +827,77 @@ class ConnectHow:
             info["holdTo"] = [hold.info() for hold in self.hold_to]
         if self.driver:
             info["driver"] = [hold.info() for hold in self.driver]
+        if self.hold_until is not None:
+            info["holdUntil"] = self.hold_until
+        if self.hold_until_stage is not None:
+            info["holdUntilStage"] = self.hold_until_stage
+        if self.hold_until_steps:
+            info["holdUntilSteps"] = list(self.hold_until_steps)
         return info
+
+
+def resolve_hold_until(children, where: str) -> None:
+    """Work out how far each step's hold reaches, once every step is known.
+
+    A 'holdUntil'/'holdUntilStage' is a statement about the steps that come
+    *after* the one that declares it, so it cannot be resolved while that step is
+    being built. This runs once the whole list is: it is handed the children of
+    one assembly, in the order they are assembled, and fills in how far each hold
+    carries. After every child's own 'resolve()', and once - what it finds wrong
+    is appended to the same 'problems' list that method starts over.
+
+    A declaration that names nothing later is reported and left unresolved. The
+    step still holds what it said it holds - for its own step, as it would
+    without the field - because the hold is the useful half and the span is the
+    half that was written wrong.
+    """
+    names = [getattr(child, "name", None) for child in children]
+    stages = [getattr(child.how, "stage", None) if child.how is not None else None for child in children]
+
+    def display(index):
+        name = names[index]
+        if name:
+            return name
+        return getattr(getattr(children[index], "item", None), "name", None) or "<unnamed>"
+
+    for index, child in enumerate(children):
+        how = child.how
+        if how is None:
+            continue
+        how.hold_until_last = None
+        how.hold_until_steps = []
+        if how.hold_until is None and how.hold_until_stage is None:
+            continue
+
+        last = None
+        if how.hold_until is not None:
+            # The first later step of that name: a name repeated further down
+            # would extend the hold past the step the author pointed at.
+            for later in range(index + 1, len(children)):
+                if names[later] == how.hold_until:
+                    last = later
+                    break
+            if last is None:
+                how._problem("'holdUntil' names no step that comes after this one: %s" % how.hold_until)
+        else:
+            # The *last* step of that stage: a stage is a group, and holding
+            # until it ends means holding through all of it.
+            for later in range(index + 1, len(children)):
+                if stages[later] == how.hold_until_stage:
+                    last = later
+            if last is None:
+                how._problem("'holdUntilStage' names no stage that comes after this step: %s" % how.hold_until_stage)
+
+        if last is None:
+            continue
+        if not how.hold_with and not how.hold_to:
+            how._problem(
+                "there is nothing to keep holding: the step holds neither end,"
+                " and 'holdUntil%s' says to keep doing it" % ("" if how.hold_until else "Stage")
+            )
+            continue
+        how.hold_until_last = last
+        how.hold_until_steps = [display(covered) for covered in range(index + 1, last + 1)]
 
 
 def check_stage_sequence(node_list, where: str):

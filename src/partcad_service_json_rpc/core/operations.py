@@ -2169,6 +2169,136 @@ def _validate_output_format(pc, ctx, fmt, packages):
         )
 
 
+def _cam_target(session, params):
+    """The context, the part and the options package one CAM request is about."""
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None, None, None
+    pc = session.partcad
+
+    object_name = params.get("object")
+    if not object_name:
+        raise JsonRpcError(USAGE_ERROR, "No object is given")
+
+    package = ctx.resolve_package_path(params.get("package") or ".")
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package)
+    package, object_name = pc.utils.resolve_resource_path(package_obj.name, object_name)
+
+    options_package = params.get("options_package")
+    if options_package:
+        options_package = ctx.resolve_package_path(options_package)
+        if ctx.get_project(options_package) is None:
+            raise JsonRpcError(USAGE_ERROR, "Options package %s is not found" % options_package)
+
+    # "-p name=value" arrives as the strings the user typed; the object accessors
+    # take a mapping.
+    param_dict = {}
+    for pair in params.get("params") or []:
+        if "=" in pair:
+            key, value = pair.split("=", 1)
+            param_dict[key] = value
+
+    shape = ctx.get_part("%s:%s" % (package, object_name), param_dict or None)
+    if shape is None:
+        raise JsonRpcError(USAGE_ERROR, "Part %s:%s is not found" % (package, object_name))
+    return ctx, shape, options_package
+
+
+def cam_info(session, params):
+    """What kinds of manufacturing instructions an object has, and their picture.
+
+    Configuration only - nothing is built - because this is what an editor asks
+    before deciding whether to offer a CAM view of an object at all.
+    """
+    ctx, shape, options_package = _cam_target(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    options_project = ctx.get_project(options_package) if options_package else None
+    return pc.actions.cam.cam_info(ctx, shape, options_project=options_project)
+
+
+def cam_visual(session, params):
+    """The plugin's picture of the instructions, as base64 binary glTF.
+
+    The conversion to glTF is PartCAD's own exporter, run in the sandbox: what
+    the plugin writes is whatever it finds natural, and what an editor draws is
+    glTF. See 'partcad.actions.cam.visual_model_async'.
+    """
+    import asyncio
+    import base64
+
+    ctx, shape, options_package = _cam_target(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    try:
+        gltf = asyncio.run(
+            pc.actions.cam.visual_model_async(
+                ctx,
+                shape,
+                format_name=params.get("format"),
+                options_package=options_package,
+            )
+        )
+    except ValueError as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+
+    return {
+        "object": "%s:%s" % (shape.project_name, shape.name),
+        "gltf": base64.b64encode(gltf).decode("ascii"),
+        "size": len(gltf),
+    }
+
+
+def cam(session, params):
+    """Produce the manufacturing instructions for one part - `pc cam`.
+
+    Two files come of it and the difference matters (see `partcad.actions.cam`):
+    the package keeps its own copy, written once and reused afterwards, and the
+    caller gets a copy of that where the command was run. The path returned is
+    the caller's copy, because that is the one they asked for.
+
+    `visual` asks the plugin for a 3D model of what the instructions do rather
+    than for the instructions - only where the plugin declares that it can draw
+    one.
+    """
+    import asyncio
+
+    ctx, shape, options_package = _cam_target(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    try:
+        path = asyncio.run(
+            pc.actions.cam.cam_async(
+                ctx,
+                shape,
+                format_name=params.get("format"),
+                options_package=options_package,
+                visual=params.get("visual", False),
+                output_dir=params.get("output_dir"),
+                output_name=params.get("output_name"),
+                force=params.get("force", False),
+                ignore_manufacturability=params.get("ignore_manufacturability", False),
+            )
+        )
+    except ValueError as e:
+        # A file type nobody implements, an object that is not a part, an
+        # options package that is not there: the request cannot be made sense
+        # of, and saying so is more use than a traceback.
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+    except pc.exception.NotManufacturableError as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+
+    pc.logging.info("Wrote the manufacturing instructions: %s" % path)
+    return {"path": path}
+
+
 def render_objects(session, params):
     """Render/export parts, assemblies, scenes, sketches, or interfaces to files.
 

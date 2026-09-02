@@ -154,8 +154,11 @@ def test_each_category_reports_its_own_properties(project):
 
     additive = prj.get_tool("extruder").info()
     assert additive["Process"] == "fdm"
-    assert additive["LayerHeight"] == 0.2
+    assert additive["Materials"] == ["PLA", "PETG"]
     assert additive["BuildVolume"] == [220.0, 220.0, 250.0]
+    assert additive["StepSize"] == [0.0125, 0.0125, 0.0025]
+    assert additive["LayerHeight"] == {"min": 0.08, "max": 0.32, "default": 0.2, "unit": "mm"}
+    assert additive["Positioning"]["home"] == ["z", "x", "y"]
     assert "TorqueMax" not in additive
 
     subtractive = prj.get_tool("end-mill").info()
@@ -211,3 +214,104 @@ def _project(config):
     """A package built from a configuration written here rather than on disk."""
     ctx = pc.init(TOOL_PACKAGE)
     return pc.Project(ctx, "//in-memory", ctx.get_project("//").config_dir, config_obj=dict(config))
+
+
+#
+# What an additive tool says a machine can do
+#
+
+
+def test_a_range_is_written_four_ways(project):
+    """A fixed value, a pair, a triple and a mapping are one thing"""
+    from partcad.tool import ToolRange
+
+    fixed = ToolRange.parse(0.2, "test", "layerHeight")
+    assert (fixed.minimum, fixed.maximum, fixed.default) == (0.2, 0.2, 0.2)
+    assert ToolRange.parse([0.05, 0.3], "test", "layerHeight").default is None
+    assert ToolRange.parse([0.05, 0.3, 0.2], "test", "layerHeight").default == 0.2
+    mapped = ToolRange.parse({"min": 0.05, "max": 0.3, "default": 0.2}, "test", "layerHeight")
+    assert (mapped.minimum, mapped.maximum, mapped.default) == (0.05, 0.3, 0.2)
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        "wide",
+        [0.3],
+        [0.3, 0.05],
+        {"min": 0.05},
+        {"min": 0.05, "max": 0.3, "default": 9.9},
+        {"min": 0.05, "max": 0.3, "nominal": 0.2},
+    ],
+)
+def test_a_range_that_is_not_one_is_reported_and_dropped(config, caplog):
+    from partcad.tool import ToolRange
+
+    assert ToolRange.parse(config, "test", "layerHeight") is None
+    assert "layerHeight" in caplog.text
+
+
+def test_a_range_says_what_is_inside_it():
+    from partcad.tool import ToolRange
+
+    allowed = ToolRange.parse([0.05, 0.3], "test", "layerHeight")
+    assert allowed.contains(0.05) and allowed.contains(0.3) and allowed.contains(0.2)
+    assert not allowed.contains(0.04) and not allowed.contains(0.31)
+
+
+def test_an_additive_tool_states_ranges_rather_than_values(project):
+    """A machine prints layers from 0.08 to 0.32mm; a part picks one"""
+    _, prj = project
+    printer = prj.get_tool("extruder")
+    assert printer.range_of("layerHeight").minimum == 0.08
+    assert printer.range_of("layerHeight").default == 0.2
+    assert printer.range_of("spotSize").maximum == 0.8
+    assert printer.range_of("nonexistent") is None
+    assert printer.materials == ["PLA", "PETG"]
+    assert printer.step_size == [0.0125, 0.0125, 0.0025]
+
+
+def test_an_additive_tool_carries_the_initial_positioning_sequence(project):
+    """What the machine has to be told before it can put anything down"""
+    _, prj = project
+    positioning = prj.get_tool("extruder").positioning
+    assert positioning["units"] == "mm"
+    assert positioning["absolute"] is True
+    assert positioning["home"] == ["z", "x", "y"]
+    assert positioning["homeFeedRate"] == 3000.0
+    assert positioning["safeZ"] == 5.0
+    assert positioning["origin"] == [0.0, 0.0, 0.0]
+    assert positioning["bedLeveling"] == "auto"
+    assert positioning["prime"] == {"length": 100.0, "extrude": 8.0, "feedRate": 1200.0}
+
+
+def test_a_positioning_field_partcad_cannot_read_is_dropped(caplog):
+    """It is about to be handed to a machine, so carrying it would be worse"""
+    project = _project(
+        {
+            "tools": {
+                "additive": {
+                    "printer": {
+                        "visual": "plate",
+                        "positioning": {"units": "furlongs", "home": ["w"], "warmUp": True},
+                    }
+                }
+            }
+        }
+    )
+    assert project.get_tool("printer").positioning == {}
+    assert "positioning.units" in caplog.text
+    assert "positioning.home" in caplog.text
+    assert "unknown 'positioning' field" in caplog.text
+
+
+def test_the_build_volume_says_what_does_not_fit(project):
+    """And says it per axis, because that is what has to be changed"""
+    _, prj = project
+    printer = prj.get_tool("extruder")
+    assert printer.fits([100.0, 100.0, 100.0]) is None
+    assert printer.fits([100.0, 100.0, 250.0]) is None
+    over = printer.fits([300.0, 100.0, 400.0])
+    assert "X: 300.0mm > 220.0mm" in over and "Z: 400.0mm > 250.0mm" in over
+    # Nothing to compare against is not a failure to fit.
+    assert printer.fits(None) is None

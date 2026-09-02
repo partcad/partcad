@@ -14,7 +14,7 @@
 //
 
 /** The tabs the panel can show. '3d' is always the first one. */
-export type TabId = '3d' | 'bom' | 'instructions' | 'supply';
+export type TabId = '3d' | 'bom' | 'instructions' | 'cam' | 'supply';
 
 /** A displayable object: the glTF, decompressed by the host, as base64. */
 export interface ShowObject {
@@ -50,6 +50,23 @@ export interface ClearMessage {
 }
 
 /**
+ * Which further tabs this object turns out to have.
+ *
+ * Sent after the 'show' it belongs to rather than inside it. Whether an object
+ * has a CAM view is a question for the daemon - does its package declare a
+ * 'cam:' file type, and can that implementation draw what it writes - and the
+ * geometry must not wait on the answer. The renderer adds the tab when this
+ * arrives for the generation it is still on, keeping whichever tab the reader
+ * is looking at.
+ */
+export interface TabsMessage {
+    type: 'tabs';
+    token: number;
+    /** The file type the CAM visualization is written as, or null for none. */
+    cam: string | null;
+}
+
+/**
  * The answer to one 'fetchTab'.
  *
  * 'token' is the generation of the object the request was made for. A daemon
@@ -66,7 +83,7 @@ export interface TabDataMessage {
     error?: string;
 }
 
-export type HostMessage = ShowMessage | ClearMessage | TabDataMessage;
+export type HostMessage = ShowMessage | ClearMessage | TabDataMessage | TabsMessage;
 
 /** Renderer to host: fill this tab in for the object of generation 'token'. */
 export interface FetchTabMessage {
@@ -141,6 +158,21 @@ export interface DocumentData {
 export interface GuideData {
     assembly: string;
     document: DocumentData;
+}
+
+/**
+ * The CAM view of an object: what its manufacturing instructions look like.
+ *
+ * Not the part. A 'cam:' plugin that can draw what it is about to do writes a 3D
+ * model of it - the beads an FDM printer lays, the volume a mill takes away - in
+ * whatever format it finds natural, and PartCAD converts that to glTF before it
+ * gets here. See 'partcad.actions.cam.visual_model_async'.
+ */
+export interface CamData {
+    object: string;
+    /** Binary glTF, base64 encoded. */
+    gltf: string;
+    size: number;
 }
 
 /** One supplier's answer for one line item. */
