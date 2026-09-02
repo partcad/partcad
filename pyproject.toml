@@ -22,7 +22,7 @@
 #     `partcad_service_json_rpc` not importing `partcad_client`.
 #
 # `partcad-cli` is still published, as a shim: no modules, no entry points, one
-# dependency on this. See `shim/pyproject.toml`.
+# dependency on this. See `dev-tools/shim/pyproject.toml`.
 #
 # This file is also the development environment: Poetry reads the `[project]`
 # metadata above and the `[tool.poetry.group.*]` dependency groups below, so

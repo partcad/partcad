@@ -17,7 +17,7 @@ ordinary update. The editor resolves `extensionDependencies` at install time, so
 nothing they configured moves: `partcad.*` settings live in their `settings.json` under keys the new extension
 contributes, not in anything the old one owned.
 
-This is the same shape as `shim/` at the repository root, which keeps `pip install partcad-cli` working now
+This is the same shape as `dev-tools/shim/`, which keeps `pip install partcad-cli` working now
 that everything ships in one `partcad` wheel, and it is temporary in the same way. Delete it once the installed
 base has moved.
 

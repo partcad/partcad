@@ -139,7 +139,7 @@ def test_the_claude_plugin_is_declared_in_bumpversion():
 # today must not be swept in and then start failing on the day it makes a release
 # of its own.
 #
-# `partcad-cli` is the compatibility shim in `shim/`, which pins `partcad` at
+# `partcad-cli` is the compatibility shim in `dev-tools/shim/`, which pins `partcad` at
 # exactly this version. That pin is the only intra-repository one left -- the
 # rest became imports when the five distributions became one.
 PARTCAD_DISTRIBUTIONS = (
