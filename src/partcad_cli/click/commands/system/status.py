@@ -23,6 +23,7 @@ path = user_config.internal_state_dir
 
 
 def get_total(context):
+    """Report the size of the whole internal state directory."""
     token = otel_context.attach(context)
     with pc.logging.Action("Status", "total"):
         total = directory_size_mb(path)
@@ -31,6 +32,7 @@ def get_total(context):
 
 
 def get_git(context):
+    """Report the size of the git clone cache."""
     token = otel_context.attach(context)
     with pc.logging.Action("Status", "git"):
         git_path = os.path.join(path, "git")
@@ -40,6 +42,7 @@ def get_git(context):
 
 
 def get_tar(context):
+    """Report the size of the unpacked tarball cache."""
     token = otel_context.attach(context)
     with pc.logging.Action("Status", "tar"):
         tar_path = os.path.join(path, "tar")
@@ -49,6 +52,7 @@ def get_tar(context):
 
 
 def get_sandbox(context):
+    """Report the size of the conda sandbox environments."""
     token = otel_context.attach(context)
     with pc.logging.Action("Status", "sandbox"):
         sandbox_path = os.path.join(path, "sandbox")

@@ -61,17 +61,40 @@ def test_a_dangling_symlink_is_not_an_error(tree: pathlib.Path) -> None:
     assert directory_size(tree) == 300
 
 
+def test_a_special_file_is_not_counted(tree: pathlib.Path) -> None:
+    """`os.walk` hands back every non-directory entry, a FIFO included, and
+    `st_size` does not mean disk usage for one. It occupies no space worth
+    reporting, so it contributes nothing rather than whatever that field held."""
+    if not hasattr(os, "mkfifo"):  # pragma: no cover - Windows
+        pytest.skip("this platform has no FIFOs")
+    try:
+        os.mkfifo(tree / "fifo")
+    except OSError:  # pragma: no cover - a filesystem that will not hold one
+        pytest.skip("this filesystem will not create a FIFO")
+    assert directory_size(tree) == 300
+
+
+def _lstat_raising_on(monkeypatch, name: str, error: OSError) -> None:
+    """Make `os.lstat` fail for one basename and behave for every other.
+
+    Patched at `os.lstat` because that is the one question `directory_size` asks
+    of each name; a test that patched something it no longer calls would pass
+    without exercising anything.
+    """
+    real_lstat = os.lstat
+
+    def failing_lstat(path, *args, **kwargs):
+        if os.path.basename(os.fspath(path)) == name:
+            raise error
+        return real_lstat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "lstat", failing_lstat)
+
+
 def test_a_file_that_vanishes_mid_walk_is_skipped(tree: pathlib.Path, monkeypatch) -> None:
-    """The race this exists for: `os.walk` listed the name, and by the time
-    `getsize` asks, whatever was writing the tree has removed it."""
-    real_getsize = os.path.getsize
-
-    def vanishing_getsize(path):
-        if os.path.basename(path) == "two":
-            raise FileNotFoundError(2, "No such file or directory", str(path))
-        return real_getsize(path)
-
-    monkeypatch.setattr(os.path, "getsize", vanishing_getsize)
+    """The race this exists for: `os.walk` listed the name, and by the time its
+    size is asked for, whatever was writing the tree has removed it."""
+    _lstat_raising_on(monkeypatch, "two", FileNotFoundError(2, "No such file or directory"))
     # The 100-byte file still counts: one unreadable name must not abort the walk.
     assert directory_size(tree) == 100
 
@@ -79,12 +102,5 @@ def test_a_file_that_vanishes_mid_walk_is_skipped(tree: pathlib.Path, monkeypatc
 def test_an_unreadable_file_is_skipped(tree: pathlib.Path, monkeypatch) -> None:
     """Same treatment for a file this process may not stat: a status report is
     worth more with one file missing from the total than not printed at all."""
-    real_getsize = os.path.getsize
-
-    def denied_getsize(path):
-        if os.path.basename(path) == "one":
-            raise PermissionError(13, "Permission denied", str(path))
-        return real_getsize(path)
-
-    monkeypatch.setattr(os.path, "getsize", denied_getsize)
+    _lstat_raising_on(monkeypatch, "one", PermissionError(13, "Permission denied"))
     assert directory_size(tree) == 200

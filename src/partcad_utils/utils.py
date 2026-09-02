@@ -8,6 +8,7 @@
 
 import os
 import re
+import stat
 import sys
 from types import ModuleType, FunctionType
 from gc import get_referents
@@ -190,25 +191,34 @@ def directory_size(path) -> int:
     'test_system_status_reports_the_local_state' failed on macOS in CI with a
     dangling 'sandbox/pc-py-conda-3.9/include/python3.9/cellobject.h'.
 
-    Symlinks are skipped rather than followed: their target is either counted
+    Regular files, and nothing else. 'os.walk' puts every non-directory entry in
+    'filenames', so a socket, a FIFO or a device node arrives here alongside the
+    files -- and 'st_size' means something different for each of them, none of it
+    disk usage. They occupy no space worth reporting, so they are left out rather
+    than counted as whatever their size field happens to hold.
+
+    Symlinks are left out for a different reason: their target is either counted
     where it lives or outside this tree entirely, and following them would
-    double-count a conda environment's hardlink farm. 'OSError' covers the
-    dangling ones a race leaves behind, and a directory this process may not
-    read (PermissionError) for good measure. 'os.walk' swallows its own
-    errors by default, so a directory that disappears needs nothing extra;
-    a path that was never there yields no entries and the total is zero,
-    which is the right answer for a cache that has not been created yet.
+    double-count a conda environment's hardlink farm.
+
+    One 'os.lstat' answers both questions and asks the filesystem once, where
+    'islink' followed by 'getsize' asked it twice and followed the link on the
+    second ask. 'os.walk' swallows its own errors by default, so a directory
+    that disappears needs nothing extra; a path that was never there yields no
+    entries and the total is zero, which is the right answer for a cache that
+    has not been created yet.
     """
     total = 0
     for dirpath, _dirnames, filenames in os.walk(path):
         for name in filenames:
             file_path = os.path.join(dirpath, name)
             try:
-                if not os.path.islink(file_path):
-                    total += os.path.getsize(file_path)
+                info = os.lstat(file_path)
             except OSError:
                 # Gone, or unreadable, between the listing and the question.
                 continue
+            if stat.S_ISREG(info.st_mode):
+                total += info.st_size
     return total
 
 

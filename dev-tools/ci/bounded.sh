@@ -64,11 +64,22 @@ fi
 # inside the fault handler: SIGKILL a minute later, so the step still ends.
 PYTHONFAULTHANDLER=1 timeout --signal=ABRT --kill-after=60 "${TIMEOUT}" "$@" && status=0 || status=$?
 
-# 134 is the shell's encoding of "killed by SIGABRT" (128 + 6), which is this
-# wrapper's own doing; 124 is 'timeout' reporting that even SIGKILL was needed.
-# Anything else is the command's own exit code and is passed through untouched.
+# Which statuses mean "this wrapper stopped it", and which mean "it stopped on
+# its own". Getting this wrong is worse here than anywhere else: the whole point
+# of the file is to say accurately why a command ended.
+#
+#   124  'timeout' fired. It reports this whatever signal it sent, so it is the
+#        normal outcome of the SIGABRT above -- not 134, which is what the shell
+#        would report for a process killed by SIGABRT if 'timeout' were not in
+#        the way. Verified against GNU coreutils 9.x rather than assumed.
+#   137  'timeout' fired, the command ignored SIGABRT, and '--kill-after' had to
+#        SIGKILL it a minute later. Also this wrapper's doing.
+#   134  the command aborted *by itself*, with no timeout involved -- a C
+#        extension calling abort(), a glibc assertion, OpenCASCADE giving up.
+#        Claiming a timeout here would send someone looking for a hang that
+#        never happened, so it is passed through with everything else.
 case "${status}" in
-134 | 124)
+124 | 137)
   echo "::error::'$1' produced no result within ${TIMEOUT}s and was aborted." >&2
   echo "The traceback above, if there is one, is every thread's stack at that moment." >&2
   ;;
