@@ -143,7 +143,21 @@ jobs:
   build-containers:
     name: "Build Docker Containers"
     runs-on: ubuntu-24.04
-    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    # Only a version bump runs the matrix on a push to "devel": every other push
+    # there is followed by one within the hour, and running it twice buys
+    # nothing.
+    #
+    # "github.event_name != 'push'" leads, and is not decoration. Only a push
+    # carries "head_commit"; on a "schedule" it is null, "startsWith" reads that
+    # as the empty string, and "github.ref" for the nightly run of the default
+    # branch *is* "refs/heads/devel" -- so without this clause the whole
+    # condition is false and the nightly run is skipped. It was, every night
+    # from the day this guard was written until this line was added, which is
+    # the deep matrix ".github/actions/test-depth" promises and nothing else
+    # provides: a pull request drops OSES_DEEP_ONLY on the strength of it.
+    # A manual dispatch, a merge queue and a pull request are all in the same
+    # position and are all covered by leading with the event name.
+    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     permissions:
       packages: write
     steps:
@@ -173,7 +187,10 @@ jobs:
   set-matrix:
     name: "Set matrix"
     runs-on: ubuntu-latest
-    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    # Same guard as "build-containers" above, for the same reasons: a push to
+    # "devel" runs this only for a version bump, and the event name leads
+    # because a "schedule" carries no "head_commit" to read.
+    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       matrix-sandbox: ${{ steps.set-matrix.outputs.matrix-sandbox }}
@@ -451,10 +468,20 @@ jobs:
 
           # BEGIN PARTCAD EXAMPLES
           cd ./examples
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples/partcad
+          # Through 'bounded.sh', which aborts a command that stops making
+          # progress and dumps every thread's stack -- see the file for why.
+          #
+          # KNOWN OPEN: on 'ubuntu-24.04-arm' the 'test' command below stops
+          # producing output shortly after '//pub/examples/partcad/produce_assembly_urdf'
+          # and never resumes; the same commands pass on 'ubuntu-latest' (x86_64)
+          # in the same run, on both sandbox Pythons. Every version-bump CI run
+          # on 'devel' from 0.8.19 onward ended up cancelled on it. The wrapper
+          # does not fix that hang. It makes the next occurrence say where the
+          # threads are stopped, which is what nobody has had so far.
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples/partcad
           # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --package //pub/examples/partcad
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi --threads-max 4 render -r --package //pub/examples/partcad
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --package //pub/examples/partcad
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi --threads-max 4 render -r --package //pub/examples/partcad
           coverage combine
           # END PARTCAD EXAMPLES
 
@@ -584,8 +611,8 @@ jobs:
           # BEGIN ALL EXAMPLES
           cd ./examples
           # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
           coverage combine
           # END ALL EXAMPLES
 
@@ -674,9 +701,9 @@ jobs:
           # already keeps the job green, so the log is the only place a genuine
           # regression in either command can show up.
           set +e
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub
           list_rc=$?
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --package //pub
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --package //pub
           test_rc=$?
           set -e
           echo "::notice title=Repo //pub::'list all' exited ${list_rc}, 'test' exited ${test_rc}"

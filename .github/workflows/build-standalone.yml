@@ -85,8 +85,24 @@ permissions:
 # the suffix to every run, independent ones included, and no push would ever
 # supersede the build in flight again. The non-empty half has to be the half the
 # condition selects.
+#
+# A third case now sits between them: a version bump, keyed by commit the way
+# "test.yml", "build.yml" and "build-ide-standalone.yml" key theirs. The bundles
+# a bump produces are that version's, and the release is cut from that commit --
+# so the next bump superseding this run does not replace its artifacts, it
+# removes them. Runs 490 through 494 were cancelled exactly that way on
+# 2026-09-01, leaving 0.8.28 through 0.8.31 with no bundles built on "devel" at
+# all.
+#
+# Three cases, chained left to right, and the order is the precedence: a called
+# instance is a called instance whatever its commit message says, so it has to
+# be tested first. The chain reads `A && B || C && D || ''` -- `&&` yields the
+# first falsy operand, `||` the first truthy one, so a false `A` falls through
+# to `C && D` and a false `C` to the empty string. Same trap as the note above:
+# every value that is *selected* has to be non-empty, or the chain runs on past
+# it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ toJSON(inputs.called) != 'null' && format('-called-{0}', github.run_id) || '' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ toJSON(inputs.called) != 'null' && format('-called-{0}', github.run_id) || startsWith(github.event.head_commit.message, 'Version updated') && format('-{0}', github.sha) || '' }}
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 # One bundle per supported OS version, not one per operating system. A frozen

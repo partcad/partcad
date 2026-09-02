@@ -23,6 +23,7 @@ from urllib.request import url2pathname
 
 import yaml
 from packaging.specifiers import SpecifierSet
+from partcad_utils.utils import directory_size_mb
 
 from ..rpc.dispatcher import JsonRpcError
 from . import events
@@ -1030,26 +1031,17 @@ def daemon_status(session, params):
     pc = session.ensure_partcad()
     root = pc.user_config.internal_state_dir
 
-    def _dir_size(path):
-        total = 0
-        for dirpath, _dirnames, filenames in os.walk(path):
-            for name in filenames:
-                fp = os.path.join(dirpath, name)
-                if not os.path.islink(fp):
-                    total += os.path.getsize(fp)
-        return total / 1048576.0
-
     with pc.logging.Process("Status", "global"):
         pc.logging.info("PartCAD version: %s" % pc.__version__)
         pc.logging.info("Internal data storage location: %s" % root)
         with pc.logging.Action("Status", "total"):
-            pc.logging.info("Total internal data storage size: %.2fMB" % _dir_size(root))
+            pc.logging.info("Total internal data storage size: %.2fMB" % directory_size_mb(root))
         with pc.logging.Action("Status", "git"):
-            pc.logging.info("Git cache size: %.2fMB" % _dir_size(os.path.join(root, "git")))
+            pc.logging.info("Git cache size: %.2fMB" % directory_size_mb(os.path.join(root, "git")))
         with pc.logging.Action("Status", "tar"):
-            pc.logging.info("Tar cache size: %.2fMB" % _dir_size(os.path.join(root, "tar")))
+            pc.logging.info("Tar cache size: %.2fMB" % directory_size_mb(os.path.join(root, "tar")))
         with pc.logging.Action("Status", "sandbox"):
-            pc.logging.info("Sandbox environments size: %.2fMB" % _dir_size(os.path.join(root, "sandbox")))
+            pc.logging.info("Sandbox environments size: %.2fMB" % directory_size_mb(os.path.join(root, "sandbox")))
     return None
 
 
