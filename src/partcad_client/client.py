@@ -62,7 +62,9 @@ def start_daemon(cwd: Optional[str] = None, extra_args=()) -> str:
     is what `pc daemon start` and the editor extension use.
     """
     argv = launcher_argv() + ["--socket", *extra_args]
-    result = subprocess.run(argv, cwd=cwd, capture_output=True, text=True)
+    # check=False: the returncode is handled below, so that the error can
+    # carry what the launcher printed rather than only its exit status.
+    result = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise RuntimeError(
             "%s exited with status %d:\n%s" % (" ".join(argv), result.returncode, _launcher_output(result))

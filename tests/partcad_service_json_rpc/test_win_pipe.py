@@ -98,6 +98,8 @@ def test_the_daemon_gets_somewhere_to_write_its_traceback(spawns, tmp_path):
 
 
 def _raise(error):
+    """A stand-in for a call that fails with ``error``."""
+
     def raiser(*args, **kwargs):
         raise error
 
