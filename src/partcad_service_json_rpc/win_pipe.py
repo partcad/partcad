@@ -14,17 +14,23 @@ operations are blocking) and notifications routed back to the calling pipe.
 The pipe's name, and the client side of talking to it, are in
 ``partcad_utils.win_pipe`` -- the rendezvous both ends have to agree on.
 
-NOTE: this module is Windows-only. It is not exercised in the Linux dev
-container / CI; Windows-specific APIs are imported inside functions so the module
-still byte-compiles on POSIX.
+NOTE: serving is Windows-only, and Windows-specific APIs are reached only inside
+functions so the module still imports on POSIX. There is no Windows runner in
+CI, so what can be checked without one is: `test_win_pipe.py` drives
+:func:`spawn_pipe_daemon` with a stand-in ``Popen`` and pins the argv and the
+redirection the daemon is started with, since neither is a Windows API and both
+have been wrong.
 """
 
 import asyncio
+import contextlib
+import os
 import subprocess
 import sys
 import threading
 
 from partcad_utils.win_pipe import STOP_METHOD, pipe_name, read_frame, write_frame
+from partcad_utils.workspace import workspace_dir
 
 from .rpc.dispatcher import Dispatcher
 from .rpc.methods import build_registry
@@ -49,16 +55,57 @@ def _launcher_argv() -> list:
     return [sys.executable, "-m", "partcad_service_json_rpc"]
 
 
-def spawn_pipe_daemon(root_path: str) -> None:
-    """Start a detached server process serving the workspace's named pipe."""
+def spawn_pipe_daemon(root_path: str, extra_args=()) -> None:
+    """Start a detached server process serving the workspace's named pipe.
+
+    ``extra_args`` are the launcher's own settings flags (`--python-sandbox`,
+    `--offline`, ...), from `partcad_service_json_rpc.__main__.settings_argv`.
+    They have to be repeated here because this daemon is a *new process*: the
+    POSIX daemon is a fork of the launcher and keeps whatever it was told, while
+    without this the Windows one served every workspace with the defaults --
+    `pc --python-sandbox conda daemon start` printed a pipe, and the daemon
+    behind it had no idea conda had been asked for.
+    """
     creationflags = 0
     creationflags |= getattr(subprocess, "DETACHED_PROCESS", 0)
     creationflags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    subprocess.Popen(
-        _launcher_argv() + ["--serve-pipe", pipe_name(root_path)],
-        close_fds=True,
-        creationflags=creationflags,
-    )
+    with _daemon_log(root_path) as log:
+        subprocess.Popen(
+            _launcher_argv() + ["--serve-pipe", pipe_name(root_path), *extra_args],
+            close_fds=True,
+            creationflags=creationflags,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=log,
+        )
+
+
+@contextlib.contextmanager
+def _daemon_log(root_path: str):
+    """The file the detached daemon's own output goes to; ``None`` if there is none.
+
+    ``DETACHED_PROCESS`` leaves the child with no console, so everything it says
+    on its way out -- the traceback of a daemon that dies before it serves, which
+    is the only account of why the pipe never appeared -- goes nowhere unless it
+    is redirected. The POSIX daemon writes the same file name from inside itself
+    (``daemon._redirect_std_fds``), which it can because it is a fork and gets to
+    run code before it serves; this one is a new process and cannot.
+
+    Yields ``None`` when the file cannot be opened. Somewhere to log is worth
+    having, and not worth refusing to start a daemon over.
+    """
+    wdir = workspace_dir(root_path)
+    try:
+        os.makedirs(wdir, exist_ok=True)
+        log = open(os.path.join(wdir, "daemon.log"), "ab", buffering=0)
+    except OSError:
+        yield None
+        return
+    try:
+        yield log
+    finally:
+        # The child holds its own copy of the handle from here on.
+        log.close()
 
 
 def serve_pipe(session, registry=None, name: str = None) -> None:

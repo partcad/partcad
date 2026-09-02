@@ -8,9 +8,12 @@
 Where the socket lives and whether anything answers on it is
 `partcad_utils.workspace`, tested there; stopping and enumerating daemons is
 `partcad_client.daemon`, tested there. What is left here is the service's
-own half: `ensure_daemon` reusing a daemon that is already serving.
+own half: `ensure_daemon` reusing a daemon that is already serving, and its
+Windows branch -- which no CI runner executes, so it is driven here with
+`os.name` forced to "nt".
 """
 
+import contextlib
 import os
 import pathlib
 import shutil
@@ -21,12 +24,17 @@ import time
 
 import pytest
 from partcad_service_json_rpc import daemon
+from partcad_service_json_rpc import win_pipe as service_win_pipe
 from partcad_service_json_rpc.core.session import Session
 from partcad_service_json_rpc.rpc.methods import build_registry
 from partcad_service_json_rpc.transport.socket_server import SocketServer
+from partcad_utils import win_pipe as rendezvous
 
 if not hasattr(socket, "AF_UNIX"):
     pytest.skip("AF_UNIX not available on this platform", allow_module_level=True)
+
+WORKSPACE = r"C:\ws"
+SANDBOX_ARGV = ["--python-sandbox", "conda"]
 
 
 @pytest.fixture
@@ -95,3 +103,84 @@ def test_ensure_daemon_returns_existing_socket_when_alive(monkeypatch, capsys):
     finally:
         server.stop()
         shutil.rmtree(home, ignore_errors=True)
+
+
+@contextlib.contextmanager
+def _pretending_to_be_windows():
+    """Run ``ensure_daemon``'s Windows branch here, where CI actually runs.
+
+    There is no Windows runner in this repository's CI, and the branch shipped
+    importing a name its own ``win_pipe`` does not define (``is_pipe_alive``,
+    which lives in ``partcad_utils.win_pipe`` with the rest of the rendezvous).
+    Every ``partcad-json-rpc --socket`` on Windows therefore died of an
+    ImportError on the first line of the branch, before it spawned anything, and
+    all the editor extension could report was "exited 1".
+
+    A context manager rather than a fixture, because ``os.name`` has to be back
+    before pytest formats a failure: while it says "nt", ``pathlib.Path`` builds
+    a ``WindowsPath`` and reporting a failed assertion dies of
+    NotImplementedError -- turning a regression here into an INTERNALERROR
+    instead of a message naming it.
+    """
+    saved = os.name
+    os.name = "nt"
+    try:
+        yield
+    finally:
+        os.name = saved
+
+
+@pytest.fixture
+def spawned(monkeypatch):
+    """Records ``(root, extra_args)`` of every daemon spawn, and spawns nothing.
+
+    Patched in as a module attribute rather than by faking the import: the
+    branch under test still runs its own ``from ... import ...``, so a name that
+    moves away again fails here instead of on a user's machine.
+    """
+    calls = []
+    monkeypatch.setattr(service_win_pipe, "spawn_pipe_daemon", lambda root, extra=(): calls.append((root, list(extra))))
+    return calls
+
+
+def _answers(monkeypatch, *replies):
+    """Make ``is_pipe_alive`` return ``replies`` in turn, then its last value."""
+    remaining = list(replies)
+    monkeypatch.setattr(
+        rendezvous,
+        "is_pipe_alive",
+        lambda name, timeout=1.0: remaining.pop(0) if len(remaining) > 1 else remaining[0],
+    )
+
+
+def test_windows_reuses_the_daemon_already_serving_the_pipe(spawned, monkeypatch, capsys):
+    _answers(monkeypatch, True)
+    with _pretending_to_be_windows():
+        pipe = daemon.ensure_daemon(lambda wdir: None, root_path=WORKSPACE, daemon_argv=SANDBOX_ARGV)
+    assert pipe == rendezvous.pipe_name(WORKSPACE)
+    assert capsys.readouterr().out.strip() == pipe  # the endpoint goes to stdout
+    assert spawned == []
+
+
+def test_windows_starts_a_daemon_and_waits_for_it_to_answer(spawned, monkeypatch, capsys):
+    # Dead, then alive: the launcher must not name the pipe until something is
+    # serving it, because connecting to a pipe that does not exist yet fails
+    # outright rather than waiting.
+    _answers(monkeypatch, False, True)
+    with _pretending_to_be_windows():
+        pipe = daemon.ensure_daemon(lambda wdir: None, root_path=WORKSPACE, daemon_argv=SANDBOX_ARGV)
+    assert capsys.readouterr().out.strip() == pipe
+    # The settings the launcher was given reach the daemon. Windows has no
+    # `fork`, so nothing carries them across on its own: without this the
+    # daemon behind `pc --python-sandbox conda daemon start` served with the
+    # defaults, and said nothing about it.
+    assert spawned == [(WORKSPACE, SANDBOX_ARGV)]
+
+
+def test_windows_reports_a_daemon_that_never_starts_serving(spawned, monkeypatch):
+    monkeypatch.setattr(daemon, "START_TIMEOUT", 0.05)
+    _answers(monkeypatch, False)
+    with pytest.raises(RuntimeError, match="did not start serving"):
+        with _pretending_to_be_windows():
+            daemon.ensure_daemon(lambda wdir: None, root_path=WORKSPACE)
+    assert spawned == [(WORKSPACE, [])]

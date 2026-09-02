@@ -88,6 +88,38 @@ def build_settings(args: argparse.Namespace) -> dict:
     return settings
 
 
+def settings_argv(args: argparse.Namespace) -> list:
+    """The options that change how the *service* behaves, back as flags.
+
+    Windows has no ``fork``, so the daemon there is a new process rather than a
+    copy of this one, and anything this launcher was told has to be told to it
+    again -- otherwise ``--python-sandbox conda`` stops at the launcher and the
+    daemon it starts serves with the defaults.
+
+    Channel selection (``--socket``/``--stdio``/``--http``/``--serve-pipe``) is
+    deliberately absent: it is what the caller replaces. Everything else here is
+    exactly what :func:`build_settings` reads, so a flag added there without one
+    here is a setting the Windows daemon silently drops -- which is what
+    ``test_main.py`` pins.
+    """
+    argv = []
+    if args.verbose:
+        argv.append("--verbose")
+    if args.quiet:
+        argv.append("--quiet")
+    if args.offline:
+        argv.append("--offline")
+    if args.force_update:
+        argv.append("--force-update")
+    if args.devel_index:
+        argv.append("--devel-index")
+    if args.python_sandbox:
+        argv.extend(["--python-sandbox", args.python_sandbox])
+    if args.javascript_sandbox:
+        argv.extend(["--javascript-sandbox", args.javascript_sandbox])
+    return argv
+
+
 def parse_host_port(address: str) -> tuple[str, int]:
     """Parse ``HOST:PORT`` or a bare ``PORT`` into ``(host, port)``."""
     if ":" in address:
@@ -130,7 +162,7 @@ def main(argv=None) -> int:
     # daemon child (after fork), so the fast path (a live daemon) stays cheap.
     from . import daemon
 
-    daemon.ensure_daemon(lambda wdir: _build_session(args, wdir))
+    daemon.ensure_daemon(lambda wdir: _build_session(args, wdir), daemon_argv=settings_argv(args))
     return 0
 
 
