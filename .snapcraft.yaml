@@ -7,13 +7,17 @@
 # too. It is built by `dev-tools/snap/build.sh` and by the "Standalone" GitHub
 # Actions workflow; `dev-tools/snap/README.md` explains what is in it and why.
 #
-# This file has to live at the repository root. `snapcraft` looks for the recipe
-# in exactly four places -- `snapcraft.yaml`, `snap/snapcraft.yaml`,
-# `build-aux/snap/snapcraft.yaml` and this one -- and the directory it is found
-# in becomes the project directory snapcraft copies into its build environment.
-# So it cannot move next to the rest of the build tooling in `dev-tools/snap/`:
-# from there, `dist/standalone/partcad` below would be outside the project
-# directory and the build could not reach it.
+# This file has to live at the repository root. The directory `snapcraft` runs
+# in is the project directory -- `CRAFT_PROJECT_DIR`, used in `override-pull`
+# below -- and it is what gets copied into the build environment and what
+# `source:` is resolved against. Within it, snapcraft looks for the recipe at
+# exactly four paths: `snapcraft.yaml`, `snap/snapcraft.yaml`,
+# `build-aux/snap/snapcraft.yaml`, and this one. All four sit at or just under
+# the project directory, so the recipe cannot move down beside the rest of the
+# build tooling in `dev-tools/snap/`: snapcraft would not find it there, and
+# running snapcraft from `dev-tools/` instead would make *that* the project
+# directory, leaving `dist/standalone/partcad` below outside it and out of
+# reach.
 #
 # Of the three root-level spellings this is the one that keeps the repository
 # root uncluttered -- `snap/` held nothing but this file. Snapcraft still treats

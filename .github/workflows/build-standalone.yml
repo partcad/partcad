@@ -31,12 +31,18 @@ on:
   # lists are duplicated because GitHub Actions does not support YAML anchors.
   # "main" is absent on purpose: a push there runs "deploy.yml", which calls
   # this workflow itself. Listing it here would build everything twice.
+  #
+  # Both "snap/**" and ".snapcraft.yaml" are listed. The recipe lives at the
+  # root, but snapcraft still reads assets -- hooks, gui, keys -- from "snap/".
+  # That directory is empty today, so the pattern matches nothing; it is here so
+  # that the first hook someone adds is built rather than silently untested.
   push:
     branches: ["devel"]
     paths:
       - "dev-tools/pyinstaller/**"
       - "dev-tools/snap/**"
       - ".snapcraft.yaml"
+      - "snap/**"
       - "install.sh"
       - ".github/workflows/build-standalone.yml"
       - "src/**"
@@ -48,6 +54,7 @@ on:
       - "dev-tools/pyinstaller/**"
       - "dev-tools/snap/**"
       - ".snapcraft.yaml"
+      - "snap/**"
       - "install.sh"
       - ".github/workflows/build-standalone.yml"
       - "src/**"
