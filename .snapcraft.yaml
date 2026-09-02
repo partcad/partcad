@@ -7,11 +7,19 @@
 # too. It is built by `dev-tools/snap/build.sh` and by the "Standalone" GitHub
 # Actions workflow; `dev-tools/snap/README.md` explains what is in it and why.
 #
-# This file has to live in `snap/` at the repository root. That is where
-# `snapcraft` looks for it, and it is also what decides the project directory
-# snapcraft copies into its build environment -- moving this file next to the
-# rest of the build tooling in `dev-tools/` would leave the bundle it packages
-# outside that directory, where the build could not reach it.
+# This file has to live at the repository root. `snapcraft` looks for the recipe
+# in exactly four places -- `snapcraft.yaml`, `snap/snapcraft.yaml`,
+# `build-aux/snap/snapcraft.yaml` and this one -- and the directory it is found
+# in becomes the project directory snapcraft copies into its build environment.
+# So it cannot move next to the rest of the build tooling in `dev-tools/snap/`:
+# from there, `dist/standalone/partcad` below would be outside the project
+# directory and the build could not reach it.
+#
+# Of the three root-level spellings this is the one that keeps the repository
+# root uncluttered -- `snap/` held nothing but this file. Snapcraft still treats
+# `snap/` as the assets directory (hooks, gui, keys), which is why it is checked
+# for existence rather than required; this snap has no assets, so there is
+# nothing to put there.
 name: partcad
 title: PartCAD
 base: core24

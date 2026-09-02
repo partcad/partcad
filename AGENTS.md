@@ -240,10 +240,11 @@ and it must not get one back: it had one, and stayed at 0.1.0 for twenty-three r
 meant remembering a tag nobody pushed. See `ai-agents/README.md`. The snap carries whatever the bundle carries,
 so it needs nothing extra of its
 own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
-Its build tooling lives beside that README, but `snap/snapcraft.yaml` stays at the repository root and cannot be
-moved down into `dev-tools/` with it: that path is where `snapcraft` looks for the recipe, and it is also what
-fixes the project directory copied into the build environment — from `dev-tools/` the recipe could no longer
-reach the `dist/standalone/partcad` bundle it packages. The comment at the top of the file says the same.
+Its build tooling lives beside that README, but the recipe, `.snapcraft.yaml`, stays at the repository root and
+cannot move down into `dev-tools/` with it: `snapcraft` looks for it only there, in `snap/`, or in
+`build-aux/snap/`, and wherever it is found becomes the project directory copied into the build environment — from
+`dev-tools/` the recipe could no longer reach the `dist/standalone/partcad` bundle it packages. The dotfile is the
+root-level spelling that leaves no directory behind; the comment at the top of the file says all of this too.
 
 ### Committing
 

@@ -20,9 +20,10 @@ because the snap is classic, a manual store review — see [Publishing](#publish
 
 ## Files
 
-- `../../snap/snapcraft.yaml` — the recipe. It has to sit in `snap/` at the repository root: that is both where
-  `snapcraft` looks for it and what fixes the project directory it copies into its build environment. Putting it here,
-  next to the rest of the build tooling, would leave `dist/standalone/partcad` outside that directory.
+- `../../.snapcraft.yaml` — the recipe. It has to sit at the repository root: `snapcraft` only looks for it there,
+  in `snap/`, or in `build-aux/snap/`, and wherever it is found becomes the project directory copied into the build
+  environment. Putting it here, next to the rest of the build tooling, would leave `dist/standalone/partcad` outside
+  that directory. Of the root-level spellings, the dotfile is the one that leaves no directory behind.
 - `build.sh` — makes sure the bundle exists, checks it, and drives `snapcraft`.
 
 ## One base, two architectures

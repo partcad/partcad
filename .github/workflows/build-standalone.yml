@@ -36,7 +36,7 @@ on:
     paths:
       - "dev-tools/pyinstaller/**"
       - "dev-tools/snap/**"
-      - "snap/**"
+      - ".snapcraft.yaml"
       - "install.sh"
       - ".github/workflows/build-standalone.yml"
       - "src/**"
@@ -47,7 +47,7 @@ on:
     paths:
       - "dev-tools/pyinstaller/**"
       - "dev-tools/snap/**"
-      - "snap/**"
+      - ".snapcraft.yaml"
       - "install.sh"
       - ".github/workflows/build-standalone.yml"
       - "src/**"
@@ -385,7 +385,7 @@ jobs:
           name: partcad-standalone-${{ matrix.bundle }}
           path: archives
 
-      # "snap/snapcraft.yaml" packages "dist/standalone/partcad", which is where
+      # ".snapcraft.yaml" packages "dist/standalone/partcad", which is where
       # a local "dev-tools/pyinstaller/build.sh" leaves the bundle. Unpacking the
       # archive there puts the artifact in the same place -- and checks in
       # passing that the archive the release ships is intact.
@@ -425,7 +425,7 @@ jobs:
           pc init
           pc list
 
-      # "snap/snapcraft.yaml" points PC_INTERNAL_STATE_DIR at the per-user
+      # ".snapcraft.yaml" points PC_INTERNAL_STATE_DIR at the per-user
       # directory snapd gives the snap, so that PartCAD's cache, sandboxes and
       # git clones do not land in ~/.partcad. Nothing about the commands above
       # succeeding would show that, so check it from both ends: that snapd
