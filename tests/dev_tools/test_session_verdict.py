@@ -39,6 +39,7 @@ def load_root_conftest():
 
 @pytest.fixture(scope="module")
 def root_conftest():
+    """Module-scoped: the file is read once, and nothing here mutates it."""
     return load_root_conftest()
 
 
@@ -63,6 +64,7 @@ def test_the_hook_is_a_no_op_without_a_marker_path(root_conftest, tmp_path, monk
 
 
 def test_a_clean_session_is_recorded_as_a_success(root_conftest, tmp_path, monkeypatch):
+    """The only case that may write "success", and the only one a gate accepts."""
     marker = tmp_path / "verdict"
     monkeypatch.setenv("PYTEST_RESULT_MARKER", str(marker))
 
@@ -85,6 +87,12 @@ def test_a_clean_session_is_recorded_as_a_success(root_conftest, tmp_path, monke
 def test_anything_but_a_clean_session_is_recorded_as_a_failure(
     root_conftest, tmp_path, monkeypatch, exitstatus, testsfailed, why
 ):
+    """Every other way a session can end, including the two that look like success.
+
+    Exit status 5 means nothing was collected, which a gate must not read as a
+    pass; and exit status 0 with a failed test is the Windows behaviour #444 was
+    written for, which is why the verdict needs both halves rather than either.
+    """
     marker = tmp_path / "verdict"
     monkeypatch.setenv("PYTEST_RESULT_MARKER", str(marker))
 
