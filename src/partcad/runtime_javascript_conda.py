@@ -19,6 +19,8 @@ import shutil
 import subprocess
 import sys
 
+from partcad_utils import conda as pc_conda
+
 from . import runtime_javascript
 from . import runtime_python_conda
 from . import sandbox_lock
@@ -119,6 +121,18 @@ class CondaJavaScriptRuntime(runtime_javascript.JavaScriptRuntime):
         env["LD_LIBRARY_PATH"] = env_lib + (os.pathsep + previous if previous else "")
         return env
 
+    def conda_command_env(self):
+        """The environment to run the conda executable itself in.
+
+        The twin of CondaPythonRuntime.conda_command_env(), and for the same
+        reason: the conda a standalone bundle carries has no root prefix of its
+        own, so it is told to keep its package cache under PartCAD's internal
+        state directory. A host conda is left entirely alone.
+        """
+        if not pc_conda.is_bundled(self.conda_path):
+            return None
+        return pc_conda.bundled_command_env(self.ctx.user_config.internal_state_dir)
+
     def once(self):
         with self.sync_lock():
             self.once_conda_locked()
@@ -190,6 +204,7 @@ class CondaJavaScriptRuntime(runtime_javascript.JavaScriptRuntime):
                         stderr=subprocess.PIPE,
                         shell=False,
                         encoding="utf-8",
+                        env=self.conda_command_env(),
                     )
                     _, stderr = p.communicate()
 

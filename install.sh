@@ -738,6 +738,7 @@ case ":${PATH}:" in
 esac
 
 log ""
-log "PartCAD runs CAD scripts in a sandbox it builds with conda, and clones"
-log "package repositories with git. Install conda and git to use those parts;"
+log "PartCAD runs CAD scripts in a sandbox it builds with conda, and the bundle"
+log "carries the conda that builds it -- nothing to install first. It clones"
+log "package repositories with git; install git to use those parts."
 log "'pc healthcheck' reports what is missing."

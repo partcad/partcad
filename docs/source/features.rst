@@ -140,12 +140,16 @@ That is what lets one package render against build123d 0.11 while another wants
 ==================== =========================================================================
 ``conda``            An environment conda provisions, **interpreter included**. The only one
                      that can give a package the Python version it asks for, so it is the
-                     default wherever conda or mamba is installed.
+                     default wherever conda or mamba is installed -- and in the
+                     :ref:`standalone tools <standalone-cli>`, the :ref:`snap <snap-package>`
+                     and the :ref:`PartCAD IDE <partcad-ide>`, which carry a conda of their
+                     own and use yours in preference to it when you have one.
 ``venv``             A plain virtual environment of PartCAD's own, one per interpreter
                      version, under the internal state directory. The default when conda is
                      not installed. Built from whichever Python the host has, so a package
                      asking for a version the host does not have is rendered on the host's
-                     and told so.
+                     and told so -- and so not something the standalone tools can fall back
+                     to, since the machine they exist for is the one with no Python.
 ``none``             No environment at all: scripts run on the host's own interpreter and
                      their dependencies are installed **into it**. Fast and shares whatever
                      is already there, at the price of writing the CAD stack into the Python

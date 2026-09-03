@@ -47,6 +47,7 @@ Feature: `pc daemon` commands
     And STDERR should contain "Tar cache size:"
     And STDERR should contain "Git cache size:"
     And STDERR should contain "Sandbox environments size:"
+    And STDERR should contain "Conda package cache size:"
     And STDERR should contain "Total internal data storage size:"
     And STDERR should contain "DONE: Status: global:"
     When I run "pc --no-ansi daemon stop"

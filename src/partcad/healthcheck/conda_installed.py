@@ -4,6 +4,15 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+"""Whether this machine can build a conda sandbox at all.
+
+The standalone bundle carries a conda of its own, so on a machine that has none
+this check passes through the bundled copy -- which is the point of carrying it.
+The wheels carry nothing, and there this reports what it always did.
+"""
+
+from partcad_utils import conda as pc_conda
+
 from partcad.runtime_python_conda import CondaPythonRuntime
 
 from .tests import HealthCheckReport, HealthCheckTest
@@ -29,7 +38,14 @@ class CondaAvailableCheck(HealthCheckTest):
         conda_path = CondaPythonRuntime.find_conda_executable()
         if conda_path is None:
             self.findings.append("Conda is not installed or not available in the PATH.")
-        return HealthCheckReport(self.name, self.findings, False)
+        report = HealthCheckReport(self.name, self.findings, False)
+        if conda_path is not None:
+            # Which one, because "a conda works here" and "the conda you
+            # installed works here" are different statements, and on a machine
+            # that has both this is the only thing that says which was taken.
+            source = "carried by this bundle" if pc_conda.is_bundled(conda_path) else "found on this machine"
+            report.debug("Using the conda %s: %s" % (source, conda_path))
+        return report
 
     def fix(self) -> bool:
         return False

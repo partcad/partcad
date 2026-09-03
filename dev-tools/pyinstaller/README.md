@@ -10,10 +10,11 @@ with [`install.sh`](../../install.sh) and never see Python.
 | Install | `pip install -U partcad` | `curl -fsSL .../install.sh \| sh` |
 | Upgrade | `pc upgrade` (runs `pip`) | `pc upgrade` (fetches the release archive) |
 | Needs Python | yes, 3.10-3.14 | no |
-| Size | ~15MB plus whatever pip resolves | ~180MB unpacked, ~57MB compressed (Linux x86_64, OpenSCAD included) |
+| Size | ~15MB plus whatever pip resolves | ~200MB unpacked, ~63MB compressed (Linux x86_64, OpenSCAD and conda included) |
 | Optional extras (`lint`, `memcache`, `aws`) | installed on demand | always included |
 | Importable as a library | yes | no, it is only the CLI |
-| CAD kernel | not a dependency either way — every shape is built in a conda sandbox | same, see `EXCLUDES` in the spec |
+| CAD kernel | not a dependency either way — every shape is built in a sandbox | same, see `EXCLUDES` in the spec |
+| conda, which builds the best sandbox | the user's, or the `venv` fallback | carried, see [conda](#conda) |
 
 ## One build per OS version
 
@@ -242,8 +243,12 @@ frozen, so `build.sh` imports them all before it builds and says which import fa
 
 Freezing replaces the *installation*, not the architecture. PartCAD still runs CAD scripts (CadQuery,
 build123d, OpenSCAD) in a separate Python interpreter that it provisions itself with conda, and still clones
-package repositories with `git`. Both remain external prerequisites of the standalone bundle, exactly as they
-are for the wheels. `pc healthcheck` reports what is missing.
+package repositories with `git`.
+
+The difference is who supplies them. The bundle carries its own conda (see [conda](#conda) below), so a machine
+with none still builds CAD, and it carries OpenSCAD on the platforms where that is possible. `git` is what is
+left, and it was never a hard prerequisite: packages are cloned through `libgit2`, and the command line tool is
+read for its *configuration* where there is one. `pc healthcheck` reports what is missing.
 
 ## No CAD kernel
 
@@ -265,7 +270,8 @@ importable, so nothing can call it. The paths the programs do reach never hold a
   OCP object", which is the right answer in a process that has no OCP, and nothing calls the other two.
 
 So `pc` from a bundle needs conda for CAD exactly as `pc` from a wheel does, exactly as it did before -- the
-kernel it carried never ran. What it cost: OCP is ~250MB of extension module and OpenCASCADE libraries,
+kernel it carried never ran. What changed since is where the conda comes from, not whether one is needed: the
+bundle now carries that too, at ~12-22MB rather than the ~600MB the kernel cost. What it cost: OCP is ~250MB of extension module and OpenCASCADE libraries,
 `build123d` pulls scipy, sympy, scikit-learn, numpy, IPython and ezdxf in at *import* time, and the VTK-enabled
 `cadquery-ocp` the bundle pinned pulls VTK (another ~336MB) on top.
 
@@ -324,6 +330,100 @@ mechanisms were quietly breaking it before these entries existed:
 The check is cheap: install something unrelated into the build virtualenv, freeze, and diff the bundle against
 one frozen without it. With the AI SDKs, `cryptography`, `pydantic`, `httpx` and setuptools 8x installed, the
 two are identical today.
+
+## conda
+
+Every bundle carries a conda, on every platform. PartCAD imports no CAD kernel -- it provisions a Python
+environment and runs every CAD script in that -- and conda is the only sandbox that provisions an *interpreter*
+along with it. It used to ask the host for one, which is exactly backwards for an artifact whose reason to exist
+is that the host has nothing installed: the PartCAD IDE, which launches `partcad-json-rpc` out of a bundle,
+failed on a clean machine for want of a `conda` executable.
+
+The `venv` sandbox added since is not the answer to that, on this artifact. A virtual environment is built
+*from* an interpreter -- `RuntimePythonVenv._host_interpreter()` looks for `python3` and falls back to
+`sys.executable`, which inside a frozen bundle is `pc` rather than a Python -- so on the machine the bundle
+exists for, the one with no Python at all, there is nothing to build it from. `venv` is the right fallback for
+a wheel, where a Python is a given. Here the sandbox has to come with the tools.
+
+What ships is **micromamba**, pinned in `build.sh` (`MICROMAMBA_VERSION`) and downloaded from
+[`mamba-org/micromamba-releases`](https://github.com/mamba-org/micromamba-releases) at build time,
+checksum-verified against the `.sha256` published beside it. It is mamba -- the same implementation CI
+provisions through Miniforge (`use-mamba: true` in `.github/actions/setup-all/action.yml`), and the one
+`partcad_utils.conda` already preferred over `conda` -- in its single-file build.
+
+Not the Miniforge installer itself, for two reasons that both decide it:
+
+* **A conda installation is not relocatable.** Its entry points hardcode the prefix they were installed into,
+  and this bundle is unpacked wherever its installer puts it -- `~/.local/share/partcad/<version>` for
+  `install.sh`, elsewhere for the VS Code extension, the FreeCAD addon and the IDE. One static executable has
+  no prefix to hardcode and runs from wherever it finds itself.
+* **Size.** Miniforge is around 500MB installed, against 12-22MB here. Taking the CAD kernel out is what got
+  the bundle from ~1010MB to ~180MB; a conda distribution would have put three times its size back.
+
+micromamba also resolves from conda-forge with no configuration at all, which is the channel policy the
+comments in that CI action insist on -- mixing Anaconda's `defaults` into a conda-forge environment is what made
+the macOS jobs segfault. A Miniforge install would have had to carry a `.condarc` saying the same thing.
+
+Unlike OpenSCAD there is no platform that goes without: upstream builds micromamba for all five
+`<os>-<arch>` combinations this bundle is built for, and `stage_conda()` fails the build on one it has no
+mapping for rather than quietly producing a bundle that cannot do CAD. Like OpenSCAD it is **not** declared in
+`partcad.spec` -- `build.sh` copies it into `_internal/conda/` after PyInstaller has run.
+
+| | what ships | size |
+| --- | --- | --- |
+| Linux x86_64 | `micromamba-linux-64` | ~18MB, ~6MB in the archive |
+| Linux arm64 | `micromamba-linux-aarch64` | ~21MB |
+| macOS arm64 | `micromamba-osx-arm64` | ~14MB |
+| macOS x86_64 | `micromamba-osx-64` | ~16MB |
+| Windows x86_64 | `micromamba-win-64`, staged as `micromamba.exe` | ~11MB |
+
+(The release publishes `micromamba-win-64.exe` too, byte for byte the same file, but only the name without the
+suffix has a `.sha256` beside it -- and a payload nobody can verify is not one worth having.)
+
+### The host's conda wins
+
+`partcad_utils.conda.find_executable()` tries the host's `mamba`, then the host's `conda`, and only then the
+bundled copy. That is the opposite of what the bundled OpenSCAD does, on purpose, and the difference is worth
+stating because it will look like an inconsistency otherwise:
+
+OpenSCAD is one self-contained program with no state, so preferring the bundled copy costs a user nothing and
+makes the bundle behave identically everywhere. conda is not a program but an *installation* -- a channel
+configuration the user chose, and a package cache holding the gigabytes the CAD sandbox is made of. Preferring
+ours would strand that cache and re-download the whole CAD stack beside it, on a machine that was working
+perfectly well. So a machine that has conda keeps behaving exactly as it did, and the bundled copy is what
+makes a machine that has none work at all. There is no `--ignore-bundled-conda` for the same reason: nothing is
+being displaced, and the sandbox setting already says it better -- `pythonSandbox: venv` for an environment
+PartCAD builds without conda at all, `none` for no environment whatever.
+
+The bundled conda is given `MAMBA_ROOT_PREFIX` inside PartCAD's internal state directory (`<state dir>/conda`,
+beside the `sandbox` directory holding the environments it creates), and only the bundled one -- a host conda
+knows its own root prefix, and telling it otherwise would move a package cache the user has been filling for
+years. It has to be told something: micromamba's own default is `~/.local/share/mamba`, a directory PartCAD
+would be creating in the user's home without ever having said so -- outside what `pc system status` reports and
+`pc system reset` clears, and outside what `snap remove --purge` takes away, since the snap redirects PartCAD's
+state with `PC_INTERNAL_STATE_DIR` precisely so that it does. The internal state directory is the one PartCAD
+already owns and already documents.
+
+`bundled_command_env()` sets it only when it is unset, though, and that exception is worth stating because it
+takes the payload's cache back out of PartCAD's lifecycle: a user who runs their own micromamba has a
+`MAMBA_ROOT_PREFIX` and a warm cache under it, and sharing it is the point -- but their cache is then where
+they put it, so `pc system status` does not report it, `pc system reset` does not clear it, and
+`snap remove --purge` does not take it away. That is the right trade (PartCAD does not empty caches it did not
+fill, exactly as it leaves a host conda's alone), and it is a trade rather than a free win.
+
+### What tests this
+
+Three things, at three levels:
+
+* `tests/partcad_utils/test_conda.py` pins the ordering and the root prefix. Nothing about either is observable
+  from a build -- a bundle built on a machine with no conda passes its smoke test whichever way round the two
+  are tried -- so it is asserted where a bundled copy and a host copy can be made to exist at once.
+* `build.sh`'s smoke test runs the staged payload (`--version`, against `MICROMAMBA_VERSION`) and then asks
+  `pc healthcheck --filters conda` whether PartCAD resolves a conda at all.
+* The `Standalone` workflow installs the archive and runs the payload out of the *installed* bundle, which is
+  the part the build cannot show -- an archive can lose an executable bit. Its `Examples ... via bundle` jobs
+  then install no conda at all and build the whole CAD stack through the payload; they fail loudly if a conda
+  turns up on `PATH`, because that would silently turn them back into a test of the host's.
 
 ## OpenSCAD
 

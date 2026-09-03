@@ -159,6 +159,11 @@ and finally your `PATH`. That last one means `pip install partcad` in a Python e
 — the extension picks it up and downloads nothing. If it finds none of them, it offers to download a standalone
 bundle, which needs no Python at all.
 
+Nor any conda: PartCAD builds every shape in a conda sandbox, and the bundle carries the conda that builds it,
+so a machine with none still renders parts. A `conda` or `mamba` you have installed is used in preference to
+the bundled copy — see
+[the standalone README](https://github.com/partcad/partcad/blob/main/dev-tools/pyinstaller/README.md#conda).
+
 `pc upgrade` run inside a bundle this extension downloaded will refuse and tell you to update the extension
 instead: the extension owns that bundle, and upgrading it from underneath would leave a copy the extension does
 not know about.

@@ -495,6 +495,28 @@ jobs:
           pc --no-ansi healthcheck --filters openscad 2>&1 | tee healthcheck.log
           grep -q "OpenSCAD: Passed" healthcheck.log
 
+      # The same for the bundled conda, and on every platform rather than one:
+      # without it PartCAD has no CAD sandbox at all on a machine that has no
+      # conda, which is the machine this bundle exists for. The executable bit
+      # is the part the archive can lose; `--version` is the part a truncated
+      # download would.
+      - name: Run the bundled conda after installation
+        shell: bash
+        run: |
+          export PATH="${HOME}/partcad-bin:${PATH}"
+          cd "${HOME}"
+          # By the installed path rather than by resolving the `pc` symlink:
+          # this step runs on macOS too, and only one version is installed.
+          bundled="$(ls -d "${HOME}"/partcad-standalone/*/_internal/conda/micromamba)"
+          test -x "${bundled}"
+          "${bundled}" --version
+          # Reported rather than asserted: these runners keep their conda off
+          # PATH, so this check can only pass through the bundle -- but that is
+          # a property of the image, not something this job controls.
+          echo "host conda: $(command -v mamba || command -v conda || echo none)"
+          pc --no-ansi healthcheck --filters conda 2>&1 | tee healthcheck-conda.log
+          grep -q "CondaAvailable: Passed" healthcheck-conda.log
+
       - name: Uninstall with install.sh
         shell: bash
         run: |
@@ -615,7 +637,7 @@ jobs:
           # ~/.partcad is still created and still holds the user configuration
           # and the telemetry id -- that is by design (see dev-tools/snap/README.md).
           # What must not be there is the state PC_INTERNAL_STATE_DIR redirects.
-          for leftover in cache git tar external sandbox; do
+          for leftover in cache git tar external sandbox conda; do
             if [ -e "${HOME}/.partcad/${leftover}" ]; then
               echo "::error::PartCAD wrote '${leftover}' into ~/.partcad rather than the snap directory"
               exit 1
@@ -623,17 +645,26 @@ jobs:
           done
           ls -la "${HOME}/.partcad" "${HOME}/snap/partcad/common" || true
 
-      # A snap does not carry the user's shell environment, so a conda under
-      # $HOME or a git outside the standard prefixes is not visible to it. That
-      # is accepted: PartCAD falls back to `pythonSandbox: none` and reports both
-      # as missing. The health check is run for the record, and deliberately not
-      # allowed to fail the job over them.
+      # A snap does not carry the user's shell environment, so a git outside the
+      # standard prefixes is not visible to it. That is accepted: PartCAD
+      # reports it missing. The health check is run for the record, and
+      # deliberately not allowed to fail the job over it.
+      #
+      # conda used to be in the same sentence and no longer is: the snap wraps
+      # the bundle, the bundle carries a conda, and a payload inside the snap is
+      # visible to it whatever the user's shell says. So this is also where the
+      # snap gets its CAD sandbox back -- which is why the conda half *is*
+      # asserted below while git stays informational.
       - name: Health check (informational)
         run: |
           export PATH="/snap/bin:${PATH}"
           cd "${HOME}"
           pc --no-ansi healthcheck 2>&1 | tee healthcheck.log || true
-          echo "conda and git are expected to be reported missing here."
+          echo "git is expected to be reported missing here."
+          grep -q "CondaAvailable: Passed" healthcheck.log || {
+            echo "::error::the snap did not resolve the conda the bundle carries"
+            exit 1
+          }
 
       - name: Remove the snap
         run: sudo snap remove --purge partcad
@@ -681,23 +712,68 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # PartCAD runs CAD scripts in a conda sandbox it provisions at runtime, so
-      # the bundle still needs conda/mamba on PATH -- the one host prerequisite
-      # it does not carry, exactly as for the wheels.
-      - uses: conda-incubator/setup-miniconda@v4
-        with:
-          miniforge-version: 24.11.3-0
-          use-mamba: true
-          # conda-forge only, for the same ABI reason as in setup-all -- see the
-          # comment there. The runtime sandbox PartCAD provisions below inherits
-          # this channel list, so leaving 'defaults' in would let Anaconda builds
-          # into it too.
-          channels: conda-forge
-          # Only base is needed -- PartCAD creates its own sandbox env at
-          # runtime. No named env, which is the part of setup-all that is flaky
-          # enough to need continue-on-error.
-          auto-activate-base: true
-          activate-environment: ""
+      # No conda reachable here, on purpose. PartCAD runs CAD scripts in a conda
+      # sandbox it provisions at runtime, and the bundle now carries the conda
+      # that provisions it -- so this job builds the whole CAD stack through the
+      # payload, on a machine with nothing of its own. That is the end-to-end
+      # proof the build's own smoke test cannot be: it can only show that a conda
+      # was *resolved*, not that a sandbox solved and ran.
+      #
+      # This used to install Miniforge here (`setup-miniconda`, conda-forge
+      # only). The bundled micromamba resolves from conda-forge with no
+      # configuration at all, which is the same channel policy for the same
+      # reason -- see the comments in `.github/actions/setup-all/action.yml`.
+      #
+      # Taking one *out of the way* rather than trusting it to be absent: the
+      # hosted images ship a conda (`$CONDA`) and put a launcher for it on PATH
+      # on some of them -- ubuntu-24.04 has `/usr/bin/conda`.
+      # `partcad_utils.conda` prefers the host's by design, so one left reachable
+      # would quietly turn this back into a test of the runner's conda, which is
+      # exactly the mistake that let the bundle ship without one.
+      #
+      # The launcher itself, not the directory holding it: it lives in `/usr/bin`
+      # alongside every other system tool, so dropping that directory from PATH
+      # takes `sudo`, `apt-get` and the rest of the job with it. Only what
+      # `command -v` actually resolves is removed, and only from a hosted runner
+      # that is discarded when the job ends. `$CONDA` is untouched, so a job that
+      # wants the runner's conda still has it.
+      - name: Take the runner's conda out of the way
+        shell: bash
+        run: |
+          for _ in 1 2 3 4 5; do
+            found="$(command -v mamba || command -v conda || true)"
+            [ -n "${found}" ] || break
+            echo "removing the launcher at '${found}' (CONDA=${CONDA:-unset} is left alone)"
+            sudo rm -f "${found}"
+            # Fail on the first one that will not go, rather than looping over
+            # it and leaving the check below to report a puzzle.
+            if [ -e "${found}" ]; then
+              echo "::error::could not remove the conda launcher at '${found}'"
+              exit 1
+            fi
+          done
+
+      # Asserted afterwards rather than assumed, and under `bash -el` -- the
+      # shell the steps below use. A login shell re-reads the profile scripts, so
+      # "no conda is reachable" is only true if it is still true there. The
+      # second half is this step's own lesson: the first attempt at it removed
+      # `/usr/bin` from PATH, which passed this check and broke everything after
+      # it, so what the job needs is checked too.
+      - name: Check that no conda is reachable, and the rest of PATH survived
+        shell: bash -el {0}
+        run: |
+          if command -v mamba >/dev/null 2>&1 || command -v conda >/dev/null 2>&1; then
+            echo "::error::a conda is still reachable ($(command -v mamba || command -v conda)),"
+            echo "::error::so this job would exercise it rather than the one the bundle carries."
+            exit 1
+          fi
+          for needed in sudo tar curl git sh; do
+            if ! command -v "${needed}" >/dev/null 2>&1; then
+              echo "::error::'${needed}' is no longer on PATH; the step above took too much with it"
+              exit 1
+            fi
+          done
+          echo "no conda reachable, and PATH still has what this job runs"
 
       # The libraries the bundled OpenSCAD AppImage resolves from the host: it is
       # not fully self-contained (see dev-tools/pyinstaller/build.sh). A desktop

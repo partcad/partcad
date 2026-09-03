@@ -14,6 +14,7 @@ because the snap is classic, a manual store review — see [Publishing](#publish
 | Install | `pip install -U partcad` | `curl -fsSL .../install.sh \| sh` | `snap install --classic partcad`, once published |
 | Needs Python | yes, 3.10-3.14 | no | no |
 | Platforms | Linux, macOS, Windows | one build per supported OS version | linux amd64 and arm64 |
+| Carries a conda | no | yes | yes, from the bundle |
 | Sees the host's conda/git | yes | yes | no, see below |
 | Upgrades | `pip install -U` | re-run `install.sh` | automatic, by snapd |
 | Root to install | no | no | yes |
@@ -123,21 +124,30 @@ where it lives — it used to be derived independently by the writer and by `pc 
 agreed only for as long as nothing set `PC_INTERNAL_STATE_DIR`. This snap was the first thing that did, which is how
 the split was found; `tests/partcad/unit/test_telemetry_id_path.py` pins it.
 
-## conda and git are not found, and that is fine
+## The host's conda and git are not found, and that is fine
 
 A snap does not carry the user's shell environment, so a conda installed under `$HOME` — the usual place — is not
-visible to it, and neither is a git outside the standard system prefixes. This is accepted rather than worked around:
-PartCAD already handles both. `pythonSandbox` defaults to `conda` only when a conda is importable or on `PATH`, and to
-`none` otherwise, so CAD scripts run without a sandbox; git dependencies are simply unavailable. `pc healthcheck`
-reports both as missing, and the CI job runs it for the record without letting it fail the build.
+visible to it, and neither is a git outside the standard system prefixes.
 
-Anyone who needs the conda sandbox or git dependencies should use the standalone bundle or the wheels, which run with
-the user's own environment.
+For conda that no longer costs anything, and this section used to say it did. The snap wraps the standalone bundle,
+the bundle carries its own conda (see the standalone README), and a payload inside the snap is visible to it whatever
+the user's shell says — so `pythonSandbox` defaults to `conda` here as everywhere else and CAD scripts get their
+sandbox. The CI job asserts exactly that. What the snap still does not get is the user's *own* conda, and with it the
+package cache they have already filled: it builds its sandbox from scratch the first time, into
+`~/snap/partcad/common`.
+
+git is accepted rather than worked around: git dependencies are cloned through `libgit2` as everywhere else, and what
+the snap cannot see is the user's git configuration. `pc healthcheck` reports it missing, and the CI job runs the
+check for the record without letting that half fail the build.
+
+Anyone who needs their git configuration, or wants to share a conda package cache they already have, should use the
+standalone bundle or the wheels, which run with the user's own environment.
 
 ## What ships in it
 
 Everything the standalone bundle carries, unchanged: the interpreter, every Python dependency including the optional
-extras, the CAD kernel, and OpenSCAD on amd64 (the arm64 bundle carries none — see the standalone README).
+extras, the conda that provisions the CAD sandbox, and OpenSCAD on amd64 (the arm64 bundle carries none — see the
+standalone README). No CAD kernel: the bundle stopped freezing one in, and every shape is built in the sandbox.
 
 ## CI
 
