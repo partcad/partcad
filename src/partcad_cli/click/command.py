@@ -301,8 +301,8 @@ click.rich_click.COMMAND_GROUPS = {
     "--python-sandbox",
     default=None,
     show_envvar=True,
-    type=click.Choice(["none", "pypy", "conda"]),
-    help="Sandboxing environment for invoking python scripts(defaults to conda)",
+    type=click.Choice(["none", "venv", "pypy", "conda"]),
+    help="Sandboxing environment for invoking python scripts (defaults to conda, else venv)",
 )
 @click.option(
     "--javascript-sandbox",

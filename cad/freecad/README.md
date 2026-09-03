@@ -21,8 +21,10 @@ import the result into the document you are working on.
 
 - FreeCAD 0.21 or newer (tested against the 1.x line).
 - Network access the first time, to fetch the PartCAD service.
-- `git` and `conda`/`mamba` on `PATH` for the packages and CAD scripts PartCAD builds in a sandbox — the same
-  prerequisites the PartCAD command line tools have. `pc healthcheck` reports what is missing.
+- Nothing else, and in particular no conda: the standalone bundle this addon downloads carries the conda that
+  provisions the CAD sandbox, so a machine with none still builds parts. A `conda` or `mamba` already on
+  `PATH` is used in preference to it, as it is everywhere else. `git` on `PATH` is read for its configuration
+  where there is one; packages are cloned either way. `pc healthcheck` reports what is missing.
 
 You do **not** need Python skills, a Python environment, or a PartCAD installation. The addon drives the
 standalone `partcad-json-rpc` service — a self-contained bundle carrying its own interpreter — because

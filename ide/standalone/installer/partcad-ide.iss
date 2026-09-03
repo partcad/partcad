@@ -37,9 +37,16 @@
   #define LicenseFile "..\..\..\LICENSE.txt"
 #endif
 
-; Both fallbacks are for compiling this by hand from this directory. They are
-; correct for the current depth -- and are exactly what breaks the next time
-; this file moves, which is why build.sh passes both in.
+; The directory holding the two images the wizard is drawn with, ../resources.
+; Passed in absolutely for the same reason the licence is: it resolves relative
+; to *this file*, so the fallback below is wrong the next time this file moves.
+#ifndef Branding
+  #define Branding "..\resources"
+#endif
+
+; All three fallbacks are for compiling this by hand from this directory. They
+; are correct for the current depth -- and are exactly what breaks the next time
+; this file moves, which is why build.sh passes all three in.
 
 #define AppName "PartCAD IDE"
 #define AppExeName "partcad-ide.exe"
@@ -94,6 +101,16 @@ UninstallDisplayIcon={app}\{#AppExeName}
 #ifdef HaveIcon
 SetupIconFile={#AppDir}\partcad-ide.ico
 #endif
+
+; The wizard itself: the panel beside the welcome and finished pages, and the
+; badge in the header of the pages between them. Both are the project logo,
+; rendered by ../tools/make_icons.py, so that what someone downloads looks like
+; PartCAD from its first page rather than from the moment it finishes. Bitmaps,
+; because that is the format every Inno Setup reads. Unconditional, unlike the
+; icon above: these are in git rather than rendered by the build, so there is no
+; case where they are missing and Inno Setup's own artwork has to do.
+WizardImageFile={#Branding}\partcad-ide-wizard.bmp
+WizardSmallImageFile={#Branding}\partcad-ide-wizard-small.bmp
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

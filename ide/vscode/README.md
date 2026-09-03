@@ -111,6 +111,10 @@ the application that made it. It is the object's own source file that is opened,
 in a tool that draws, next to what the extension does with it.
 
 * **FreeCAD**, for a part or an assembly.
+* **Blender**, for a part or an assembly. Blender reads meshes and nothing else, so an object that is not
+  already one (a STEP file, a CadQuery script) is converted to STL first and Blender is given that; an STL, an
+  OBJ or a glTF is imported as it is. The converted copy lives under PartCAD's own directory for this
+  workspace, never beside your file, and is reused until the object changes.
 * **Gazebo**, for a scene that *is* a Gazebo world -- one of type `world`, which is also what
   **Export > Gazebo world...** writes out of any scene.
 * **KiCad**, for a part of type `kicad`. What is opened is the board (`.kicad_pro`) beside the STEP the part
@@ -119,14 +123,16 @@ in a tool that draws, next to what the extension does with it.
 This runs on your machine and never goes anywhere near the PartCAD daemon: the extension runs `pc open`, which
 looks for the application installed here and starts it. If there is none, and `partcad.open.useDocker` is on,
 PartCAD runs it in a Docker container instead -- one container per application, named after it
-(`partcad-freecad`, `partcad-gazebo`, `partcad-kicad`), created from the application's image (or
+(`partcad-freecad`, `partcad-blender`, `partcad-gazebo`, `partcad-kicad`), created from the application's image (or
 `partcad.open.dockerImage`) the first time and reused afterwards, with your
 workspace and the PartCAD daemon's socket mounted at the paths they have here, so one path means the same thing
 on both sides. Its windows come out on your X display. On Linux that is the display you are already using; on
 macOS and Windows it needs an X server (XQuartz, VcXsrv) that PartCAD cannot install for you, so it tells you
 which one to install and what to allow rather than starting a container whose windows go nowhere. Remove the
-container of the application in question (`docker rm -f partcad-freecad`, `partcad-gazebo` or
-`partcad-kicad`) to have the next open create a fresh one.
+container of the application in question (`docker rm -f partcad-freecad`, `partcad-blender`,
+`partcad-gazebo` or `partcad-kicad`) to have the next open create a fresh one. With
+`partcad.open.useDocker` off, a machine that has neither the application nor Docker is told so rather than
+left with a menu entry that quietly does nothing.
 
 ## Inspecting published PartCAD packages
 
@@ -152,6 +158,11 @@ This extension is a client. It talks to a `partcad-json-rpc` executable, and it 
 and finally your `PATH`. That last one means `pip install partcad` in a Python environment of your own is enough
 — the extension picks it up and downloads nothing. If it finds none of them, it offers to download a standalone
 bundle, which needs no Python at all.
+
+Nor any conda: PartCAD builds every shape in a conda sandbox, and the bundle carries the conda that builds it,
+so a machine with none still renders parts. A `conda` or `mamba` you have installed is used in preference to
+the bundled copy — see
+[the standalone README](https://github.com/partcad/partcad/blob/main/dev-tools/pyinstaller/README.md#conda).
 
 `pc upgrade` run inside a bundle this extension downloaded will refuse and tell you to update the extension
 instead: the extension owns that bundle, and upgrading it from underneath would leave a copy the extension does

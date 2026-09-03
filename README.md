@@ -187,8 +187,9 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - Object-Oriented Programming approach to maintaining part interfaces and mating information
   - Live preview of 3D models while working in Visual Studio Code, with the bill of materials, the assembly
     instructions and supplier quotes on tabs beside the 3D view
-  - Open an object in the application that made it (`pc open`): `FreeCAD`, `Gazebo`, `KiCad` — installed
-    locally, or run in a container when it is not
+  - Open an object in the application that made it (`pc open`): `FreeCAD`, `Blender`, `Gazebo`, `KiCad` —
+    installed locally, or run in a container when it is not; an object `Blender` cannot read is converted to
+    a mesh on the way
   - Render 2D projections, from any viewing angle (`--view`, or an arbitrary one), with the connection
     ports and interfaces drawn on top if asked
     - [x] `SVG`
@@ -215,6 +216,9 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
 
 Note, it's not required but highly recommended that you have [conda] installed. If you experience any difficulty
 installing or using any PartCAD tool, then make sure to install [conda].
+
+That applies to the Python packages below. The standalone command line tools, the snap and the PartCAD IDE
+carry a conda of their own and need none installed — they use yours when you have one.
 
 ### Plugin for Claude Code
 

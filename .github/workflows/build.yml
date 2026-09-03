@@ -28,12 +28,16 @@ concurrency:
 # workflow builds what that one tests. Keep them in sync; that file carries the
 # reasoning for which images are here and which are not.
 env:
+  # One macOS entry, the moving label: "macos-latest" and "macos-26" became the
+  # same image when GitHub moved the alias in July 2026. See the note under OSES
+  # in "test.yml".
   OSES:
     '["ubuntu-latest", "ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-22.04-arm", "windows-latest", "windows-2022",
-    "macos-latest", "macos-26"]'
-  # Dropped unless the run is deep: the Ubuntu 22.04 images and the second
-  # macOS. See ".github/actions/test-depth" and OSES_DEEP_ONLY in "test.yml".
-  OSES_DEEP_ONLY: '["ubuntu-22.04", "ubuntu-22.04-arm", "macos-26"]'
+    "macos-latest"]'
+  # Dropped unless the run is deep: the Ubuntu 22.04 images. No macOS, because
+  # there is only one macOS leg left and dropping it would test none. See
+  # ".github/actions/test-depth" and OSES_DEEP_ONLY in "test.yml".
+  OSES_DEEP_ONLY: '["ubuntu-22.04", "ubuntu-22.04-arm"]'
   PYTHONS: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
   # Same cost trade-off as test.yml: the full Python range runs on
   # ubuntu-latest only, every other image builds on the oldest and the newest
@@ -60,10 +64,7 @@ env:
     {"os": "windows-2022", "python-version": "3.13"},
     {"os": "macos-latest", "python-version": "3.11"},
     {"os": "macos-latest", "python-version": "3.12"},
-    {"os": "macos-latest", "python-version": "3.13"},
-    {"os": "macos-26", "python-version": "3.11"},
-    {"os": "macos-26", "python-version": "3.12"},
-    {"os": "macos-26", "python-version": "3.13"}]
+    {"os": "macos-latest", "python-version": "3.13"}]
 
 jobs:
   # Composed here rather than written out below, so that a pull request can run
@@ -134,8 +135,8 @@ jobs:
           python -m build
           # The shim states `license = {file = "LICENSE.txt"}`, so it needs the
           # repository's copy the way each distribution used to.
-          cp LICENSE.txt shim
-          (cd shim && python -m build)
+          cp LICENSE.txt dev-tools/shim
+          (cd dev-tools/shim && python -m build)
           mamba deactivate
 
       - name: Test installation
@@ -154,7 +155,7 @@ jobs:
           pc --no-ansi version
           partcad-json-rpc --help >/dev/null
           # The shim brings the wheel in, and owns nothing of its own.
-          python -m pip install --no-index --find-links=dist --find-links=shim/dist partcad-cli
+          python -m pip install --no-index --find-links=dist --find-links=dev-tools/shim/dist partcad-cli
           mamba deactivate
 
       - name: Build documentation

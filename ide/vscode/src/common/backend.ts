@@ -262,14 +262,29 @@ class JsonRpcBackend implements PartcadBackend {
      * Whether a container may be used is the user's setting rather than
      * something worked out here: PartCAD decides how to run the application, and
      * this only says what it is allowed to do.
+     *
+     * `pc open` may make a daemon call of its own on the way -- an application
+     * that reads meshes has to be handed one, and converting a solid into one is
+     * CAD work. That is its connection, not this one, and it is a conversion
+     * rather than an opening: the window still belongs to the machine the
+     * command ran on.
      */
-    private async openExternal(arg: { path?: string; tool?: string }): Promise<{ detail: string; method: string }> {
+    private async openExternal(arg: {
+        path?: string;
+        tool?: string;
+        type?: string;
+    }): Promise<{ detail: string; method: string }> {
         const config = vscode.workspace.getConfiguration('partcad');
         const image = (config.get<string>('open.dockerImage') ?? '').trim();
         const args = [
             'open',
             '--with',
             arg?.tool ?? 'freecad',
+            // What the object was declared as. It matters for an application
+            // that reads meshes only -- Blender -- where a file that is not one
+            // has to be converted first, and a file name does not always say
+            // which type it holds. `pc open` decides what to do with it.
+            ...(arg?.type ? ['--type', arg.type] : []),
             ...(config.get<boolean>('open.useDocker') === true ? ['--use-docker'] : []),
             ...(image ? ['--docker-image', image] : []),
             arg?.path ?? '',

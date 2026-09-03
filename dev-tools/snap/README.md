@@ -14,15 +14,19 @@ because the snap is classic, a manual store review — see [Publishing](#publish
 | Install | `pip install -U partcad` | `curl -fsSL .../install.sh \| sh` | `snap install --classic partcad`, once published |
 | Needs Python | yes, 3.10-3.14 | no | no |
 | Platforms | Linux, macOS, Windows | one build per supported OS version | linux amd64 and arm64 |
+| Carries a conda | no | yes | yes, from the bundle |
 | Sees the host's conda/git | yes | yes | no, see below |
 | Upgrades | `pip install -U` | re-run `install.sh` | automatic, by snapd |
 | Root to install | no | no | yes |
 
 ## Files
 
-- `../../snap/snapcraft.yaml` — the recipe. It has to sit in `snap/` at the repository root: that is both where
-  `snapcraft` looks for it and what fixes the project directory it copies into its build environment. Putting it here,
-  next to the rest of the build tooling, would leave `dist/standalone/partcad` outside that directory.
+- `../../.snapcraft.yaml` — the recipe. It has to sit at the repository root. The directory `snapcraft` runs in is
+  the project directory: it is what gets copied into the build environment and what `source:` resolves against, and
+  snapcraft looks for the recipe only at four paths within it — the root itself (as `snapcraft.yaml` or
+  `.snapcraft.yaml`), `snap/`, or `build-aux/snap/`. Keeping it here instead would mean running snapcraft from
+  `dev-tools/`, which would leave `dist/standalone/partcad` outside the project directory. Of the root-level
+  spellings, the dotfile is the one that leaves no directory behind.
 - `build.sh` — makes sure the bundle exists, checks it, and drives `snapcraft`.
 
 ## One base, two architectures
@@ -93,15 +97,15 @@ about reaching the user's *files*, not about inheriting the user's shell.
 The price is a manual review before the Snap Store will publish it, which is one of the two reasons nothing is
 published yet. A locally built or CI-built `.snap` installs with `--dangerous --classic` in the meantime.
 
-For the same reason, snapcraft's `classic` and `library` linters are switched off in `snapcraft.yaml`, and its
+For the same reason, snapcraft's `classic` and `library` linters are switched off in `.snapcraft.yaml`, and its
 `enable-patchelf` build attribute is deliberately left unset: PyInstaller's shared libraries find each other through
 `$ORIGIN` and the bundle's own bootloader, so rewriting their rpaths would break the bundle rather than fix it. The
-comments in `snapcraft.yaml` say the same at the point where it matters.
+comments in `.snapcraft.yaml` say the same at the point where it matters.
 
 ## Where it keeps its state
 
 PartCAD normally keeps its cache, its conda sandboxes and its git/tar clones in `~/.partcad`. A packaged application
-has no business writing there, so `snapcraft.yaml` sets `PC_INTERNAL_STATE_DIR` to `$SNAP_USER_COMMON` —
+has no business writing there, so `.snapcraft.yaml` sets `PC_INTERNAL_STATE_DIR` to `$SNAP_USER_COMMON` —
 `~/snap/partcad/common`, which snapd creates before the app starts. It survives refreshes (unlike `$SNAP_USER_DATA`,
 which is keyed by revision), and `snap remove --purge` takes it away with the snap.
 
@@ -120,21 +124,30 @@ where it lives — it used to be derived independently by the writer and by `pc 
 agreed only for as long as nothing set `PC_INTERNAL_STATE_DIR`. This snap was the first thing that did, which is how
 the split was found; `tests/partcad/unit/test_telemetry_id_path.py` pins it.
 
-## conda and git are not found, and that is fine
+## The host's conda and git are not found, and that is fine
 
 A snap does not carry the user's shell environment, so a conda installed under `$HOME` — the usual place — is not
-visible to it, and neither is a git outside the standard system prefixes. This is accepted rather than worked around:
-PartCAD already handles both. `pythonSandbox` defaults to `conda` only when a conda is importable or on `PATH`, and to
-`none` otherwise, so CAD scripts run without a sandbox; git dependencies are simply unavailable. `pc healthcheck`
-reports both as missing, and the CI job runs it for the record without letting it fail the build.
+visible to it, and neither is a git outside the standard system prefixes.
 
-Anyone who needs the conda sandbox or git dependencies should use the standalone bundle or the wheels, which run with
-the user's own environment.
+For conda that no longer costs anything, and this section used to say it did. The snap wraps the standalone bundle,
+the bundle carries its own conda (see the standalone README), and a payload inside the snap is visible to it whatever
+the user's shell says — so `pythonSandbox` defaults to `conda` here as everywhere else and CAD scripts get their
+sandbox. The CI job asserts exactly that. What the snap still does not get is the user's *own* conda, and with it the
+package cache they have already filled: it builds its sandbox from scratch the first time, into
+`~/snap/partcad/common`.
+
+git is accepted rather than worked around: git dependencies are cloned through `libgit2` as everywhere else, and what
+the snap cannot see is the user's git configuration. `pc healthcheck` reports it missing, and the CI job runs the
+check for the record without letting that half fail the build.
+
+Anyone who needs their git configuration, or wants to share a conda package cache they already have, should use the
+standalone bundle or the wheels, which run with the user's own environment.
 
 ## What ships in it
 
 Everything the standalone bundle carries, unchanged: the interpreter, every Python dependency including the optional
-extras, the CAD kernel, and OpenSCAD on amd64 (the arm64 bundle carries none — see the standalone README).
+extras, the conda that provisions the CAD sandbox, and OpenSCAD on amd64 (the arm64 bundle carries none — see the
+standalone README). No CAD kernel: the bundle stopped freezing one in, and every shape is built in the sandbox.
 
 ## CI
 

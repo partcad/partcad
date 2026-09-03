@@ -149,16 +149,29 @@ isort --check src/partcad tests/partcad
 
 ## Schemas and linting
 
-`./src/partcad/schema/partcad.json` is the schema `lint/schema.py` validates `partcad.yaml` against, and
-`lint/all.py` registers the checks — the names it gives them are what `pc lint -f` filters on. Anything added to
-`schema/` ships through `[tool.setuptools.package-data]` in `pyproject.toml` and through the PyInstaller spec's
-copy of the whole directory.
+**Neither schema is here.** Both `partcad_utils/schema/partcad.json` (the `partcad.yaml` schema) and
+`partcad_utils/schema/assy.json` (the ASSY one) live beside `partcad_utils.assy_lint`, the checker that reads
+both, and ship through `[tool.setuptools.package-data]` in `pyproject.toml` and the PyInstaller spec's copy of
+that directory. They are there because a client checks the file it is editing without a daemon and without a
+CAD kernel: a schema under `partcad` would mean importing one to read a JSON file. `lint/all.py` registers the
+checks — the names it gives them are what `pc lint -f` filters on — and `get_partcad_schema()` is the one way
+in for anything that wants the configuration schema itself.
 
-The ASSY schema and its checker are **not** here: they are `partcad_utils.assy_lint` and
-`partcad_utils/schema/assy.json`. `AssySchemaLinting` is the *package* half — walking a package's `.assy` files
-needs the package graph, which is daemon work — while each client checks the one file being edited in its own
-process (`partcad_client.lint`, reached by `pc lint --file`). Two implementations of that check would let an
-editor and CI disagree about a file, so there is one, in the package both ends already depend on.
+`lint/schema.py` is the *package* half of both checks: `SchemaLinting` walks a package's `partcad.yaml`,
+`AssySchemaLinting` its `.assy` files, and `YamlLinting` under them is the shared body — reading the file and
+handing it to `assy_lint.validate_source`. Walking a package needs the package graph, which is daemon work,
+while each client checks the one file being edited in its own process (`partcad_client.lint`, reached by
+`pc lint --file`). Two implementations of that check would let an editor and CI disagree about a file, so there
+is one, in the package both ends already depend on. That is also why `AssySchemaLinting.get_targets` asks
+`assy_lint.is_assy_file` rather than "does this file have a schema": both kinds have one now, and the looser
+question would have it walk `partcad.yaml` too and report every finding twice.
+
+A `partcad.yaml` is a Jinja2 template exactly as an ASSY file is — `ProjectLocal` renders it, `includePaths`
+and all — so it goes through the same masking rather than straight to `yaml.safe_load`, and every finding
+carries the line and column it came from. **A gap in the configuration schema is now a squiggle on a working
+file**, not a message in a CI log nobody reads: whatever PartCAD's own tooling writes has to validate. `pc init`
+writes empty (null) sections, so every section accepts null; every registered part type has to be in the
+`parts` enum (`sdf` was not, and two shipped examples failed their own check because of it).
 
 The **scene** schema is that same schema with `how` forbidden, derived from it by
 `assy_lint.scene_schema()` rather than kept beside it as a second file — a copy is a copy that stops matching.

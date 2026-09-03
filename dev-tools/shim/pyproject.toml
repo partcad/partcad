@@ -26,11 +26,15 @@
 # distribution never owned it.
 #
 # Built and published by "deploy.yml" beside the wheel, under the same version.
+# It lives under `dev-tools/` with the rest of the build tooling rather than at
+# the repository root: nothing here is imported or read at runtime, and the two
+# workflows that build it, `dev-tools/bumpversion.toml`, and the `.gitignore`
+# entries for its build output all name this path.
 #
 
 [project]
 name = "partcad-cli"
-version = "0.8.34"
+version = "0.8.45"
 description = "The PartCAD command line interface, which now ships inside 'partcad'"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "cad", "design", "openscad", "step", "stl"]
@@ -48,7 +52,7 @@ maintainers = [
   {name = "PartCAD", email = "support@partcad.org" }
 ]
 
-dependencies = ["partcad==0.8.34"]
+dependencies = ["partcad==0.8.45"]
 
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -58,8 +62,8 @@ classifiers = [
 # Mirrored so that `partcad-cli[lint]` and `partcad-cli[aws]` keep resolving for
 # anyone who pinned them.
 [project.optional-dependencies]
-lint = ["partcad[lint]==0.8.34"]
-aws = ["partcad[aws]==0.8.34"]
+lint = ["partcad[lint]==0.8.45"]
+aws = ["partcad[aws]==0.8.45"]
 
 [project.urls]
 Homepage = "https://github.com/partcad/partcad"

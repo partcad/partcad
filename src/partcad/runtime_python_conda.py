@@ -15,6 +15,8 @@ import subprocess
 import sys
 import json
 
+from partcad_utils import conda as pc_conda
+
 from . import runtime_python
 from . import sandbox_lock
 from . import sandbox_versions
@@ -115,14 +117,21 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
 
     @staticmethod
     def find_conda_executable():
-        conda_path = shutil.which("mamba")
+        # The host's mamba or conda, and -- when the host has neither -- the copy
+        # the standalone bundle carries. Shared with `user_config`, which decides
+        # from the same answer whether `pythonSandbox` defaults to conda at all;
+        # a second implementation of "is there a conda here" is a second answer,
+        # and the two disagreeing means a sandbox configured and then not found.
+        conda_path = pc_conda.find_executable()
         if conda_path:
             return conda_path
 
-        conda_path = shutil.which("conda")
-        if conda_path:
-            return conda_path
-
+        # Nothing on PATH and nothing in the bundle. An importable conda module
+        # is the last resort: PartCAD installed into a conda environment can be
+        # run by an interpreter that never had conda's own bin directory on
+        # PATH. It is asked last because answering costs two conda subprocesses,
+        # and it can only ever answer in a wheel install -- no conda module is
+        # frozen into the bundle.
         try:
             conda_cli = importlib.import_module("conda.cli.python_api")
             conda_cli.run_command(conda_cli.Commands.CONFIG, "--quiet")
@@ -276,6 +285,22 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
         env["LD_LIBRARY_PATH"] = env_lib + (os.pathsep + previous if previous else "")
         return env
 
+    def conda_command_env(self):
+        """The environment to run the *conda executable itself* in.
+
+        Not to be confused with _subprocess_env() above, which is about running
+        what conda installed. None means "inherit this process's environment",
+        which is the answer for every host conda: it has a root prefix, a package
+        cache and a configuration of its own, and PartCAD has no business
+        rewriting any of them.
+
+        The conda the bundle carries has none of that -- see
+        `partcad_utils.conda`.
+        """
+        if not pc_conda.is_bundled(self.conda_path):
+            return None
+        return pc_conda.bundled_command_env(self.ctx.user_config.internal_state_dir)
+
     def once(self):
         # 'provisioned' is raised by the base implementation below, once the
         # whole of this has run. Without the check, every command run in this
@@ -374,6 +399,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     stderr=subprocess.PIPE,
                     shell=False,
                     encoding="utf-8",
+                    env=self.conda_command_env(),
                 )
                 try:
                     _, stderr = p.communicate(timeout=300)
@@ -447,6 +473,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                             stderr=subprocess.PIPE,
                             shell=False,
                             encoding="utf-8",
+                            env=self.conda_command_env(),
                         )
                         stdout, stderr = p.communicate()
 
@@ -560,6 +587,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         stderr=subprocess.PIPE,
                         shell=False,
                         encoding="utf-8",
+                        env=self.conda_command_env(),
                     )
                     stdout, stderr = p.communicate()
 

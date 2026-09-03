@@ -17,7 +17,7 @@ ordinary update. The editor resolves `extensionDependencies` at install time, so
 nothing they configured moves: `partcad.*` settings live in their `settings.json` under keys the new extension
 contributes, not in anything the old one owned.
 
-This is the same shape as `shim/` at the repository root, which keeps `pip install partcad-cli` working now
+This is the same shape as `dev-tools/shim/`, which keeps `pip install partcad-cli` working now
 that everything ships in one `partcad` wheel, and it is temporary in the same way. Delete it once the installed
 base has moved.
 
@@ -53,10 +53,12 @@ base has moved.
   `bumpversion` entry -- a build failure per release, none of them about the change under review. Derived,
   the two cannot drift: there is one version, and the shim reads it.
 
-* **No icon.** `ide/vscode/resources/logo_128x128.png` is tracked in git-lfs, and a second copy of an lfs
-  object for a package that is meant to be deleted is not worth the checkout that has to pull it. The default
-  placeholder also does something useful in the "Installed" list: "PartCAD (moved)" with no logo reads as the
-  stub it is, beside the real "PartCAD" with the logo.
+* **No icon**, on purpose rather than for want of one. The default placeholder does something useful in the
+  "Installed" list: "PartCAD (moved)" with no logo reads as the stub it is, beside the real "PartCAD" with
+  the logo. (This used to say the icon was unavailable because it is a git-lfs object. It no longer is --
+  `.gitattributes` names `logo_128x128.png` as the one `.png` outside lfs, because `vsce` was packaging the
+  pointer file into the real extension -- so the reason above is now the only one, and it is the one that
+  was always doing the work.)
 
 ## Build
 

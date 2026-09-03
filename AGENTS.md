@@ -62,10 +62,16 @@ a CAD addon, or documentation.
 
   `external` is the same rule applied to a window instead of an installation. `pc open` (and the VS Code
   extension's per-part "Open in..." menu, by running it) starts FreeCAD on the screen of whoever ran the
-  command — on this machine, with this machine's file, and never over the wire; there is no RPC method for it
-  and none may be added. A machine with no local installation can run the application in a container PartCAD
-  keeps for it, named after the tool (`partcad-freecad`), with the workspace and the daemon's socket mounted
-  at the paths they have here and the host's X display forwarded into it.
+  command — on this machine, with this machine's file, and never over the wire; there is no RPC method for
+  opening a file and none may be added. A machine with no local installation can run the application in a
+  container PartCAD keeps for it, named after the tool (`partcad-freecad`), with the workspace and the
+  daemon's socket mounted at the paths they have here and the host's X display forwarded into it.
+
+  One application in that table reads meshes and nothing else — Blender — so an object that is not already one
+  is converted to STL before it is handed over. That conversion is the single thing `pc open` asks the daemon
+  for, because a CAD wrapper is what does it; the window still opens here, and the registry still has no
+  `open` method. Which object types are meshes is `object_types`, an inlined copy of PartCAD's own tables (a
+  client must stay cheap to import) that a completeness test keeps honest.
 
 * [src/partcad_ide_client](./src/partcad_ide_client/AGENTS.md):
 
@@ -87,8 +93,8 @@ a CAD addon, or documentation.
   half of an extension's identity — the new entry is a *different* extension as far as the marketplace and the
   editor are concerned, and nothing carries an installation across. So the old entry is not abandoned; it is
   replaced by a package that pulls the new one in, and an existing installation updates into it. Same shape as
-  `shim/` below, and temporary in the same way. Do not give it a `main` or a `contributes`: both extensions are
-  installed at once afterwards, and anything it contributed would be contributed twice.
+  `dev-tools/shim/` below, and temporary in the same way. Do not give it a `main` or a `contributes`: both
+  extensions are installed at once afterwards, and anything it contributed would be contributed twice.
 
 * [ide/standalone](./ide/standalone/AGENTS.md):
 
@@ -104,7 +110,7 @@ a CAD addon, or documentation.
   `ide/vscode` it is a thin client of the JSON-RPC service (the standalone PyInstaller bundle), because
   FreeCAD's embedded Python cannot host `partcad` itself.
 
-* [shim/](./shim/pyproject.toml):
+* [dev-tools/shim/](./dev-tools/shim/pyproject.toml):
 
   The `partcad-cli` compatibility package: no modules, no entry points, one dependency on `partcad`. It exists
   so that an older `pip install partcad-cli` keeps working. Do not give it modules or entry points — two
@@ -212,20 +218,21 @@ Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.to
 
 ### Packaging
 
-Six artifacts ship from this repo: **one Python wheel** (`partcad`, carrying all six packages and all three
-entry points, with a `partcad-cli` shim published beside it from `shim/` so the older install instruction keeps
+Six artifacts ship from this repo: **one Python wheel** (`partcad`, carrying all six packages and all three entry
+points, with a `partcad-cli` shim published beside it from `dev-tools/shim/` so the older install instruction keeps
 working), the standalone PyInstaller bundles for users who have no Python, the PartCAD IDE, which carries those
-bundles inside it, the VS Code extension's `.vsix` (with the `ide/vscode-shim` `.vsix` published beside it, for
-the same reason the wheel has one), the `pc` plugin for Claude Code, and the snap, which wraps the Linux
-bundle and is built but not published yet.
+bundles inside it, the VS Code extension's `.vsix` (with the `ide/vscode-shim` `.vsix` published beside it, for the
+same reason the wheel has one), the `pc` plugin for Claude Code, and the snap, which wraps the Linux bundle and is
+built but not published yet.
 
 There used to be five wheels pinning each other at `==`. Do not add a second distribution back: within one
 distribution a pin is an import, and two distributions owning one import name break each other on uninstall
 without pip noticing. Adding a runtime dependency, an optional extra, or a file that is read at runtime can be
 invisible to the frozen bundle and break it while the wheel stays fine — see `dev-tools/pyinstaller/README.md`
 before doing any of those. Note that the bundles fan out over
-*OS versions* (`ubuntu-22.04-x86_64`, `macos-26-arm64`, …), and that the same platform list appears in three places
-that nothing keeps in sync; the README says which, and which of them a pull request skips without `#deepTest`. The
+*OS versions* (`ubuntu-22.04-x86_64`, `macos-15-arm64`, …), and that the same platform ids appear in several
+places that mostly nothing keeps in sync; the README says which, and which of them a pull request skips
+without `#deepTest`. The
 `.vsix` is built once by `.github/workflows/vsix.yml`, which `build.yml` and `deploy.yml` both call, and
 `ide/standalone/build.sh` runs the same `npm run vsce-package` for the copy inside the IDE. One build
 serves every platform: the extension is a JSON-RPC client with no Python and no compiled content in it. The
@@ -240,6 +247,12 @@ and it must not get one back: it had one, and stayed at 0.1.0 for twenty-three r
 meant remembering a tag nobody pushed. See `ai-agents/README.md`. The snap carries whatever the bundle carries,
 so it needs nothing extra of its
 own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
+Its build tooling lives beside that README, but the recipe, `.snapcraft.yaml`, stays at the repository root and
+cannot move down into `dev-tools/` with it: the directory `snapcraft` runs in is the project directory — what gets
+copied into the build environment and what `source:` resolves against — and snapcraft looks for the recipe only at
+four paths within it, the root itself, `snap/`, or `build-aux/snap/`. Running it from `dev-tools/` instead would
+leave the `dist/standalone/partcad` bundle it packages outside that directory. The dotfile is the
+root-level spelling that leaves no directory behind; the comment at the top of the file says all of this too.
 
 ### Committing
 

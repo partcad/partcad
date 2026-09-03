@@ -4,7 +4,7 @@
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.8.34",
+  "version": "0.8.45",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -182,13 +182,13 @@
         "properties": {
           "partcad.open.useDocker": {
             "default": false,
-            "description": "Let PartCAD run a third-party application (\"Open in...\": FreeCAD, Gazebo, KiCad) in a Docker container when it is not installed on this machine. The container is named after the application ('partcad-freecad', 'partcad-gazebo', 'partcad-kicad'), keeps the workspace mounted at the path it has here, and shows its windows on this machine's X display - which macOS and Windows need an X server for.",
+            "description": "Let PartCAD run a third-party application (\"Open in...\": FreeCAD, Blender, Gazebo, KiCad) in a Docker container when it is not installed on this machine. The container is named after the application ('partcad-freecad', 'partcad-blender', 'partcad-gazebo', 'partcad-kicad'), keeps the workspace mounted at the path it has here, and shows its windows on this machine's X display - which macOS and Windows need an X server for.",
             "scope": "machine",
             "type": "boolean"
           },
           "partcad.open.dockerImage": {
             "default": "",
-            "description": "Create that container from this image instead of the application's default one (FreeCAD: 'linuxserver/freecad:latest', Gazebo: 'gazebosim/gz-harmonic:latest', KiCad: the 'ghcr.io/partcad/partcad-container-kicad' image of this release). Applies to whichever application is opened next and only when its container is created; remove an existing one to have it recreated.",
+            "description": "Create that container from this image instead of the application's default one (FreeCAD: 'linuxserver/freecad:latest', Blender: 'linuxserver/blender:latest', Gazebo: 'gazebosim/gz-harmonic:latest', KiCad: the 'ghcr.io/partcad/partcad-container-kicad' image of this release). Applies to whichever application is opened next and only when its container is created; remove an existing one to have it recreated.",
             "scope": "machine",
             "type": "string"
           }
@@ -200,7 +200,7 @@
         "properties": {
           "partcad.lint.enabled": {
             "default": true,
-            "description": "Check ASSY files for Jinja2, YAML and schema errors while editing, and report them in the Problems view.",
+            "description": "Check ASSY files and `partcad.yaml` for Jinja2, YAML and schema errors while editing, and report them in the Problems view.",
             "scope": "resource",
             "type": "boolean"
           },
@@ -611,6 +611,13 @@
         "group": "Open in",
         "title": "KiCad",
         "icon": "$(link-external)"
+      },
+      {
+        "command": "partcad.openInBlender",
+        "category": "PartCAD",
+        "group": "Open in",
+        "title": "Blender",
+        "icon": "$(link-external)"
       }
     ],
     "submenus": [
@@ -893,6 +900,10 @@
         {
           "command": "partcad.openInKiCad",
           "when": "view == partcadExplorer && viewItem == partKicad"
+        },
+        {
+          "command": "partcad.openInBlender",
+          "when": "view == partcadExplorer && viewItem != sceneWorld"
         }
       ]
     },

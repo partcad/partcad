@@ -89,10 +89,10 @@ Options pass through the pipe with `sh -s --` (for example
 `... | sh -s -- --version 0.7.135`); the same knobs exist as environment
 variables (`PARTCAD_VERSION`, `PARTCAD_REPOSITORY`, `PARTCAD_BIN_DIR`, …).
 
-Every release publishes bundles for Linux (x86_64, arm64), macOS (Apple silicon)
-and Windows, along with a `platforms.json` manifest the installer reads to pick
-the right one for this machine. The download is around 57MB on Linux x86_64 and
-about half that on macOS and Linux arm64.
+Every release publishes bundles for Linux (x86_64, arm64), macOS (Apple silicon
+and Intel) and Windows, along with a `platforms.json` manifest the installer
+reads to pick the right one for this machine. The download is around 57MB on
+Linux x86_64 and about half that on macOS and Linux arm64.
 
 Should the installer fail, report what it said and stop. Do not fall back to
 another install method and do not hand-roll one. The two failures worth

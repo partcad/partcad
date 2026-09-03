@@ -57,7 +57,7 @@ done
 ################################################  PLATFORM  ##################################################
 
 # Snaps are a Linux packaging format. The architecture names are Debian's, which
-# is what snapcraft puts in the file name and what `snap/snapcraft.yaml` lists
+# is what snapcraft puts in the file name and what `.snapcraft.yaml` lists
 # under `platforms`.
 if [ "$(uname -s)" != "Linux" ]; then
   echo "error: snaps are built on Linux only, this is '$(uname -s)'" >&2
@@ -99,7 +99,7 @@ fi
 
 echo "==> Checking the bundle"
 missing=0
-# What `snap/snapcraft.yaml` organizes and turns into apps. A bundle missing any
+# What `.snapcraft.yaml` organizes and turns into apps. A bundle missing any
 # of these produces a snap that installs and then fails to run, so check here.
 for entry in pc partcad partcad-json-rpc _internal; do
   if [ ! -e "${BUNDLE_DIR}/${entry}" ]; then
@@ -121,14 +121,14 @@ echo "==> Running snapcraft (${SNAPCRAFT_MODE})"
 mkdir -p "${OUTPUT_DIR}"
 rm -f "${OUTPUT_DIR}/${SNAP_NAME}" "${OUTPUT_DIR}/${SNAP_NAME}.sha256"
 # snapcraft writes the .snap into the current directory, which has to be the
-# project directory -- that is how it finds `snap/snapcraft.yaml`, and what it
+# project directory -- that is how it finds `.snapcraft.yaml`, and what it
 # resolves the part's `source: dist/standalone/partcad` against. The result is
 # moved out afterwards rather than passed through `--output`, whose handling of
 # a directory argument has changed between snapcraft releases.
 #
 # `--platform` narrows the build plan to this machine's architecture. It is
 # required in destructive mode, which cannot build the two platforms
-# `snap/snapcraft.yaml` declares one after another in the same host directory,
+# `.snapcraft.yaml` declares one after another in the same host directory,
 # and it is passed in LXD mode too: there is no cross-building here either -- the
 # payload is a frozen native bundle -- and exactly one snap has to come out, the
 # `${SNAP_NAME}` looked for below.

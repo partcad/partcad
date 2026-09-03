@@ -10,6 +10,7 @@ import shutil
 
 import partcad as pc
 from partcad.user_config import user_config
+from partcad_utils import conda as pc_conda
 
 
 @click.option(
@@ -52,6 +53,18 @@ def cli(cli_ctx, repo_only: bool, sandbox_only: bool, cache_only: bool) -> None:
                             sandbox_subdir = os.path.join(sandbox_dir, subdir)
                             shutil.rmtree(sandbox_subdir)
                             pc.logging.info(f"Removed sandbox: '{subdir}'")
+
+                # The packages those environments were built from, which only the
+                # conda a standalone bundle carries keeps here -- a host conda has
+                # a package cache of its own, elsewhere, and PartCAD does not
+                # empty caches it did not fill. It goes with the environments
+                # rather than being left behind: it is the larger of the two, and
+                # a reset that leaves gigabytes in place has not reset much.
+                conda_dir = os.path.join(user_config.internal_state_dir, pc_conda.ROOT_PREFIX_SUBDIR)
+                if os.path.exists(conda_dir):
+                    with pc.logging.Action("Sandbox", "conda"):
+                        shutil.rmtree(conda_dir)
+                        pc.logging.info(f"Removed the conda package cache: '{conda_dir}'")
 
             if cache_only or not (repo_only or sandbox_only):
                 cache_dir = os.path.join(user_config.internal_state_dir, "cache")

@@ -102,29 +102,49 @@ Host commands
 
     pc open cube.step                       # in a locally installed FreeCAD
     pc open --use-docker cube.step          # or in a container, when there is none
+    pc open --with blender cube.stl         # a mesh, in Blender
+    pc open --with blender cube.step        # a solid, converted to STL for Blender first
     pc open --with gazebo warehouse.world   # a scene, in Gazebo
     pc open --with kicad Arduino_Nano.step  # a board, in KiCad
 
-  ``--with`` names the application: ``freecad`` (the default), ``gazebo`` for a Gazebo world -- which is what
-  a :ref:`scene <scenes>` of type ``world`` is, and what ``pc export -S -t world`` writes -- and ``kicad`` for
-  a board. A locally installed one is always
+  ``--with`` names the application: ``freecad`` (the default), ``blender``, ``gazebo`` for a Gazebo world --
+  which is what a :ref:`scene <scenes>` of type ``world`` is, and what ``pc export -S -t world`` writes -- and
+  ``kicad`` for a board. A locally installed one is always
   used when there is one: the command looks on the ``PATH``, in ``/Applications`` on macOS, under
   ``Program Files`` on Windows, and for a flatpak on Linux. Gazebo is looked for under all three of the names
   it has had (``gz sim``, ``ign gazebo``, ``gazebo``), and whichever the machine has is the one used.
 
+  Blender reads meshes and nothing else, so a file that is not one is converted to STL and Blender is given
+  that instead: an STL, an OBJ or a glTF is imported as it is, while a STEP file, a CadQuery script or a mesh
+  in a format Blender ships no importer for (3MF) is converted first. This is the one thing ``pc open`` asks
+  the PartCAD daemon for, because turning a solid into a mesh is CAD work; the window still opens on the
+  machine the command was run on. The converted copy is written under this workspace's own directory (never
+  beside your file), named after the object it came from, and reused until that object changes. ``--type``
+  says what the file holds when its name does not -- a ``.py`` is a CadQuery script, a build123d one or an SDF
+  one -- and the VS Code extension passes the declared type of the object you clicked. A ``.blend`` is
+  Blender's own file and is opened, not converted.
+
+  An object that only means something inside a package -- an ASSY file, a URDF -- has nothing to convert
+  ad-hoc, and is refused with that rather than converted wrongly: export it to a mesh first
+  (``pc export -t stl``) and open that.
+
   KiCad is handed the board rather than the file named, when the two are not the same: a ``kicad`` part *is*
   the STEP file KiCad's command line writes out of the board, so ``pc open --with kicad`` on it opens the
-  ``.kicad_pro`` (or ``.kicad_pcb``, or ``.kicad_sch``) beside it. Nothing is created and nothing is
-  converted -- ``pc open`` renders nothing -- so a file with no board beside it is handed over as it is.
+  ``.kicad_pro`` (or ``.kicad_pcb``, or ``.kicad_sch``) beside it. Nothing is created here and nothing is
+  rendered -- a file with no board beside it is handed over as it is. Every application but Blender is given
+  the file it was pointed at, whatever it holds.
 
   With ``--use-docker``, a machine that has no local installation runs the application in a container instead
-  — one container per application, named after it (``partcad-freecad``, ``partcad-gazebo``,
-  ``partcad-kicad``), created from the application's image
+  — one container per application, named after it (``partcad-freecad``, ``partcad-blender``,
+  ``partcad-gazebo``, ``partcad-kicad``), created from the application's image
   (``--docker-image`` overrides it; FreeCAD's is ``linuxserver/freecad:latest``, since the FreeCAD project
-  publishes no image of its own, Gazebo's is ``gazebosim/gz-harmonic:latest``, and KiCad's is the
+  publishes no image of its own, Blender's is ``linuxserver/blender:latest`` for the same reason, Gazebo's is
+  ``gazebosim/gz-harmonic:latest``, and KiCad's is the
   ``ghcr.io/partcad/partcad-container-kicad`` image PartCAD already builds for ``kicad`` parts) the first
   time and reused afterwards, so a container you have prepared
-  keeps being the one that is used. Remove the application's own container (``docker rm -f partcad-freecad``,
+  keeps being the one that is used. Without ``--use-docker``, a machine with neither the application nor
+  Docker is told so rather than being left with a command that quietly did nothing. Remove the application's
+  own container (``docker rm -f partcad-freecad``, ``partcad-blender``,
   ``partcad-gazebo``, ``partcad-kicad``) to have the next ``pc open``
   create a fresh one. The workspace and the directory holding this workspace's daemon socket are mounted **at
   the paths they have on the host**, which is what lets one path mean the same thing on both sides. A file

@@ -296,14 +296,21 @@ effect is that it appears on `PATH` twice.
 This has nothing to do with `src/terminal.ts`, which creates the `PartCAD` output pseudoterminal: that is a log
 surface with a no-op `handleInput`, not a shell, and has no environment to inherit.
 
-## ASSY diagnostics
+## YAML diagnostics
 
-`.assy` files are registered as YAML for highlighting but are not YAML: they are Jinja2 templates that render
-to YAML and then have to match the ASSY schema. (`.world` files are registered the same way, against `xml`:
-a Gazebo world *is* XML, so the editor's own XML support is the whole of what it needs -- there is no PartCAD
-check for one, and none is wanted.) `src/PartcadLint.ts` checks the open document (debounced on
-edit, immediately on open/save) through the `partcad.lintFile` command and publishes the answer into a
-`partcad` diagnostic collection.
+Two documents are checked: `.assy` files and a package's `partcad.yaml`. Both are registered as YAML for
+highlighting and neither is YAML -- each is a Jinja2 template that renders to YAML and then has to match a
+schema. (`.world` files are registered the same way, against `xml`: a Gazebo world *is* XML, so the editor's
+own XML support is the whole of what it needs -- there is no PartCAD check for one, and none is wanted.)
+`src/PartcadLint.ts` checks the open document (debounced on edit, immediately on open/save) through the
+`partcad.lintFile` command and publishes the answer into a `partcad` diagnostic collection.
+
+**Keeping the `yaml` language id is what keeps the highlighting.** The id is how the editor picks a grammar, so
+a PartCAD id of its own would have to bring a grammar of its own; the `languages` contribution in
+`package.json` claims `partcad.yaml` by filename and `.assy` by extension, and gives each the PartCAD icon,
+without taking either away from `yaml`. Diagnostics need none of that -- they are published per document URI,
+beside whatever else has an opinion about the file. `isPackageConfigDocument` matches the basename rather than
+the extension, because a `parts.yaml` next door is somebody's own file and not a package configuration.
 
 **The check never reaches the daemon**, and there is no RPC method for it. It is the client's own file --
 usually one the editor has not saved -- and it needs no package graph, no CAD runtime and no loaded context, so
@@ -312,8 +319,9 @@ exactly when the package fails to load *because* of the file being typed into. `
 answers it by running `pc --no-ansi lint --file <path> --stdin --json`, feeding the buffer on stdin. Same
 reasoning as `pc daemon stop`: defer to the CLI rather than keep a second copy here.
 
-An ASSY file a **scene** points at is checked against the same schema with `how` forbidden, and which of the
-two a given file is is not a property of the file. `PartcadLint.flavorOf` answers it from the package contents
+An **ASSY** file a **scene** points at is checked against the same schema with `how` forbidden, and which of the
+two a given file is is not a property of the file. (A `partcad.yaml` has no flavor -- nothing points at a
+package configuration -- so `flavorOf` returns nothing for one and none is sent.) `PartcadLint.flavorOf` answers it from the package contents
 the Explorer has already loaded -- the declaration itself -- and leaves the question to `pc lint` for a file no
 loaded package mentions. Both sides go through `pathKey` (`common/paths.ts`) rather than comparing paths as
 strings: `Uri.fsPath` lower-cases a Windows drive letter and PartCAD does not, so the editor's spelling of a
@@ -322,21 +330,23 @@ assembly. The daemon answers the same question with `os.path.samefile`; this one
 has never been saved, so it normalises instead of asking the filesystem. Both lean the same way when they cannot tell: unknown means assembly, because reading
 an assembly as a scene would put a false error on correct code.
 
-The checker is `partcad_utils.assy_lint` (schema: `src/partcad_utils/schema/assy.json`), shared
-with the daemon-side package lint so an editor and CI cannot disagree about a file. It masks each Jinja2
-construct with equally sized filler before parsing, which is what keeps every finding on its source line and
-column; findings that depend on what the mask hid are dropped rather than guessed. Change the schema or the
-message wording there, not here.
+The checker is `partcad_utils.assy_lint` (schemas: `src/partcad_utils/schema/assy.json` and
+`partcad.json`), shared with the daemon-side package lint so an editor and CI cannot disagree about a file. It
+masks each Jinja2 construct with equally sized filler before parsing, which is what keeps every finding on its
+source line and column; findings that depend on what the mask hid are dropped rather than guessed. Change the
+schema or the message wording there, not here -- and remember that a gap in the configuration schema is now a
+squiggle on a working file, so anything PartCAD's own tooling writes has to validate.
 
 ## Opening a file in a third-party application
 
 The Explorer's per-item **"Open in > ..."** menu hands the item's file to `partcad.openExternal`, which runs
-`pc --no-ansi open --with <tool> [--use-docker] [--docker-image <image>] <path> --json`. Three applications,
-each offered for the objects it can actually open:
+`pc --no-ansi open --with <tool> [--type <type>] [--use-docker] [--docker-image <image>] <path> --json`. Four
+applications, each offered for the objects it can actually open:
 
 | Menu entry | Command | Shown for |
 | --- | --- | --- |
 | FreeCAD | `partcad.openInFreeCAD` | parts and assemblies |
+| Blender | `partcad.openInBlender` | parts and assemblies |
 | Gazebo | `partcad.openInGazebo` | scenes of type `world` (`viewItem == sceneWorld`) |
 | KiCad | `partcad.openInKiCad` | parts of type `kicad` (`viewItem == partKicad`) |
 
@@ -363,11 +373,20 @@ application is for, has none; `config.item_path` is the file the daemon reported
 The menu is therefore on the same items as "Export" and an object that has no file of its own says so when it
 is picked, rather than being silently missing from the menu.
 
+The object's declared `config.type` is handed over too, as `--type`, and it is the *only* other thing this
+tree contributes. It is there because a file name does not always say what it holds -- a `.py` is a CadQuery
+script, a build123d one or an SDF one -- and Blender reads meshes and nothing else, so a part that is not
+already one is converted to STL before it is opened. Which types are meshes
+(`partcad_client.object_types`), whether this one needs converting, where the mesh goes and who does the
+converting are all decided by `pc open`; nothing here branches on the type, and nothing here knows that
+Blender is the application it matters for.
+
 And no more than that is decided here. A `kicad` part's file is the STEP KiCad's command line writes out of
 the board; the board is the `.kicad_pro` beside it, and swapping one for the other is a fact about KiCad that
 lives in `external.TOOLS` (`Tool.companions`), not in this tree. Same for how Gazebo is launched: `gz sim`,
 `ign gazebo` and `gazebo` are three front ends of one application and `Tool.binary_args` is where that is
-written down.
+written down -- as is Blender being handed `--python-expr` rather than a file name, because the only file
+Blender *opens* is a `.blend`.
 
 `partcad.open.useDocker` and `partcad.open.dockerImage` are read here, on the way to that command line, rather
 than being worked out anywhere in Python: PartCAD decides *how* to run the application, and the settings only
@@ -415,6 +434,26 @@ more, so one build serves every platform.
 
 The same workflow packages `ide/vscode-shim` beside it, into the same artifact and onto the same release. That
 is the marketplace entry this extension used to be published under -- see "The marketplace identity" below.
+
+## The icon
+
+`resources/logo.svg` is the PartCAD mark, and it is the only drawing here: the activity bar container, the
+three views in it, the `partcad.yaml`/`.assy`/`.world` file icons and the `PartCAD` terminal view all point at
+that one file, and so does the PartCAD IDE, which renders its application icons from it
+(`ide/standalone/tools/make_icons.py`). `resources/logo_128x128.png` is the same mark rasterized, which is
+what `package.json`'s `icon` has to be: `vsce` refuses an SVG there.
+
+That `.png` is the one image in this repository that is **not** in Git LFS, and it has to stay that way. No
+checkout in `.github/workflows` asks for LFS, `vsce package` copies the file into the `.vsix` without looking
+at it, and the result is an extension whose icon is a 130-byte pointer -- which is exactly what every release
+up to 0.8.35 shipped. `.gitattributes` names the file and says so.
+
+The corollary is that this package should carry **no other image**. `docs/` used to hold `image1.png` and
+`image2.png`, which were byte-identical copies of `docs/source/images/vscode1.png` and `vscode2.png` at the
+repository root -- nothing referenced them (`README.md` links the originals by absolute URL, which is what the
+marketplace needs), and they shipped in every `.vsix` as two more LFS pointers. They are gone. An image this
+package genuinely needs has to be added the way the icon is: named in `.gitattributes` and kept out of LFS, or
+it arrives as text.
 
 After changing `partcad` core code while developing through this extension, click "Restart PartCAD" in the
 PartCAD `Context` view (or restart VS Code) to pick up the change.

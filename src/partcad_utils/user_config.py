@@ -17,6 +17,7 @@ from pathlib import Path
 
 import vyper
 
+from . import conda as pc_conda
 from . import logging as pc_logging
 from .booleans import to_bool
 from .utils import is_editable_install
@@ -498,10 +499,31 @@ class UserConfig(vyper.Vyper):
         self.set_default("cacheS3MinEntrySize", 100)
         self.set_default("cacheDependenciesIgnore", False)
 
-        if shutil.which("conda") is not None or importlib.util.find_spec("conda") is not None:
+        # conda first, because it is the only sandbox that can provision an
+        # *interpreter*: a package asking for a Python the host does not have
+        # gets it. Failing that, a virtual environment of PartCAD's own, which
+        # is still a sandbox -- it installs where it runs, and nothing it
+        # installs reaches the interpreter the user works with.
+        #
+        # Not 'none'. That one has no environment at all: it renders with the
+        # host's interpreter and installs the CAD stack into it, which is a
+        # surprising thing to do to somebody's Python and impossible on a host
+        # whose Python is not writable. It stays available for a host that wants
+        # exactly that, and is chosen rather than fallen back to.
+        #
+        # `pc_conda.find_executable()` rather than `shutil.which("conda")`: it is
+        # the same question the sandbox itself asks later
+        # (`CondaPythonRuntime.find_conda_executable`), and asking it differently
+        # here is how the two came to disagree. It answers for a host `mamba`
+        # with no `conda` beside it -- which the sandbox has always preferred and
+        # this default used to miss -- and for the conda a standalone bundle
+        # carries. That last one is why the bundle is not left to the `venv`
+        # fallback: a venv is built *from* an interpreter, and the machine a
+        # bundle exists for is the machine with no Python to build one from.
+        if pc_conda.find_executable() is not None or importlib.util.find_spec("conda") is not None:
             self.set_default("pythonSandbox", "conda")
         else:
-            self.set_default("pythonSandbox", "none")
+            self.set_default("pythonSandbox", "venv")
 
         # Unlike Python, whose sandbox has to be provisioned because PartCAD's
         # own interpreter is the wrong one to render in, a host Node.js is
@@ -511,7 +533,7 @@ class UserConfig(vyper.Vyper):
         # works if conda can supply one.
         if shutil.which("node") is not None:
             self.set_default("javascriptSandbox", "none")
-        elif shutil.which("conda") is not None or importlib.util.find_spec("conda") is not None:
+        elif pc_conda.find_executable() is not None or importlib.util.find_spec("conda") is not None:
             self.set_default("javascriptSandbox", "conda")
         else:
             self.set_default("javascriptSandbox", "none")
@@ -710,8 +732,8 @@ class UserConfig(vyper.Vyper):
 
         # option: pythonSandbox
         # description: sandboxing environment for invoking python scripts
-        # values: [none | pypy | conda]
-        # default: conda
+        # values: [none | venv | pypy | conda]
+        # default: conda where the host has it, else venv
         self.bind_env("pythonSandbox", "PC_PYTHON_SANDBOX")
         self.python_sandbox = self.get_string("pythonSandbox")
 

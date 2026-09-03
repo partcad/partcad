@@ -80,6 +80,10 @@ getting tested on Linux, macOS and Windows.
   If that doesn't help (e.g. macOS+arm64) then try ``mamba``.
   On Windows, PartCAD must be used inside a ``conda`` environment.
 
+  This applies to the wheels. The :ref:`standalone command line tools <standalone-cli>`, the
+  :ref:`snap <snap-package>` and the :ref:`PartCAD IDE <partcad-ide>` carry a conda of their own and need
+  none installed.
+
 .. note::
 
   On Ubuntu, try ``apt install libcairo2-dev`` if ``pip install`` fails to install ``cairo``.
@@ -179,13 +183,14 @@ That downloads the bundle for the current operating system and architecture from
 Nothing else on the system is touched, and no ``sudo`` is asked for. If ``~/.local/bin`` is not on your
 ``PATH``, the installer says so and prints the line to add.
 
-The bundle is around 180MB unpacked and 57MB to download on Linux x86_64, and about half that on macOS and
+The bundle is around 200MB unpacked and 63MB to download on Linux x86_64, and about half that on macOS and
 on Linux arm64, which carry no bundled OpenSCAD. It carries no CAD kernel: PartCAD builds every shape in a
-conda sandbox it provisions itself, so ``conda`` (or ``mamba``) is a prerequisite here exactly as it is for
-the wheels. ``pc healthcheck`` reports what this machine is missing.
+sandbox it provisions itself -- and it carries the conda that provisions it, so nothing has to be installed
+first, and the ``conda`` sandbox is what you get rather than the ``venv`` fallback the wheels use when there
+is no conda (see :ref:`python-sandbox`). ``pc healthcheck`` reports what this machine is missing.
 
-Supported platforms are Linux on x86_64 and arm64, and macOS on Apple silicon. Windows is covered by the
-``.zip`` archives under :ref:`manual installation <standalone-manual>`.
+Supported platforms are Linux on x86_64 and arm64, and macOS on Apple silicon and on Intel. Windows is
+covered by the ``.zip`` archives under :ref:`manual installation <standalone-manual>`.
 
 .. _standalone-os-versions:
 
@@ -198,12 +203,17 @@ carries; the installer reads it, works out which of them this machine can run, a
 .. code-block:: text
 
   Linux, x86_64 and arm64     built on Ubuntu 22.04 and on Ubuntu 24.04
-  macOS, Apple silicon        built on macOS 15 and on macOS 26
+  macOS, Apple silicon        built on macOS 15
+  macOS, Intel                built on macOS 15
   Windows, x86_64             built on Windows Server 2022
 
 The Ubuntu names are not a requirement to run Ubuntu. Any Linux distribution can run these bundles; what
 differs between the two is the minimum glibc, and a machine the installer cannot identify as Ubuntu is
 offered the 22.04 build, which has the lower floor. Pass ``--platform`` to install a specific one.
+
+macOS has one build per architecture rather than one per macOS version, because a bundle built on macOS 15
+runs on macOS 15 and on macOS 26 alike -- both are built and installation-tested on both releases before
+every publish. On Apple silicon that is the ``arm64`` archive; on an Intel Mac, the ``x86_64`` one.
 
 Windows is one build rather than one per Windows version, because there is nothing to choose between: the
 split exists so that a machine can be compared against it, and Windows offers no such comparison -- nor the
@@ -307,7 +317,7 @@ the wheels, together with a ``.sha256`` file each:
 
 * ``partcad-<version>-ubuntu-22.04-x86_64.tar.xz``, ``partcad-<version>-ubuntu-22.04-arm64.tar.xz``
 * ``partcad-<version>-ubuntu-24.04-x86_64.tar.xz``, ``partcad-<version>-ubuntu-24.04-arm64.tar.xz``
-* ``partcad-<version>-macos-15-arm64.tar.xz``, ``partcad-<version>-macos-26-arm64.tar.xz``
+* ``partcad-<version>-macos-15-arm64.tar.xz``, ``partcad-<version>-macos-15-x86_64.tar.xz``
 * ``partcad-<version>-windows-2022-x86_64.zip``
 
 Pick the newest one your machine is not older than -- see :ref:`the note above <standalone-os-versions>` on
@@ -341,10 +351,28 @@ The bundle carries the optional extras that the wheels leave to the user, becaus
 extended afterwards: the Python linter (``lint``) is in it, ready to run.
 
 What it does **not** carry is a CAD kernel. The bundle is three console programs, not a library to import, and
-every shape those programs build, render, export or tessellate is produced in the conda sandbox PartCAD
-provisions and comes back as geometry the commands never open themselves. So ``conda`` (or ``mamba``) is as
-much a prerequisite here as it is for the wheels, and leaving OpenCASCADE out is most of why the bundle is
-around 180MB rather than around 1GB.
+every shape those programs build, render, export or tessellate is produced in the sandbox PartCAD provisions
+and comes back as geometry the commands never open themselves. Leaving OpenCASCADE out of the bundle is most
+of why it is around 200MB rather than around 1GB.
+
+It does carry the **conda** that builds that sandbox. Elsewhere conda is optional -- without it PartCAD builds
+a plain virtual environment instead (see :ref:`python-sandbox`) -- but a virtual environment is built *from*
+an interpreter, and the machine this bundle exists for is the machine with no Python to build one from. So
+every bundle, on every platform, ships `micromamba <https://mamba.readthedocs.io/>`_, a single self-contained
+executable of about 12-22MB, and PartCAD uses it when the machine has no conda of its own.
+
+If you already have ``conda`` or ``mamba``, yours is used and the bundled copy is ignored. That is deliberate:
+your conda has the channels you configured and a package cache holding the gigabytes a CAD sandbox is built
+from, and taking ours instead would strand that cache and download all of it again. Nothing needs to be
+configured either way; ``pc healthcheck`` says which conda was found.
+
+By default the bundled conda keeps its package cache in ``~/.partcad/conda``, beside the sandboxes it creates
+in ``~/.partcad/sandbox``. Deleting ``~/.partcad`` removes both, ``pc system status`` reports their size and
+``pc system reset`` clears them, and the next command rebuilds them.
+
+The exception is ``MAMBA_ROOT_PREFIX``: if you already have that set -- because you run micromamba yourself --
+the bundled copy uses your prefix rather than making a second cache of its own, and then none of the sentence
+above applies to it. It is your cache, in your location, and PartCAD neither reports nor deletes it.
 
 On Linux x86_64 and on Windows it also carries **OpenSCAD**, which PartCAD runs as an external program to
 build ``.scad`` parts. The bundled copy is used in preference to any OpenSCAD installed on the machine, so that the
@@ -362,14 +390,13 @@ consequences worth knowing:
 
 The macOS bundles carry no OpenSCAD: the last OpenSCAD release predates Apple silicon and ships an
 Intel-only build, which would quietly require Rosetta 2. The Linux arm64 bundles carry none for the same
-reason -- upstream publishes that release for x86_64 only. On both, install OpenSCAD yourself and PartCAD
-will use it.
+reason -- upstream publishes that release for x86_64 only. The Intel macOS bundle carries none either, so
+that both macOS builds behave the same way. On all of them, install OpenSCAD yourself and PartCAD will use
+it.
 
-Two other things are deliberately not in the bundle, because PartCAD runs them as external programs rather
-than importing them, exactly as the wheels do:
-
-* **git**, used to fetch package repositories.
-* **conda** (or **mamba**), used to build the sandbox in which PartCAD runs CAD scripts.
+One thing is deliberately not in the bundle, because PartCAD runs it as an external program rather than
+importing it, exactly as the wheels do: **git**, used for your git configuration when packages are fetched
+from git repositories. Packages are cloned either way, through ``libgit2``.
 
 Run ``pc healthcheck`` to see what is missing on the current machine.
 
@@ -406,7 +433,7 @@ is the packaging: snapd installs it, keeps it up to date, and removes it cleanly
 Two flags need explaining:
 
 * ``--classic`` is the confinement. PartCAD works on your own files -- it reads and writes CAD projects
-  anywhere on disk, clones git repositories, builds conda sandboxes and runs CAD scripts in them, and serves
+  anywhere on disk, clones git repositories, builds sandboxes and runs CAD scripts in them, and serves
   a daemon over a socket that the Visual Studio Code extension connects to. A strictly confined snap could do
   none of that.
 * ``--dangerous`` says the package is not signed by the Snap Store, which a downloaded file is not. It stops
@@ -418,7 +445,7 @@ itself. Without it, the commands are ``partcad``, ``partcad.pc`` and ``partcad.j
 Where it keeps its state
 ========================
 
-Everywhere else, PartCAD keeps its cache, its conda sandboxes and its git clones in ``~/.partcad``. The snap
+Everywhere else, PartCAD keeps its cache, its sandboxes and its git clones in ``~/.partcad``. The snap
 does not write them there. It sets ``PC_INTERNAL_STATE_DIR`` to the per-user directory snapd gives it, so all
 of that lives in ``~/snap/partcad/common`` instead, and ``sudo snap remove --purge partcad`` takes it away
 with the snap.
@@ -434,9 +461,15 @@ conda and git
 =============
 
 A snap does not carry your shell environment, so a conda installed under your home directory -- the usual
-place -- is not visible to it, and neither is a git outside the standard system prefixes. This is expected
-and accepted rather than worked around: PartCAD notices, falls back to running Python scripts without a
-sandbox (``pythonSandbox: none``), and reports both as missing. Packages imported from git repositories are
+place -- is not visible to it, and neither is a git outside the standard system prefixes.
+
+conda no longer matters, and that is the one thing to know here that changed. The snap wraps the standalone
+bundle, the bundle carries its own conda, and a payload inside the snap is visible to it whatever your shell
+says -- so the snap gets the ``conda`` sandbox (see :ref:`python-sandbox`) rather than falling back to a
+virtual environment. What it will not pick up is *your* conda, and with it your package cache: the snap
+builds its sandbox from scratch the first time.
+
+git is still expected and accepted rather than worked around. Packages imported from git repositories are
 still cloned, through ``libgit2`` as everywhere else; what the snap cannot see is your git *configuration*
 (see :ref:`git-configuration`).
 
@@ -444,8 +477,8 @@ still cloned, through ``libgit2`` as everywhere else; what the snap cannot see i
 
   $ pc healthcheck
 
-If you need the conda sandbox, or your own git configuration, use the :ref:`standalone bundle
-<standalone-cli>` or the wheels, which run with your own environment.
+If you need your own git configuration, or want the snap to share the conda package cache you already have,
+use the :ref:`standalone bundle <standalone-cli>` or the wheels, which run with your own environment.
 
 To remove the snap, including its data:
 
@@ -499,8 +532,10 @@ The installer is not signed, so SmartScreen shows a warning: choose "More info",
 ``partcad-ide.exe`` without installing anything.
 
 It unpacks to around 500MB: an editor, a Python interpreter, the command line tools and the extensions, all
-in one archive. Like the standalone bundle inside it, it carries no CAD kernel -- shapes are built in a conda
-sandbox, so ``conda`` (or ``mamba``) is still expected on the machine.
+in one archive. Like the standalone bundle inside it, it carries no CAD kernel -- shapes are built in a
+sandbox PartCAD provisions on the machine. The conda that provisions it comes from the same place: the IDE
+ships the standalone bundle, and the bundle carries a conda, so there is nothing to install alongside the IDE
+either (see :ref:`python-sandbox`).
 
 The first start
 ===============
@@ -571,8 +606,9 @@ nothing with a Visual Studio Code or VSCodium on the same machine. PartCAD's own
 stay in ``~/.partcad``, shared with the command line tools, so a package installed in a terminal is
 there in the IDE.
 
-On macOS, ``partcad-ide-<version>-macos-arm64.dmg`` is published as well: open it and drag the
-application to Applications, the usual way.
+On macOS, a ``.dmg`` is published as well -- ``partcad-ide-<version>-macos-arm64.dmg`` for Apple silicon
+and ``partcad-ide-<version>-macos-x86_64.dmg`` for Intel: open it and drag the application to
+Applications, the usual way.
 
 .. note::
 

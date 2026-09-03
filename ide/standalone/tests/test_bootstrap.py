@@ -178,3 +178,22 @@ def test_the_examples_are_the_ones_the_build_ships(examples):
     assert re.search(r"const EXAMPLES_MANIFEST = 'examples\.json';", EXTENSION_JS)
     assert javascript_constant("EXAMPLES_DIRECTORY") == "examples"
     assert examples, "the manifest offers nothing"
+
+
+def test_the_icon_the_manifest_names_is_the_one_the_build_copies(manifest):
+    """The extension's icon is staged by the build, so two files have to agree."""
+    # `package.json` names an icon that is not in `bootstrap/`: the build copies
+    # it in from `ide/vscode/resources`, so that the IDE and the extension wear
+    # the same one and there is nothing to keep in step. `vsce` fails outright
+    # on an icon it cannot find, so what this catches is the rename that leaves
+    # the manifest and `build.sh` naming two different files.
+    icon = manifest["icon"]
+    assert icon.endswith(".png"), "`vsce` packages a .png and refuses an .svg"
+    assert not (BOOTSTRAP / icon).exists(), f"{icon} is in git after all; the build would overwrite it"
+
+    build = (COMPONENT_ROOT / "build.sh").read_text(encoding="utf-8")
+    source = REPO_ROOT / "ide" / "vscode" / "resources" / "logo_128x128.png"
+    assert f'"${{staging}}/{icon}"' in build, f"build.sh no longer writes {icon} into the staging directory"
+    assert 'ide/vscode/resources/logo_128x128.png"' in build, "build.sh no longer copies the project logo"
+    assert source.is_file(), f"{source} is missing"
+    assert source.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", f"{source} is not a PNG; is this checkout LFS-smudged?"

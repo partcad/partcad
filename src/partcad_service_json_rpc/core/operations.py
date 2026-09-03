@@ -23,6 +23,7 @@ from urllib.request import url2pathname
 
 import yaml
 from packaging.specifiers import SpecifierSet
+from partcad_utils import conda as pc_conda
 from partcad_utils.utils import directory_size_mb
 
 from ..rpc.dispatcher import JsonRpcError
@@ -1006,6 +1007,18 @@ def daemon_reset(session, params):
                         shutil.rmtree(os.path.join(sandbox_dir, subdir))
                         pc.logging.info("Removed sandbox: '%s'" % subdir)
 
+            # The packages those environments were built from, which only the
+            # conda a standalone bundle carries keeps here -- a host conda has a
+            # package cache of its own, elsewhere, and PartCAD does not empty
+            # caches it did not fill. Not nested under the directory above: the
+            # cache outlives the environments, and a machine that has the one
+            # without the other is what a previous half-reset leaves behind.
+            conda_dir = os.path.join(user_config.internal_state_dir, pc_conda.ROOT_PREFIX_SUBDIR)
+            if os.path.exists(conda_dir):
+                with pc.logging.Action("Sandbox", "conda"):
+                    shutil.rmtree(conda_dir)
+                    pc.logging.info("Removed the conda package cache: '%s'" % conda_dir)
+
         if cache_only or not (repo_only or sandbox_only):
             cache_dir = os.path.join(user_config.internal_state_dir, "cache")
             if os.path.exists(cache_dir):
@@ -1042,6 +1055,10 @@ def daemon_status(session, params):
             pc.logging.info("Tar cache size: %.2fMB" % directory_size_mb(os.path.join(root, "tar")))
         with pc.logging.Action("Status", "sandbox"):
             pc.logging.info("Sandbox environments size: %.2fMB" % directory_size_mb(os.path.join(root, "sandbox")))
+        with pc.logging.Action("Status", "conda"):
+            pc.logging.info(
+                "Conda package cache size: %.2fMB" % directory_size_mb(os.path.join(root, pc_conda.ROOT_PREFIX_SUBDIR))
+            )
     return None
 
 
@@ -1337,7 +1354,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.34"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.45"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None

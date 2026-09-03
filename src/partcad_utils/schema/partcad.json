@@ -3,7 +3,7 @@
   "type": "object",
   "definitions": {
     "output-section": {
-      "type": "object",
+      "type": ["object", "null"],
       "properties": {
         "output_dir": { "type": "string", "minLength": 1 }
       },
@@ -410,7 +410,7 @@
       "allOf": [
         { "$ref": "#/definitions/output-section" },
         {
-          "type": "object",
+          "type": ["object", "null"],
           "properties": {
             "png": { "$ref": "#/definitions/raster-output-type" },
             "jpeg": { "$ref": "#/definitions/raster-output-type" }
@@ -451,8 +451,9 @@
       "maxLength": 255
     },
     "desc": {
+      "description": "What this package is, in prose. Rendered at the top of the package's generated README, and allowed the same length as the 'docs' fields beside it.",
       "type": "string",
-      "maxLength": 1000
+      "maxLength": 5000
     },
     "private": {
       "type": "boolean",
@@ -464,7 +465,7 @@
     },
     "unless": { "$ref": "#/definitions/unless" },
     "docs": {
-      "type": "object",
+      "type": ["object", "null"],
       "properties": {
         "intro": { "type": "string", "maxLength": 5000 },
         "usage": { "type": "string", "maxLength": 5000 }
@@ -506,6 +507,7 @@
     "suppliers":{
       "description": "The providers to consider for the parts and assemblies of this package. A name is a provider of this package unless it is qualified with a package path, which lets a package buy from a provider defined elsewhere.",
       "oneOf":[
+        { "type": "null" },
         { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
         {
           "type": "object",
@@ -517,7 +519,7 @@
       ]
     },
     "cover": {
-      "type": "object",
+      "type": ["object", "null"],
       "properties": {
         "package": { "type": "string", "minLength": 1 },
         "assembly": { "type": "string", "minLength": 1 }
@@ -527,7 +529,7 @@
     "render": { "$ref": "#/definitions/render" },
     "export": { "$ref": "#/definitions/output-section" },
     "dependencies": {
-      "type": "object",
+      "type": ["object", "null"],
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
           "type": "object",
@@ -555,7 +557,7 @@
       "additionalProperties": false
     },
     "parts": {
-      "type": "object",
+      "type": ["object", "null"],
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
           "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
@@ -567,9 +569,9 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "cadquery", "build123d", "chili3d", "svg", "dxf", "extrude", "sweep",
-                    "stl", "step", "scad", "3mf", "enrich", "alias", "brep", "obj",
-                    "kicad", "compound"
+                    "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
+                    "sweep", "stl", "step", "scad", "3mf", "enrich", "alias", "brep",
+                    "obj", "kicad", "compound"
                   ]
                 },
                 "aliases": {
@@ -743,7 +745,7 @@
       "additionalProperties": false
     },
     "assemblies":{
-      "type": "object",
+      "type": ["object", "null"],
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
           "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
@@ -826,7 +828,7 @@
       }
     },
     "scenes": {
-      "type": "object",
+      "type": ["object", "null"],
       "description": "Scenes: placed arrangements of objects - a workcell, a table, a simulation world - stating where things are and not how they got there. Declared by pointing at the file that holds one, with no assembly object in between",
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
@@ -894,7 +896,7 @@
       }
     },
     "sketches": {
-      "type": "object",
+      "type": ["object", "null"],
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
           "type": "object",
@@ -1029,7 +1031,7 @@
       "additionalProperties": false
     },
     "interfaces": {
-      "type": "object",
+      "type": ["object", "null"],
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
           "type": "object",
@@ -1098,7 +1100,7 @@
       "additionalProperties": false
     },
     "providers": {
-      "type": "object",
+      "type": ["object", "null"],
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
           "type": "object",
@@ -1134,7 +1136,7 @@
       "additionalProperties": false
     },
     "repositories": {
-      "type": "object",
+      "type": ["object", "null"],
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
           "type": "object",
@@ -1161,7 +1163,7 @@
     },
     "software": {
       "description": "The software this package ships: firmware images, binaries, disk images. Software is an object of a package like a part is, and unlike a part it has no geometry - it is always a file. Every type is a file; the types beyond 'raw' will name the firmware flashing procedure the file goes through (which tool, which bootloader), never a different way of pointing at it.",
-      "type": "object",
+      "type": ["object", "null"],
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
           "oneOf": [
@@ -1200,7 +1202,7 @@
       "additionalProperties": false
     },
     "partTypes": {
-      "type": "object",
+      "type": ["object", "null"],
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
           "type": "object",

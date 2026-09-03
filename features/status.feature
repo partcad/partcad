@@ -14,6 +14,7 @@ Feature: `pc system status` command
     And STDOUT should match the regex "Tar cache size: \d\.\d+[KMGT]B"
     And STDOUT should match the regex "Git cache size: \d\.\d+[KMGT]B"
     And STDOUT should contain "Sandbox environments size:"
+    And STDOUT should contain "Conda package cache size:"
     And STDOUT should contain "Total internal data storage size:"
     And STDOUT should contain "DONE: Status: global:"
 

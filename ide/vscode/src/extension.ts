@@ -161,12 +161,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     traceLog(`Module: ${serverInfo.module}`);
     traceVerbose(`Full Server Info: ${JSON.stringify(serverInfo)}`);
 
-    // ASSY files are checked through the backend; the checker is created here so
-    // the documents already open when the window came up get checked as soon as
-    // the backend registers `partcad.lintFile`. The Explorer is handed over as a
-    // getter rather than a value: it does not exist yet, and what the checker
-    // wants from it - which ASSY files the packages declare as scenes - only
-    // arrives once a package has loaded.
+    // ASSY files and `partcad.yaml` are checked through the backend; the checker
+    // is created here so the documents already open when the window came up get
+    // checked as soon as the backend registers `partcad.lintFile`. The Explorer
+    // is handed over as a getter rather than a value: it does not exist yet, and
+    // what the checker wants from it - which ASSY files the packages declare as
+    // scenes - only arrives once a package has loaded.
     partcadLint = new PartcadLint(() => partcadExplorer);
     context.subscriptions.push(partcadLint);
 

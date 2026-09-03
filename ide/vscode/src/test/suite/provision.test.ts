@@ -29,7 +29,12 @@ const MANIFEST = {
             x86_64: ['ubuntu-24.04-x86_64', 'ubuntu-22.04-x86_64'],
             arm64: ['ubuntu-24.04-arm64', 'ubuntu-22.04-arm64'],
         },
-        macos: { arm64: ['macos-26-arm64', 'macos-15-arm64'] },
+        // Two arm64 entries and one x86_64. A release publishes one macOS build
+        // per architecture today -- both frozen on macOS 15 -- but the policy
+        // has to order a list of any length, macOS carried two before and will
+        // again when the macOS 15 images retire, and no other operating system
+        // here exercises "several builds of one arch, one of the other".
+        macos: { arm64: ['macos-26-arm64', 'macos-15-arm64'], x86_64: ['macos-15-x86_64'] },
         // One Windows build, not one per image: nothing here can be compared
         // against a Windows host, and there is no floor for two builds to
         // differ in. See the note beside the matrix in "build-standalone.yml".
@@ -37,7 +42,7 @@ const MANIFEST = {
     },
     ide: {
         linux: { x86_64: ['linux-x86_64'] },
-        macos: { arm64: ['macos-arm64'] },
+        macos: { arm64: ['macos-arm64'], x86_64: ['macos-x86_64'] },
         windows: { x86_64: ['windows-x86_64'] },
     },
 };
@@ -94,8 +99,17 @@ suite('Release manifest', () => {
     });
 
     test('an architecture the release does not carry has no candidates', () => {
-        // There is no macOS x86_64 bundle: nothing is offered, rather than an arm64 one.
-        assert.deepStrictEqual(selectPlatforms(MANIFEST, 'bundle', 'macos', 'x86_64', 'macos-15'), []);
+        // There is no Windows arm64 bundle: nothing is offered, rather than an
+        // x86_64 one that this machine would have to emulate.
+        assert.deepStrictEqual(selectPlatforms(MANIFEST, 'bundle', 'windows', 'arm64', undefined), []);
+    });
+
+    test('each macOS architecture is offered only its own builds', () => {
+        // The two are separate lists in the manifest, so an Intel Mac is never
+        // handed an Apple silicon bundle, and the shorter Intel list is no
+        // reason to reach into the other one.
+        assert.deepStrictEqual(selectPlatforms(MANIFEST, 'bundle', 'macos', 'x86_64', 'macos-26'), ['macos-15-x86_64']);
+        assert.deepStrictEqual(selectPlatforms(MANIFEST, 'bundle', 'macos', 'arm64', 'macos-15'), ['macos-15-arm64']);
     });
 
     test('a release with no manifest for this kind has no candidates', () => {
@@ -107,6 +121,7 @@ suite('Release manifest', () => {
 
     test('the IDE archives carry no OS version and are offered as they are', () => {
         assert.deepStrictEqual(selectPlatforms(MANIFEST, 'ide', 'linux', 'x86_64', 'ubuntu-22.04'), ['linux-x86_64']);
+        assert.deepStrictEqual(selectPlatforms(MANIFEST, 'ide', 'macos', 'x86_64', 'macos-15'), ['macos-x86_64']);
     });
 });
 

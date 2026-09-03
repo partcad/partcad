@@ -44,25 +44,39 @@ drift apart.
 
 **`pc lint` sits on both sides of the line, one mode each.** `pc lint [-P/-r]` checks a *package*: which
 packages, resolved how, with which files, is the package graph, so it is a thin daemon client like any other.
-`pc lint --file` checks the *files named on the command line*, in this process: an ASSY file is a Jinja2
-template rendered to YAML and matched against a schema, which needs no package graph, no CAD runtime and no
-context — and with `--stdin` the content is a buffer an editor has not saved, which the daemon cannot see at
-all. There is deliberately no RPC method for it: sending it would ship the client's own file across a wire to
-have it read back, and would leave the editor silent exactly when the package fails to load *because* of that
-file. The checker (`partcad_client.lint`, over `partcad_utils.assy_lint`) is the same one the daemon runs over a
-package, so an editor and CI cannot disagree. The VS Code extension runs `pc lint --file`, so the two cannot
-drift apart either.
+`pc lint --file` checks the *files named on the command line*, in this process: an ASSY file and a
+`partcad.yaml` are both Jinja2 templates rendered to YAML and matched against a schema, which needs no package
+graph, no CAD runtime and no context — and with `--stdin` the content is a buffer an editor has not saved,
+which the daemon cannot see at all. There is deliberately no RPC method for it: sending it would ship the
+client's own file across a wire to have it read back, and would leave the editor silent exactly when the
+package fails to load *because* of that file — which for a `partcad.yaml` is every time it is wrong. The
+checker (`partcad_client.lint`, over `partcad_utils.assy_lint`) is the same one the daemon runs over a package,
+so an editor and CI cannot disagree. The VS Code extension runs `pc lint --file`, so the two cannot drift apart
+either. `--schema` picks the flavor of an ASSY file; a `partcad.yaml` has none — nothing points at a package
+configuration — so it is ignored for one, and the detection is not even run.
 
 **`pc open` is on the in-process side for a stronger version of the same reason.** Opening a file in a
 third-party CAD application puts a window on a screen, and the only screen a command can put one on is the one
 in front of the user who ran it: a daemon can be remote, where that window would appear on somebody else's
 desk, on a machine that may have no display at all -- and the path on the command line names a file only the
-client has. It needs no package graph, no CAD runtime and no context either, so there is deliberately no RPC
-method for it and none may be added. The application, the container PartCAD keeps for one that is not
-installed, and the X forwarding into it are `partcad_client.external`, so the command never imports the heavy
+client has. It needs no package graph and no context either, so there is deliberately no RPC
+method for *opening a file* and none may be added. The application, the container PartCAD keeps for one that is
+not installed, and the X forwarding into it are `partcad_client.external`, so the command never imports the heavy
 `partcad`. Taking a path rather than a `<package>:<part>` name follows from the same rule: resolving a name is
 a package-graph question, which is exactly the round trip this command does not make. The VS Code extension's
 "Open in..." context menu runs `pc open --json`, so the two cannot drift apart.
+
+**One step inside it does cross the wire, and it is the exception that states the rule.** Blender reads meshes
+and nothing else, so a part that is not already one has to be converted before it is handed over -- and turning
+a solid into a mesh drives a CAD wrapper, whose sandboxed Python runtime lives in the daemon's environment and
+may not exist on the client at all. So `pc open --with blender` sends `adhoc.convert`, the same method
+`pc adhoc convert` sends, on the same absolute paths: file in, file out, `needs_context=False`, nothing left on
+the daemon to go stale, and no new method in the registry. The window still opens here. Which types are meshes
+is `partcad_client.object_types` -- an inlined copy of PartCAD's tables, so the client stays cheap to import,
+with `tests/partcad/unit/test_client_object_types.py` failing when the copy drifts. This is the only daemon
+call an in-process command makes, and `IN_PROCESS_DAEMON_CALLS` in
+`tests/partcad_cli/unit/test_command_boundary.py` is where it is written down -- one method at a time, so
+widening it is a decision somebody makes on purpose.
 
 A command stays **in-process** only when it operates on the client's own state, which does not cross the wire:
 `init` (creates the workspace, before any package or context exists, and adds the `Render` command to the

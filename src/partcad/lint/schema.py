@@ -1,9 +1,6 @@
 import json
 import os
-import yaml
 import aiofiles
-import jsonschema
-import jsonschema.exceptions
 
 from ..project import Project
 from ..context import Context
@@ -12,87 +9,102 @@ from partcad.cache_hash import CacheHash
 from .lint import Linting, Severity, LintingReport
 
 # Shared with every client's `pc lint --file`, which is why it is not in this
-# package: the daemon checks a package's ASSY files while walking the package
-# graph, and a client checks the one file being edited in its own process. Two
-# copies of that check would let an editor and CI disagree about a file.
+# package: the daemon checks a package's files when it walks the package graph,
+# and a client checks the one file being edited in its own process. Two copies
+# of that check would let an editor and CI disagree about a file.
 from partcad_utils.assy_lint import (
-    ASSY_SCHEMA,
     FLAVOR_ASSEMBLY,
     FLAVOR_SCENE,
     SEVERITY_WARNING,
-    get_schema,
+    is_assy_file,
     schema_for_file,
-    schema_name_for_file,
     validate_source,
 )
 
 
-class SchemaLinting(Linting):
-    def __init__(self, name: str, schema: dict) -> None:
-        super().__init__(name)
-        self.schema = schema
+class YamlLinting(Linting):
+    """Check the YAML documents of a package against the schemas that govern them.
+
+    A `partcad.yaml` and an `.assy` are the same kind of document -- a Jinja2
+    template that renders to YAML and then has to match a schema -- so they are
+    checked by the same code, `partcad_utils.assy_lint.validate_source`, which
+    masks the template before parsing and reports each finding at the source
+    line and column it came from. What the two subclasses below differ in is
+    only which files they walk and which schema each file gets.
+
+    That sharing is the point rather than a convenience. `validate_source` is
+    also what every client runs over the single file somebody is editing
+    (`partcad_client.lint`, reached by `pc lint --file`), so a finding reads the
+    same, at the same position, in the editor and in CI. A second implementation
+    here -- handing the raw file to `yaml.safe_load` and reporting whatever
+    `jsonschema` raised first -- is what that used to be, and it disagreed with
+    the editor twice over: it stopped at one finding per file, and it called a
+    templated `partcad.yaml` broken YAML.
+    """
+
+    def flavor(self, name: str, target: str) -> str:
+        """What ``target`` is read as. Only an ASSY file has an answer."""
+        return None
+
+    def schema(self, name: str, target: str) -> dict:
+        return schema_for_file(target, self.flavor(name, target))
 
     def get_hash(self, name: str, target: str) -> CacheHash:
         # The schema is half of what produced a finding: a cached result for an
         # unchanged file is only valid while the schema it was checked against
-        # is the same one.
+        # is the same one. The flavor is in here for the same reason and is not
+        # implied by anything else in the hash: moving a file's declaration from
+        # 'assemblies:' to 'scenes:' changes which schema it is checked against
+        # without touching the file.
         hash = super().get_hash(name, target)
-        hash.add_string(json.dumps(self.schema, sort_keys=True))
+        hash.add_string(json.dumps(self.schema(name, target), sort_keys=True))
+        hash.add_string(str(self.flavor(name, target)))
         return hash
-
-    def get_targets(self, ctx: Context, package: Project) -> list[str]:
-        return [os.path.join(package.config_dir, "partcad.yaml")]
 
     async def validate(self, ctx: Context, package: Project, target: str, lint_ctx: dict = {}) -> LintingReport:
         lint_result = LintingReport(package.name)
-        async with aiofiles.open(target, mode="r") as file:
-            # Handle file access and decoding errors
-            try:
-                raw = await file.read()
-            except (OSError, IOError, UnicodeDecodeError) as err:
-                lint_result.add(
-                    Severity.FAILED,
-                    f"Failed to read configuration file: {err}"
-                )
-                return lint_result
 
-            # Handle YAML parsing and schema validation errors
-            try:
-                config = yaml.safe_load(raw)
-                jsonschema.validate(instance=config, schema=self.schema)
-            except jsonschema.exceptions.ValidationError as exc:
-                if "unexpected" in exc.message:
-                    lint_result.add(
-                        Severity.WARNING,
-                        f"{exc.json_path}: {exc.message}",
-                    )
-                else:
-                    details = []
-                    if exc.context:
-                        root_error_location = exc.context[-1].relative_path
-                        for error in reversed(exc.context):
-                            if error.relative_path == root_error_location:
-                                details.append(error.message)
-                            else:
-                                break
-                    lint_result.add(
-                        Severity.FAILED,
-                        f"{exc.json_path}: {exc.message}" + (f" ({details})" if details else ""),
-                    )
-            except jsonschema.exceptions.SchemaError as exc:
-                pc_logging.debug(package.name, str(exc))
-                lint_result.add(Severity.FAILED, f"Internal Error: Invalid schema")
+        # 'open' is inside the try as well: it is what raises when the entry is a
+        # directory named '*.assy', or was removed between the listing and here,
+        # and nothing above catches that - one unreadable entry would end the
+        # whole 'pc lint' run instead of being reported as a failed check.
+        try:
+            async with aiofiles.open(target, mode="r") as file:
+                raw = await file.read()
+        except (OSError, UnicodeDecodeError) as err:
+            lint_result.add(Severity.FAILED, f"Failed to read {os.path.basename(target)}: {err}")
+            return lint_result
+
+        try:
+            diagnostics = validate_source(raw, self.schema(package.name, target))
+        except Exception as exc:  # pylint: disable=broad-except
+            pc_logging.debug(package.name, str(exc))
+            lint_result.add(Severity.FAILED, f"Internal Error: Failed to check {os.path.basename(target)}")
+            return lint_result
+
+        for diagnostic in diagnostics:
+            severity = Severity.WARNING if diagnostic.severity == SEVERITY_WARNING else Severity.FAILED
+            lint_result.add(severity, diagnostic.format(os.path.basename(target)))
 
         return lint_result
 
 
-class AssySchemaLinting(Linting):
-    """Check every ASSY file of a package against the ASSY schema.
+class SchemaLinting(YamlLinting):
+    """Check a package's own `partcad.yaml` against the configuration schema.
 
-    ASSY files are Jinja2 templates, so unlike `partcad.yaml` above they cannot
-    be handed to `yaml.safe_load()` as they are on disk. `partcad_utils.assy_lint`
-    masks the template first and reports each finding at the source line it came
-    from; this wraps that into the package-scoped report `pc lint` prints.
+    One target per package, and it is the file that decides whether the package
+    exists at all -- so it is checked as text, exactly as it is on disk, rather
+    than through the loaded configuration. A `partcad.yaml` broken badly enough
+    that the package will not load is precisely the one worth a finding, and by
+    then there is no `Project` to ask.
+    """
+
+    def get_targets(self, ctx: Context, package: Project) -> list[str]:
+        return [os.path.join(package.config_dir, "partcad.yaml")]
+
+
+class AssySchemaLinting(YamlLinting):
+    """Check every ASSY file of a package against the ASSY schema.
 
     This is the *package* half of ASSY checking: it needs the package graph to
     know which packages, and which of their files, to walk, which is what makes
@@ -115,17 +127,8 @@ class AssySchemaLinting(Linting):
         # them runs against its targets.
         self._flavors: dict = {}
 
-    def get_hash(self, name: str, target: str) -> CacheHash:
-        # As in 'SchemaLinting' above: a schema update has to invalidate the
-        # findings cached against the schema it replaced. The flavor is in here
-        # for the same reason and is not implied by anything else in the hash:
-        # moving a file's declaration from 'assemblies:' to 'scenes:' changes
-        # which schema it is checked against without touching the file.
-        flavor = self._flavors.get((name, target), FLAVOR_ASSEMBLY)
-        hash = super().get_hash(name, target)
-        hash.add_string(json.dumps(get_schema(ASSY_SCHEMA), sort_keys=True))
-        hash.add_string(flavor)
-        return hash
+    def flavor(self, name: str, target: str) -> str:
+        return self._flavors.get((name, target), FLAVOR_ASSEMBLY)
 
     def get_targets(self, ctx: Context, package: Project) -> list[str]:
         config_dir = package.config_dir
@@ -134,11 +137,13 @@ class AssySchemaLinting(Linting):
         # Through the shared helper, which matches the extension case
         # insensitively: 'pc lint --file' and the extension already check a
         # 'Logo.ASSY', and the package walk skipping it is exactly the
-        # editor/CI disagreement this module exists to prevent.
+        # editor/CI disagreement this module exists to prevent. It also excludes
+        # the package's own 'partcad.yaml', which the checker knows a schema for
+        # too and which 'SchemaLinting' above is the one to walk.
         targets = sorted(
             os.path.join(config_dir, f)
             for f in os.listdir(config_dir)
-            if schema_name_for_file(f) is not None and os.path.isfile(os.path.join(config_dir, f))
+            if is_assy_file(f) and os.path.isfile(os.path.join(config_dir, f))
         )
         declared_by_assembly = self._declared_files(package, "assembly")
         declared_by_scene = self._declared_files(package, "scene")
@@ -162,31 +167,3 @@ class AssySchemaLinting(Linting):
             declared = config.get("path") or "%s.assy" % config.get("orig_name", name)
             files.add(os.path.realpath(os.path.join(package.config_dir, declared)))
         return files
-
-    async def validate(self, ctx: Context, package: Project, target: str, lint_ctx: dict = {}) -> LintingReport:
-        lint_result = LintingReport(package.name)
-
-        # 'open' is inside the try as well: it is what raises when the entry is a
-        # directory named '*.assy', or was removed between the listing and here,
-        # and nothing above catches that - one unreadable entry would end the
-        # whole 'pc lint' run instead of being reported as a failed check.
-        try:
-            async with aiofiles.open(target, mode="r") as file:
-                raw = await file.read()
-        except (OSError, UnicodeDecodeError) as err:
-            lint_result.add(Severity.FAILED, f"Failed to read assembly file: {err}")
-            return lint_result
-
-        flavor = self._flavors.get((package.name, target), FLAVOR_ASSEMBLY)
-        try:
-            diagnostics = validate_source(raw, schema_for_file(target, flavor))
-        except Exception as exc:  # pylint: disable=broad-except
-            pc_logging.debug(package.name, str(exc))
-            lint_result.add(Severity.FAILED, "Internal Error: Failed to check the assembly file")
-            return lint_result
-
-        for diagnostic in diagnostics:
-            severity = Severity.WARNING if diagnostic.severity == SEVERITY_WARNING else Severity.FAILED
-            lint_result.add(severity, diagnostic.format(os.path.basename(target)))
-
-        return lint_result

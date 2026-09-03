@@ -48,13 +48,11 @@ def sandbox(tmp_path, packages):
 
 def assert_valid_package_config(config):
     """Check a 'partcad.yaml' against the schema editors validate it with."""
-    import json
-
     from jsonschema import Draft7Validator
 
-    schema_path = Path(pc.__file__).parent / "schema" / "partcad.json"
-    with open(schema_path) as f:
-        schema = json.load(f)
+    from partcad.lint.all import get_partcad_schema
+
+    schema = get_partcad_schema()
     errors = sorted(Draft7Validator(schema).iter_errors(config), key=lambda e: list(e.path))
     assert not errors, "\n".join("%s: %s" % (list(e.path), e.message) for e in errors)
 

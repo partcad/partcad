@@ -31,11 +31,12 @@ Objects
 - **Display** (inspect) a part, assembly, scene, sketch, or interface in the ``PartCAD Viewer``; parts can
   also be opened for display and editing together, or their source edited directly.
 - **Test** a part, assembly, or scene.
-- **Open in >** — Open the object's own source file in the application that made it: **FreeCAD** for a part
-  or an assembly, **Gazebo** for a scene of type ``world``, **KiCad** for a part of type ``kicad``. This runs
+- **Open in >** — Open the object's own source file in the application that made it: **FreeCAD** or
+  **Blender** for a part or an assembly, **Gazebo** for a scene of type ``world``, **KiCad** for a part of
+  type ``kicad``. This runs
   on your machine rather than on the daemon: the extension runs ``pc open`` (see :doc:`cli`), which starts an
   application installed here, or runs one in a container when there is none and ``partcad.open.useDocker``
-  is on.
+  is on. Blender reads meshes, so an object that is not one is converted to STL on the way.
 
 The Explorer also lists the ``software`` a package ships. Selecting one shows its path and its ``fileHash``
 in the Inspector and leaves the ``PartCAD Viewer`` as it is: software is a file, not geometry, so there is
@@ -121,6 +122,48 @@ provider defined elsewhere instead of declaring one of its own. In the future Pa
 based on the location and preferences of the requester, while leaving the
 possibility to enforce the use of a specific provider for corresponding parts
 (for example, for parts that are using a patented design).
+
+.. _python-sandbox:
+
+==================
+The Python sandbox
+==================
+
+Every CAD script PartCAD runs -- a ``cadquery`` or ``build123d`` part, the
+importer that reads a ``STEP`` file, a ``render:`` or ``cam:`` implementation --
+runs in a sandbox rather than in the interpreter PartCAD itself is running on.
+That is what lets one package render against build123d 0.11 while another wants
+0.9, and what keeps a CAD stack out of the environment you work in.
+
+``pythonSandbox`` chooses how that sandbox is built:
+
+==================== =========================================================================
+``conda``            An environment conda provisions, **interpreter included**. The only one
+                     that can give a package the Python version it asks for, so it is the
+                     default wherever conda or mamba is installed -- and in the
+                     :ref:`standalone tools <standalone-cli>`, the :ref:`snap <snap-package>`
+                     and the :ref:`PartCAD IDE <partcad-ide>`, which carry a conda of their
+                     own and use yours in preference to it when you have one.
+``venv``             A plain virtual environment of PartCAD's own, one per interpreter
+                     version, under the internal state directory. The default when conda is
+                     not installed. Built from whichever Python the host has, so a package
+                     asking for a version the host does not have is rendered on the host's
+                     and told so -- and so not something the standalone tools can fall back
+                     to, since the machine they exist for is the one with no Python.
+``none``             No environment at all: scripts run on the host's own interpreter and
+                     their dependencies are installed **into it**. Fast and shares whatever
+                     is already there, at the price of writing the CAD stack into the Python
+                     you work with -- and unusable where that Python is not writable.
+``pypy``             A conda environment built around PyPy.
+==================== =========================================================================
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    pythonSandbox: venv
+
+The equivalents everywhere else are ``PC_PYTHON_SANDBOX`` in the environment and
+``--python-sandbox`` on the command line, in the usual order of precedence.
 
 .. _caching:
 

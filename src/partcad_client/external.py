@@ -31,6 +31,17 @@ path on both sides is what keeps the arrangement honest: the file argument, an
 error message, and anything the application writes back all name one path that
 means the same thing inside the container, on the host, and to the daemon.
 
+Some applications read triangles and nothing else. Blender is the one PartCAD
+knows about: its command line takes a `.blend` to open, and any other geometry
+has to be *imported*, which only a mesh format can be. So a file that is not
+already a mesh is converted to STL first, and the application is handed that
+instead. Which types are meshes is `partcad_client.object_types`; making one out
+of a solid is CAD work, so it is not done here -- the caller passes a
+``transcode`` callback, and `pc open` implements it as the same `adhoc.convert`
+the daemon serves `pc adhoc convert` with. The converted copy is written under
+the workspace's own state directory, which is already mounted into the container
+at the path it has here, so one name means the same thing on both sides.
+
 A containerised GUI needs an X server on the host, which is the one place where
 this cannot paper over the difference between platforms. On Linux the display is
 usually a socket that can simply be shared, cookie and all, and nothing has to be
@@ -42,6 +53,7 @@ what to run, rather than a container that starts and silently never shows a wind
 
 import contextlib
 import glob
+import hashlib
 import os
 import platform
 import shutil
@@ -51,7 +63,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from partcad_utils.workspace import determine_root_path, socket_path
 
-from . import __version__
+from . import __version__, object_types
 
 __all__ = [
     "ExternalToolError",
@@ -60,6 +72,7 @@ __all__ = [
     "TOOLS",
     "open_file",
     "tool_names",
+    "transcode_path",
 ]
 
 # How long to wait for the `docker` commands that only ask a question. Generous
@@ -95,6 +108,12 @@ class Tool:
     binaries: Tuple[str, ...] = ()
     # macOS application bundles, looked for under /Applications and ~/Applications.
     macos_apps: Tuple[str, ...] = ()
+    # The executable inside the macOS bundle, relative to it, for an application
+    # that is handed arguments rather than a document. `open -a` is how macOS
+    # launches one and is used everywhere else, but it hands a *running* copy
+    # nothing at all -- so an application whose file arrives as an argument (see
+    # `file_args`) would silently open nothing the second time.
+    macos_executable: Optional[str] = None
     # Windows install locations, as globs relative to the directories in
     # `windows_roots`, so a versioned directory name still matches.
     windows_globs: Tuple[str, ...] = ()
@@ -112,6 +131,26 @@ class Tool:
     # what somebody opening KiCad means -- is the project file next to it, and
     # the tree has no other name for it.
     companions: Tuple[str, ...] = ()
+    # How the file reaches the application, when being the last argument is not
+    # it. Blender's command line takes a `.blend` to open and imports anything
+    # else through a line of Python, which is a fact about Blender and lives
+    # with the rest of them.
+    file_args: Optional[Callable[[str], Tuple[str, ...]]] = None
+    # The format a file that is not already a mesh is converted to before this
+    # application sees it, for an application that reads meshes and nothing
+    # else. None -- every other tool in the table -- means the file is handed
+    # over as it is, whatever it holds.
+    mesh_via: Optional[str] = None
+    # Extensions this application opens whatever they contain, because they are
+    # its own: a `.blend` is not a mesh and must not be converted into one.
+    own_formats: Tuple[str, ...] = ()
+    # The mesh formats this application imports, for one that reads meshes only.
+    # A second question from `mesh_via`, and a different one: PartCAD's tables
+    # say whether a file holds triangles, and this says whether *this*
+    # application can read the file that holds them. 3MF is the case that makes
+    # it two questions -- it is a mesh, and Blender ships no importer for it, so
+    # it takes the STL route like a solid does.
+    imports: Tuple[str, ...] = ()
 
     @property
     def container_name(self) -> str:
@@ -128,6 +167,36 @@ class Tool:
         """
         stem = os.path.splitext(os.path.basename(executable))[0]
         return self.binary_args.get(stem, self.args)
+
+    def file_arguments(self, path: str) -> Tuple[str, ...]:
+        """The arguments that name ``path`` to this application.
+
+        The path itself for every application that takes a file name, which is
+        all of them but Blender; see `file_args`.
+        """
+        if self.file_args is None:
+            return (path,)
+        return tuple(self.file_args(path))
+
+    def needs_mesh(self, path: str, object_type: Optional[str] = None) -> bool:
+        """Whether ``path`` has to be converted before this application sees it.
+
+        False for every application that takes what it is given, and false for
+        one that reads meshes when the file already is a mesh it can read -- or
+        is the application's own project format, which is not a mesh and is not
+        to be converted into one. A mesh in a format it has no importer for is
+        converted like a solid: the point is a file the application opens.
+        """
+        if self.mesh_via is None:
+            return False
+        extension = os.path.splitext(path)[1].lower()
+        if extension in self.own_formats:
+            return False
+        if object_types.is_mesh(path, object_type) is not True:
+            return True
+        # A mesh this application has no importer for is no better off than a
+        # solid: it is converted too, to the one format that always works.
+        return extension not in self.imports
 
     def file_for(self, path: str) -> str:
         """The file this application is really given, from the one it was handed.
@@ -205,9 +274,89 @@ KICAD = Tool(
     companions=(".kicad_pro", ".kicad_pcb", ".kicad_sch"),
 )
 
+# The Python Blender is asked to run when it is handed geometry rather than one
+# of its own files. `blender <file>` *opens* a file, and the only thing Blender
+# opens is a `.blend`: everything else is an import, which is an operator call
+# and nothing else. Written as one expression on the command line rather than a
+# script file because it has to work identically in a container, where a script
+# file would be one more thing to make visible on both sides of the mount.
+#
+# Two names per format: Blender 4.x replaced the old Python importers with C++
+# ones under different operator names ('wm.stl_import' for what used to be
+# 'import_mesh.stl'), and both releases are in use. Whichever exists answers;
+# the loop tries them in turn, newest first, and says so if none does. Reading
+# a home file with no contents first is what leaves the imported object alone in
+# the scene instead of inside Blender's default cube.
+_BLENDER_IMPORT = """\
+import bpy, os
+path = {path!r}
+importers = {{
+    '.stl': ('wm.stl_import', 'import_mesh.stl'),
+    '.obj': ('wm.obj_import', 'import_scene.obj'),
+    '.ply': ('wm.ply_import', 'import_mesh.ply'),
+    '.gltf': ('import_scene.gltf',),
+    '.glb': ('import_scene.gltf',),
+    '.json': ('import_scene.gltf',),
+    '.fbx': ('import_scene.fbx',),
+    '.x3d': ('import_scene.x3d',),
+}}
+extension = os.path.splitext(path)[1].lower()
+bpy.ops.wm.read_homefile(use_empty=True)
+for name in importers.get(extension, ()):
+    category, _, operator = name.partition('.')
+    try:
+        getattr(getattr(bpy.ops, category), operator)(filepath=path)
+        break
+    except Exception as e:
+        print('PartCAD: bpy.ops.' + name + ' did not import ' + path + ': ' + str(e))
+else:
+    print('PartCAD: this Blender has no importer for ' + (extension or path))
+"""
+
+
+def _blender_arguments(path: str) -> Tuple[str, ...]:
+    """How Blender is told about ``path``: opened if it is a `.blend`, else imported."""
+    if os.path.splitext(path)[1].lower() == ".blend":
+        return (path,)
+    return ("--python-expr", _BLENDER_IMPORT.format(path=path))
+
+
+BLENDER = Tool(
+    name="blender",
+    display_name="Blender",
+    # `:latest`, for the reason FreeCAD's is: a user asking for a container
+    # wants the current Blender. The image is a community one because the
+    # Blender project publishes none, and it is this one because it carries a
+    # GUI Blender on `PATH` and is still being rebuilt. `--docker-image`
+    # overrides it, as it does for every other tool here.
+    image="linuxserver/blender:latest",
+    binaries=("blender",),
+    macos_apps=("Blender.app",),
+    # Not through `open -a`: the arguments below are the whole point of the
+    # launch, and `open -a` drops them on a Blender that is already running.
+    macos_executable="Contents/MacOS/Blender",
+    windows_globs=("Blender Foundation/Blender*/blender.exe", "Blender*/blender.exe"),
+    flatpak_id="org.blender.Blender",
+    file_args=_blender_arguments,
+    # What the expression above knows how to import. '.json' is deliberately
+    # absent: PartCAD writes both glTF and three.js to it, and only one of the
+    # two is a file Blender reads -- so a '.json' is converted rather than
+    # guessed at.
+    imports=(".stl", ".obj", ".ply", ".gltf", ".glb", ".fbx", ".x3d"),
+    # Blender reads triangles. Anything else -- a STEP file, a CadQuery script,
+    # a part PartCAD builds -- reaches it as the STL PartCAD makes out of it.
+    # STL rather than a richer mesh format because every part type converts to
+    # it, which is what makes this one rule rather than a table of exceptions.
+    mesh_via="stl",
+    # A `.blend` is Blender's own file: not a mesh, and not something to convert
+    # into one.
+    own_formats=(".blend",),
+)
+
+
 # The tools `pc open --with` accepts. Each is a row here, not a branch anywhere
 # below.
-TOOLS: Dict[str, Tool] = {tool.name: tool for tool in (FREECAD, GAZEBO, KICAD)}
+TOOLS: Dict[str, Tool] = {tool.name: tool for tool in (FREECAD, GAZEBO, KICAD, BLENDER)}
 
 
 def tool_names() -> List[str]:
@@ -225,6 +374,11 @@ class OpenResult:
     path: str
     command: List[str]
     detail: str
+    # The file the caller named, when the application was given another one --
+    # the board beside a KiCad part's STEP, the mesh made out of a solid. None
+    # when it was handed exactly what it was asked about, which is the usual
+    # case; a caller that reports "opened <path>" then needs no special case.
+    source: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
@@ -232,6 +386,7 @@ class OpenResult:
             "tool": self.tool,
             "method": self.method,
             "path": self.path,
+            "source": self.source,
             "command": list(self.command),
             "detail": self.detail,
         }
@@ -243,6 +398,8 @@ def open_file(
     use_docker: bool = False,
     image: Optional[str] = None,
     log: Optional[Callable[[str], None]] = None,
+    object_type: Optional[str] = None,
+    transcode: Optional[Callable[[str, Optional[str], str, str], None]] = None,
 ) -> OpenResult:
     """Open ``path`` in ``tool``, natively if it is installed, else in a container.
 
@@ -250,6 +407,19 @@ def open_file(
     demand for one: a machine with the application installed uses it either way.
     Without that permission, and without a local installation, this raises rather
     than pulling an image nobody asked for.
+
+    ``object_type`` is the PartCAD type the object was declared with, when the
+    caller knows it -- the VS Code tree does, and a file name does not always say
+    (a '.py' is three different script types). It decides nothing on its own; it
+    is one of the two things `object_types.is_mesh` reads.
+
+    ``transcode`` is how a file that is not a mesh becomes one, for an
+    application that reads nothing else. Called as
+    ``transcode(source, source_type, target, target_type)`` and expected to leave
+    ``target`` on disk. It is a callback rather than something done here because
+    turning a solid into a mesh is CAD work: it belongs to the daemon, and this
+    module is the half that must keep running without one. A caller that passes
+    none can still open a mesh in Blender; a solid is refused with the reason.
     """
     say = log or (lambda _message: None)
 
@@ -259,20 +429,30 @@ def open_file(
             "Unknown application '%s'. PartCAD can open files in: %s." % (tool, ", ".join(tool_names()))
         )
 
-    resolved = os.path.abspath(os.path.expanduser(path))
-    if not os.path.exists(resolved):
-        raise ExternalToolError("No such file: %s" % resolved)
-    resolved = spec.file_for(resolved)
+    named = os.path.abspath(os.path.expanduser(path))
+    if not os.path.exists(named):
+        raise ExternalToolError("No such file: %s" % named)
+    resolved = spec.file_for(named)
+
+    # The workspace is worked out from the file the caller named, before any
+    # conversion: a converted copy lives under that workspace's own state
+    # directory, and asking which workspace *it* is in would answer with the
+    # state directory itself.
+    root = _workspace_for(resolved)
+    opened = resolved
+    if spec.needs_mesh(resolved, object_type):
+        opened = _transcode(spec, resolved, root, object_type, transcode, say)
 
     native = native_command(spec)
     if native is not None:
-        command = list(native) + list(spec.launch_args(native[-1])) + [resolved]
-        say("Opening %s in %s..." % (resolved, spec.display_name))
+        command = list(native) + list(spec.launch_args(native[-1])) + list(spec.file_arguments(opened))
+        say("Opening %s in %s..." % (opened, spec.display_name))
         _spawn(command)
         return OpenResult(
             tool=spec.name,
             method="native",
-            path=resolved,
+            path=opened,
+            source=None if opened == named else named,
             command=command,
             detail="%s is installed on this machine." % spec.display_name,
         )
@@ -284,7 +464,92 @@ def open_file(
             "(the 'partcad.open.useDocker' setting in the VS Code extension)." % spec.display_name
         )
 
-    return _open_in_container(spec, resolved, image, say)
+    return _open_in_container(spec, opened, root, image, say, source=None if opened == named else named)
+
+
+# ---------------------------------------------------------------------------
+# Making a mesh out of what the application cannot read
+# ---------------------------------------------------------------------------
+
+
+def transcode_path(root: str, source: str, output_type: str) -> str:
+    """Where the converted copy of ``source`` goes.
+
+    Under the workspace's own directory on this machine -- the one that holds
+    its daemon socket -- rather than beside the file. Two reasons, and both are
+    the reason it is not a temporary directory either:
+
+    * nothing PartCAD generates belongs in the user's source tree, where it
+      would turn up in `git status` after opening a part; and
+    * that directory is mounted into the container, at the path it has here, so
+      the converted file has one name that means the same thing on both sides.
+
+    The name carries a digest of the source path, so two parts called `cube` in
+    different packages do not overwrite each other's mesh, and is otherwise
+    stable, so opening the same part twice reuses the same file.
+    """
+    digest = hashlib.sha256(os.path.realpath(source).encode("utf-8")).hexdigest()[:16]
+    stem = os.path.splitext(os.path.basename(source))[0]
+    return os.path.join(_state_dir(root), "open", "%s-%s.%s" % (stem, digest, output_type))
+
+
+def _transcode(
+    spec: Tool,
+    source: str,
+    root: str,
+    object_type: Optional[str],
+    transcode: Optional[Callable[[str, Optional[str], str, str], None]],
+    say: Callable[[str], None],
+) -> str:
+    """Convert ``source`` to the mesh format ``spec`` reads, and return that file."""
+    source_type = object_types.readable_type(source, object_type)
+    reason = object_types.PACKAGE_ONLY_TYPES.get((source_type or "").lower())
+    if reason is not None:
+        raise ExternalToolError(
+            "%s cannot open %s: %s, so it only means anything inside a package and there is "
+            "nothing here to convert.\n"
+            "Export the object to a mesh first, and open that: pc export -t stl -O <file> <object>"
+            % (spec.display_name, source, reason)
+        )
+    if source_type is None:
+        candidates = object_types.types_of_extension(os.path.splitext(source)[1])
+        raise ExternalToolError(
+            "%s reads meshes, and PartCAD cannot tell from its name what %s holds%s.\n"
+            "Say so with --type ('pc open --type ...'); the VS Code extension passes the "
+            "declared type of the object you clicked."
+            % (
+                spec.display_name,
+                source,
+                (" (it could be: %s)" % ", ".join(candidates)) if candidates else "",
+            )
+        )
+    if transcode is None:
+        # A caller inside `pc open` always passes one. Anything else reaching
+        # here is a caller that cannot convert, and saying so beats opening an
+        # application on a file it will refuse.
+        raise ExternalToolError(
+            "%s reads meshes, and %s is not one. Converting it needs the PartCAD daemon; "
+            "run `pc open` rather than calling this directly." % (spec.display_name, source)
+        )
+
+    target = transcode_path(root, source, spec.mesh_via)
+    if os.path.isfile(target) and os.path.getmtime(target) >= os.path.getmtime(source):
+        # The conversion is the slow part of opening a part, and the source has
+        # not changed since the last one. A `touch` of the source is enough to
+        # ask for it again, and so is deleting the file.
+        say("Reusing %s..." % target)
+        return target
+
+    with contextlib.suppress(OSError):
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+    say("Converting %s to %s for %s..." % (source, spec.mesh_via.upper(), spec.display_name))
+    transcode(source, source_type, target, spec.mesh_via)
+    if not os.path.isfile(target):
+        raise ExternalToolError(
+            "Failed to convert %s to %s for %s; the conversion wrote nothing to %s."
+            % (source, spec.mesh_via.upper(), spec.display_name, target)
+        )
+    return target
 
 
 # ---------------------------------------------------------------------------
@@ -309,11 +574,21 @@ def native_command(spec: Tool) -> Optional[List[str]]:
         for app in spec.macos_apps:
             for directory in ("/Applications", os.path.expanduser("~/Applications")):
                 bundle = os.path.join(directory, app)
-                if os.path.isdir(bundle):
-                    # Through `open`, not the executable inside the bundle: it is
-                    # how macOS launches an application, and it reuses a running
-                    # instance instead of starting a second one.
-                    return ["open", "-a", bundle]
+                if not os.path.isdir(bundle):
+                    continue
+                if spec.macos_executable is not None:
+                    # The executable inside the bundle, because this application
+                    # is handed arguments and `open -a` drops them on a copy
+                    # that is already running -- which would open nothing at
+                    # all, silently, from the second `pc open` onwards.
+                    executable = os.path.join(bundle, spec.macos_executable)
+                    if os.path.isfile(executable):
+                        return [executable]
+                    continue
+                # Through `open`, not the executable inside the bundle: it is
+                # how macOS launches an application, and it reuses a running
+                # instance instead of starting a second one.
+                return ["open", "-a", bundle]
     elif system == "Windows":  # pragma: no cover - exercised only on Windows
         for root in _windows_roots():
             for pattern in spec.windows_globs:
@@ -349,8 +624,21 @@ def _windows_roots() -> List[str]:  # pragma: no cover - exercised only on Windo
 # ---------------------------------------------------------------------------
 
 
-def _open_in_container(spec: Tool, path: str, image: Optional[str], say: Callable[[str], None]) -> OpenResult:
-    """Run ``spec`` in its container, creating and starting one as needed."""
+def _open_in_container(
+    spec: Tool,
+    path: str,
+    root: str,
+    image: Optional[str],
+    say: Callable[[str], None],
+    source: Optional[str] = None,
+) -> OpenResult:
+    """Run ``spec`` in its container, creating and starting one as needed.
+
+    ``root`` is the workspace to mount, worked out by the caller from the file
+    it was asked about rather than from ``path``: the two differ when ``path``
+    is a mesh PartCAD made, which lives under that workspace's state directory
+    and is not in a workspace of its own.
+    """
     if not _docker_available():
         raise ExternalToolError(
             "%s is not installed on this machine and Docker is not available to run it in a container.\n"
@@ -363,8 +651,6 @@ def _open_in_container(spec: Tool, path: str, image: Optional[str], say: Callabl
     # point of the check.
     x11_env, x11_mounts, x11_advice = _x11_forwarding(spec)
     display = x11_env["DISPLAY"]
-
-    root = _workspace_for(path)
 
     state = _container_state(spec.container_name)
     if state is None:
@@ -390,7 +676,7 @@ def _open_in_container(spec: Tool, path: str, image: Optional[str], say: Callabl
         spec.container_name,
         binary,
         *spec.launch_args(binary),
-        path,
+        *spec.file_arguments(path),
     ]
     say("Opening %s in %s (container '%s', DISPLAY=%s)..." % (path, spec.display_name, spec.container_name, display))
     result = _run(command)
@@ -403,7 +689,7 @@ def _open_in_container(spec: Tool, path: str, image: Optional[str], say: Callabl
     detail = "%s runs in the '%s' container, displaying on %s." % (spec.display_name, spec.container_name, display)
     if x11_advice:
         detail += "\n" + x11_advice
-    return OpenResult(tool=spec.name, method="docker", path=path, command=command, detail=detail)
+    return OpenResult(tool=spec.name, method="docker", path=path, source=source, command=command, detail=detail)
 
 
 def _env_args(env: Dict[str, str]) -> List[str]:
@@ -412,6 +698,18 @@ def _env_args(env: Dict[str, str]) -> List[str]:
     for key in sorted(env):
         args += ["--env", "%s=%s" % (key, env[key])]
     return args
+
+
+def _state_dir(root: str) -> str:
+    """The workspace's own directory on this machine, holding its daemon socket.
+
+    Derived from `socket_path` rather than named again, because this is the
+    directory `_create_container` mounts: a converted mesh is written into it
+    (see `transcode_path`) precisely so that it arrives inside the container,
+    and two ways of spelling one directory is how that would quietly stop being
+    true.
+    """
+    return os.path.dirname(socket_path(root))
 
 
 def _workspace_for(path: str) -> str:
@@ -490,7 +788,7 @@ def _create_container(spec: Tool, image: str, root: str, x11_mounts: List[str], 
     # times over. Waiting for a daemon that has not started would mean a
     # container that can never see the one that eventually does -- and the
     # directory is PartCAD's own, which the daemon would create the same way.
-    socket_dir = os.path.dirname(socket_path(root))
+    socket_dir = _state_dir(root)
     with contextlib.suppress(OSError):
         os.makedirs(socket_dir, exist_ok=True)
     if os.path.isdir(socket_dir):

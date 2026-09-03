@@ -78,6 +78,12 @@ its own result, and the `install` job in that workflow, which installs the archi
   installed from Open VSX or cannot be redistributed, and say which in the `reason`.
 - **Branding, or a default setting**: `product.overlay.json`. A `null` removes a key; `${VERSION}` is the
   PartCAD version.
+- **The icon, anywhere it appears**: `../vscode/resources/logo.svg`, and nothing else. `tools/make_icons.py`
+  renders it into the window, launcher and executable icons, into the installer's wizard images, and into
+  the `.icns` of the macOS bundle. Three of those cannot be rendered on Windows and are in git
+  (`resources/*.ico`, `resources/*.bmp`) -- change the logo and they are stale until you regenerate them,
+  with the command in `README.md`. The bootstrap extension's icon is `logo_128x128.png`, copied into the
+  staging directory by `build.sh` rather than kept beside `bootstrap/package.json`, for the same reason.
 - **What the IDE does on startup**: `bootstrap/extension.js` -- including the package it creates in
   `~/.partcad/projects/start` and opens as the first workspace. It is plain JavaScript, packaged as it is --
   no compile step, so keep it that way.
@@ -91,7 +97,9 @@ its own result, and the `install` job in that workflow, which installs the archi
   `.github/workflows/build-ide-standalone.yml` and in `docs/source/installation.rst` too, which that test
   also enforces.
 - **What the Windows installer sets up**: `installer/partcad-ide.iss`. Never change its `AppId`: Windows
-  recognizes an upgrade, and an uninstall, by that and nothing else.
+  recognizes an upgrade, and an uninstall, by that and nothing else. Every path it reads comes in on the
+  command line (`AppDir`, `LicenseFile`, `Branding`); the `#ifndef` fallbacks beside them are for compiling
+  the script by hand and are wrong the next time the file moves.
 - **The VSCodium release**: `build.sh --vscodium-version <tag> --record`, then restore the comments `--record`
   strips from `vscodium.json`.
 

@@ -10,10 +10,11 @@ with [`install.sh`](../../install.sh) and never see Python.
 | Install | `pip install -U partcad` | `curl -fsSL .../install.sh \| sh` |
 | Upgrade | `pc upgrade` (runs `pip`) | `pc upgrade` (fetches the release archive) |
 | Needs Python | yes, 3.10-3.14 | no |
-| Size | ~15MB plus whatever pip resolves | ~180MB unpacked, ~57MB compressed (Linux x86_64, OpenSCAD included) |
+| Size | ~15MB plus whatever pip resolves | ~200MB unpacked, ~63MB compressed (Linux x86_64, OpenSCAD and conda included) |
 | Optional extras (`lint`, `memcache`, `aws`) | installed on demand | always included |
 | Importable as a library | yes | no, it is only the CLI |
-| CAD kernel | not a dependency either way — every shape is built in a conda sandbox | same, see `EXCLUDES` in the spec |
+| CAD kernel | not a dependency either way — every shape is built in a sandbox | same, see `EXCLUDES` in the spec |
+| conda, which builds the best sandbox | the user's, or the `venv` fallback | carried, see [conda](#conda) |
 
 ## One build per OS version
 
@@ -24,12 +25,12 @@ starting for users the day that image moved.
 
 So there is one build per supported OS version, and the archive name carries it. The platform id is
 `<os>-<os-version>-<arch>`, which for the builds CI produces is exactly the runner image label (minus any `-arm`
-suffix) plus the architecture:
+or `-intel` suffix) plus the architecture:
 
 | | x86_64 | arm64 |
 | --- | --- | --- |
 | Linux | `ubuntu-22.04-x86_64`, `ubuntu-24.04-x86_64` | `ubuntu-22.04-arm64`, `ubuntu-24.04-arm64` |
-| macOS | — (needs macos-13, see below) | `macos-15-arm64`, `macos-26-arm64` |
+| macOS | `macos-15-x86_64` | `macos-15-arm64` |
 | Windows | `windows-2022-x86_64` | — |
 
 The Ubuntu names say what built the bundle, not what is required to run it: any distribution can run these, and
@@ -51,8 +52,15 @@ matrix that no release check expects is dead weight; one the check expects that 
 release. Each says so at the point where it is defined. The clients keep no list of their own — they read the manifest
 described below.
 
+Two other places name these ids, and both consume them rather than declaring them, so a name that is wrong there
+is a job waiting for an artifact nothing uploaded. `IDE_CORE`/`IDE_DEEP` in `build-ide-standalone.yml` say which
+bundle goes inside each IDE, and the depth has to match: a core IDE cannot embed a deep-only bundle. The
+`EXAMPLES_CORE`/`EXAMPLES_DEEP` lists in `build-standalone.yml` say which bundles the example packages run
+through, and those *are* enforced — the "Set matrix" job fails the run if a leg names a platform this run does
+not build.
+
 The split between `PLATFORMS_CORE` and `PLATFORMS_DEEP` is about cost, not support: a pull request builds the four core
-platforms, and the three in `PLATFORMS_DEEP` (Ubuntu 22.04 on both architectures, and the second macOS) are added on a
+platforms, and the three in `PLATFORMS_DEEP` (Ubuntu 22.04 on both architectures, and macOS on x86_64) are added on a
 deep run — the nightly schedule, a manual dispatch, a push, or `#deepTest` in the pull request. See
 `.github/actions/test-depth`. A release runs on a push, so it is always deep and always builds all seven; `deploy.yml`
 refuses to publish otherwise. Put `#deepTest` on a pull request that changes what is frozen.
@@ -61,9 +69,48 @@ refuses to publish otherwise. Put `#deepTest` on a pull request that changes wha
 CI passes `--platform=` instead: the runner image label is the authoritative answer to which OS version it is,
 and recovering that from the running system is guesswork on Windows in particular.
 
-There is no macOS x86_64 bundle: it would need macos-13, and no macos-13 job has ever started on the current
-runner plan (see the note in `test.yml`). There is no Windows arm64 bundle either -- not a platform PartCAD
-releases for.
+**macOS is the exception to the table above: one build per architecture, not one per OS version.** The labels
+are not symmetric either. Apple silicon has a pinned label per release, `macos-15`/`macos-26`, and the newest
+also answers to `macos-latest`; x86_64 has `macos-15-intel`/`macos-26-intel` and **no `macos-latest-intel`** —
+the moving label exists on one architecture only, and `macos-latest-large` is a paid larger runner rather than
+an x86_64 equivalent. (`-large`/`-xlarge` are all larger runners, which this repository does not use.) x86_64
+macOS used to mean `macos-13`, which is why there was no Intel bundle at all: no macos-13 job ever started on
+the current runner plan, and GitHub retired the image in December 2025 — see the note in `test.yml`. The
+`-intel` labels replaced it.
+
+Which label a job names follows from what the job is for. **A job that freezes a bundle names a pinned image**:
+the archive is named after it and takes its C library floor from it, so a moving label would rename what we
+publish and raise what it needs, with no commit to point at. **A job that installs one on a later OS names the
+moving label** where there is one: its question is "does this still run on the newest macOS", and pinning it
+means the answer quietly goes stale the day a newer macOS ships. So the freezes are `macos-15` and
+`macos-15-intel`, and the forward legs are `macos-latest` and — for want of an equivalent — `macos-26-intel`,
+which is a line that needs editing when a macOS 27 Intel image appears.
+
+Both macOS builds are frozen on macOS 15, and there is deliberately no macOS 26 build of either. A frozen bundle
+runs on the OS version it was built on and everything newer, so `macos-15-arm64` and `macos-15-x86_64` cover
+macOS 15 and 26 between them; a `macos-26-*` build reaches no machine they do not. There *was* a
+`macos-26-arm64` build. Dropping it is what pays for the Intel one — a 10x-billed freeze traded for another
+10x-billed freeze, out for a build that reached nothing new and in for a build that reaches an architecture
+nothing here reached before.
+
+**That trade is only sound if "older build runs on newer OS" is true, so CI now checks it.** It is the
+assumption the whole per-OS-version scheme rests on and nothing used to test it: every bundle was installed on
+the image that froze it, and a macOS 26 host was handed a macOS 26 build. `INSTALL_FORWARD_CORE` and
+`INSTALL_FORWARD_DEEP` in `build-standalone.yml` add an `Install` leg for each macOS bundle on the *next*
+generation — `macos-15-arm64` on `macos-latest`, `macos-15-x86_64` on `macos-26-intel` — and the IDE workflow
+does the same for the application. Those legs run `install.sh` without `--platform`, so they also check the half that
+is not the binary: that a macOS 26 machine reads the manifest and resolves itself to the macOS 15 build.
+
+The arm64 forward leg is core rather than deep, unlike the freeze it replaced: with one arm64 build for every
+macOS version, "it still starts on the newest macOS" is now load-bearing for every Mac user rather than some of
+them. The Intel legs follow their bundle and stay deep-only.
+
+**The next move here is one event, not two.** The macOS 15 images are the last x86_64 ones: GitHub drops x86_64
+macOS when they retire, announced for autumn 2027. That same retirement is what forces arm64 onto `macos-26`.
+So when it comes: move `macos-15`→`macos-26` and `macos-15-arm64`→`macos-26-arm64`, delete the x86_64 build and
+its legs, and add the next generation's forward legs when there is one.
+
+There is no Windows arm64 bundle -- not a platform PartCAD releases for.
 
 ## Files
 
@@ -196,8 +243,12 @@ frozen, so `build.sh` imports them all before it builds and says which import fa
 
 Freezing replaces the *installation*, not the architecture. PartCAD still runs CAD scripts (CadQuery,
 build123d, OpenSCAD) in a separate Python interpreter that it provisions itself with conda, and still clones
-package repositories with `git`. Both remain external prerequisites of the standalone bundle, exactly as they
-are for the wheels. `pc healthcheck` reports what is missing.
+package repositories with `git`.
+
+The difference is who supplies them. The bundle carries its own conda (see [conda](#conda) below), so a machine
+with none still builds CAD, and it carries OpenSCAD on the platforms where that is possible. `git` is what is
+left, and it was never a hard prerequisite: packages are cloned through `libgit2`, and the command line tool is
+read for its *configuration* where there is one. `pc healthcheck` reports what is missing.
 
 ## No CAD kernel
 
@@ -219,7 +270,8 @@ importable, so nothing can call it. The paths the programs do reach never hold a
   OCP object", which is the right answer in a process that has no OCP, and nothing calls the other two.
 
 So `pc` from a bundle needs conda for CAD exactly as `pc` from a wheel does, exactly as it did before -- the
-kernel it carried never ran. What it cost: OCP is ~250MB of extension module and OpenCASCADE libraries,
+kernel it carried never ran. What changed since is where the conda comes from, not whether one is needed: the
+bundle now carries that too, at ~12-22MB rather than the ~600MB the kernel cost. What it cost: OCP is ~250MB of extension module and OpenCASCADE libraries,
 `build123d` pulls scipy, sympy, scikit-learn, numpy, IPython and ezdxf in at *import* time, and the VTK-enabled
 `cadquery-ocp` the bundle pinned pulls VTK (another ~336MB) on top.
 
@@ -279,6 +331,100 @@ The check is cheap: install something unrelated into the build virtualenv, freez
 one frozen without it. With the AI SDKs, `cryptography`, `pydantic`, `httpx` and setuptools 8x installed, the
 two are identical today.
 
+## conda
+
+Every bundle carries a conda, on every platform. PartCAD imports no CAD kernel -- it provisions a Python
+environment and runs every CAD script in that -- and conda is the only sandbox that provisions an *interpreter*
+along with it. It used to ask the host for one, which is exactly backwards for an artifact whose reason to exist
+is that the host has nothing installed: the PartCAD IDE, which launches `partcad-json-rpc` out of a bundle,
+failed on a clean machine for want of a `conda` executable.
+
+The `venv` sandbox added since is not the answer to that, on this artifact. A virtual environment is built
+*from* an interpreter -- `RuntimePythonVenv._host_interpreter()` looks for `python3` and falls back to
+`sys.executable`, which inside a frozen bundle is `pc` rather than a Python -- so on the machine the bundle
+exists for, the one with no Python at all, there is nothing to build it from. `venv` is the right fallback for
+a wheel, where a Python is a given. Here the sandbox has to come with the tools.
+
+What ships is **micromamba**, pinned in `build.sh` (`MICROMAMBA_VERSION`) and downloaded from
+[`mamba-org/micromamba-releases`](https://github.com/mamba-org/micromamba-releases) at build time,
+checksum-verified against the `.sha256` published beside it. It is mamba -- the same implementation CI
+provisions through Miniforge (`use-mamba: true` in `.github/actions/setup-all/action.yml`), and the one
+`partcad_utils.conda` already preferred over `conda` -- in its single-file build.
+
+Not the Miniforge installer itself, for two reasons that both decide it:
+
+* **A conda installation is not relocatable.** Its entry points hardcode the prefix they were installed into,
+  and this bundle is unpacked wherever its installer puts it -- `~/.local/share/partcad/<version>` for
+  `install.sh`, elsewhere for the VS Code extension, the FreeCAD addon and the IDE. One static executable has
+  no prefix to hardcode and runs from wherever it finds itself.
+* **Size.** Miniforge is around 500MB installed, against 12-22MB here. Taking the CAD kernel out is what got
+  the bundle from ~1010MB to ~180MB; a conda distribution would have put three times its size back.
+
+micromamba also resolves from conda-forge with no configuration at all, which is the channel policy the
+comments in that CI action insist on -- mixing Anaconda's `defaults` into a conda-forge environment is what made
+the macOS jobs segfault. A Miniforge install would have had to carry a `.condarc` saying the same thing.
+
+Unlike OpenSCAD there is no platform that goes without: upstream builds micromamba for all five
+`<os>-<arch>` combinations this bundle is built for, and `stage_conda()` fails the build on one it has no
+mapping for rather than quietly producing a bundle that cannot do CAD. Like OpenSCAD it is **not** declared in
+`partcad.spec` -- `build.sh` copies it into `_internal/conda/` after PyInstaller has run.
+
+| | what ships | size |
+| --- | --- | --- |
+| Linux x86_64 | `micromamba-linux-64` | ~18MB, ~6MB in the archive |
+| Linux arm64 | `micromamba-linux-aarch64` | ~21MB |
+| macOS arm64 | `micromamba-osx-arm64` | ~14MB |
+| macOS x86_64 | `micromamba-osx-64` | ~16MB |
+| Windows x86_64 | `micromamba-win-64`, staged as `micromamba.exe` | ~11MB |
+
+(The release publishes `micromamba-win-64.exe` too, byte for byte the same file, but only the name without the
+suffix has a `.sha256` beside it -- and a payload nobody can verify is not one worth having.)
+
+### The host's conda wins
+
+`partcad_utils.conda.find_executable()` tries the host's `mamba`, then the host's `conda`, and only then the
+bundled copy. That is the opposite of what the bundled OpenSCAD does, on purpose, and the difference is worth
+stating because it will look like an inconsistency otherwise:
+
+OpenSCAD is one self-contained program with no state, so preferring the bundled copy costs a user nothing and
+makes the bundle behave identically everywhere. conda is not a program but an *installation* -- a channel
+configuration the user chose, and a package cache holding the gigabytes the CAD sandbox is made of. Preferring
+ours would strand that cache and re-download the whole CAD stack beside it, on a machine that was working
+perfectly well. So a machine that has conda keeps behaving exactly as it did, and the bundled copy is what
+makes a machine that has none work at all. There is no `--ignore-bundled-conda` for the same reason: nothing is
+being displaced, and the sandbox setting already says it better -- `pythonSandbox: venv` for an environment
+PartCAD builds without conda at all, `none` for no environment whatever.
+
+The bundled conda is given `MAMBA_ROOT_PREFIX` inside PartCAD's internal state directory (`<state dir>/conda`,
+beside the `sandbox` directory holding the environments it creates), and only the bundled one -- a host conda
+knows its own root prefix, and telling it otherwise would move a package cache the user has been filling for
+years. It has to be told something: micromamba's own default is `~/.local/share/mamba`, a directory PartCAD
+would be creating in the user's home without ever having said so -- outside what `pc system status` reports and
+`pc system reset` clears, and outside what `snap remove --purge` takes away, since the snap redirects PartCAD's
+state with `PC_INTERNAL_STATE_DIR` precisely so that it does. The internal state directory is the one PartCAD
+already owns and already documents.
+
+`bundled_command_env()` sets it only when it is unset, though, and that exception is worth stating because it
+takes the payload's cache back out of PartCAD's lifecycle: a user who runs their own micromamba has a
+`MAMBA_ROOT_PREFIX` and a warm cache under it, and sharing it is the point -- but their cache is then where
+they put it, so `pc system status` does not report it, `pc system reset` does not clear it, and
+`snap remove --purge` does not take it away. That is the right trade (PartCAD does not empty caches it did not
+fill, exactly as it leaves a host conda's alone), and it is a trade rather than a free win.
+
+### What tests this
+
+Three things, at three levels:
+
+* `tests/partcad_utils/test_conda.py` pins the ordering and the root prefix. Nothing about either is observable
+  from a build -- a bundle built on a machine with no conda passes its smoke test whichever way round the two
+  are tried -- so it is asserted where a bundled copy and a host copy can be made to exist at once.
+* `build.sh`'s smoke test runs the staged payload (`--version`, against `MICROMAMBA_VERSION`) and then asks
+  `pc healthcheck --filters conda` whether PartCAD resolves a conda at all.
+* The `Standalone` workflow installs the archive and runs the payload out of the *installed* bundle, which is
+  the part the build cannot show -- an archive can lose an executable bit. Its `Examples ... via bundle` jobs
+  then install no conda at all and build the whole CAD stack through the payload; they fail loudly if a conda
+  turns up on `PATH`, because that would silently turn them back into a test of the host's.
+
 ## OpenSCAD
 
 The Linux and Windows bundles carry OpenSCAD, pinned to the version in `build.sh` and downloaded from
@@ -294,7 +440,7 @@ where the AppImage's library dependencies are absent.
 | Linux x86_64 | the AppImage, unpacked | no — needs `libGL`, `libX11`, `libxcb`, fontconfig, freetype, glib, harfbuzz from the host |
 | Linux arm64 | nothing | — |
 | Windows | the portable build | yes — one statically linked `openscad.exe`, no DLLs |
-| macOS | nothing | — |
+| macOS, both architectures | nothing | — |
 
 Linux arm64 carries nothing because upstream publishes the pinned 2021.01 AppImage for x86_64 only; running it
 under emulation is not something a bundle should quietly require. `pc` there uses the host's OpenSCAD, exactly
@@ -313,6 +459,13 @@ macOS is excluded because the 2021.01 release predates Apple silicon and ships a
 on the arm64 bundle would require Rosetta 2 — absent from a clean machine. Development snapshots may be
 universal binaries, but they are snapshots and their architecture has not been confirmed; `lipo -archs` on a
 mounted snapshot `.dmg` would settle it.
+
+The `macos-15-x86_64` bundle is the one where that argument does not apply — the pinned `.dmg` is for exactly
+that architecture — and it still carries nothing, deliberately. Two macOS bundles that differ in what is inside
+them are two behaviours to explain, to health-check and to support, on the architecture that is being retired;
+and `build.sh` would have to learn to mount and copy out of a `.dmg` to gain it. `pc` on an Intel Mac uses the
+host's OpenSCAD, exactly as the wheels do. If that changes, it is a one-architecture payload and this paragraph
+is where to say so.
 
 To move to a different OpenSCAD, change `OPENSCAD_VERSION` in `build.sh`. Upstream publishes a `.sha256` next
 to each artifact and the build verifies it, so nothing else needs updating — but note the published checksum

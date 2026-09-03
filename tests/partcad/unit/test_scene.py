@@ -192,13 +192,11 @@ def test_a_world_scene_owns_the_parts_named_under_it(project):
 
 def test_the_package_schema_accepts_the_scene_example():
     """The example package validates against the schema editors use."""
-    import json
-
     from jsonschema import Draft7Validator
 
-    schema_path = os.path.join(os.path.dirname(os.path.abspath(pc.__file__)), "schema", "partcad.json")
-    with open(schema_path) as f:
-        schema = json.load(f)
+    from partcad.lint.all import get_partcad_schema
+
+    schema = get_partcad_schema()
     config = yaml.safe_load(open(os.path.join(EXAMPLES, SCENE_EXAMPLE_PACKAGE, "partcad.yaml")))
     errors = sorted(Draft7Validator(schema).iter_errors(config), key=lambda e: list(e.path))
     assert not errors, "\n".join("%s: %s" % (list(e.path), e.message) for e in errors)

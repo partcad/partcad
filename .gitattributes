@@ -29,20 +29,31 @@
 # it; named here too, so that neither rests on the heuristic.
 #
 # `.ico` is one file, `ide/standalone/resources/partcad-ide.ico`, the
-# Windows IDE's icon. It is deliberately not LFS like the `.png` and `.jpg`
-# below: it is 34KB, and it is a build *input* -- `build.sh` reads it and Inno
-# Setup compiles it into the installer -- so a checkout that has not fetched LFS
+# Windows IDE's icon, and `.bmp` is the pair beside it that Inno Setup draws the
+# installer's wizard with. They are deliberately not LFS like the `.png` and
+# `.jpg` below: they are build *inputs* -- `build.sh` reads them and Inno Setup
+# compiles them into the installer -- so a checkout that has not fetched LFS
 # would hand the build a pointer file and ship an installer wearing a text file
-# for an icon, silently. The images LFS carries are outputs that nothing reads
-# back.
+# for an icon, silently. Most of the images LFS carries are outputs that nothing
+# reads back.
+#
+# `logo_128x128.png` is the exception among the `.png`s, and it is here because
+# the rule above was learned the hard way a second time: it is the VS Code
+# extension's icon, `vsce package` copies it into the `.vsix`, and no checkout
+# in `.github/workflows` asks for LFS -- so every published extension until now
+# carried a 130-byte pointer file where its icon should be, and showed none in
+# the marketplace or in the Extensions view. Named on its own rather than by
+# extension: the rest of the `.png`s in the tree really are rendered output.
 * text=auto eol=lf
 *.step binary
 *.stl binary
 *.3mf binary
 *.pdf binary
 *.ico binary
+*.bmp binary
 **/*.jpg filter=lfs diff=lfs merge=lfs -text
 **/*.png filter=lfs diff=lfs merge=lfs -text
+/ide/vscode/resources/logo_128x128.png -filter binary
 
 # The dev container's polyglot initializeCommand shim: cmd.exe reads the top of it
 # and /bin/sh the bottom, and the shell half breaks on a trailing CR -- so pin it to

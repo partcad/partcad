@@ -11,7 +11,8 @@ first time it starts.
 | Needs Python          | yes, 3.10-3.14               | no                            | no                              |
 | Needs an editor       | -                            | -                             | no, it is one                   |
 | What you get          | `pc`, `partcad`, the library | `pc`, `partcad`               | the editor, the extension, `pc` |
-| Size (Linux, unpacked)| ~15MB plus dependencies      | ~185MB                        | ~500MB                          |
+| Needs conda installed | yes, for CAD                 | no, it carries one            | no, from the tools inside it    |
+| Size (Linux, unpacked)| ~15MB plus dependencies      | ~205MB                        | ~500MB                          |
 
 It is built from [VSCodium](https://vscodium.com/), rebranded, with the extensions this repository recommends
 installed into it and the [standalone command line tools](../dev-tools/pyinstaller/README.md) inside it. The
@@ -80,17 +81,23 @@ same IDE next month as it does today.
 Two optional dependencies change what the build can do, and it reports what it left out rather than failing:
 
 - `cairosvg` and `Pillow` (`pip install cairosvg pillow`) render the icons from the project's logo. Without
-  them the application keeps VSCodium's icon -- except on Windows, which uses `resources/partcad-ide.ico`
-  from git instead. That one is checked in because it cannot be rendered where it is needed: `cairosvg`
-  needs `cairocffi`, and `cairocffi` needs a `libcairo-2.dll` that no wheel ships, so the renderers are
-  installable on Windows but not loadable there. Regenerate it when `ide/vscode/resources/logo.svg`
-  changes -- on Linux or macOS, since it is the machines that *can* render that keep it honest:
+  them the application keeps VSCodium's icon -- except on Windows, which uses the three files in
+  `resources/` from git instead: `partcad-ide.ico` for the executable and the window, and
+  `partcad-ide-wizard.bmp` and `partcad-ide-wizard-small.bmp` for the installer's wizard. Those are
+  checked in because they cannot be rendered where they are needed: `cairosvg` needs `cairocffi`, and
+  `cairocffi` needs a `libcairo-2.dll` that no wheel ships, so the renderers are installable on Windows but
+  not loadable there. Regenerate all three when `ide/vscode/resources/logo.svg` changes -- on Linux or
+  macOS, since it is the machines that *can* render that keep them honest:
 
   ```bash
   python ide/standalone/tools/make_icons.py \
       --svg ide/vscode/resources/logo.svg --output-dir /tmp/icons
-  cp /tmp/icons/partcad-ide.ico ide/standalone/resources/partcad-ide.ico
+  cp /tmp/icons/partcad-ide.ico /tmp/icons/partcad-ide-wizard*.bmp ide/standalone/resources/
   ```
+
+  `tests/test_icons.py` checks that they are there, that they are the sizes their consumers draw, and that
+  the installer script still names them. What no test can check is whether they still *look* like the
+  logo, which is the whole reason for the paragraph above.
 - `rcedit` (`npm install -g rcedit`) puts the icon into `partcad-ide.exe`. There is no other way to change a
   Windows executable's icon after it is linked.
 - Inno Setup 6.3 or newer (`choco install innosetup`) compiles the Windows installer. Without it the build
@@ -130,6 +137,13 @@ is the bundle directory that becomes `PartCAD IDE.app`.
 **The command line tools are embedded** at `<resources>/partcad-cli`, beside `<resources>/app` rather than
 inside it, so that no extension scan walks a gigabyte of Python. The bootstrap extension finds them there
 relative to `appRoot`, which is the same relative path on all three platforms.
+
+That embedding is also where the IDE gets its **conda**. PartCAD builds every shape in a conda sandbox, and
+the IDE has nothing of its own to build one with -- it is an editor and a JSON-RPC client; the daemon it
+launches is `partcad-json-rpc` out of that bundle. The bundle carries a conda (see
+[the standalone README](../../dev-tools/pyinstaller/README.md#conda)), so the IDE inherits one by carrying the
+bundle and adds nothing here. Before it did, the IDE started fine on a clean machine and then failed the
+moment a part had to be built, for want of a `conda` executable the user was never told to install.
 
 **The result is checked** (`tools/verify_bundle.py`): branding applied, every required extension present, no
 extension present that the policy skips, the tools where they should be, the launcher runnable. Each of those
@@ -283,6 +297,12 @@ way `install.sh` leaves `~/.partcad`.
 life of the product: regenerating it turns the next release into a second application installed beside this
 one.
 
+The wizard is branded rather than left as Inno Setup ships it: `WizardImageFile` is the panel beside the
+welcome and finished pages and `WizardSmallImageFile` the badge in the header of the pages between them,
+both rendered from the project logo into `resources/`. `build.sh` passes their directory as `Branding`, the
+same way it passes `AppDir` and `LicenseFile`, and unlike the executable's icon they are unconditional:
+they are in git rather than rendered by the build, so there is no case where they are missing.
+
 The `.zip` is still published next to the installer, for unpacking without installing.
 
 The installer is **not signed**. SmartScreen warns about an unsigned installer from an unknown publisher, and
@@ -320,6 +340,22 @@ without building.
 `install.sh --ide` on a runner that has never seen PartCAD. `deploy.yml` calls it on a push to `main` and
 uploads the archives to the same GitHub release as the wheels and the command line bundles, which is where
 `install.sh --ide` downloads from.
+
+Four platforms: `linux-x86_64`, `macos-arm64` and `windows-x86_64` on every run, and `macos-x86_64` on a deep
+one -- the nightly schedule, a manual dispatch, a push, or `#deepTest` on the pull request (see
+`.github/actions/test-depth`). The Intel macOS IDE is gated because the command line bundle that goes inside
+it is: `macos-15-x86_64` is in `PLATFORMS_DEEP` in `build-standalone.yml`, and on a reduced run there is no
+such artifact to embed. Unlike the bundles, an IDE is built once per operating system and architecture rather
+than per OS version -- it carries its own Electron runtime -- which is why `macos-x86_64` carries no macOS
+version while the bundle inside it does. `IDE_CORE` and `IDE_DEEP` at the top of that workflow are the list.
+
+That is also why the macOS builders are `macos-15` and `macos-15-intel` rather than `macos-latest`: an archive
+with no OS version in its name has nowhere to declare a floor and no way for a client to compare a machine
+against one, so whatever the builder imposes is invisible. Building on the oldest supported image is how it
+does not acquire one, and it keeps a label that moves -- `macos-latest` went from macOS 15 to macOS 26 in July
+2026 -- out of what gets released. Each macOS application is then installed and started on macOS 15 *and* on
+macOS 26, which is where that claim is either true or is a story: `partcad-ide --version` exercises the editor
+and `pc version` the frozen bundle inside it.
 
 It does not build the command line bundles it embeds. `deploy.yml` builds them once, in the same run, and the
 IDE build downloads them from there; on every other trigger the IDE build finds the sibling `Standalone`
