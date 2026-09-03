@@ -12,10 +12,14 @@ reads it, and on a failure the message it carries is the whole answer (which X
 server to install, or how to let PartCAD use a container), so it has to survive
 a non-zero exit rather than be replaced by one.
 
-The one thing this command sends to the daemon is pinned here too: an
-application that reads meshes has to be handed one, and making a mesh out of a
-solid is CAD work. Which method that is, and on what, is the whole contract --
-that it is allowed at all is `test_command_boundary.py`'s to say.
+The one thing this command sends to the daemon is pinned here too, from both
+sides: an application that reads meshes has to be handed one, and making a mesh
+out of a solid is CAD work -- but *only* that. A `pc open` that needed no
+conversion and connected anyway would start a daemon to open a file that was
+already on disk, on a machine that may have neither a CAD environment nor any
+use for one, and would fail where it used to work. Which method is sent, on
+what, and that nothing is sent otherwise, is the whole contract; that a daemon
+call is allowed here at all is `test_command_boundary.py`'s to say.
 
 Which side of the command boundary this command is on is checked by
 `test_command_boundary.py`; nothing here starts an application or a container.
@@ -216,3 +220,125 @@ def test_what_was_converted_is_said_as_well_as_what_was_opened(click_runner: Ite
     result = _invoke(click_runner, "--with", "blender", "/w/cube.step")
     assert "cube-0123.stl" in result.output
     assert "cube.step" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Nothing to convert, nothing to connect to
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def no_daemon(monkeypatch):
+    """Fail loudly if the command connects to the daemon at all.
+
+    Both doors are shut, not just the one this command holds the key to:
+    `service.run` is what `pc open` calls, and `client.connect` is what would
+    answer if anything else in the invocation reached for a daemon.
+    """
+    import partcad_client.client
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("pc open reached for the daemon when nothing needed converting")
+
+    monkeypatch.setattr(open_command, "run", refuse)
+    monkeypatch.setattr(partcad_client.client, "connect", refuse)
+
+
+@pytest.fixture
+def installed_blender(monkeypatch):
+    """A machine with Blender on it, and nothing actually started."""
+    started = []
+    monkeypatch.setattr(external, "native_command", lambda _spec: ["/usr/bin/blender"])
+    monkeypatch.setattr(external, "_spawn", lambda args: started.append(list(args)))
+    return started
+
+
+@pytest.fixture
+def mesh(tmp_path):
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    path = tmp_path / "cube.stl"
+    path.write_text("solid cube\nendsolid cube\n")
+    return path
+
+
+@pytest.fixture(autouse=True)
+def workspace_state(monkeypatch, tmp_path):
+    """Put this workspace's own directory under the test's, not under `$HOME`.
+
+    A converted mesh is written there (`external.transcode_path`), and a unit
+    test has no business leaving one in the directory a real daemon serves.
+    """
+    monkeypatch.setattr(external, "socket_path", lambda _root: str(tmp_path / ".partcad" / "hash" / "socket"))
+
+
+def test_a_mesh_is_opened_without_a_daemon(click_runner, no_daemon, installed_blender, mesh) -> None:
+    """The whole point of `pc open` staying a client command, kept true.
+
+    This one goes through the real `partcad_client.external`, not the recorder
+    above: what is being checked is that no conversion is *decided on*, which
+    the recorder would hide by never asking.
+    """
+    result = _invoke(click_runner, "--json", "--with", "blender", str(mesh))
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["path"] == str(mesh)
+    assert installed_blender[0][0] == "/usr/bin/blender"
+
+
+def test_the_declared_type_does_not_make_it_a_daemon_command(click_runner, no_daemon, installed_blender, mesh) -> None:
+    """The extension passes `--type` for every object it opens, mesh or not."""
+    result = _invoke(click_runner, "--json", "--with", "blender", "--type", "stl", str(mesh))
+    assert result.exit_code == 0, result.output
+
+
+def test_an_application_that_takes_what_it_is_given_never_connects(click_runner, no_daemon, monkeypatch, mesh) -> None:
+    """FreeCAD, Gazebo and KiCad read what they are handed; there is nothing to ask."""
+    started = []
+    monkeypatch.setattr(external, "native_command", lambda _spec: ["/usr/bin/freecad"])
+    monkeypatch.setattr(external, "_spawn", lambda args: started.append(list(args)))
+
+    result = _invoke(click_runner, "--json", "--with", "freecad", str(mesh))
+
+    assert result.exit_code == 0, result.output
+    assert started == [["/usr/bin/freecad", str(mesh)]]
+
+
+def test_a_failure_with_nothing_to_convert_does_not_connect_either(click_runner, no_daemon, monkeypatch, mesh) -> None:
+    """A machine with no Blender is told so; it is not told to start a daemon first."""
+    monkeypatch.setattr(external, "native_command", lambda _spec: None)
+
+    result = _invoke(click_runner, "--json", "--with", "blender", str(mesh))
+
+    assert result.exit_code == 1
+    assert "--use-docker" in json.loads(result.output)["error"]
+
+
+def test_a_solid_is_the_one_case_that_connects(click_runner, installed_blender, monkeypatch, tmp_path) -> None:
+    """The other half of the contract: the conversion really does go to the daemon.
+
+    Driven through the real `external`, so what is pinned is that the decision
+    to convert is what reaches `service.run` -- not a callback a test invoked.
+    """
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    solid = tmp_path / "cube.step"
+    solid.write_text("ISO-10303-21;\n")
+    sent = []
+
+    def convert(_cli_ctx, method, params, **kwargs):
+        sent.append((method, params, kwargs))
+        # The daemon's job, done here so that `external` finds the file it
+        # asked for and the command carries on to the opening.
+        open(params["output_filename"], "w").write("solid converted\nendsolid converted\n")
+
+    monkeypatch.setattr(open_command, "run", convert)
+
+    result = _invoke(click_runner, "--json", "--with", "blender", str(solid))
+
+    assert result.exit_code == 0, result.output
+    assert [method for method, _params, _kwargs in sent] == ["adhoc.convert"]
+    assert sent[0][1]["input_type"] == "step"
+    assert sent[0][1]["output_type"] == "stl"
+    assert sent[0][2] == {"needs_context": False}
+    reported = json.loads(result.output)
+    assert reported["source"] == str(solid)
+    assert reported["path"] == sent[0][1]["output_filename"]
