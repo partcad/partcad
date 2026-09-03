@@ -1,7 +1,23 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!-- PartCAD, 2026. Licensed under Apache License, Version 2.0. -->
+<!--
+  Drawn twice: the wider #707070 pass underneath is the keyline, and the
+  #F5BB2B pass on top is the brand amber. That is how the mark in partcad.svg
+  is built (amber over grey edges), and it is also the only way one flat colour
+  holds up on both of FreeCAD's themes: amber alone all but disappears on a
+  light toolbar, and grey alone disappears on a dark one.
+
+  The paths are written out twice rather than defined once and drawn with
+  <use>, because FreeCAD renders these through QtSvg, which implements only
+  part of the specification. Duplication here is boring; a <use> that one
+  renderer ignores is an icon nobody sees.
+-->
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <g fill="none" stroke="#40c040" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+  <g fill="none" stroke="#707070" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M6 50 V16 h16 l5 7 h21 v9"/>
+    <path d="M6 50 L16 30 h44 L50 50 Z"/>
+  </g>
+  <g fill="none" stroke="#F5BB2B" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
     <path d="M6 50 V16 h16 l5 7 h21 v9"/>
     <path d="M6 50 L16 30 h44 L50 50 Z"/>
   </g>
