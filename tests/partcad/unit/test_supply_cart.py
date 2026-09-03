@@ -5,8 +5,6 @@
 #
 
 import asyncio
-import importlib.resources
-import json
 
 import jsonschema
 import yaml
@@ -179,8 +177,9 @@ def test_fixture_packages_pass_the_schema():
     so a key the code reads has to be a key the schema allows -- for assemblies
     as well as for parts.
     """
-    with importlib.resources.files("partcad.schema").joinpath("partcad.json").open("r") as file:
-        schema = json.load(file)
+    from partcad.lint.all import get_partcad_schema
+
+    schema = get_partcad_schema()
 
     for path in (SUPPLY_BOM_PACKAGE, "tests/partcad/unit/data/supply_bom/sub/partcad.yaml"):
         with open(path) as file:

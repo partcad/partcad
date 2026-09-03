@@ -3,19 +3,26 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// Syntax and schema checking for ASSY files.
+// Syntax and schema checking for the two YAML documents PartCAD writes: an
+// `.assy` file and a package's `partcad.yaml`.
 //
-// An `.assy` file is registered as YAML so it gets syntax highlighting, but it
-// is not YAML: it is a Jinja2 template that renders to YAML and then has to
-// match the ASSY schema. A plain YAML checker therefore both misses the errors
-// that matter (a mistyped `locaton:`, a location that is not an OCCT location)
+// Both are registered as YAML so they get the editor's YAML syntax
+// highlighting, and neither is YAML: each is a Jinja2 template that renders to
+// YAML and then has to match a schema. A plain YAML checker therefore both
+// misses the errors that matter (a mistyped `locaton:`, a location that is not
+// an OCCT location, a `part` declared with a `type` PartCAD has no factory for)
 // and invents errors that are not there (every `{% for %}` line).
+//
+// Registering them as `yaml` is also what keeps that highlighting: the language
+// id is what the editor picks a grammar by, so these stay `yaml` documents and
+// the diagnostics are published into a `partcad` collection beside whatever
+// else has an opinion about the file. Giving them a PartCAD language id of
+// their own would have bought nothing and lost the grammar.
 //
 // The check runs locally, never on the daemon: it is the client's own file --
 // usually one this editor has not saved -- and it needs no package graph, no CAD
-// runtime and no loaded context. `partcad.lintFile` is answered by whichever
-// local PartCAD the active backend has (`pc lint --file` for the service
-// backend, the bundled language server for the Python one), so it keeps
+// runtime and no loaded context. `partcad.lintFile` is answered by running this
+// machine's own `pc lint --file` (see `JsonRpcBackend.lintFile`), so it keeps
 // answering when the daemon is down or the package will not load because of the
 // very file being typed into.
 //
@@ -24,8 +31,8 @@
 // Jinja2 template before parsing so each finding still carries the line and
 // column of the source file.
 //
-// One thing has to be settled before the check can run: whether the file is an
-// **assembly** or a **scene**. The two are the same format read for two
+// One thing has to be settled before an **ASSY** file can be checked: whether
+// it is an **assembly** or a **scene**. The two are the same format read for two
 // purposes, and a scene is checked against the same schema with `how`
 // forbidden -- a scene states where things are, not how they got there (see
 // `partcad.scene`). Nothing in the file says which it is; what points at it
@@ -40,6 +47,10 @@
 // package this workspace has not opened -- is left to the CLI, which makes the
 // same call from the `partcad.yaml` files around the file
 // (`partcad_client.lint.detect_flavor`) and leans the same way.
+//
+// A `partcad.yaml` has no flavor -- nothing points at a package configuration
+// the way a declaration points at an ASSY file -- so nothing is settled for one
+// and none is sent.
 //
 
 import * as vscode from 'vscode';
@@ -74,8 +85,31 @@ type LintResult = {
 /** Which schema an ASSY file is checked against. `undefined` means "let the CLI decide". */
 type LintFlavor = 'assembly' | 'scene' | undefined;
 
+/** An ASSY file: checked against the ASSY schema, and the only kind with a flavor. */
 function isAssyDocument(document: vscode.TextDocument): boolean {
     return document.uri.scheme === 'file' && document.uri.fsPath.toLowerCase().endsWith('.assy');
+}
+
+/**
+ * A package configuration: `partcad.yaml`, by name.
+ *
+ * By name and not by extension, because that is what makes it one -- PartCAD
+ * looks for `partcad.yaml`, and a `parts.yaml` beside it is somebody's own file
+ * that nothing here should have an opinion about. Lower-cased for the same
+ * reason `pathKey` exists: on a case-insensitive filesystem the file the user
+ * opened as `PartCAD.yaml` is the one PartCAD is reading.
+ */
+function isPackageConfigDocument(document: vscode.TextDocument): boolean {
+    if (document.uri.scheme !== 'file') {
+        return false;
+    }
+    const path = document.uri.fsPath.replace(/\\/g, '/');
+    return path.slice(path.lastIndexOf('/') + 1).toLowerCase() === 'partcad.yaml';
+}
+
+/** Every document PartCAD checks. Anything else is left to whoever owns it. */
+function isCheckedDocument(document: vscode.TextDocument): boolean {
+    return isAssyDocument(document) || isPackageConfigDocument(document);
 }
 
 function isEnabled(): boolean {
@@ -124,6 +158,12 @@ export class PartcadLint implements vscode.Disposable {
      * so the CLI can make its own.
      */
     private flavorOf(document: vscode.TextDocument): LintFlavor {
+        if (!isAssyDocument(document)) {
+            // A `partcad.yaml` has one schema and no flavor. Sending one anyway
+            // would be asking for a scene-flavored configuration schema, which
+            // is a schema forbidding a `how` no configuration has.
+            return undefined;
+        }
         const explorer = this.explorer?.();
         if (explorer === undefined) {
             return undefined;
@@ -149,8 +189,9 @@ export class PartcadLint implements vscode.Disposable {
     }
 
     /**
-     * Re-check every open ASSY file. Called once the backend is up: documents
-     * opened before that were checked against a command that did not exist yet.
+     * Re-check every open file PartCAD checks. Called once the backend is up:
+     * documents opened before that were checked against a command that did not
+     * exist yet.
      */
     public refresh(): void {
         if (!isEnabled()) {
@@ -182,7 +223,7 @@ export class PartcadLint implements vscode.Disposable {
     }
 
     private schedule(document: vscode.TextDocument, delay: number): void {
-        if (!isAssyDocument(document)) {
+        if (!isCheckedDocument(document)) {
             return;
         }
         if (!isEnabled()) {

@@ -22,7 +22,7 @@
 #     `partcad_service_json_rpc` not importing `partcad_client`.
 #
 # `partcad-cli` is still published, as a shim: no modules, no entry points, one
-# dependency on this. See `shim/pyproject.toml`.
+# dependency on this. See `dev-tools/shim/pyproject.toml`.
 #
 # This file is also the development environment: Poetry reads the `[project]`
 # metadata above and the `[tool.poetry.group.*]` dependency groups below, so
@@ -32,7 +32,7 @@
 
 [project]
 name = "partcad"
-version = "0.8.34"
+version = "0.8.37"
 description = "Package manager for CAD models and a modelling framework"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "sdf", "cad", "design", "openscad", "step", "stl"]
@@ -103,8 +103,10 @@ aws = {file = ["requirements-aws.txt"]}
 "partcad.builtin.export" = ["*.py", "*.yaml"]
 "partcad.builtin.render" = ["*.py", "*.yaml"]
 "partcad.template" = ["*.yaml"]
-"partcad.schema" = ["**/partcad.json"]
-# The ASSY schema, which `partcad_utils.assy_lint` validates against.
+# The schemas `partcad_utils.assy_lint` validates against: the ASSY one and the
+# `partcad.yaml` one. Both live in `partcad_utils` because both ends check both
+# kinds of file -- the daemon over a package, every client over the one file
+# somebody is editing.
 "partcad_utils.schema" = ["**/*.json"]
 
 [tool.pytest.ini_options]

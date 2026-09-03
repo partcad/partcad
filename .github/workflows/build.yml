@@ -135,8 +135,8 @@ jobs:
           python -m build
           # The shim states `license = {file = "LICENSE.txt"}`, so it needs the
           # repository's copy the way each distribution used to.
-          cp LICENSE.txt shim
-          (cd shim && python -m build)
+          cp LICENSE.txt dev-tools/shim
+          (cd dev-tools/shim && python -m build)
           mamba deactivate
 
       - name: Test installation
@@ -155,7 +155,7 @@ jobs:
           pc --no-ansi version
           partcad-json-rpc --help >/dev/null
           # The shim brings the wheel in, and owns nothing of its own.
-          python -m pip install --no-index --find-links=dist --find-links=shim/dist partcad-cli
+          python -m pip install --no-index --find-links=dist --find-links=dev-tools/shim/dist partcad-cli
           mamba deactivate
 
       - name: Build documentation

@@ -9,6 +9,7 @@
 from . import runtime_python_none
 from . import runtime_python_pypy
 from . import runtime_python_conda
+from . import runtime_python_venv
 
 
 def create(ctx, version, python_runtime=None):
@@ -16,6 +17,8 @@ def create(ctx, version, python_runtime=None):
         python_runtime = ctx.user_config.python_sandbox
     if python_runtime == "none":
         return runtime_python_none.NonePythonRuntime(ctx, version)
+    elif python_runtime == "venv":
+        return runtime_python_venv.VenvPythonRuntime(ctx, version)
     elif python_runtime == "pypy":
         return runtime_python_pypy.PyPyPythonRuntime(ctx, version)
     elif python_runtime == "conda":

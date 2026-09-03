@@ -44,14 +44,16 @@ drift apart.
 
 **`pc lint` sits on both sides of the line, one mode each.** `pc lint [-P/-r]` checks a *package*: which
 packages, resolved how, with which files, is the package graph, so it is a thin daemon client like any other.
-`pc lint --file` checks the *files named on the command line*, in this process: an ASSY file is a Jinja2
-template rendered to YAML and matched against a schema, which needs no package graph, no CAD runtime and no
-context — and with `--stdin` the content is a buffer an editor has not saved, which the daemon cannot see at
-all. There is deliberately no RPC method for it: sending it would ship the client's own file across a wire to
-have it read back, and would leave the editor silent exactly when the package fails to load *because* of that
-file. The checker (`partcad_client.lint`, over `partcad_utils.assy_lint`) is the same one the daemon runs over a
-package, so an editor and CI cannot disagree. The VS Code extension runs `pc lint --file`, so the two cannot
-drift apart either.
+`pc lint --file` checks the *files named on the command line*, in this process: an ASSY file and a
+`partcad.yaml` are both Jinja2 templates rendered to YAML and matched against a schema, which needs no package
+graph, no CAD runtime and no context — and with `--stdin` the content is a buffer an editor has not saved,
+which the daemon cannot see at all. There is deliberately no RPC method for it: sending it would ship the
+client's own file across a wire to have it read back, and would leave the editor silent exactly when the
+package fails to load *because* of that file — which for a `partcad.yaml` is every time it is wrong. The
+checker (`partcad_client.lint`, over `partcad_utils.assy_lint`) is the same one the daemon runs over a package,
+so an editor and CI cannot disagree. The VS Code extension runs `pc lint --file`, so the two cannot drift apart
+either. `--schema` picks the flavor of an ASSY file; a `partcad.yaml` has none — nothing points at a package
+configuration — so it is ignored for one, and the detection is not even run.
 
 **`pc open` is on the in-process side for a stronger version of the same reason.** Opening a file in a
 third-party CAD application puts a window on a screen, and the only screen a command can put one on is the one

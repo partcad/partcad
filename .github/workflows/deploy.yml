@@ -125,8 +125,8 @@ jobs:
           (. .venv/build/${{ env.BIN_DIR }}/activate && python -m build && deactivate)
           # The shim states `license = {file = "LICENSE.txt"}`, so it needs the
           # repository's copy the way each distribution used to.
-          cp LICENSE.txt shim
-          (. .venv/build/${{ env.BIN_DIR }}/activate && cd shim && python -m build && cd .. && deactivate)
+          cp LICENSE.txt dev-tools/shim
+          (. .venv/build/${{ env.BIN_DIR }}/activate && cd dev-tools/shim && python -m build && cd ../.. && deactivate)
       - name: Test installation
         run: |
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --find-links=dist partcad && deactivate)
@@ -138,7 +138,7 @@ jobs:
           " && deactivate)
           (. .venv/install/${{ env.BIN_DIR }}/activate && pc --no-ansi version && partcad-json-rpc --help >/dev/null && deactivate)
           # The shim brings the wheel in, and owns nothing of its own.
-          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=dist --find-links=shim/dist partcad-cli && deactivate)
+          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=dist --find-links=dev-tools/shim/dist partcad-cli && deactivate)
       # Upload artifact from the selected OS/Python version combination only
       - name: Upload "partcad"
         if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.13' }}
@@ -151,7 +151,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: python-package-distributions-cli
-          path: shim/dist/
+          path: dev-tools/shim/dist/
 
   publish-to-pypi:
     name: Publish to PyPI

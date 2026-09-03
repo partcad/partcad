@@ -12,19 +12,22 @@ Checking a **package** means walking the package graph -- which packages,
 resolved how, with which files -- so it is daemon work like any other, and
 `--recursive` reaches imported packages the client has never seen.
 
-Checking a **file** is not. An ASSY file is a Jinja2 template rendered to YAML
-and matched against a schema: pure text work, no package graph, no CAD runtime.
-The file is the client's own, sometimes not even saved yet (`--stdin`), and the
-moment it most needs checking is when the package will not load *because* of it.
-So `--file` never leaves this process: it runs `partcad_client.lint` here, which
-is the same checker the daemon runs over a package, and is what the VS Code
-extension reaches by running this command.
+Checking a **file** is not. An ASSY file and a `partcad.yaml` are both Jinja2
+templates rendered to YAML and matched against a schema: pure text work, no
+package graph, no CAD runtime. The file is the client's own, sometimes not even
+saved yet (`--stdin`), and the moment it most needs checking is when the package
+will not load *because* of it -- which for a `partcad.yaml` is every time it is
+wrong. So `--file` never leaves this process: it runs `partcad_client.lint`
+here, which is the same checker the daemon runs over a package, and is what the
+VS Code extension reaches by running this command.
 
-One thing the daemon does know and this side has to work out: whether the file
-is an assembly or a scene, because a scene is checked against the same schema
-with `how` forbidden. `--schema` says which; `auto`, the default, reads the
-`partcad.yaml` files around the file to find out (see
-`partcad_client.lint.detect_flavor`).
+One thing the daemon does know and this side has to work out: whether an ASSY
+file is an assembly or a scene, because a scene is checked against the same
+schema with `how` forbidden. `--schema` says which; `auto`, the default, reads
+the `partcad.yaml` files around the file to find out (see
+`partcad_client.lint.detect_flavor`). A `partcad.yaml` has no flavor -- nothing
+points at a package configuration -- so nothing is worked out for one, and
+`--schema` is ignored if it is named.
 """
 
 import json
@@ -87,7 +90,7 @@ from ..service import run
     help=(
         "Which schema to check an ASSY --file against: the full one ('assembly'), "
         "the same one without 'how' ('scene'), or whichever the packages around the file "
-        "say it is ('auto')."
+        "say it is ('auto'). Ignored for a 'partcad.yaml', which has one schema."
     ),
 )
 @click.pass_context

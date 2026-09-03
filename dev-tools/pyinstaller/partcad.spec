@@ -141,10 +141,10 @@ datas += [
     (str(SRC / "partcad" / "builtin"), "partcad/builtin"),
     # Copied into new packages by `pc init`.
     (str(SRC / "partcad" / "template"), "partcad/template"),
-    # Read through `importlib.resources` by `pc lint`. The ASSY schema is in
-    # `partcad_utils` because both ends check ASSY files -- the daemon over a
-    # package, `pc lint --file` in the client over one file.
-    (str(SRC / "partcad" / "schema"), "partcad/schema"),
+    # Read through `importlib.resources` by `pc lint`. Both schemas -- the ASSY
+    # one and the `partcad.yaml` one -- are in `partcad_utils` because both ends
+    # check both kinds of file: the daemon over a package, `pc lint --file` in
+    # the client over one file.
     (str(SRC / "partcad_utils" / "schema"), "partcad_utils/schema"),
     # The loader lists this directory to enumerate the available subcommands.
     (str(SRC / "partcad_cli" / "click" / "commands"), "partcad_cli/click/commands"),
