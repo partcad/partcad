@@ -1440,16 +1440,15 @@ visualization, simulation calculations and, if applicable, manufacturing
 
 - ``material``
 
-  Must point at an object of type ``material``.
-  Some of them are defined in ``//pub/std/manufacturing/material``.
+  Must point at an object of type ``material``, as ``<package>:<name>``.
+  Some of them are defined in ``//pub/std/manufacturing/material``; see
+  :ref:`materials` for declaring your own.
   This one is an object-type parameter, so it may only be declared on the part
   types listed above.
   When a request is made to a manufacturing API,
   a close enough material is selected from the materials provided by the
   manufacturer. The responsibility to select the right material is on the
   implementation of the manufacturing API (the ``provider`` object in PartCAD).
-
-  **Not implemented yet. Use hardcoded values for now.**
 
 - ``color``
 
@@ -2123,6 +2122,67 @@ package around it:
 file the package does not declare yet, leaving the package holding PartCAD's own
 objects. ``pc add scene world warehouse.world`` declares the file where it lies
 instead.
+
+.. _materials:
+
+=========
+Materials
+=========
+
+A part is made of something, and ``materials`` is where a package says what
+that something is. It is the object the ``material`` parameter of a part points
+at (see `Parameters`_), so that naming a substance is naming a thing PartCAD can
+ask questions of rather than repeating a string every reader has to interpret
+for themselves.
+
+A material is **not** a shape. PLA has no geometry: there is nothing to render,
+to export or to tessellate, and none of what :ref:`parts` and :ref:`assemblies`
+can do applies to it. What it is, is a set of facts about a substance:
+
+.. code-block:: yaml
+
+  materials:
+    <material name>:
+      formal: <(optional) the short formal name, e.g. "PLA">
+      full: <(optional) the full name, e.g. "Polylactic Acid">
+      desc: <(optional) textual description>
+      url: <(optional) where to read about it>
+      density: <(optional) density in g/mm^3>
+      tags: <(optional) a list of free-form tags, or a single tag>
+
+The short form gives the full name and nothing else:
+
+.. code-block:: yaml
+
+  materials:
+    nylon: Nylon
+
+Density is in ``g/mm^3``, the units every length in PartCAD is already in, so
+that a mass falls out of a volume without a conversion nobody remembers to
+apply. Datasheets quote ``g/cm^3``, which is 1000 times larger: PLA at
+1.32 g/cm^3 is declared as ``0.00132``. A material that states no density
+reports no mass, rather than a mass of zero -- nothing downstream could tell an
+invented figure apart from a stated one.
+
+``tags`` is free-form on purpose. There is no controlled vocabulary of material
+properties that survives contact with real catalogues, and imposing one would
+only mean packages could not say what they mean.
+
+Materials are addressed like every other object, as ``<package>:<name>``, so a
+part in one package names a material catalogued in another:
+
+.. code-block:: yaml
+
+  parts:
+    bracket:
+      type: cadquery
+      parameters:
+        material:
+          type: string
+          default: //pub/std/manufacturing/material/plastic:pla
+
+List what a package catalogues with ``pc list materials`` (and ``-r`` to walk
+the packages it imports).
 
 .. _software:
 
