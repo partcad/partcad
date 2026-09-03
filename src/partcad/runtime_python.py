@@ -55,9 +55,36 @@ def get_local_partcad_pkg(dep: str) -> str:
 #
 # ocpsvg is bounded for the same reason: it depends on the proxy directly and
 # build123d's own bound on it is wide.
+#
+# The numba entry is a different problem that lands in the same file: a platform
+# gap, the one sandbox_versions.NLOPT documents, one layer further down and with
+# the opposite failure mode. 'cadquery' 2.8 depends on numba, numba depends on
+# llvmlite, and the two dropped macOS x86_64 wheels in lockstep -- numba 0.62.1
+# and llvmlite 0.45.1 are the last releases that publish one (cp310 through
+# cp313), and from numba 0.63.0 / llvmlite 0.46.0 there are none at all.
+#
+# Unlike nlopt, both still publish an sdist. So pip does not run out of
+# candidates and fall back to an older release; it takes the newest and tries to
+# *build* it, and building llvmlite needs an LLVM the runner does not have:
+# "CMake Error at CMakeLists.txt:21 (find_package): Could not find a package
+# configuration file provided by 'LLVM'", which fails the whole
+# "pip install cadquery==2.8.0" and leaves the sandbox with no CAD stack. A bare
+# version range cannot fix that the way NLOPT's does -- the bound has to be one
+# pip applies on Intel macOS and nowhere else, which is what the marker is for.
+#
+# Capping numba alone is enough: numba 0.62.1 declares 'llvmlite<0.46', so the
+# llvmlite installed beside it is 0.45.1 by construction. Its other bound,
+# 'numpy<2.4', still intersects sandbox_versions.NUMPY ('numpy>=2.2,<3').
+#
+# Every other platform is left entirely unconstrained, which is the point of the
+# marker: the resolve on Linux, Windows and Apple silicon is unchanged.
+#
+# The residual gap NLOPT describes applies here too: Intel macOS wheels stop at
+# cp313, so a 3.14 sandbox on that platform still finds nothing to install.
 PIP_CONSTRAINTS = [
     "cadquery-ocp-proxy>=7.9,<8.0",
     "ocpsvg>=0.6,<0.7",
+    'numba<=0.62.1; sys_platform == "darwin" and platform_machine == "x86_64"',
 ]
 
 
