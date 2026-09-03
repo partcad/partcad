@@ -23,11 +23,13 @@ pytest counted no failed tests, and `failure` otherwise. Two callers do:
 
 Both choose a path carrying their shell's PID, so concurrent runs never collide,
 and both remove it before and after the run; neither leaves anything behind. A
-run that dies before `pytest_sessionfinish` -- a collection error, a crash
-mid-suite, a runner that goes away -- writes no marker at all, and a caller that
-finds none must fail. That is the property that keeps this from being a way to
-paint a broken run green: it can only ever forgive an exit code that contradicts
-a session pytest itself called clean.
+run that never reaches this hook -- a crash mid-suite, a runner that goes away,
+an exception in another session hook -- writes no marker at all, and a caller
+that finds none must fail. (A collection error does reach it: pytest reports
+that as exit status 2, so it is recorded as `failure` like any other unclean
+session.) That is the property that keeps this from being a way to paint a
+broken run green: it can only ever forgive an exit code that contradicts a
+session pytest itself called clean.
 
 This lives at the repository root rather than beside one package's tests so that
 the verdict is recorded for whatever paths a caller passes. It used to live in
@@ -42,17 +44,31 @@ import pathlib
 import pytest
 
 
-@pytest.hookimpl(trylast=True)
+@pytest.hookimpl(wrapper=True, tryfirst=True)
 def pytest_sessionfinish(session, exitstatus):
-    """Write the session's verdict to `PYTEST_RESULT_MARKER`, if a caller asked for one."""
+    """Write the session's verdict to `PYTEST_RESULT_MARKER`, if a caller asked for one.
+
+    A wrapper, and `tryfirst` so that it is the outermost one, because the
+    `exitstatus` handed to this hook is not always the status pytest goes on to
+    exit with. pytest's own terminal reporter implements `pytest_sessionfinish`
+    as a wrapper too, and after the inner hooks have run it can still raise
+    `session.exitstatus` -- `--max-warnings` being exceeded turns a `0` into
+    `ExitCode.MAX_WARNINGS_ERROR` there. A plain `trylast` hook reading the
+    argument would record "success" for a session pytest then failed, which is
+    the one direction this must never get wrong. Running last of all, after the
+    yield, and reading `session.exitstatus` rather than the argument, is what
+    makes the verdict the final one.
+    """
+    result = yield
+
     marker = os.environ.get("PYTEST_RESULT_MARKER")
     if not marker:
-        return
+        return result
 
     # Under xdist only the controller sees the aggregate result; the workers
     # each report their own subset and must not write the verdict.
     if hasattr(session.config, "workerinput"):
-        return
+        return result
 
     path = pathlib.Path(marker)
     if not path.is_absolute():
@@ -66,7 +82,8 @@ def pytest_sessionfinish(session, exitstatus):
 
     # An exit status of 5 (no tests collected) is a failure here, deliberately:
     # a run that tested nothing is not a run that passed.
-    passed = exitstatus == 0 and session.testsfailed == 0
+    passed = session.exitstatus == 0 and session.testsfailed == 0
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("success" if passed else "failure")
+    return result

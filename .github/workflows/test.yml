@@ -330,10 +330,11 @@ jobs:
           # 'conftest.py' at the repository root is the one place that writes it.
           #
           # It cannot paint a broken run green. The session writes "failure"
-          # whenever pytest's own exit status is dirty or it counted a failed
-          # test, and a run that dies before 'pytest_sessionfinish' -- a
-          # collection error, a crash mid-suite, a runner that goes away --
-          # writes nothing at all, which is not "success" either.
+          # whenever pytest's final exit status is dirty or it counted a failed
+          # test -- a collection error included, which pytest reports as exit
+          # status 2 -- and a run that never reaches the hook at all, a crash
+          # mid-suite or a runner that goes away, writes nothing, which is not
+          # "success" either.
           #
           # The path is relative on purpose: Git Bash and the native interpreter
           # do not agree on what an absolute POSIX path means on Windows, but

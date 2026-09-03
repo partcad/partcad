@@ -12,6 +12,11 @@ may forgive an exit code that contradicts a clean session, and nothing else. So
 these check both halves, and in particular that every way a run can be *not*
 clean still writes "failure".
 
+Most of it is checked by driving the hook directly, which is quick and lets a
+session be posed in states that are awkward to produce for real. The last two
+run pytest for real, in a subprocess, because what they are about is *when* the
+hook runs relative to pytest's own -- something no stand-in can show.
+
 The module is loaded by path rather than imported by name. `pyproject.toml` puts
 `ide/standalone/tests` on `pythonpath` so its own tests can do
 `from conftest import REPO_ROOT`, which means a bare `import conftest` here would
@@ -19,8 +24,11 @@ find that file instead of this one.
 """
 
 import importlib.util
+import os
 import pathlib
+import subprocess
 import sys
+import textwrap
 import types
 
 import pytest
@@ -43,14 +51,29 @@ def root_conftest():
     return load_root_conftest()
 
 
-def session(testsfailed=0, invocation_dir=None, worker=False):
+def session(exitstatus=0, testsfailed=0, invocation_dir=None, worker=False):
     """The parts of a `pytest.Session` the hook actually reads."""
     config = types.SimpleNamespace(
         invocation_params=types.SimpleNamespace(dir=invocation_dir or pathlib.Path.cwd()),
     )
     if worker:
         config.workerinput = {}
-    return types.SimpleNamespace(config=config, testsfailed=testsfailed)
+    return types.SimpleNamespace(config=config, exitstatus=exitstatus, testsfailed=testsfailed)
+
+
+def run_hook(root_conftest, session_obj, argument_exitstatus=0):
+    """Drive the hook the way pluggy drives a wrapper: run to the yield, then resume.
+
+    The default `argument_exitstatus` is deliberately the *clean* one, so that a
+    caller passing an unclean `session.exitstatus` is asking whether the hook
+    reads the session rather than the argument.
+    """
+    generator = root_conftest.pytest_sessionfinish(session_obj, argument_exitstatus)
+    next(generator)
+    try:
+        generator.send(None)
+    except StopIteration:
+        pass
 
 
 def test_the_hook_is_a_no_op_without_a_marker_path(root_conftest, tmp_path, monkeypatch):
@@ -58,7 +81,7 @@ def test_the_hook_is_a_no_op_without_a_marker_path(root_conftest, tmp_path, monk
     monkeypatch.delenv("PYTEST_RESULT_MARKER", raising=False)
     monkeypatch.chdir(tmp_path)
 
-    root_conftest.pytest_sessionfinish(session(), 0)
+    run_hook(root_conftest, session())
 
     assert list(tmp_path.iterdir()) == []
 
@@ -68,7 +91,7 @@ def test_a_clean_session_is_recorded_as_a_success(root_conftest, tmp_path, monke
     marker = tmp_path / "verdict"
     monkeypatch.setenv("PYTEST_RESULT_MARKER", str(marker))
 
-    root_conftest.pytest_sessionfinish(session(testsfailed=0), 0)
+    run_hook(root_conftest, session(exitstatus=0, testsfailed=0))
 
     assert marker.read_text() == "success"
 
@@ -77,11 +100,12 @@ def test_a_clean_session_is_recorded_as_a_success(root_conftest, tmp_path, monke
     "exitstatus, testsfailed, why",
     [
         (1, 1, "a test failed"),
-        (2, 0, "the run was interrupted"),
+        (2, 0, "the run was interrupted, which is also how a collection error ends"),
         (3, 0, "an internal error"),
         (4, 0, "pytest was misused"),
         (5, 0, "no tests were collected, so nothing passed"),
-        (0, 1, "pytest exited 0 with a failed test, which is why this hook exists"),
+        (6, 0, "more warnings than --max-warnings allows"),
+        (0, 1, "exit status 0 with a failed test, which is why this hook exists"),
     ],
 )
 def test_anything_but_a_clean_session_is_recorded_as_a_failure(
@@ -91,14 +115,31 @@ def test_anything_but_a_clean_session_is_recorded_as_a_failure(
 
     Exit status 5 means nothing was collected, which a gate must not read as a
     pass; and exit status 0 with a failed test is the Windows behaviour #444 was
-    written for, which is why the verdict needs both halves rather than either.
+    written for. Between them they are why the verdict needs both halves rather
+    than either alone.
     """
     marker = tmp_path / "verdict"
     monkeypatch.setenv("PYTEST_RESULT_MARKER", str(marker))
 
-    root_conftest.pytest_sessionfinish(session(testsfailed=testsfailed), exitstatus)
+    run_hook(root_conftest, session(exitstatus=exitstatus, testsfailed=testsfailed))
 
     assert marker.read_text() == "failure", why
+
+
+def test_the_session_decides_the_verdict_rather_than_the_argument(root_conftest, tmp_path, monkeypatch):
+    """The `exitstatus` argument can be stale by the time this hook writes.
+
+    pytest's terminal reporter raises `session.exitstatus` after the inner
+    session hooks have run, so the argument is the status *before* that. Reading
+    the argument is what would let a `--max-warnings` failure be recorded as a
+    success; this pins the hook to the session instead.
+    """
+    marker = tmp_path / "verdict"
+    monkeypatch.setenv("PYTEST_RESULT_MARKER", str(marker))
+
+    run_hook(root_conftest, session(exitstatus=6), argument_exitstatus=0)
+
+    assert marker.read_text() == "failure"
 
 
 def test_an_xdist_worker_writes_no_verdict(root_conftest, tmp_path, monkeypatch):
@@ -111,7 +152,7 @@ def test_an_xdist_worker_writes_no_verdict(root_conftest, tmp_path, monkeypatch)
     marker = tmp_path / "verdict"
     monkeypatch.setenv("PYTEST_RESULT_MARKER", str(marker))
 
-    root_conftest.pytest_sessionfinish(session(testsfailed=0, worker=True), 0)
+    run_hook(root_conftest, session(worker=True))
 
     assert not marker.exists()
 
@@ -130,19 +171,22 @@ def test_a_relative_marker_is_anchored_to_the_invocation_directory(root_conftest
     monkeypatch.setenv("PYTEST_RESULT_MARKER", "results/verdict")
     monkeypatch.chdir(elsewhere)
 
-    root_conftest.pytest_sessionfinish(session(invocation_dir=invocation_dir), 0)
+    run_hook(root_conftest, session(invocation_dir=invocation_dir))
 
     assert (invocation_dir / "results" / "verdict").read_text() == "success"
     assert not (elsewhere / "results").exists()
 
 
-def test_the_hook_runs_last(root_conftest):
-    """`trylast` so the verdict is written after every other session hook.
+def test_the_hook_is_the_outermost_wrapper(root_conftest):
+    """A wrapper, and `tryfirst`, so that it writes after every other session hook.
 
-    One of those writes the HTML report the job uploads; a verdict recorded
-    before them would be a verdict for a session that had not finished.
+    pytest's terminal reporter is a wrapper here too, and it can still raise
+    `session.exitstatus` after the inner hooks return. Only the outermost
+    wrapper's code after the yield is guaranteed to see that final status.
     """
-    assert root_conftest.pytest_sessionfinish.pytest_impl["trylast"] is True
+    options = root_conftest.pytest_sessionfinish.pytest_impl
+    assert options["wrapper"] is True
+    assert options["tryfirst"] is True
 
 
 def test_the_repository_root_is_where_the_hook_lives():
@@ -163,3 +207,57 @@ def test_it_needs_nothing_from_partcad(root_conftest):
         if line.startswith(("import ", "from ")):
             module = line.split()[1].split(".")[0]
             assert module in sys.stdlib_module_names or module == "pytest", line
+
+
+def real_pytest_run(tmp_path, *arguments):
+    """Run pytest for real, in its own process, with the repository's own hook.
+
+    A stand-in session cannot show *when* this hook runs relative to pytest's
+    own, which is the whole of what the two tests below are about. The copy is
+    the real file; `cwd` is a directory with no `pyproject.toml`, so the
+    repository's `addopts` do not follow it in.
+    """
+    (tmp_path / "conftest.py").write_text(CONFTEST.read_text())
+    (tmp_path / "test_warns.py").write_text(textwrap.dedent("""
+            import warnings
+
+            def test_warns():
+                warnings.warn("a warning", UserWarning)
+            """))
+    marker = tmp_path / "verdict"
+    environment = dict(os.environ, PYTEST_RESULT_MARKER=str(marker))
+    environment.pop("PYTEST_ADDOPTS", None)
+
+    completed = subprocess.run(
+        [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-q", *arguments],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+    return completed, marker.read_text() if marker.exists() else None
+
+
+def test_a_real_clean_run_records_a_success(tmp_path):
+    """The control for the regression below: without the flag, this run passes.
+
+    Without it the test below would pass even if the hook had stopped writing
+    anything at all.
+    """
+    completed, verdict = real_pytest_run(tmp_path)
+
+    assert completed.returncode == 0, completed.stdout
+    assert verdict == "success"
+
+
+def test_a_real_max_warnings_failure_records_a_failure(tmp_path):
+    """The regression: pytest raises the status after the inner session hooks run.
+
+    The same run, with `--max-warnings=0`, exits 6 while every test passed. A
+    hook reading its `exitstatus` argument records "success" here and the gate
+    accepts a session pytest called a failure.
+    """
+    completed, verdict = real_pytest_run(tmp_path, "--max-warnings=0")
+
+    assert completed.returncode == 6, completed.stdout
+    assert verdict == "failure"
