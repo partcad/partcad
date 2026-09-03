@@ -753,11 +753,18 @@ def test_docker_that_does_not_answer_names_blender_and_docker(part, docker, conv
 
 
 def test_macos_runs_the_executable_inside_the_bundle(monkeypatch):
-    """`open -a` hands a running Blender nothing at all, and the arguments are the point."""
+    """`open -a` hands a running Blender nothing at all, and the arguments are the point.
+
+    The two paths are built with `os.path.join`, the way `native_command` builds
+    them, rather than spelled out with slashes. This test runs on every platform
+    -- including Windows, where `os.path.join` uses a backslash, so a hand-spelled
+    "/Applications/Blender.app" is not the string the code under test compares
+    against and the mocked `isdir` never matches.
+    """
     monkeypatch.setattr(external.platform, "system", lambda: "Darwin")
     monkeypatch.setattr(external.shutil, "which", lambda _name: None)
-    bundle = "/Applications/Blender.app"
-    executable = bundle + "/Contents/MacOS/Blender"
+    bundle = os.path.join("/Applications", "Blender.app")
+    executable = os.path.join(bundle, external.BLENDER.macos_executable)
     monkeypatch.setattr(external.os.path, "isdir", lambda path: path == bundle)
     monkeypatch.setattr(external.os.path, "isfile", lambda path: path == executable)
 
@@ -773,7 +780,7 @@ def test_macos_opens_the_bundle_for_an_application_that_takes_a_file(monkeypatch
     """
     monkeypatch.setattr(external.platform, "system", lambda: "Darwin")
     monkeypatch.setattr(external.shutil, "which", lambda _name: None)
-    bundle = "/Applications/FreeCAD.app"
+    bundle = os.path.join("/Applications", "FreeCAD.app")
     monkeypatch.setattr(external.os.path, "isdir", lambda path: path == bundle)
 
     assert external.native_command(external.FREECAD) == ["open", "-a", bundle]
