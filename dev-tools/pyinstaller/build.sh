@@ -302,17 +302,26 @@ fi
 # took 75 seconds to fail at the OS level, and a stalled transfer would have sat
 # there until the job's own deadline.
 #
-# Two things are deliberately NOT retried. A 4xx is an answer rather than a
+# Three things are deliberately NOT retried. A 4xx is an answer rather than a
 # hiccup -- the URL is wrong, and asking four more times will not make it right.
-# And a checksum mismatch stays a hard failure below: retrying it would paper
-# over the truncated-or-substituted download that the checksum is there to
-# catch.
+# A certificate failure is the one TLS error that means what it says, so only
+# the abrupt-EOF one is retried and `ssl.SSLError` as a whole is not: a bundle
+# that fetched its payload from something it could not authenticate is worse
+# than a bundle that failed to build. And a checksum mismatch stays a hard
+# failure below: retrying it would paper over the truncated-or-substituted
+# download that the checksum is there to catch.
+#
+# The EOF case has to be named because the read happens outside `urlopen`:
+# `do_open` wraps a handshake-time OSError into a URLError, but a TLS EOF part
+# way through `copyfileobj` is raised bare, and an 18 MB payload is a lot of
+# transfer to leave unguarded.
 fetch_and_verify() {
   local url="$1" destination="$2"
 
   "${PYTHON}" - "${url}" "${destination}" <<'FETCH'
 import http.client
 import shutil
+import ssl
 import sys
 import time
 import urllib.error
@@ -335,7 +344,16 @@ def fetch(url, destination):
             if failure.code < 500 or attempt == ATTEMPTS:
                 raise
             reason = failure
-        except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError) as failure:
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            http.client.HTTPException,
+            ConnectionError,
+            # A TLS connection dropped without a close_notify. Named on its own
+            # rather than catching ssl.SSLError, which would also swallow a
+            # certificate failure -- see the note above.
+            ssl.SSLEOFError,
+        ) as failure:
             if attempt == ATTEMPTS:
                 raise
             reason = failure
