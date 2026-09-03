@@ -487,3 +487,15 @@ Problems view. It answers the same question from the package contents it has
 already loaded, which is the declaration itself rather than a guess at it, and
 falls back to the command's own answer for a file no loaded package mentions.
 Set ``partcad.lint.enabled`` to ``false`` to turn that off.
+
+``partcad.yaml`` is checked the same way, by the same checker, against the
+configuration schema (``src/partcad_utils/schema/partcad.json``) -- see
+:doc:`configuration`. It is a Jinja2 template too, so it is masked before
+parsing exactly as an ASSY file is, and it has no assembly/scene flavor:
+nothing points at a package configuration, so ``--schema`` does not apply to
+one.
+
+  .. code-block:: shell
+
+    pc lint --file partcad.yaml
+    pc lint -f PartcadSchema     # the same check over a whole package

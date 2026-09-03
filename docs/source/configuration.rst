@@ -115,6 +115,34 @@ instance. This is intentional -- referencing two copies of the same package at
 once is almost always a mistake, and the alternative would be an implicit,
 easily-missed dependency on the upstream package.
 
+==========
+Validation
+==========
+
+``partcad.yaml`` is checked against a JSON schema
+(``src/partcad_utils/schema/partcad.json``) that describes everything below:
+which sections exist, which fields each kind of declaration takes, and which of
+them exclude or require one another.
+
+Run the check over a package, or over the file alone:
+
+  .. code-block:: shell
+
+    pc lint                          # every check, over the package
+    pc lint -f PartcadSchema         # this one only
+    pc lint --file partcad.yaml      # no package, no daemon - just the file
+
+Every finding names the line and column it came from. ``partcad.yaml`` is a
+Jinja2 template rendered to YAML before it is parsed (see ``includePaths``
+below), so the checker masks each template construct before parsing rather than
+rendering the file, which would need the values the template is waiting for. It
+is the same checker :doc:`ASSY files <assy>` go through, and the `PartCAD
+extension for VS Code
+<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ runs it
+on the open document -- so a mistyped section is underlined as it is typed,
+including in the file that is stopping the package from loading at all. Set
+``partcad.lint.enabled`` to ``false`` to turn that off.
+
 ============
 Dependencies
 ============

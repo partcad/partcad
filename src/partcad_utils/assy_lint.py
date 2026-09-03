@@ -3,13 +3,19 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Position-accurate syntax and schema checking for PartCAD's ASSY files.
+"""Position-accurate syntax and schema checking for PartCAD's YAML documents.
 
-Every ASSY (``*.assy``) file is a Jinja2 template that is rendered into YAML and
-then has to conform to a JSON schema. That is three error classes a user can
-hit -- a broken template, YAML that does not parse, and YAML that parses but
-does not match the schema -- and an editor is only useful if it can point at the
-*source* line of each one.
+PartCAD writes two kinds of them, and they are the same kind of document: an
+ASSY file (``*.assy``) and a package configuration (``partcad.yaml``) are both
+Jinja2 templates that are rendered into YAML and then have to conform to a JSON
+schema. (``partcad.yaml`` is rendered by `ProjectLocal`, with an
+``includePaths`` of its own to pull fragments in.) That is three error classes a
+user can hit in either of them -- a broken template, YAML that does not parse,
+and YAML that parses but does not match the schema -- and an editor is only
+useful if it can point at the *source* line of each one.
+
+Which schema governs a file is `schema_for_file`, and it is the only thing that
+differs between the two: everything below is about the shape they share.
 
 Rendering the template first is not an option here: rendering needs the
 parameter values, which are only known once the whole package is loaded, and it
@@ -33,12 +39,14 @@ lost information is dropped rather than reported. That trades a missed error for
 never underlining correct code, which is the right trade for an editor.
 
 It lives here, next to ``framing`` and ``workspace``, because neither end owns
-it. The daemon checks a package's ASSY files when `pc lint` walks the package
-graph; every client checks the one file somebody is editing, in its own process
+it. The daemon checks a package's files when `pc lint` walks the package graph;
+every client checks the one file somebody is editing, in its own process
 (`partcad_client.lint`). Both are answering the same question about the same
 documents, so a copy on each side is a copy that can disagree -- and a
 disagreement here means the editor and CI contradicting each other about a file.
-Nothing in this module needs a loaded PartCAD context, or ``partcad`` at all.
+Nothing in this module needs a loaded PartCAD context, or ``partcad`` at all --
+which is why both schemas are packaged beside it rather than under ``partcad``,
+where reaching one would import the CAD kernel to read a JSON file.
 """
 
 import copy
@@ -109,12 +117,20 @@ _VALUE_VALIDATORS = frozenset(
 _KEY_VALIDATORS = frozenset({"required", "anyOf", "oneOf", "not", "dependencies"})
 
 ASSY_SCHEMA = "assy.json"
+PARTCAD_SCHEMA = "partcad.json"
 
-# File extensions whose content this module knows how to check. `partcad.yaml`
-# is deliberately absent: it is checked by `partcad.lint.schema.SchemaLinting`,
-# which reports per-package rather than per-position, and turning its schema
-# loose on an editor would surface every gap in it as a squiggle on a working
-# file.
+# What governs a file, by name and then by extension. A package configuration is
+# recognised by its whole filename because that is what makes it one: PartCAD
+# looks for `partcad.yaml` by name, and a `parts.yaml` beside it is somebody's
+# own file that nothing here should have an opinion about.
+#
+# Both lookups are case-insensitive, so a `Logo.ASSY` or a `PartCAD.yaml` on a
+# case-insensitive filesystem is checked rather than silently skipped -- the
+# package walk and the editor have to agree about which files are checked at all,
+# not only about what they say.
+_SCHEMA_BY_FILENAME = {
+    "partcad.yaml": PARTCAD_SCHEMA,
+}
 _SCHEMA_BY_EXTENSION = {
     ".assy": ASSY_SCHEMA,
 }
@@ -199,7 +215,21 @@ def get_schema(filename: str) -> dict:
 
 def schema_name_for_file(path: str):
     """Return the schema filename that governs ``path``, or None if unknown."""
-    return _SCHEMA_BY_EXTENSION.get(os.path.splitext(os.path.basename(path))[1].lower())
+    name = os.path.basename(path).lower()
+    if name in _SCHEMA_BY_FILENAME:
+        return _SCHEMA_BY_FILENAME[name]
+    return _SCHEMA_BY_EXTENSION.get(os.path.splitext(name)[1])
+
+
+def is_assy_file(path: str) -> bool:
+    """Whether ``path`` is an ASSY file, and so has an assembly/scene flavor.
+
+    A `partcad.yaml` has one schema and no flavor: nothing points at a package
+    configuration the way an `assemblies:` or a `scenes:` entry points at an
+    ASSY file. Callers that work a flavor out ask this first, so that they do
+    not spend the search -- or report an answer -- for a file it cannot apply to.
+    """
+    return schema_name_for_file(path) == ASSY_SCHEMA
 
 
 def scene_schema(schema: dict) -> dict:
@@ -230,11 +260,19 @@ def scene_schema(schema: dict) -> dict:
 
 
 def schema_for_file(path: str, flavor: str = FLAVOR_ASSEMBLY):
-    """The schema that governs ``path`` when read as ``flavor``, or None."""
+    """The schema that governs ``path`` when read as ``flavor``, or None.
+
+    ``flavor`` only means anything for an ASSY file; it is ignored for a
+    `partcad.yaml`, which has one schema. A caller that passes one anyway (an
+    editor sending the same parameters for every document, `pc lint --file
+    --schema scene` naming a configuration by mistake) gets the configuration
+    schema rather than a scene-flavored derivative of it, which would be a
+    schema forbidding a `how` no package configuration has.
+    """
     name = schema_name_for_file(path)
     if name is None:
         return None
-    if flavor != FLAVOR_SCENE:
+    if flavor != FLAVOR_SCENE or name != ASSY_SCHEMA:
         return get_schema(name)
     # Cached like the file-backed schemas beside it: an editor checks the same
     # document on every keystroke, and deriving it each time would deep-copy
@@ -449,13 +487,22 @@ def _unexpected_keys(error) -> list:
 
 
 def _most_specific(error):
-    """Descend into a failed anyOf/oneOf for the most informative sub-error."""
-    while error.context:
-        better = jsonschema.exceptions.best_match(error.context)
-        if better is None or better is error:
-            break
-        error = better
-    return error
+    """Descend into a failed anyOf/oneOf for the most informative sub-error.
+
+    ``best_match`` is handed the error itself rather than its ``context``, which
+    is what makes it descend: given a list it takes the *most* relevant member
+    and then walks down through that member's own branches, discarding a branch
+    only when two of them are equally plausible. Given a ``context`` it took the
+    least relevant of the alternatives instead -- so a part declaration failing
+    the `oneOf` of "a path string" and "a declaration object" was reported
+    against the string branch, and a bad ``axis`` came out as "is not of type
+    'string'" rather than as "[1, 2] is too short".
+
+    Answering the same way `jsonschema.validate()` does is the point: that is
+    the wording `pc lint` printed for a `partcad.yaml` before this checker
+    reported it, and the wording the schema's own error messages are written to.
+    """
+    return jsonschema.exceptions.best_match([error]) or error
 
 
 def _describe(error):

@@ -291,6 +291,6 @@
     "devel"
   ],
   "yaml.schemas": {
-    "src/partcad/schema/partcad.json": "*/partcad.yaml"
+    "src/partcad_utils/schema/partcad.json": "*/partcad.yaml"
   }
 }
