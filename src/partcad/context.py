@@ -856,6 +856,25 @@ class Context:
         """Thin alias for convert_sketch(sketch_spec, "build123d", params)."""
         return self.convert_sketch(sketch_spec, "build123d", params)
 
+    def get_material(self, material_spec, quiet=False):
+        """The material named by '<package>:<name>', or None.
+
+        Relative to the current package, like every other object accessor here,
+        so that a part in the package being worked on can name a material of
+        its own without spelling out where it is.
+        """
+        project_name, material_name = resolve_resource_path(
+            self.current_project_path,
+            material_spec,
+        )
+        prj = self.get_project(project_name)
+        if prj is None:
+            if not quiet:
+                pc_logging.error("Package %s not found" % project_name)
+            return None
+        pc_logging.debug("Retrieving %s from %s" % (material_name, project_name))
+        return prj.get_material(material_name, quiet=quiet)
+
     def _get_interface(self, interface_spec):
         project_name, interface_name = resolve_resource_path(
             self.current_project_path,

@@ -26,6 +26,7 @@ from . import assembly, assembly_config, assembly_guide
 from . import assembly_factory_alias as afa
 from . import consts, document as pc_document, factory, interface
 from . import logging as pc_logging
+from . import material, material_config
 from . import output
 from . import part_config
 from . import part_factory_alias as pfa
@@ -64,6 +65,7 @@ if TYPE_CHECKING:
 # 'partcad.yaml' section that declares them. Kept as data so that introducing a
 # new kind of object does not require touching the per-kind accessor plumbing.
 OBJECT_KINDS = (
+    "material",
     "interface",
     "sketch",
     "part",
@@ -75,6 +77,9 @@ OBJECT_KINDS = (
     "partType",
 )
 OBJECT_KIND_SECTIONS = {
+    # What a part is made of, rather than a part: a 'Material' is not a shape
+    # and nothing constructs it, so it has neither a factory nor a 'type'.
+    "material": "materials",
     "interface": "interfaces",
     "sketch": "sketches",
     "part": "parts",
@@ -169,6 +174,20 @@ class Project(project_config.Configuration):
     providers: dict[str, plugin_provider.Provider]
     repositories: dict[str, plugin_repository.Repository]
     software: dict[str, pc_software.Software]
+
+    class MaterialLock(object):
+        def __init__(self, prj, material_name: str):
+            prj.material_locks_lock.acquire()
+            if not material_name in prj.material_locks:
+                prj.material_locks[material_name] = threading.Lock()
+            self.lock = prj.material_locks[material_name]
+            prj.material_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
 
     class InterfaceLock(object):
         def __init__(self, prj, interface_name: str):
@@ -345,6 +364,10 @@ class Project(project_config.Configuration):
         }
 
         # The instantiated objects of each kind, filled lazily by the getters.
+        self.materials = {}
+        self.material_locks = {}
+        self.material_locks_lock = threading.Lock()
+
         self.interfaces = {}
         self.interface_locks = {}
         self.interface_locks_lock = threading.Lock()
@@ -463,6 +486,10 @@ class Project(project_config.Configuration):
         # here depends on it having been read, and a part that references one
         # resolves it by name when asked rather than at load time.
         self.init_software()
+        # Before the objects that name one: a material is data, so reading it
+        # cannot fail on anything that is not read yet, and having them all in
+        # place first means a part's 'material' resolves without a second pass.
+        self.init_materials()
         self.init_sketches()
         self.init_interfaces()  # After sketches
         self.init_mates()  # After interfaces
@@ -549,6 +576,10 @@ class Project(project_config.Configuration):
     # Backward-compatible views onto the object-access layer. These keep the
     # historical 'self.<kind>_configs' attribute name working (now sourced
     # through the accessor, so plugin packages enumerate lazily here too).
+    @property
+    def material_configs(self) -> dict:
+        return self.object_configs("material")
+
     @property
     def interface_configs(self) -> dict:
         return self.object_configs("interface")
@@ -721,6 +752,73 @@ class Project(project_config.Configuration):
 
     def get_interface_config(self, interface_name):
         return self.object_config("interface", interface_name)
+
+    def init_materials(self):
+        for material_name in self.object_names("material"):
+            # Per object, exactly as 'init_objects' does it and for the same
+            # reason: an unreadable declaration costs the user that one
+            # material rather than every material declared after it.
+            try:
+                self.init_material_by_config(self.get_material_config(material_name), material_name)
+            except Exception as e:
+                self.record_broken_object("material", material_name, e)
+
+    def init_material_by_config(self, config, material_name=None, source_project=None):
+        """Build one material and put it in this package.
+
+        Built here rather than through 'init_object_by_config' because that
+        dispatches on a 'type' to a factory, and a material has neither: it is
+        declared data, like an interface. Normalization still happens - it is
+        what expands the short form - and it happens before the name is read
+        back out, because in the short form the declaration is a string and has
+        no name in it yet.
+        """
+        if source_project is None:
+            source_project = self
+        if material_name is None:
+            material_name = config["name"]
+        config = material_config.MaterialConfiguration.normalize(
+            material_name, config, "%s:%s" % (self.name, material_name)
+        )
+        self.register_object(
+            "material",
+            material_name,
+            material.Material(material_name, source_project.name, config),
+        )
+
+    def get_material(self, material_name, quiet=False) -> Optional[material.Material]:
+        """The material of this package called 'material_name', or None.
+
+        Built directly rather than through 'get_object' for the same reason
+        'get_interface' is: there is no factory to dispatch on a 'type', and no
+        parameters to instantiate a separate object for. What remains is the
+        two-step look under the lock that every kind needs - the object may
+        have been created while this thread waited for the lock, and creating a
+        second one would collide in 'register_object'.
+        """
+        with self.lock:
+            existing = self.materials.get(material_name)
+        if existing is not None:
+            return existing
+
+        with Project.MaterialLock(self, material_name):
+            if self.materials.get(material_name) is not None:
+                return self.materials[material_name]
+
+            config = self.get_material_config(material_name)
+            if config is None:
+                if not quiet:
+                    pc_logging.error(
+                        "Material '%s' not found in '%s'",
+                        material_name,
+                        self.name,
+                    )
+                return None
+            self.init_material_by_config(config, material_name)
+            return self.materials[material_name]
+
+    def get_material_config(self, material_name):
+        return self.object_config("material", material_name)
 
     def init_interfaces(self):
         for interface_name in self.object_names("interface"):
