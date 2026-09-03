@@ -88,6 +88,7 @@ def bitmap_header(path):
 
 @pytest.mark.parametrize("path", sorted(WIZARD), ids=lambda path: path.name)
 def test_the_wizard_image_is_there_and_is_the_size_inno_draws(path):
+    """A bitmap Inno Setup has to stretch is one somebody drew at the wrong size."""
     assert path.is_file(), f"{path} is missing; regenerate it as README.md describes"
     width, height, depth = bitmap_header(path)
     assert (width, abs(height)) == WIZARD[path]

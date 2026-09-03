@@ -181,6 +181,7 @@ def test_the_examples_are_the_ones_the_build_ships(examples):
 
 
 def test_the_icon_the_manifest_names_is_the_one_the_build_copies(manifest):
+    """The extension's icon is staged by the build, so two files have to agree."""
     # `package.json` names an icon that is not in `bootstrap/`: the build copies
     # it in from `ide/vscode/resources`, so that the IDE and the extension wear
     # the same one and there is nothing to keep in step. `vsce` fails outright
