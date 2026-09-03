@@ -724,46 +724,56 @@ jobs:
       # configuration at all, which is the same channel policy for the same
       # reason -- see the comments in `.github/actions/setup-all/action.yml`.
       #
-      # Taking one *off* PATH rather than trusting it to be absent: the hosted
-      # images ship a conda (`$CONDA`) and put it on PATH on some of them --
-      # ubuntu-24.04 does. `partcad_utils.conda` prefers the host's by design, so
-      # one left there would quietly turn this back into a test of the runner's
-      # conda, which is exactly the mistake that let the bundle ship without one.
-      # Matched by looking for the executable in each PATH entry rather than by
-      # the entry's name, so a workspace path that happens to spell "conda" is
-      # not dropped. POSIX only; this job runs on Linux and macOS.
-      - name: Take any host conda off PATH
+      # Taking one *out of the way* rather than trusting it to be absent: the
+      # hosted images ship a conda (`$CONDA`) and put a launcher for it on PATH
+      # on some of them -- ubuntu-24.04 has `/usr/bin/conda`.
+      # `partcad_utils.conda` prefers the host's by design, so one left reachable
+      # would quietly turn this back into a test of the runner's conda, which is
+      # exactly the mistake that let the bundle ship without one.
+      #
+      # The launcher itself, not the directory holding it: it lives in `/usr/bin`
+      # alongside every other system tool, so dropping that directory from PATH
+      # takes `sudo`, `apt-get` and the rest of the job with it. Only what
+      # `command -v` actually resolves is removed, and only from a hosted runner
+      # that is discarded when the job ends. `$CONDA` is untouched, so a job that
+      # wants the runner's conda still has it.
+      - name: Take the runner's conda out of the way
         shell: bash
         run: |
-          kept=""
-          IFS=':' read -ra entries <<< "${PATH}"
-          for entry in "${entries[@]}"; do
-            if [ -x "${entry}/conda" ] || [ -x "${entry}/mamba" ]; then
-              echo "taking '${entry}' off PATH"
-              continue
+          for _ in 1 2 3 4 5; do
+            found="$(command -v mamba || command -v conda || true)"
+            [ -n "${found}" ] || break
+            echo "removing the launcher at '${found}' (CONDA=${CONDA:-unset} is left alone)"
+            sudo rm -f "${found}"
+            # Fail on the first one that will not go, rather than looping over
+            # it and leaving the check below to report a puzzle.
+            if [ -e "${found}" ]; then
+              echo "::error::could not remove the conda launcher at '${found}'"
+              exit 1
             fi
-            kept="${kept:+${kept}:}${entry}"
           done
-          # An empty PATH would fail every step below with "command not found"
-          # and nothing saying why, so refuse to write one.
-          if [ -z "${kept}" ]; then
-            echo "::error::every PATH entry held a conda; refusing to leave this job with no PATH"
-            exit 1
-          fi
-          echo "PATH=${kept}" >> "${GITHUB_ENV}"
 
-      # Asserted after the fact, and under `bash -el` -- the shell the steps
-      # below use. A login shell re-reads the profile scripts, so "PATH has no
-      # conda in it" is only true if it is still true there.
-      - name: Check that no conda is reachable
+      # Asserted afterwards rather than assumed, and under `bash -el` -- the
+      # shell the steps below use. A login shell re-reads the profile scripts, so
+      # "no conda is reachable" is only true if it is still true there. The
+      # second half is this step's own lesson: the first attempt at it removed
+      # `/usr/bin` from PATH, which passed this check and broke everything after
+      # it, so what the job needs is checked too.
+      - name: Check that no conda is reachable, and the rest of PATH survived
         shell: bash -el {0}
         run: |
           if command -v mamba >/dev/null 2>&1 || command -v conda >/dev/null 2>&1; then
-            echo "::error::a conda is still on PATH ($(command -v mamba || command -v conda)),"
+            echo "::error::a conda is still reachable ($(command -v mamba || command -v conda)),"
             echo "::error::so this job would exercise it rather than the one the bundle carries."
             exit 1
           fi
-          echo "no conda on PATH: the bundle's own is the only one available"
+          for needed in sudo tar curl git sh; do
+            if ! command -v "${needed}" >/dev/null 2>&1; then
+              echo "::error::'${needed}' is no longer on PATH; the step above took too much with it"
+              exit 1
+            fi
+          done
+          echo "no conda reachable, and PATH still has what this job runs"
 
       # The libraries the bundled OpenSCAD AppImage resolves from the host: it is
       # not fully self-contained (see dev-tools/pyinstaller/build.sh). A desktop
