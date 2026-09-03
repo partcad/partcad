@@ -288,15 +288,67 @@ fi
 # same shape -- OpenSCAD's reads "<hash>  releases/<name>", micromamba's is the
 # bare hash with no trailing newline -- so the first whitespace-separated field
 # is what is compared and anything after it ignored.
+#
+# The download retries, because a single connection failure here fails the whole
+# bundle. This is the only network operation in the build without one, and it
+# cost a run: "Fetching micromamba 2.9.0-0" died on
+# "TimeoutError: [Errno 60] Operation timed out" at connect, after the wheel had
+# already built, and took the `Examples` job that depends on this bundle with it.
+# The same shape as `.github/actions/setup-all/mamba-create-retry.sh`, which
+# exists because conda-forge downloads flake in exactly this way.
+#
+# `urlopen` rather than `urlretrieve` only because `urlretrieve` takes no
+# timeout, and an unbounded read is the other half of this: the connect above
+# took 75 seconds to fail at the OS level, and a stalled transfer would have sat
+# there until the job's own deadline.
+#
+# Two things are deliberately NOT retried. A 4xx is an answer rather than a
+# hiccup -- the URL is wrong, and asking four more times will not make it right.
+# And a checksum mismatch stays a hard failure below: retrying it would paper
+# over the truncated-or-substituted download that the checksum is there to
+# catch.
 fetch_and_verify() {
   local url="$1" destination="$2"
 
   "${PYTHON}" - "${url}" "${destination}" <<'FETCH'
+import http.client
+import shutil
 import sys
+import time
+import urllib.error
 import urllib.request
 
+ATTEMPTS = 5
+TIMEOUT = 60
+
+
+def fetch(url, destination):
+    """Download one file, retrying the failures that are worth retrying."""
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
+                with open(destination, "wb") as out:
+                    shutil.copyfileobj(response, out)
+            return
+        except urllib.error.HTTPError as failure:
+            # Must come first: HTTPError is a URLError.
+            if failure.code < 500 or attempt == ATTEMPTS:
+                raise
+            reason = failure
+        except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError) as failure:
+            if attempt == ATTEMPTS:
+                raise
+            reason = failure
+        delay = 2**attempt
+        print(
+            "    fetch failed (%s); retrying in %ds [attempt %d/%d]" % (reason, delay, attempt, ATTEMPTS),
+            file=sys.stderr,
+        )
+        time.sleep(delay)
+
+
 for url, destination in ((sys.argv[1], sys.argv[2]), (sys.argv[1] + ".sha256", sys.argv[2] + ".sha256")):
-    urllib.request.urlretrieve(url, destination)
+    fetch(url, destination)
 FETCH
 
   "${PYTHON}" - "${destination}" <<'VERIFY'
