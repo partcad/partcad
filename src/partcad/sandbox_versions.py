@@ -33,24 +33,27 @@ TYPING_EXTENSIONS = "typing_extensions==4.16.0"
 # nlopt release covers every platform PartCAD runs on, so pip picks per platform.
 #
 # 2.11.0 publishes no macOS x86_64 wheel at all -- five for arm64, none for
-# Intel -- and neither release ships an sdist, so there is nothing for pip to
-# fall back to and build. Pinned exactly at 2.11.0 this left every Intel Mac
+# Intel -- and it ships no sdist either, so there is nothing for pip to fall back
+# to and build. Pinned exactly at 2.11.0 this left every Intel Mac
 # unable to provision a CAD sandbox at all: "Could not find a version that
 # satisfies the requirement nlopt==2.11.0", and then every script-defined part
 # failing on an import of something that was never installed. It went unnoticed
 # because nothing ran a sandbox on that platform until the macos-15-x86_64
 # bundle got an "Examples" job in "build-standalone.yml".
 #
-# 2.9.1 is the newest release that does publish Intel macOS wheels, so the
-# specifier admits both and each platform resolves to the newest it can install:
-# 2.11.0 on Linux, Windows and Apple silicon, 2.9.1 on Intel macOS.
+# 2.9.1 is where Intel macOS support stops: it publishes cp39 through cp313 for
+# that platform, and 2.10.0 and 2.11.0 publish none at all. So the range admits
+# three releases -- 2.9.1, 2.10.0 and 2.11.0 -- and each platform resolves to the
+# newest it can install: 2.11.0 on Linux, Windows and Apple silicon, 2.9.1 on
+# Intel macOS. 2.10.0 is never the answer anywhere, having the same platform
+# coverage as 2.11.0 and a lower version.
 #
-# The bound is closed on both ends, which keeps this as deterministic as an
-# exact pin: versions only ever go up, so the candidate set (2.4.2.post1 through
-# 2.11.0) cannot grow. And nlopt is deliberately not in the "pins must be exact"
-# set that 'test_cad_pins_are_exact' guards -- that rule exists because two OCP
-# builds in one sandbox crash the wrapper with no traceback, and nlopt writes no
-# part of the OCP native module.
+# The bound is closed on both ends, which keeps this as deterministic as an exact
+# pin: versions only ever go up, so those three are the whole candidate set for
+# good. And nlopt is deliberately not in the "pins must be exact" set that
+# 'test_cad_pins_are_exact' guards -- that rule exists because two OCP builds in
+# one sandbox crash the wrapper with no traceback, and nlopt writes no part of
+# the OCP native module.
 #
 # One gap remains and this does not close it: nlopt publishes Intel macOS wheels
 # up to cp313 only, so a 3.14 sandbox there still finds no candidate. The default
