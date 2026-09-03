@@ -80,6 +80,26 @@ IN_PROCESS = {
     "system/set/telemetry/sentryDsn.py": "writes the client's own user configuration",
 }
 
+# The one thing an in-process command may ask the daemon for, and what it may
+# ask. An in-process command works on client-only state, and that stays true of
+# every command listed above -- but `pc open` has one step in the middle that is
+# not client work at all: an application that reads meshes has to be handed one,
+# and turning a solid into a mesh drives a CAD wrapper, whose Python runtime
+# lives in the daemon's environment and may not exist on this machine.
+#
+# So the *conversion* crosses the wire and the *window* does not, which is the
+# boundary applied rather than bent: there is still no `open` method in the
+# daemon's registry and none may be added. What it sends is `adhoc.convert` --
+# file in, file out, no context, nothing left on the daemon to go stale, and
+# exactly what `pc adhoc convert` sends for the same job.
+#
+# Each entry names the methods that command may send. A method that is not
+# listed fails the test below, so widening this is a decision somebody makes on
+# purpose, in this file, next to the reason.
+IN_PROCESS_DAEMON_CALLS = {
+    "open.py": ("adhoc.convert",),
+}
+
 # Commands that have not been migrated to the daemon yet. This list is a debt
 # ledger, not a target: it may only shrink. Nothing new belongs here -- a new
 # command that needs the package graph or a CAD wrapper is written as a thin
@@ -325,6 +345,7 @@ def test_in_process_commands_do_not_call_the_daemon():
         for module in COMMAND_MODULES
         if module.rel in IN_PROCESS
         for lineno, method in module.run_calls
+        if method not in IN_PROCESS_DAEMON_CALLS.get(module.rel, ())
     ]
     offenders += [
         (module.rel, lineno, "<computed>")
@@ -344,7 +365,38 @@ def test_in_process_commands_do_not_call_the_daemon():
                 side entirely -- splitting it leaves half of the work reading a context the
                 other half already invalidated. Move the whole command, and drop it from
                 IN_PROCESS at the top of this file.
+
+                The one exception is a step that is neither: contextless, file-in file-out
+                work that only the daemon's CAD runtime can do, wrapped in a command whose
+                result belongs on this machine. `pc open` converting a solid to a mesh for
+                Blender is that, and IN_PROCESS_DAEMON_CALLS at the top of this file is
+                where such a step is named -- one method at a time, with the reason.
                 """).format(details=details))
+
+
+def test_in_process_daemon_calls_are_not_stale():
+    """The exception list is the contract too; an entry nobody uses widens it silently."""
+    missing = [rel for rel in IN_PROCESS_DAEMON_CALLS if rel not in IN_PROCESS]
+    assert not missing, (
+        f"IN_PROCESS_DAEMON_CALLS names commands that are not in-process: {', '.join(sorted(missing))}. "
+        "A command that is not in-process is a thin client and needs no exemption."
+    )
+    called = {
+        (module.rel, method)
+        for module in COMMAND_MODULES
+        if module.rel in IN_PROCESS_DAEMON_CALLS
+        for _lineno, method in module.run_calls
+    }
+    unused = sorted(
+        f"{rel} -> {method}"
+        for rel, methods in IN_PROCESS_DAEMON_CALLS.items()
+        for method in methods
+        if (rel, method) not in called
+    )
+    assert not unused, (
+        f"These daemon calls are allowed for an in-process command but nothing makes them: {', '.join(unused)}. "
+        "Remove them -- an exemption nobody is using is one nobody is watching."
+    )
 
 
 def test_boundary_lists_have_no_stale_entries():

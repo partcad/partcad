@@ -31,11 +31,12 @@ Objects
 - **Display** (inspect) a part, assembly, scene, sketch, or interface in the ``PartCAD Viewer``; parts can
   also be opened for display and editing together, or their source edited directly.
 - **Test** a part, assembly, or scene.
-- **Open in >** — Open the object's own source file in the application that made it: **FreeCAD** for a part
-  or an assembly, **Gazebo** for a scene of type ``world``, **KiCad** for a part of type ``kicad``. This runs
+- **Open in >** — Open the object's own source file in the application that made it: **FreeCAD** or
+  **Blender** for a part or an assembly, **Gazebo** for a scene of type ``world``, **KiCad** for a part of
+  type ``kicad``. This runs
   on your machine rather than on the daemon: the extension runs ``pc open`` (see :doc:`cli`), which starts an
   application installed here, or runs one in a container when there is none and ``partcad.open.useDocker``
-  is on.
+  is on. Blender reads meshes, so an object that is not one is converted to STL on the way.
 
 The Explorer also lists the ``software`` a package ships. Selecting one shows its path and its ``fileHash``
 in the Inspector and leaves the ``PartCAD Viewer`` as it is: software is a file, not geometry, so there is

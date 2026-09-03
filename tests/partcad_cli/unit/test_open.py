@@ -12,6 +12,11 @@ reads it, and on a failure the message it carries is the whole answer (which X
 server to install, or how to let PartCAD use a container), so it has to survive
 a non-zero exit rather than be replaced by one.
 
+The one thing this command sends to the daemon is pinned here too: an
+application that reads meshes has to be handed one, and making a mesh out of a
+solid is CAD work. Which method that is, and on what, is the whole contract --
+that it is allowed at all is `test_command_boundary.py`'s to say.
+
 Which side of the command boundary this command is on is checked by
 `test_command_boundary.py`; nothing here starts an application or a container.
 """
@@ -22,6 +27,7 @@ from collections.abc import Iterator
 import pytest
 from click.testing import CliRunner
 from partcad_cli.click.command import cli
+from partcad_cli.click.commands import open as open_command
 from partcad_client import external
 
 
@@ -41,8 +47,20 @@ def opened(monkeypatch):
                 detail="FreeCAD is installed on this machine.",
             )
 
-        def open_file(self, path, tool="freecad", use_docker=False, image=None, log=None):
-            self.calls.append({"path": path, "tool": tool, "use_docker": use_docker, "image": image, "log": log})
+        def open_file(
+            self, path, tool="freecad", use_docker=False, image=None, log=None, object_type=None, transcode=None
+        ):
+            self.calls.append(
+                {
+                    "path": path,
+                    "tool": tool,
+                    "use_docker": use_docker,
+                    "image": image,
+                    "log": log,
+                    "object_type": object_type,
+                    "transcode": transcode,
+                }
+            )
             if self.error:
                 raise self.error
             return self.result
@@ -68,6 +86,8 @@ def test_the_options_reach_the_opener(click_runner: Iterator[CliRunner], opened)
             "use_docker": True,
             "image": "freecad/freecad:weekly",
             "log": opened.calls[0]["log"],
+            "object_type": None,
+            "transcode": opened.calls[0]["transcode"],
         }
     ]
 
@@ -91,6 +111,7 @@ def test_json_reports_what_happened_in_full(click_runner: Iterator[CliRunner], o
         "tool": "freecad",
         "method": "native",
         "path": "/w/cube.step",
+        "source": None,
         "command": ["/usr/bin/freecad", "/w/cube.step"],
         "detail": "FreeCAD is installed on this machine.",
     }
@@ -117,3 +138,81 @@ def test_a_failure_keeps_its_message_under_json(click_runner: Iterator[CliRunner
     reported = json.loads(result.output)
     assert reported["ok"] is False
     assert "XQuartz" in reported["error"]
+
+
+def test_the_declared_type_is_handed_over(click_runner: Iterator[CliRunner], opened) -> None:
+    """A '.py' is three different script types, and the tree knows which."""
+    _invoke(click_runner, "--with", "blender", "--type", "cadquery", "cube.py")
+    assert opened.calls[0]["object_type"] == "cadquery"
+    assert opened.calls[0]["tool"] == "blender"
+
+
+def test_a_conversion_is_the_daemon_s_adhoc_convert(click_runner: Iterator[CliRunner], opened, monkeypatch) -> None:
+    """Making a mesh out of a solid is CAD work, so it crosses the wire.
+
+    The opening does not: what `pc open` sends is the same file-in, file-out
+    conversion `pc adhoc convert` sends, and nothing else.
+    """
+    sent = []
+    monkeypatch.setattr(open_command, "run", lambda cli_ctx, method, params, **kw: sent.append((method, params, kw)))
+
+    _invoke(click_runner, "--with", "blender", "/w/cube.step")
+    opened.calls[0]["transcode"]("/w/cube.step", "step", "/state/cube-0123.stl", "stl")
+
+    assert sent == [
+        (
+            "adhoc.convert",
+            {
+                "kind": "part",
+                "input_type": "step",
+                "output_type": "stl",
+                "input_filename": "/w/cube.step",
+                "output_filename": "/state/cube-0123.stl",
+            },
+            {"needs_context": False},
+        )
+    ]
+
+
+def test_a_failed_conversion_is_reported_like_any_other_reason(
+    click_runner: Iterator[CliRunner], opened, monkeypatch
+) -> None:
+    """A daemon error arrives as a ClickException, and it is a reason like the rest.
+
+    Left to itself it would exit non-zero with the message on stderr, which is
+    exactly what the JSON is there to prevent: the extension shows `error` and
+    has nothing else.
+    """
+    import rich_click as click
+
+    def explode(path, **kwargs):
+        kwargs["transcode"]("/w/cube.step", "step", "/state/cube.stl", "stl")
+
+    monkeypatch.setattr(
+        open_command,
+        "run",
+        lambda *args, **kw: (_ for _ in ()).throw(click.ClickException("The daemon could not read cube.step")),
+    )
+    monkeypatch.setattr(external, "open_file", explode)
+
+    result = _invoke(click_runner, "--json", "--with", "blender", "/w/cube.step")
+
+    assert result.exit_code == 1
+    reported = json.loads(result.output)
+    assert reported["ok"] is False
+    assert "could not read cube.step" in reported["error"]
+
+
+def test_what_was_converted_is_said_as_well_as_what_was_opened(click_runner: Iterator[CliRunner], opened) -> None:
+    """A user who asked for a STEP file has to be told a mesh is what Blender got."""
+    opened.result = external.OpenResult(
+        tool="blender",
+        method="native",
+        path="/state/cube-0123.stl",
+        source="/w/cube.step",
+        command=["/usr/bin/blender"],
+        detail="Blender is installed on this machine.",
+    )
+    result = _invoke(click_runner, "--with", "blender", "/w/cube.step")
+    assert "cube-0123.stl" in result.output
+    assert "cube.step" in result.output
