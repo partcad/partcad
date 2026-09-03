@@ -181,8 +181,10 @@ Nothing else on the system is touched, and no ``sudo`` is asked for. If ``~/.loc
 
 The bundle is around 180MB unpacked and 57MB to download on Linux x86_64, and about half that on macOS and
 on Linux arm64, which carry no bundled OpenSCAD. It carries no CAD kernel: PartCAD builds every shape in a
-conda sandbox it provisions itself, so ``conda`` (or ``mamba``) is a prerequisite here exactly as it is for
-the wheels. ``pc healthcheck`` reports what this machine is missing.
+sandbox it provisions itself, so what is said about ``conda`` for the wheels applies here too: it is not
+required -- PartCAD falls back to a virtual environment of its own -- but it is what lets a package be built
+on a Python version this machine does not have (see :ref:`python-sandbox`). ``pc healthcheck`` reports what
+this machine is missing.
 
 Supported platforms are Linux on x86_64 and arm64, and macOS on Apple silicon. Windows is covered by the
 ``.zip`` archives under :ref:`manual installation <standalone-manual>`.
@@ -341,10 +343,10 @@ The bundle carries the optional extras that the wheels leave to the user, becaus
 extended afterwards: the Python linter (``lint``) is in it, ready to run.
 
 What it does **not** carry is a CAD kernel. The bundle is three console programs, not a library to import, and
-every shape those programs build, render, export or tessellate is produced in the conda sandbox PartCAD
-provisions and comes back as geometry the commands never open themselves. So ``conda`` (or ``mamba``) is as
-much a prerequisite here as it is for the wheels, and leaving OpenCASCADE out is most of why the bundle is
-around 180MB rather than around 1GB.
+every shape those programs build, render, export or tessellate is produced in the sandbox PartCAD provisions
+and comes back as geometry the commands never open themselves. That sandbox is a conda environment where the
+machine has conda and a plain virtual environment otherwise (see :ref:`python-sandbox`); either way, leaving
+OpenCASCADE out of the bundle is most of why it is around 180MB rather than around 1GB.
 
 On Linux x86_64 and on Windows it also carries **OpenSCAD**, which PartCAD runs as an external program to
 build ``.scad`` parts. The bundled copy is used in preference to any OpenSCAD installed on the machine, so that the
@@ -408,7 +410,7 @@ is the packaging: snapd installs it, keeps it up to date, and removes it cleanly
 Two flags need explaining:
 
 * ``--classic`` is the confinement. PartCAD works on your own files -- it reads and writes CAD projects
-  anywhere on disk, clones git repositories, builds conda sandboxes and runs CAD scripts in them, and serves
+  anywhere on disk, clones git repositories, builds sandboxes and runs CAD scripts in them, and serves
   a daemon over a socket that the Visual Studio Code extension connects to. A strictly confined snap could do
   none of that.
 * ``--dangerous`` says the package is not signed by the Snap Store, which a downloaded file is not. It stops
@@ -420,7 +422,7 @@ itself. Without it, the commands are ``partcad``, ``partcad.pc`` and ``partcad.j
 Where it keeps its state
 ========================
 
-Everywhere else, PartCAD keeps its cache, its conda sandboxes and its git clones in ``~/.partcad``. The snap
+Everywhere else, PartCAD keeps its cache, its sandboxes and its git clones in ``~/.partcad``. The snap
 does not write them there. It sets ``PC_INTERNAL_STATE_DIR`` to the per-user directory snapd gives it, so all
 of that lives in ``~/snap/partcad/common`` instead, and ``sudo snap remove --purge partcad`` takes it away
 with the snap.
@@ -501,8 +503,9 @@ The installer is not signed, so SmartScreen shows a warning: choose "More info",
 ``partcad-ide.exe`` without installing anything.
 
 It unpacks to around 500MB: an editor, a Python interpreter, the command line tools and the extensions, all
-in one archive. Like the standalone bundle inside it, it carries no CAD kernel -- shapes are built in a conda
-sandbox, so ``conda`` (or ``mamba``) is still expected on the machine.
+in one archive. Like the standalone bundle inside it, it carries no CAD kernel -- shapes are built in a
+sandbox PartCAD provisions on the machine, using conda where there is conda and a virtual environment of its
+own otherwise (see :ref:`python-sandbox`).
 
 The first start
 ===============

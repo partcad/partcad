@@ -113,6 +113,24 @@ class VenvPythonRuntime(runtime_python.PythonRuntime):
         self.exec_path = self.host_exec_path
         return ["-m", "venv", "--upgrade-deps", self.path]
 
+    def _created(self, exitcode, stderr) -> None:
+        """Accept the environment, or fail with what actually went wrong.
+
+        'run_onced_locked' reports an exit code rather than raising, so a failed
+        '-m venv' -- no ensurepip, a full disk, a directory that cannot be
+        written -- would otherwise be stepped straight past. 'exec_path' would
+        then name an interpreter that was never created, and the first thing the
+        base does with it is install a package: the error the user sees would be
+        that install failing on a missing file, with the creation failure that
+        caused it nowhere in sight.
+        """
+        if exitcode != 0 or not os.path.exists(self.venv_exec_path):
+            raise Exception(
+                "Failed to create the '%s' sandbox at %s: %s"
+                % (self.sandbox, self.path, (stderr or "").strip() or "'-m venv' exited with %s" % exitcode)
+            )
+        self.exec_path = self.venv_exec_path
+
     def once(self):
         if self.provisioned:
             return
@@ -120,8 +138,8 @@ class VenvPythonRuntime(runtime_python.PythonRuntime):
             command = self._create_locked()
             if command:
                 with pc_logging.Action("Venv", self.version, self.path):
-                    self.run_onced_locked(command)
-                self.exec_path = self.venv_exec_path
+                    exitcode, _, stderr = self.run_onced_locked(command)
+                self._created(exitcode, stderr)
         # Outside the lock above rather than inside it: the base takes the same
         # lock, and it is a file lock rather than a re-entrant one.
         super().once()
@@ -133,6 +151,6 @@ class VenvPythonRuntime(runtime_python.PythonRuntime):
             command = self._create_locked()
             if command:
                 with pc_logging.Action("Venv", self.version, self.path):
-                    await self.run_async_onced_locked(command)
-                self.exec_path = self.venv_exec_path
+                    exitcode, _, stderr = await self.run_async_onced_locked(command)
+                self._created(exitcode, stderr)
         await super().once_async()

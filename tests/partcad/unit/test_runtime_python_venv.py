@@ -146,6 +146,51 @@ def test_an_existing_environment_is_not_rebuilt(ctx, tmp_path):
     assert runtime.exec_path == runtime.venv_exec_path
 
 
+def test_a_failed_creation_is_raised_rather_than_stepped_past(ctx, tmp_path):
+    """'run_onced_locked' reports an exit code; it does not raise.
+
+    Without checking it, 'exec_path' would name an interpreter that was never
+    created and the base's first install would fail on the missing file -- so
+    what the user saw would be a pip error, with the ensurepip failure that
+    caused it nowhere in sight.
+    """
+    runtime = ctx.get_python_runtime(VERSION)
+    runtime.path = str(tmp_path / ("pc-py-venv-" + VERSION))
+    runtime.run_onced_locked = lambda *a, **k: (1, "", "ensurepip is not available")
+
+    with pytest.raises(Exception, match="ensurepip is not available"):
+        runtime.once()
+    assert not runtime.provisioned
+    # And it did not leave the interpreter pointing at a file that is not there.
+    assert runtime.exec_path == runtime.host_exec_path
+
+
+def test_the_asynchronous_path_fails_the_same_way(ctx, tmp_path):
+    """'once_async' is the path every render actually takes, so it matters more."""
+    runtime = ctx.get_python_runtime(VERSION)
+    runtime.path = str(tmp_path / ("pc-py-venv-" + VERSION))
+
+    async def failed(*args, **kwargs):
+        return 1, "", "Permission denied"
+
+    runtime.run_async_onced_locked = failed
+
+    with pytest.raises(Exception, match="Permission denied"):
+        asyncio.run(runtime.once_async())
+    assert not runtime.provisioned
+    assert runtime.exec_path == runtime.host_exec_path
+
+
+def test_a_creation_that_writes_no_interpreter_is_a_failure_too(ctx, tmp_path):
+    """A zero exit code is not the same as an environment that exists."""
+    runtime = ctx.get_python_runtime(VERSION)
+    runtime.path = str(tmp_path / ("pc-py-venv-" + VERSION))
+    runtime.run_onced_locked = lambda *a, **k: (0, "", "")
+
+    with pytest.raises(Exception, match="exited with 0|Failed to create"):
+        runtime.once()
+
+
 # --------------------------------------------------------------------------- #
 # What the fallback is                                                        #
 # --------------------------------------------------------------------------- #
