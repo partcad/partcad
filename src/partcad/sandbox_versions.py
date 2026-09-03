@@ -29,7 +29,34 @@ BUILD123D = "build123d==0.11.1"
 CADQUERY = "cadquery==2.8.0"
 OCP_TESSELLATE = "ocp-tessellate==3.4.1"
 TYPING_EXTENSIONS = "typing_extensions==4.16.0"
-NLOPT = "nlopt==2.11.0"
+# A range for the same reason NUMPY below is one, on a different axis: no single
+# nlopt release covers every platform PartCAD runs on, so pip picks per platform.
+#
+# 2.11.0 publishes no macOS x86_64 wheel at all -- five for arm64, none for
+# Intel -- and neither release ships an sdist, so there is nothing for pip to
+# fall back to and build. Pinned exactly at 2.11.0 this left every Intel Mac
+# unable to provision a CAD sandbox at all: "Could not find a version that
+# satisfies the requirement nlopt==2.11.0", and then every script-defined part
+# failing on an import of something that was never installed. It went unnoticed
+# because nothing ran a sandbox on that platform until the macos-15-x86_64
+# bundle got an "Examples" job in "build-standalone.yml".
+#
+# 2.9.1 is the newest release that does publish Intel macOS wheels, so the
+# specifier admits both and each platform resolves to the newest it can install:
+# 2.11.0 on Linux, Windows and Apple silicon, 2.9.1 on Intel macOS.
+#
+# The bound is closed on both ends, which keeps this as deterministic as an
+# exact pin: versions only ever go up, so the candidate set (2.4.2.post1 through
+# 2.11.0) cannot grow. And nlopt is deliberately not in the "pins must be exact"
+# set that 'test_cad_pins_are_exact' guards -- that rule exists because two OCP
+# builds in one sandbox crash the wrapper with no traceback, and nlopt writes no
+# part of the OCP native module.
+#
+# One gap remains and this does not close it: nlopt publishes Intel macOS wheels
+# up to cp313 only, so a 3.14 sandbox there still finds no candidate. The default
+# is 3.11 and CAD sandboxes cap at MAX_PYTHON_VERSION_CAD, which is not platform
+# aware; see the note there.
+NLOPT = "nlopt>=2.9.1,<=2.11.0"
 # No single numpy release covers Python 3.10 through 3.14 (2.3 dropped 3.10),
 # so this one stays a range and pip picks per interpreter.
 NUMPY = "numpy>=2.2,<3"
@@ -201,6 +228,15 @@ MIN_PYTHON_VERSION_SAFE_PATH = "3.11"
 # every script-defined part in it fails on an import of something that was never
 # installed.
 #
+# This is one number for every platform, and on one of them it is a version too
+# high: nlopt publishes Intel macOS wheels only up to cp313 (see NLOPT above), so
+# a 3.14 sandbox there hits the missing-candidate failure this ceiling exists to
+# prevent. Nothing reaches it by default -- DEFAULT_PYTHON_VERSION is 3.11 -- so
+# it takes a package that asks for 3.14 by name on an Intel Mac. Making the
+# ceiling platform aware is the fix if that ever bites; it is a constant that
+# 'context.get_python_runtime' and two test modules read, so it is a change with
+# a blast radius rather than a one-liner, and it is deliberately not made here.
+#
 # The ceiling this is applied as (see Context.get_python_runtime) is not a claim
 # about what PartCAD supports - it is what *these pins* are built for, and it
 # moves with them. The floor above is a different kind of thing: it belongs to
@@ -292,8 +328,8 @@ def python_abi_requirement(python_version: str, exact: bool = True) -> str | Non
     Nothing in PartCAD wants that build, and the whole CAD stack is unusable in
     it: cadquery-ocp and nlopt publish "cp314-cp314" wheels and no "cp314t" ones,
     so pip finds no candidate at all ("Could not find a version that satisfies
-    the requirement nlopt==2.11.0"), and every part defined by a script then dies
-    with "No module named 'OCP'". Remove this and that comes back.
+    the requirement nlopt>=2.9.1,<=2.11.0"), and every part defined by a script
+    then dies with "No module named 'OCP'". Remove this and that comes back.
 
     The pin goes on 'python_abi' rather than on the 'python' spec itself. A build
     string can only be given in conda's three-field "name=version=build" form, so
