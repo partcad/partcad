@@ -404,6 +404,14 @@ build_bootstrap_vsix() {
   rm -rf "${staging}"
   cp -R "${SCRIPT_DIR}/bootstrap" "${staging}"
   cp "${REPO_ROOT}/LICENSE.txt" "${staging}/LICENSE.txt"
+  # The icon `package.json` names, copied in here rather than kept in
+  # `bootstrap/` so that there is one PartCAD icon in this repository and not
+  # two that can disagree. It is what the Extensions view shows this extension
+  # as, and what the welcome window draws beside "Start with PartCAD" -- the
+  # first thing anyone opening the IDE sees, and until now a grey placeholder.
+  # `vsce` takes a `.png` and refuses an `.svg`, which is why this is the
+  # rendered one rather than `logo.svg`.
+  cp "${REPO_ROOT}/ide/vscode/resources/logo_128x128.png" "${staging}/icon.png"
   # The examples the welcome window offers, taken from `examples/` in this
   # repository rather than kept as a second copy of them: those are rendered and
   # compared byte for byte by CI, so what the IDE hands a user is what the
@@ -941,6 +949,10 @@ if [ "${OS_NAME}" = "windows" ] && [ "${CREATE_INSTALLER}" = "1" ]; then
     # .iss rather than to the application: #553 moved that file a level
     # deeper and its '..\..\LICENSE.txt' started resolving inside 'ide/'.
     ISCC_ARGS+=("/DLicenseFile=$(cygpath -w "${REPO_ROOT}/LICENSE.txt")")
+    # Where the wizard's two images are, absolute for the same reason. They are
+    # named in the source tree rather than in the application: the installer
+    # draws them, so there is no reason for every installation to carry a copy.
+    ISCC_ARGS+=("/DBranding=$(cygpath -w "${SCRIPT_DIR}/resources")")
     if [ -f "${APP_ROOT}/partcad-ide.ico" ]; then
       ISCC_ARGS+=("/DHaveIcon=1")
     fi

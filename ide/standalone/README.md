@@ -80,17 +80,23 @@ same IDE next month as it does today.
 Two optional dependencies change what the build can do, and it reports what it left out rather than failing:
 
 - `cairosvg` and `Pillow` (`pip install cairosvg pillow`) render the icons from the project's logo. Without
-  them the application keeps VSCodium's icon -- except on Windows, which uses `resources/partcad-ide.ico`
-  from git instead. That one is checked in because it cannot be rendered where it is needed: `cairosvg`
-  needs `cairocffi`, and `cairocffi` needs a `libcairo-2.dll` that no wheel ships, so the renderers are
-  installable on Windows but not loadable there. Regenerate it when `ide/vscode/resources/logo.svg`
-  changes -- on Linux or macOS, since it is the machines that *can* render that keep it honest:
+  them the application keeps VSCodium's icon -- except on Windows, which uses the three files in
+  `resources/` from git instead: `partcad-ide.ico` for the executable and the window, and
+  `partcad-ide-wizard.bmp` and `partcad-ide-wizard-small.bmp` for the installer's wizard. Those are
+  checked in because they cannot be rendered where they are needed: `cairosvg` needs `cairocffi`, and
+  `cairocffi` needs a `libcairo-2.dll` that no wheel ships, so the renderers are installable on Windows but
+  not loadable there. Regenerate all three when `ide/vscode/resources/logo.svg` changes -- on Linux or
+  macOS, since it is the machines that *can* render that keep them honest:
 
   ```bash
   python ide/standalone/tools/make_icons.py \
       --svg ide/vscode/resources/logo.svg --output-dir /tmp/icons
-  cp /tmp/icons/partcad-ide.ico ide/standalone/resources/partcad-ide.ico
+  cp /tmp/icons/partcad-ide.ico /tmp/icons/partcad-ide-wizard*.bmp ide/standalone/resources/
   ```
+
+  `tests/test_icons.py` checks that they are there, that they are the sizes their consumers draw, and that
+  the installer script still names them. What no test can check is whether they still *look* like the
+  logo, which is the whole reason for the paragraph above.
 - `rcedit` (`npm install -g rcedit`) puts the icon into `partcad-ide.exe`. There is no other way to change a
   Windows executable's icon after it is linked.
 - Inno Setup 6.3 or newer (`choco install innosetup`) compiles the Windows installer. Without it the build
@@ -282,6 +288,12 @@ way `install.sh` leaves `~/.partcad`.
 `AppId` in the script is the identity Windows recognizes an upgrade and an uninstall by. It is fixed for the
 life of the product: regenerating it turns the next release into a second application installed beside this
 one.
+
+The wizard is branded rather than left as Inno Setup ships it: `WizardImageFile` is the panel beside the
+welcome and finished pages and `WizardSmallImageFile` the badge in the header of the pages between them,
+both rendered from the project logo into `resources/`. `build.sh` passes their directory as `Branding`, the
+same way it passes `AppDir` and `LicenseFile`, and unlike the executable's icon they are unconditional:
+they are in git rather than rendered by the build, so there is no case where they are missing.
 
 The `.zip` is still published next to the installer, for unpacking without installing.
 
