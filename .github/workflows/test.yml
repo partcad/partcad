@@ -124,10 +124,16 @@ env:
   # Windows on 3.12 (see the note below). 40 -> 21 combinations.
   #
   # NOTE: windows + Python 3.12 used to be excluded on its own, for an
-  # 'ensurepip' failure (see #374), NOT for a missing cadquery-ocp wheel. It is
-  # deliberately back in the matrix here: the toolchain underneath it has moved
-  # a long way (miniforge 24.11 -> 26.3, setup-miniconda v3 -> v4), so this run
-  # is what tells us whether #374 is still real. Re-exclude it if it is.
+  # 'ensurepip' failure (see #374), NOT for a missing cadquery-ocp wheel. It was
+  # put back in the matrix by #564 to find out whether #374 was still real, and
+  # it stays here now that the answer is in: the environment builds and the
+  # whole suite passes, and then the interpreter exits 127 with nothing printed
+  # after the summary line. Both Windows images do it, on 3.12 and no other
+  # version, and it reproduced on #596 -- an eleven-line change to one test
+  # file -- as readily as on #598. That is an exit code contradicting a session
+  # pytest called clean, which is what the result marker in the "Pytest" job
+  # below exists to see through, so re-excluding the combination would now cost
+  # the coverage and buy nothing.
   EXCLUDES: >-
     [{"os": "ubuntu-22.04", "python-version": "3.11"},
     {"os": "ubuntu-22.04", "python-version": "3.12"},
@@ -311,15 +317,60 @@ jobs:
           mamba activate ${{ format('env-test-pytest-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-test-results
+
+          # The verdict comes from the session, not from the process exit code.
+          #
+          # On Windows the two disagree, in both directions. #444 was written
+          # because pytest exited 0 with a test having failed; the
+          # 'windows-*, 3.12' cells here do the opposite, printing
+          # "2639 passed, 38 skipped" and then exiting 127 with nothing in
+          # between -- so under 'set -e' a fully green suite fails the job. The
+          # marker is how the pre-commit gate has answered this since #444
+          # ('.devcontainer/pytest_hook.sh'); this is the same mechanism, and
+          # 'conftest.py' at the repository root is the one place that writes it.
+          #
+          # It cannot paint a broken run green. The session writes "failure"
+          # whenever pytest's final exit status is dirty or it counted a failed
+          # test -- a collection error included, which pytest reports as exit
+          # status 2 -- and a run that never reaches the hook at all, a crash
+          # mid-suite or a runner that goes away, writes nothing, which is not
+          # "success" either.
+          #
+          # The path is relative on purpose: Git Bash and the native interpreter
+          # do not agree on what an absolute POSIX path means on Windows, but
+          # they do share this step's working directory. '$$' keeps it unique
+          # per shell, as the pre-commit hook's does.
+          marker="pytest-test-results/session-verdict-$$"
+          export PYTEST_RESULT_MARKER="${marker}"
+          rm -f "${marker}"
+
           # '--junitxml' overrides the one in 'pyproject.toml', which writes to
           # 'pytest-results/' -- a directory this job neither uploads nor hands
           # to Codecov, so the JUnit report was written and then thrown away and
           # Codecov said "JUnit XML file not found" on every run. Point it at the
           # directory the upload step below actually reads.
+          rc=0
           pytest \
             tests cad/freecad \
             --junitxml=pytest-test-results/junit.xml \
-            -x -p no:error-for-skips -p no:warnings --dist no
+            -x -p no:error-for-skips -p no:warnings --dist no || rc=$?
+
+          verdict="$(cat "${marker}" 2>/dev/null || true)"
+          rm -f "${marker}"
+
+          if [ "${verdict}" != "success" ]; then
+            echo "::error::pytest recorded '${verdict:-no verdict}' (process exit code ${rc})"
+            # Report pytest's code when it had one, so the log still says what
+            # the process did; 1 when it exited 0 and the session said failure.
+            exit "$(( rc != 0 ? rc : 1 ))"
+          fi
+          if [ "${rc}" -ne 0 ]; then
+            # Not fatal, but not swept away either: something is wrong with how
+            # the interpreter shuts down on this cell, and the annotation is
+            # what keeps it visible while the job stays honest about the tests.
+            echo "::warning::every test passed but the pytest process exited ${rc}; trusting the session's verdict"
+          fi
+
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
           mamba deactivate
 

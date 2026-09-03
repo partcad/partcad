@@ -33,10 +33,12 @@ TIMEOUT="${PC_PYTEST_TIMEOUT:-900}"
 
 # pytest has been observed to exit 0 despite failures on some platforms (Windows
 # in particular), so the exit code alone cannot be trusted. Instead the pytest
-# session writes an explicit verdict to a marker file (see conftest.py), and this
-# hook reads that. The marker path carries this shell's PID so concurrent hook
-# runs never collide, lives under a temp dir rather than in the repo, and is
-# removed both before and after the run so nothing is left behind.
+# session writes an explicit verdict to a marker file (see 'conftest.py' at the
+# repository root, which is also where the "Pytest" job in
+# '.github/workflows/test.yml' reads its verdict from), and this hook reads that.
+# The marker path carries this shell's PID so concurrent hook runs never collide,
+# lives under a temp dir rather than in the repo, and is removed both before and
+# after the run so nothing is left behind.
 MARKER="${TMPDIR:-/tmp}/partcad-pytest-result-$$"
 export PYTEST_RESULT_MARKER="$MARKER"
 rm -f "$MARKER"
