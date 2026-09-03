@@ -404,6 +404,13 @@ would be creating in the user's home without ever having said so -- outside what
 state with `PC_INTERNAL_STATE_DIR` precisely so that it does. The internal state directory is the one PartCAD
 already owns and already documents.
 
+`bundled_command_env()` sets it only when it is unset, though, and that exception is worth stating because it
+takes the payload's cache back out of PartCAD's lifecycle: a user who runs their own micromamba has a
+`MAMBA_ROOT_PREFIX` and a warm cache under it, and sharing it is the point -- but their cache is then where
+they put it, so `pc system status` does not report it, `pc system reset` does not clear it, and
+`snap remove --purge` does not take it away. That is the right trade (PartCAD does not empty caches it did not
+fill, exactly as it leaves a host conda's alone), and it is a trade rather than a free win.
+
 ### What tests this
 
 Three things, at three levels:

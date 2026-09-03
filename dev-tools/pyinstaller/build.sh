@@ -63,9 +63,8 @@ OPENSCAD_PAYLOAD_DIR="${OPENSCAD_STAGE_DIR}/payload-${OPENSCAD_VERSION}"
 # first half. Pinned rather than tracking "latest" for the same reason OpenSCAD
 # is: a rebuild of a given PartCAD version has to produce the same bundle.
 MICROMAMBA_VERSION="2.9.0-0"
-# Keyed by version like the OpenSCAD payload, so a bump refetches rather than
-# silently reusing whatever an old `build/` still holds.
-CONDA_PAYLOAD_DIR="${CONDA_STAGE_DIR}/payload-${MICROMAMBA_VERSION}"
+# CONDA_PAYLOAD_DIR is set below, once the platform is known: unlike OpenSCAD's,
+# it has to be keyed by platform as well as by version. See the note there.
 
 INSTALL_DEPENDENCIES=1
 CREATE_ARCHIVE=1
@@ -197,6 +196,23 @@ else
   ARCHIVE_EXT="tar.xz"
   EXE_SUFFIX=""
 fi
+
+# Keyed by version *and* platform, and set here rather than beside
+# MICROMAMBA_VERSION because it needs OS_NAME and ARCH_NAME, which the block
+# above is what settles.
+#
+# Version, so that bumping MICROMAMBA_VERSION refetches rather than silently
+# reusing whatever an old `build/` still holds -- the reason the OpenSCAD payload
+# is keyed too. Platform, because every platform stages a payload under the same
+# file name (`micromamba`), where OpenSCAD stages one on two platforms whose
+# workspaces nothing shares. Two builds for different platforms out of one
+# workspace -- an arm64 and an amd64 container over the same bind mount, an
+# Apple silicon Mac building the Intel bundle under `arch -x86_64` -- would
+# otherwise find the first build's executable already staged, pass
+# `stage_conda`'s entry-point check, and copy it into the second build's bundle.
+# The smoke test would catch it, since the executable would not run at all; that
+# is a confusing way to find out about a one-line key.
+CONDA_PAYLOAD_DIR="${CONDA_STAGE_DIR}/payload-${MICROMAMBA_VERSION}-${OS_NAME}-${ARCH_NAME}"
 
 VERSION="$("${PYTHON}" -c "
 import re, pathlib

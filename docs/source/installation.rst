@@ -366,8 +366,13 @@ your conda has the channels you configured and a package cache holding the gigab
 from, and taking ours instead would strand that cache and download all of it again. Nothing needs to be
 configured either way; ``pc healthcheck`` says which conda was found.
 
-The bundled conda keeps its package cache in ``~/.partcad/conda``, beside the sandboxes it creates in
-``~/.partcad/sandbox``. Deleting ``~/.partcad`` removes both, and the next command rebuilds them.
+By default the bundled conda keeps its package cache in ``~/.partcad/conda``, beside the sandboxes it creates
+in ``~/.partcad/sandbox``. Deleting ``~/.partcad`` removes both, ``pc system status`` reports their size and
+``pc system reset`` clears them, and the next command rebuilds them.
+
+The exception is ``MAMBA_ROOT_PREFIX``: if you already have that set -- because you run micromamba yourself --
+the bundled copy uses your prefix rather than making a second cache of its own, and then none of the sentence
+above applies to it. It is your cache, in your location, and PartCAD neither reports nor deletes it.
 
 On Linux x86_64 and on Windows it also carries **OpenSCAD**, which PartCAD runs as an external program to
 build ``.scad`` parts. The bundled copy is used in preference to any OpenSCAD installed on the machine, so that the

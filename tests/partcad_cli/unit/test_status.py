@@ -30,6 +30,7 @@ EXPECTED = [
     "Git cache size:",
     "Tar cache size:",
     "Sandbox environments size:",
+    "Conda package cache size:",
 ]
 
 
