@@ -54,13 +54,42 @@ directory.
 - `transport/` — `framing.py` (Content-Length codec), `stdio.py`, `socket_server.py` (threaded AF_UNIX server,
   the daemon's transport), `http.py` (optional HTTP+SSE).
 - `daemon.py` — workspace root discovery, hashing, socket path, liveness (`rpc.discover` probe), stale recovery,
-  double-fork/detach, `daemon.stop`. `win_pipe.py` — the Windows named-pipe counterpart (untested on POSIX/CI).
-  Two things differ on Windows and both are load-bearing. The daemon is a **detached new process**, not a fork,
-  so `_launcher_argv` has to name the frozen bundle as itself rather than as `python -m` — the bundle takes the
-  service's own options and rejects `-m`, so the daemon simply was not there. And `ensure_daemon` **waits for
-  the pipe to answer** before printing it: the POSIX branch binds and listens in this very process, so the
-  socket exists the moment it is named, while a pipe does not exist until the new process gets that far, and
-  connecting to a pipe that is not there fails instead of queueing.
+  double-fork/detach, `daemon.stop`. `win_pipe.py` — the Windows named-pipe counterpart.
+
+  CI **does** run Windows (`windows-latest` and `windows-2022` in `test.yml`), which is worth knowing because
+  it is not what kept these bugs alive. `test_daemon.py` and `test_client.py` guard themselves on
+  `socket.AF_UNIX`, which CPython does not define on Windows, so the daemon's own tests are skipped on exactly
+  the platform this counterpart is for — and nothing else called into it. Every bug listed below reached users
+  that way: not unrunnable, just unrun.
+
+  So the tests for it are written to need no Windows kernel and live where nothing skips them:
+  `test_win_pipe.py` pins the argv and the redirection the spawn is given behind a stand-in `Popen`, and
+  `test_daemon_windows.py` — a module of its own, deliberately without the AF_UNIX guard — drives
+  `ensure_daemon`'s Windows branch, taking it for real on the Windows legs and with `os.name` forced to `"nt"`
+  on POSIX. Keep it that way: a test only Windows can run is a test that was not protecting this code before.
+
+  Because the daemon is a **detached new process** rather than a fork, it inherits nothing, and each of these
+  had to be handed to it explicitly:
+
+  - **What to run.** `_launcher_argv` names the frozen bundle as itself rather than as `python -m`: the bundle
+    takes the service's own options and rejects `-m`, so the daemon simply was not there.
+  - **What it was told.** `spawn_pipe_daemon` repeats the launcher's settings flags
+    (`__main__.settings_argv`) in the child's argv. Without them, `pc --python-sandbox conda daemon start`
+    printed a pipe served by a daemon using the default sandbox, and said nothing about it.
+  - **Somewhere to speak.** `DETACHED_PROCESS` leaves the child with no console, so its output is redirected
+    into the workspace's `daemon.log` — the same file the POSIX daemon redirects itself to, which it can
+    because it is a fork and gets to run code first. Without it, a daemon that died before serving accounted
+    for itself nowhere.
+
+  And `ensure_daemon` **waits for the pipe to answer** before printing it: the POSIX branch binds and listens
+  in this very process, so the socket exists the moment it is named, while a pipe does not exist until the new
+  process gets that far, and connecting to a pipe that is not there fails instead of queueing.
+
+  Where the pipe is and whether anything answers on it (`pipe_name`, `is_pipe_alive`) comes from
+  `partcad_utils.win_pipe`, never from this package — the rendezvous belongs to neither end, exactly as
+  `socket_path`/`is_alive` in `partcad_utils.workspace` do for POSIX. Importing `is_pipe_alive` from
+  `.win_pipe`, which has no such name, is what shipped: on Windows `ensure_daemon` raised ImportError on the
+  first line of the branch, and all a client saw was `partcad-json-rpc.exe ... exited 1`.
 - `client.py` — `DaemonClient` and `start_daemon`, used by the CLI (and any Python caller) to reach the daemon.
 - `__main__.py` — the `partcad-json-rpc` entry point: channel selection (`--socket` default, `--stdio`,
   `--http`) and CLI-style flags mirroring `pc` globals.

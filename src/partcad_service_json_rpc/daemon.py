@@ -55,6 +55,7 @@ def ensure_daemon(
     build_session: Callable,
     root_path: Optional[str] = None,
     liveness_timeout: float = LIVENESS_TIMEOUT,
+    daemon_argv=(),
 ) -> str:
     """Ensure a daemon serves the workspace and return (and print) its endpoint.
 
@@ -62,6 +63,10 @@ def ensure_daemon(
     Windows, a named-pipe daemon. ``build_session`` is a callable taking the
     workspace directory and returning the warm :class:`Session` the daemon
     serves (the directory is where its rotating log file lives).
+
+    ``daemon_argv`` is only consulted on Windows, and only when a daemon is
+    actually started: the service's own settings flags, to hand to the new
+    process. The POSIX daemon is a fork of this one and already has them.
     """
     root = root_path or determine_root_path()
 
@@ -69,12 +74,26 @@ def ensure_daemon(
     # socket.AF_UNIX), so it must not run here -- it used to raise
     # ModuleNotFoundError before this branch could ever be reached, and the
     # printed endpoint has to be the pipe the client will connect to.
-    if os.name == "nt":  # pragma: no cover - exercised only on Windows
-        from .win_pipe import is_pipe_alive, pipe_name, spawn_pipe_daemon
+    if os.name == "nt":
+        # Where the pipe is and whether anything answers on it comes from
+        # `partcad_utils.win_pipe`, for the same reason the POSIX branch below
+        # takes `socket_path`/`is_alive` from `partcad_utils.workspace`: it is
+        # the rendezvous, and both ends have to read it from one place. Only
+        # spawning the server is this package's own half.
+        #
+        # `is_pipe_alive` used to be imported from `.win_pipe`, which does not
+        # define one -- so on Windows this raised ImportError on the first line
+        # of the branch, before anything was spawned, and the launcher exited 1.
+        # CI runs Windows, but `test_daemon.py` skips itself where there is no
+        # `socket.AF_UNIX`, so the daemon's tests are skipped on the platform
+        # this branch is for. `test_daemon_windows.py` has no such guard.
+        from partcad_utils.win_pipe import is_pipe_alive, pipe_name
+
+        from .win_pipe import spawn_pipe_daemon
 
         pipe = pipe_name(root)
         if not is_pipe_alive(pipe, liveness_timeout):
-            spawn_pipe_daemon(root)
+            spawn_pipe_daemon(root, daemon_argv)
             # Wait for it to answer before saying where it is. The POSIX branch
             # below binds and listens in *this* process, so the socket is there
             # the moment it is printed and a client that arrives early simply
@@ -118,9 +137,9 @@ def ensure_daemon(
 START_TIMEOUT = 120.0
 
 
-def _wait_for_pipe(pipe: str, liveness_timeout: float) -> bool:  # pragma: no cover - Windows only
+def _wait_for_pipe(pipe: str, liveness_timeout: float) -> bool:
     """True once the named-pipe daemon answers, False if it never does."""
-    from .win_pipe import is_pipe_alive
+    from partcad_utils.win_pipe import is_pipe_alive
 
     deadline = time.monotonic() + START_TIMEOUT
     while time.monotonic() < deadline:

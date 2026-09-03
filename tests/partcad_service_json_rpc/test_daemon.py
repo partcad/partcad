@@ -8,7 +8,9 @@
 Where the socket lives and whether anything answers on it is
 `partcad_utils.workspace`, tested there; stopping and enumerating daemons is
 `partcad_client.daemon`, tested there. What is left here is the service's
-own half: `ensure_daemon` reusing a daemon that is already serving.
+own half: `ensure_daemon` reusing a daemon that is already serving. Its
+Windows branch is `test_daemon_windows.py`, which is a separate module because
+the AF_UNIX guard below skips this one on the platform that branch is about.
 """
 
 import os

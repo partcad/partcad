@@ -125,12 +125,30 @@ pythonpath = [
     # ends in `echo DONE`, reports success anyway while having run nothing.
     "ide/standalone/tests",
 ]
+# The `--cov` list below names every package the one wheel ships, for the same
+# reason `dev-tools/coverage.rc` writes its `include` list out by hand: a name
+# that is missing is a package coverage never traces. `--cov=partcad` alone
+# traced exactly one of the six, and that is upstream of the report --
+# `coverage.rc` does list all of them, but an `include` filter cannot report a
+# file that was never measured. So every unit test of the other five counted for
+# nothing, and their only coverage came from behave driving the installed `pc`.
+# That is end-to-end, so it walks success paths: the error branches those suites
+# test read as untested, and a pull request adding one was told its patch was
+# uncovered.
+#
+# Keep the list here, above the string -- `addopts` is a TOML string, so a '#'
+# line inside it is passed to pytest as an argument rather than ignored.
 addopts = """
     --import-mode importlib
     --alluredir=allure-results
     --cov-report=html:pytest-results/htmlcov
     --cov-report=xml:pytest-results/coverage.xml
     --cov=partcad
+    --cov=partcad_cli
+    --cov=partcad_client
+    --cov=partcad_ide_client
+    --cov=partcad_service_json_rpc
+    --cov=partcad_utils
     --durations-min=1.0
     --durations=0
     --html=pytest-results/report.html

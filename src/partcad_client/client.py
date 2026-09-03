@@ -61,17 +61,32 @@ def start_daemon(cwd: Optional[str] = None, extra_args=()) -> str:
     :func:`connect` below still runs a one-shot stdio service on Windows; this
     is what `pc daemon start` and the editor extension use.
     """
-    result = subprocess.run(
-        launcher_argv() + ["--socket", *extra_args],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    argv = launcher_argv() + ["--socket", *extra_args]
+    # check=False: the returncode is handled below, so that the error can
+    # carry what the launcher printed rather than only its exit status.
+    result = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise RuntimeError(
+            "%s exited with status %d:\n%s" % (" ".join(argv), result.returncode, _launcher_output(result))
+        )
     path = next((line.strip() for line in result.stdout.splitlines() if line.strip()), "")
     if not path:
-        raise RuntimeError("partcad-json-rpc did not print a socket path: %s" % (result.stderr or "").strip())
+        raise RuntimeError("partcad-json-rpc did not print a socket path:\n%s" % _launcher_output(result))
     return path
+
+
+def _launcher_output(result: subprocess.CompletedProcess) -> str:
+    """Everything the launcher said, for an error that would otherwise say nothing.
+
+    This used to be ``check=True``, whose ``CalledProcessError`` names the argv
+    and the exit status and then discards both captured streams -- so a launcher
+    that died on a traceback reached the user as "returned non-zero exit status
+    1" with the traceback caught and thrown away. The editor extension shows
+    this error verbatim in its output channel, and that is where the reason has
+    to be.
+    """
+    said = [stream.strip() for stream in (result.stderr, result.stdout) if stream and stream.strip()]
+    return "\n".join(said) if said else "(no output)"
 
 
 class DaemonClient:
