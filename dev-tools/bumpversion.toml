@@ -33,22 +33,22 @@ replace = "version = \"{new_version}\""
 
 # The shim states its own version and pins the wheel at exactly it, so both move.
 [[tool.bumpversion.files]]
-filename = "shim/pyproject.toml"
+filename = "dev-tools/shim/pyproject.toml"
 search = "version = \"{current_version}\""
 replace = "version = \"{new_version}\""
 
 [[tool.bumpversion.files]]
-filename = "shim/pyproject.toml"
+filename = "dev-tools/shim/pyproject.toml"
 search = "dependencies = [\"partcad=={current_version}\"]"
 replace = "dependencies = [\"partcad=={new_version}\"]"
 
 [[tool.bumpversion.files]]
-filename = "shim/pyproject.toml"
+filename = "dev-tools/shim/pyproject.toml"
 search = "lint = [\"partcad[lint]=={current_version}\"]"
 replace = "lint = [\"partcad[lint]=={new_version}\"]"
 
 [[tool.bumpversion.files]]
-filename = "shim/pyproject.toml"
+filename = "dev-tools/shim/pyproject.toml"
 search = "aws = [\"partcad[aws]=={current_version}\"]"
 replace = "aws = [\"partcad[aws]=={new_version}\"]"
 

@@ -87,8 +87,8 @@ a CAD addon, or documentation.
   half of an extension's identity — the new entry is a *different* extension as far as the marketplace and the
   editor are concerned, and nothing carries an installation across. So the old entry is not abandoned; it is
   replaced by a package that pulls the new one in, and an existing installation updates into it. Same shape as
-  `shim/` below, and temporary in the same way. Do not give it a `main` or a `contributes`: both extensions are
-  installed at once afterwards, and anything it contributed would be contributed twice.
+  `dev-tools/shim/` below, and temporary in the same way. Do not give it a `main` or a `contributes`: both
+  extensions are installed at once afterwards, and anything it contributed would be contributed twice.
 
 * [ide/standalone](./ide/standalone/AGENTS.md):
 
@@ -104,7 +104,7 @@ a CAD addon, or documentation.
   `ide/vscode` it is a thin client of the JSON-RPC service (the standalone PyInstaller bundle), because
   FreeCAD's embedded Python cannot host `partcad` itself.
 
-* [shim/](./shim/pyproject.toml):
+* [dev-tools/shim/](./dev-tools/shim/pyproject.toml):
 
   The `partcad-cli` compatibility package: no modules, no entry points, one dependency on `partcad`. It exists
   so that an older `pip install partcad-cli` keeps working. Do not give it modules or entry points — two
@@ -212,12 +212,12 @@ Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.to
 
 ### Packaging
 
-Six artifacts ship from this repo: **one Python wheel** (`partcad`, carrying all six packages and all three
-entry points, with a `partcad-cli` shim published beside it from `shim/` so the older install instruction keeps
+Six artifacts ship from this repo: **one Python wheel** (`partcad`, carrying all six packages and all three entry
+points, with a `partcad-cli` shim published beside it from `dev-tools/shim/` so the older install instruction keeps
 working), the standalone PyInstaller bundles for users who have no Python, the PartCAD IDE, which carries those
-bundles inside it, the VS Code extension's `.vsix` (with the `ide/vscode-shim` `.vsix` published beside it, for
-the same reason the wheel has one), the `pc` plugin for Claude Code, and the snap, which wraps the Linux
-bundle and is built but not published yet.
+bundles inside it, the VS Code extension's `.vsix` (with the `ide/vscode-shim` `.vsix` published beside it, for the
+same reason the wheel has one), the `pc` plugin for Claude Code, and the snap, which wraps the Linux bundle and is
+built but not published yet.
 
 There used to be five wheels pinning each other at `==`. Do not add a second distribution back: within one
 distribution a pin is an import, and two distributions owning one import name break each other on uninstall
@@ -240,6 +240,12 @@ and it must not get one back: it had one, and stayed at 0.1.0 for twenty-three r
 meant remembering a tag nobody pushed. See `ai-agents/README.md`. The snap carries whatever the bundle carries,
 so it needs nothing extra of its
 own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
+Its build tooling lives beside that README, but the recipe, `.snapcraft.yaml`, stays at the repository root and
+cannot move down into `dev-tools/` with it: the directory `snapcraft` runs in is the project directory — what gets
+copied into the build environment and what `source:` resolves against — and snapcraft looks for the recipe only at
+four paths within it, the root itself, `snap/`, or `build-aux/snap/`. Running it from `dev-tools/` instead would
+leave the `dist/standalone/partcad` bundle it packages outside that directory. The dotfile is the
+root-level spelling that leaves no directory behind; the comment at the top of the file says all of this too.
 
 ### Committing
 

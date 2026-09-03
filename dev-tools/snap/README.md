@@ -20,9 +20,12 @@ because the snap is classic, a manual store review — see [Publishing](#publish
 
 ## Files
 
-- `../../snap/snapcraft.yaml` — the recipe. It has to sit in `snap/` at the repository root: that is both where
-  `snapcraft` looks for it and what fixes the project directory it copies into its build environment. Putting it here,
-  next to the rest of the build tooling, would leave `dist/standalone/partcad` outside that directory.
+- `../../.snapcraft.yaml` — the recipe. It has to sit at the repository root. The directory `snapcraft` runs in is
+  the project directory: it is what gets copied into the build environment and what `source:` resolves against, and
+  snapcraft looks for the recipe only at four paths within it — the root itself (as `snapcraft.yaml` or
+  `.snapcraft.yaml`), `snap/`, or `build-aux/snap/`. Keeping it here instead would mean running snapcraft from
+  `dev-tools/`, which would leave `dist/standalone/partcad` outside the project directory. Of the root-level
+  spellings, the dotfile is the one that leaves no directory behind.
 - `build.sh` — makes sure the bundle exists, checks it, and drives `snapcraft`.
 
 ## One base, two architectures
@@ -93,15 +96,15 @@ about reaching the user's *files*, not about inheriting the user's shell.
 The price is a manual review before the Snap Store will publish it, which is one of the two reasons nothing is
 published yet. A locally built or CI-built `.snap` installs with `--dangerous --classic` in the meantime.
 
-For the same reason, snapcraft's `classic` and `library` linters are switched off in `snapcraft.yaml`, and its
+For the same reason, snapcraft's `classic` and `library` linters are switched off in `.snapcraft.yaml`, and its
 `enable-patchelf` build attribute is deliberately left unset: PyInstaller's shared libraries find each other through
 `$ORIGIN` and the bundle's own bootloader, so rewriting their rpaths would break the bundle rather than fix it. The
-comments in `snapcraft.yaml` say the same at the point where it matters.
+comments in `.snapcraft.yaml` say the same at the point where it matters.
 
 ## Where it keeps its state
 
 PartCAD normally keeps its cache, its conda sandboxes and its git/tar clones in `~/.partcad`. A packaged application
-has no business writing there, so `snapcraft.yaml` sets `PC_INTERNAL_STATE_DIR` to `$SNAP_USER_COMMON` —
+has no business writing there, so `.snapcraft.yaml` sets `PC_INTERNAL_STATE_DIR` to `$SNAP_USER_COMMON` —
 `~/snap/partcad/common`, which snapd creates before the app starts. It survives refreshes (unlike `$SNAP_USER_DATA`,
 which is keyed by revision), and `snap remove --purge` takes it away with the snap.
 

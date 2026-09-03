@@ -24,9 +24,9 @@ __pycache__
 /*.snap
 # The compatibility shim, built beside the wheel. Its LICENSE.txt is copied in
 # from the repository root by the build, the way each distribution's used to be.
-/shim/build
-/shim/dist
-/shim/LICENSE.txt
+/dev-tools/shim/build
+/dev-tools/shim/dist
+/dev-tools/shim/LICENSE.txt
 allure-report/
 allure-results/
 behave-results/

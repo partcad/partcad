@@ -26,6 +26,10 @@
 # distribution never owned it.
 #
 # Built and published by "deploy.yml" beside the wheel, under the same version.
+# It lives under `dev-tools/` with the rest of the build tooling rather than at
+# the repository root: nothing here is imported or read at runtime, and the two
+# workflows that build it, `dev-tools/bumpversion.toml`, and the `.gitignore`
+# entries for its build output all name this path.
 #
 
 [project]
