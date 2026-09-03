@@ -53,10 +53,12 @@ base has moved.
   `bumpversion` entry -- a build failure per release, none of them about the change under review. Derived,
   the two cannot drift: there is one version, and the shim reads it.
 
-* **No icon.** `ide/vscode/resources/logo_128x128.png` is tracked in git-lfs, and a second copy of an lfs
-  object for a package that is meant to be deleted is not worth the checkout that has to pull it. The default
-  placeholder also does something useful in the "Installed" list: "PartCAD (moved)" with no logo reads as the
-  stub it is, beside the real "PartCAD" with the logo.
+* **No icon**, on purpose rather than for want of one. The default placeholder does something useful in the
+  "Installed" list: "PartCAD (moved)" with no logo reads as the stub it is, beside the real "PartCAD" with
+  the logo. (This used to say the icon was unavailable because it is a git-lfs object. It no longer is --
+  `.gitattributes` names `logo_128x128.png` as the one `.png` outside lfs, because `vsce` was packaging the
+  pointer file into the real extension -- so the reason above is now the only one, and it is the one that
+  was always doing the work.)
 
 ## Build
 

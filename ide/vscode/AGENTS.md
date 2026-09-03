@@ -425,6 +425,19 @@ more, so one build serves every platform.
 The same workflow packages `ide/vscode-shim` beside it, into the same artifact and onto the same release. That
 is the marketplace entry this extension used to be published under -- see "The marketplace identity" below.
 
+## The icon
+
+`resources/logo.svg` is the PartCAD mark, and it is the only drawing here: the activity bar container, the
+three views in it, the `partcad.yaml`/`.assy`/`.world` file icons and the `PartCAD` terminal view all point at
+that one file, and so does the PartCAD IDE, which renders its application icons from it
+(`ide/standalone/tools/make_icons.py`). `resources/logo_128x128.png` is the same mark rasterized, which is
+what `package.json`'s `icon` has to be: `vsce` refuses an SVG there.
+
+That `.png` is the one image in this repository that is **not** in Git LFS, and it has to stay that way. No
+checkout in `.github/workflows` asks for LFS, `vsce package` copies the file into the `.vsix` without looking
+at it, and the result is an extension whose icon is a 130-byte pointer -- which is exactly what every release
+up to 0.8.35 shipped. `.gitattributes` names the file and says so.
+
 After changing `partcad` core code while developing through this extension, click "Restart PartCAD" in the
 PartCAD `Context` view (or restart VS Code) to pick up the change.
 
