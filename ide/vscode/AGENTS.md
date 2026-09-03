@@ -340,12 +340,13 @@ squiggle on a working file, so anything PartCAD's own tooling writes has to vali
 ## Opening a file in a third-party application
 
 The Explorer's per-item **"Open in > ..."** menu hands the item's file to `partcad.openExternal`, which runs
-`pc --no-ansi open --with <tool> [--use-docker] [--docker-image <image>] <path> --json`. Three applications,
-each offered for the objects it can actually open:
+`pc --no-ansi open --with <tool> [--type <type>] [--use-docker] [--docker-image <image>] <path> --json`. Four
+applications, each offered for the objects it can actually open:
 
 | Menu entry | Command | Shown for |
 | --- | --- | --- |
 | FreeCAD | `partcad.openInFreeCAD` | parts and assemblies |
+| Blender | `partcad.openInBlender` | parts and assemblies |
 | Gazebo | `partcad.openInGazebo` | scenes of type `world` (`viewItem == sceneWorld`) |
 | KiCad | `partcad.openInKiCad` | parts of type `kicad` (`viewItem == partKicad`) |
 
@@ -372,11 +373,20 @@ application is for, has none; `config.item_path` is the file the daemon reported
 The menu is therefore on the same items as "Export" and an object that has no file of its own says so when it
 is picked, rather than being silently missing from the menu.
 
+The object's declared `config.type` is handed over too, as `--type`, and it is the *only* other thing this
+tree contributes. It is there because a file name does not always say what it holds -- a `.py` is a CadQuery
+script, a build123d one or an SDF one -- and Blender reads meshes and nothing else, so a part that is not
+already one is converted to STL before it is opened. Which types are meshes
+(`partcad_client.object_types`), whether this one needs converting, where the mesh goes and who does the
+converting are all decided by `pc open`; nothing here branches on the type, and nothing here knows that
+Blender is the application it matters for.
+
 And no more than that is decided here. A `kicad` part's file is the STEP KiCad's command line writes out of
 the board; the board is the `.kicad_pro` beside it, and swapping one for the other is a fact about KiCad that
 lives in `external.TOOLS` (`Tool.companions`), not in this tree. Same for how Gazebo is launched: `gz sim`,
 `ign gazebo` and `gazebo` are three front ends of one application and `Tool.binary_args` is where that is
-written down.
+written down -- as is Blender being handed `--python-expr` rather than a file name, because the only file
+Blender *opens* is a `.blend`.
 
 `partcad.open.useDocker` and `partcad.open.dockerImage` are read here, on the way to that command line, rather
 than being worked out anywhere in Python: PartCAD decides *how* to run the application, and the settings only

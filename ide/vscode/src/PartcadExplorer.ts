@@ -82,6 +82,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         vscode.commands.registerCommand(`partcad.openInFreeCAD`, (item) => this.openWith('freecad', item));
         vscode.commands.registerCommand(`partcad.openInGazebo`, (item) => this.openWith('gazebo', item));
         vscode.commands.registerCommand(`partcad.openInKiCad`, (item) => this.openWith('kicad', item));
+        vscode.commands.registerCommand(`partcad.openInBlender`, (item) => this.openWith('blender', item));
 
         vscode.commands.registerCommand(`partcad.test`, (item) => this.test(item));
 
@@ -179,7 +180,18 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
                 { location: vscode.ProgressLocation.Notification, title: `${item.name}`, cancellable: false },
                 async (progress) => {
                     progress.report({ message: 'Opening...' });
-                    await vscode.commands.executeCommand('partcad.openExternal', { path: path, tool: tool });
+                    // The declared type travels with the path, because the path
+                    // does not always say: a '.py' is a CadQuery script, a
+                    // build123d one or an SDF one, and PartCAD has to know which
+                    // before it can convert one for an application that reads
+                    // meshes. Everything that is decided from it -- whether a
+                    // conversion is needed at all -- is decided in `pc open`,
+                    // not here.
+                    await vscode.commands.executeCommand('partcad.openExternal', {
+                        path: path,
+                        tool: tool,
+                        type: item?.config?.type,
+                    });
                 },
             );
         } catch (e) {

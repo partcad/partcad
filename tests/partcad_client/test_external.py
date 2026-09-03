@@ -389,9 +389,9 @@ def test_the_result_says_how_the_file_was_opened(part, docker):
 
 
 def test_every_tool_can_be_named_and_has_a_container_of_its_own():
-    assert external.tool_names() == ["freecad", "gazebo", "kicad"]
+    assert external.tool_names() == ["freecad", "gazebo", "kicad", "blender"]
     names = {external.TOOLS[name].container_name for name in external.tool_names()}
-    assert names == {"partcad-freecad", "partcad-gazebo", "partcad-kicad"}
+    assert names == {"partcad-freecad", "partcad-gazebo", "partcad-kicad", "partcad-blender"}
 
 
 def test_the_kicad_container_is_the_image_partcad_already_builds():
@@ -524,3 +524,279 @@ def test_a_launcher_that_is_not_the_program_supplies_its_own_arguments():
     assert gazebo.launch_args(os.path.join("Gazebo", "bin", "gz.exe")) == ("sim",)
     assert gazebo.launch_args("org.gazebosim.Gazebo") == ()
     assert gazebo.launch_args("/Applications/Gazebo.app") == ()
+
+
+# ---------------------------------------------------------------------------
+# Blender: the application that reads meshes and nothing else
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mesh(tmp_path):
+    """An STL inside a workspace: what Blender can be handed as it is."""
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    path = tmp_path / "cube.stl"
+    path.write_text("solid cube\nendsolid cube\n")
+    return path
+
+
+@pytest.fixture
+def converter():
+    """A conversion that writes the file it was asked for, and records the ask."""
+
+    class Converter:
+        def __init__(self):
+            self.calls = []
+            self.writes = True
+
+        def __call__(self, source, source_type, target, target_type):
+            self.calls.append((source, source_type, target, target_type))
+            if self.writes:
+                open(target, "w").write("solid converted\nendsolid converted\n")
+
+    return Converter()
+
+
+def test_a_mesh_is_imported_rather_than_opened(monkeypatch, spawned, mesh):
+    """`blender <file>` opens a `.blend`; anything else is an import, in Python."""
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/blender" if name == "blender" else None)
+
+    result = external.open_file(str(mesh), tool="blender")
+
+    assert result.method == "native"
+    assert result.path == str(mesh)
+    # Nothing was converted, so there is nothing to report as converted from.
+    assert result.source is None
+    command = spawned[0]
+    assert command[:2] == ["/usr/bin/blender", "--python-expr"]
+    assert repr(str(mesh)) in command[2]
+    assert "stl_import" in command[2]
+
+
+def test_blender_s_own_file_is_opened_and_never_converted(monkeypatch, spawned, tmp_path, converter):
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    scene = tmp_path / "scene.blend"
+    scene.write_text("BLENDER")
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/blender" if name == "blender" else None)
+
+    external.open_file(str(scene), tool="blender", transcode=converter)
+
+    assert spawned == [["/usr/bin/blender", str(scene)]]
+    assert converter.calls == []
+
+
+def test_a_solid_is_converted_to_a_mesh_first(monkeypatch, spawned, part, converter, workspace_socket):
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/blender" if name == "blender" else None)
+
+    result = external.open_file(str(part), tool="blender", transcode=converter)
+
+    # The conversion is asked for by type, not left to be guessed at the far end.
+    source, source_type, target, target_type = converter.calls[0]
+    assert (source, source_type, target_type) == (str(part), "step", "stl")
+    # It lands under the workspace's own directory -- not beside the user's
+    # file, and not in a temporary directory the container cannot see.
+    assert target.startswith(str(workspace_socket))
+    assert result.path == target
+    assert result.source == str(part)
+    assert repr(target) in spawned[0][2]
+
+
+def test_the_converted_mesh_is_reused_until_the_source_changes(monkeypatch, spawned, part, converter):
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/blender" if name == "blender" else None)
+
+    first = external.open_file(str(part), tool="blender", transcode=converter)
+    second = external.open_file(str(part), tool="blender", transcode=converter)
+    assert second.path == first.path
+    assert len(converter.calls) == 1
+
+    # Touching the source is how a user asks for it again.
+    os.utime(str(part), (os.path.getmtime(first.path) + 10,) * 2)
+    external.open_file(str(part), tool="blender", transcode=converter)
+    assert len(converter.calls) == 2
+
+
+def test_two_parts_of_the_same_name_do_not_share_a_mesh(monkeypatch, spawned, part, converter, tmp_path):
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/blender" if name == "blender" else None)
+    other = tmp_path / "elsewhere"
+    other.mkdir()
+    twin = other / "cube.step"
+    twin.write_text("ISO-10303-21;\n")
+
+    first = external.open_file(str(part), tool="blender", transcode=converter)
+    second = external.open_file(str(twin), tool="blender", transcode=converter)
+
+    assert first.path != second.path
+
+
+def test_a_conversion_that_writes_nothing_is_a_failure_not_a_window(monkeypatch, spawned, part, converter):
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/blender" if name == "blender" else None)
+    converter.writes = False
+
+    with pytest.raises(external.ExternalToolError) as caught:
+        external.open_file(str(part), tool="blender", transcode=converter)
+
+    assert "Failed to convert" in str(caught.value)
+    assert spawned == []
+
+
+def test_a_mesh_blender_has_no_importer_for_is_converted_too(monkeypatch, spawned, tmp_path, converter):
+    """3MF is a mesh, and Blender ships nothing that reads one."""
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    box = tmp_path / "box.3mf"
+    box.write_text("PK\n")
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/blender" if name == "blender" else None)
+
+    external.open_file(str(box), tool="blender", transcode=converter)
+
+    source, source_type, _target, target_type = converter.calls[0]
+    assert (source, source_type, target_type) == (str(box), "3mf", "stl")
+
+
+def test_a_declared_type_says_what_the_file_name_cannot(monkeypatch, spawned, tmp_path, converter):
+    """A '.py' is a CadQuery script, a build123d one or an SDF one."""
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    script = tmp_path / "cube.py"
+    script.write_text("# a part\n")
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/blender" if name == "blender" else None)
+
+    external.open_file(str(script), tool="blender", object_type="build123d", transcode=converter)
+
+    assert converter.calls[0][1] == "build123d"
+
+
+def test_a_declared_type_that_is_not_a_format_does_not_become_one(monkeypatch, spawned, part, converter):
+    """A `kicad` part is the STEP that KiCad's CLI wrote; it is read as a STEP.
+
+    The tree hands over whatever the object was declared as, and several of
+    those types name no file format at all. Sending one as the input type would
+    ask the daemon to read a STEP file as a KiCad board.
+    """
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/blender" if name == "blender" else None)
+
+    external.open_file(str(part), tool="blender", object_type="kicad", transcode=converter)
+
+    assert converter.calls[0][1] == "step"
+
+
+def test_a_file_whose_type_cannot_be_told_is_refused_with_what_to_pass(monkeypatch, spawned, tmp_path, converter):
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    script = tmp_path / "cube.py"
+    script.write_text("# a part\n")
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/blender" if name == "blender" else None)
+
+    with pytest.raises(external.ExternalToolError) as caught:
+        external.open_file(str(script), tool="blender", transcode=converter)
+
+    assert "--type" in str(caught.value)
+    assert "cadquery" in str(caught.value)
+    assert converter.calls == []
+
+
+def test_an_assy_is_refused_by_name_rather_than_sent_to_be_refused(monkeypatch, spawned, tmp_path, converter):
+    """There is no package around an ad-hoc file to resolve an ASSY against."""
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    assembly = tmp_path / "logo.assy"
+    assembly.write_text("links: []\n")
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/blender" if name == "blender" else None)
+
+    with pytest.raises(external.ExternalToolError) as caught:
+        external.open_file(str(assembly), tool="blender", transcode=converter)
+
+    assert "inside a package" in str(caught.value)
+    assert "pc export" in str(caught.value)
+    assert converter.calls == []
+
+
+def test_without_a_converter_a_solid_says_so_instead_of_opening_nothing(monkeypatch, spawned, part):
+    """Nothing but `pc open` has a daemon to convert with, and it says which."""
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/blender" if name == "blender" else None)
+
+    with pytest.raises(external.ExternalToolError) as caught:
+        external.open_file(str(part), tool="blender")
+
+    assert "pc open" in str(caught.value)
+    assert spawned == []
+
+
+def test_blender_runs_in_its_own_container_on_the_converted_mesh(part, docker, converter, workspace_socket):
+    docker.binaries = ["/usr/bin/blender"]
+
+    result = external.open_file(str(part), tool="blender", use_docker=True, transcode=converter)
+
+    assert result.method == "docker"
+    created = docker.command("docker", "run")
+    assert "partcad-blender" in created
+    assert external.BLENDER.image in created
+    # The workspace that holds the *source* is what gets mounted: the mesh lives
+    # under that workspace's state directory, which is mounted beside it, and a
+    # workspace worked out from the mesh would have been the state directory.
+    assert "%s:%s" % (workspace_socket, workspace_socket) in created
+    started = docker.command("docker", "exec", "--detach")
+    assert started[-3:-1] == ["/usr/bin/blender", "--python-expr"]
+    assert repr(result.path) in started[-1]
+
+
+def test_a_solid_without_docker_or_blender_says_both(part, converter):
+    """The refusal a machine with neither gets, which has to name both ways out."""
+    with pytest.raises(external.ExternalToolError) as caught:
+        external.open_file(str(part), tool="blender", transcode=converter)
+    assert "Blender was not found" in str(caught.value)
+    assert "--use-docker" in str(caught.value)
+
+
+def test_docker_that_does_not_answer_names_blender_and_docker(part, docker, converter):
+    docker.available = False
+    with pytest.raises(external.ExternalToolError) as caught:
+        external.open_file(str(part), tool="blender", use_docker=True, transcode=converter)
+    assert "Blender is not installed" in str(caught.value)
+    assert "docker info" in str(caught.value)
+
+
+def test_macos_runs_the_executable_inside_the_bundle(monkeypatch):
+    """`open -a` hands a running Blender nothing at all, and the arguments are the point."""
+    monkeypatch.setattr(external.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(external.shutil, "which", lambda _name: None)
+    bundle = "/Applications/Blender.app"
+    executable = bundle + "/Contents/MacOS/Blender"
+    monkeypatch.setattr(external.os.path, "isdir", lambda path: path == bundle)
+    monkeypatch.setattr(external.os.path, "isfile", lambda path: path == executable)
+
+    assert external.native_command(external.BLENDER) == [executable]
+
+
+def test_macos_opens_the_bundle_for_an_application_that_takes_a_file(monkeypatch):
+    """The other half of that rule, and the one every other tool takes.
+
+    FreeCAD is handed a document rather than arguments, so `open -a` is right
+    for it: it is how macOS launches an application, and it reuses a running
+    instance instead of starting a second one.
+    """
+    monkeypatch.setattr(external.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(external.shutil, "which", lambda _name: None)
+    bundle = "/Applications/FreeCAD.app"
+    monkeypatch.setattr(external.os.path, "isdir", lambda path: path == bundle)
+
+    assert external.native_command(external.FREECAD) == ["open", "-a", bundle]
+
+
+def test_a_bundle_without_the_executable_in_it_is_not_a_local_installation(monkeypatch):
+    """A `Blender.app` with nothing runnable inside is not something to launch.
+
+    Falling back to `open -a` here would be worse than finding nothing: the
+    import expression would be dropped and Blender would open empty, which
+    looks like PartCAD doing nothing at all. Finding nothing is honest, and
+    leaves the container route to say what to install.
+    """
+    monkeypatch.setattr(external.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(external.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(external.os.path, "isdir", lambda path: path.endswith("Blender.app"))
+    monkeypatch.setattr(external.os.path, "isfile", lambda _path: False)
+
+    assert external.native_command(external.BLENDER) is None
+
+
+def test_the_other_applications_are_still_handed_the_file_itself(monkeypatch, spawned, part):
+    """Only Blender imports; converting for FreeCAD would be a loss, not a favour."""
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/" + name if name == "freecad" else None)
+    external.open_file(str(part), tool="freecad")
+    assert spawned == [["/usr/bin/freecad", str(part)]]

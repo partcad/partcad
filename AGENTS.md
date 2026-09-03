@@ -62,10 +62,16 @@ a CAD addon, or documentation.
 
   `external` is the same rule applied to a window instead of an installation. `pc open` (and the VS Code
   extension's per-part "Open in..." menu, by running it) starts FreeCAD on the screen of whoever ran the
-  command — on this machine, with this machine's file, and never over the wire; there is no RPC method for it
-  and none may be added. A machine with no local installation can run the application in a container PartCAD
-  keeps for it, named after the tool (`partcad-freecad`), with the workspace and the daemon's socket mounted
-  at the paths they have here and the host's X display forwarded into it.
+  command — on this machine, with this machine's file, and never over the wire; there is no RPC method for
+  opening a file and none may be added. A machine with no local installation can run the application in a
+  container PartCAD keeps for it, named after the tool (`partcad-freecad`), with the workspace and the
+  daemon's socket mounted at the paths they have here and the host's X display forwarded into it.
+
+  One application in that table reads meshes and nothing else — Blender — so an object that is not already one
+  is converted to STL before it is handed over. That conversion is the single thing `pc open` asks the daemon
+  for, because a CAD wrapper is what does it; the window still opens here, and the registry still has no
+  `open` method. Which object types are meshes is `object_types`, an inlined copy of PartCAD's own tables (a
+  client must stay cheap to import) that a completeness test keeps honest.
 
 * [src/partcad_ide_client](./src/partcad_ide_client/AGENTS.md):
 
