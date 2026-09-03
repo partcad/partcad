@@ -53,6 +53,67 @@ def test_a_file_type_with_no_checks_is_not_reported_as_clean(tmp_path):
     assert report.failed is False
 
 
+def test_a_package_configuration_is_checked_too(tmp_path):
+    """The file the package fails to load *because* of is the client's to check.
+
+    Sending it to a daemon would mean asking a daemon that cannot load the
+    package about the file that is stopping it.
+    """
+    path = write(tmp_path, "partcad.yaml", "desc: a package\nparts:\n  cube:\n    type: cadquery\n")
+    report = lint.check_file(path)
+    assert report.checked is True
+    assert report.diagnostics == []
+
+    edited = lint.check_file(path, "desc: a package\nprts:\n  cube:\n    type: cadquery\n")
+    assert [d.message for d in edited.diagnostics] == ["unexpected property 'prts'"]
+    assert (edited.diagnostics[0].line, edited.diagnostics[0].column) == (1, 0)
+
+
+def test_a_configuration_has_no_flavor(tmp_path, monkeypatch):
+    """Nothing points at a package configuration, so nothing is worked out.
+
+    The search is not merely ignored, it is not run: an editor re-checks the
+    open configuration on every keystroke, and walking the tree above it each
+    time to answer a question that cannot apply is work for nothing.
+    """
+    monkeypatch.setattr(lint, "detect_flavor", lambda path: pytest.fail("flavor detected for a configuration"))
+    report = lint.check_file(write(tmp_path, "partcad.yaml", "desc: a package\n"))
+    assert report.flavor is None
+    assert report.to_dict()["flavor"] is None
+
+
+def test_a_scene_flavor_named_for_a_configuration_is_ignored(tmp_path):
+    """`--schema scene` aimed at the wrong file gets the configuration schema.
+
+    A scene-flavored configuration schema would forbid a `how` no package
+    configuration has, which is a schema nothing should ever be checked against.
+    """
+    path = write(tmp_path, "partcad.yaml", "desc: a package\nscenes:\n  bench:\n    type: assy\n")
+    report = lint.check_file(path, flavor="scene")
+    assert report.flavor is None
+    assert report.diagnostics == []
+
+
+def test_a_templated_configuration_is_not_mistaken_for_broken_yaml(tmp_path):
+    """`partcad.yaml` is a Jinja2 template too -- it even has `includePaths`."""
+    path = write(
+        tmp_path,
+        "partcad.yaml",
+        "parts:\n{% for size in [10, 20] %}\n  cube_{{ size }}:\n    type: cadquery\n    path: cube.py\n{% endfor %}\n",
+    )
+    assert lint.check_file(path).diagnostics == []
+
+
+def test_what_pc_init_writes_is_clean(tmp_path):
+    """A new package must not be three errors the moment its file is opened.
+
+    An empty section parses as null, which is how the loader reads it as well;
+    `pc init` writes three of them and `pc add part` fills one in.
+    """
+    path = write(tmp_path, "partcad.yaml", "dependencies:\nsketches:\nparts:\nassemblies:\n")
+    assert lint.check_file(path).diagnostics == []
+
+
 def test_a_missing_file_raises(tmp_path):
     # A caller that named a file it cannot open wants to hear about it, rather
     # than get an empty (and therefore reassuring) report back.

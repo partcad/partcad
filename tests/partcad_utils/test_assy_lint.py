@@ -5,13 +5,18 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-"""Tests for the ASSY checker in ``partcad_utils.assy_lint``.
+"""Tests for the YAML checker in ``partcad_utils.assy_lint``.
 
-An ASSY file is a Jinja2 template, so the checker cannot simply parse it as
-YAML. It masks the template first, which is what lets it keep the source line
-and column of every finding -- and what forces it to stay quiet about anything
-the mask made unknowable. Both halves are pinned here: real errors are found at
-the right place, and templated files that are perfectly correct stay clean.
+An ASSY file and a ``partcad.yaml`` are both Jinja2 templates, so the checker
+cannot simply parse either as YAML. It masks the template first, which is what
+lets it keep the source line and column of every finding -- and what forces it
+to stay quiet about anything the mask made unknowable. Both halves are pinned
+here: real errors are found at the right place, and templated files that are
+perfectly correct stay clean.
+
+Most of what follows uses ASSY files, because the two documents differ only in
+which schema governs them; the block at the end covers what is specific to a
+package configuration.
 """
 
 import pytest
@@ -21,9 +26,13 @@ from partcad_utils.assy_lint import (
     CODE_SCHEMA,
     CODE_TEMPLATE,
     CODE_YAML,
+    FLAVOR_SCENE,
+    PARTCAD_SCHEMA,
     SEVERITY_ERROR,
     SEVERITY_WARNING,
     get_schema,
+    is_assy_file,
+    schema_for_file,
     schema_name_for_file,
     validate_source,
 )
@@ -236,17 +245,94 @@ def test_diagnostic_dict_is_json_rpc_shaped():
     assert payload["endLine"] >= payload["line"]
 
 
-def test_only_assy_files_have_a_schema(tmp_path):
+def test_each_kind_of_file_finds_its_schema(tmp_path):
     # Reading the file, and deciding there is nothing to read it for, is the
     # caller's half of the job (`partcad_client.lint`); all this knows is which
     # names it has a schema for.
     assert schema_name_for_file("/pkg/logo.assy") == ASSY_SCHEMA
     assert schema_name_for_file("/pkg/LOGO.ASSY") == ASSY_SCHEMA
-    assert schema_name_for_file("/pkg/partcad.yaml") is None
+    assert schema_name_for_file("/pkg/partcad.yaml") == PARTCAD_SCHEMA
+    assert schema_name_for_file("/pkg/PartCAD.YAML") == PARTCAD_SCHEMA
+    # A configuration is recognised by its whole name, so a '.yaml' beside it is
+    # somebody's own file rather than a package this has an opinion about.
+    assert schema_name_for_file("/pkg/parts.yaml") is None
     assert schema_name_for_file("/pkg/notes.txt") is None
 
 
-def test_the_schema_ships_with_the_package():
+def test_only_an_assy_file_has_a_flavor():
+    """A `partcad.yaml` is not read as an assembly or as a scene; it is read."""
+    assert is_assy_file("/pkg/logo.assy")
+    assert not is_assy_file("/pkg/partcad.yaml")
+    assert not is_assy_file("/pkg/notes.txt")
+
+
+def test_the_scene_flavor_does_not_reach_a_configuration():
+    """`--schema scene` on a `partcad.yaml` gets the configuration schema.
+
+    Deriving one would forbid a `how` no package configuration has, and hand a
+    caller that sends the same parameters for every document a schema nothing
+    is checked against.
+    """
+    assert schema_for_file("/pkg/partcad.yaml", FLAVOR_SCENE) is get_schema(PARTCAD_SCHEMA)
+    assert schema_for_file("/pkg/logo.assy", FLAVOR_SCENE) is not get_schema(ASSY_SCHEMA)
+
+
+def test_the_schemas_ship_with_the_package():
     schema = get_schema(ASSY_SCHEMA)
     assert schema["$schema"].startswith("http://json-schema.org/draft-07/")
     assert "node" in schema["definitions"]
+
+    schema = get_schema(PARTCAD_SCHEMA)
+    assert schema["$schema"].startswith("http://json-schema.org/draft-07/")
+    assert "parts" in schema["properties"]
+
+
+# A package configuration is the same kind of document as an ASSY file -- a
+# Jinja2 template that renders to YAML and then has to match a schema -- so the
+# whole of the machinery above applies to it. What follows is what is specific
+# to it: which findings it produces, and what it must not produce a finding for.
+
+
+def config_diagnostics(text):
+    return validate_source(text, get_schema(PARTCAD_SCHEMA))
+
+
+def test_a_configuration_is_checked_against_the_configuration_schema():
+    """A part type PartCAD has no factory for, reported at the declaration."""
+    diagnostics = config_diagnostics("parts:\n  cube:\n    type: nonsense\n")
+    assert [(d.severity, d.code, d.path) for d in diagnostics] == [(SEVERITY_ERROR, CODE_SCHEMA, "$.parts.cube")]
+    assert diagnostics[0].line == 2
+
+
+def test_a_misspelled_configuration_key_is_a_warning_at_the_key():
+    diagnostics = config_diagnostics("desc: a package\nfoo: bar\n")
+    assert len(diagnostics) == 1
+    assert diagnostics[0].severity == SEVERITY_WARNING
+    assert diagnostics[0].message == "unexpected property 'foo'"
+    assert (diagnostics[0].line, diagnostics[0].column) == (1, 0)
+
+
+def test_a_freshly_initialized_package_is_clean():
+    """What `pc init` writes, and `pc add part` leaves beside a populated one.
+
+    An empty section parses as null, which is how the loader reads it too
+    ('config_obj.get(section) or {}'). A schema that rejected it would put three
+    errors on every new package the moment its configuration was opened.
+    """
+    assert config_diagnostics("sketches:\nparts:\nassemblies:\ndependencies:\n") == []
+    assert config_diagnostics("sketches:\nparts:\n  cube:\n    type: cadquery\nassemblies:\n") == []
+
+
+def test_jinja2_in_a_configuration_is_not_mistaken_for_broken_yaml():
+    """`partcad.yaml` is rendered as a template too, `includePaths` and all."""
+    assert (
+        config_diagnostics(
+            "parts:\n"
+            "{% for size in [10, 20] %}\n"
+            "  cube_{{ size }}:\n"
+            "    type: cadquery\n"
+            "    path: cube.py\n"
+            "{% endfor %}\n"
+        )
+        == []
+    )

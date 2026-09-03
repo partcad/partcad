@@ -296,14 +296,21 @@ effect is that it appears on `PATH` twice.
 This has nothing to do with `src/terminal.ts`, which creates the `PartCAD` output pseudoterminal: that is a log
 surface with a no-op `handleInput`, not a shell, and has no environment to inherit.
 
-## ASSY diagnostics
+## YAML diagnostics
 
-`.assy` files are registered as YAML for highlighting but are not YAML: they are Jinja2 templates that render
-to YAML and then have to match the ASSY schema. (`.world` files are registered the same way, against `xml`:
-a Gazebo world *is* XML, so the editor's own XML support is the whole of what it needs -- there is no PartCAD
-check for one, and none is wanted.) `src/PartcadLint.ts` checks the open document (debounced on
-edit, immediately on open/save) through the `partcad.lintFile` command and publishes the answer into a
-`partcad` diagnostic collection.
+Two documents are checked: `.assy` files and a package's `partcad.yaml`. Both are registered as YAML for
+highlighting and neither is YAML -- each is a Jinja2 template that renders to YAML and then has to match a
+schema. (`.world` files are registered the same way, against `xml`: a Gazebo world *is* XML, so the editor's
+own XML support is the whole of what it needs -- there is no PartCAD check for one, and none is wanted.)
+`src/PartcadLint.ts` checks the open document (debounced on edit, immediately on open/save) through the
+`partcad.lintFile` command and publishes the answer into a `partcad` diagnostic collection.
+
+**Keeping the `yaml` language id is what keeps the highlighting.** The id is how the editor picks a grammar, so
+a PartCAD id of its own would have to bring a grammar of its own; the `languages` contribution in
+`package.json` claims `partcad.yaml` by filename and `.assy` by extension, and gives each the PartCAD icon,
+without taking either away from `yaml`. Diagnostics need none of that -- they are published per document URI,
+beside whatever else has an opinion about the file. `isPackageConfigDocument` matches the basename rather than
+the extension, because a `parts.yaml` next door is somebody's own file and not a package configuration.
 
 **The check never reaches the daemon**, and there is no RPC method for it. It is the client's own file --
 usually one the editor has not saved -- and it needs no package graph, no CAD runtime and no loaded context, so
@@ -312,8 +319,9 @@ exactly when the package fails to load *because* of the file being typed into. `
 answers it by running `pc --no-ansi lint --file <path> --stdin --json`, feeding the buffer on stdin. Same
 reasoning as `pc daemon stop`: defer to the CLI rather than keep a second copy here.
 
-An ASSY file a **scene** points at is checked against the same schema with `how` forbidden, and which of the
-two a given file is is not a property of the file. `PartcadLint.flavorOf` answers it from the package contents
+An **ASSY** file a **scene** points at is checked against the same schema with `how` forbidden, and which of the
+two a given file is is not a property of the file. (A `partcad.yaml` has no flavor -- nothing points at a
+package configuration -- so `flavorOf` returns nothing for one and none is sent.) `PartcadLint.flavorOf` answers it from the package contents
 the Explorer has already loaded -- the declaration itself -- and leaves the question to `pc lint` for a file no
 loaded package mentions. Both sides go through `pathKey` (`common/paths.ts`) rather than comparing paths as
 strings: `Uri.fsPath` lower-cases a Windows drive letter and PartCAD does not, so the editor's spelling of a
@@ -322,11 +330,12 @@ assembly. The daemon answers the same question with `os.path.samefile`; this one
 has never been saved, so it normalises instead of asking the filesystem. Both lean the same way when they cannot tell: unknown means assembly, because reading
 an assembly as a scene would put a false error on correct code.
 
-The checker is `partcad_utils.assy_lint` (schema: `src/partcad_utils/schema/assy.json`), shared
-with the daemon-side package lint so an editor and CI cannot disagree about a file. It masks each Jinja2
-construct with equally sized filler before parsing, which is what keeps every finding on its source line and
-column; findings that depend on what the mask hid are dropped rather than guessed. Change the schema or the
-message wording there, not here.
+The checker is `partcad_utils.assy_lint` (schemas: `src/partcad_utils/schema/assy.json` and
+`partcad.json`), shared with the daemon-side package lint so an editor and CI cannot disagree about a file. It
+masks each Jinja2 construct with equally sized filler before parsing, which is what keeps every finding on its
+source line and column; findings that depend on what the mask hid are dropped rather than guessed. Change the
+schema or the message wording there, not here -- and remember that a gap in the configuration schema is now a
+squiggle on a working file, so anything PartCAD's own tooling writes has to validate.
 
 ## Opening a file in a third-party application
 

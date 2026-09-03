@@ -292,7 +292,7 @@ class Interface:
         # 'physics' what moving it costs (effort and velocity limits, damping,
         # friction, spring and solver parameters). Both are closed sets of named
         # properties in PartCAD's own units - degrees and millimetres, SI for
-        # the rest - defined in schema/partcad.json; a format that states
+        # the rest - defined in partcad_utils/schema/partcad.json; a format that states
         # something outside them fails the import rather than being carried
         # under a name of its own.
         #

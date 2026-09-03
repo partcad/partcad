@@ -21,6 +21,44 @@ Feature: `pc lint` command
     When I run "pc lint"
     Then the command should exit with a status code of "0"
 
+  @success
+  Scenario: What `pc init` writes is clean
+    # 'pc init' leaves each section empty, and 'pc add part' fills one in. An
+    # empty section parses as null, which is how the loader reads it too - so a
+    # brand new package must not be four findings the moment it is checked.
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A brand new package
+      dependencies:
+      sketches:
+      parts:
+      assemblies:
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+    And STDOUT should not contain "is not of type 'object'"
+
+  @success
+  Scenario: Jinja2 in `partcad.yaml` is not mistaken for broken YAML
+    # A package configuration is a Jinja2 template as much as an ASSY file is -
+    # it even has an 'includePaths' of its own to pull fragments in.
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package whose parts are generated
+      parts:
+      {% for size in [10, 20] %}
+        cube_{{ size }}:
+          type: cadquery
+          path: cube.py
+      {% endfor %}
+      """
+    And a file named "cube.py" with content:
+      """
+      # This is a py file for cube.py
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+
   @failure
   Scenario: Unexpected top-level key should raise an error
     Given a file named "partcad.yaml" with content:
@@ -31,7 +69,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "$: Additional properties are not allowed ('foo' was unexpected)"
+    And STDOUT should contain "partcad.yaml:2:1: unexpected property 'foo'"
 
   @failure
   Scenario: Unexpected subkey give warning
@@ -45,7 +83,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "$.dependencies.core: Additional properties are not allowed ('foo' was unexpected)"
+    And STDOUT should contain "partcad.yaml:5:5: unexpected property 'foo'"
 
   @failure
   Scenario: Invalid enum value in part type
@@ -61,7 +99,7 @@ Feature: `pc lint` command
     Then the command should exit with a status code of "1"
     # A part 'type' is now anyOf {built-in enum, a '<package>:<partType>' reference},
     # so an unknown type fails the whole part schema rather than just the enum.
-    And STDOUT should contain "$.parts.part1: {'type': 'unknown_type'} is not valid under any of the given schemas"
+    And STDOUT should contain "partcad.yaml:5:5: {'type': 'unknown_type'} is not valid under any of the given schemas"
 
   @failure
   Scenario: Invalid enum in shape parameters
@@ -84,7 +122,7 @@ Feature: `pc lint` command
     Then the command should exit with a status code of "1"
     # Same anyOf part schema: a bad parameter 'type' surfaces as the parameter
     # object failing its schemas, not as a bare enum error.
-    And STDOUT should contain "{'type': 'nonsense'} is not valid under any of the given schemas"
+    And STDOUT should contain "partcad.yaml:4:5: {'type': 'cadquery', 'parameters': {'length': {'type': 'nonsense'}}} is not valid under any of the given schemas"
 
   @success
   Scenario: Fully valid configuration with deeply nested parameters
@@ -171,7 +209,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "$.parts.bolt: 'fileFrom' is a dependency of 'fileUrl'"
+    And STDOUT should contain "partcad.yaml:4:5: 'fileFrom' is a dependency of 'fileUrl'"
 
   @failure
   Scenario: Invalid provider type
@@ -185,7 +223,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "$.providers.localstore.type: 's3' is not one of ['store', 'manufacturer', 'enrich']"
+    And STDOUT should contain "partcad.yaml:4:11: 's3' is not one of ['store', 'manufacturer', 'enrich']"
 
   @failure
   Scenario: Invalid value for pythonRequirements
@@ -196,7 +234,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "$.pythonRequirements: 'should-be-a-list' is not of type 'array'"
+    And STDOUT should contain "partcad.yaml:2:21: 'should-be-a-list' is not of type 'array'"
 
   @success
   Scenario: Valid sketch with rectangle, square, and circle
@@ -244,7 +282,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "$.sketches.shape.rectangle: 'side-y' is a required property"
+    And STDOUT should contain "partcad.yaml:5:7: 'side-y' is a required property"
 
   @failure
   Scenario: Part with invalid axis format
@@ -259,7 +297,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "$.parts.extruder.axis[0]: [1, 2] is too short"
+    And STDOUT should contain "partcad.yaml:5:10: [1, 2] is too short"
 
   @success
   Scenario: Interface with valid parameters and ports
@@ -303,7 +341,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "$.providers.buildTool.parameters.configMode.enum[0]: 1 is not of type 'string'"
+    And STDOUT should contain "partcad.yaml:7:16: 1 is not of type 'string'"
 
   @failure
   Scenario: Part with invalid offset array
@@ -320,7 +358,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "'bad' is not of type 'number'"
+    And STDOUT should contain "partcad.yaml:6:16: 'bad' is not of type 'number'"
 
   @success
   Scenario: Valid OCCTLocation in part offset
@@ -359,7 +397,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "$.parts.block.offset[0]: [1.0, 2.0] is too short"
+    And STDOUT should contain "partcad.yaml:5:10: [1.0, 2.0] is too short"
 
   @success
   Scenario: Valid interface-parameter with directional parameters
@@ -393,7 +431,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "$.interfaces.mech.parameters.custom_axis: 'dir' is a required property"
+    And STDOUT should contain "partcad.yaml:6:9: 'dir' is a required property"
 
   @success
   Scenario: Valid assembly with parameters
@@ -475,7 +513,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "$.render.png.exclude[0]: 'nonsense' is not one of"
+    And STDOUT should contain "partcad.yaml:5:15: 'nonsense' is not one of"
 
   @success
   Scenario: Valid suppliers configuration
@@ -500,7 +538,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "$.suppliers[0]: 123 is not of type 'string'"
+    And STDOUT should contain "partcad.yaml:3:5: 123 is not of type 'string'"
 
   @success
   Scenario: Valid part with implements and ports
@@ -547,7 +585,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "$.parts.component.implements.iface1: {'invalid_field': True} is not valid under any of the given schemas"
+    And STDOUT should contain "partcad.yaml:6:9: {'invalid_field': True} is not valid under any of the given schemas"
 
   @success
   Scenario: Valid ASSY file passes lint check
@@ -737,6 +775,21 @@ Feature: `pc lint` command
     When I run "pc lint --file bench.assy --schema scene"
     Then the command should exit with a status code of "1"
     And STDOUT should contain "bench.assy:7:7: 'how' is not allowed in a scene"
+
+  @failure
+  Scenario: `pc lint --file` checks a `partcad.yaml` the same way
+    # The file that decides whether the package loads at all, checked without
+    # loading it - which is the only way to check it while it is broken.
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package with a misspelled section
+      prts:
+        cube:
+          type: cadquery
+      """
+    When I run "pc lint --file partcad.yaml"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "partcad.yaml:2:1: unexpected property 'prts'"
 
   @failure
   Scenario: `pc lint --file` rejects being mixed with the package options

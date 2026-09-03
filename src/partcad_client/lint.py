@@ -5,25 +5,29 @@
 #
 """Checking the files this machine is editing, without asking a daemon.
 
-An ASSY file is a Jinja2 template that renders to YAML and then has to match the
-ASSY schema. Checking one is pure text work: no package graph, no CAD runtime,
-no context -- and the file in question is often not on disk at all, but a buffer
-an editor has not saved yet. Sending that to the daemon would be shipping the
-client's own file across a wire to have it read back, and would leave the editor
-silent exactly when the daemon is down or the package fails to load, which is
-usually *because* of the file being typed into.
+An ASSY file and a `partcad.yaml` are both Jinja2 templates that render to YAML
+and then have to match a schema. Checking one is pure text work: no package
+graph, no CAD runtime, no context -- and the file in question is often not on
+disk at all, but a buffer an editor has not saved yet. Sending that to the
+daemon would be shipping the client's own file across a wire to have it read
+back, and would leave the editor silent exactly when the daemon is down or the
+package fails to load, which is usually *because* of the file being typed into.
+A `partcad.yaml` is the sharpest case of that: the file that decides whether the
+package loads at all is the one a daemon cannot tell you about while it is
+broken.
 
 So every client checks locally, through here: `pc lint --file` in the CLI
-process, and the VS Code extension by running that same command (or, on the
-Python backend, by calling this from its bundled language server). The check
+process, and the VS Code extension by running that same command. The check
 itself is `partcad_utils.assy_lint`, shared with the daemon-side package lint so
 an editor and CI cannot disagree about a file.
 
-One thing has to be decided before the check can run: whether the file is an
-**assembly** or a **scene**, because a scene is checked against the same schema
-with ``how`` forbidden (see `partcad.scene`). That is not a property of the
-file -- it is a property of what points at it -- so it is answered best effort,
-by `detect_flavor` below, and a caller that knows better says so instead.
+One thing has to be decided before an **ASSY** file can be checked: whether it
+is an **assembly** or a **scene**, because a scene is checked against the same
+schema with ``how`` forbidden (see `partcad.scene`). That is not a property of
+the file -- it is a property of what points at it -- so it is answered best
+effort, by `detect_flavor` below, and a caller that knows better says so
+instead. A `partcad.yaml` has no flavor: nothing points at a package
+configuration, and there is only one schema for it.
 """
 
 import os
@@ -54,7 +58,7 @@ _ASSY_TYPES = ("assy",)
 class FileReport:
     """The findings for one file, and how it was named on the way in."""
 
-    def __init__(self, path: str, diagnostics: list, checked: bool, flavor: str = assy_lint.FLAVOR_ASSEMBLY):
+    def __init__(self, path: str, diagnostics: list, checked: bool, flavor: str = None):
         self.path = path
         self.diagnostics = diagnostics
         # False when nothing here knows how to check this kind of file, which is
@@ -62,7 +66,9 @@ class FileReport:
         # two apart (`pc lint --file notes.txt` should say so).
         self.checked = checked
         # What the file was read as. Reported back so that a caller can see
-        # which way the detection went, and an editor can show it.
+        # which way the detection went, and an editor can show it. None where
+        # the question does not arise -- a `partcad.yaml`, or a file type
+        # nothing here checks -- rather than a flavor nothing chose.
         self.flavor = flavor
 
     @property
@@ -154,15 +160,21 @@ def _declared_in(config_path: str, target: str):
 def check_file(path: str, text: str = None, flavor: str = None) -> FileReport:
     """Check one file, or ``text`` as its unsaved content.
 
-    ``flavor`` says whether to read the file as an assembly or as a scene (see
-    `assy_lint.FLAVORS`); None works it out with `detect_flavor`.
+    ``flavor`` says whether to read an ASSY file as an assembly or as a scene
+    (see `assy_lint.FLAVORS`); None works it out with `detect_flavor`. It is
+    ignored for a `partcad.yaml`, which has one schema and no flavor -- and the
+    search is not run for one either, so an editor checking a configuration on
+    every keystroke does not walk the tree above it to answer a question that
+    does not apply.
 
     Raises ``OSError`` if ``text`` is None and the file cannot be read: a caller
     that named a file it cannot open wants to hear about it.
     """
     if assy_lint.schema_name_for_file(path) is None:
         return FileReport(path, [], checked=False)
-    if flavor not in assy_lint.FLAVORS:
+    if not assy_lint.is_assy_file(path):
+        flavor = None
+    elif flavor not in assy_lint.FLAVORS:
         flavor = detect_flavor(path)
     if text is None:
         with open(path, "r", encoding="utf-8") as file:
