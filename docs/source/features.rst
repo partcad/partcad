@@ -122,6 +122,44 @@ based on the location and preferences of the requester, while leaving the
 possibility to enforce the use of a specific provider for corresponding parts
 (for example, for parts that are using a patented design).
 
+.. _python-sandbox:
+
+==================
+The Python sandbox
+==================
+
+Every CAD script PartCAD runs -- a ``cadquery`` or ``build123d`` part, the
+importer that reads a ``STEP`` file, a ``render:`` or ``cam:`` implementation --
+runs in a sandbox rather than in the interpreter PartCAD itself is running on.
+That is what lets one package render against build123d 0.11 while another wants
+0.9, and what keeps a CAD stack out of the environment you work in.
+
+``pythonSandbox`` chooses how that sandbox is built:
+
+==================== =========================================================================
+``conda``            An environment conda provisions, **interpreter included**. The only one
+                     that can give a package the Python version it asks for, so it is the
+                     default wherever conda or mamba is installed.
+``venv``             A plain virtual environment of PartCAD's own, one per interpreter
+                     version, under the internal state directory. The default when conda is
+                     not installed. Built from whichever Python the host has, so a package
+                     asking for a version the host does not have is rendered on the host's
+                     and told so.
+``none``             No environment at all: scripts run on the host's own interpreter and
+                     their dependencies are installed **into it**. Fast and shares whatever
+                     is already there, at the price of writing the CAD stack into the Python
+                     you work with -- and unusable where that Python is not writable.
+``pypy``             A conda environment built around PyPy.
+==================== =========================================================================
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    pythonSandbox: venv
+
+The equivalents everywhere else are ``PC_PYTHON_SANDBOX`` in the environment and
+``--python-sandbox`` on the command line, in the usual order of precedence.
+
 .. _caching:
 
 =======

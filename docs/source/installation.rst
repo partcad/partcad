@@ -369,7 +369,9 @@ Two other things are deliberately not in the bundle, because PartCAD runs them a
 than importing them, exactly as the wheels do:
 
 * **git**, used to fetch package repositories.
-* **conda** (or **mamba**), used to build the sandbox in which PartCAD runs CAD scripts.
+* **conda** (or **mamba**), used to build the sandbox in which PartCAD runs CAD scripts. Optional: without it
+  PartCAD builds a plain virtual environment instead (see :ref:`python-sandbox`); conda is what lets a package
+  ask for a Python version the host does not have.
 
 Run ``pc healthcheck`` to see what is missing on the current machine.
 
@@ -435,8 +437,8 @@ conda and git
 
 A snap does not carry your shell environment, so a conda installed under your home directory -- the usual
 place -- is not visible to it, and neither is a git outside the standard system prefixes. This is expected
-and accepted rather than worked around: PartCAD notices, falls back to running Python scripts without a
-sandbox (``pythonSandbox: none``), and reports both as missing. Packages imported from git repositories are
+and accepted rather than worked around: PartCAD notices, falls back to a virtual environment of its own
+(``pythonSandbox: venv`` -- see :ref:`python-sandbox`), and reports both as missing. Packages imported from git repositories are
 still cloned, through ``libgit2`` as everywhere else; what the snap cannot see is your git *configuration*
 (see :ref:`git-configuration`).
 

@@ -993,12 +993,25 @@ class PythonRuntime(runtime.Runtime):
             else:
                 path = session["path"]
                 use_venv = True
+        elif str(os.path.basename(path)).startswith(VENV_PREFIX):
+            use_venv = True
+        elif self.exec_path is not None and os.path.normpath(path) == os.path.normpath(self.path):
+            # The runtime's own directory, for a sandbox whose interpreter does
+            # not live inside it.
+            #
+            # 'none' is that sandbox: it runs whatever Python the host has, and
+            # its directory holds guard files and a constraints file rather than
+            # an environment. Every install defaults to that directory
+            # ('ensure_*' fills 'path' in with 'self.path'), so without this the
+            # interpreter that installs a package is '<sandbox>/bin/python' -- a
+            # file that never existed -- while the interpreter that then runs
+            # the wrapper is 'exec_path'. Nothing was installed where anything
+            # was looked for, and on a clean machine the install could not even
+            # start.
+            return self.exec_path
         else:
-            # This can be either a venv path or a conda path.
-            if str(os.path.basename(path)).startswith(VENV_PREFIX):
-                use_venv = True
-            else:
-                use_venv = False
+            # A conda prefix: its interpreter really is inside it.
+            use_venv = False
 
         if os.name == "nt":
             if use_venv:
