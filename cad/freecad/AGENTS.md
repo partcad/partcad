@@ -41,6 +41,29 @@ package and does import FreeCAD — it is the root entry point FreeCAD itself ex
 - `partcad_freecad/gui/` — `qt.py` (the PySide2/PySide6 shim), `worker.py` (calls off the Qt thread),
   `dialog.py` (the generated parameter dialog), `explorer.py` (the tree), `controller.py` (the flows),
   `commands.py` (the FreeCAD commands).
+- `resources/icons/` — the workbench icon and the three toolbar commands. See below.
+
+## The icons
+
+`resources/icons/partcad.svg` is the workbench icon (`InitGui.py`) and the Explorer command's button, and it is
+a **byte-identical copy** of `../../ide/vscode/resources/logo.svg` — the one PartCAD mark, the same one the IDE
+renders its application icons from. It has to be a copy rather than a reference: the Addon Manager installs
+this directory on its own, so nothing here can reach a file in another component. Refresh it whenever the mark
+changes, from the repository root:
+
+```bash
+cp ide/vscode/resources/logo.svg cad/freecad/resources/icons/partcad.svg
+```
+
+`tests/test_icons.py` fails if the two disagree, so the copy cannot rot quietly.
+
+The other three are drawn here, and each is stroked **twice**: a wider `#707070` pass, then the brand amber
+`#F5BB2B` over it. That is how the mark itself is built, and it is also the only way one flat colour survives
+both FreeCAD themes — amber alone is nearly invisible on a light toolbar, grey alone on a dark one. Keep both
+passes, keep the grey first and wider, and take any colour from the mark's palette rather than picking one by
+eye; the tests check all three. Write the paths out twice rather than reaching for `<use>`: FreeCAD renders
+these through QtSvg, which implements only part of the specification, and an icon it silently declines to draw
+is worse than a repeated path.
 
 ## Test and validate changes
 

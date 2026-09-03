@@ -448,6 +448,13 @@ checkout in `.github/workflows` asks for LFS, `vsce package` copies the file int
 at it, and the result is an extension whose icon is a 130-byte pointer -- which is exactly what every release
 up to 0.8.35 shipped. `.gitattributes` names the file and says so.
 
+The corollary is that this package should carry **no other image**. `docs/` used to hold `image1.png` and
+`image2.png`, which were byte-identical copies of `docs/source/images/vscode1.png` and `vscode2.png` at the
+repository root -- nothing referenced them (`README.md` links the originals by absolute URL, which is what the
+marketplace needs), and they shipped in every `.vsix` as two more LFS pointers. They are gone. An image this
+package genuinely needs has to be added the way the icon is: named in `.gitattributes` and kept out of LFS, or
+it arrives as text.
+
 After changing `partcad` core code while developing through this extension, click "Restart PartCAD" in the
 PartCAD `Context` view (or restart VS Code) to pick up the change.
 
