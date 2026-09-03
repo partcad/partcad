@@ -124,23 +124,35 @@ concurrency:
 # ubuntu-26.04 (and -arm) are absent on purpose: still preview images, not
 # covered by the Actions SLA. See the note in test.yml.
 #
-# macOS is built on both architectures, and its labels are not symmetric.
-# "macos-15" and "macos-26" are the Apple silicon images; the x86_64 image of the
-# same release is "macos-15-intel" / "macos-26-intel". (The "-large" and
-# "-xlarge" labels beside them are the paid larger runners, which this repository
-# does not use.) x86_64 macOS used to mean "macos-13", which is why there was no
-# Intel bundle here at all: no macos-13 job ever started on the current runner
-# plan, and GitHub retired the image in December 2025 -- see the note in
-# test.yml. The "-intel" labels are its replacement, and they are ordinary
-# standard runners.
+# macOS is the one operating system here that is built on a single OS version,
+# and the labels are not symmetric. "macos-15"/"macos-26" are the Apple silicon
+# images; the x86_64 image of the same release is "macos-15-intel"/
+# "macos-26-intel". (The "-large"/"-xlarge" labels beside them are the paid
+# larger runners, which this repository does not use.) x86_64 macOS used to mean
+# "macos-13", which is why there was no Intel bundle here at all: no macos-13 job
+# ever started on the current runner plan, and GitHub retired the image in
+# December 2025 -- see the note in test.yml. The "-intel" labels replaced it, and
+# they are ordinary standard runners.
 #
-# One Intel build rather than two, and it is the *older* release. A frozen bundle
-# runs on the OS version it was built on and everything newer, so macos-15-x86_64
-# covers macOS 15 and 26 while a macos-26-x86_64 would cover only 26 -- a second
-# 10x-billed freeze buying the half of the range the first one already has. It is
-# also the end of the line: GitHub drops x86_64 macOS altogether when the macOS
-# 15 image retires (announced for autumn 2027), so macos-15-intel is the last
-# x86_64 image there will be.
+# **One macOS build per architecture, both frozen on macOS 15, and both install-
+# tested on macOS 15 and macOS 26.** A frozen bundle runs on the OS version it
+# was built on and everything newer, so the macOS 15 builds cover macOS 15 and 26
+# between them and a macos-26-* build reaches no machine they do not. There used
+# to be a macos-26-arm64 build; it was a second 10x-billed freeze buying the half
+# of the range the first one already had, and dropping it is what pays for the
+# Intel build -- which reaches machines nothing here reached before.
+#
+# What that costs is the assumption. "Older build runs on newer OS" is the whole
+# basis of the per-OS-version scheme and nothing used to check it: a macOS 26 host
+# was handed a macOS 26 build. So the "Install" job now runs each macOS bundle on
+# its own generation *and* on the next one -- see INSTALL_FORWARD_* below. That is
+# a ~10 minute job in place of a ~35 minute freeze, and it tests the property that
+# matters rather than sidestepping it.
+#
+# The macOS 15 images are also the last x86_64 ones: GitHub drops x86_64 macOS
+# when they retire (announced for autumn 2027). That single event is what forces
+# the next move here -- arm64 to macos-26, x86_64 to nothing -- so it is one
+# migration to plan, not two. "dev-tools/pyinstaller/README.md" says so as well.
 #
 # Windows has one build, not one per image, and that is not an oversight. The
 # per-OS-version split exists because a machine can be lined up against it: an
@@ -168,24 +180,46 @@ env:
   # ".github/actions/test-depth", and OSES_DEEP_ONLY in "test.yml", which drops
   # the same images for the same reasons.
   #
-  # This workflow is the expensive one to halve: eight freezes of ~875MB, three
-  # of them on macOS runners that bill at 10x. The trade is that a pull request
-  # no longer proves the Ubuntu 22.04, the macOS 26 and the macOS x86_64 bundles
-  # still build. Nothing ships unproven, though -- "deploy.yml" runs on a push,
-  # which is always deep, and refuses a release that is missing any platform. Put
-  # "#deepTest" on a pull request that touches the freeze, and the whole set runs
-  # before it merges.
+  # This workflow is the expensive one to halve: seven freezes of ~875MB, two of
+  # them on macOS runners that bill at 10x. The trade is that a pull request no
+  # longer proves the Ubuntu 22.04 and the macOS x86_64 bundles still build.
+  # Nothing ships unproven, though -- "deploy.yml" runs on a push, which is always
+  # deep, and refuses a release that is missing any platform. Put "#deepTest" on a
+  # pull request that touches the freeze, and the whole set runs before it merges.
   #
-  # macos-15-x86_64 is here rather than in PLATFORMS_CORE for the same reason
-  # macos-26-arm64 is -- a 10x-billed runner -- and for one of its own: it is the
-  # architecture Apple stopped shipping, so it is the build least likely to be
-  # the one a change breaks and the one a contributor is least likely to be on.
-  # A release still carries it, and "#deepTest" still builds it before a merge.
+  # macos-15-x86_64 is here rather than in PLATFORMS_CORE for the billing rate and
+  # for one reason of its own: it is the architecture Apple stopped shipping, so
+  # it is the build least likely to be the one a change breaks and the one a
+  # contributor is least likely to be on. A release still carries it, and
+  # "#deepTest" still builds it before a merge.
   PLATFORMS_DEEP: >-
     [{"os": "ubuntu-22.04", "platform": "ubuntu-22.04-x86_64"},
     {"os": "ubuntu-22.04-arm", "platform": "ubuntu-22.04-arm64"},
-    {"os": "macos-26", "platform": "macos-26-arm64"},
     {"os": "macos-15-intel", "platform": "macos-15-x86_64"}]
+
+  # Extra "Install" legs: a bundle run on a runner that did not build it.
+  #
+  # Every platform this run froze is installed on the image that froze it -- the
+  # "Set matrix" job derives that from the lists above, so it cannot be forgotten.
+  # These are the legs that go further: the macOS bundles on the *next* macOS
+  # generation, which is where "a frozen bundle runs on the OS it was built on and
+  # everything newer" is either true or is a story we tell users. Nothing else
+  # tests it: every other install runs a build on its own image.
+  #
+  # They exercise the resolution as well as the binary, because "install.sh" runs
+  # here without "--platform": a macOS 26 host has to read the manifest, work out
+  # that the macOS 15 build is the one it can run, and fetch that. The assertion
+  # after it names the platform, so resolving to the wrong build fails the job.
+  #
+  # arm64 is core rather than deep, unlike the freeze it replaced. We now ship one
+  # arm64 build for every macOS version, so "it still starts on the newest macOS"
+  # protects every Mac user rather than some of them -- and it is ~10 minutes
+  # beside the hours of macOS "Examples" a pull request already pays for.
+  INSTALL_FORWARD_CORE: >-
+    [{"os": "macos-26", "platform": "macos-15-arm64"}]
+  # x86_64 follows its bundle: deep-only, both generations.
+  INSTALL_FORWARD_DEEP: >-
+    [{"os": "macos-26-intel", "platform": "macos-15-x86_64"}]
 
   # Which bundles the "Examples" job below runs the example packages through, and
   # with which suite. A representative subset of the builds above rather than all
@@ -194,6 +228,11 @@ env:
   # the libraries it links against do, and the "Install" jobs cover every
   # platform this run built for that. So this is one build per operating system
   # and architecture.
+  #
+  # Each runs on the image that froze it, and only there. What a second generation
+  # would add is that the binary starts on a newer OS, which is the "Install"
+  # job's question and is answered there for a tenth of the price -- an "Examples"
+  # leg provisions a conda sandbox and renders every package.
   EXAMPLES_CORE: >-
     [{"os": "ubuntu-24.04", "platform": "ubuntu-24.04-x86_64", "suite": "PartCAD", "package": "//pub/examples/partcad", "render": true},
     {"os": "ubuntu-24.04", "platform": "ubuntu-24.04-x86_64", "suite": "All", "package": "//pub/examples", "render": false},
@@ -231,31 +270,52 @@ jobs:
         run: |
           if [ "${DEEP}" = "true" ]; then
             platforms=$(jq -cn --argjson core '${{ env.PLATFORMS_CORE }}' --argjson deep '${{ env.PLATFORMS_DEEP }}' '$core + $deep')
+            forward=$(jq -cn --argjson core '${{ env.INSTALL_FORWARD_CORE }}' --argjson deep '${{ env.INSTALL_FORWARD_DEEP }}' '$core + $deep')
             examples=$(jq -cn --argjson core '${{ env.EXAMPLES_CORE }}' --argjson deep '${{ env.EXAMPLES_DEEP }}' '$core + $deep')
           else
             platforms='${{ env.PLATFORMS_CORE }}'
+            forward='${{ env.INSTALL_FORWARD_CORE }}'
             examples='${{ env.EXAMPLES_CORE }}'
           fi
           echo "Platforms: ${platforms}"
           echo 'build={"include": '"${platforms}"'}' >> "${GITHUB_OUTPUT}"
+
           # Everything the "Install" job can exercise, which is everything but
           # Windows: "install.sh" is a shell installer and there is none there.
-          install=$(jq -c 'map(select(.platform | startswith("windows") | not))' <<<"${platforms}")
-          echo 'install={"include": '"${install}"'}' >> "${GITHUB_OUTPUT}"
-          # Every "Examples" leg has to name a build this run produced -- the
-          # deep-only ones are absent from a reduced run, and the job would then
-          # wait for an artifact that nothing uploaded. Checked rather than
-          # trusted, because the two lists are edited separately and a mismatch
-          # would otherwise show up an hour into the run as a download failure.
+          #
+          # Derived from the build list rather than written out. That is what
+          # makes "every bundle this run freezes is installed somewhere" true by
+          # construction rather than by anyone remembering: there is no second
+          # list to fall behind, and so nothing to check it against either.
+          # INSTALL_FORWARD_* then adds the legs that run a bundle on an image
+          # that did not build it -- those are a second list, and they are checked
+          # below. `unique_by` because a forward leg naming an image already in
+          # the build list would otherwise be two identical jobs.
+          own=$(jq -c 'map(select(.platform | startswith("windows") | not) | {os, platform})' <<<"${platforms}")
+          install=$(jq -cn --argjson own "${own}" --argjson forward "${forward}" \
+            '($own + ($forward | map({os, platform}))) | unique_by([.os, .platform])')
+          echo "Install: ${install}"
+
+          # Every "Install" and "Examples" leg has to name a build this run
+          # produced -- the deep-only ones are absent from a reduced run, and the
+          # job would then wait for an artifact that nothing uploaded. Checked
+          # rather than trusted, because these lists are edited separately from
+          # the platform lists and a mismatch would otherwise show up as a
+          # download failure well into the run.
           echo "Examples: ${examples}"
           built=$(jq -c '[.[].platform]' <<<"${platforms}")
-          orphans=$(jq -r --argjson built "${built}" \
-            '[.[] | select(.platform as $p | $built | index($p) | not) | .platform] | unique | join(" ")' \
-            <<<"${examples}")
-          if [ -n "${orphans}" ]; then
-            echo "::error::the Examples matrix asks for bundles this run does not build: ${orphans}"
-            exit 1
-          fi
+          for pair in "Install:${install}" "Examples:${examples}"; do
+            what="${pair%%:*}"
+            legs="${pair#*:}"
+            orphans=$(jq -r --argjson built "${built}" \
+              '[.[] | select(.platform as $p | $built | index($p) | not) | .platform] | unique | join(" ")' \
+              <<<"${legs}")
+            if [ -n "${orphans}" ]; then
+              echo "::error::the ${what} matrix asks for bundles this run does not build: ${orphans}"
+              exit 1
+            fi
+          done
+          echo 'install={"include": '"${install}"'}' >> "${GITHUB_OUTPUT}"
           echo 'examples={"include": '"${examples}"'}' >> "${GITHUB_OUTPUT}"
 
   build:
@@ -305,9 +365,13 @@ jobs:
           retention-days: 14
 
   # Every platform this run built that "install.sh" can install, which is every
-  # one except Windows -- there is no shell installer there.
+  # one except Windows -- there is no shell installer there -- plus the macOS
+  # bundles again on the next macOS generation. The runner is in the job name
+  # because the platform no longer identifies the leg: "macos-15-arm64" is
+  # installed twice, on macos-15 and on macos-26, and those are the two jobs that
+  # together say the build runs everywhere it claims to.
   install:
-    name: "Install (${{ matrix.platform }})"
+    name: "Install (${{ matrix.platform }} on ${{ matrix.os }})"
     needs: [set-matrix, build]
     strategy:
       fail-fast: false
@@ -339,6 +403,10 @@ jobs:
       # Deliberately without `--platform`: the installer resolving this machine
       # to one of the published builds is the part that can silently pick the
       # wrong one, so it runs for real and the result is asserted afterwards.
+      # That assertion is the whole point of the forward legs -- on macos-26 the
+      # installer has to read the manifest, work out that the macOS 15 build is
+      # one this machine can run, and fetch it. A resolver that refused it, or
+      # picked something else, fails here rather than in a user's terminal.
       - name: Install with install.sh
         shell: bash
         run: |

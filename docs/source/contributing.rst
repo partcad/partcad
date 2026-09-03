@@ -701,11 +701,16 @@ To run it on a pull request before it merges, put ``#deepTest`` anywhere in the 
 description and re-run the checks. Worth doing when the change touches packaging, dependencies, the standalone
 bundle or the snap, or anything else where an older OS version could behave differently.
 
-The ``Standalone`` workflow reads the same marker: without it, a pull request builds four of the eight
-standalone bundles -- it drops both Ubuntu 22.04 images, the second macOS, and macOS on x86_64, whose runner
-bills at the same ten times the Linux rate. The ``IDE`` workflow reads it too, for the one IDE whose command
-line bundle is deep-only: the Intel macOS application is built and installed on a deep run and on no other. A
-release always builds all eight bundles and all four IDEs, and refuses to publish if any is missing.
+The ``Standalone`` workflow reads the same marker: without it, a pull request builds four of the seven
+standalone bundles -- it drops both Ubuntu 22.04 images and macOS on x86_64, whose runner bills at the same ten
+times the Linux rate. The ``IDE`` workflow reads it too, for the one IDE whose command line bundle is
+deep-only: the Intel macOS application is built and installed on a deep run and on no other. A release always
+builds all seven bundles and all four IDEs, and refuses to publish if any is missing.
+
+Both workflows install each macOS artifact on macOS 15 *and* on macOS 26, because there is one macOS build per
+architecture and it is frozen on the older release -- so "a bundle runs on the OS it was built on and
+everything newer" stopped being an assumption and became something a job checks. Only the Intel half of that
+is deep-only.
 
 The Python axis is not the same for every job, because not every job is testing the same thing. ``Pytest`` and
 ``Examples (All)`` run the whole supported range: they exercise PartCAD's own code, so the interpreter it runs

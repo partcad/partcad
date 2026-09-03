@@ -198,13 +198,17 @@ carries; the installer reads it, works out which of them this machine can run, a
 .. code-block:: text
 
   Linux, x86_64 and arm64     built on Ubuntu 22.04 and on Ubuntu 24.04
-  macOS, Apple silicon        built on macOS 15 and on macOS 26
+  macOS, Apple silicon        built on macOS 15
   macOS, Intel                built on macOS 15
   Windows, x86_64             built on Windows Server 2022
 
 The Ubuntu names are not a requirement to run Ubuntu. Any Linux distribution can run these bundles; what
 differs between the two is the minimum glibc, and a machine the installer cannot identify as Ubuntu is
 offered the 22.04 build, which has the lower floor. Pass ``--platform`` to install a specific one.
+
+macOS has one build per architecture rather than one per macOS version, because a bundle built on macOS 15
+runs on macOS 15 and on macOS 26 alike -- both are built and installation-tested on both releases before
+every publish. On Apple silicon that is the ``arm64`` archive; on an Intel Mac, the ``x86_64`` one.
 
 Windows is one build rather than one per Windows version, because there is nothing to choose between: the
 split exists so that a machine can be compared against it, and Windows offers no such comparison -- nor the
@@ -308,8 +312,7 @@ the wheels, together with a ``.sha256`` file each:
 
 * ``partcad-<version>-ubuntu-22.04-x86_64.tar.xz``, ``partcad-<version>-ubuntu-22.04-arm64.tar.xz``
 * ``partcad-<version>-ubuntu-24.04-x86_64.tar.xz``, ``partcad-<version>-ubuntu-24.04-arm64.tar.xz``
-* ``partcad-<version>-macos-15-arm64.tar.xz``, ``partcad-<version>-macos-26-arm64.tar.xz``
-* ``partcad-<version>-macos-15-x86_64.tar.xz``
+* ``partcad-<version>-macos-15-arm64.tar.xz``, ``partcad-<version>-macos-15-x86_64.tar.xz``
 * ``partcad-<version>-windows-2022-x86_64.zip``
 
 Pick the newest one your machine is not older than -- see :ref:`the note above <standalone-os-versions>` on

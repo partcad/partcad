@@ -83,9 +83,12 @@ MANIFEST = {
             "x86_64": ["ubuntu-24.04-x86_64", "ubuntu-22.04-x86_64"],
             "arm64": ["ubuntu-24.04-arm64", "ubuntu-22.04-arm64"],
         },
-        # Both macOS architectures, and not the same number of builds on each:
-        # the Intel image is deep-only in CI and there is one of it, which is
-        # what a release manifest looks like.
+        # Two arm64 entries and one x86_64. A release publishes one macOS build
+        # per architecture today -- both frozen on macOS 15, see
+        # "build-standalone.yml" -- but the policy has to order a list of any
+        # length, macOS carried two before and will again when the macOS 15
+        # images retire, and no other operating system here exercises "several
+        # builds of one arch, one of the other".
         "macos": {
             "arm64": ["macos-26-arm64", "macos-15-arm64"],
             "x86_64": ["macos-15-x86_64"],

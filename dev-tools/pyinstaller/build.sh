@@ -91,8 +91,11 @@ done
 # Apple silicon image and `macos-15-intel` the x86_64 one of the same release:
 #
 #   ubuntu-22.04-x86_64   ubuntu-22.04-arm64    macos-15-arm64    windows-2022-x86_64
-#   ubuntu-24.04-x86_64   ubuntu-24.04-arm64    macos-26-arm64
-#                                               macos-15-x86_64
+#   ubuntu-24.04-x86_64   ubuntu-24.04-arm64    macos-15-x86_64
+#
+# macOS is one build per architecture rather than one per OS version: both are
+# frozen on macOS 15 and cover macOS 15 and 26 between them. CI installs each of
+# them on both releases rather than assuming that.
 #
 # Which of these a release carries is published with it, as `platforms.json`;
 # `install.sh` and the other clients read that rather than keeping a list. The

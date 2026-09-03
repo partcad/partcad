@@ -29,7 +29,7 @@ or `-intel` suffix) plus the architecture:
 | | x86_64 | arm64 |
 | --- | --- | --- |
 | Linux | `ubuntu-22.04-x86_64`, `ubuntu-24.04-x86_64` | `ubuntu-22.04-arm64`, `ubuntu-24.04-arm64` |
-| macOS | `macos-15-x86_64` | `macos-15-arm64`, `macos-26-arm64` |
+| macOS | `macos-15-x86_64` | `macos-15-arm64` |
 | Windows | `windows-2022-x86_64` | — |
 
 The Ubuntu names say what built the bundle, not what is required to run it: any distribution can run these, and
@@ -59,27 +59,45 @@ through, and those *are* enforced — the "Set matrix" job fails the run if a le
 not build.
 
 The split between `PLATFORMS_CORE` and `PLATFORMS_DEEP` is about cost, not support: a pull request builds the four core
-platforms, and the four in `PLATFORMS_DEEP` (Ubuntu 22.04 on both architectures, the second macOS, and macOS on x86_64)
-are added on a deep run — the nightly schedule, a manual dispatch, a push, or `#deepTest` in the pull request. See
-`.github/actions/test-depth`. A release runs on a push, so it is always deep and always builds all eight; `deploy.yml`
+platforms, and the three in `PLATFORMS_DEEP` (Ubuntu 22.04 on both architectures, and macOS on x86_64) are added on a
+deep run — the nightly schedule, a manual dispatch, a push, or `#deepTest` in the pull request. See
+`.github/actions/test-depth`. A release runs on a push, so it is always deep and always builds all seven; `deploy.yml`
 refuses to publish otherwise. Put `#deepTest` on a pull request that changes what is frozen.
 
 `build.sh` detects the platform id from the machine when it is not told one, which is what a local build wants.
 CI passes `--platform=` instead: the runner image label is the authoritative answer to which OS version it is,
 and recovering that from the running system is guesswork on Windows in particular.
 
-**The macOS labels are not symmetric, and the x86_64 one is new.** `macos-15`/`macos-26` are the Apple silicon
-images; the x86_64 image of the same release is `macos-15-intel`/`macos-26-intel`. (`-large`/`-xlarge` beside
-them are the paid larger runners, which this repository does not use.) x86_64 macOS used to mean `macos-13`,
-which is why there was no Intel bundle at all: no macos-13 job ever started on the current runner plan, and
-GitHub retired the image in December 2025 — see the note in `test.yml`. The `-intel` labels replaced it.
+**macOS is the exception to the table above: one build per architecture, not one per OS version.** The labels
+are not symmetric either. `macos-15`/`macos-26` are the Apple silicon images; the x86_64 image of the same
+release is `macos-15-intel`/`macos-26-intel`. (`-large`/`-xlarge` beside them are the paid larger runners, which
+this repository does not use.) x86_64 macOS used to mean `macos-13`, which is why there was no Intel bundle at
+all: no macos-13 job ever started on the current runner plan, and GitHub retired the image in December 2025 —
+see the note in `test.yml`. The `-intel` labels replaced it.
 
-There is one Intel build rather than two, and it is the older release. A frozen bundle runs on the OS version
-it was built on and everything newer, so `macos-15-x86_64` covers macOS 15 and 26 while a `macos-26-x86_64`
-would cover only 26 — a second 10x-billed freeze for the half of the range the first one already has. It is
-also the end of the line: GitHub drops x86_64 macOS when the macOS 15 image retires (announced for autumn
-2027), so `macos-15-intel` is the last x86_64 image there will be. It is in `PLATFORMS_DEEP` for that reason as
-much as for the billing rate — a release carries it, a pull request builds it on `#deepTest`.
+Both macOS builds are frozen on macOS 15, and there is deliberately no macOS 26 build of either. A frozen bundle
+runs on the OS version it was built on and everything newer, so `macos-15-arm64` and `macos-15-x86_64` cover
+macOS 15 and 26 between them; a `macos-26-*` build reaches no machine they do not. There *was* a
+`macos-26-arm64` build. Dropping it is what pays for the Intel one — a 10x-billed freeze traded for another
+10x-billed freeze, out for a build that reached nothing new and in for a build that reaches an architecture
+nothing here reached before.
+
+**That trade is only sound if "older build runs on newer OS" is true, so CI now checks it.** It is the
+assumption the whole per-OS-version scheme rests on and nothing used to test it: every bundle was installed on
+the image that froze it, and a macOS 26 host was handed a macOS 26 build. `INSTALL_FORWARD_CORE` and
+`INSTALL_FORWARD_DEEP` in `build-standalone.yml` add an `Install` leg for each macOS bundle on the *next*
+generation — `macos-15-arm64` on `macos-26`, `macos-15-x86_64` on `macos-26-intel` — and the IDE workflow does
+the same for the application. Those legs run `install.sh` without `--platform`, so they also check the half that
+is not the binary: that a macOS 26 machine reads the manifest and resolves itself to the macOS 15 build.
+
+The arm64 forward leg is core rather than deep, unlike the freeze it replaced: with one arm64 build for every
+macOS version, "it still starts on the newest macOS" is now load-bearing for every Mac user rather than some of
+them. The Intel legs follow their bundle and stay deep-only.
+
+**The next move here is one event, not two.** The macOS 15 images are the last x86_64 ones: GitHub drops x86_64
+macOS when they retire, announced for autumn 2027. That same retirement is what forces arm64 onto `macos-26`.
+So when it comes: move `macos-15`→`macos-26` and `macos-15-arm64`→`macos-26-arm64`, delete the x86_64 build and
+its legs, and add the next generation's forward legs when there is one.
 
 There is no Windows arm64 bundle -- not a platform PartCAD releases for.
 

@@ -313,9 +313,13 @@ jobs:
           # PLATFORMS_CORE and PLATFORMS_DEEP together, because a release is
           # always a deep run: this workflow runs on a push, and
           # ".github/actions/test-depth" gives every push the full matrix. The
-          # deep-only platforms -- both Ubuntu 22.04 images, macos-26-arm64 and
-          # macos-15-x86_64 -- are the ones a pull request skips, not ones a
-          # release may go without.
+          # deep-only platforms -- both Ubuntu 22.04 images and macos-15-x86_64 --
+          # are the ones a pull request skips, not ones a release may go without.
+          #
+          # One macOS build per architecture, both frozen on macOS 15: a bundle
+          # runs on the OS version it was built on and everything newer, so these
+          # two cover macOS 15 and 26 between them. "build-standalone.yml" says
+          # why, and installs each of them on both generations to prove it.
           #
           # By version, not by "partcad-*": an archive left over from another
           # build satisfies the loose glob, and the release would then carry two
@@ -324,7 +328,7 @@ jobs:
           for platform in \
             ubuntu-22.04-x86_64 ubuntu-22.04-arm64 \
             ubuntu-24.04-x86_64 ubuntu-24.04-arm64 \
-            macos-15-arm64 macos-26-arm64 macos-15-x86_64 \
+            macos-15-arm64 macos-15-x86_64 \
             windows-2022-x86_64; do
             archive=$(find release/standalone -type f \
               -name "partcad-${RELEASE_VERSION}-${platform}.*" ! -name "*.sha256")

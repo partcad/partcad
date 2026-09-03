@@ -70,12 +70,23 @@ concurrency:
 # in a run of this depth -- this workflow downloads that artifact rather than
 # freezing it, and a name nothing uploaded is an hour of building followed by a
 # failed download.
+#
+# The macOS builders are the 15 images, not "macos-latest". The IDE archive
+# carries no OS version, so unlike a command line bundle there is nowhere to say
+# what it needs and no way for a client to compare a machine against it: whatever
+# floor the builder gives it is a floor nobody can see. Building on the oldest
+# supported image is how it does not acquire one. It also keeps a moving label
+# out of what gets released -- "macos-latest" moved from macOS 15 to macOS 26 in
+# July 2026, which would have raised that invisible floor with no commit to point
+# at. (`ubuntu-latest` and `windows-latest` below are the same shape of risk and
+# are left alone here: neither carries a bundle whose floor this workflow sets,
+# and moving them belongs with the wheel matrix in "test.yml", not here.)
 env:
   # Built on every run. Each `bundle` is one of PLATFORMS_CORE there, so a
   # reduced run has them.
   IDE_CORE: >-
     [{"os": "ubuntu-latest", "platform": "linux-x86_64", "bundle": "ubuntu-24.04-x86_64"},
-    {"os": "macos-latest", "platform": "macos-arm64", "bundle": "macos-15-arm64"},
+    {"os": "macos-15", "platform": "macos-arm64", "bundle": "macos-15-arm64"},
     {"os": "windows-latest", "platform": "windows-x86_64", "bundle": "windows-2022-x86_64"}]
   # Added only on a deep run: the nightly schedule, a manual dispatch, a push --
   # which includes the release path -- or "#deepTest" in the pull request. See
@@ -95,6 +106,20 @@ env:
   # same reasons as the bundle inside it.
   IDE_DEEP: >-
     [{"os": "macos-15-intel", "platform": "macos-x86_64", "bundle": "macos-15-x86_64"}]
+
+  # Extra "Install" legs: an IDE run on a runner that did not build it.
+  #
+  # Every platform this run built is installed on the image that built it -- the
+  # "Set matrix" job derives that from the lists above. These add the next macOS
+  # generation, matching what "build-standalone.yml" does for the bundles: an
+  # application built on macOS 15, carrying a `pc` frozen on macOS 15, has to
+  # start on macOS 26, and this is the only place that is tried. Note that it is
+  # tried twice over -- `partcad-ide --version` is the editor, `pc version` is the
+  # frozen bundle inside it.
+  IDE_INSTALL_FORWARD_CORE: >-
+    [{"os": "macos-26", "platform": "macos-arm64"}]
+  IDE_INSTALL_FORWARD_DEEP: >-
+    [{"os": "macos-26-intel", "platform": "macos-x86_64"}]
 
 jobs:
   set-matrix:
@@ -118,15 +143,33 @@ jobs:
         run: |
           if [ "${DEEP}" = "true" ]; then
             platforms=$(jq -cn --argjson core '${{ env.IDE_CORE }}' --argjson deep '${{ env.IDE_DEEP }}' '$core + $deep')
+            forward=$(jq -cn --argjson core '${{ env.IDE_INSTALL_FORWARD_CORE }}' --argjson deep '${{ env.IDE_INSTALL_FORWARD_DEEP }}' '$core + $deep')
           else
             platforms='${{ env.IDE_CORE }}'
+            forward='${{ env.IDE_INSTALL_FORWARD_CORE }}'
           fi
           echo "Platforms: ${platforms}"
           echo 'build={"include": '"${platforms}"'}' >> "${GITHUB_OUTPUT}"
+
           # Everything the "Install" job can exercise, which is everything but
-          # Windows: there is no shell installer there, and the setup program
-          # that takes its place is what "install-windows" runs instead.
-          install=$(jq -c 'map(select(.platform | startswith("windows") | not) | {os, platform})' <<<"${platforms}")
+          # Windows: there is no shell installer there, and the setup program that
+          # takes its place is what "install-windows" runs instead.
+          #
+          # Derived from the build list, so an IDE this run builds is installed
+          # somewhere whether or not anyone remembered to say so; the forward legs
+          # are the second list, and they are checked against what this run built.
+          own=$(jq -c 'map(select(.platform | startswith("windows") | not) | {os, platform})' <<<"${platforms}")
+          install=$(jq -cn --argjson own "${own}" --argjson forward "${forward}" \
+            '($own + $forward) | unique_by([.os, .platform])')
+          echo "Install: ${install}"
+          built=$(jq -c '[.[].platform]' <<<"${platforms}")
+          orphans=$(jq -r --argjson built "${built}" \
+            '[.[] | select(.platform as $p | $built | index($p) | not) | .platform] | unique | join(" ")' \
+            <<<"${install}")
+          if [ -n "${orphans}" ]; then
+            echo "::error::the Install matrix asks for IDEs this run does not build: ${orphans}"
+            exit 1
+          fi
           echo 'install={"include": '"${install}"'}' >> "${GITHUB_OUTPUT}"
 
   # The build tooling's own tests: the extension policy, the branding, the
@@ -627,13 +670,16 @@ jobs:
   # What a user does: download the archive this run produced and install it with
   # the script from the front page, on a machine that has never seen PartCAD.
   install:
-    name: "Install (${{ matrix.platform }})"
+    name: "Install (${{ matrix.platform }} on ${{ matrix.os }})"
     needs: [set-matrix, build]
     strategy:
       fail-fast: false
       # Every platform this run built that "install.sh" can install, which is
       # every one except Windows -- the setup program is the installer there, and
-      # "install-windows" below runs it.
+      # "install-windows" below runs it -- plus the macOS applications again on
+      # the next macOS generation. The runner is in the job name because the
+      # platform no longer identifies the leg: "macos-arm64" is installed on
+      # macos-15 and on macos-26.
       matrix: ${{ fromJson(needs.set-matrix.outputs.install) }}
     runs-on: ${{ matrix.os }}
     # The first start below runs the editor and waits for a PyInstaller bundle
