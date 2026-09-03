@@ -764,6 +764,37 @@ def test_macos_runs_the_executable_inside_the_bundle(monkeypatch):
     assert external.native_command(external.BLENDER) == [executable]
 
 
+def test_macos_opens_the_bundle_for_an_application_that_takes_a_file(monkeypatch):
+    """The other half of that rule, and the one every other tool takes.
+
+    FreeCAD is handed a document rather than arguments, so `open -a` is right
+    for it: it is how macOS launches an application, and it reuses a running
+    instance instead of starting a second one.
+    """
+    monkeypatch.setattr(external.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(external.shutil, "which", lambda _name: None)
+    bundle = "/Applications/FreeCAD.app"
+    monkeypatch.setattr(external.os.path, "isdir", lambda path: path == bundle)
+
+    assert external.native_command(external.FREECAD) == ["open", "-a", bundle]
+
+
+def test_a_bundle_without_the_executable_in_it_is_not_a_local_installation(monkeypatch):
+    """A `Blender.app` with nothing runnable inside is not something to launch.
+
+    Falling back to `open -a` here would be worse than finding nothing: the
+    import expression would be dropped and Blender would open empty, which
+    looks like PartCAD doing nothing at all. Finding nothing is honest, and
+    leaves the container route to say what to install.
+    """
+    monkeypatch.setattr(external.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(external.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(external.os.path, "isdir", lambda path: path.endswith("Blender.app"))
+    monkeypatch.setattr(external.os.path, "isfile", lambda _path: False)
+
+    assert external.native_command(external.BLENDER) is None
+
+
 def test_the_other_applications_are_still_handed_the_file_itself(monkeypatch, spawned, part):
     """Only Blender imports; converting for FreeCAD would be a loss, not a favour."""
     monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/" + name if name == "freecad" else None)
