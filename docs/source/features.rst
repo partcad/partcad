@@ -51,11 +51,18 @@ a bare canvas. Which tabs appear depends on what is being shown, and the 3D view
 - **3D** — the shape itself, tessellated by PartCAD and drawn here. Always present.
 - **Bill of Materials** — for an assembly or a scene: every part it is made of, recursively, counted.
 - **Instructions** — for an assembly that declares its steps: the assembly guide, step by step.
+- **FEA** and **CFD** — for a part: the analysis :ref:`pc cae <cae>` runs, and what it found.
 - **Supply** — what the objects in view can be bought from, and a quote per supplier.
 
 The 3D view arrives over the viewer protocol from whichever ``partcad`` asked for the shape to be shown; the
 other tabs are questions put to the PartCAD daemon, fetched the first time the tab is looked at and cached
 until the next object is shown. An object that belongs to no package gets the 3D view alone.
+
+The two analysis tabs are the exception to "questions": looking at one *runs* the analysis. A field over the
+model names which implementation runs it — pre-filled with the configured default, and editable, so a machine
+whose solver is elsewhere is one line away from an answer rather than stuck on an error. The model is drawn
+according to the format the implementation chose: a 3D result is turned and zoomed, a 2D one is panned and
+zoomed as a picture. Any findings are listed under it; a part with nothing to report gets the whole pane.
 
 Export
 ------
@@ -63,6 +70,59 @@ Export
 Objects can be exported directly from the extension to any of the following formats: **SVG**, **PNG**,
 **JPEG**, **STEP**, **STL**, **3MF**, **ThreeJS**, **OBJ**, **IGES**, and **glTF**. A scene can also be
 exported as a **Gazebo world** (SDFormat).
+
+.. _engineering-analysis:
+
+====================
+Engineering analysis
+====================
+
+A part can say what holds it and what it carries, and PartCAD can put that
+question to a solver: ``pc cae fea`` for a finite element analysis, ``pc cae
+cfd`` for computational fluid dynamics. The conditions live on the part, in a
+section named after the analysis, because they are a property of the part rather
+than of whoever analyses it -- a bracket is bolted down at the same holes
+whichever solver is asked about it:
+
+.. code-block:: yaml
+
+  # partcad.yaml
+
+  parts:
+    bracket:
+      type: build123d
+      path: bracket.py
+      fea:
+        fix:
+          - m3-screw        # every instance of this interface is held still
+        load:
+          hook: 5 kg        # every instance of this one carries this
+          rail:
+            left: 30 N      # or one named instance at a time
+            right: 30 N
+
+``fix:`` and ``load:`` name :ref:`interfaces <interfaces>` the part implements,
+so the same declaration that says where a part connects also says where it is
+held and pulled. A ``load`` is a force: write a number and a unit, or a bare
+number for a mass in kilograms, which PartCAD weighs into newtons at 9.8 N/kg.
+``cfd:`` takes the same two keys with the same meaning.
+
+PartCAD ships no solver. The analysis is run by an implementation package,
+declared in a ``cae:`` section exactly as an export or a render implementation is
+declared in its own (see :ref:`cae-section`), and named by the
+``caeFeaImplementation`` / ``caeCfdImplementation`` user configuration options --
+``//pub/features/cae/calculix:fea`` and ``//pub/features/cae/calculix:cfd`` by
+default. ``pc cae fea --implementation`` overrides it for one run, and so does
+the field over the model in the IDE's FEA tab.
+
+What comes back is two things: the model, written to
+``<part>.<analysis>.<extension>`` in whichever format the implementation chose,
+and the **findings** -- a JSON array of what the analysis has to say about the
+part. ``pc test`` gains an ``fea`` and a ``cfd`` check that fail a part whose
+analysis produced any finding, and they apply only to a part that declares the
+matching section, so a package of bolts pays nothing for them.
+
+See :ref:`pc cae <cae>` for the command and the units it accepts.
 
 =============================
 Procurement and Manufacturing

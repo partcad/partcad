@@ -27,10 +27,21 @@
 //
 
 import { renderBom } from './bom';
+import { CaeView } from './cae';
 import { DocumentView } from './document';
 import { el, empty, placeholder } from './dom';
 import { fetchTab, ready, reportError } from './host';
-import { BomData, GuideData, HostMessage, ShowMessage, SupplyData, TabId } from './messages';
+import {
+    ANALYSIS_TABS,
+    BomData,
+    CaeData,
+    GuideData,
+    HostMessage,
+    ShowMessage,
+    SupplyData,
+    TabId,
+    isAnalysisTab,
+} from './messages';
 import { clearGeometry, resizeCanvas, showGeometry } from './scene';
 import { SupplyView } from './supply';
 import { TabSpec, Tabs } from './tabs';
@@ -41,9 +52,21 @@ const panes: Record<TabId, HTMLElement> = {
     bom: byId('pane-bom'),
     instructions: byId('pane-instructions'),
     supply: byId('pane-supply'),
+    fea: byId('pane-fea'),
+    cfd: byId('pane-cfd'),
 };
 
+/** The tabs whose panes are rebuilt from scratch on every show. */
+const DATA_TABS: TabId[] = ['bom', 'instructions', 'supply'];
+
 const supplyView = new SupplyView(panes.supply);
+// Each analysis owns its pane for the life of the panel: the implementation
+// field is the user's, and rebuilding the pane on every show would take back
+// what they typed into it.
+const caeViews: Partial<Record<TabId, CaeView>> = {};
+for (const tab of ANALYSIS_TABS) {
+    caeViews[tab] = new CaeView(panes[tab], tab, (implementation) => runAnalysis(tab, implementation));
+}
 const tabs = new Tabs(byId('tabs'), onTabSelected);
 
 /** What the panel is showing, or undefined when it is empty. */
@@ -106,6 +129,16 @@ function tabsFor(message: ShowMessage): TabSpec[] {
         // show. See 'partcad.scene'.
         specs.push({ id: 'instructions', label: 'Instructions', pane: panes.instructions });
     }
+    if (message.kind === 'part') {
+        // Only a part is analysed. An assembly is a set of parts that each have
+        // boundary conditions of their own, and a load on the whole of one says
+        // nothing about which member carries it - so 'pc cae' takes a part, and
+        // so does this. The tab is offered whether or not the part declares
+        // 'fea:'/'cfd:', because "this part says nothing about FEA" is the
+        // answer somebody looking for the tab came to read.
+        specs.push({ id: 'fea', label: 'FEA', pane: panes.fea });
+        specs.push({ id: 'cfd', label: 'CFD', pane: panes.cfd });
+    }
     specs.push({ id: 'supply', label: 'Supply', pane: panes.supply });
     return specs;
 }
@@ -115,8 +148,11 @@ function show(message: ShowMessage): void {
     generation += 1;
     requested.clear();
     instructions = undefined;
-    for (const tab of ['bom', 'instructions', 'supply'] as TabId[]) {
+    for (const tab of DATA_TABS) {
         reset(tab);
+    }
+    for (const tab of ANALYSIS_TABS) {
+        caeViews[tab]?.setBusy('Select this tab to run the analysis.');
     }
 
     void showGeometry(message);
@@ -131,10 +167,20 @@ function clear(): void {
     requested.clear();
     instructions = undefined;
     clearGeometry();
-    for (const tab of ['bom', 'instructions', 'supply'] as TabId[]) {
+    for (const tab of DATA_TABS) {
         reset(tab);
     }
+    for (const tab of ANALYSIS_TABS) {
+        caeViews[tab]?.setBusy('Nothing to analyse.');
+    }
     tabs.setTabs([{ id: '3d', label: '3D', pane: panes['3d'] }]);
+}
+
+/** Ask for an analysis again, with whatever implementation was typed in. */
+function runAnalysis(tab: TabId, implementation: string): void {
+    requested.add(tab);
+    caeViews[tab]?.setBusy('Running the analysis…');
+    fetchTab({ type: 'fetchTab', tab, token: generation, implementation: implementation || undefined });
 }
 
 function onTabSelected(tab: TabId): void {
@@ -144,19 +190,57 @@ function onTabSelected(tab: TabId): void {
         resizeCanvas();
         return;
     }
+    if (isAnalysisTab(tab)) {
+        // Same reason as the 3D view: a result mesh is drawn on a canvas that
+        // had no size while its tab was hidden.
+        caeViews[tab]?.resize();
+    }
     if (requested.has(tab)) {
         return;
     }
     requested.add(tab);
-    reset(tab).appendChild(placeholder('Asking PartCAD…'));
+    if (isAnalysisTab(tab)) {
+        // An analysis is not a lookup - a solver runs for as long as it runs -
+        // so the pane says what is happening rather than going blank.
+        caeViews[tab]?.setBusy('Running the analysis…');
+    } else {
+        reset(tab).appendChild(placeholder('Asking PartCAD…'));
+    }
     fetchTab({ type: 'fetchTab', tab, token: generation });
 }
 
-function onTabData(tab: TabId, token: number, data: unknown, error: string | undefined): void {
+function onTabData(
+    tab: TabId,
+    token: number,
+    data: unknown,
+    error: string | undefined,
+    implementation: string | undefined,
+): void {
     if (token !== generation) {
         // For an object that is no longer on screen.
         return;
     }
+
+    if (isAnalysisTab(tab)) {
+        // The analysis panes are not rebuilt: they own a field the user types
+        // into, and 'reset()' would take it away mid-sentence.
+        const view = caeViews[tab];
+        view?.suggest(implementation);
+        if (error !== undefined) {
+            view?.showError(error);
+        } else if (data === null || data === undefined) {
+            view?.showError('PartCAD had nothing to say about this.');
+        } else {
+            try {
+                view?.render(data as CaeData);
+            } catch (e: unknown) {
+                view?.showError(`Failed to display this: ${e}`);
+                reportError(`failed to render the '${tab}' tab: ${e}`);
+            }
+        }
+        return;
+    }
+
     const pane = reset(tab);
 
     if (error !== undefined) {
@@ -203,7 +287,7 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
     } else if (message.type === 'show') {
         show(message);
     } else if (message.type === 'tabData') {
-        onTabData(message.tab, message.token, message.data, message.error);
+        onTabData(message.tab, message.token, message.data, message.error, message.implementation);
     }
 });
 

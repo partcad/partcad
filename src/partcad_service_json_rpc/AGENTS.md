@@ -129,18 +129,29 @@ poetry run isort --check src/partcad_service_json_rpc tests/partcad_service_json
 
 Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|assembly|scene|file`,
 `export.part|assembly|scene`, `ai.regenerate|change`, `add.part|assembly|scene`, `package.load|path|refresh`, `init`,
-`list.all`, `bom`, `assembly.guide`, `supply.quote`, `test`, `info`, `activate`, and `rpc.discover`. Server-to-client
+`list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults`, `test`, `info`, `activate`, and
+`rpc.discover`. Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,
 `stats`, `terminal`, `execute`, and the `*Done`/lifecycle signals).
 
-Three of them answer the tabs of the IDE's PartCAD Viewer, which is a webview with no file system and no
-network in reach: `bom`, `assembly.guide` and `supply.quote`. Each is the CLI's own operation returning **data**
+Five of them answer the tabs of the IDE's PartCAD Viewer, which is a webview with no file system and no
+network in reach: `bom`, `assembly.guide`, `supply.quote` and the pair behind the FEA and CFD tabs,
+`cae.analyze` and `cae.defaults`. The first three Each is the CLI's own operation returning **data**
 rather than writing a file -- `assembly.guide` is the instruction book `pc render -t html|pdf` writes, as
 `partcad.document`'s renderer-independent model with the illustrations inlined (they live in a temporary
 directory that is deleted as soon as the document is built); `supply.quote` fills the cart `pc supply quote`
 fills and quotes each line item on its own, because a cart of the whole assembly comes back as one price for
 all of it. Note that `supply.quote` deliberately does *not* go through `Context.find_suppliers()`: that reports "no
 suppliers" as an error, and in the IDE an error is a modal popup, one per part.
+
+`cae.analyze` is the odd one of the five: it *runs* something rather than answering a question about the
+package, and it is the same `Shape.analyze_async()` that `pc cae fea` runs. Two things about it are for the
+webview specifically. `inline` asks for the model's bytes beside the path it was written to, because a panel
+with no file system cannot open a path -- and the daemon may not even be on the viewer's machine. And
+`cae.defaults` exists at all because the field over the model has to be *pre-filled*: which implementation runs
+an analysis is user configuration, not a property of the object on screen, so there is nothing in the object's
+answer to fill it from -- least of all when the answer is the failure of a solver that is not installed, which
+is exactly when the user needs to see what was tried.
 
 There is deliberately no prompt in the protocol. A daemon has nobody to ask, and a request that blocks
 waiting for an answer it cannot receive is a hang, not a question -- anything a command needs is either an

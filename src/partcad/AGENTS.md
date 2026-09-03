@@ -124,6 +124,28 @@ isort --check src/partcad tests/partcad
   spec (see "Packaging" in the root [AGENTS.md](../../AGENTS.md)). The requirement strings there are the versions
   `sandbox_versions.py` pins, which `tests/partcad/unit/test_output.py` enforces.
 
+- **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae_test.py`):
+  `pc cae fea`/`pc cae cfd` are a third output section, `cae:`, resolved by the very code that resolves
+  `export:` and `render:` -- same `path`/`package`, same sandbox, same meta-wrapper (`wrapper_export.py`), and
+  `Shape._run_implementation_async()` is the body all three share. It is deliberately **not** in
+  `output.SECTIONS`: that tuple answers "which sections does a file type of `pc export`/`pc render` live in",
+  and a `fea` left in there would be offered to `pc render -t` and would fall back to a render implementation.
+  It also has no built-in package -- PartCAD ships no solver -- so `output.builtin_project()` answers `None`
+  for it and everything downstream has to cope with a missing bottom layer.
+
+  What is genuinely new is the two halves either side of the script. Going in, the *part* declares the
+  boundary conditions in a section named after the analysis, because they belong to the part and not to
+  whoever analyses it; `cae.py` parses `fix:`/`load:`, converts the units (a bare number is a mass in
+  kilograms, weighed into newtons at `GRAVITY`; everything is stored as force), and `assign_ports()` attaches
+  them to the ports `render_overlay.collect_async()` already knows how to find -- so `pc render --with-ports`
+  draws exactly what a solver was told. Coming back, the implementation reports **findings** beside the file
+  it wrote, a JSON array that `pc cae` prints, `pc test`'s `fea`/`cfd` checks fail on, and the IDE lists under
+  the model. `cae.py` imports nothing from `partcad`, which is what lets it be tested without a sandbox.
+
+  Both checks are gated on the part *declaring* the section, and that gate is the whole cost model: a
+  `pc test -r` over a package tree must not start a solver for every bolt in it, and a bolt with no `fea:` has
+  nothing to tell one. Declaring `fea:` is how a user asks for the check, which is why it needs no flag.
+
 - **Drawing ports and interfaces** (`./src/partcad/render_overlay.py`, `./src/partcad/wrappers/stroke_text.py`):
   `pc render --with-ports`/`--with-interfaces` draws the connection metadata on top of a projection.
   `render_overlay.py` answers only *where* the ports are — a lookup for a part, a walk for an assembly (and so

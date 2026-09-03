@@ -14,7 +14,9 @@ from .cam import CamTest
 from .cam_additive_solid import CamAdditiveSolidTest
 from .cam_subtractive import CamSubtractiveTest
 from .cam_forming import CamFormingTest
+from .cfd import CfdTest
 from .connect import ConnectTest
+from .fea import FeaTest
 
 _global_tests: list[Test] = []
 
@@ -32,6 +34,11 @@ def tests(concurrency_cap: int) -> list[Test]:
                 CamSubtractiveTest(),
                 CamFormingTest(),
                 ConnectTest(),
+                # Only ever run for a part that declares the matching section;
+                # see 'cae_test.CaeTest'. A package with no 'fea:'/'cfd:' in
+                # it pays nothing for these two being here.
+                FeaTest(),
+                CfdTest(),
             ]
         )
     return _global_tests

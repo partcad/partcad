@@ -2852,6 +2852,52 @@ the shape of the tree but nothing else about it: every node's ``name`` and
 ``label`` is dropped, and its placement is baked into the geometry instead of
 staying readable as the joint origin. See :doc:`simulation`.
 
+.. _cae-section:
+
+Analyses
+--------
+
+``cae:`` is a third section of the same shape, and it is where an engineering
+analysis is implemented. Its file types are what :ref:`pc cae <cae>` runs, and
+every field means what it means above -- ``path`` and ``package`` name the
+script, ``pythonRequirements`` and ``pythonVersion`` describe its sandbox,
+``extension`` says what the model file is called, and everything else is a
+parameter handed to the script:
+
+.. code-block:: yaml
+
+  cae:
+    fea:
+      path: solve_fea.py
+      pythonRequirements:
+        - ccx2paraview==3.2.0
+      extension: glb          # required: PartCAD has no default to guess at
+      mesh_size: 2.0          # a parameter of this implementation
+
+Three things are different from ``export:`` and ``render:``, and all three
+follow from an analysis not being a file type of the object:
+
+* **There is no built-in package.** PartCAD ships no solver, so ``cae:`` has no
+  bottom layer to fall back on and no fallback section either: an export
+  implementation cannot stand in for one, and a ``fea`` declared under
+  ``export:`` is an export format that happens to be called ``fea``. Which
+  implementation runs by default is the ``caeFeaImplementation`` /
+  ``caeCfdImplementation`` user configuration option, naming a package and a
+  file type in it.
+* **``extension`` is required.** Which model format an analysis writes -- a 3D
+  field, a 2D plot -- is the implementation's decision, and guessing on its
+  behalf would put a name on a file whose contents are something else.
+* **The implementation reports findings.** Beside ``success`` it returns
+  ``findings``, a JSON array of what it has to say about the part. An empty one
+  is a pass, and is what the ``fea`` and ``cfd`` checks of ``pc test`` require.
+
+The file it writes is named after the analysis as well as the object --
+``bracket.fea.glb`` -- because a part has as many results as it has analyses.
+What the analysis is *given* is the part's own ``fea:``/``cfd:`` section, which
+is a property of the part rather than of whoever analyses it; see
+:ref:`pc cae <cae>` for how ``fix:`` and ``load:`` are written and what units
+they are in.
+
 Drawing the ports and the interfaces
 ------------------------------------
 

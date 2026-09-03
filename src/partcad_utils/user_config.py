@@ -309,6 +309,8 @@ OPTION_KEYS = (
     "useDocker",
     "useDockerPython",
     "useDockerKicad",
+    "caeFeaImplementation",
+    "caeCfdImplementation",
     "tags",
 )
 
@@ -341,6 +343,17 @@ SECTION_PATHS = (
     "parameters",
     "user",
 )
+
+
+# Which implementation each CAE analysis is run by when nothing says otherwise.
+# A package path and a file type in it, exactly as a user would write one, and
+# both live in the public PartCAD index. They are not built into 'partcad': a
+# solver is a large third-party program, and which one to run is the user's
+# decision (see the 'caeFeaImplementation' option below).
+DEFAULT_CAE_IMPLEMENTATIONS = {
+    "fea": "//pub/features/cae/calculix:fea",
+    "cfd": "//pub/features/cae/calculix:cfd",
+}
 
 
 class UserConfig(vyper.Vyper):
@@ -926,6 +939,43 @@ class UserConfig(vyper.Vyper):
         # daemon serving this caller honours the tags the caller declared.
         self.bind_env("tags", "PC_TAGS")
         self.tags = self.get("tags")
+
+        # option: caeFeaImplementation
+        # description: which implementation runs "pc cae fea", as
+        #              "<package>:<file type>"
+        # values: <string>
+        # default: //pub/features/cae/calculix:fea
+        #
+        # option: caeCfdImplementation
+        # description: which implementation runs "pc cae cfd", as
+        #              "<package>:<file type>"
+        # values: <string>
+        # default: //pub/features/cae/calculix:cfd
+        #
+        # PartCAD ships no solver, so unlike every export and render format
+        # there is no built-in implementation for these two to fall back on -
+        # the default is a package in the public index, and this is where it is
+        # named. It is user configuration rather than a constant because the
+        # answer is a property of the machine and the person: which solver is
+        # installed, which one is licensed, which one this shop trusts. A run
+        # overrides it with "pc cae fea --implementation", and the IDE's FEA tab
+        # with the field over the model.
+        self.bind_env("caeFeaImplementation", "PC_CAE_FEA_IMPLEMENTATION")
+        self.bind_env("caeCfdImplementation", "PC_CAE_CFD_IMPLEMENTATION")
+        self.cae_fea_implementation = self.get_string("caeFeaImplementation") or DEFAULT_CAE_IMPLEMENTATIONS["fea"]
+        self.cae_cfd_implementation = self.get_string("caeCfdImplementation") or DEFAULT_CAE_IMPLEMENTATIONS["cfd"]
+
+    def cae_implementation(self, analysis: str) -> str:
+        """Which implementation runs one analysis, by its name ("fea"/"cfd").
+
+        Looked up rather than branched on, so that adding a third analysis is an
+        entry in 'DEFAULT_CAE_IMPLEMENTATIONS' and an option key beside it, and
+        not a chain of ifs in whatever asks.
+        """
+        attribute = "cae_%s_implementation" % analysis
+        if not hasattr(self, attribute):
+            raise ValueError("PartCAD does not run a '%s' analysis" % analysis)
+        return getattr(self, attribute)
 
 
 user_config = UserConfig()

@@ -1889,6 +1889,105 @@ def assembly_guide(session, params):
     return {"assembly": _qualified(package, object_name), "document": document}
 
 
+def cae_defaults(session, params):
+    """Which implementation each CAE analysis runs under when nobody says otherwise.
+
+    Needed by a client that offers to change it -- the IDE's FEA and CFD tabs
+    have a field over the model -- because the answer is user configuration and
+    not anything about the object on screen. Not context-aware: nothing here
+    reads a package.
+    """
+    pc = session.partcad
+    # '_caller_user_config' answers with the caller's configuration where one was
+    # sent and the daemon's own where none was; either way the second half of the
+    # pair is the configuration to read.
+    _sent, config = _caller_user_config(pc, params)
+    return {analysis: config.cae_implementation(analysis) for analysis in pc.cae.ANALYSES}
+
+
+def cae_analyze(session, params):
+    """Run a CAE analysis on a part and return the model it wrote and its findings.
+
+    Backs ``pc cae fea`` and ``pc cae cfd``; ``analysis`` says which. The part
+    declares the boundary conditions in a section of its own named after the
+    analysis (``fea:``/``cfd:``, see ``partcad.cae``) and the implementation is
+    whatever ``implementation`` -- or, failing that, the caller's user
+    configuration -- names, as ``<package>:<file type>``.
+
+    The model is written to ``<part>.<analysis>.<extension>`` beside the package,
+    as it stands: which format that is, and whether it is 2D or 3D, is the
+    implementation's decision and PartCAD does not convert it. ``inline`` asks
+    for its bytes to come back base64-encoded as well, which is what the IDE's
+    FEA and CFD tabs need -- a webview has no file system in reach, so a model it
+    cannot be handed is a model it cannot draw.
+
+    A part that declares no such section, or declares it wrongly, is a
+    ``USAGE_ERROR`` carrying the sentence that says which: the answer the user
+    asked for rather than a failure of the machinery, and the very text the IDE
+    shows in the tab.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    analysis = params.get("analysis")
+    if analysis not in pc.cae.ANALYSES:
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "Unknown analysis '%s'. PartCAD runs: %s" % (analysis, ", ".join(pc.cae.ANALYSES)),
+        )
+
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, object_name = resolved
+    path = _qualified(package, object_name)
+
+    shape = ctx.get_part(path)
+    if shape is None:
+        # Only a part is analysed. An assembly is a set of parts that each have
+        # their own boundary conditions, and a "load" on the whole of one says
+        # nothing about which of its members carries it.
+        raise JsonRpcError(USAGE_ERROR, "Part %s is not found" % path)
+
+    with pc.logging.Process(analysis.upper(), package, object_name):
+        ctx.option_create_dirs = bool(params.get("create_dirs", False))
+        try:
+            result = asyncio.run(
+                shape.analyze_async(
+                    ctx,
+                    analysis,
+                    implementation=params.get("implementation") or None,
+                    output_dir=params.get("output_dir") or None,
+                )
+            )
+        except pc.cae.CaeConfigError as e:
+            # "This part says nothing about FEA" and "what it says does not
+            # parse" are both answers, and both are what the tab prints.
+            raise JsonRpcError(USAGE_ERROR, str(e)) from e
+
+    if params.get("inline"):
+        import base64
+
+        try:
+            with open(result["filepath"], "rb") as f:
+                result["content"] = base64.b64encode(f.read()).decode("ascii")
+        except OSError as e:
+            # The findings are still worth having: an implementation that
+            # reported them and then failed to leave the model where it said it
+            # would has answered the more important half of the question.
+            pc.logging.warning("Failed to read the %s model back: %s" % (analysis.upper(), e))
+            result["content"] = None
+
+    if not params.get("json"):
+        pc.logging.info(pc.cae.findings_report(path, analysis, result["findings"]))
+        pc.logging.info("%s model: %s" % (analysis.upper(), result["filepath"]))
+    return result
+
+
 def supply_quote(session, params):
     """Where to buy what an object is made of, and for how much.
 
