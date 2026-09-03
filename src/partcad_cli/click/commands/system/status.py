@@ -17,6 +17,7 @@ import partcad as pc
 import partcad.user_config as user_config
 from opentelemetry import context as otel_context
 from partcad_cli.click.cli_context import CliContext
+from partcad_utils import conda as pc_conda
 from partcad_utils.utils import directory_size_mb
 
 path = user_config.internal_state_dir
@@ -61,6 +62,22 @@ def get_sandbox(context):
     otel_context.detach(token)
 
 
+def get_conda(context):
+    """Report the size of the bundled conda's package cache.
+
+    Only the standalone bundle's conda keeps anything here -- a host conda has a
+    package cache of its own and is left alone. It is reported separately from
+    the sandboxes because it is the larger of the two and the less obvious: the
+    environments are what the user asked for, this is what they were built from.
+    """
+    token = otel_context.attach(context)
+    with pc.logging.Action("Status", "conda"):
+        conda_path = os.path.join(path, pc_conda.ROOT_PREFIX_SUBDIR)
+        conda_total = directory_size_mb(conda_path)
+        pc.logging.info("Conda package cache size: %.2fMB" % conda_total)
+    otel_context.detach(token)
+
+
 @click.command(help="Display the state of internal data used by PartCAD")
 @click.pass_obj
 def cli(cli_ctx: CliContext) -> None:
@@ -83,15 +100,18 @@ def cli(cli_ctx: CliContext) -> None:
             thread_git = threading.Thread(target=get_git, args=(otel_context.get_current(),))
             thread_tar = threading.Thread(target=get_tar, args=(otel_context.get_current(),))
             thread_sandbox = threading.Thread(target=get_sandbox, args=(otel_context.get_current(),))
+            thread_conda = threading.Thread(target=get_conda, args=(otel_context.get_current(),))
 
             # Launch threads
             thread_total.start()
             thread_git.start()
             thread_tar.start()
             thread_sandbox.start()
+            thread_conda.start()
 
             # Wait for threads to finish
             thread_total.join()
             thread_git.join()
             thread_tar.join()
             thread_sandbox.join()
+            thread_conda.join()

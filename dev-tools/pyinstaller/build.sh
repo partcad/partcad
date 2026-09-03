@@ -44,6 +44,7 @@ fi
 SPEC_DIR="${REPO_ROOT}/dev-tools/pyinstaller"
 OUTPUT_DIR="${REPO_ROOT}/dist/standalone"
 OPENSCAD_STAGE_DIR="${REPO_ROOT}/build/openscad"
+CONDA_STAGE_DIR="${REPO_ROOT}/build/conda"
 PYTHON="${PYTHON:-python3}"
 
 # The OpenSCAD the bundle carries. Pinned rather than tracking the latest, so a
@@ -56,6 +57,15 @@ OPENSCAD_VERSION="2021.01"
 # builds, and CI aside, nobody wipes it by hand). Stale siblings are harmless:
 # `build/` is gitignored, and only the matching directory is ever read.
 OPENSCAD_PAYLOAD_DIR="${OPENSCAD_STAGE_DIR}/payload-${OPENSCAD_VERSION}"
+
+# The conda the bundle carries, as the tag of a `micromamba-releases` release --
+# "<micromamba version>-<build>", where `micromamba --version` prints only the
+# first half. Pinned rather than tracking "latest" for the same reason OpenSCAD
+# is: a rebuild of a given PartCAD version has to produce the same bundle.
+MICROMAMBA_VERSION="2.9.0-0"
+# Keyed by version like the OpenSCAD payload, so a bump refetches rather than
+# silently reusing whatever an old `build/` still holds.
+CONDA_PAYLOAD_DIR="${CONDA_STAGE_DIR}/payload-${MICROMAMBA_VERSION}"
 
 INSTALL_DEPENDENCIES=1
 CREATE_ARCHIVE=1
@@ -249,6 +259,44 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   # ran either way. `pc healthcheck` reports it.
 fi
 
+#############################################  PAYLOAD FETCH  ################################################
+
+# Fetch a URL and the ".sha256" its upstream publishes beside it, and check the
+# one against the other. Used for both payloads the bundle carries -- OpenSCAD
+# and conda -- so that neither can be staged from a truncated or substituted
+# download.
+#
+# Fetched and verified with the Python this script already depends on, rather
+# than with curl and sha256sum, whose presence and flags differ across the three
+# platforms this runs on. The two upstreams do not publish the checksum in the
+# same shape -- OpenSCAD's reads "<hash>  releases/<name>", micromamba's is the
+# bare hash with no trailing newline -- so the first whitespace-separated field
+# is what is compared and anything after it ignored.
+fetch_and_verify() {
+  local url="$1" destination="$2"
+
+  "${PYTHON}" - "${url}" "${destination}" <<'FETCH'
+import sys
+import urllib.request
+
+for url, destination in ((sys.argv[1], sys.argv[2]), (sys.argv[1] + ".sha256", sys.argv[2] + ".sha256")):
+    urllib.request.urlretrieve(url, destination)
+FETCH
+
+  "${PYTHON}" - "${destination}" <<'VERIFY'
+import hashlib
+import pathlib
+import sys
+
+artifact = pathlib.Path(sys.argv[1])
+expected = pathlib.Path(str(artifact) + ".sha256").read_text().split()[0]
+actual = hashlib.sha256(artifact.read_bytes()).hexdigest()
+if actual != expected:
+    sys.exit(f"error: checksum mismatch for {artifact.name}: expected {expected}, got {actual}")
+print(f"    checksum verified: {artifact.name}")
+VERIFY
+}
+
 ###############################################  OPENSCAD  ###################################################
 
 # The bundle carries OpenSCAD, so `pc` can build .scad parts on a machine that
@@ -308,31 +356,7 @@ stage_openscad() {
   rm -rf "${payload_dir}"
   mkdir -p "${download_dir}" "${payload_dir}"
 
-  # Fetched and verified with the Python this script already depends on, rather
-  # than with curl and sha256sum, whose presence and flags differ across the
-  # three platforms this runs on.
-  "${PYTHON}" - "https://files.openscad.org/${artifact}" "${download_dir}/${artifact}" <<'FETCH'
-import sys
-import urllib.request
-
-for url, destination in ((sys.argv[1], sys.argv[2]), (sys.argv[1] + ".sha256", sys.argv[2] + ".sha256")):
-    urllib.request.urlretrieve(url, destination)
-FETCH
-
-  "${PYTHON}" - "${download_dir}/${artifact}" <<'VERIFY'
-import hashlib
-import pathlib
-import sys
-
-archive = pathlib.Path(sys.argv[1])
-# Published as "<hash>  releases/<name>": take the hash, ignore the path, which
-# names the location on the upstream server rather than the local file.
-expected = pathlib.Path(str(archive) + ".sha256").read_text().split()[0]
-actual = hashlib.sha256(archive.read_bytes()).hexdigest()
-if actual != expected:
-    sys.exit(f"error: checksum mismatch for {archive.name}: expected {expected}, got {actual}")
-print(f"    checksum verified: {archive.name}")
-VERIFY
+  fetch_and_verify "https://files.openscad.org/${artifact}" "${download_dir}/${artifact}"
 
   case "${artifact}" in
   *.AppImage)
@@ -360,6 +384,99 @@ VERIFY
 }
 
 stage_openscad
+
+################################################  CONDA  #####################################################
+
+# The bundle carries a conda, so that `pc` can build the CAD sandbox on a machine
+# that has none.
+#
+# It did not, and that was the flaw this fixes. PartCAD imports no CAD kernel: it
+# provisions a Python environment and runs every CAD script in that, and conda is
+# the only sandbox that provisions an *interpreter* along with it. The bundle
+# exists so that a machine with no Python can run PartCAD -- and it then asked
+# that machine for conda, which the PartCAD IDE discovered by launching the
+# daemon out of a bundle on a clean machine and failing.
+#
+# The `venv` sandbox is not the fallback here that it is for a wheel: a virtual
+# environment is built *from* an interpreter, and the machine this artifact is
+# for is the one with no Python to build it from (see `partcad_utils.conda`).
+#
+# What is staged is micromamba: mamba in its single-file, dependency-free build,
+# published by the mamba project. mamba because that is the implementation CI
+# provisions through Miniforge (`use-mamba: true` in
+# `.github/actions/setup-all/action.yml`) and the one `partcad_utils.conda`
+# already preferred over conda. Not the Miniforge installer itself, for two
+# reasons that both matter here:
+#
+#   1. A conda *installation* is not relocatable. Its entry points hardcode the
+#      prefix they were installed into, and this bundle is unpacked to a path
+#      nobody knows at build time -- `~/.local/share/partcad/<version>` for
+#      `install.sh`, somewhere else for the extension, the addon and the IDE.
+#      One static executable has no prefix to hardcode.
+#   2. Miniforge is around 500MB installed, against 12-22MB here. The bundle is
+#      ~200MB unpacked precisely because the CAD kernel was taken out of it; a
+#      conda distribution would put three times that back.
+#
+# micromamba also resolves from conda-forge with no configuration at all, which
+# is the channel policy the comments in that CI action insist on -- mixing
+# Anaconda's `defaults` into a conda-forge environment is what made the macOS
+# jobs segfault. A Miniforge install would have had to carry a `.condarc` saying
+# the same thing.
+#
+# Unlike OpenSCAD, there is no platform that goes without: upstream builds
+# micromamba for every platform this bundle is built for, and a bundle without a
+# conda is the bug. An unmapped platform therefore fails the build rather than
+# quietly producing one.
+#
+# `partcad_utils.conda` is the other half of this: where the payload is looked
+# for at run time, and why the host's conda still comes first when there is one.
+stage_conda() {
+  local artifact download_dir payload_dir entry_point
+  download_dir="${CONDA_STAGE_DIR}/download-${MICROMAMBA_VERSION}"
+  payload_dir="${CONDA_PAYLOAD_DIR}"
+
+  # Keyed on the operating system and architecture rather than on PLATFORM: one
+  # micromamba build serves every version of an operating system, exactly as one
+  # OpenSCAD build does.
+  case "${OS_NAME}-${ARCH_NAME}" in
+  linux-x86_64) artifact="micromamba-linux-64" ;;
+  linux-arm64) artifact="micromamba-linux-aarch64" ;;
+  macos-x86_64) artifact="micromamba-osx-64" ;;
+  macos-arm64) artifact="micromamba-osx-arm64" ;;
+  # The release also publishes "micromamba-win-64.exe", byte for byte the same
+  # file -- but only the name without the suffix has a ".sha256" beside it, and
+  # a payload nobody can verify is not one worth having. The staged copy is
+  # renamed to "micromamba.exe" below, which is the name that matters.
+  windows-x86_64) artifact="micromamba-win-64" ;;
+  *)
+    echo "error: no micromamba build is mapped for ${PLATFORM}, and a bundle" >&2
+    echo "       without a conda cannot build a CAD sandbox on a host that" >&2
+    echo "       has none -- add the mapping rather than shipping without it" >&2
+    exit 1
+    ;;
+  esac
+
+  entry_point="${payload_dir}/micromamba${EXE_SUFFIX}"
+  if [ -e "${entry_point}" ]; then
+    echo "==> micromamba ${MICROMAMBA_VERSION} already staged"
+    return 0
+  fi
+
+  echo "==> Fetching micromamba ${MICROMAMBA_VERSION} for ${PLATFORM}"
+  rm -rf "${payload_dir}"
+  mkdir -p "${download_dir}" "${payload_dir}"
+
+  fetch_and_verify \
+    "https://github.com/mamba-org/micromamba-releases/releases/download/${MICROMAMBA_VERSION}/${artifact}" \
+    "${download_dir}/${artifact}"
+
+  cp "${download_dir}/${artifact}" "${entry_point}"
+  chmod +x "${entry_point}"
+
+  echo "    staged $(du -sh "${payload_dir}" | cut -f1) in ${payload_dir}"
+}
+
+stage_conda
 
 ##############################################  PRE-FLIGHT  ##################################################
 
@@ -484,6 +601,9 @@ rm -rf "${OUTPUT_DIR}/partcad"
 BUNDLE_DIR="${OUTPUT_DIR}/partcad"
 # `sys._MEIPASS`, which is where `partcad.healthcheck.openscad` looks for the payload.
 OPENSCAD_BUNDLED_DIR="${BUNDLE_DIR}/_internal/openscad"
+# The same directory, and the same reasoning, for the conda payload:
+# `partcad_utils.conda.BUNDLED_SUBPATH` is where it is looked for.
+CONDA_BUNDLED_DIR="${BUNDLE_DIR}/_internal/conda"
 
 # OpenSCAD is copied in after the freeze rather than declared in the spec.
 # PyInstaller reclassifies shared libraries found among data files as binaries
@@ -498,6 +618,13 @@ if [ -d "${OPENSCAD_PAYLOAD_DIR}" ]; then
   rm -rf "${OPENSCAD_BUNDLED_DIR}"
   cp -a "${OPENSCAD_PAYLOAD_DIR}" "${OPENSCAD_BUNDLED_DIR}"
 fi
+
+# conda is copied in the same way and for the same reason -- it is a payload
+# PyInstaller has no business analysing -- but unconditionally: `stage_conda`
+# either staged it or stopped the build.
+echo "==> Installing the bundled conda"
+rm -rf "${CONDA_BUNDLED_DIR}"
+cp -a "${CONDA_PAYLOAD_DIR}" "${CONDA_BUNDLED_DIR}"
 
 ##############################################  ONE PAYLOAD  #################################################
 
@@ -575,6 +702,38 @@ if [ -d "${OPENSCAD_BUNDLED_DIR}" ]; then
     exit 1
   }
 fi
+
+# The bundled conda: that the payload runs, that it is the version pinned above
+# (which catches a stale `build/` from a different MICROMAMBA_VERSION and a copy
+# that arrived without its executable bit), and then that `pc` resolves a conda
+# at all. `micromamba --version` prints the version without the release's build
+# number, so only the half before the "-" is compared.
+conda_version_output="$(cd "${SMOKE_DIR}" && "${CONDA_BUNDLED_DIR}/micromamba${EXE_SUFFIX}" --version 2>&1)"
+echo "    micromamba ${conda_version_output}"
+# A prefix match rather than an equality: micromamba prints the version and
+# nothing else, but it prints it through a stream that Windows opens in text
+# mode, so what comes back there ends in a carriage return.
+case "${conda_version_output}" in
+"${MICROMAMBA_VERSION%-*}"*) ;;
+*)
+  echo "error: bundled micromamba is not ${MICROMAMBA_VERSION%-*}: '${conda_version_output}'" >&2
+  exit 1
+  ;;
+esac
+
+# What this proves is the same as for OpenSCAD, and no more: the health check
+# reports that a conda was resolved, so it demonstrates the *bundled* one was
+# used only on a machine that has none of its own -- hence the host is reported
+# beside it. That a host conda still wins over the bundled copy, which is the
+# ordering `partcad_utils.conda` deliberately has, is pinned down by the unit
+# tests, where both can be made to exist at once.
+echo "    host conda: $(command -v mamba || command -v conda || echo "none, so the check below can only pass via the bundle")"
+(cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/pc${EXE_SUFFIX}" --no-ansi healthcheck --filters conda 2>&1) |
+  tee "${SMOKE_DIR}/healthcheck-conda.log"
+grep -q "CondaAvailable: Passed" "${SMOKE_DIR}/healthcheck-conda.log" || {
+  echo "error: PartCAD did not resolve a conda executable" >&2
+  exit 1
+}
 
 if [ "${CREATE_ARCHIVE}" = "0" ]; then
   echo "==> Bundle: ${BUNDLE_DIR}"

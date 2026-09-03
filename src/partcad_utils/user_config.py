@@ -17,6 +17,7 @@ from pathlib import Path
 
 import vyper
 
+from . import conda as pc_conda
 from . import logging as pc_logging
 from .booleans import to_bool
 from .utils import is_editable_install
@@ -509,7 +510,17 @@ class UserConfig(vyper.Vyper):
         # surprising thing to do to somebody's Python and impossible on a host
         # whose Python is not writable. It stays available for a host that wants
         # exactly that, and is chosen rather than fallen back to.
-        if shutil.which("conda") is not None or importlib.util.find_spec("conda") is not None:
+        #
+        # `pc_conda.find_executable()` rather than `shutil.which("conda")`: it is
+        # the same question the sandbox itself asks later
+        # (`CondaPythonRuntime.find_conda_executable`), and asking it differently
+        # here is how the two came to disagree. It answers for a host `mamba`
+        # with no `conda` beside it -- which the sandbox has always preferred and
+        # this default used to miss -- and for the conda a standalone bundle
+        # carries. That last one is why the bundle is not left to the `venv`
+        # fallback: a venv is built *from* an interpreter, and the machine a
+        # bundle exists for is the machine with no Python to build one from.
+        if pc_conda.find_executable() is not None or importlib.util.find_spec("conda") is not None:
             self.set_default("pythonSandbox", "conda")
         else:
             self.set_default("pythonSandbox", "venv")
@@ -522,7 +533,7 @@ class UserConfig(vyper.Vyper):
         # works if conda can supply one.
         if shutil.which("node") is not None:
             self.set_default("javascriptSandbox", "none")
-        elif shutil.which("conda") is not None or importlib.util.find_spec("conda") is not None:
+        elif pc_conda.find_executable() is not None or importlib.util.find_spec("conda") is not None:
             self.set_default("javascriptSandbox", "conda")
         else:
             self.set_default("javascriptSandbox", "none")

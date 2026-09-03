@@ -11,7 +11,8 @@ first time it starts.
 | Needs Python          | yes, 3.10-3.14               | no                            | no                              |
 | Needs an editor       | -                            | -                             | no, it is one                   |
 | What you get          | `pc`, `partcad`, the library | `pc`, `partcad`               | the editor, the extension, `pc` |
-| Size (Linux, unpacked)| ~15MB plus dependencies      | ~185MB                        | ~500MB                          |
+| Needs conda installed | yes, for CAD                 | no, it carries one            | no, from the tools inside it    |
+| Size (Linux, unpacked)| ~15MB plus dependencies      | ~205MB                        | ~500MB                          |
 
 It is built from [VSCodium](https://vscodium.com/), rebranded, with the extensions this repository recommends
 installed into it and the [standalone command line tools](../dev-tools/pyinstaller/README.md) inside it. The
@@ -136,6 +137,13 @@ is the bundle directory that becomes `PartCAD IDE.app`.
 **The command line tools are embedded** at `<resources>/partcad-cli`, beside `<resources>/app` rather than
 inside it, so that no extension scan walks a gigabyte of Python. The bootstrap extension finds them there
 relative to `appRoot`, which is the same relative path on all three platforms.
+
+That embedding is also where the IDE gets its **conda**. PartCAD builds every shape in a conda sandbox, and
+the IDE has nothing of its own to build one with -- it is an editor and a JSON-RPC client; the daemon it
+launches is `partcad-json-rpc` out of that bundle. The bundle carries a conda (see
+[the standalone README](../../dev-tools/pyinstaller/README.md#conda)), so the IDE inherits one by carrying the
+bundle and adds nothing here. Before it did, the IDE started fine on a clean machine and then failed the
+moment a part had to be built, for want of a `conda` executable the user was never told to install.
 
 **The result is checked** (`tools/verify_bundle.py`): branding applied, every required extension present, no
 extension present that the policy skips, the tools where they should be, the launcher runnable. Each of those

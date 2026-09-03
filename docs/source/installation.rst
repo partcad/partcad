@@ -80,6 +80,10 @@ getting tested on Linux, macOS and Windows.
   If that doesn't help (e.g. macOS+arm64) then try ``mamba``.
   On Windows, PartCAD must be used inside a ``conda`` environment.
 
+  This applies to the wheels. The :ref:`standalone command line tools <standalone-cli>`, the
+  :ref:`snap <snap-package>` and the :ref:`PartCAD IDE <partcad-ide>` carry a conda of their own and need
+  none installed.
+
 .. note::
 
   On Ubuntu, try ``apt install libcairo2-dev`` if ``pip install`` fails to install ``cairo``.
@@ -179,12 +183,11 @@ That downloads the bundle for the current operating system and architecture from
 Nothing else on the system is touched, and no ``sudo`` is asked for. If ``~/.local/bin`` is not on your
 ``PATH``, the installer says so and prints the line to add.
 
-The bundle is around 180MB unpacked and 57MB to download on Linux x86_64, and about half that on macOS and
+The bundle is around 200MB unpacked and 63MB to download on Linux x86_64, and about half that on macOS and
 on Linux arm64, which carry no bundled OpenSCAD. It carries no CAD kernel: PartCAD builds every shape in a
-sandbox it provisions itself, so what is said about ``conda`` for the wheels applies here too: it is not
-required -- PartCAD falls back to a virtual environment of its own -- but it is what lets a package be built
-on a Python version this machine does not have (see :ref:`python-sandbox`). ``pc healthcheck`` reports what
-this machine is missing.
+sandbox it provisions itself -- and it carries the conda that provisions it, so nothing has to be installed
+first, and the ``conda`` sandbox is what you get rather than the ``venv`` fallback the wheels use when there
+is no conda (see :ref:`python-sandbox`). ``pc healthcheck`` reports what this machine is missing.
 
 Supported platforms are Linux on x86_64 and arm64, and macOS on Apple silicon and on Intel. Windows is
 covered by the ``.zip`` archives under :ref:`manual installation <standalone-manual>`.
@@ -349,9 +352,22 @@ extended afterwards: the Python linter (``lint``) is in it, ready to run.
 
 What it does **not** carry is a CAD kernel. The bundle is three console programs, not a library to import, and
 every shape those programs build, render, export or tessellate is produced in the sandbox PartCAD provisions
-and comes back as geometry the commands never open themselves. That sandbox is a conda environment where the
-machine has conda and a plain virtual environment otherwise (see :ref:`python-sandbox`); either way, leaving
-OpenCASCADE out of the bundle is most of why it is around 180MB rather than around 1GB.
+and comes back as geometry the commands never open themselves. Leaving OpenCASCADE out of the bundle is most
+of why it is around 200MB rather than around 1GB.
+
+It does carry the **conda** that builds that sandbox. Elsewhere conda is optional -- without it PartCAD builds
+a plain virtual environment instead (see :ref:`python-sandbox`) -- but a virtual environment is built *from*
+an interpreter, and the machine this bundle exists for is the machine with no Python to build one from. So
+every bundle, on every platform, ships `micromamba <https://mamba.readthedocs.io/>`_, a single self-contained
+executable of about 12-22MB, and PartCAD uses it when the machine has no conda of its own.
+
+If you already have ``conda`` or ``mamba``, yours is used and the bundled copy is ignored. That is deliberate:
+your conda has the channels you configured and a package cache holding the gigabytes a CAD sandbox is built
+from, and taking ours instead would strand that cache and download all of it again. Nothing needs to be
+configured either way; ``pc healthcheck`` says which conda was found.
+
+The bundled conda keeps its package cache in ``~/.partcad/conda``, beside the sandboxes it creates in
+``~/.partcad/sandbox``. Deleting ``~/.partcad`` removes both, and the next command rebuilds them.
 
 On Linux x86_64 and on Windows it also carries **OpenSCAD**, which PartCAD runs as an external program to
 build ``.scad`` parts. The bundled copy is used in preference to any OpenSCAD installed on the machine, so that the
@@ -373,13 +389,9 @@ reason -- upstream publishes that release for x86_64 only. The Intel macOS bundl
 that both macOS builds behave the same way. On all of them, install OpenSCAD yourself and PartCAD will use
 it.
 
-Two other things are deliberately not in the bundle, because PartCAD runs them as external programs rather
-than importing them, exactly as the wheels do:
-
-* **git**, used to fetch package repositories.
-* **conda** (or **mamba**), used to build the sandbox in which PartCAD runs CAD scripts. Optional: without it
-  PartCAD builds a plain virtual environment instead (see :ref:`python-sandbox`); conda is what lets a package
-  ask for a Python version the host does not have.
+One thing is deliberately not in the bundle, because PartCAD runs it as an external program rather than
+importing it, exactly as the wheels do: **git**, used for your git configuration when packages are fetched
+from git repositories. Packages are cloned either way, through ``libgit2``.
 
 Run ``pc healthcheck`` to see what is missing on the current machine.
 
@@ -444,9 +456,15 @@ conda and git
 =============
 
 A snap does not carry your shell environment, so a conda installed under your home directory -- the usual
-place -- is not visible to it, and neither is a git outside the standard system prefixes. This is expected
-and accepted rather than worked around: PartCAD notices, falls back to a virtual environment of its own
-(``pythonSandbox: venv`` -- see :ref:`python-sandbox`), and reports both as missing. Packages imported from git repositories are
+place -- is not visible to it, and neither is a git outside the standard system prefixes.
+
+conda no longer matters, and that is the one thing to know here that changed. The snap wraps the standalone
+bundle, the bundle carries its own conda, and a payload inside the snap is visible to it whatever your shell
+says -- so the snap gets the ``conda`` sandbox (see :ref:`python-sandbox`) rather than falling back to a
+virtual environment. What it will not pick up is *your* conda, and with it your package cache: the snap
+builds its sandbox from scratch the first time.
+
+git is still expected and accepted rather than worked around. Packages imported from git repositories are
 still cloned, through ``libgit2`` as everywhere else; what the snap cannot see is your git *configuration*
 (see :ref:`git-configuration`).
 
@@ -454,8 +472,8 @@ still cloned, through ``libgit2`` as everywhere else; what the snap cannot see i
 
   $ pc healthcheck
 
-If you need the conda sandbox, or your own git configuration, use the :ref:`standalone bundle
-<standalone-cli>` or the wheels, which run with your own environment.
+If you need your own git configuration, or want the snap to share the conda package cache you already have,
+use the :ref:`standalone bundle <standalone-cli>` or the wheels, which run with your own environment.
 
 To remove the snap, including its data:
 
@@ -510,8 +528,9 @@ The installer is not signed, so SmartScreen shows a warning: choose "More info",
 
 It unpacks to around 500MB: an editor, a Python interpreter, the command line tools and the extensions, all
 in one archive. Like the standalone bundle inside it, it carries no CAD kernel -- shapes are built in a
-sandbox PartCAD provisions on the machine, using conda where there is conda and a virtual environment of its
-own otherwise (see :ref:`python-sandbox`).
+sandbox PartCAD provisions on the machine. The conda that provisions it comes from the same place: the IDE
+ships the standalone bundle, and the bundle carries a conda, so there is nothing to install alongside the IDE
+either (see :ref:`python-sandbox`).
 
 The first start
 ===============

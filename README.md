@@ -217,6 +217,9 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
 Note, it's not required but highly recommended that you have [conda] installed. If you experience any difficulty
 installing or using any PartCAD tool, then make sure to install [conda].
 
+That applies to the Python packages below. The standalone command line tools, the snap and the PartCAD IDE
+carry a conda of their own and need none installed — they use yours when you have one.
+
 ### Plugin for Claude Code
 
 Already using [Claude Code](https://claude.com/claude-code)? This is the shortest way in, and it installs
