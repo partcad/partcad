@@ -24,12 +24,12 @@ starting for users the day that image moved.
 
 So there is one build per supported OS version, and the archive name carries it. The platform id is
 `<os>-<os-version>-<arch>`, which for the builds CI produces is exactly the runner image label (minus any `-arm`
-suffix) plus the architecture:
+or `-intel` suffix) plus the architecture:
 
 | | x86_64 | arm64 |
 | --- | --- | --- |
 | Linux | `ubuntu-22.04-x86_64`, `ubuntu-24.04-x86_64` | `ubuntu-22.04-arm64`, `ubuntu-24.04-arm64` |
-| macOS | — (needs macos-13, see below) | `macos-15-arm64`, `macos-26-arm64` |
+| macOS | `macos-15-x86_64` | `macos-15-arm64` |
 | Windows | `windows-2022-x86_64` | — |
 
 The Ubuntu names say what built the bundle, not what is required to run it: any distribution can run these, and
@@ -51,8 +51,15 @@ matrix that no release check expects is dead weight; one the check expects that 
 release. Each says so at the point where it is defined. The clients keep no list of their own — they read the manifest
 described below.
 
+Two other places name these ids, and both consume them rather than declaring them, so a name that is wrong there
+is a job waiting for an artifact nothing uploaded. `IDE_CORE`/`IDE_DEEP` in `build-ide-standalone.yml` say which
+bundle goes inside each IDE, and the depth has to match: a core IDE cannot embed a deep-only bundle. The
+`EXAMPLES_CORE`/`EXAMPLES_DEEP` lists in `build-standalone.yml` say which bundles the example packages run
+through, and those *are* enforced — the "Set matrix" job fails the run if a leg names a platform this run does
+not build.
+
 The split between `PLATFORMS_CORE` and `PLATFORMS_DEEP` is about cost, not support: a pull request builds the four core
-platforms, and the three in `PLATFORMS_DEEP` (Ubuntu 22.04 on both architectures, and the second macOS) are added on a
+platforms, and the three in `PLATFORMS_DEEP` (Ubuntu 22.04 on both architectures, and macOS on x86_64) are added on a
 deep run — the nightly schedule, a manual dispatch, a push, or `#deepTest` in the pull request. See
 `.github/actions/test-depth`. A release runs on a push, so it is always deep and always builds all seven; `deploy.yml`
 refuses to publish otherwise. Put `#deepTest` on a pull request that changes what is frozen.
@@ -61,9 +68,48 @@ refuses to publish otherwise. Put `#deepTest` on a pull request that changes wha
 CI passes `--platform=` instead: the runner image label is the authoritative answer to which OS version it is,
 and recovering that from the running system is guesswork on Windows in particular.
 
-There is no macOS x86_64 bundle: it would need macos-13, and no macos-13 job has ever started on the current
-runner plan (see the note in `test.yml`). There is no Windows arm64 bundle either -- not a platform PartCAD
-releases for.
+**macOS is the exception to the table above: one build per architecture, not one per OS version.** The labels
+are not symmetric either. Apple silicon has a pinned label per release, `macos-15`/`macos-26`, and the newest
+also answers to `macos-latest`; x86_64 has `macos-15-intel`/`macos-26-intel` and **no `macos-latest-intel`** —
+the moving label exists on one architecture only, and `macos-latest-large` is a paid larger runner rather than
+an x86_64 equivalent. (`-large`/`-xlarge` are all larger runners, which this repository does not use.) x86_64
+macOS used to mean `macos-13`, which is why there was no Intel bundle at all: no macos-13 job ever started on
+the current runner plan, and GitHub retired the image in December 2025 — see the note in `test.yml`. The
+`-intel` labels replaced it.
+
+Which label a job names follows from what the job is for. **A job that freezes a bundle names a pinned image**:
+the archive is named after it and takes its C library floor from it, so a moving label would rename what we
+publish and raise what it needs, with no commit to point at. **A job that installs one on a later OS names the
+moving label** where there is one: its question is "does this still run on the newest macOS", and pinning it
+means the answer quietly goes stale the day a newer macOS ships. So the freezes are `macos-15` and
+`macos-15-intel`, and the forward legs are `macos-latest` and — for want of an equivalent — `macos-26-intel`,
+which is a line that needs editing when a macOS 27 Intel image appears.
+
+Both macOS builds are frozen on macOS 15, and there is deliberately no macOS 26 build of either. A frozen bundle
+runs on the OS version it was built on and everything newer, so `macos-15-arm64` and `macos-15-x86_64` cover
+macOS 15 and 26 between them; a `macos-26-*` build reaches no machine they do not. There *was* a
+`macos-26-arm64` build. Dropping it is what pays for the Intel one — a 10x-billed freeze traded for another
+10x-billed freeze, out for a build that reached nothing new and in for a build that reaches an architecture
+nothing here reached before.
+
+**That trade is only sound if "older build runs on newer OS" is true, so CI now checks it.** It is the
+assumption the whole per-OS-version scheme rests on and nothing used to test it: every bundle was installed on
+the image that froze it, and a macOS 26 host was handed a macOS 26 build. `INSTALL_FORWARD_CORE` and
+`INSTALL_FORWARD_DEEP` in `build-standalone.yml` add an `Install` leg for each macOS bundle on the *next*
+generation — `macos-15-arm64` on `macos-latest`, `macos-15-x86_64` on `macos-26-intel` — and the IDE workflow
+does the same for the application. Those legs run `install.sh` without `--platform`, so they also check the half that
+is not the binary: that a macOS 26 machine reads the manifest and resolves itself to the macOS 15 build.
+
+The arm64 forward leg is core rather than deep, unlike the freeze it replaced: with one arm64 build for every
+macOS version, "it still starts on the newest macOS" is now load-bearing for every Mac user rather than some of
+them. The Intel legs follow their bundle and stay deep-only.
+
+**The next move here is one event, not two.** The macOS 15 images are the last x86_64 ones: GitHub drops x86_64
+macOS when they retire, announced for autumn 2027. That same retirement is what forces arm64 onto `macos-26`.
+So when it comes: move `macos-15`→`macos-26` and `macos-15-arm64`→`macos-26-arm64`, delete the x86_64 build and
+its legs, and add the next generation's forward legs when there is one.
+
+There is no Windows arm64 bundle -- not a platform PartCAD releases for.
 
 ## Files
 
@@ -294,7 +340,7 @@ where the AppImage's library dependencies are absent.
 | Linux x86_64 | the AppImage, unpacked | no — needs `libGL`, `libX11`, `libxcb`, fontconfig, freetype, glib, harfbuzz from the host |
 | Linux arm64 | nothing | — |
 | Windows | the portable build | yes — one statically linked `openscad.exe`, no DLLs |
-| macOS | nothing | — |
+| macOS, both architectures | nothing | — |
 
 Linux arm64 carries nothing because upstream publishes the pinned 2021.01 AppImage for x86_64 only; running it
 under emulation is not something a bundle should quietly require. `pc` there uses the host's OpenSCAD, exactly
@@ -313,6 +359,13 @@ macOS is excluded because the 2021.01 release predates Apple silicon and ships a
 on the arm64 bundle would require Rosetta 2 — absent from a clean machine. Development snapshots may be
 universal binaries, but they are snapshots and their architecture has not been confirmed; `lipo -archs` on a
 mounted snapshot `.dmg` would settle it.
+
+The `macos-15-x86_64` bundle is the one where that argument does not apply — the pinned `.dmg` is for exactly
+that architecture — and it still carries nothing, deliberately. Two macOS bundles that differ in what is inside
+them are two behaviours to explain, to health-check and to support, on the architecture that is being retired;
+and `build.sh` would have to learn to mount and copy out of a `.dmg` to gain it. `pc` on an Intel Mac uses the
+host's OpenSCAD, exactly as the wheels do. If that changes, it is a one-architecture payload and this paragraph
+is where to say so.
 
 To move to a different OpenSCAD, change `OPENSCAD_VERSION` in `build.sh`. Upstream publishes a `.sha256` next
 to each artifact and the build verifies it, so nothing else needs updating — but note the published checksum

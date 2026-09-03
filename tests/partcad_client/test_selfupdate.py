@@ -205,7 +205,16 @@ MANIFEST = {
             "x86_64": ["ubuntu-24.04-x86_64", "ubuntu-22.04-x86_64"],
             "arm64": ["ubuntu-24.04-arm64", "ubuntu-22.04-arm64"],
         },
-        "macos": {"arm64": ["macos-26-arm64", "macos-15-arm64"]},
+        # Two arm64 entries and one x86_64. A release publishes one macOS build
+        # per architecture today -- both frozen on macOS 15, see
+        # "build-standalone.yml" -- but the policy has to order a list of any
+        # length, macOS carried two before and will again when the macOS 15
+        # images retire, and no other operating system here exercises "several
+        # builds of one arch, one of the other".
+        "macos": {
+            "arm64": ["macos-26-arm64", "macos-15-arm64"],
+            "x86_64": ["macos-15-x86_64"],
+        },
         # One Windows build, not one per image: nothing here can be compared
         # against a Windows host, and there is no floor for two builds to differ
         # in. See the note beside the matrix in "build-standalone.yml".
@@ -213,7 +222,7 @@ MANIFEST = {
     },
     "ide": {
         "linux": {"x86_64": ["linux-x86_64"]},
-        "macos": {"arm64": ["macos-arm64"]},
+        "macos": {"arm64": ["macos-arm64"], "x86_64": ["macos-x86_64"]},
         "windows": {"x86_64": ["windows-x86_64"]},
     },
 }
@@ -266,13 +275,25 @@ def test_an_unknown_operating_system_has_no_candidates():
 
 
 def test_an_architecture_the_release_does_not_carry_has_no_candidates():
-    # macOS x86_64 has no bundle: nothing is offered, rather than an arm64 one.
-    assert _select("macos", "x86_64", "macos-15") == []
+    # Windows arm64 has no bundle: nothing is offered, rather than an x86_64 one
+    # that this machine would have to emulate.
+    assert _select("windows", "arm64", None) == []
+
+
+def test_each_macos_architecture_is_offered_only_its_own_builds():
+    # The two are separate lists in the manifest, so an Intel Mac is never handed
+    # an Apple silicon bundle, and the shorter Intel list is no reason to reach
+    # into the other one. macOS 26 on Intel gets the macOS 15 build -- newer host,
+    # older build, which is the direction that works.
+    assert _select("macos", "x86_64", "macos-15") == ["macos-15-x86_64"]
+    assert _select("macos", "x86_64", "macos-26") == ["macos-15-x86_64"]
+    assert _select("macos", "arm64", "macos-15") == ["macos-15-arm64"]
 
 
 def test_the_ide_archives_carry_no_os_version_and_are_offered_as_they_are():
     assert _select("linux", "x86_64", "ubuntu-22.04", kind="ide") == ["linux-x86_64"]
     assert _select("macos", "arm64", "macos-15", kind="ide") == ["macos-arm64"]
+    assert _select("macos", "x86_64", "macos-15", kind="ide") == ["macos-x86_64"]
 
 
 def test_a_manifest_without_this_kind_has_no_candidates():
@@ -327,11 +348,15 @@ def test_fetch_manifest_rejects_a_body_that_is_not_a_manifest(monkeypatch):
 
 
 def test_release_platforms_reports_a_machine_the_release_has_no_build_for(monkeypatch):
-    monkeypatch.setattr(selfupdate.sys, "platform", "darwin")
-    monkeypatch.setattr(selfupdate.platform, "machine", lambda: "x86_64")
+    # Windows on arm64: a machine PartCAD runs on but publishes no bundle for.
+    # The manifest carries the architecture under another operating system and
+    # the operating system under another architecture, so this only passes if
+    # both are required to match.
+    monkeypatch.setattr(selfupdate.sys, "platform", "win32")
+    monkeypatch.setattr(selfupdate.platform, "machine", lambda: "ARM64")
     monkeypatch.setattr(selfupdate, "fetch_manifest", lambda base_url: MANIFEST)
-    monkeypatch.setattr(selfupdate, "host_release", lambda: "macos-15")
-    with pytest.raises(selfupdate.SelfUpdateError, match="no standalone bundle for macos/x86_64"):
+    monkeypatch.setattr(selfupdate, "host_release", lambda: None)
+    with pytest.raises(selfupdate.SelfUpdateError, match="no standalone bundle for windows/arm64"):
         selfupdate.release_platforms("https://example.invalid/builds")
 
 

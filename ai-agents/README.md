@@ -60,8 +60,9 @@ The plugin folder is named `claude`, but the command namespace comes from
   installs the standalone PyInstaller build from the latest GitHub release via
   the official `install.sh`; `python-module` installs the `partcad` wheel
   into the active Python environment (run as `python -m partcad_cli.click.command`).
-  Releases publish bundles for Linux (x86_64, arm64), macOS (Apple silicon) and
-  Windows, and a `platforms.json` the installer reads to pick this machine's.
+  Releases publish bundles for Linux (x86_64, arm64), macOS (Apple silicon and
+  Intel) and Windows, and a `platforms.json` the installer reads to pick this
+  machine's.
   The same release publishes this plugin, so the plugin's version names the
   PartCAD the skills were written against, and is what `--version` pins if the
   newest one ever behaves differently.
