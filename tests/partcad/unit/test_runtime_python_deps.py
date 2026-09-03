@@ -13,6 +13,7 @@ import re
 import signal
 
 import pytest
+from packaging.requirements import Requirement
 
 import partcad as pc
 from partcad import sandbox_versions
@@ -68,6 +69,39 @@ def test_constraints_bound_ocp_and_ocpsvg():
     assert "<8.0" in joined
     assert "ocpsvg" in joined
     assert "<0.7" in joined
+
+
+def test_numba_is_capped_on_intel_macos_and_nowhere_else():
+    """The one constraint that must NOT apply everywhere.
+
+    numba and llvmlite stopped publishing macOS x86_64 wheels at 0.63.0/0.46.0,
+    and both still publish an sdist -- so without a bound pip builds llvmlite
+    from source there, finds no LLVM, and the cadquery install dies with it. The
+    cap has to be scoped by marker: every other platform still resolves numba
+    freely, and a cap that leaked onto them would hold the whole fleet at a
+    release chosen for a runner none of them are.
+
+    Asserted on the parsed requirement, not on the text: the marker has to
+    actually evaluate that way, and the specifier has to actually admit the last
+    Intel-macOS release while excluding the first one without a wheel.
+    """
+    capped = [c for c in PIP_CONSTRAINTS if Requirement(c).name == "numba"]
+    assert len(capped) == 1, capped
+    requirement = Requirement(capped[0])
+
+    assert requirement.marker is not None
+    assert requirement.marker.evaluate({"sys_platform": "darwin", "platform_machine": "x86_64"})
+    for elsewhere in (
+        {"sys_platform": "darwin", "platform_machine": "arm64"},
+        {"sys_platform": "linux", "platform_machine": "x86_64"},
+        {"sys_platform": "linux", "platform_machine": "aarch64"},
+        {"sys_platform": "win32", "platform_machine": "AMD64"},
+    ):
+        assert not requirement.marker.evaluate(elsewhere), elsewhere
+
+    # The last numba with an Intel macOS wheel, and the first without one.
+    assert "0.62.1" in requirement.specifier
+    assert "0.63.0" not in requirement.specifier
 
 
 def test_build123d_install_demands_a_cadquery_ocp_reassert(tmp_path):

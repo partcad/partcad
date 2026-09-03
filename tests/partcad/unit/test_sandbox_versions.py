@@ -6,6 +6,7 @@
 #
 
 import pytest
+from packaging.specifiers import SpecifierSet
 
 from partcad import sandbox_versions
 
@@ -34,6 +35,10 @@ def test_cad_pins_are_exact():
 
     Two different OCP builds in one sandbox crash the wrapper process with no
     traceback, so these may not drift apart on their own.
+
+    NLOPT is deliberately absent: the rule is about the packages that write the
+    OCP native module, and nlopt writes none of it. The test below explains why
+    it cannot be a single version.
     """
     for pin in (
         sandbox_versions.CADQUERY_OCP,
@@ -43,6 +48,51 @@ def test_cad_pins_are_exact():
         sandbox_versions.OCP_TESSELLATE,
     ):
         assert "==" in pin, pin
+
+
+def test_nlopt_spans_the_platform_gap():
+    """nlopt is the one CAD requirement no single version can satisfy.
+
+    2.10.0 and 2.11.0 publish no macOS x86_64 wheel and no sdist either, so an
+    exact pin at one of them leaves pip with no candidate at all and every
+    script-defined part on an Intel Mac dies on a missing import. 2.9.1 is the
+    last release that does publish one, so the specifier has to admit both ends
+    and let each platform resolve to the newest it can install.
+
+    Asserted on the parsed specifier rather than on the text. Both bounds have to
+    be *inclusive*: '>2.9.1,<2.11.0' reads almost the same and contains both
+    version numbers, so a substring check passes for it while it admits neither
+    the version Intel macOS needs nor the one every other platform gets.
+    """
+    specifier = SpecifierSet(sandbox_versions.NLOPT.partition("nlopt")[2])
+    # The two that matter, each the answer on some platform.
+    assert "2.9.1" in specifier
+    assert "2.11.0" in specifier
+    # And both bounds still bite, so this stays a closed range rather than drift.
+    # The ceiling is the half that is easy to lose: without it the specifier
+    # admits whatever nlopt publishes next, sight unseen, which is the opposite
+    # of the "as deterministic as an exact pin" property the comment beside
+    # NLOPT claims for it.
+    assert "2.8.0" not in specifier
+    assert "2.11.1" not in specifier
+    assert "==" not in sandbox_versions.NLOPT
+
+
+def test_nlopt_range_still_reconciles_like_a_pin():
+    """A range must not weaken the guard that forces the CAD stack's versions.
+
+    'reconcile_requirement' finds a pin by distribution name, so the specifier
+    has to stay parseable by 'distribution_name' -- a range written in a way that
+    did not would silently stop overriding a package's own nlopt version, which
+    is the drift PINNED_REQUIREMENTS exists to prevent.
+    """
+    assert sandbox_versions.distribution_name(sandbox_versions.NLOPT) == "nlopt"
+    reconciled, superseded = sandbox_versions.reconcile_requirement("nlopt==2.7.1")
+    assert reconciled == sandbox_versions.NLOPT
+    assert superseded == "nlopt==2.7.1"
+    # And an environment marker the caller attached still survives the override.
+    reconciled, _ = sandbox_versions.reconcile_requirement('nlopt==2.7.1; sys_platform == "linux"')
+    assert reconciled == '%s; sys_platform == "linux"' % sandbox_versions.NLOPT
 
 
 def test_default_python_version_is_supported():
