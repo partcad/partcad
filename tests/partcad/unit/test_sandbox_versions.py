@@ -68,8 +68,13 @@ def test_nlopt_spans_the_platform_gap():
     # The two that matter, each the answer on some platform.
     assert "2.9.1" in specifier
     assert "2.11.0" in specifier
-    # And the floor still bites, so this stays a bounded range rather than drift.
+    # And both bounds still bite, so this stays a closed range rather than drift.
+    # The ceiling is the half that is easy to lose: without it the specifier
+    # admits whatever nlopt publishes next, sight unseen, which is the opposite
+    # of the "as deterministic as an exact pin" property the comment beside
+    # NLOPT claims for it.
     assert "2.8.0" not in specifier
+    assert "2.11.1" not in specifier
     assert "==" not in sandbox_versions.NLOPT
 
 
