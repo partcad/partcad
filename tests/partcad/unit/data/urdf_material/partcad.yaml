@@ -1,0 +1,48 @@
+desc: A package whose parts say what they are made of
+
+sketches:
+  plate:
+    type: basic
+    square: 20
+
+materials:
+  pla:
+    formal: PLA
+    full: Polylactic Acid
+    density: 0.00132 # g/mm^3 == 1320 kg/m^3
+  steel:
+    formal: Steel
+    density: 0.00785 # g/mm^3 == 7850 kg/m^3
+  unweighed:
+    full: Something nobody stated a density for
+
+parts:
+  # 20 x 20 x 5 mm == 2000 mm^3 exactly, so the mass is checkable by hand.
+  plastic-plate:
+    type: extrude
+    sketch: plate
+    depth: 5
+    properties:
+      material: pla
+  steel-plate:
+    type: extrude
+    sketch: plate
+    depth: 5
+    properties:
+      material: steel
+  # No material at all: the exporter has to fall back and say so.
+  bare-plate:
+    type: extrude
+    sketch: plate
+    depth: 5
+  # A material that states no density: the same fallback, by another route.
+  unweighed-plate:
+    type: extrude
+    sketch: plate
+    depth: 5
+    properties:
+      material: unweighed
+
+assemblies:
+  rig:
+    type: assy

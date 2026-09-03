@@ -22,7 +22,7 @@ from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from . import output
 from .shape_config import ShapeConfiguration
-from .utils import total_size
+from .utils import normalize_resource_path, total_size
 from . import logging as pc_logging
 from .sync_threads import threadpool_manager
 from . import render_overlay
@@ -121,6 +121,42 @@ SERIALIZED_PART_TYPES = (
 TEXT_PART_TYPES = frozenset({"step", "iges", "brep", "obj", "threejs", "svg", "dxf"})
 
 SUPPORTED_PART_TYPES = frozenset(LIVE_OBJECT_PART_TYPES | SERIALIZED_PART_TYPES)
+
+
+def envelope_material_refs(envelope):
+    """Every node of an envelope tree that names a material, and which one.
+
+    Read from the envelope about to be sent rather than from the live
+    object, because the envelope is what the exporter will actually see: the
+    index it looks properties up in is built from these very nodes (see
+    'properties_index()' in wrappers/wrapper_export.py), so reading anything
+    else risks answering about a different tree. An assembly served from the
+    cache is the case that makes this more than a preference - it has no
+    instantiated children to walk, and walking them would silently find no
+    materials and weigh everything as the default.
+
+    Keyed by the node's full name, which is the key the exporter uses. That
+    name is '<package>:<object>', so it also says which package declared the
+    reference - and therefore what a relative one means, wherever the shape
+    was later placed.
+    """
+    refs = {}
+
+    def visit(node):
+        if not isinstance(node, dict):
+            return
+        name = node.get("name")
+        properties = node.get(shape_envelope.KEY_PROPERTIES)
+        if name and isinstance(properties, dict):
+            reference = properties.get("material")
+            if isinstance(reference, str) and reference.strip():
+                package = name.rsplit(":", 1)[0] if ":" in name else name
+                refs[name] = normalize_resource_path(package, reference.strip())
+        for child in node.get(shape_envelope.KEY_ASSEMBLY) or []:
+            visit(child)
+
+    visit(envelope)
+    return refs
 
 
 @telemetry.instrument(exclude=["locked"])
@@ -497,6 +533,35 @@ class Shape(ShapeConfiguration):
         cached, _ = await ctx.cache_shapes.read_async(self.hash, [key])
         properties = cached.get(key)
         return properties if isinstance(properties, dict) and properties else None
+
+    def _material_index(self, ctx, envelope):
+        """What each shape's material is, for an exporter that needs to weigh it.
+
+        A sandboxed exporter is handed a material as a *string* - it has no
+        PartCAD context and cannot look a package up - so anything it needs to
+        know about that material has to be resolved here and travel with the
+        request. What it needs is the density, to turn a volume into a mass, and
+        the formal name, which is what a URDF or SDFormat '<material>' should be
+        called rather than the package path.
+
+        Only shapes whose reference resolves appear. A reference that does not
+        is not an error and is not reported: a part imported from a URDF carries
+        the URDF's own material name ('grey'), which was never a PartCAD
+        reference and is still perfectly good as an appearance name.
+        """
+        from . import material as pc_material
+
+        index = {}
+        for full_name, reference in envelope_material_refs(envelope).items():
+            _, resolved = pc_material.lookup(ctx, reference, quiet=True)
+            if resolved is None:
+                continue
+            entry = {"name": resolved.formal or resolved.name}
+            if resolved.density is not None:
+                # g/mm^3, as the material states it. The exporter converts.
+                entry["density"] = resolved.density
+            index[full_name] = entry
+        return index
 
     def _shape_metadata(self):
         """The (full_name, label) stamped onto this shape's envelope."""
@@ -1059,6 +1124,17 @@ class Shape(ShapeConfiguration):
 
         request = await self._output_request(obj, impl, kwargs, overlay=effective_overlay, ports=ports)
         request[output.SCRIPT_KEY] = os.path.abspath(script)
+        # What the shapes report about themselves reaches the sandbox on the
+        # envelopes, but a material among those properties is only a
+        # *reference*: resolving it means reading another package, which a
+        # sandbox cannot do. So it is resolved here, where there is a context to
+        # resolve it in, and travels with the request. Added beside the other
+        # keys the caller fills in rather than inside '_output_request', which is
+        # the configuration merge and has no business needing a context.
+        if impl.parameters.get("properties"):
+            materials = self._material_index(ctx, obj)
+            if materials:
+                request[output.MATERIALS_KEY] = materials
         # Whether the sandbox rebuilds the envelopes into live geometry before
         # the implementation sees them. Off for an implementation that needs what
         # the envelopes say about each node (the URDF exporter names every link

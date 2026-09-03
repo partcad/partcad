@@ -146,3 +146,102 @@ def test_is_identity():
     assert urdf_common.is_identity((urdf_common.IDENTITY_Q, urdf_common.IDENTITY_T))
     assert not urdf_common.is_identity((urdf_common.IDENTITY_Q, (0.0, 0.0, 1.0)))
     assert not urdf_common.is_identity((urdf_common.axis_angle_to_quat((0, 0, 1), 5.0), urdf_common.IDENTITY_T))
+
+
+#
+# Turning a volume and a material into a mass and an inertia
+#
+
+
+def test_a_material_density_becomes_kg_per_cubic_metre():
+    """PartCAD states g/mm^3; URDF and SDFormat state kg/m^3."""
+    # PLA at 1.32 g/cm^3, which is 0.00132 g/mm^3, is 1320 kg/m^3.
+    assert urdf_common.density_from_material({"density": 0.00132}) == pytest.approx(1320.0)
+    assert urdf_common.density_from_material({"density": 0.00785}) == pytest.approx(7850.0)
+
+
+def test_a_material_with_nothing_usable_has_no_density():
+    # Each of these means "weigh it some other way", never "weigh it as zero".
+    assert urdf_common.density_from_material(None) is None
+    assert urdf_common.density_from_material({}) is None
+    assert urdf_common.density_from_material({"name": "PLA"}) is None
+    assert urdf_common.density_from_material({"density": None}) is None
+    assert urdf_common.density_from_material({"density": 0.0}) is None
+    assert urdf_common.density_from_material({"density": "heavy"}) is None
+
+
+def _box(a, b, c, centre, density):
+    """A box as 'combine_inertials' takes it: unit-density moments about its own centre."""
+    volume = a * b * c
+    inertia = [
+        [volume * (b * b + c * c) / 12.0, 0.0, 0.0],
+        [0.0, volume * (a * a + c * c) / 12.0, 0.0],
+        [0.0, 0.0, volume * (a * a + b * b) / 12.0],
+    ]
+    return (volume, centre, inertia, density)
+
+
+def test_one_solid_is_its_own_volume_times_its_density():
+    mass, centre, inertia = urdf_common.combine_inertials([_box(10.0, 20.0, 30.0, (5.0, 10.0, 15.0), 2700.0)])
+    # 6000 mm^3 of aluminium.
+    assert mass == pytest.approx(6000.0 * 1e-9 * 2700.0)
+    # The centre of mass comes back in metres.
+    assert centre == pytest.approx((0.005, 0.010, 0.015))
+    # ixx = V(b^2+c^2)/12 * density * mm^5->m^5.
+    assert inertia["ixx"] == pytest.approx(650000.0 * 2700.0 * 1e-15)
+    assert inertia["ixy"] == pytest.approx(0.0)
+
+
+def test_a_link_of_two_materials_weighs_what_both_say():
+    """The case one density for the whole link cannot express.
+
+    A steel insert in a plastic housing weighs what neither material alone
+    would say, and the centre of mass is pulled towards the steel.
+    """
+    plastic = _box(20.0, 20.0, 5.0, (0.0, 0.0, 0.0), 1320.0)
+    steel = _box(20.0, 20.0, 5.0, (40.0, 0.0, 0.0), 7850.0)
+    mass, centre, _ = urdf_common.combine_inertials([plastic, steel])
+
+    plastic_mass = 2000.0 * 1e-9 * 1320.0
+    steel_mass = 2000.0 * 1e-9 * 7850.0
+    assert mass == pytest.approx(plastic_mass + steel_mass)
+    # Weighted towards the steel, not the midpoint at 0.020 m.
+    expected_x = (plastic_mass * 0.0 + steel_mass * 0.040) / (plastic_mass + steel_mass)
+    assert centre[0] == pytest.approx(expected_x)
+    assert centre[0] > 0.030
+
+
+def test_combining_carries_each_tensor_to_the_shared_centre():
+    """Two identical solids apart on one axis, against the closed form.
+
+    Each contributes its own tensor plus m*d^2 about the combined centre, which
+    for this arrangement is the midpoint.
+    """
+    a = b = c = 10.0
+    half = 25.0
+    left = _box(a, b, c, (-half, 0.0, 0.0), 1000.0)
+    right = _box(a, b, c, (half, 0.0, 0.0), 1000.0)
+    mass, centre, inertia = urdf_common.combine_inertials([left, right])
+
+    each = 1000.0 * 1e-9 * 1000.0  # 1000 mm^3 at 1000 kg/m^3
+    assert mass == pytest.approx(2.0 * each)
+    assert centre == pytest.approx((0.0, 0.0, 0.0))
+    # About x the offset is along the axis, so nothing is added.
+    own_ixx = 1000.0 * (b * b + c * c) / 12.0 * 1000.0 * 1e-15
+    assert inertia["ixx"] == pytest.approx(2.0 * own_ixx)
+    # About y and z each solid is carried 0.025 m off the centre.
+    own_izz = 1000.0 * (a * a + b * b) / 12.0 * 1000.0 * 1e-15
+    assert inertia["izz"] == pytest.approx(2.0 * (own_izz + each * 0.025**2))
+
+
+def test_solids_with_no_volume_are_left_out():
+    real = _box(10.0, 10.0, 10.0, (0.0, 0.0, 0.0), 1000.0)
+    empty = (0.0, (0.0, 0.0, 0.0), [[0.0] * 3] * 3, 1000.0)
+    assert urdf_common.combine_inertials([real, empty]) == urdf_common.combine_inertials([real])
+
+
+def test_nothing_to_weigh_is_none_not_zero():
+    # A mesh or an open shell has no volume. None is what makes the caller
+    # write no <inertial> at all rather than one full of zeroes.
+    assert urdf_common.combine_inertials([]) is None
+    assert urdf_common.combine_inertials([(0.0, (0.0, 0.0, 0.0), [[0.0] * 3] * 3, 2700.0)]) is None

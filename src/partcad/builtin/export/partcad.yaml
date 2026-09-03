@@ -182,8 +182,11 @@ export:
     tolerance: 0.1
     angularTolerance: 0.1
     ascii: false
-    # Write an '<inertial>' for every link, computing one from the solid and
-    # 'density' (kg/m^3) for a part that does not state its own.
+    # Write an '<inertial>' for every link, computing one from the solid for a
+    # part that does not state its own mass. The density comes from the part's
+    # material, unless 'density' (kg/m^3) is given here - naming one is a
+    # deliberate "weigh all of this as such-and-such" and overrides the
+    # materials. A part with neither is weighed as aluminium, and said to be.
     inertial: true
     # 'robot_name' defaults to the object's label, 'mesh_dir' to
     # '<file stem>_meshes' next to the URDF, 'mesh_prefix' to empty (which makes

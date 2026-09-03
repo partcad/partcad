@@ -38,8 +38,19 @@ What the part states about itself wins over anything computed here: mass,
 centre of mass, inertia, friction and the contact parameters are named PartCAD
 properties, and this writes each of them back into the URDF element that states
 it. Only a part that says nothing gets computed inertial properties, from its
-solid and the configured density. A property PartCAD has and URDF has no
-spelling for is reported rather than dropped in silence - see URDF_STATED.
+solid and a density. A property PartCAD has and URDF has no spelling for is
+reported rather than dropped in silence - see URDF_STATED.
+
+Where that density comes from, most specific first:
+
+  1. The caller's ``density`` option, when one was given. Naming it is a
+     deliberate "weigh all of this as such-and-such", so it wins.
+  2. The part's own material, resolved to a density before the request reached
+     this sandbox (see 'Shape._material_index()'). This is per part, so a link
+     that mixes materials is weighed material by material rather than averaged.
+  3. DEFAULT_DENSITY, which is a guess and now says so: every link that falls
+     back to it is named in a warning, because a plastic part silently weighed
+     as aluminium is wrong by a factor of two.
 """
 
 import math
@@ -58,17 +69,17 @@ import urdf_common  # noqa: E402
 # in millimetres and URDF reads mesh coordinates as metres after scaling.
 MESH_SCALE = 1.0 / urdf_common.MM_PER_M
 
-# Density used to turn a volume into a mass when the caller does not name one,
-# in kg/m^3. Aluminium: a middle-of-the-road value for a machined part, and one
-# whose provenance is obvious in the output rather than looking like a
-# measurement.
+# Density used to turn a volume into a mass when neither the caller nor the
+# part's material names one, in kg/m^3. Aluminium: a middle-of-the-road value
+# for a machined part, and one whose provenance is obvious in the output rather
+# than looking like a measurement. Falling back to it is reported - see
+# 'densities_of()'.
 DEFAULT_DENSITY = 2700.0
 
-# mm^5 -> m^5. The second moment OCCT integrates has units of length^5, so this
-# is what converts it once the density (kg/m^3) is applied.
-MM5_TO_M5 = 1e-15
-# mm^3 -> m^3.
-MM3_TO_M3 = 1e-9
+# mm^5 -> m^5 and mm^3 -> m^3. Shared with the SDFormat exporter, and with the
+# arithmetic that combines solids of differing densities.
+MM5_TO_M5 = urdf_common.MM5_TO_M5
+MM3_TO_M3 = urdf_common.MM3_TO_M3
 
 # URDF link and joint names end up as XML attributes and as ROS graph names, so
 # anything outside this set is replaced.
@@ -165,19 +176,58 @@ def write_mesh(shape, path, options):
         raise Exception("Failed to write the mesh file: %s" % path)
 
 
-def inertial_of(placed, density, warnings, link_name):
+def densities_of(shape_nodes, state, link_name):
+    """The density (kg/m^3) to weigh each of a link's solids with.
+
+    One per node, in the order they were given, so that a link built from parts
+    of different materials is weighed part by part. The order of preference is
+    the one the module docstring sets out; whichever wins, a link that ends up
+    on DEFAULT_DENSITY is named in a warning, once, listing the materials that
+    were not resolvable rather than only that something was guessed.
+    """
+    override = state["options"]["density"]
+    materials = state["materials"]
+    densities = []
+    guessed = []
+    for node in shape_nodes:
+        name = node.get("name")
+        if override is not None:
+            densities.append(override)
+            continue
+        density = urdf_common.density_from_material(materials.get(name))
+        if density is None:
+            densities.append(DEFAULT_DENSITY)
+            stated = (state["properties"].get(name) or {}).get("material")
+            guessed.append("%s (%s)" % (name or "?", stated) if stated else (name or "?"))
+        else:
+            densities.append(density)
+    if guessed:
+        state["warnings"].append(
+            "Link '%s' has no density for %s, so it is weighed as aluminium (%g kg/m^3); "
+            "state 'physics: mass:', give the part a material with a density, or pass 'density'"
+            % (link_name, ", ".join(guessed), DEFAULT_DENSITY)
+        )
+    return densities
+
+
+def inertial_of(placed, densities, warnings, link_name):
     """The URDF ``<inertial>`` for a link's solids, or None when they have none.
 
     'placed' is the (shape, packed placement) pairs the link is made of - one for
     an ordinary link, several for a URDF link with more than one ``<visual>``.
-    Each is put where it belongs before the moments are taken, so the result is
-    about the link as a whole.
+    'densities' is one density (kg/m^3) per pair, in the same order.
 
-    OCCT's GProp_GProps.MatrixOfInertia() is already the tensor about the centre
-    of mass, which is the frame URDF's ``<inertia>`` is stated in, so no
-    parallel-axis shift is needed - only the units and the density. GProp
-    integrates at unit density in the shape's own (millimetre) units, so the
-    volume becomes a mass and the second moment (length^5) becomes kg.m^2.
+    Each solid is measured where it belongs and weighed with its own density,
+    and the results are combined by 'urdf_common.combine_inertials()': the
+    masses add, the centre of mass is their weighted mean, and each tensor is
+    carried to that combined centre by the parallel-axis theorem. A link of one
+    material comes out exactly as it did when one density was applied to the
+    whole compound.
+
+    OCCT's GProp_GProps.MatrixOfInertia() is the tensor about the shape's own
+    centre of mass - it does not change when the shape is translated - which is
+    the frame URDF's ``<inertia>`` is stated in, so the only shift needed is
+    the one between solids.
 
     A link with no volume (a mesh imported as a shell, an empty compound) has no
     inertia to compute: it is reported and the link goes out without an
@@ -187,34 +237,36 @@ def inertial_of(placed, density, warnings, link_name):
     from OCP.GProp import GProp_GProps
     from urdf_parser_py.urdf import Inertia, Inertial, Pose
 
-    props = GProp_GProps()
-    BRepGProp.VolumeProperties_s(combined(placed), props)
-    volume = props.Mass()
-    if volume <= 0.0:
+    solids = []
+    for (shape, placement), density in zip(placed, densities):
+        props = GProp_GProps()
+        BRepGProp.VolumeProperties_s(combined([(shape, placement)]), props)
+        volume = props.Mass()
+        if volume <= 0.0:
+            continue
+        com = props.CentreOfMass()
+        matrix = props.MatrixOfInertia()
+        solids.append(
+            (
+                volume,
+                (com.X(), com.Y(), com.Z()),
+                [[matrix.Value(row, col) for col in (1, 2, 3)] for row in (1, 2, 3)],
+                density,
+            )
+        )
+
+    result = urdf_common.combine_inertials(solids)
+    if result is None:
         warnings.append(
             "Link '%s' has no computable volume (an open shell or a mesh), so it carries no <inertial>" % link_name
         )
         return None
 
-    com = props.CentreOfMass()
-    centre = (com.X(), com.Y(), com.Z())
-    matrix = props.MatrixOfInertia()
-    # Row/column indices in OCCT's gp_Mat are 1-based.
-    inertia = [[matrix.Value(row, col) for col in (1, 2, 3)] for row in (1, 2, 3)]
-
-    mass = volume * MM3_TO_M3 * density
-    factor = density * MM5_TO_M5
+    mass, centre, inertia = result
     return Inertial(
         mass=mass,
-        origin=Pose(xyz=[v * MESH_SCALE for v in centre], rpy=[0.0, 0.0, 0.0]),
-        inertia=Inertia(
-            ixx=inertia[0][0] * factor,
-            ixy=inertia[0][1] * factor,
-            ixz=inertia[0][2] * factor,
-            iyy=inertia[1][1] * factor,
-            iyz=inertia[1][2] * factor,
-            izz=inertia[2][2] * factor,
-        ),
+        origin=Pose(xyz=list(centre), rpy=[0.0, 0.0, 0.0]),
+        inertia=Inertia(**inertia),
     )
 
 
@@ -271,13 +323,23 @@ def carried_inertial(physics):
     )
 
 
-def carried_material(properties, state):
-    """The ``<material>`` a part's own 'material'/'color' properties state."""
+def carried_material(properties, material, state):
+    """The ``<material>`` a part's own 'material'/'color' properties state.
+
+    'material' is what the reference resolved to, when it did. Its formal name
+    is what the URDF should call the material: 'PLA' reads as a material, while
+    the sanitized package path it would otherwise get
+    ('pub-std-manufacturing-material-plastic-pla') reads as an accident. A
+    reference that resolved to nothing - a URDF's own material name, most often,
+    which was never a PartCAD reference - is used as it stands.
+    """
     from urdf_parser_py.urdf import Color, LinkMaterial
 
     name, color = properties.get("material"), properties.get("color")
     if not name and not color:
         return None
+    if name and isinstance(material, dict) and material.get("name"):
+        name = material["name"]
     built = LinkMaterial(name=sanitize_name(name or color, "material"))
     rgba = color_rgba(color, state) if color else None
     if rgba is not None:
@@ -377,6 +439,7 @@ def build_link(node, link_name, elements, state):
     physics = (state["properties"].get(node.get("name")) or {}).get("physics") or {}
 
     placed = []
+    placed_nodes = []
     for shape_node, placement in elements:
         shape = node_geometry(shape_node)
         if shape is None:
@@ -390,10 +453,15 @@ def build_link(node, link_name, elements, state):
             origin = Pose(xyz=xyz, rpy=rpy)
         # The appearance belongs to the shape, not to the link: a link built
         # from several parts may well have a colour per part.
-        material = carried_material(state["properties"].get(shape_node.get("name")) or {}, state)
+        material = carried_material(
+            state["properties"].get(shape_node.get("name")) or {},
+            state["materials"].get(shape_node.get("name")),
+            state,
+        )
         link.add_aggregate("visual", Visual(geometry=geometry, origin=origin, material=material))
         link.add_aggregate("collision", Collision(geometry=geometry, origin=origin))
         placed.append((shape, placement))
+        placed_nodes.append(shape_node)
 
     if not placed:
         # A frame that carries children, with no geometry of its own. URDF has
@@ -401,8 +469,10 @@ def build_link(node, link_name, elements, state):
         return link
 
     if state["options"]["inertial"]:
+        # 'or' short-circuits, so a link that states its own mass never reaches
+        # 'densities_of' - and so never warns about a density it does not use.
         link.inertial = carried_inertial(physics) or inertial_of(
-            placed, state["options"]["density"], state["warnings"], link_name
+            placed, densities_of(placed_nodes, state, link_name), state["warnings"], link_name
         )
     gazebo = gazebo_element(link_name, physics, state)
     if gazebo is not None:
@@ -472,6 +542,11 @@ def process(path, request):
         # mass, inertia and friction here, and they go back out rather than
         # being recomputed.
         "properties": request.get("properties") or {},
+        # Shape full name -> what its material is: the density (g/mm^3) to weigh
+        # it with and the formal name to call it in the URDF. Resolved in the
+        # PartCAD process, because a reference to another package cannot be
+        # followed from here. See 'Shape._material_index()'.
+        "materials": request.get("materials") or {},
         "gazebo": [],
         # PartCAD properties URDF has no spelling for, reported once at the end.
         "unsupported": set(),
@@ -480,7 +555,9 @@ def process(path, request):
             "angularTolerance": request.get("angularTolerance", 0.1),
             "ascii": request.get("ascii", False),
             "inertial": request.get("inertial", True),
-            "density": request.get("density") or DEFAULT_DENSITY,
+            # None when the caller named none, which is what lets a part's own
+            # material decide. Only an explicit option overrides the material.
+            "density": request.get("density") or None,
         },
         "warnings": warnings,
     }
