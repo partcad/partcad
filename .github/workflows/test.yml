@@ -37,9 +37,9 @@ env:
   # made this possible at all.
   #
   # Deliberately NOT in this list:
-  #  * ubuntu-24.04, windows-2025, macos-15 - these are exactly what
-  #    ubuntu-latest / windows-latest / macos-latest alias today, so naming
-  #    them as well would run the very same image twice.
+  #  * ubuntu-24.04 and windows-2025 - these are exactly what ubuntu-latest and
+  #    windows-latest alias today, so naming them as well would run the very
+  #    same image twice.
   #  * ubuntu-26.04 (and ubuntu-26.04-arm) - still a preview image, not
   #    covered by the Actions SLA, so it would only make CI flaky.
   #  * windows-11-arm - Windows on arm64 is not a platform PartCAD builds or
@@ -50,17 +50,32 @@ env:
   #    leaving checks pending forever. GitHub retired the image in December
   #    2025.
   #  * macos-15-intel / macos-26-intel - the x86_64 macOS images that replaced
-  #    macos-13 ("macos-15"/"macos-26" without the suffix are Apple silicon).
-  #    Not here, and that is a cost decision rather than a gap: this workflow
-  #    is the wheels, whose Python is the host's and whose shapes are built in
-  #    a conda sandbox, and macOS minutes bill at 10x. What has to work on an
+  #    macos-13 (the same labels without "-intel" are Apple silicon; there is
+  #    no "macos-latest-intel", the moving label exists on arm64 only). Not
+  #    here, and that is a cost decision rather than a gap: this workflow is
+  #    the wheels, whose Python is the host's and whose shapes are built in a
+  #    conda sandbox, and macOS minutes bill at 10x. What has to work on an
   #    Intel Mac is the *frozen* bundle, which carries its own interpreter and
   #    cannot be reinstalled around a problem -- so macos-15-intel is in
   #    PLATFORMS_DEEP in "build-standalone.yml", where it is built, installed
   #    and run through the example packages on every deep run.
+  #  * macos-15 - see the note under OSES below. There is one macOS here, and
+  #    it is the moving label.
+  #
+  # macOS is the exception to the "alias plus one pinned image" rule above, and
+  # it is one entry rather than two. It used to be '"macos-latest", "macos-26"',
+  # written when macos-latest was macOS 15 -- GitHub moved the label to macOS 26
+  # in July 2026 and the two silently became the same image, so the second entry
+  # bought a duplicate rather than a second version. Collapsed to the alias.
+  # Adding "macos-15" back would restore the rule; what it costs is a second
+  # 10x-billed leg of every job in this file, and what it buys for the *wheels*
+  # is small -- the interpreter is the host's and the shapes are built in a conda
+  # sandbox, so there is little for a macOS version to break. The frozen bundle
+  # is where an OS version matters, and "build-standalone.yml" builds it on
+  # macOS 15 and installs it on both.
   OSES:
     '["ubuntu-latest", "ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-22.04-arm", "windows-latest", "windows-2022",
-    "macos-latest", "macos-26"]'
+    "macos-latest"]'
   # Of those, the ones a pull request does not pay for by default. They are
   # dropped unless the run is deep -- the nightly schedule, a manual dispatch,
   # a push, or "#deepTest" in the pull request; see
@@ -70,10 +85,12 @@ env:
   #  * both Ubuntu 22.04 images. 24.04 is what 'ubuntu-latest' is, and a
   #    breakage specific to the older release is rare enough to be worth
   #    finding nightly rather than on every push.
-  #  * macos-26, leaving one macOS. macOS minutes bill at 10x, so this is the
-  #    single largest saving here. The one that stays is 'macos-latest',
-  #    because that is the version most contributors and most users are on.
-  OSES_DEEP_ONLY: '["ubuntu-22.04", "ubuntu-22.04-arm", "macos-26"]'
+  #
+  # No macOS entry any more. It used to drop 'macos-26' and leave 'macos-latest',
+  # which was the single largest saving here -- until the label moved and those
+  # became one image. There is one macOS leg now and it runs on every pull
+  # request: dropping it would mean testing no macOS at all.
+  OSES_DEEP_ONLY: '["ubuntu-22.04", "ubuntu-22.04-arm"]'
   PYTHONS: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
   # The two ends of the range a *sandbox* can be built at:
   # sandbox_versions.MIN_PYTHON_VERSION_CADQUERY and MAX_PYTHON_VERSION_CAD.
@@ -127,10 +144,7 @@ env:
     {"os": "windows-2022", "python-version": "3.13"},
     {"os": "macos-latest", "python-version": "3.11"},
     {"os": "macos-latest", "python-version": "3.12"},
-    {"os": "macos-latest", "python-version": "3.13"},
-    {"os": "macos-26", "python-version": "3.11"},
-    {"os": "macos-26", "python-version": "3.12"},
-    {"os": "macos-26", "python-version": "3.13"}]
+    {"os": "macos-latest", "python-version": "3.13"}]
   # The sharded 'test-behave' jobs and 'test-pub-repo' (45 min) are by far the
   # most expensive, so they get a reduced OS axis: the '*-latest' images only.
   # Behave then shards each of those BEHAVE_SHARDS ways. Linux arm64 is

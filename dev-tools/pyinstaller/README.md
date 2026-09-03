@@ -69,11 +69,21 @@ CI passes `--platform=` instead: the runner image label is the authoritative ans
 and recovering that from the running system is guesswork on Windows in particular.
 
 **macOS is the exception to the table above: one build per architecture, not one per OS version.** The labels
-are not symmetric either. `macos-15`/`macos-26` are the Apple silicon images; the x86_64 image of the same
-release is `macos-15-intel`/`macos-26-intel`. (`-large`/`-xlarge` beside them are the paid larger runners, which
-this repository does not use.) x86_64 macOS used to mean `macos-13`, which is why there was no Intel bundle at
-all: no macos-13 job ever started on the current runner plan, and GitHub retired the image in December 2025 —
-see the note in `test.yml`. The `-intel` labels replaced it.
+are not symmetric either. Apple silicon has a pinned label per release, `macos-15`/`macos-26`, and the newest
+also answers to `macos-latest`; x86_64 has `macos-15-intel`/`macos-26-intel` and **no `macos-latest-intel`** —
+the moving label exists on one architecture only, and `macos-latest-large` is a paid larger runner rather than
+an x86_64 equivalent. (`-large`/`-xlarge` are all larger runners, which this repository does not use.) x86_64
+macOS used to mean `macos-13`, which is why there was no Intel bundle at all: no macos-13 job ever started on
+the current runner plan, and GitHub retired the image in December 2025 — see the note in `test.yml`. The
+`-intel` labels replaced it.
+
+Which label a job names follows from what the job is for. **A job that freezes a bundle names a pinned image**:
+the archive is named after it and takes its C library floor from it, so a moving label would rename what we
+publish and raise what it needs, with no commit to point at. **A job that installs one on a later OS names the
+moving label** where there is one: its question is "does this still run on the newest macOS", and pinning it
+means the answer quietly goes stale the day a newer macOS ships. So the freezes are `macos-15` and
+`macos-15-intel`, and the forward legs are `macos-latest` and — for want of an equivalent — `macos-26-intel`,
+which is a line that needs editing when a macOS 27 Intel image appears.
 
 Both macOS builds are frozen on macOS 15, and there is deliberately no macOS 26 build of either. A frozen bundle
 runs on the OS version it was built on and everything newer, so `macos-15-arm64` and `macos-15-x86_64` cover
@@ -86,8 +96,8 @@ nothing here reached before.
 assumption the whole per-OS-version scheme rests on and nothing used to test it: every bundle was installed on
 the image that froze it, and a macOS 26 host was handed a macOS 26 build. `INSTALL_FORWARD_CORE` and
 `INSTALL_FORWARD_DEEP` in `build-standalone.yml` add an `Install` leg for each macOS bundle on the *next*
-generation — `macos-15-arm64` on `macos-26`, `macos-15-x86_64` on `macos-26-intel` — and the IDE workflow does
-the same for the application. Those legs run `install.sh` without `--platform`, so they also check the half that
+generation — `macos-15-arm64` on `macos-latest`, `macos-15-x86_64` on `macos-26-intel` — and the IDE workflow
+does the same for the application. Those legs run `install.sh` without `--platform`, so they also check the half that
 is not the binary: that a macOS 26 machine reads the manifest and resolves itself to the macOS 15 build.
 
 The arm64 forward leg is core rather than deep, unlike the freeze it replaced: with one arm64 build for every

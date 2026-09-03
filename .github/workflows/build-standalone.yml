@@ -125,14 +125,33 @@ concurrency:
 # covered by the Actions SLA. See the note in test.yml.
 #
 # macOS is the one operating system here that is built on a single OS version,
-# and the labels are not symmetric. "macos-15"/"macos-26" are the Apple silicon
-# images; the x86_64 image of the same release is "macos-15-intel"/
-# "macos-26-intel". (The "-large"/"-xlarge" labels beside them are the paid
-# larger runners, which this repository does not use.) x86_64 macOS used to mean
-# "macos-13", which is why there was no Intel bundle here at all: no macos-13 job
-# ever started on the current runner plan, and GitHub retired the image in
-# December 2025 -- see the note in test.yml. The "-intel" labels replaced it, and
-# they are ordinary standard runners.
+# and its labels are not symmetric. On Apple silicon a release has a pinned label
+# and the newest also answers to "macos-latest" ("macos-15", "macos-26", with
+# "macos-latest" pointing at the newest -- macOS 26 since July 2026). On x86_64
+# the same image is "macos-15-intel"/"macos-26-intel", and **there is no
+# "macos-latest-intel"**: the moving label exists on one architecture only. The
+# nearest x86_64 thing to it, "macos-latest-large", is a paid larger runner and
+# not a substitute. (The "-large"/"-xlarge" labels are all larger runners, which
+# this repository does not use.) x86_64 macOS used to mean "macos-13", which is
+# why there was no Intel bundle here at all: no macos-13 job ever started on the
+# current runner plan, and GitHub retired the image in December 2025 -- see the
+# note in test.yml. The "-intel" labels replaced it, as standard runners.
+#
+# Which label to use is decided by what the job is for, and the two answers are
+# opposite:
+#
+#   * a job that FREEZES a bundle names a pinned image, always. The archive is
+#     named after that image and the C library floor comes from it, so a label
+#     that moves would silently rename what we publish and raise what it needs.
+#   * a job that INSTALLS one on a later OS names the moving label where there is
+#     one. Its whole question is "does this still run on the newest macOS", and
+#     pinning it means the answer goes stale the day a newer macOS ships and
+#     nobody notices until someone edits this file.
+#
+# So: freeze on macos-15/macos-15-intel, install-test on those and on
+# macos-latest. The Intel forward leg has to name macos-26-intel because the
+# moving label does not exist there; when a macOS 27 Intel image appears that leg
+# needs editing and the arm64 one does not.
 #
 # **One macOS build per architecture, both frozen on macOS 15, and both install-
 # tested on macOS 15 and macOS 26.** A frozen bundle runs on the OS version it
@@ -201,10 +220,15 @@ env:
   #
   # Every platform this run froze is installed on the image that froze it -- the
   # "Set matrix" job derives that from the lists above, so it cannot be forgotten.
-  # These are the legs that go further: the macOS bundles on the *next* macOS
-  # generation, which is where "a frozen bundle runs on the OS it was built on and
-  # everything newer" is either true or is a story we tell users. Nothing else
-  # tests it: every other install runs a build on its own image.
+  # These are the legs that go further: the macOS bundles on the *newest* macOS,
+  # which is where "a frozen bundle runs on the OS it was built on and everything
+  # newer" is either true or is a story we tell users. Nothing else tests it:
+  # every other install runs a build on its own image.
+  #
+  # "macos-latest" rather than the macOS 26 it currently is, so that the leg keeps
+  # asking about the newest macOS as GitHub moves the label rather than about the
+  # one that was newest when this line was written. That is the opposite of the
+  # rule for the freeze above, and deliberately -- see the note before `env`.
   #
   # They exercise the resolution as well as the binary, because "install.sh" runs
   # here without "--platform": a macOS 26 host has to read the manifest, work out
@@ -216,8 +240,9 @@ env:
   # protects every Mac user rather than some of them -- and it is ~10 minutes
   # beside the hours of macOS "Examples" a pull request already pays for.
   INSTALL_FORWARD_CORE: >-
-    [{"os": "macos-26", "platform": "macos-15-arm64"}]
-  # x86_64 follows its bundle: deep-only, both generations.
+    [{"os": "macos-latest", "platform": "macos-15-arm64"}]
+  # x86_64 follows its bundle: deep-only, both generations. Pinned, because
+  # "macos-latest-intel" is not a label -- the moving one is arm64 only.
   INSTALL_FORWARD_DEEP: >-
     [{"os": "macos-26-intel", "platform": "macos-15-x86_64"}]
 
@@ -368,7 +393,8 @@ jobs:
   # one except Windows -- there is no shell installer there -- plus the macOS
   # bundles again on the next macOS generation. The runner is in the job name
   # because the platform no longer identifies the leg: "macos-15-arm64" is
-  # installed twice, on macos-15 and on macos-26, and those are the two jobs that
+  # installed twice, on macos-15 and on macos-latest, and those are the two jobs
+  # that
   # together say the build runs everywhere it claims to.
   install:
     name: "Install (${{ matrix.platform }} on ${{ matrix.os }})"
@@ -403,9 +429,9 @@ jobs:
       # Deliberately without `--platform`: the installer resolving this machine
       # to one of the published builds is the part that can silently pick the
       # wrong one, so it runs for real and the result is asserted afterwards.
-      # That assertion is the whole point of the forward legs -- on macos-26 the
-      # installer has to read the manifest, work out that the macOS 15 build is
-      # one this machine can run, and fetch it. A resolver that refused it, or
+      # That assertion is the whole point of the forward legs -- on macos-latest
+      # the installer has to read the manifest, work out that the macOS 15 build
+      # is one this machine can run, and fetch it. A resolver that refused it, or
       # picked something else, fails here rather than in a user's terminal.
       - name: Install with install.sh
         shell: bash

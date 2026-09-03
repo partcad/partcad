@@ -110,14 +110,23 @@ env:
   # Extra "Install" legs: an IDE run on a runner that did not build it.
   #
   # Every platform this run built is installed on the image that built it -- the
-  # "Set matrix" job derives that from the lists above. These add the next macOS
-  # generation, matching what "build-standalone.yml" does for the bundles: an
+  # "Set matrix" job derives that from the lists above. These add the newest
+  # macOS, matching what "build-standalone.yml" does for the bundles: an
   # application built on macOS 15, carrying a `pc` frozen on macOS 15, has to
-  # start on macOS 26, and this is the only place that is tried. Note that it is
-  # tried twice over -- `partcad-ide --version` is the editor, `pc version` is the
-  # frozen bundle inside it.
+  # start on the newest macOS, and this is the only place that is tried. Note
+  # that it is tried twice over -- `partcad-ide --version` is the editor,
+  # `pc version` is the frozen bundle inside it.
+  #
+  # "macos-latest" here and pinned labels in IDE_CORE above, on purpose: what is
+  # built has to be reproducible and what is tested forward has to keep asking
+  # about whatever macOS is newest today. "build-standalone.yml" spells that rule
+  # out before its own `env`.
   IDE_INSTALL_FORWARD_CORE: >-
-    [{"os": "macos-26", "platform": "macos-arm64"}]
+    [{"os": "macos-latest", "platform": "macos-arm64"}]
+  # Pinned, because "macos-latest-intel" is not a label: the moving one exists on
+  # Apple silicon only, and "macos-latest-large" is a paid larger runner rather
+  # than an x86_64 equivalent. This line needs editing when a macOS 27 Intel
+  # image appears; the arm64 one above does not.
   IDE_INSTALL_FORWARD_DEEP: >-
     [{"os": "macos-26-intel", "platform": "macos-x86_64"}]
 
@@ -679,7 +688,7 @@ jobs:
       # "install-windows" below runs it -- plus the macOS applications again on
       # the next macOS generation. The runner is in the job name because the
       # platform no longer identifies the leg: "macos-arm64" is installed on
-      # macos-15 and on macos-26.
+      # macos-15 and on macos-latest.
       matrix: ${{ fromJson(needs.set-matrix.outputs.install) }}
     runs-on: ${{ matrix.os }}
     # The first start below runs the editor and waits for a PyInstaller bundle
