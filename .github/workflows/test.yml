@@ -45,9 +45,19 @@ env:
   #  * windows-11-arm - Windows on arm64 is not a platform PartCAD builds or
   #    releases for; adding it to CI would test something nothing ships.
   #  * macos-14 - deprecated by GitHub, scheduled for removal.
-  #  * macos-13 - no macos-13 job has ever started on the current runner
-  #    plan. They queue for hours and are eventually cancelled without
-  #    executing, so they only ever left checks pending forever.
+  #  * macos-13 - gone. No macos-13 job ever started on the current runner
+  #    plan: they queued for hours and were cancelled without executing,
+  #    leaving checks pending forever. GitHub retired the image in December
+  #    2025.
+  #  * macos-15-intel / macos-26-intel - the x86_64 macOS images that replaced
+  #    macos-13 ("macos-15"/"macos-26" without the suffix are Apple silicon).
+  #    Not here, and that is a cost decision rather than a gap: this workflow
+  #    is the wheels, whose Python is the host's and whose shapes are built in
+  #    a conda sandbox, and macOS minutes bill at 10x. What has to work on an
+  #    Intel Mac is the *frozen* bundle, which carries its own interpreter and
+  #    cannot be reinstalled around a problem -- so macos-15-intel is in
+  #    PLATFORMS_DEEP in "build-standalone.yml", where it is built, installed
+  #    and run through the example packages on every deep run.
   OSES:
     '["ubuntu-latest", "ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-22.04-arm", "windows-latest", "windows-2022",
     "macos-latest", "macos-26"]'

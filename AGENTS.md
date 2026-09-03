@@ -224,8 +224,9 @@ distribution a pin is an import, and two distributions owning one import name br
 without pip noticing. Adding a runtime dependency, an optional extra, or a file that is read at runtime can be
 invisible to the frozen bundle and break it while the wheel stays fine — see `dev-tools/pyinstaller/README.md`
 before doing any of those. Note that the bundles fan out over
-*OS versions* (`ubuntu-22.04-x86_64`, `macos-26-arm64`, …), and that the same platform list appears in three places
-that nothing keeps in sync; the README says which, and which of them a pull request skips without `#deepTest`. The
+*OS versions* (`ubuntu-22.04-x86_64`, `macos-26-arm64`, …), and that the same platform ids appear in several
+places that mostly nothing keeps in sync; the README says which, and which of them a pull request skips
+without `#deepTest`. The
 `.vsix` is built once by `.github/workflows/vsix.yml`, which `build.yml` and `deploy.yml` both call, and
 `ide/standalone/build.sh` runs the same `npm run vsce-package` for the copy inside the IDE. One build
 serves every platform: the extension is a JSON-RPC client with no Python and no compiled content in it. The

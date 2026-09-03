@@ -86,11 +86,13 @@ done
 # per operating system.
 #
 # The platform id is `<os>-<os-version>-<arch>`, and for the builds CI produces
-# it is exactly the runner image label (minus the `-arm` suffix) plus the
-# architecture:
+# it is exactly the runner image label (minus the `-arm` or `-intel` suffix) plus
+# the architecture -- the macOS labels are not symmetric, `macos-15` being the
+# Apple silicon image and `macos-15-intel` the x86_64 one of the same release:
 #
 #   ubuntu-22.04-x86_64   ubuntu-22.04-arm64    macos-15-arm64    windows-2022-x86_64
 #   ubuntu-24.04-x86_64   ubuntu-24.04-arm64    macos-26-arm64
+#                                               macos-15-x86_64
 #
 # Which of these a release carries is published with it, as `platforms.json`;
 # `install.sh` and the other clients read that rather than keeping a list. The

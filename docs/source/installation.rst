@@ -184,8 +184,8 @@ on Linux arm64, which carry no bundled OpenSCAD. It carries no CAD kernel: PartC
 conda sandbox it provisions itself, so ``conda`` (or ``mamba``) is a prerequisite here exactly as it is for
 the wheels. ``pc healthcheck`` reports what this machine is missing.
 
-Supported platforms are Linux on x86_64 and arm64, and macOS on Apple silicon. Windows is covered by the
-``.zip`` archives under :ref:`manual installation <standalone-manual>`.
+Supported platforms are Linux on x86_64 and arm64, and macOS on Apple silicon and on Intel. Windows is
+covered by the ``.zip`` archives under :ref:`manual installation <standalone-manual>`.
 
 .. _standalone-os-versions:
 
@@ -199,6 +199,7 @@ carries; the installer reads it, works out which of them this machine can run, a
 
   Linux, x86_64 and arm64     built on Ubuntu 22.04 and on Ubuntu 24.04
   macOS, Apple silicon        built on macOS 15 and on macOS 26
+  macOS, Intel                built on macOS 15
   Windows, x86_64             built on Windows Server 2022
 
 The Ubuntu names are not a requirement to run Ubuntu. Any Linux distribution can run these bundles; what
@@ -308,6 +309,7 @@ the wheels, together with a ``.sha256`` file each:
 * ``partcad-<version>-ubuntu-22.04-x86_64.tar.xz``, ``partcad-<version>-ubuntu-22.04-arm64.tar.xz``
 * ``partcad-<version>-ubuntu-24.04-x86_64.tar.xz``, ``partcad-<version>-ubuntu-24.04-arm64.tar.xz``
 * ``partcad-<version>-macos-15-arm64.tar.xz``, ``partcad-<version>-macos-26-arm64.tar.xz``
+* ``partcad-<version>-macos-15-x86_64.tar.xz``
 * ``partcad-<version>-windows-2022-x86_64.zip``
 
 Pick the newest one your machine is not older than -- see :ref:`the note above <standalone-os-versions>` on
@@ -362,8 +364,9 @@ consequences worth knowing:
 
 The macOS bundles carry no OpenSCAD: the last OpenSCAD release predates Apple silicon and ships an
 Intel-only build, which would quietly require Rosetta 2. The Linux arm64 bundles carry none for the same
-reason -- upstream publishes that release for x86_64 only. On both, install OpenSCAD yourself and PartCAD
-will use it.
+reason -- upstream publishes that release for x86_64 only. The Intel macOS bundle carries none either, so
+that both macOS builds behave the same way. On all of them, install OpenSCAD yourself and PartCAD will use
+it.
 
 Two other things are deliberately not in the bundle, because PartCAD runs them as external programs rather
 than importing them, exactly as the wheels do:
@@ -571,8 +574,9 @@ nothing with a Visual Studio Code or VSCodium on the same machine. PartCAD's own
 stay in ``~/.partcad``, shared with the command line tools, so a package installed in a terminal is
 there in the IDE.
 
-On macOS, ``partcad-ide-<version>-macos-arm64.dmg`` is published as well: open it and drag the
-application to Applications, the usual way.
+On macOS, a ``.dmg`` is published as well -- ``partcad-ide-<version>-macos-arm64.dmg`` for Apple silicon
+and ``partcad-ide-<version>-macos-x86_64.dmg`` for Intel: open it and drag the application to
+Applications, the usual way.
 
 .. note::
 

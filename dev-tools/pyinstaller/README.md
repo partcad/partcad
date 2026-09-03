@@ -24,12 +24,12 @@ starting for users the day that image moved.
 
 So there is one build per supported OS version, and the archive name carries it. The platform id is
 `<os>-<os-version>-<arch>`, which for the builds CI produces is exactly the runner image label (minus any `-arm`
-suffix) plus the architecture:
+or `-intel` suffix) plus the architecture:
 
 | | x86_64 | arm64 |
 | --- | --- | --- |
 | Linux | `ubuntu-22.04-x86_64`, `ubuntu-24.04-x86_64` | `ubuntu-22.04-arm64`, `ubuntu-24.04-arm64` |
-| macOS | — (needs macos-13, see below) | `macos-15-arm64`, `macos-26-arm64` |
+| macOS | `macos-15-x86_64` | `macos-15-arm64`, `macos-26-arm64` |
 | Windows | `windows-2022-x86_64` | — |
 
 The Ubuntu names say what built the bundle, not what is required to run it: any distribution can run these, and
@@ -51,19 +51,37 @@ matrix that no release check expects is dead weight; one the check expects that 
 release. Each says so at the point where it is defined. The clients keep no list of their own — they read the manifest
 described below.
 
+Two other places name these ids, and both consume them rather than declaring them, so a name that is wrong there
+is a job waiting for an artifact nothing uploaded. `IDE_CORE`/`IDE_DEEP` in `build-ide-standalone.yml` say which
+bundle goes inside each IDE, and the depth has to match: a core IDE cannot embed a deep-only bundle. The
+`EXAMPLES_CORE`/`EXAMPLES_DEEP` lists in `build-standalone.yml` say which bundles the example packages run
+through, and those *are* enforced — the "Set matrix" job fails the run if a leg names a platform this run does
+not build.
+
 The split between `PLATFORMS_CORE` and `PLATFORMS_DEEP` is about cost, not support: a pull request builds the four core
-platforms, and the three in `PLATFORMS_DEEP` (Ubuntu 22.04 on both architectures, and the second macOS) are added on a
-deep run — the nightly schedule, a manual dispatch, a push, or `#deepTest` in the pull request. See
-`.github/actions/test-depth`. A release runs on a push, so it is always deep and always builds all seven; `deploy.yml`
+platforms, and the four in `PLATFORMS_DEEP` (Ubuntu 22.04 on both architectures, the second macOS, and macOS on x86_64)
+are added on a deep run — the nightly schedule, a manual dispatch, a push, or `#deepTest` in the pull request. See
+`.github/actions/test-depth`. A release runs on a push, so it is always deep and always builds all eight; `deploy.yml`
 refuses to publish otherwise. Put `#deepTest` on a pull request that changes what is frozen.
 
 `build.sh` detects the platform id from the machine when it is not told one, which is what a local build wants.
 CI passes `--platform=` instead: the runner image label is the authoritative answer to which OS version it is,
 and recovering that from the running system is guesswork on Windows in particular.
 
-There is no macOS x86_64 bundle: it would need macos-13, and no macos-13 job has ever started on the current
-runner plan (see the note in `test.yml`). There is no Windows arm64 bundle either -- not a platform PartCAD
-releases for.
+**The macOS labels are not symmetric, and the x86_64 one is new.** `macos-15`/`macos-26` are the Apple silicon
+images; the x86_64 image of the same release is `macos-15-intel`/`macos-26-intel`. (`-large`/`-xlarge` beside
+them are the paid larger runners, which this repository does not use.) x86_64 macOS used to mean `macos-13`,
+which is why there was no Intel bundle at all: no macos-13 job ever started on the current runner plan, and
+GitHub retired the image in December 2025 — see the note in `test.yml`. The `-intel` labels replaced it.
+
+There is one Intel build rather than two, and it is the older release. A frozen bundle runs on the OS version
+it was built on and everything newer, so `macos-15-x86_64` covers macOS 15 and 26 while a `macos-26-x86_64`
+would cover only 26 — a second 10x-billed freeze for the half of the range the first one already has. It is
+also the end of the line: GitHub drops x86_64 macOS when the macOS 15 image retires (announced for autumn
+2027), so `macos-15-intel` is the last x86_64 image there will be. It is in `PLATFORMS_DEEP` for that reason as
+much as for the billing rate — a release carries it, a pull request builds it on `#deepTest`.
+
+There is no Windows arm64 bundle -- not a platform PartCAD releases for.
 
 ## Files
 
@@ -294,7 +312,7 @@ where the AppImage's library dependencies are absent.
 | Linux x86_64 | the AppImage, unpacked | no — needs `libGL`, `libX11`, `libxcb`, fontconfig, freetype, glib, harfbuzz from the host |
 | Linux arm64 | nothing | — |
 | Windows | the portable build | yes — one statically linked `openscad.exe`, no DLLs |
-| macOS | nothing | — |
+| macOS, both architectures | nothing | — |
 
 Linux arm64 carries nothing because upstream publishes the pinned 2021.01 AppImage for x86_64 only; running it
 under emulation is not something a bundle should quietly require. `pc` there uses the host's OpenSCAD, exactly
@@ -313,6 +331,13 @@ macOS is excluded because the 2021.01 release predates Apple silicon and ships a
 on the arm64 bundle would require Rosetta 2 — absent from a clean machine. Development snapshots may be
 universal binaries, but they are snapshots and their architecture has not been confirmed; `lipo -archs` on a
 mounted snapshot `.dmg` would settle it.
+
+The `macos-15-x86_64` bundle is the one where that argument does not apply — the pinned `.dmg` is for exactly
+that architecture — and it still carries nothing, deliberately. Two macOS bundles that differ in what is inside
+them are two behaviours to explain, to health-check and to support, on the architecture that is being retired;
+and `build.sh` would have to learn to mount and copy out of a `.dmg` to gain it. `pc` on an Intel Mac uses the
+host's OpenSCAD, exactly as the wheels do. If that changes, it is a one-architecture payload and this paragraph
+is where to say so.
 
 To move to a different OpenSCAD, change `OPENSCAD_VERSION` in `build.sh`. Upstream publishes a `.sha256` next
 to each artifact and the build verifies it, so nothing else needs updating — but note the published checksum

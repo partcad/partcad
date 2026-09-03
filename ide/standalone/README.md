@@ -321,6 +321,14 @@ without building.
 uploads the archives to the same GitHub release as the wheels and the command line bundles, which is where
 `install.sh --ide` downloads from.
 
+Four platforms: `linux-x86_64`, `macos-arm64` and `windows-x86_64` on every run, and `macos-x86_64` on a deep
+one -- the nightly schedule, a manual dispatch, a push, or `#deepTest` on the pull request (see
+`.github/actions/test-depth`). The Intel macOS IDE is gated because the command line bundle that goes inside
+it is: `macos-15-x86_64` is in `PLATFORMS_DEEP` in `build-standalone.yml`, and on a reduced run there is no
+such artifact to embed. Unlike the bundles, an IDE is built once per operating system and architecture rather
+than per OS version -- it carries its own Electron runtime -- which is why `macos-x86_64` carries no macOS
+version while the bundle inside it does. `IDE_CORE` and `IDE_DEEP` at the top of that workflow are the list.
+
 It does not build the command line bundles it embeds. `deploy.yml` builds them once, in the same run, and the
 IDE build downloads them from there; on every other trigger the IDE build finds the sibling `Standalone`
 workflow run for the same commit and downloads them from that run instead. Building them here as well would

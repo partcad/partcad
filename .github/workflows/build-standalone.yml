@@ -114,14 +114,33 @@ concurrency:
 #
 # This is the list. "install.sh" and the other clients no longer keep one --
 # they read "platforms.json", which "deploy.yml" generates from the archives
-# these jobs produce -- so the only other place that has to agree is the platform
-# loop in the release check in "deploy.yml", which is what refuses a release with
-# a platform missing.
+# these jobs produce -- so what has to agree with it is short: the platform loop
+# in the release check in "deploy.yml", which is what refuses a release with a
+# platform missing, and IDE_CORE/IDE_DEEP in "build-ide-standalone.yml", which
+# name the bundle that goes inside each IDE. Both consume these ids; a name that
+# is wrong in either is a job waiting for an artifact nothing uploaded. The
+# EXAMPLES_* lists below name them too, and those are checked in "Set matrix".
 #
 # ubuntu-26.04 (and -arm) are absent on purpose: still preview images, not
-# covered by the Actions SLA. See the note in test.yml. macOS is arm64 only: an
-# x86_64 bundle would need macos-13, and no macos-13 job has ever started on the
-# current runner plan (again, see test.yml).
+# covered by the Actions SLA. See the note in test.yml.
+#
+# macOS is built on both architectures, and its labels are not symmetric.
+# "macos-15" and "macos-26" are the Apple silicon images; the x86_64 image of the
+# same release is "macos-15-intel" / "macos-26-intel". (The "-large" and
+# "-xlarge" labels beside them are the paid larger runners, which this repository
+# does not use.) x86_64 macOS used to mean "macos-13", which is why there was no
+# Intel bundle here at all: no macos-13 job ever started on the current runner
+# plan, and GitHub retired the image in December 2025 -- see the note in
+# test.yml. The "-intel" labels are its replacement, and they are ordinary
+# standard runners.
+#
+# One Intel build rather than two, and it is the *older* release. A frozen bundle
+# runs on the OS version it was built on and everything newer, so macos-15-x86_64
+# covers macOS 15 and 26 while a macos-26-x86_64 would cover only 26 -- a second
+# 10x-billed freeze buying the half of the range the first one already has. It is
+# also the end of the line: GitHub drops x86_64 macOS altogether when the macOS
+# 15 image retires (announced for autumn 2027), so macos-15-intel is the last
+# x86_64 image there will be.
 #
 # Windows has one build, not one per image, and that is not an oversight. The
 # per-OS-version split exists because a machine can be lined up against it: an
@@ -149,16 +168,46 @@ env:
   # ".github/actions/test-depth", and OSES_DEEP_ONLY in "test.yml", which drops
   # the same images for the same reasons.
   #
-  # This workflow is the expensive one to halve: seven freezes of ~875MB, two of
-  # them on macOS runners that bill at 10x. The trade is that a pull request no
-  # longer proves the Ubuntu 22.04 and macOS 26 bundles still build. Nothing
-  # ships unproven, though -- "deploy.yml" runs on a push, which is always deep,
-  # and refuses a release that is missing any platform. Put "#deepTest" on a pull
-  # request that touches the freeze, and the whole set runs before it merges.
+  # This workflow is the expensive one to halve: eight freezes of ~875MB, three
+  # of them on macOS runners that bill at 10x. The trade is that a pull request
+  # no longer proves the Ubuntu 22.04, the macOS 26 and the macOS x86_64 bundles
+  # still build. Nothing ships unproven, though -- "deploy.yml" runs on a push,
+  # which is always deep, and refuses a release that is missing any platform. Put
+  # "#deepTest" on a pull request that touches the freeze, and the whole set runs
+  # before it merges.
+  #
+  # macos-15-x86_64 is here rather than in PLATFORMS_CORE for the same reason
+  # macos-26-arm64 is -- a 10x-billed runner -- and for one of its own: it is the
+  # architecture Apple stopped shipping, so it is the build least likely to be
+  # the one a change breaks and the one a contributor is least likely to be on.
+  # A release still carries it, and "#deepTest" still builds it before a merge.
   PLATFORMS_DEEP: >-
     [{"os": "ubuntu-22.04", "platform": "ubuntu-22.04-x86_64"},
     {"os": "ubuntu-22.04-arm", "platform": "ubuntu-22.04-arm64"},
-    {"os": "macos-26", "platform": "macos-26-arm64"}]
+    {"os": "macos-26", "platform": "macos-26-arm64"},
+    {"os": "macos-15-intel", "platform": "macos-15-x86_64"}]
+
+  # Which bundles the "Examples" job below runs the example packages through, and
+  # with which suite. A representative subset of the builds above rather than all
+  # of them: what those jobs exercise is the bundle's *behaviour*, which does not
+  # differ between the 22.04 and the 24.04 build of the same architecture -- only
+  # the libraries it links against do, and the "Install" jobs cover every
+  # platform this run built for that. So this is one build per operating system
+  # and architecture.
+  EXAMPLES_CORE: >-
+    [{"os": "ubuntu-24.04", "platform": "ubuntu-24.04-x86_64", "suite": "PartCAD", "package": "//pub/examples/partcad", "render": true},
+    {"os": "ubuntu-24.04", "platform": "ubuntu-24.04-x86_64", "suite": "All", "package": "//pub/examples", "render": false},
+    {"os": "ubuntu-24.04-arm", "platform": "ubuntu-24.04-arm64", "suite": "PartCAD", "package": "//pub/examples/partcad", "render": true},
+    {"os": "macos-15", "platform": "macos-15-arm64", "suite": "PartCAD", "package": "//pub/examples/partcad", "render": true},
+    {"os": "macos-15", "platform": "macos-15-arm64", "suite": "All", "package": "//pub/examples", "render": false}]
+  # macOS x86_64, whose bundle only a deep run has -- asking for it on a reduced
+  # run would be asking to download an artifact nothing built. This is the only
+  # place PartCAD runs a CAD sandbox on an Intel Mac at all, which is why it is
+  # here rather than left to the "Install" job's smoke test. One suite rather
+  # than the two the arm64 macOS gets: the runner bills at 10x, and "PartCAD" is
+  # the suite that tests this repository rather than the public index.
+  EXAMPLES_DEEP: >-
+    [{"os": "macos-15-intel", "platform": "macos-15-x86_64", "suite": "PartCAD", "package": "//pub/examples/partcad", "render": true}]
 
 jobs:
   set-matrix:
@@ -167,6 +216,7 @@ jobs:
     outputs:
       build: ${{ steps.set-matrix.outputs.build }}
       install: ${{ steps.set-matrix.outputs.install }}
+      examples: ${{ steps.set-matrix.outputs.examples }}
     steps:
       - uses: actions/checkout@v7
 
@@ -181,8 +231,10 @@ jobs:
         run: |
           if [ "${DEEP}" = "true" ]; then
             platforms=$(jq -cn --argjson core '${{ env.PLATFORMS_CORE }}' --argjson deep '${{ env.PLATFORMS_DEEP }}' '$core + $deep')
+            examples=$(jq -cn --argjson core '${{ env.EXAMPLES_CORE }}' --argjson deep '${{ env.EXAMPLES_DEEP }}' '$core + $deep')
           else
             platforms='${{ env.PLATFORMS_CORE }}'
+            examples='${{ env.EXAMPLES_CORE }}'
           fi
           echo "Platforms: ${platforms}"
           echo 'build={"include": '"${platforms}"'}' >> "${GITHUB_OUTPUT}"
@@ -190,6 +242,21 @@ jobs:
           # Windows: "install.sh" is a shell installer and there is none there.
           install=$(jq -c 'map(select(.platform | startswith("windows") | not))' <<<"${platforms}")
           echo 'install={"include": '"${install}"'}' >> "${GITHUB_OUTPUT}"
+          # Every "Examples" leg has to name a build this run produced -- the
+          # deep-only ones are absent from a reduced run, and the job would then
+          # wait for an artifact that nothing uploaded. Checked rather than
+          # trusted, because the two lists are edited separately and a mismatch
+          # would otherwise show up an hour into the run as a download failure.
+          echo "Examples: ${examples}"
+          built=$(jq -c '[.[].platform]' <<<"${platforms}")
+          orphans=$(jq -r --argjson built "${built}" \
+            '[.[] | select(.platform as $p | $built | index($p) | not) | .platform] | unique | join(" ")' \
+            <<<"${examples}")
+          if [ -n "${orphans}" ]; then
+            echo "::error::the Examples matrix asks for bundles this run does not build: ${orphans}"
+            exit 1
+          fi
+          echo 'examples={"include": '"${examples}"'}' >> "${GITHUB_OUTPUT}"
 
   build:
     name: "Build (${{ matrix.platform }})"
@@ -492,47 +559,19 @@ jobs:
   # tests; the deterministic build and install jobs above gate the release.
   examples:
     name: "Examples ${{ matrix.suite }} via bundle (${{ matrix.platform }})"
-    needs: build
+    needs: [set-matrix, build]
     if: >-
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/devel')
-    # A representative subset of the build matrix, not all of it: what these
-    # exercise is the bundle's behaviour, which does not differ between the
-    # 22.04 and the 24.04 build of the same architecture -- only the libraries
-    # it links against do, and the "Install" jobs above cover every platform
-    # this run built for that. So this runs one build per architecture and per
-    # OS, and only ones from PLATFORMS_CORE, so that the list stays literal and
-    # this job never asks for a bundle a reduced run did not produce.
+    # A representative subset of the build matrix, not all of it: EXAMPLES_CORE
+    # and EXAMPLES_DEEP above say which builds and why. The deep half is why this
+    # is an output of "set-matrix" rather than a literal list here -- a leg whose
+    # bundle a reduced run did not freeze has to be absent, not skipped, or it
+    # sits waiting for an artifact nothing will upload.
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            platform: ubuntu-24.04-x86_64
-            suite: PartCAD
-            package: "//pub/examples/partcad"
-            render: true
-          - os: ubuntu-24.04
-            platform: ubuntu-24.04-x86_64
-            suite: All
-            package: "//pub/examples"
-            render: false
-          - os: ubuntu-24.04-arm
-            platform: ubuntu-24.04-arm64
-            suite: PartCAD
-            package: "//pub/examples/partcad"
-            render: true
-          - os: macos-15
-            platform: macos-15-arm64
-            suite: PartCAD
-            package: "//pub/examples/partcad"
-            render: true
-          - os: macos-15
-            platform: macos-15-arm64
-            suite: All
-            package: "//pub/examples"
-            render: false
+      matrix: ${{ fromJson(needs.set-matrix.outputs.examples) }}
     runs-on: ${{ matrix.os }}
     # No conda cache and a sandbox built from scratch (cadquery-ocp is ~150MB),
     # so this is slower than the cached wheel-based jobs in test.yml.
@@ -588,12 +627,14 @@ jobs:
           # which existed for a *corrupted cached* .dmg -- fail with it, so the
           # step could not succeed on any macOS runner.
           #
-          # The snapshot cask is the maintained one, and on these runners it is
-          # the only candidate: they are arm64, and 2021.01 ships an x86_64-only
-          # .dmg. "dev-tools/pyinstaller/build.sh" says so, and declines to
-          # bundle OpenSCAD on macOS for exactly that reason -- so fetching that
+          # The snapshot cask is the maintained one, and it is what gets
+          # installed on either architecture. On the arm64 runners it is also the
+          # only candidate: 2021.01 ships an x86_64-only .dmg, so fetching that
           # release directly would quietly require Rosetta 2 rather than fix
-          # anything.
+          # anything -- "dev-tools/pyinstaller/build.sh" says so, and declines to
+          # bundle OpenSCAD on macOS for exactly that reason. On macos-15-intel
+          # that release would run, but Homebrew disabled the cask for everyone,
+          # so there is nothing to gain from a second code path here.
           set -euo pipefail
 
           if ! command -v openscad >/dev/null 2>&1; then

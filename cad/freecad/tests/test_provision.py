@@ -83,7 +83,13 @@ MANIFEST = {
             "x86_64": ["ubuntu-24.04-x86_64", "ubuntu-22.04-x86_64"],
             "arm64": ["ubuntu-24.04-arm64", "ubuntu-22.04-arm64"],
         },
-        "macos": {"arm64": ["macos-26-arm64", "macos-15-arm64"]},
+        # Both macOS architectures, and not the same number of builds on each:
+        # the Intel image is deep-only in CI and there is one of it, which is
+        # what a release manifest looks like.
+        "macos": {
+            "arm64": ["macos-26-arm64", "macos-15-arm64"],
+            "x86_64": ["macos-15-x86_64"],
+        },
         # One Windows build, not one per image: see the note beside the matrix
         # in "build-standalone.yml".
         "windows": {"x86_64": ["windows-2022-x86_64"]},
@@ -125,7 +131,14 @@ def test_an_unknown_operating_system_has_no_candidates():
 
 
 def test_an_architecture_the_release_does_not_carry_has_no_candidates():
-    assert _select("macos", "x86_64", "macos-15") == []
+    # Windows arm64 has no bundle: nothing is offered, rather than an x86_64 one
+    # that this machine would have to emulate.
+    assert _select("windows", "arm64", None) == []
+
+
+def test_each_macos_architecture_is_offered_only_its_own_builds():
+    assert _select("macos", "x86_64", "macos-26") == ["macos-15-x86_64"]
+    assert _select("macos", "arm64", "macos-15") == ["macos-15-arm64"]
 
 
 def test_a_missing_manifest_leaves_nothing_to_try():
@@ -137,6 +150,7 @@ def test_ci_artifact_names_are_grouped_like_a_manifest():
         [
             "ubuntu-22.04-x86_64",
             "macos-15-arm64",
+            "macos-15-x86_64",
             "ubuntu-24.04-x86_64",
             "windows-2022-x86_64",
             "not-a-platform-id-at-all",
@@ -144,6 +158,7 @@ def test_ci_artifact_names_are_grouped_like_a_manifest():
     )
     assert grouped["linux"]["x86_64"] == ["ubuntu-24.04-x86_64", "ubuntu-22.04-x86_64"]
     assert grouped["macos"]["arm64"] == ["macos-15-arm64"]
+    assert grouped["macos"]["x86_64"] == ["macos-15-x86_64"]
     assert grouped["windows"]["x86_64"] == ["windows-2022-x86_64"]
 
 
