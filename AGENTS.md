@@ -202,6 +202,16 @@ that decides; `docs/source/contributing.rst` explains it to contributors. Note t
 matrix at all unless its head commit message starts with `Version updated` — the `set-matrix` job, and every
 job that depends on it, is skipped otherwise.
 
+**Neither gate trusts pytest's exit code.** On Windows it disagrees with the run in both directions — exit `0`
+with a test having failed (which is what #444 was written for), and exit `127` after a session where every test
+passed (which is what `Pytest (windows-*, 3.12)` does today). So the `pytest` `pre-commit` hook and the
+`Pytest` job both set `PYTEST_RESULT_MARKER` to a PID-unique path they then read, and the `pytest_sessionfinish`
+hook in the repository's root `conftest.py` writes `success` into it only when pytest's own exit status is
+clean **and** it counted no failed tests. That hook belongs at the root and nowhere else: a copy scoped to one
+package's tests records nothing for a run that does not collect that directory, and a gate reading no marker
+fails — which is also what keeps a crash mid-suite from passing. Do not move it, and do not let anything read
+the exit code instead.
+
 The packages under `examples/` are a third suite. The images and `README.md` files there are what
 `cd examples && pc render -r` produces, and they are checked in so that a change in how PartCAD renders is a
 diff someone has to look at rather than something a reader of the README discovers. If a change affects a

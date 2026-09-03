@@ -556,6 +556,16 @@ hour cold takes minutes warm. The ``pytest`` ``pre-commit`` hook allows 15 minut
 (``PC_PYTEST_TIMEOUT`` overrides it); a test reported as timing out on a cold cache is worth simply running
 again before it is treated as a bug.
 
+**A gate reads the session's verdict, not pytest's exit code.** The two disagree on Windows, in both
+directions: pytest has exited ``0`` with a test having failed, and it exits ``127`` after a session in which
+every test passed. So a caller that must not be wrong sets ``PYTEST_RESULT_MARKER`` to a path, and the
+``pytest_sessionfinish`` hook in the repository's root ``conftest.py`` writes ``success`` there only when
+pytest's own exit status is clean *and* it counted no failed tests, and ``failure`` otherwise. Both gates do
+this -- the ``pytest`` ``pre-commit`` hook and the ``Pytest`` job in CI -- and both fail unless they read
+``success``, so a run that never reached ``pytest_sessionfinish`` (a collection error, a crash mid-suite)
+writes no marker and fails too. Nothing is written unless that variable is set, so an ordinary
+``poetry run pytest`` is unaffected.
+
 Behave
 ^^^^^^
 
