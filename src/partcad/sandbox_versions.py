@@ -232,13 +232,24 @@ MIN_PYTHON_VERSION_SAFE_PATH = "3.11"
 # installed.
 #
 # This is one number for every platform, and on one of them it is a version too
-# high: nlopt publishes Intel macOS wheels only up to cp313 (see NLOPT above), so
-# a 3.14 sandbox there hits the missing-candidate failure this ceiling exists to
-# prevent. Nothing reaches it by default -- DEFAULT_PYTHON_VERSION is 3.11 -- so
-# it takes a package that asks for 3.14 by name on an Intel Mac. Making the
-# ceiling platform aware is the fix if that ever bites; it is a constant that
-# 'context.get_python_runtime' and two test modules read, so it is a change with
-# a blast radius rather than a one-liner, and it is deliberately not made here.
+# high. Three of the things a CAD sandbox installs stop at cp313 on Intel macOS:
+# nlopt (see NLOPT above), and numba and llvmlite, which 'cadquery' pulls in and
+# which runtime_python.PIP_CONSTRAINTS caps there for the same reason. So a 3.14
+# sandbox on that platform hits the missing-candidate failure this ceiling exists
+# to prevent. Nothing reaches it by default -- DEFAULT_PYTHON_VERSION is 3.11 --
+# so it takes a package that asks for 3.14 by name on an Intel Mac.
+#
+# Note it is those three and not the CAD kernel: cadquery-ocp 7.9.3.1.1 does
+# publish a cp314 Intel macOS wheel. That is worth knowing before reaching for
+# the obvious-looking fix of building and shipping a wheel of our own for the
+# gap, because one such wheel would not lift the ceiling -- it would move the
+# failure from the first of the three to the second, which is precisely what
+# capping nlopt alone did.
+#
+# Making the ceiling platform aware is the fix if this ever bites; it is a
+# constant that 'context.get_python_runtime' and two test modules read, so it is
+# a change with a blast radius rather than a one-liner, and it is deliberately
+# not made here.
 #
 # The ceiling this is applied as (see Context.get_python_runtime) is not a claim
 # about what PartCAD supports - it is what *these pins* are built for, and it
