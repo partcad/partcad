@@ -712,25 +712,58 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # No conda is installed here, on purpose. PartCAD runs CAD scripts in a
-      # conda sandbox it provisions at runtime, and the bundle now carries the
-      # conda that provisions it -- so this job builds the whole CAD stack
-      # through the payload, on a machine that has nothing of its own. That is
-      # the end-to-end proof the build's own smoke test cannot be: it can only
-      # show that a conda was *resolved*, not that a sandbox solved and ran.
+      # No conda reachable here, on purpose. PartCAD runs CAD scripts in a conda
+      # sandbox it provisions at runtime, and the bundle now carries the conda
+      # that provisions it -- so this job builds the whole CAD stack through the
+      # payload, on a machine with nothing of its own. That is the end-to-end
+      # proof the build's own smoke test cannot be: it can only show that a conda
+      # was *resolved*, not that a sandbox solved and ran.
       #
       # This used to install Miniforge here (`setup-miniconda`, conda-forge
       # only). The bundled micromamba resolves from conda-forge with no
       # configuration at all, which is the same channel policy for the same
       # reason -- see the comments in `.github/actions/setup-all/action.yml`.
-      - name: Check that this machine has no conda of its own
+      #
+      # Taking one *off* PATH rather than trusting it to be absent: the hosted
+      # images ship a conda (`$CONDA`) and put it on PATH on some of them --
+      # ubuntu-24.04 does. `partcad_utils.conda` prefers the host's by design, so
+      # one left there would quietly turn this back into a test of the runner's
+      # conda, which is exactly the mistake that let the bundle ship without one.
+      # Matched by looking for the executable in each PATH entry rather than by
+      # the entry's name, so a workspace path that happens to spell "conda" is
+      # not dropped. POSIX only; this job runs on Linux and macOS.
+      - name: Take any host conda off PATH
         shell: bash
         run: |
-          if command -v mamba >/dev/null 2>&1 || command -v conda >/dev/null 2>&1; then
-            echo "::error::a conda is on PATH, so this job would exercise it rather than"
-            echo "::error::the one the bundle carries. Take it off PATH for this job."
+          kept=""
+          IFS=':' read -ra entries <<< "${PATH}"
+          for entry in "${entries[@]}"; do
+            if [ -x "${entry}/conda" ] || [ -x "${entry}/mamba" ]; then
+              echo "taking '${entry}' off PATH"
+              continue
+            fi
+            kept="${kept:+${kept}:}${entry}"
+          done
+          # An empty PATH would fail every step below with "command not found"
+          # and nothing saying why, so refuse to write one.
+          if [ -z "${kept}" ]; then
+            echo "::error::every PATH entry held a conda; refusing to leave this job with no PATH"
             exit 1
           fi
+          echo "PATH=${kept}" >> "${GITHUB_ENV}"
+
+      # Asserted after the fact, and under `bash -el` -- the shell the steps
+      # below use. A login shell re-reads the profile scripts, so "PATH has no
+      # conda in it" is only true if it is still true there.
+      - name: Check that no conda is reachable
+        shell: bash -el {0}
+        run: |
+          if command -v mamba >/dev/null 2>&1 || command -v conda >/dev/null 2>&1; then
+            echo "::error::a conda is still on PATH ($(command -v mamba || command -v conda)),"
+            echo "::error::so this job would exercise it rather than the one the bundle carries."
+            exit 1
+          fi
+          echo "no conda on PATH: the bundle's own is the only one available"
 
       # The libraries the bundled OpenSCAD AppImage resolves from the host: it is
       # not fully self-contained (see dev-tools/pyinstaller/build.sh). A desktop
