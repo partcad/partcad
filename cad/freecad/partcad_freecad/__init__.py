@@ -11,4 +11,4 @@ service provisioning, the package/object model and the parameter model -- is
 plain Python and is unit tested without FreeCAD installed.
 """
 
-__version__: str = "0.8.41"
+__version__: str = "0.8.42"
