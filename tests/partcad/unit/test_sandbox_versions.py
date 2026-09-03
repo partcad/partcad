@@ -6,6 +6,7 @@
 #
 
 import pytest
+from packaging.specifiers import SpecifierSet
 
 from partcad import sandbox_versions
 
@@ -52,14 +53,23 @@ def test_cad_pins_are_exact():
 def test_nlopt_spans_the_platform_gap():
     """nlopt is the one CAD requirement no single version can satisfy.
 
-    2.11.0 publishes no macOS x86_64 wheel and neither release ships an sdist,
-    so an exact pin there leaves pip with no candidate at all and every
+    2.10.0 and 2.11.0 publish no macOS x86_64 wheel and no sdist either, so an
+    exact pin at one of them leaves pip with no candidate at all and every
     script-defined part on an Intel Mac dies on a missing import. 2.9.1 is the
-    newest release that does publish one, so the specifier has to admit both and
-    let each platform resolve to the newest it can install.
+    last release that does publish one, so the specifier has to admit both ends
+    and let each platform resolve to the newest it can install.
+
+    Asserted on the parsed specifier rather than on the text. Both bounds have to
+    be *inclusive*: '>2.9.1,<2.11.0' reads almost the same and contains both
+    version numbers, so a substring check passes for it while it admits neither
+    the version Intel macOS needs nor the one every other platform gets.
     """
-    assert "2.9.1" in sandbox_versions.NLOPT
-    assert "2.11.0" in sandbox_versions.NLOPT
+    specifier = SpecifierSet(sandbox_versions.NLOPT.partition("nlopt")[2])
+    # The two that matter, each the answer on some platform.
+    assert "2.9.1" in specifier
+    assert "2.11.0" in specifier
+    # And the floor still bites, so this stays a bounded range rather than drift.
+    assert "2.8.0" not in specifier
     assert "==" not in sandbox_versions.NLOPT
 
 
