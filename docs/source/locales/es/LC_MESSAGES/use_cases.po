@@ -85,11 +85,11 @@ msgstr "Extensión de Visual Studio Code"
 #: ../../source/use_cases.rst:36
 msgid ""
 "The PartCAD extension is `available "
-"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
 "in VS Code extension marketplace."
 msgstr ""
 "La extensión de PartCAD está `disponible "
-"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
 "en el mercado de extensiones de VS Code."
 
 #: ../../source/use_cases.rst:41

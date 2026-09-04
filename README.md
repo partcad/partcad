@@ -115,7 +115,7 @@ Stay informed and share feedback by joining [our Discord server](https://discord
 
 Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [Twitter/X].
 
-[![PartCAD Visual Studio Code extension](docs/source/images/vscode1.png)](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad)
+[![PartCAD Visual Studio Code extension](docs/source/images/vscode1.png)](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official)
 
 ## Features
 
@@ -267,15 +267,15 @@ On Windows, download and run `partcad-ide-<version>-windows-x86_64-setup.exe` fr
 Already using Visual Studio Code? Install the extension into it instead of the IDE above.
 
 This extension can be installed by searching for `PartCAD` in the VS Code extension search form, or by browsing
-[its VS Code marketplace page](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad). From a
-terminal it is `code --install-extension PartCAD.partcad`.
+[its VS Code marketplace page](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official). From a
+terminal it is `code --install-extension PartCAD.partcad-official`.
 
 Every [release](https://github.com/partcad/partcad/releases) also carries the packaged extension as
 `partcad-<version>.vsix`, to pin a version or to install where the marketplace is not reachable:
 `code --install-extension partcad-<version>.vsix`. On VSCodium it comes from [Open VSX](https://open-vsx.org/)
 -- the gallery VSCodium ships with, and where PartCAD publishes the extension for it, the Visual Studio
 Marketplace's terms restricting that one to Microsoft's own products:
-`codium --install-extension PartCAD.partcad`.
+`codium --install-extension PartCAD.partcad-official`.
 
 `/pc:setup` above does this for you when it is run from a terminal inside the editor.
 

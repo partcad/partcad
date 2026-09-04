@@ -87,7 +87,7 @@
       },
       // <!-- prettier-ignore-start -->
       "extensions": [
-        "PartCAD.partcad",
+        "PartCAD.partcad-official",
         // Git Tools
         "eamodio.gitlens",
         // Python Environment

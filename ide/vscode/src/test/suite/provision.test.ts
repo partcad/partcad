@@ -296,44 +296,71 @@ suite('Where the service was looked for', () => {
         );
     });
 
-    // The publisher move from `OpenVMP` to `PartCAD` renamed the extension, and
-    // `globalStorageUri` is named after the extension -- so every bundle this
-    // extension had already downloaded ended up in a directory it no longer
+    // The extension's identity has moved twice -- publisher `OpenVMP` to
+    // `PartCAD`, then name `partcad` to `partcad-official` -- and
+    // `globalStorageUri` is named after that identity, so each move left every
+    // bundle this extension had already downloaded in a directory it no longer
     // looks in. The symptom is the worst kind: a working installation reported
-    // as missing, and downloaded again.
-    test('a bundle downloaded before the publisher moved is still found', async () => {
+    // as missing, and downloaded again. Both old directories are searched, so
+    // this runs for each.
+    for (const identity of ['partcad.partcad', 'openvmp.partcad']) {
+        test(`a bundle downloaded as ${identity} is still found`, async () => {
+            await pointServicePathAt(undefined);
+
+            const legacy = path.join(tmp, identity, 'partcad-bundle', '0.8.20');
+            fs.mkdirSync(legacy, { recursive: true });
+            const exe = path.join(legacy, EXE);
+            fs.writeFileSync(exe, '');
+
+            // Through `pathKey` for the reason `names` documents above: what
+            // comes back is built from `globalStorageUri.fsPath`, whose drive
+            // letter Windows lower-cases, while `tmp` here keeps the case it was
+            // created with.
+            assert.strictEqual(pathKey(resolveServicePath(fakeContext(), 'partcad') ?? ''), pathKey(exe));
+        });
+
+        // ...but only after the current one. `pc upgrade` and `downloadLatest`
+        // install into the storage this extension owns now, so a bundle there is
+        // by construction the newer of the two and a legacy root must not shadow
+        // it.
+        test(`the current storage wins over ${identity}`, async () => {
+            await pointServicePathAt(undefined);
+
+            for (const [dir, version] of [
+                [path.join(tmp, identity, 'partcad-bundle'), '0.8.20'],
+                [path.join(tmp, 'storage', 'partcad-bundle'), '0.8.19'],
+            ]) {
+                fs.mkdirSync(path.join(dir, version), { recursive: true });
+                fs.writeFileSync(path.join(dir, version, EXE), '');
+            }
+
+            assert.strictEqual(
+                pathKey(resolveServicePath(fakeContext(), 'partcad') ?? ''),
+                pathKey(path.join(tmp, 'storage', 'partcad-bundle', '0.8.19', EXE)),
+                'the legacy root is a fallback, not a candidate ranked by version',
+            );
+        });
+    }
+
+    // And in order between themselves: the name move is the more recent of the
+    // two, so a bundle left by `partcad.partcad` is the newer thing to fall back
+    // to and `openvmp.partcad` must not win over it.
+    test('the newer of the two old identities is preferred', async () => {
         await pointServicePathAt(undefined);
 
-        const legacy = path.join(tmp, 'openvmp.partcad', 'partcad-bundle', '0.8.20');
-        fs.mkdirSync(legacy, { recursive: true });
-        const exe = path.join(legacy, EXE);
-        fs.writeFileSync(exe, '');
-
-        // Through `pathKey` for the reason `names` documents above: what comes
-        // back is built from `globalStorageUri.fsPath`, whose drive letter
-        // Windows lower-cases, while `tmp` here keeps the case it was created
-        // with.
-        assert.strictEqual(pathKey(resolveServicePath(fakeContext(), 'partcad') ?? ''), pathKey(exe));
-    });
-
-    // ...but only after the current one. `pc upgrade` and `downloadLatest`
-    // install into the storage this extension owns now, so a bundle there is by
-    // construction the newer of the two and the legacy root must not shadow it.
-    test('the current storage wins over the one from before the move', async () => {
-        await pointServicePathAt(undefined);
-
-        for (const [dir, version] of [
-            [path.join(tmp, 'openvmp.partcad', 'partcad-bundle'), '0.8.20'],
-            [path.join(tmp, 'storage', 'partcad-bundle'), '0.8.19'],
+        for (const [identity, version] of [
+            ['partcad.partcad', '0.8.19'],
+            ['openvmp.partcad', '0.8.20'],
         ]) {
-            fs.mkdirSync(path.join(dir, version), { recursive: true });
-            fs.writeFileSync(path.join(dir, version, EXE), '');
+            const dir = path.join(tmp, identity, 'partcad-bundle', version);
+            fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(path.join(dir, EXE), '');
         }
 
         assert.strictEqual(
             pathKey(resolveServicePath(fakeContext(), 'partcad') ?? ''),
-            pathKey(path.join(tmp, 'storage', 'partcad-bundle', '0.8.19', EXE)),
-            'the legacy root is a fallback, not a candidate ranked by version',
+            pathKey(path.join(tmp, 'partcad.partcad', 'partcad-bundle', '0.8.19', EXE)),
+            'the legacy roots are ordered by how recent the identity is, not by version',
         );
     });
 });

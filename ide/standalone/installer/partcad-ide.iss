@@ -121,6 +121,21 @@ Name: "addcontextmenufiles"; Description: "Add ""Open with {#AppName}"" to the f
 Name: "addcontextmenufolders"; Description: "Add ""Open with {#AppName}"" to the folder context menu"; GroupDescription: "Other:"; Flags: unchecked
 Name: "addtopath"; Description: "Add ""partcad-ide"" and ""pc"" to PATH (needs a new terminal)"; GroupDescription: "Other:"
 
+; An upgrade installs over the previous one and [Files] only overwrites, so
+; anything the old build put in {app} that the new one does not survives. That
+; is harmless for an extension whose directory name changes only in its version
+; -- the editor loads the newest directory it finds for an id and ignores the
+; rest -- and not harmless when the id itself changes: two directories with two
+; different ids are two extensions, both loaded, both contributing the same
+; "partcad-container" activity bar entry and racing to register the same command
+; ids. The id did change, from "PartCAD.partcad" to "PartCAD.partcad-official",
+; so the directories PartCAD's own extensions live in are cleared before [Files]
+; puts this build's back. Nothing of the user's is under here: extensions they
+; install go to the data folder ("%USERPROFILE%\.partcad-ide"), and everything in
+; this directory is shipped by the installer and copied again below.
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\resources\app\extensions\partcad.partcad-*"
+
 [Files]
 Source: "{#AppDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 

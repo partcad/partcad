@@ -8,7 +8,7 @@ Visual Studio Code extension
 The PartCAD extension for Visual Studio Code is the primary graphical interface to PartCAD. It adds a PartCAD
 workbench with an Explorer view for browsing packages and an Inspector view for viewing objects and editing
 their parameters. Install it from the
-`VS Code marketplace <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_. See
+`VS Code marketplace <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_. See
 the :doc:`tutorial <tutorial>` for a step-by-step walkthrough.
 
 The extension exposes the following actions from the Explorer view and the command palette:

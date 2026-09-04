@@ -305,23 +305,30 @@ function cachedBundleRoot(context: vscode.ExtensionContext): string {
 }
 
 /**
- * Where this extension's downloads went before it changed publisher.
+ * Where this extension's downloads went under the identities it used to have.
  *
- * `globalStorageUri` is named after the extension's identity, so moving from the
- * `OpenVMP` publisher to `PartCAD` renamed the directory: it is
- * `globalStorage/partcad.partcad/` now and everything downloaded before the move
- * is under `globalStorage/openvmp.partcad/`, next door. Without this an upgrade
- * across the move tells a user whose PartCAD is sitting right there that none
- * was found, and downloads a second copy of it.
+ * `globalStorageUri` is named after the extension's identity, so every change to
+ * that identity renames the directory. There have been two: the publisher moved
+ * from `OpenVMP` to `PartCAD`, and then the extension name moved from `partcad`
+ * to `partcad-official` (the marketplace refuses a name another publisher
+ * already has, and the transition shim on the old entry is what holds
+ * `partcad`). The current root is `globalStorage/partcad.partcad-official/`, and
+ * bundles downloaded before either move sit next door under
+ * `globalStorage/partcad.partcad/` and `globalStorage/openvmp.partcad/`. Without
+ * this an upgrade across a move tells a user whose PartCAD is sitting right
+ * there that none was found, and downloads a second copy of it.
  *
- * Read-only, and deliberately not the download target: `downloadLatest` and
- * `pc upgrade` install into the current root, so the old directory is superseded
- * rather than kept in step. Same reasoning as the flat layout `newestBundleIn`
- * still accepts -- an installation that predates a change keeps working, and
- * loses nothing by not being the place new ones go.
+ * Newest identity first, although only the first hit is used: they are searched
+ * after the current root either way. Read-only, and deliberately not the
+ * download target: `downloadLatest` and `pc upgrade` install into the current
+ * root, so the old directories are superseded rather than kept in step. Same
+ * reasoning as the flat layout `newestBundleIn` still accepts -- an installation
+ * that predates a change keeps working, and loses nothing by not being the place
+ * new ones go.
  */
-function legacyBundleRoot(context: vscode.ExtensionContext): string {
-    return path.join(path.dirname(context.globalStorageUri.fsPath), 'openvmp.partcad', 'partcad-bundle');
+function legacyBundleRoots(context: vscode.ExtensionContext): string[] {
+    const storage = path.dirname(context.globalStorageUri.fsPath);
+    return ['partcad.partcad', 'openvmp.partcad'].map((identity) => path.join(storage, identity, 'partcad-bundle'));
 }
 
 /**
@@ -336,8 +343,8 @@ function legacyBundleRoot(context: vscode.ExtensionContext): string {
  *
  * The extension's own download directory comes after those either way: an
  * installation the user chose outranks one this downloaded for them. And
- * `legacyBundleRoot` comes last, for the same reason it is not the download
- * target -- what is there predates the publisher move, so anything in the
+ * `legacyBundleRoots` comes last, for the same reason they are not the download
+ * target -- what is there predates a change of identity, so anything in the
  * current root supersedes it.
  */
 function installRoots(context: vscode.ExtensionContext): string[] {
@@ -346,11 +353,11 @@ function installRoots(context: vscode.ExtensionContext): string[] {
         return [
             ...(localAppData ? [path.join(localAppData, 'PartCAD')] : []),
             cachedBundleRoot(context),
-            legacyBundleRoot(context),
+            ...legacyBundleRoots(context),
         ];
     }
     const xdgData = process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
-    return [path.join(xdgData, 'partcad'), cachedBundleRoot(context), legacyBundleRoot(context)];
+    return [path.join(xdgData, 'partcad'), cachedBundleRoot(context), ...legacyBundleRoots(context)];
 }
 
 /** Compare two version strings numerically, oldest first. */

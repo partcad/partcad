@@ -293,6 +293,15 @@ in the Explorer context menu for files and folders, and -- on by default -- `PAT
 Uninstalling removes all of it, including the `PATH` entries. `%USERPROFILE%\.partcad-ide` is left alone, the
 way `install.sh` leaves `~/.partcad`.
 
+An upgrade installs over the previous one, and the file list only overwrites -- so anything an older build put
+in the application directory that this one does not survives. `[InstallDelete]` clears one place where that
+matters: the directories PartCAD's own extensions live in, under `resources\app\extensions`. A stale directory
+for an extension whose id has not changed is ignored (the editor loads the newest it finds for an id), but the
+extension's id did change once, from `PartCAD.partcad` to `PartCAD.partcad-official`, and two directories with
+two different ids are two extensions -- both loaded, both contributing the same activity bar entry, both
+registering the same commands. Nothing of the user's is under there: extensions they install go to
+`%USERPROFILE%\.partcad-ide`, and everything in that directory is put back by the file list immediately after.
+
 `AppId` in the script is the identity Windows recognizes an upgrade and an uninstall by. It is fixed for the
 life of the product: regenerating it turns the next release into a second application installed beside this
 one.

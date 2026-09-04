@@ -84,17 +84,21 @@ a CAD addon, or documentation.
 
   Visual Studio Code extension for navigating through objects in a `partcad` project and UI interface to some
   of `partcad` functionality. Hosts the `PartCAD Viewer`. It is a **JSON-RPC client and nothing else** — it
-  talks to `partcad-json-rpc` and contains no Python of its own. Published as `PartCAD.partcad`.
+  talks to `partcad-json-rpc` and contains no Python of its own. Published as `PartCAD.partcad-official` — the
+  name is not `partcad` because the shim below holds that one, and the marketplace does not let two publishers
+  share an extension name.
 
 * [ide/vscode-shim](./ide/vscode-shim/AGENTS.md):
 
   The `OpenVMP.partcad` marketplace entry, as a transition shim: no code, one `extensionDependencies` on
-  `PartCAD.partcad`. The extension above used to be published by the `OpenVMP` publisher, and a publisher is
-  half of an extension's identity — the new entry is a *different* extension as far as the marketplace and the
-  editor are concerned, and nothing carries an installation across. So the old entry is not abandoned; it is
-  replaced by a package that pulls the new one in, and an existing installation updates into it. Same shape as
-  `dev-tools/shim/` below, and temporary in the same way. Do not give it a `main` or a `contributes`: both
-  extensions are installed at once afterwards, and anything it contributed would be contributed twice.
+  `PartCAD.partcad-official`. The extension above used to be published by the `OpenVMP` publisher, and a
+  publisher is half of an extension's identity — the new entry is a *different* extension as far as the
+  marketplace and the editor are concerned, and nothing carries an installation across. So the old entry is not
+  abandoned; it is replaced by a package that pulls the new one in, and an existing installation updates into
+  it. Same shape as `dev-tools/shim/` below, and temporary in the same way. Do not give it a `main` or a
+  `contributes`: both extensions are installed at once afterwards, and anything it contributed would be
+  contributed twice. Its `name` stays `partcad`, which is the other half of the identity it has to keep — and
+  the reason the extension above had to take a different one.
 
 * [ide/standalone](./ide/standalone/AGENTS.md):
 

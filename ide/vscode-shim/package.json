@@ -28,7 +28,7 @@
     "Other"
   ],
   "extensionDependencies": [
-    "PartCAD.partcad"
+    "PartCAD.partcad-official"
   ],
   "scripts": {
     "vsce-package": "npx --yes @vscode/vsce@3.9.2 package \"$(node -p \"require('../vscode/package.json').version\")\" --no-update-package-json --no-git-tag-version -o partcad-shim.vsix"

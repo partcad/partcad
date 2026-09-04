@@ -99,7 +99,9 @@ its own result, and the `install` job in that workflow, which installs the archi
 - **What the Windows installer sets up**: `installer/partcad-ide.iss`. Never change its `AppId`: Windows
   recognizes an upgrade, and an uninstall, by that and nothing else. Every path it reads comes in on the
   command line (`AppDir`, `LicenseFile`, `Branding`); the `#ifndef` fallbacks beside them are for compiling
-  the script by hand and are wrong the next time the file moves.
+  the script by hand and are wrong the next time the file moves. Its `[InstallDelete]` clears PartCAD's own
+  extension directories before the files are copied, because an upgrade only overwrites and the extension has
+  changed its id once already -- `README.md` explains what that leaves behind if it does not.
 - **The VSCodium release**: `build.sh --vscodium-version <tag> --record`, then restore the comments `--record`
   strips from `vscodium.json`.
 
