@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "partcad",
+  "description": "PartCAD skills for AI coding agents",
+  "owner": {
+    "name": "Roman Kuzmenko",
+    "email": "rkuz@partcad.org"
+  },
+  "plugins": [
+    {
+      "name": "pc",
+      "description": "Mechanical and robotics engineering with PartCAD",
+      "source": "./pc"
+    }
+  ]
+}
