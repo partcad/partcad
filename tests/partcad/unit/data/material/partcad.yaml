@@ -1,0 +1,23 @@
+desc: A package that catalogues materials
+
+materials:
+  pla:
+    formal: PLA
+    full: Polylactic Acid
+    desc: |
+      A semi-crystalline thermoplastic made from cornstarch or sugarcane.
+    url: https://en.wikipedia.org/wiki/Polylactic_acid
+    density: 0.001320 # g/mm^3
+    tags:
+      - low-cost
+      - biodegradable
+  abs:
+    formal: ABS
+    full: Acrylonitrile Butadiene Styrene
+    density: 0.00107
+    tags: heat-resistant
+  # The short form: the value is the full name of the substance.
+  nylon: Nylon
+  # A material nobody stated a density for.
+  mystery:
+    desc: Something, but nobody said how dense

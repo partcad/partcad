@@ -1354,7 +1354,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.46"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.47"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -1478,6 +1478,7 @@ def list_all(session, params):
 # The key is the name of the package attribute holding the objects, which is why
 # 'software' looks singular here: the section is called that in both numbers.
 _LIST_LABELS = {
+    "materials": "PartCAD materials",
     "parts": "PartCAD parts",
     "sketches": "PartCAD sketches",
     "assemblies": "PartCAD assemblies",
@@ -1490,11 +1491,11 @@ _LIST_LABELS = {
 # ones with geometry in them. A package of firmware images has nothing to render
 # and would be filtered out of the walk exactly as a package of interfaces is
 # (see 'Context.get_packages', and the TODO there about the two).
-_LIST_EVERY_PACKAGE = ("interfaces", "software")
+_LIST_EVERY_PACKAGE = ("interfaces", "software", "materials")
 
 
 def list_objects(session, params):
-    """List a package's parts, sketches, assemblies, interfaces or software."""
+    """List a package's parts, sketches, assemblies, interfaces, materials or software."""
     ctx = _ctx(session, params)
     if ctx is None:
         return None

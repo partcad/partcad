@@ -10,6 +10,7 @@ from click.testing import CliRunner
 from ...cli_context import CliContext
 from .assemblies import cli as list_assemblies
 from .interfaces import cli as list_interfaces
+from .materials import cli as list_materials
 from .mates import cli as list_mates
 from .packages import cli as list_packages
 from .parts import cli as list_parts
@@ -42,6 +43,7 @@ def cli(cli_ctx: CliContext, recursive: bool, package: str) -> None:
     catch_exceptions = False
 
     runner.invoke(list_packages, catch_exceptions=catch_exceptions, obj=cli_ctx)
+    runner.invoke(list_materials, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     runner.invoke(list_sketches, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     runner.invoke(list_interfaces, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     runner.invoke(list_parts, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
