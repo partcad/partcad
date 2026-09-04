@@ -166,8 +166,8 @@ runs:
         add() { case " ${buckets} " in *" $1 "*) ;; *) buckets="${buckets}$1 " ;; esac; }
 
         if [ "${ALL}" = "true" ]; then
-          add code; add docs; add ai; add devcontainer; add vscode; add ide
-          add packaging; add ci
+          add code; add deps; add docs; add ai; add devcontainer; add vscode
+          add ide; add packaging; add ci
         else
           while IFS= read -r f; do
             [ -n "${f}" ] || continue
@@ -215,14 +215,30 @@ runs:
               # Markdown file that turned out to be *data* under "src/" still
               # counts as code.
               add docs ;;
-            src/*|tests/*|features/*|cad/*|tools/*|dev-tools/*)
+            src/*|tests/*|features/*|cad/*|tools/*|dev-tools/*|conftest.py|behave.ini)
               add code ;;
+            pyproject.toml|poetry.lock|poetry.toml|requirements*.txt|requirements*.in)
+              # What PartCAD is built out of, as opposed to what it is. Only the
+              # root-level files: "*" matches "/" in a case pattern, so these
+              # patterns are anchored at the start of the path and the
+              # "requirements.txt" belonging to the docs, the dev container, the
+              # extension or a tool container is matched by its own directory's
+              # rule above.
+              #
+              # This is the bucket that separates a source change from a
+              # dependency change, which is the one distinction the standalone
+              # bundles turn on -- see the note on "bundle" below.
+              add deps ;;
             *.md|*.rst|LICENSE.txt|apache20.svg)
               add docs ;;
             *)
-              # Anything this action has not been taught, "pyproject.toml",
-              # "poetry.lock", "conftest.py" and "requirements*.txt" included.
-              add code ;;
+              # Anything this action has not been taught. Both buckets, not just
+              # "code": "code" alone would leave the bundles unbuilt for a path
+              # nobody has classified, and an unclassified path is exactly the
+              # one nobody has thought about. A file has to be *named* above as
+              # source before it stops being treated as something that can
+              # change what gets frozen.
+              add code; add deps ;;
             esac
           done < "${RUNNER_TEMP}/changed-files.txt"
         fi
@@ -235,19 +251,37 @@ runs:
         emit() { if any "${@:2}"; then echo "$1=true"; else echo "$1=false"; fi >> "${GITHUB_OUTPUT}"; }
 
         # Which buckets each subject listens to. "ci" is in every one of them.
-        emit wheel               code ci
+        emit wheel               code deps ci
         # Sphinx reads "docs/source" and nothing else -- "conf.py" enables no
         # extensions, so there is no autodoc pulling in the source tree.
         emit docs                docs ci
-        emit pytest              code ci
-        emit behave              code ci
-        emit examples            code ci
+        emit pytest              code deps ci
+        emit behave              code deps ci
+        emit examples            code deps ci
         # The dev container image is built from ".devcontainer" and installs the
-        # project into itself, so both matter to it.
-        emit devcontainer        code ci devcontainer
-        emit devcontainer-pytest code ci
-        # "src/**" is why the bundles are frozen at all; "packaging" is how.
-        emit bundle              code ci packaging
+        # project into itself, so all three matter to it.
+        emit devcontainer        code deps ci devcontainer
+        emit devcontainer-pytest code deps ci
+        # The one subject that does NOT listen to "code", and the only place a
+        # source change is treated differently from a dependency change.
+        #
+        # Freezing is the most expensive thing this repository does -- ~500MB of
+        # OpenCASCADE per runner, seven of them on a deep run -- and what makes a
+        # frozen bundle differ from a working wheel is almost always what went
+        # into it rather than what PartCAD does with it: a dependency that ships
+        # a data file PyInstaller cannot see, a new transitive import, a wheel
+        # with no build for one of the platforms. So a dependency change freezes,
+        # and a change to "src/" alone does not.
+        #
+        # It is a trade, and this is the other half of it: a source change *can*
+        # break the freeze (a lazily imported module, a file read relative to
+        # "__file__" -- see "dev-tools/pyinstaller/README.md"), and that is now
+        # found on the push to "devel" that follows the merge rather than on the
+        # pull request. The push trigger of "build-standalone.yml" still lists
+        # "src/**" for exactly this, a release still refuses to publish with a
+        # platform missing, and "#deepTest" builds the whole set before a merge
+        # for a change that warrants it.
+        emit bundle              deps ci packaging
         # Not "code": the IDE downloads the bundles rather than freezing them,
         # so what rebuilds it is the application around them.
         emit ide                 ci packaging vscode ide

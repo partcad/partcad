@@ -709,10 +709,11 @@ Depth: three tiers
 CI fans out over operating systems, and a pull request does not pay for all of them.
 
 ``pr``
-    What a pull request runs on every push to it. One image per operating system and architecture --
-    Ubuntu 24.04 on x86_64 and arm64, and ``windows-latest`` -- and the oldest and the newest supported
-    Python, with nothing in between. No macOS, whose runners bill at ten times the Linux rate, and no
-    standalone bundle or IDE for it either.
+    What a pull request runs on every push to it. The oldest and the newest supported Python, with nothing
+    in between, and every image except macOS -- whose runners bill at ten times the Linux rate, and which no
+    standalone bundle or IDE is built for here either. **Both Windows images stay.** Windows is not a second
+    macOS to economise on: its path separator, drive letters and line endings are a standing source of
+    breakage in code written on Linux, so it is the platform a pull request most needs.
 
 ``queue``
     What the merge queue runs, which is what a pull request used to: every current image, macOS included, and
@@ -732,11 +733,43 @@ else -- the nightly run has no head commit to read a message from, so the guard 
 lets every other trigger through. It did not, from the day the guard was written until 0.8.32, and the nightly
 was skipped every night in between: if you change that condition, keep the event-name clause first.
 
-The ``Standalone`` workflow reads the same tiers: a pull request builds three of the seven standalone bundles,
-the merge queue builds four -- it is the macOS bundle a pull request drops -- and a deep run builds all seven.
-The ``IDE`` workflow follows it, because each IDE carries a bundle: no macOS IDE on a pull request, the Intel
-macOS one on a deep run only. A release always builds all seven bundles and all four IDEs, and refuses to
-publish if any is missing.
+The ``Standalone`` workflow reads the same tiers, job by job:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 26 26 26
+
+   * - Job
+     - ``pr``
+     - ``queue``
+     - ``deep``
+   * - ``Build``
+     - 3 bundles (no macOS)
+     - 4 bundles
+     - all 7
+   * - ``Install``
+     - 2 (every bundle ``install.sh`` can install)
+     - 4 (adds the macOS bundle on the *next* macOS)
+     - 8
+   * - ``Snap``
+     - 1 (amd64)
+     - not run
+     - 2, on a ``devel`` push or a dispatch
+   * - ``Examples via bundle``
+     - 2 (the ``PartCAD`` suite only)
+     - not run
+     - 6
+
+``Snap`` and ``Examples`` have always been skipped in the merge queue and on the release path -- nothing
+downstream consumes a snap, and the deterministic ``Build`` and ``Install`` jobs are what gate a release. What
+is new is that a pull request packs one snap rather than two (the recipe is one file and the two jobs run it
+over payloads ``Build`` and ``Install`` have already exercised, at ~45 minutes of squashing each), and that the
+``All`` example suite -- ``continue-on-error``, because the public index carries packages this repository
+cannot fix -- is left to deep runs.
+
+The ``IDE`` workflow follows the same tiers, because each IDE carries a bundle: no macOS IDE on a pull request,
+the Intel macOS one on a deep run only. A release always builds all seven bundles and all four IDEs, and
+refuses to publish if any is missing.
 
 Scope: what the change touches
 
@@ -763,10 +796,28 @@ and turns each subject on or off:
      - ``IDE``
    * - ``dev-tools/pyinstaller/``, ``dev-tools/snap/``, ``.snapcraft.yaml``, ``install.sh``
      - ``Standalone``, ``IDE``
-   * - anything else -- ``src/``, ``tests/``, ``features/``, ``examples/``, ``pyproject.toml``, ``poetry.lock``
-     - everything except the IDE
+   * - ``pyproject.toml``, ``poetry.lock``, root ``requirements*``
+     - the tests, the wheel **and** ``Standalone``
+   * - ``src/``, ``tests/``, ``features/``, ``examples/``, ``cad/``, ``tools/``, ``dev-tools/``
+     - the tests and the wheel, but **not** ``Standalone``
+   * - anything else
+     - all of the above, ``Standalone`` included
    * - ``.github/``
      - everything, this being the thing that decides what runs
+
+Two of those rows are the same distinction from either side, and it is the only place a source change and a
+dependency change are treated differently. Freezing is the most expensive thing this repository does -- ~500MB
+of OpenCASCADE per runner -- and what makes a frozen bundle differ from a working wheel is nearly always what
+went *into* it: a dependency shipping a data file PyInstaller cannot see, a new transitive import, a wheel with
+no build for one platform. So a dependency change freezes and a change to ``src/`` alone does not.
+
+That is a trade rather than a fact. A source change *can* break the freeze -- a lazily imported module, a file
+read relative to ``__file__``; ``dev-tools/pyinstaller/README.md`` has the list -- and that is now found on the
+push to ``devel`` after the merge rather than on the pull request. The push trigger of ``build-standalone.yml``
+still lists ``src/**`` for exactly this, a release still refuses to publish with a platform missing, and
+``#deepTest`` still builds the whole set before a merge for a change that warrants it. Note also which way the
+last row falls: an unclassified path counts as **both** source and dependency, so a bundle is skipped only for
+a directory somebody has named as source.
 
 Two properties are worth knowing before you edit that list. It is **fail-safe**: a path it has not been taught
 falls through to "code" and turns everything on, so a new directory can only ever run too much. And it is a job

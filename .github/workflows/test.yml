@@ -98,19 +98,21 @@ env:
   # what separates the two now: a pull request is re-run on every push to it,
   # while the queue runs once, immediately before the commit lands.
   #
-  # Which ones, and why these:
-  #  * "macos-latest". The single most expensive leg in the file -- macOS minutes
-  #    bill at 10x -- and the one whose breakages are least likely to be found by
-  #    a contributor's own machine. Nothing merges without it: the merge queue
-  #    runs it, and a queued commit that fails there never lands.
-  #  * "windows-2022". The pinned second Windows image, which is here so that a
-  #    move of the "windows-latest" alias cannot become the only Windows we ever
-  #    tested on. That is a question for the queue and the nightly run, not for
-  #    every push to a branch; "windows-latest" still runs on every one.
+  # One entry, and it is macOS: the most expensive leg in the file -- macOS
+  # minutes bill at 10x -- and one where a version specific breakage is rare,
+  # because the interpreter is the host's and the shapes are built in a conda
+  # sandbox. Nothing merges without it: the merge queue runs it, and a queued
+  # commit that fails there never lands.
   #
-  # NOT here, deliberately: "ubuntu-24.04-arm". arm64 is an architecture rather
-  # than a second image of one, and "cadquery-ocp" ships separate wheels for it.
-  OSES_QUEUE_ONLY: '["windows-2022", "macos-latest"]'
+  # Deliberately NOT here:
+  #  * "windows-2022", and no Windows image at all. Windows is not a second
+  #    macOS. It is the platform whose path separator, drive letters and line
+  #    endings are a standing source of breakage in code written on Linux, so it
+  #    is the platform a pull request most needs, not the one to economise on.
+  #    Both images stay on every tier.
+  #  * "ubuntu-24.04-arm". arm64 is an architecture rather than a second image of
+  #    one, and "cadquery-ocp" ships separate wheels for it.
+  OSES_QUEUE_ONLY: '["macos-latest"]'
   PYTHONS: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
   # The two ends of the range a *sandbox* can be built at:
   # sandbox_versions.MIN_PYTHON_VERSION_CADQUERY and MAX_PYTHON_VERSION_CAD.

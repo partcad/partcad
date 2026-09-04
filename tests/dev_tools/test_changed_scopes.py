@@ -95,13 +95,61 @@ def test_a_deep_run_turns_everything_on(tmp_path):
 
 
 def test_an_unknown_path_runs_everything(tmp_path):
-    """The fail-safe. A directory nobody has taught the gate about is code."""
+    """The fail-safe, and the reason it lands in two buckets rather than one.
+
+    "code" alone would leave the standalone bundles unbuilt for a path nobody
+    has classified -- and an unclassified path is precisely the one nobody has
+    thought about. A file has to be *named* as source before it stops being
+    treated as something that can change what gets frozen.
+    """
     subjects, buckets = classify(tmp_path, ["a-brand-new-directory/whatever.py"])
-    assert buckets == {"code"}
+    assert buckets == {"code", "deps"}
     # Not "all of them": the IDE is not rebuilt by a source change, here or in
     # "build-ide-standalone.yml", because it downloads the bundles rather than
-    # freezing them. Everything a source change *can* break is on.
+    # freezing them. Everything else is on.
     assert subjects["pytest"] and subjects["behave"] and subjects["wheel"] and subjects["bundle"]
+
+
+def test_source_alone_does_not_freeze_a_bundle(tmp_path):
+    """The one place a source change and a dependency change part company.
+
+    Freezing is the most expensive thing in CI, and what makes a bundle differ
+    from a working wheel is almost always what went into it. So a change to
+    "src/" runs the tests and builds the wheel but does not freeze; the push to
+    "devel" that follows the merge still does, its "paths:" filter still lists
+    "src/**", and "#deepTest" still freezes everything before a merge.
+    """
+    subjects, buckets = classify(tmp_path, ["src/partcad/context.py"])
+    assert buckets == {"code"}
+    assert subjects["pytest"] and subjects["behave"] and subjects["wheel"]
+    assert not subjects["bundle"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["pyproject.toml", "poetry.lock", "requirements.txt", "requirements-aws.txt", "requirements-dev.in"],
+)
+def test_a_dependency_change_freezes_a_bundle(tmp_path, path):
+    subjects, buckets = classify(tmp_path, [path])
+    assert buckets == {"deps"}
+    assert subjects["bundle"]
+    # And everything a source change runs, since the dependency is under it.
+    assert subjects["pytest"] and subjects["behave"] and subjects["wheel"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["docs/requirements.txt", ".devcontainer/requirements.txt", "ide/vscode/requirements.txt"],
+)
+def test_only_the_root_dependency_files_are_dependencies(tmp_path, path):
+    """A "requirements.txt" belongs to whatever directory it is in.
+
+    The patterns for these are anchored at the start of the path -- "*" matches
+    "/" in a case pattern -- and each of these directories has a rule of its own
+    above them. Sphinx's requirements are not PartCAD's.
+    """
+    subjects, _ = classify(tmp_path, [path])
+    assert not subjects["bundle"]
 
 
 @pytest.mark.parametrize(
@@ -132,10 +180,11 @@ def test_an_unknown_path_runs_everything(tmp_path):
         ("src/partcad/context.py", "code"),
         ("tests/partcad/unit/test_part.py", "code"),
         ("features/pc_list.feature", "code"),
-        ("pyproject.toml", "code"),
-        ("poetry.lock", "code"),
         ("conftest.py", "code"),
-        ("requirements.txt", "code"),
+        ("behave.ini", "code"),
+        ("pyproject.toml", "deps"),
+        ("poetry.lock", "deps"),
+        ("requirements.txt", "deps"),
         ("cad/freecad/InitGui.py", "code"),
         # A rendered README under "examples/" is an *output* that
         # "Examples (PartCAD)" compares against a fresh render, so it must not
@@ -213,44 +262,46 @@ def test_every_top_level_entry_is_classified_deliberately(tmp_path):
     ).stdout.split()
 
     # What each top-level entry is allowed to be. Anything absent from here is a
-    # new entry, and the assertion below says to come and decide about it.
+    # new entry, and the assertion below says to come and decide about it. The
+    # two entries that are "code" *and* "deps" are the ones nothing classifies:
+    # they reach the catch-all, which is the fail-safe.
     expected = {
-        ".devcontainer": "devcontainer",
-        ".github": "ci",
-        ".claude": "docs",
-        ".claude-plugin": "ai",
-        ".cursor": "docs",
-        ".gitattributes": "code",
-        ".gitignore": "code",
-        ".readthedocs.yaml": "docs",
-        ".snapcraft.yaml": "packaging",
-        ".vscode": "ide",
-        "AGENTS.md": "docs",
-        "CLAUDE.md": "docs",
-        "LICENSE.txt": "docs",
-        "README.md": "docs",
-        "ai-agents": "ai",
-        "apache20.svg": "docs",
-        "behave.ini": "code",
-        "cad": "code",
-        "conftest.py": "code",
-        "dev-tools": "code",
-        "docs": "docs",
-        "examples": "code",
-        "features": "code",
+        ".devcontainer": {"devcontainer"},
+        ".github": {"ci"},
+        ".claude": {"docs"},
+        ".claude-plugin": {"ai"},
+        ".cursor": {"docs"},
+        ".gitattributes": {"code", "deps"},
+        ".gitignore": {"code", "deps"},
+        ".readthedocs.yaml": {"docs"},
+        ".snapcraft.yaml": {"packaging"},
+        ".vscode": {"ide"},
+        "AGENTS.md": {"docs"},
+        "CLAUDE.md": {"docs"},
+        "LICENSE.txt": {"docs"},
+        "README.md": {"docs"},
+        "ai-agents": {"ai"},
+        "apache20.svg": {"docs"},
+        "behave.ini": {"code"},
+        "cad": {"code"},
+        "conftest.py": {"code"},
+        "dev-tools": {"code"},
+        "docs": {"docs"},
+        "examples": {"code"},
+        "features": {"code"},
         "ide": None,  # split between "vscode" and "ide"; covered above
-        "install.sh": "packaging",
-        "openspec": "docs",
-        "poetry.lock": "code",
-        "poetry.toml": "code",
-        "pyproject.toml": "code",
-        "requirements-aws.txt": "code",
-        "requirements-dev.in": "code",
-        "requirements-lint.txt": "code",
-        "requirements.txt": "code",
-        "src": "code",
-        "tests": "code",
-        "tools": "code",
+        "install.sh": {"packaging"},
+        "openspec": {"docs"},
+        "poetry.lock": {"deps"},
+        "poetry.toml": {"deps"},
+        "pyproject.toml": {"deps"},
+        "requirements-aws.txt": {"deps"},
+        "requirements-dev.in": {"deps"},
+        "requirements-lint.txt": {"deps"},
+        "requirements.txt": {"deps"},
+        "src": {"code"},
+        "tests": {"code"},
+        "tools": {"code"},
     }
 
     unknown = sorted(set(tracked) - set(expected))
@@ -268,4 +319,4 @@ def test_every_top_level_entry_is_classified_deliberately(tmp_path):
         if entry.startswith(".") and (REPO_ROOT / entry).is_file():
             path = entry
         _, buckets = classify(tmp_path, [path])
-        assert buckets == {want}, f"{path} classified as {buckets}, expected {{'{want}'}}"
+        assert buckets == want, f"{path} classified as {buckets}, expected {want}"

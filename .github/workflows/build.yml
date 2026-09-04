@@ -39,9 +39,9 @@ env:
   # test none. See ".github/actions/test-depth" and OSES_DEEP_ONLY in "test.yml".
   OSES_DEEP_ONLY: '["ubuntu-22.04", "ubuntu-22.04-arm"]'
   # Dropped on a pull request and kept from the merge queue up, as in "test.yml"
-  # -- that file carries the reasoning for which images are here and why arm64
-  # is not.
-  OSES_QUEUE_ONLY: '["windows-2022", "macos-latest"]'
+  # -- that file carries the reasoning for why this is macOS alone, and in
+  # particular why no Windows image is in it.
+  OSES_QUEUE_ONLY: '["macos-latest"]'
   PYTHONS: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
   # Same cost trade-off as test.yml: the full Python range runs on
   # ubuntu-latest only, every other image builds on the oldest and the newest
