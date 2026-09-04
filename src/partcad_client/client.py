@@ -21,6 +21,7 @@ for the matching response.
 """
 
 import logging
+import math
 import os
 import socket
 import subprocess
@@ -76,11 +77,15 @@ def idle_timeout() -> float:
     """The silence bound in seconds, or ``0`` to wait as long as it takes.
 
     Normalized here so that every caller has one thing to test. "No bound" is
-    ``0``, never a negative number: ``socket.settimeout()`` raises ``ValueError``
-    on one of those, and it would be raised inside :func:`_connect_socket`, where
+    ``0``, and never anything ``socket.settimeout()`` would reject: it raises
+    ``ValueError`` on a negative number and ``OverflowError`` on an infinite one
+    (which is what ``float()`` makes of both ``inf`` and an overflowing literal
+    like ``1e309``). Either would be raised inside :func:`_connect_socket`, where
     :func:`connect` catches everything and quietly falls back to a one-shot
-    stdio service -- a setting meant to make the client wait longer would
-    instead have stopped it using the daemon at all.
+    stdio service -- so a setting written to make the client wait *longer* would
+    instead have stopped it using the daemon at all, with no sign of why.
+
+    ``nan`` needs no special case: it fails ``> 0`` like every comparison.
     """
     raw = os.environ.get("PC_DAEMON_IDLE_TIMEOUT")
     if raw is None or not raw.strip():
@@ -90,7 +95,7 @@ def idle_timeout() -> float:
     except ValueError:
         _logger.warning("PC_DAEMON_IDLE_TIMEOUT is not a number of seconds (%r); using %gs.", raw, DEFAULT_IDLE_TIMEOUT)
         return DEFAULT_IDLE_TIMEOUT
-    return seconds if seconds > 0 else 0.0
+    return seconds if seconds > 0 and math.isfinite(seconds) else 0.0
 
 
 def launcher_argv() -> list:
