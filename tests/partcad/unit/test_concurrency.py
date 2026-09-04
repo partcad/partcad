@@ -75,10 +75,16 @@ def test_a_sibling_task_is_not_admitted_by_its_neighbour():
     """
     gate = ReentrantGate("test.sibling")
     order = []
+    live = 0
+    peak = 0
 
     async def slow(tag):
+        nonlocal live, peak
         order.append(tag)
+        live += 1
+        peak = max(peak, live)
         await asyncio.sleep(0.05)
+        live -= 1
 
     async def main():
         first = asyncio.create_task(gate.run(1, slow, "first"))
@@ -87,7 +93,10 @@ def test_a_sibling_task_is_not_admitted_by_its_neighbour():
         await asyncio.gather(first, second)
 
     asyncio.run(asyncio.wait_for(main(), timeout=30))
-    # 'second' had to wait for 'first' rather than being waved through.
+    # The order alone proves nothing -- it comes out the same whether 'second'
+    # waited or was waved straight through, because both append on entry. That
+    # only one ran at a time is the claim.
+    assert peak == 1
     assert order == ["first", "second"]
 
 

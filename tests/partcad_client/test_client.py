@@ -228,6 +228,81 @@ def test_no_bound_is_applied_when_the_timeout_is_disabled(socket_dir, monkeypatc
     assert client_module.idle_timeout() == 0.0
 
 
+@pytest.mark.parametrize("setting", ["0", "-1", "-0.5", "inf", "1e309"])
+def test_turning_the_bound_off_leaves_the_socket_blocking(socket_dir, monkeypatch, setting):
+    """ "No bound" has to mean waiting, not failing instantly or not connecting.
+
+    'settimeout(0)' does not make a socket wait forever, it makes it
+    non-blocking, and the first read then fails with BlockingIOError -- which is
+    not the TimeoutError a stall is reported from, so it would have escaped
+    'call' as an unhandled error on every request. The others never reach a
+    socket at all: 'settimeout()' raises ValueError on a negative number and
+    OverflowError on an infinite one, from inside the connect that 'connect()'
+    wraps in a bare except, so the client would have silently stopped using the
+    daemon and spawned a one-shot stdio service per command instead.
+    """
+    monkeypatch.setenv("PC_DAEMON_IDLE_TIMEOUT", setting)
+    assert client_module.idle_timeout() == 0.0
+
+    # The service holds its answer back until released, so that the call has to
+    # *wait* for one. Answering straight away would not prove anything: the
+    # answer can be sitting in the socket buffer by the time 'read_message'
+    # first reads, and a read that never has to wait cannot tell a blocking
+    # socket from a non-blocking one.
+    arrived = threading.Event()
+    release = threading.Event()
+
+    def slow_ping(session, params):
+        arrived.set()
+        release.wait(30)
+        return "pong"
+
+    server, path = _serve(socket_dir, {"ping": slow_ping})
+    try:
+        # The real '_connect_socket', with only the launcher stubbed out: the
+        # socket it builds is what this is about, and starting a daemon is not.
+        monkeypatch.setattr(client_module, "start_daemon", lambda cwd, extra_args: path)
+        client = client_module._connect_socket(None, ())
+
+        answer = []
+
+        def call_it():
+            try:
+                answer.append(client.call("ping"))
+            except BaseException as e:  # noqa: BLE001 - reported by the assertion below
+                answer.append(e)
+
+        caller = threading.Thread(target=call_it, daemon=True)
+        caller.start()
+        assert arrived.wait(10), "the service never received the request"
+        caller.join(timeout=0.5)
+        assert caller.is_alive(), "the call did not wait for an answer: %r" % (answer,)
+
+        release.set()
+        caller.join(timeout=30)
+        assert answer == ["pong"]
+        client.close()
+    finally:
+        release.set()
+        server.stop()
+
+
+@pytest.mark.parametrize("setting", [None, "", "   "])
+def test_the_default_bound_applies_when_nothing_is_set(socket_dir, monkeypatch, setting):
+    """The branch every command that does not set the variable goes through.
+
+    Blank is treated as unset rather than as a value, unlike the 'PC_*' flags
+    'partcad_utils.booleans' reads, where an empty value deliberately turns one
+    off. There is no "off" for a bound -- 0 says that -- so there is nothing for
+    a blank to mean but "no answer given".
+    """
+    if setting is None:
+        monkeypatch.delenv("PC_DAEMON_IDLE_TIMEOUT", raising=False)
+    else:
+        monkeypatch.setenv("PC_DAEMON_IDLE_TIMEOUT", setting)
+    assert client_module.idle_timeout() == client_module.DEFAULT_IDLE_TIMEOUT
+
+
 def test_the_default_bound_is_used_when_the_setting_is_not_a_number(socket_dir, monkeypatch):
     monkeypatch.setenv("PC_DAEMON_IDLE_TIMEOUT", "soon")
     assert client_module.idle_timeout() == client_module.DEFAULT_IDLE_TIMEOUT

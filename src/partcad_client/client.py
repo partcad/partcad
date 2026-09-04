@@ -21,6 +21,7 @@ for the matching response.
 """
 
 import logging
+import math
 import os
 import socket
 import subprocess
@@ -73,15 +74,28 @@ class DaemonStalled(RuntimeError):
 
 
 def idle_timeout() -> float:
-    """The silence bound in seconds; zero or less waits forever, as before."""
+    """The silence bound in seconds, or ``0`` to wait as long as it takes.
+
+    Normalized here so that every caller has one thing to test. "No bound" is
+    ``0``, and never anything ``socket.settimeout()`` would reject: it raises
+    ``ValueError`` on a negative number and ``OverflowError`` on an infinite one
+    (which is what ``float()`` makes of both ``inf`` and an overflowing literal
+    like ``1e309``). Either would be raised inside :func:`_connect_socket`, where
+    :func:`connect` catches everything and quietly falls back to a one-shot
+    stdio service -- so a setting written to make the client wait *longer* would
+    instead have stopped it using the daemon at all, with no sign of why.
+
+    ``nan`` needs no special case: it fails ``> 0`` like every comparison.
+    """
     raw = os.environ.get("PC_DAEMON_IDLE_TIMEOUT")
     if raw is None or not raw.strip():
         return DEFAULT_IDLE_TIMEOUT
     try:
-        return float(raw)
+        seconds = float(raw)
     except ValueError:
         _logger.warning("PC_DAEMON_IDLE_TIMEOUT is not a number of seconds (%r); using %gs.", raw, DEFAULT_IDLE_TIMEOUT)
         return DEFAULT_IDLE_TIMEOUT
+    return seconds if seconds > 0 and math.isfinite(seconds) else 0.0
 
 
 def launcher_argv() -> list:
@@ -165,7 +179,9 @@ class DaemonClient:
         self._write = write_stream
         self._closer = closer
         self._next_id = 0
-        self._timeout = timeout or 0.0
+        # Clamped, so that only '> 0' has to be tested everywhere below. Zero
+        # and anything below it mean the same thing: no bound.
+        self._timeout = max(timeout or 0.0, 0.0)
         self._endpoint = endpoint
         self._interrupt = interrupt
         # Written by the request thread on every message and read by the
@@ -314,12 +330,20 @@ def _connect_socket(cwd: Optional[str], extra_args) -> DaemonClient:
         return DaemonClient(stream, stream, closer=stream.close, endpoint=path)
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.connect(path)
+    timeout = idle_timeout()
+    # 'None', not the 0 that means "no bound" here: 'settimeout(0)' does not
+    # make a socket wait forever, it makes it *non-blocking*, and the first read
+    # then fails immediately with BlockingIOError -- an OSError, but not the
+    # TimeoutError 'call' reports a stall from. Turning the bound off would have
+    # broken every call instead of restoring the wait it used to make.
+    #
     # Set before makefile(): a socket may carry a timeout under a file object
-    # (only a non-blocking one may not), and a read that reaches it raises
-    # TimeoutError, which is what 'call' turns into the report. The buffer is
-    # left in an undefined state by a read that times out, which costs nothing
-    # here because a client that has given up on this connection closes it.
-    sock.settimeout(idle_timeout())
+    # and only a non-blocking one may not, which is the other reason the line
+    # above matters. A read that reaches the timeout raises TimeoutError, which
+    # is what 'call' turns into the report; it also leaves the buffer in an
+    # undefined state, which costs nothing here because a client that has given
+    # up on this connection closes it.
+    sock.settimeout(timeout if timeout > 0 else None)
     stream = sock.makefile("rwb")
 
     def closer():
@@ -328,7 +352,7 @@ def _connect_socket(cwd: Optional[str], extra_args) -> DaemonClient:
         finally:
             sock.close()
 
-    return DaemonClient(stream, stream, closer=closer, timeout=idle_timeout(), endpoint=path)
+    return DaemonClient(stream, stream, closer=closer, timeout=timeout, endpoint=path)
 
 
 def _connect_stdio(cwd: Optional[str], extra_args) -> DaemonClient:
