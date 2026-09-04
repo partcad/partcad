@@ -419,6 +419,67 @@ belongs in a pure function that takes the platform (`pathKey`, `listenOptions`, 
 `resolveServicePath`'s `searched` list) so a test can ask what it would do somewhere else. Everything in this
 file that starts "on Windows" was shipped broken at some point precisely because nothing asked.
 
+### Testing against the IDE, not against VS Code
+
+**`npm test` downloads stock VS Code, so it says nothing about the editor that ships.** That is the right
+default -- what it checks is this extension's logic -- but it is blind to everything the PartCAD IDE puts
+around it: the built-in extension set, `product.json`'s `configurationDefaults` (`partcad.backend`,
+`partcad.serviceChannel`), the bootstrap extension and the first-start workspace it creates, the embedded
+`partcad-json-rpc` the extension is meant to find without a dialog, and the branded application shell itself.
+Nothing here started that editor until #609, and it could not start at all on macOS for two releases without a
+single test in this repository noticing.
+
+So a change to any of those is tested against a **built** IDE. `.vscode-test.js` offers a second
+configuration, `bundledIde`, when `PARTCAD_IDE_PATH` names one. What it wants is the application *binary* --
+not the bundle, and not the `bin/` launcher:
+
+```bash
+# macOS. The executable's name belongs to the editor this was built from --
+# VSCodium's, today -- so it is read rather than written down here.
+app="$HOME/Applications/PartCAD IDE.app"
+export PARTCAD_IDE_PATH="$app/Contents/MacOS/$(plutil -extract CFBundleExecutable raw "$app/Contents/Info.plist")"
+
+# Linux. Resolved through the launcher `install.sh` symlinks, rather than
+# assuming the layout it owns.
+app="$(dirname "$(dirname "$(readlink -f "$HOME/partcad-bin/partcad-ide")")")"
+export PARTCAD_IDE_PATH="$app/partcad-ide"
+
+npm run pretest && npx vscode-test --label bundledIde        # xvfb-run -a ... on Linux
+```
+
+```powershell
+# Windows. There is no `install.sh` there -- the setup program puts the
+# application here -- and `fromPath` is read by Node, so it wants a native path.
+$env:PARTCAD_IDE_PATH = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE\partcad-ide.exe"
+npm run pretest; npx vscode-test --label bundledIde
+```
+
+The first two are the ones `build-ide-standalone.yml` uses, and neither hardcodes a name it can ask for. The
+first version of that step wrote `Contents/MacOS/VSCodium` and was right about today's bundle and wrong in
+principle; `ide/standalone/AGENTS.md` has which plist field means what.
+
+**CI runs this on macOS and Linux only.** The `install` job drops Windows from its matrix -- there is no shell
+installer there, and `install-windows` runs the setup program instead -- so the Windows form above is the one
+to use by hand and the one nothing checks. Do not reach it by running the Bash recipe under Git Bash: there is
+no `~/partcad-bin/partcad-ide` to resolve, and if there were, `readlink -f` answers with an MSYS path
+(`/c/...`) that `useInstallation.fromPath` cannot use.
+
+Unset, the configuration is not offered and `npm test` is unchanged, so nobody needs a bundle to work here.
+`.github/workflows/build-ide-standalone.yml` sets it after installing a build, which is the only place it runs
+in CI -- `ide/standalone/AGENTS.md` has how that bundle is made.
+
+Three things the bundled run needs, all of which have already cost a debugging session:
+
+- **`PARTCAD_EXTENSION_NO_PROMPTS=1` still applies.** The IDE *does* carry a service, so the download dialog is
+  not the risk it is under stock VS Code -- but a prompt of any kind is still something a headless run cannot
+  answer, and on Windows an unanswered modal keeps the window from ever closing.
+- **The built IDE already contains a released copy of this extension.** `--extensionDevelopmentPath`, which the
+  runner passes, is what makes the checkout win. A test asserting on extension *version* rather than behaviour
+  will read whichever copy it happened to get.
+- **A first `Display` provisions a conda environment**, which takes about three minutes on a clean machine
+  against roughly two seconds warm. A test that exercises geometry needs a warmed `~/.partcad/conda` or a
+  budget that admits the cold path; the 60s Mocha timeout is sized for activation, not for that.
+
 ## Build / package
 
 ```bash
