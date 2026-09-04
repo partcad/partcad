@@ -791,6 +791,125 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install --yes xvfb
 
+      # The one check that runs the application the way the operating system
+      # runs it, and reads what it says.
+      #
+      # `partcad-ide --version` -- "Run what was installed", above -- does not
+      # do this and cannot: that launcher ends in `ELECTRON_RUN_AS_NODE=1`,
+      # which is Electron being Node. No browser process, no helper
+      # applications, no window. It printed a version out of a macOS bundle that
+      # could not launch, in every release from 0.8.33 on, and the job stayed
+      # green. Anything claiming to smoke-test the editor has to run the binary
+      # the bundle's `Contents/MacOS` (or the top of the directory, elsewhere)
+      # holds, and has to keep its output.
+      #
+      # Startup failures of this class are fatal in the first second and print
+      # one line to stderr, so a short wait and a look at what came out is the
+      # whole test. Whether a window appeared is not asked here: "Start it once"
+      # asks that, of the editor started the way a user starts it.
+      - name: Run the application binary
+        shell: bash
+        run: |
+          case "${{ runner.os }}" in
+            macOS)   binary="${HOME}/Applications/PartCAD IDE.app/Contents/MacOS/VSCodium" ;;
+            Windows) binary="$(dirname "$(dirname "$(readlink -f "${HOME}/partcad-bin/partcad-ide")")")/partcad-ide.exe" ;;
+            *)       binary="$(dirname "$(dirname "$(readlink -f "${HOME}/partcad-bin/partcad-ide")")")/partcad-ide" ;;
+          esac
+          test -x "${binary}" || {
+            echo "::error::no application binary at ${binary}"
+            exit 1
+          }
+          echo "running ${binary}"
+
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            Xvfb :98 -screen 0 1280x1024x24 >/dev/null 2>&1 &
+            export DISPLAY=:98
+            # The runner image restricts unprivileged user namespaces, which is
+            # what Chromium's sandbox is built on.
+            set -- --no-sandbox
+          else
+            set --
+          fi
+
+          # Backgrounded and killed rather than waited on: the editor has no
+          # argument that starts the browser process and then exits, so what is
+          # being tested is that it is still alive a little later.
+          "${binary}" "$@" --user-data-dir "${RUNNER_TEMP}/binary-user-data" >start.log 2>&1 &
+          binary_pid=$!
+          sleep 20
+
+          echo "--- what it printed:"
+          cat start.log || true
+
+          # Named explicitly, because it is the one this check was written for
+          # and "the process is gone" does not say it.
+          if grep -q "Unable to find helper app" start.log; then
+            echo "::error::the Electron helper applications are not named for this application;" \
+                 "see the rename in ide/standalone/build.sh and check_macos_helpers in verify_bundle.py"
+            exit 1
+          fi
+          # Chromium's own fatal format -- "[0904/041024.624061:FATAL:file.cc:66]"
+          # -- and not a bare "fatal", which appears in ordinary GPU and
+          # sandbox chatter on the Linux runners and would fail this step for
+          # a machine's properties rather than for the build's.
+          if grep -q ":FATAL:" start.log; then
+            echo "::error::the application logged a fatal error on startup"
+            exit 1
+          fi
+          if ! kill -0 "${binary_pid}" 2>/dev/null; then
+            echo "::error::the application binary exited within 20 seconds instead of running"
+            exit 1
+          fi
+
+          kill "${binary_pid}" 2>/dev/null || true
+          pkill -if "partcad.ide" || true
+
+      # The extension's own test suite, in the editor that ships.
+      #
+      # `npm-test.yml` runs the same suite against a downloaded stock VS Code,
+      # which checks this extension's logic and nothing the IDE puts around it:
+      # the built-in extension set, `product.json`'s `configurationDefaults`,
+      # the bootstrap extension, the embedded service, the branded shell. The
+      # two never met, so "the bundle is well-formed" was as far as any check
+      # here went, and an editor that could not start on macOS passed all of
+      # them.
+      #
+      # `.vscode-test.js` offers the `bundledIde` configuration only when
+      # `PARTCAD_IDE_PATH` names a build, so this is the only place it runs.
+      - name: Install Node.js
+        uses: actions/setup-node@v7
+        with:
+          # Node 24 is the current Active LTS; 22.x is in maintenance now.
+          node-version: 24.x
+          cache: "npm"
+          cache-dependency-path: ide/vscode/package-lock.json
+
+      - name: Run the extension test suite in the installed IDE
+        working-directory: ide/vscode
+        shell: bash
+        run: |
+          # The application binary, which is what `useInstallation.fromPath`
+          # wants -- not the bundle, and not the `bin/` launcher. Resolved the
+          # same way "Check the IDE ships what it is supposed to" resolves the
+          # resources directory, rather than assuming a layout `install.sh` owns.
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            export PARTCAD_IDE_PATH="${HOME}/Applications/PartCAD IDE.app/Contents/MacOS/VSCodium"
+          else
+            app="$(dirname "$(dirname "$(readlink -f "${HOME}/partcad-bin/partcad-ide")")")"
+            export PARTCAD_IDE_PATH="${app}/partcad-ide"
+          fi
+          test -x "${PARTCAD_IDE_PATH}" || {
+            echo "::error::no application binary at ${PARTCAD_IDE_PATH}"
+            exit 1
+          }
+          npm ci
+          npm run pretest
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            xvfb-run -a npx vscode-test --label bundledIde
+          else
+            npx vscode-test --label bundledIde
+          fi
+
       # What the IDE does for someone who has just installed it: `pc init` a
       # package in ~/.partcad/projects/start and open it as the workspace.
       # Started the way a user starts it, with no arguments -- and with a user
@@ -798,30 +917,33 @@ jobs:
       # times the job is re-run, and so that the state the editor writes is
       # somewhere this job can read it.
       - name: Start it once
-        # Blocking on Linux, where it works and is the signal this check exists
-        # for. Reporting only on macOS, and that is a stop-gap with a date on it.
+        # Blocking on every platform. It was reporting-only on macOS, where it
+        # had never once passed, and the comment here guessed at a hosted
+        # runner's session as the likelier suspect than anything wrong with the
+        # IDE. It was not the runner.
         #
-        # This check is new in #584 and has never once passed on macOS. What it
-        # gets there is a launcher that exits 0 in six seconds having printed
-        # nothing, no editor process, and -- the reason nobody has been able to
-        # say more than that -- not one line in the user data directory, so the
-        # "what the editor logged" dump below came back empty. The same
-        # commands, the same bundle, the same 'install.sh' pass on Linux and on
-        # Windows. There is no evidence yet of anything wrong with the IDE that
-        # a person installing it would meet; a hosted macOS runner's session is
-        # the far likelier suspect, and confirming that needs a run on one.
+        # The macOS bundle could not start at all. Electron resolves its helper
+        # applications from the outer bundle's 'CFBundleName', 'build.sh' brands
+        # that plist, and nothing renamed 'Contents/Frameworks/VSCodium
+        # Helper*.app' to match -- so every Mac got 'FATAL ... Unable to find
+        # helper app' and an editor that died before it opened a window, created
+        # a user data directory or wrote a line of log. That is the whole of
+        # "exits 0 in six seconds having printed nothing, and not one line in
+        # the user data directory": the launcher spawns the editor and returns,
+        # so its own zero says nothing, and the editor was gone before it could
+        # write anything down. It shipped in 0.8.33 and 0.8.49.
         #
-        # What is certain is the cost of leaving it blocking, because it was
-        # paid: "deploy.yml" makes 'publish-to-pypi' wait on this workflow, so
-        # this step held back the 0.8.32 wheel, the bundles, the extension and
-        # the plugin, and PyPI stayed on 0.8.27. A check that has never passed
-        # on a platform must not be what decides whether a release ships.
+        # Two things now stand between that and a release. "Verifying the
+        # bundle" checks the four helpers are named for the branded application,
+        # which is cheap and says which one is wrong; the step below runs the
+        # application binary and reads what it prints, which is what catches the
+        # next startup failure of a different kind. This step is the one that
+        # says the editor came up and did its work, and it is blocking again.
         #
-        # So it still runs on macOS, still prints its errors, and no longer
-        # fails the job there. Make it blocking again -- delete this expression
-        # -- the moment a macOS run gets past it, which the diagnostics added
-        # below are there to bring about.
-        continue-on-error: ${{ startsWith(matrix.platform, 'macos') }}
+        # Keep it blocking. It held back the 0.8.32 release once ("deploy.yml"
+        # makes 'publish-to-pypi' wait on this workflow) and was demoted for it
+        # -- and the two releases that followed were unlaunchable on macOS,
+        # which is the more expensive of the two failures by a distance.
         shell: bash
         run: |
           export PATH="${HOME}/partcad-bin:${PATH}"
