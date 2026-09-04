@@ -979,6 +979,45 @@ jobs:
           $path = (Get-ItemProperty -Path "HKCU:\Environment" -Name Path).Path
           if ($path -notlike "*PartCAD IDE\bin*") { throw "the installer did not add bin to PATH" }
 
+      # What the install above cannot show: it wrote into an empty directory, so
+      # the installer's "[InstallDelete]" had nothing to delete and a regression
+      # in it would look exactly like this. An upgrade is where it does the work.
+      # The extension's id changed once -- "PartCAD.partcad" to
+      # "PartCAD.partcad-official" -- and "[Files]" only overwrites, so without
+      # the delete an older install's extension directory would still be sitting
+      # beside this one: two directories with two ids are two extensions, both
+      # loaded, both contributing the same activity bar entry and racing to
+      # register the same commands.
+      #
+      # So plant what an older install would have left behind, run the setup
+      # program over it the way an upgrade runs, and check both halves: the
+      # stale directory is gone, and the directories "[InstallDelete]" also
+      # matches -- this extension's own, and the bootstrap's -- were put back by
+      # "[Files]" rather than deleted on the way past.
+      - name: Upgrade over a stale extension directory
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE"
+          $extensions = Join-Path $app "resources\app\extensions"
+          $stale = Join-Path $extensions "partcad.partcad-0.8.0"
+          New-Item -ItemType Directory -Path $stale -Force | Out-Null
+          Set-Content -Path (Join-Path $stale "package.json") `
+            -Value '{"name":"partcad","publisher":"PartCAD","version":"0.8.0"}'
+
+          $setup = Get-ChildItem archives -Filter "*setup.exe" | Select-Object -First 1
+          if (-not $setup) { throw "no installer in the artifact" }
+          Start-Process -FilePath $setup.FullName -Wait `
+            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/LOG=upgrade.log"
+          Get-Content upgrade.log -Tail 20
+
+          if (Test-Path $stale) { throw "the upgrade left $stale behind" }
+          if (-not (Get-ChildItem $extensions -Directory | Where-Object { $_.Name -match "^partcad\.partcad-official-\d" })) {
+            throw "the upgrade removed the PartCAD extension instead of replacing it"
+          }
+          if (-not (Get-ChildItem $extensions -Filter "partcad.partcad-ide-bootstrap-*")) {
+            throw "the upgrade removed the PartCAD IDE bootstrap extension instead of replacing it"
+          }
+
       # The same first start as the job above, on the platform where the setup
       # program is the installer: `pc init` in %USERPROFILE%\.partcad\projects\start,
       # and that folder opened as the workspace.

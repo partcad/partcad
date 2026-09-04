@@ -301,6 +301,10 @@ extension's id did change once, from `PartCAD.partcad` to `PartCAD.partcad-offic
 two different ids are two extensions -- both loaded, both contributing the same activity bar entry, both
 registering the same commands. Nothing of the user's is under there: extensions they install go to
 `%USERPROFILE%\.partcad-ide`, and everything in that directory is put back by the file list immediately after.
+The `Install (windows-x86_64)` job in `.github/workflows/build-ide-standalone.yml` is what keeps this honest: it
+plants a stale `partcad.partcad-<version>` directory, runs the setup program over the install the way an upgrade
+runs, and checks both halves -- the stale directory is gone, and the two directories the pattern also matches
+were put back rather than deleted on the way past.
 
 `AppId` in the script is the identity Windows recognizes an upgrade and an uninstall by. It is fixed for the
 life of the product: regenerating it turns the next release into a second application installed beside this
