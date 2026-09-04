@@ -955,21 +955,36 @@ jobs:
           pkill -x pc || true
 
           # Then wait for both to actually be gone. Thirty seconds is far more
-          # than either needs; the point is to fail with something legible if
-          # one of them will not go, rather than to let the removal below fail
-          # on a directory that is still being written to.
-          gone=""
-          for _ in $(seq 30); do
-            if ! pgrep -if "partcad.ide" >/dev/null 2>&1 &&
-               ! pgrep -x pc >/dev/null 2>&1; then
-              gone="yes"
-              break
-            fi
-            sleep 1
-          done
-          if [ -z "${gone}" ]; then
-            echo "::warning::the editor or its daemon was still running 30s after being asked to stop"
+          # than either needs, and reaching the end of it is not a reason to
+          # start removing the tree anyway: something still writing into it is
+          # the entire failure this step exists to avoid, so warning and then
+          # removing regardless would reproduce that failure with its diagnosis
+          # one step further away than it is now.
+          wait_gone() {
+            for _ in $(seq "$1"); do
+              if ! pgrep -if "partcad.ide" >/dev/null 2>&1 &&
+                 ! pgrep -x pc >/dev/null 2>&1; then
+                return 0
+              fi
+              sleep 1
+            done
+            return 1
+          }
+          if ! wait_gone 30; then
+            # SIGTERM was not enough. Nothing here has to shut down cleanly at
+            # this point: the daemon's state lives under `~/.partcad/workspaces`,
+            # outside every tree the uninstall removes, and a socket left behind
+            # by a killed daemon is one the next client probes and replaces
+            # rather than hangs on. So escalate, and wait again.
+            echo "::warning::the editor or its daemon was still running 30s after being asked to stop; killing it"
             ps ax | grep -i -e "partcad.ide" -e "[/ ]pc\b" | grep -v grep || true
+            pkill -9 -if "partcad.ide" || true
+            pkill -9 -x pc || true
+            if ! wait_gone 10; then
+              echo "::error::the editor or its daemon is still running after SIGKILL; refusing to remove a tree that is still being written to"
+              ps ax | grep -i -e "partcad.ide" -e "[/ ]pc\b" | grep -v grep || true
+              exit 1
+            fi
           fi
 
           sh install.sh --uninstall \
