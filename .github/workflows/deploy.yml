@@ -699,9 +699,11 @@ jobs:
           echo "Extension: ${extension}"
           echo "Shim:      ${shim}"
 
-          # Publishes one package to one gallery, and treats "this version is
-          # already there" as done rather than as a failure -- which is what a
-          # re-run of a release is. Matched on the message because neither tool
+          # Publishes one package to one gallery. Three outcomes, because the
+          # caller has to tell them apart: 0 the gallery has this version now
+          # (published, or already there), 1 it does not and that is an error,
+          # 2 it does not because there is no token for it. Treating "already
+          # there" as done is what makes a re-run of a release a no-op. Matched on the message because neither tool
           # gives that its own exit code; should the wording ever move, this job
           # fails loudly instead of skipping quietly, which is the safe
           # direction for such a match to break in.
@@ -713,7 +715,7 @@ jobs:
             if [ -z "${token}" ]; then
               echo "::warning::no token for ${gallery}; ${name} was not published"
               echo "- ${gallery}: skipped, no token -- ${name}" >> "${GITHUB_STEP_SUMMARY}"
-              return 0
+              return 2
             fi
             case "${gallery}" in
             marketplace)
@@ -742,21 +744,50 @@ jobs:
 
           echo "## VS Code extension" >> "${GITHUB_STEP_SUMMARY}"
 
-          # The extension before the shim, in both galleries and without
-          # exception. The shim's only content is an `extensionDependencies` on
-          # the extension, and an editor fails an install whose dependency it
-          # cannot resolve -- so a shim published first is one that breaks the
-          # very installations it exists to carry over, for as long as it takes
-          # the extension to follow. "ide/vscode-shim/AGENTS.md" states the
-          # rule; this is the only place that has to obey it.
-          failed=0
-          publish marketplace "${VSCE_PAT}" "${extension}" || failed=1
-          publish open-vsx "${OVSX_PAT}" "${extension}" || failed=1
-          if [ "${failed}" -ne 0 ]; then
+          # The extension before the shim, and -- the part that is easy to get
+          # wrong -- per gallery rather than overall. The shim's only content is
+          # an `extensionDependencies` on the extension, and an editor fails an
+          # install whose dependency it cannot resolve, so a shim in a gallery
+          # the extension is not in is a package nobody can install. That is
+          # worse than no shim at all: it is what every installation of the old
+          # entry receives. "ide/vscode-shim/AGENTS.md" states the rule; this is
+          # the only place that has to obey it.
+          #
+          # Hence a status per gallery, not one flag for both. The two are
+          # published with tokens that need not be the same -- the shim's
+          # publisher may be a separate account -- so "the extension went to the
+          # Marketplace" says nothing about Open VSX, and a token present for one
+          # package but not the other is exactly how a shim could otherwise
+          # overtake the extension it depends on.
+          marketplace_extension=0
+          publish marketplace "${VSCE_PAT}" "${extension}" || marketplace_extension=$?
+          open_vsx_extension=0
+          publish open-vsx "${OVSX_PAT}" "${extension}" || open_vsx_extension=$?
+          if [ "${marketplace_extension}" -eq 1 ] || [ "${open_vsx_extension}" -eq 1 ]; then
             echo "::error::the extension did not publish; not publishing the shim after it"
             exit 1
           fi
 
-          publish marketplace "${VSCE_PAT_SHIM:-${VSCE_PAT}}" "${shim}" || failed=1
-          publish open-vsx "${OVSX_PAT_SHIM:-${OVSX_PAT}}" "${shim}" || failed=1
+          # Into a gallery that has the extension, and no other. A gallery the
+          # extension was skipped for gets no shim either, and says so.
+          shim_into() {
+            into_gallery="$1"
+            into_extension="$2"
+            into_token="$3"
+            if [ "${into_extension}" -ne 0 ]; then
+              echo "::warning::${into_gallery} did not get the extension; the shim was not published there either"
+              echo "- ${into_gallery}: shim skipped, the extension is not there" >> "${GITHUB_STEP_SUMMARY}"
+              return 0
+            fi
+            into_status=0
+            publish "${into_gallery}" "${into_token}" "${shim}" || into_status=$?
+            if [ "${into_status}" -eq 1 ]; then
+              return 1
+            fi
+            return 0
+          }
+
+          failed=0
+          shim_into marketplace "${marketplace_extension}" "${VSCE_PAT_SHIM:-${VSCE_PAT}}" || failed=1
+          shim_into open-vsx "${open_vsx_extension}" "${OVSX_PAT_SHIM:-${OVSX_PAT}}" || failed=1
           exit "${failed}"
