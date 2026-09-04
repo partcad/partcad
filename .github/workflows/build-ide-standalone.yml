@@ -912,6 +912,80 @@ jobs:
       - name: Uninstall with install.sh
         shell: bash
         run: |
+          # Nothing may still be running out of the tree about to be removed.
+          # The editor and the `pc` daemon it starts both live in it and both
+          # keep writing into it -- logs, workspace state, the directory the
+          # frozen bundle unpacks itself into -- and a file appearing under a
+          # directory while `rm -rf` walks it is how the removal ends in
+          # "Directory not empty" with the directory still there.
+          #
+          # "Start it once" above already signals the editor, from the `trap
+          # diagnose EXIT` in it. That is not enough here for two reasons:
+          # `pkill` returns when the signal has been sent rather than when the
+          # process is gone, so the uninstall starts while Electron is still
+          # shutting down and still writing; and the pattern matches the editor
+          # only, leaving the daemon behind it running. The Windows half of this
+          # workflow has had the shape this needs from the start -- it stops the
+          # editor in a `finally` and then waits for the directory to go -- and
+          # this is the same idea for the half that has an extra process to
+          # stop.
+          #
+          # `pc daemon stop` is per workspace, so it has to run in the one the
+          # IDE opened on its first start rather than in the checkout; from here
+          # it would stop a daemon for this repository, which is not the one
+          # holding the tree open. Asking nicely first, signalling after: a
+          # daemon told to stop closes its socket and removes its own state,
+          # which a signal in the middle of a write does not.
+          #
+          # It is bounded rather than instant -- against a daemon that has itself
+          # stopped answering, this is the CLI's own timeout rather than a hang,
+          # which is what makes it safe to run here at all. The signals below are
+          # sent either way, so a stop that times out still ends with both
+          # processes gone.
+          starter="${HOME}/.partcad/projects/start"
+          if [ -x "${HOME}/partcad-bin/pc" ] && [ -d "${starter}" ]; then
+            (cd "${starter}" && "${HOME}/partcad-bin/pc" --no-ansi daemon stop) || true
+          fi
+          pkill -if "partcad.ide" || true
+          # And the daemon by name, exactly: it is `pc`, as the "Terminate
+          # orphan process: pid (NNNN) (pc)" line at the end of a failed run
+          # says. Whatever `pc daemon stop` did or did not manage, this is what
+          # makes the wait below terminate.
+          pkill -x pc || true
+
+          # Then wait for both to actually be gone. Thirty seconds is far more
+          # than either needs, and reaching the end of it is not a reason to
+          # start removing the tree anyway: something still writing into it is
+          # the entire failure this step exists to avoid, so warning and then
+          # removing regardless would reproduce that failure with its diagnosis
+          # one step further away than it is now.
+          wait_gone() {
+            for _ in $(seq "$1"); do
+              if ! pgrep -if "partcad.ide" >/dev/null 2>&1 &&
+                 ! pgrep -x pc >/dev/null 2>&1; then
+                return 0
+              fi
+              sleep 1
+            done
+            return 1
+          }
+          if ! wait_gone 30; then
+            # SIGTERM was not enough. Nothing here has to shut down cleanly at
+            # this point: the daemon's state lives under `~/.partcad/workspaces`,
+            # outside every tree the uninstall removes, and a socket left behind
+            # by a killed daemon is one the next client probes and replaces
+            # rather than hangs on. So escalate, and wait again.
+            echo "::warning::the editor or its daemon was still running 30s after being asked to stop; killing it"
+            ps ax | grep -i -e "partcad.ide" -e "[/ ]pc\b" | grep -v grep || true
+            pkill -9 -if "partcad.ide" || true
+            pkill -9 -x pc || true
+            if ! wait_gone 10; then
+              echo "::error::the editor or its daemon is still running after SIGKILL; refusing to remove a tree that is still being written to"
+              ps ax | grep -i -e "partcad.ide" -e "[/ ]pc\b" | grep -v grep || true
+              exit 1
+            fi
+          fi
+
           sh install.sh --uninstall \
             --install-dir "${HOME}/partcad-standalone" \
             --bin-dir "${HOME}/partcad-bin" \
