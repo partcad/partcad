@@ -111,7 +111,7 @@ PartCAD ships no solver. The analysis is run by an implementation package,
 declared in a ``cae:`` section exactly as an export or a render implementation is
 declared in its own (see :ref:`cae-section`), and named by the
 ``caeFeaImplementation`` / ``caeCfdImplementation`` user configuration options --
-``//pub/features/cae/calculix:fea`` and ``//pub/features/cae/calculix:cfd`` by
+``//pub/feature/cae/calculix:fea`` and ``//pub/feature/cae/calculix:cfd`` by
 default. ``pc cae fea --implementation`` overrides it for one run, and so does
 the field over the model in the IDE's FEA tab.
 

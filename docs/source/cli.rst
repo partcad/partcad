@@ -271,7 +271,7 @@ Object commands
   analysis) and ``cfd`` (computational fluid dynamics). Both take one part::
 
       pc cae fea :bracket
-      pc cae cfd -i //pub/features/cae/openfoam:cfd :duct
+      pc cae cfd -i //pub/feature/cae/openfoam:cfd :duct
 
   The part says what it is held by and what it carries, in a section named after the analysis. ``fix:`` names
   what is held still — a list of interface types, or a map from an interface type to the instances of it that
@@ -305,8 +305,8 @@ Object commands
   one, so it can be used as a gate.
 
   Who runs the analysis is ``<package>:<file type>``. It defaults to the ``caeFeaImplementation`` /
-  ``caeCfdImplementation`` :doc:`user configuration <configuration>` options — ``//pub/features/cae/calculix:fea``
-  and ``//pub/features/cae/calculix:cfd`` — and ``-i``/``--implementation`` overrides it for one run. PartCAD
+  ``caeCfdImplementation`` :doc:`user configuration <configuration>` options — ``//pub/feature/cae/calculix:fea``
+  and ``//pub/feature/cae/calculix:cfd`` — and ``-i``/``--implementation`` overrides it for one run. PartCAD
   ships no solver: an implementation is a package like any other, declared in a ``cae:`` section exactly as an
   export or a render implementation is declared in its own (see :ref:`output-files`), and installed as a
   dependency.

@@ -1,0 +1,129 @@
+# The CalculiX implementations of PartCAD's two engineering analyses.
+#
+# The structure is identical to `//builtin/export` and `//builtin/render` -- see
+# `docs/source/configuration.rst` in the `partcad` repository for what each field
+# means. The only difference is which section they are declared in: `cae:` rather
+# than `export:` or `render:`, which is what makes them analyses rather than
+# output formats.
+#
+# A `cae:` file type differs from those two in exactly three ways, and all three
+# are visible below:
+#
+#   * `extension:` is required. Which model format an analysis writes is the
+#     implementation's decision -- PartCAD has no default to fall back on, and
+#     guessing would put a name on a file whose contents are something else.
+#     Both of these write binary glTF, because the result is a 3D field and glTF
+#     is what the PartCAD Viewer turns and zooms.
+#   * The implementation is handed the part's boundary conditions: `analysis`,
+#     `fix`, `load` (in newtons, always) and `boundary` -- the ports each
+#     condition landed on, with their locations.
+#   * It answers with `findings` beside `success`: the JSON array of what the
+#     analysis has to say about the part. An empty one is a pass, and is what
+#     `pc test` requires.
+
+name: //pub/feature/cae/calculix
+desc: |
+  Finite element and fluid dynamics analysis, by
+  [CalculiX](https://www.calculix.de/).
+
+  `pc cae fea` and `pc cae cfd` run these two by default. The part says what
+  holds it and what it carries; this package meshes it, hands the mesh to
+  CalculiX, and reports back a coloured result model and a list of findings.
+
+# What both scripts import. Declared for the package rather than repeated on each
+# file type, because it is the same pipeline underneath both of them: mesh with
+# gmsh, write a CalculiX deck, run `ccx`, read the `.frd`, write a glTF.
+#
+# `ccx` itself is NOT here. It is a native executable rather than a Python
+# package, and pip cannot install it -- see README.md for how to get one.
+pythonRequirements:
+  - gmsh==4.15.0
+  - numpy==2.4.0
+  - trimesh==4.9.1
+
+cae:
+  fea:
+    desc: A linear static stress analysis, as a coloured glTF plus findings.
+    path: fea_calculix.py
+    extension: glb
+
+    # Every field below is a parameter of this implementation, handed to the
+    # script as it stands. A package re-tunes any of them in a `cae:` section of
+    # its own, and one object overrides them again in its own.
+
+    # How fine the mesh is, as a fraction of the part's largest dimension. The
+    # default is coarse on purpose: a first answer that arrives is worth more
+    # than a better one that does not, and a part whose answer is marginal is
+    # exactly the part worth re-running at 0.02.
+    mesh_size: 0.05
+    # Second-order tetrahedra (C3D10). First-order ones (C3D4) are far too stiff
+    # in bending, which is the loading almost every bracket sees, so they are not
+    # offered as a parameter -- they would silently under-report deflection.
+    mesh_order: 2
+
+    # The material, when the part does not name one PartCAD can resolve. Steel,
+    # because a part with no stated material is a part nobody has thought about
+    # yet, and answering it as steel is the answer least likely to be flattering.
+    #
+    # `youngs_modulus` and `yield_strength` are in pascals, `poissons_ratio` is
+    # dimensionless, `density` is kg/m^3.
+    #
+    # Note the `+` in the exponents. YAML 1.1 wants both a decimal point and a
+    # *signed* exponent before it will read a number in this form as a number:
+    # `2.5e8` parses as the string "2.5e8" and would reach the script as one.
+    # Every parameter here is coerced on the way in anyway, so a package that
+    # gets this wrong still works -- but a configuration should mean what it
+    # looks like it means.
+    youngs_modulus: 2.1e+11
+    poissons_ratio: 0.30
+    yield_strength: 2.5e+8
+    density: 7850
+
+    # What counts as a finding. `safety_factor` is what the yield strength is
+    # divided by before the stress is compared against it, so 1.5 reports a part
+    # that reaches two thirds of yield. `max_displacement` is in millimetres and
+    # is reported separately: a part can be nowhere near yielding and still be
+    # useless because it moves.
+    safety_factor: 1.5
+    max_displacement: 1.0
+
+    # Whether gravity acts on the part as well as the declared loads. On,
+    # because a load declared as a mass is a thing being carried and the part
+    # carrying it weighs something too.
+    self_weight: true
+
+    # How far from a port a mesh node may be and still belong to it, as a
+    # fraction of the part's largest dimension. This is what turns "held at the
+    # m3-screw interface" into a set of nodes: the ports are coordinate frames,
+    # not faces, so the nodes near one are what the boundary condition is
+    # applied to.
+    port_radius: 0.05
+
+  cfd:
+    desc: An incompressible flow analysis of the part as a fluid volume.
+    path: cfd_calculix.py
+    extension: glb
+
+    # See `fea` above for the meshing parameters.
+    mesh_size: 0.05
+    # First order here, and deliberately: CalculiX's CFD solver takes linear
+    # elements (F3D4) and nothing else.
+    mesh_order: 1
+
+    # The fluid. Air at 20 degrees; `density` is kg/m^3 and `viscosity` is the
+    # dynamic viscosity in Pa*s. See the note on exponents under `fea` above.
+    density: 1.204
+    viscosity: 1.82e-5
+
+    # How long the transient runs, and in what steps, both in seconds. CalculiX
+    # solves incompressible flow transiently and is marched to a steady state
+    # rather than asked for one.
+    duration: 1.0
+    time_step: 0.01
+
+    # What counts as a finding: a velocity or a pressure drop past which the
+    # geometry is not doing what it was meant to. Metres per second and pascals.
+    max_velocity: 50.0
+    max_pressure_drop: 5000.0
+
+    port_radius: 0.05

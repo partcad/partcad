@@ -351,8 +351,8 @@ SECTION_PATHS = (
 # solver is a large third-party program, and which one to run is the user's
 # decision (see the 'caeFeaImplementation' option below).
 DEFAULT_CAE_IMPLEMENTATIONS = {
-    "fea": "//pub/features/cae/calculix:fea",
-    "cfd": "//pub/features/cae/calculix:cfd",
+    "fea": "//pub/feature/cae/calculix:fea",
+    "cfd": "//pub/feature/cae/calculix:cfd",
 }
 
 
@@ -944,13 +944,13 @@ class UserConfig(vyper.Vyper):
         # description: which implementation runs "pc cae fea", as
         #              "<package>:<file type>"
         # values: <string>
-        # default: //pub/features/cae/calculix:fea
+        # default: //pub/feature/cae/calculix:fea
         #
         # option: caeCfdImplementation
         # description: which implementation runs "pc cae cfd", as
         #              "<package>:<file type>"
         # values: <string>
-        # default: //pub/features/cae/calculix:cfd
+        # default: //pub/feature/cae/calculix:cfd
         #
         # PartCAD ships no solver, so unlike every export and render format
         # there is no built-in implementation for these two to fall back on -
@@ -960,8 +960,18 @@ class UserConfig(vyper.Vyper):
         # installed, which one is licensed, which one this shop trusts. A run
         # overrides it with "pc cae fea --implementation", and the IDE's FEA tab
         # with the field over the model.
+        #
+        # Defaulted here rather than only on the attribute, so that the resolved
+        # value travels to the daemon like every other option: a key missing
+        # from the copy is a key the daemon resolves from its own environment,
+        # which is exactly what sending the configuration is meant to stop.
+        self.set_default("caeFeaImplementation", DEFAULT_CAE_IMPLEMENTATIONS["fea"])
+        self.set_default("caeCfdImplementation", DEFAULT_CAE_IMPLEMENTATIONS["cfd"])
         self.bind_env("caeFeaImplementation", "PC_CAE_FEA_IMPLEMENTATION")
         self.bind_env("caeCfdImplementation", "PC_CAE_CFD_IMPLEMENTATION")
+        # The 'or' still stands: a configuration file may carry the key with
+        # nothing under it, and an analysis with no implementation at all is a
+        # worse answer than the default one.
         self.cae_fea_implementation = self.get_string("caeFeaImplementation") or DEFAULT_CAE_IMPLEMENTATIONS["fea"]
         self.cae_cfd_implementation = self.get_string("caeCfdImplementation") or DEFAULT_CAE_IMPLEMENTATIONS["cfd"]
 
