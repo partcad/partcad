@@ -175,7 +175,14 @@ def test_only_the_root_dependency_files_are_dependencies(tmp_path, path):
         ("docs/source/contributing.rst", "docs"),
         ("README.md", "docs"),
         ("src/partcad/AGENTS.md", "docs"),
+        # ... but only where no earlier directory rule claims them. "AGENTS.md"
+        # is matched ahead of the source directories and behind everything above
+        # those, so it is documentation beside a package's code and nothing of
+        # the sort inside CI, the plugin or the extension.
         ("ide/vscode/AGENTS.md", "vscode"),
+        (".github/AGENTS.md", "ci"),
+        ("ai-agents/AGENTS.md", "ai"),
+        (".devcontainer/AGENTS.md", "devcontainer"),
         (".claude/skills/steward/SKILL.md", "docs"),
         ("openspec/whatever.md", "docs"),
         # The Claude Code plugin, which is Markdown that ships.

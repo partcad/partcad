@@ -813,12 +813,21 @@ and turns each subject on or off:
    * - ``.github/``
      - everything, this being the thing that decides what runs
 
-**The rows are matched in order, and a directory's row beats the extension row above it.** That is what the
-first row's qualifier is about: ``ai-agents/skills/render/SKILL.md`` is the plugin, not prose about it, and
-``examples/feature_render/README.md`` is what ``pc render -r`` wrote and the ``Examples (PartCAD)`` job
-compares against a fresh render. Both are Markdown and neither is documentation. The exception to the
-exception is ``AGENTS.md`` and ``CLAUDE.md``, which are documentation wherever they sit -- this repository
-keeps a package's own under ``src/`` -- so they are named before the source directories rather than after.
+**The table above is grouped by subject, for reading. The classifier is an ordered list of rules and the first
+one that matches a path wins**, and the two orders are not the same -- ``.github/`` is the last row here and
+the first rule there. What matters is the shape of that list: every rule that names a *directory* comes before
+every rule that matches by *extension*.
+
+So a Markdown file belongs to whatever directory claims it first. ``ai-agents/skills/render/SKILL.md`` is the
+plugin rather than prose about it, and ``examples/feature_render/README.md`` is what ``pc render -r`` wrote and
+what the ``Examples (PartCAD)`` job compares against a fresh render; neither is documentation.
+
+``AGENTS.md`` and ``CLAUDE.md`` are matched ahead of the *source* directories, which is why
+``src/partcad/AGENTS.md`` is documentation -- this repository keeps a package's own beside its code. They are
+not matched ahead of the directories above those, so they are **not** documentation wherever they sit:
+``.github/AGENTS.md`` is CI, ``ai-agents/AGENTS.md`` is the plugin, and ``ide/vscode/AGENTS.md`` belongs to the
+extension. If you are adding a rule, its position in that list is the decision; ``.github/actions/changed-scopes``
+carries the list in order, and ``tests/dev_tools/test_changed_scopes.py`` pins these cases.
 
 Two of those rows are the same distinction from either side, and it is the only place a source change and a
 dependency change are treated differently. Freezing is the most expensive thing this repository does -- ~500MB
