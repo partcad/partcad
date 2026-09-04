@@ -697,28 +697,167 @@ maintainers, following are related GH docs:
 
 .. _deep-test:
 
-Running the full test matrix
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+How much CI a change runs
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
-CI fans out over operating systems, and a pull request does not pay for all of them. By default it drops both
-Ubuntu 22.04 images and the second macOS, which is most of the cost -- macOS minutes bill at ten times the
-Linux rate. What stays is Ubuntu 24.04 on x86_64 and arm64, both Windows images, and one macOS.
+Two questions decide it, and they are asked separately: **how deep** the matrix goes, and **which jobs** the
+change can say anything about at all.
 
-The full matrix runs on the nightly schedule, on a manual workflow run, and on a push, which includes the
-release. A push to ``devel`` is the exception: it runs no matrix at all unless its head commit message starts
-with ``Version updated``, which is the release commit. That exception applies to pushes and to nothing else --
-the nightly run has no head commit to read a message from, so the guard leads with the event name and lets
-every other trigger through. It did not, from the day the guard was written until 0.8.32, and the nightly was
-skipped every night in between: if you change that condition, keep the event-name clause first.
-To run it on a pull request before it merges, put ``#deepTest`` anywhere in the pull request title or
-description and re-run the checks. Worth doing when the change touches packaging, dependencies, the standalone
-bundle or the snap, or anything else where an older OS version could behave differently.
+Depth: three tiers
 
-The ``Standalone`` workflow reads the same marker: without it, a pull request builds four of the seven
-standalone bundles -- it drops both Ubuntu 22.04 images and macOS on x86_64, whose runner bills at the same ten
-times the Linux rate. The ``IDE`` workflow reads it too, for the one IDE whose command line bundle is
-deep-only: the Intel macOS application is built and installed on a deep run and on no other. A release always
-builds all seven bundles and all four IDEs, and refuses to publish if any is missing.
+
+CI fans out over operating systems, and a pull request does not pay for all of them.
+
+``pr``
+    What a pull request runs on every push to it. The oldest and the newest supported Python, with nothing
+    in between, and every image except macOS -- whose runners bill at ten times the Linux rate, and which no
+    standalone bundle or IDE is built for here either. **Both Windows images stay.** Windows is not a second
+    macOS to economise on: its path separator, drive letters and line endings are a standing source of
+    breakage in code written on Linux, so it is the platform a pull request most needs.
+
+``queue``
+    What the merge queue runs, which is what a pull request used to: every current image, macOS included, and
+    the full Python range. Nothing reaches ``devel`` without having passed this, so the coverage a pull request
+    drops is coverage the commit still has to earn -- one run per merge instead of one per push.
+
+``deep``
+    Everything, the older OS versions included: the nightly schedule, a manual workflow run, and any push,
+    which includes the release. On a pull request, put ``#deepTest`` anywhere in the title or the description
+    and re-run the checks. Worth doing when the change touches packaging, dependencies, the standalone bundle
+    or the snap, or anything else where an older OS version could behave differently. It runs exactly what it
+    always ran -- it is unaffected by everything on this page.
+
+    .. note::
+
+       The marker is matched as a plain substring, so a pull request that merely *mentions* it -- one editing
+       this page, say -- opts itself in and runs the full matrix. That is deliberate: a matcher clever enough
+       to tell a marker from a mention is a rule you would have to know before your opt-in worked, and
+       over-running is the safe direction. If a description has to name the marker without asking for it,
+       write it split across two code spans.
+
+A push to ``devel`` is the exception to all three: it runs no matrix at all unless its head commit message
+starts with ``Version updated``, which is the release commit. That exception applies to pushes and to nothing
+else -- the nightly run has no head commit to read a message from, so the guard leads with the event name and
+lets every other trigger through. It did not, from the day the guard was written until 0.8.32, and the nightly
+was skipped every night in between: if you change that condition, keep the event-name clause first.
+
+The ``Standalone`` workflow reads the same tiers, job by job:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 26 26 26
+
+   * - Job
+     - ``pr``
+     - ``queue``
+     - ``deep``
+   * - ``Build``
+     - 3 bundles (no macOS)
+     - 4 bundles
+     - all 7
+   * - ``Install``
+     - 2 (every bundle ``install.sh`` can install)
+     - 4 (adds the macOS bundle on the *next* macOS)
+     - 8
+   * - ``Snap``
+     - 1 (amd64)
+     - not run
+     - 2, on a ``devel`` push or a dispatch
+   * - ``Examples via bundle``
+     - 2 (the ``PartCAD`` suite only)
+     - not run
+     - 6
+
+``Snap`` and ``Examples`` have always been skipped in the merge queue and on the release path -- nothing
+downstream consumes a snap, and the deterministic ``Build`` and ``Install`` jobs are what gate a release. What
+is new is that a pull request packs one snap rather than two (the recipe is one file and the two jobs run it
+over payloads ``Build`` and ``Install`` have already exercised, at ~45 minutes of squashing each), and that the
+``All`` example suite -- ``continue-on-error``, because the public index carries packages this repository
+cannot fix -- is left to deep runs.
+
+The ``IDE`` workflow follows the same tiers, because each IDE carries a bundle: no macOS IDE on a pull request,
+the Intel macOS one on a deep run only. A release always builds all seven bundles and all four IDEs, and
+refuses to publish if any is missing.
+
+Scope: what the change touches
+
+
+Depth decides how wide a job fans out. Scope decides whether it runs at all, and it applies to the merge queue
+exactly as it does to a pull request. ``.github/actions/changed-scopes`` sorts the changed files into buckets
+and turns each subject on or off:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - A change touching only...
+     - runs
+   * - ``docs/``, ``.claude/``, ``openspec/``, and any ``*.md`` or ``*.rst`` no row below claims
+     - ``Documentation``
+   * - ``ai-agents/``, ``.claude-plugin/``
+     - ``Claude Code plugin``
+   * - ``.devcontainer/``
+     - the ``CI-Dev`` container, ``Run: behave`` and ``Run: pc`` -- but not ``Run: pytest``
+   * - ``ide/vscode/``, ``ide/vscode-shim/``
+     - ``npm test``, ``VS Code extension``, ``IDE``
+   * - ``ide/standalone/``, ``.vscode/``
+     - ``IDE``
+   * - ``dev-tools/pyinstaller/``, ``dev-tools/snap/``, ``.snapcraft.yaml``, ``install.sh``
+     - ``Standalone``, ``IDE``
+   * - ``pyproject.toml``, ``poetry.lock``, root ``requirements*``
+     - the tests, the wheel **and** ``Standalone``
+   * - ``src/``, ``tests/``, ``features/``, ``examples/``, ``cad/``, ``tools/``, ``dev-tools/``
+     - the tests and the wheel, but **not** ``Standalone``
+   * - anything else
+     - all of the above, ``Standalone`` included
+   * - ``.github/``
+     - everything, this being the thing that decides what runs
+
+**The table above is grouped by subject, for reading. The classifier is an ordered list of rules and the first
+one that matches a path wins**, and the two orders are not the same -- ``.github/`` is the last row here and
+the first rule there. What matters is the shape of that list: every rule that names a *directory* comes before
+every rule that matches by *extension*.
+
+So a Markdown file belongs to whatever directory claims it first. ``ai-agents/skills/render/SKILL.md`` is the
+plugin rather than prose about it, and ``examples/feature_render/README.md`` is what ``pc render -r`` wrote and
+what the ``Examples (PartCAD)`` job compares against a fresh render; neither is documentation.
+
+``AGENTS.md`` and ``CLAUDE.md`` are matched ahead of the *source* directories, which is why
+``src/partcad/AGENTS.md`` is documentation -- this repository keeps a package's own beside its code. They are
+not matched ahead of the directories above those, so they are **not** documentation wherever they sit:
+``.github/AGENTS.md`` is CI, ``ai-agents/AGENTS.md`` is the plugin, and ``ide/vscode/AGENTS.md`` belongs to the
+extension. If you are adding a rule, its position in that list is the decision; ``.github/actions/changed-scopes``
+carries the list in order, and ``tests/dev_tools/test_changed_scopes.py`` pins these cases.
+
+Two of those rows are the same distinction from either side, and it is the only place a source change and a
+dependency change are treated differently. Freezing is the most expensive thing this repository does -- ~500MB
+of OpenCASCADE per runner -- and what makes a frozen bundle differ from a working wheel is nearly always what
+went *into* it: a dependency shipping a data file PyInstaller cannot see, a new transitive import, a wheel with
+no build for one platform. So a dependency change freezes and a change to ``src/`` alone does not.
+
+That is a trade rather than a fact. A source change *can* break the freeze -- a lazily imported module, a file
+read relative to ``__file__``; ``dev-tools/pyinstaller/README.md`` has the list -- and that is now found on the
+push to ``devel`` after the merge rather than on the pull request. The push trigger of ``build-standalone.yml``
+still lists ``src/**`` for exactly this, a release still refuses to publish with a platform missing, and
+``#deepTest`` still builds the whole set before a merge for a change that warrants it. Note also which way the
+last row falls: an unclassified path counts as **both** source and dependency, so a bundle is skipped only for
+a directory somebody has named as source.
+
+Two properties are worth knowing before you edit that list. It is **fail-safe**: a path it has not been taught
+counts as both source and a dependency, so it runs everything a source change runs, the standalone bundles
+included, and a new directory can only ever run too much. It does not turn on the four subjects that only their
+own directory turns on -- the documentation, the extension, the IDE, the plugin -- and that is not a gap: each
+is built from one fixed directory, so a path outside them cannot change what they contain. And it is a job
+condition rather than a ``paths:`` filter on the trigger, deliberately -- ``merge_group`` supports no ``paths:``
+filter at all, so a trigger-level list is one the merge queue ignores; and a workflow skipped by ``paths:``
+never creates the check run that a *required* check waits for, while a job skipped by a condition reports
+``skipped``, which counts as passing.
+
+``.devcontainer`` is the one entry that is a judgement rather than a mechanism. ``Run: pytest`` in ``CI-Dev``
+is the ``Pytest`` matrix over again on one image and one interpreter, and a change to the container's
+configuration cannot make the unit tests disagree with what that matrix already said. What it can break is
+whether anything works inside the container at all, and ``Run: behave`` and ``Run: pc`` -- which drive the
+command line end to end, in the container -- are the jobs that ask that.
 
 Both workflows install each macOS artifact on macOS 15 *and* on macOS 26, because there is one macOS build per
 architecture and it is frozen on the older release -- so "a bundle runs on the OS it was built on and

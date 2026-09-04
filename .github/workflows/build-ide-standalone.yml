@@ -20,8 +20,14 @@ on:
   merge_group:
   # Not on every change: this builds the standalone command line bundles first,
   # to put them inside the IDE, and those pull ~500MB of OpenCASCADE per runner.
-  # Only the changes that can alter what ships. The two lists are duplicated
-  # because GitHub Actions does not support YAML anchors.
+  # Only the changes that can alter what ships.
+  #
+  # On a push that is a "paths:" filter and stays one. On a pull request it is
+  # the "set-matrix" job's gate instead, for the two reasons
+  # "build-standalone.yml" sets out beside its own trigger: "merge_group"
+  # supports no "paths:" filter, so this workflow used to build three IDEs in the
+  # queue for a change to a README; and a workflow skipped by "paths:" never
+  # creates the check run a required check waits for, while a skipped job does.
   push:
     branches: ["devel"]
     paths:
@@ -32,12 +38,6 @@ on:
       - ".github/workflows/build-ide-standalone.yml"
   pull_request:
     branches: ["main", "devel"]
-    paths:
-      - "ide/standalone/**"
-      - "ide/vscode/**"
-      - ".vscode/extensions.json"
-      - "install.sh"
-      - ".github/workflows/build-ide-standalone.yml"
 
 # `actions: read` is what lets the "build" job list and download the artifacts
 # of *another* workflow run -- the sibling "Standalone" run that froze the
@@ -138,6 +138,10 @@ jobs:
     outputs:
       build: ${{ steps.set-matrix.outputs.build }}
       install: ${{ steps.set-matrix.outputs.install }}
+      # Whether this change can alter what the IDE ships. Every job below needs
+      # this one, so this is the whole workflow's gate. See
+      # ".github/actions/changed-scopes".
+      ide: ${{ steps.scope.outputs.ide }}
     steps:
       - uses: actions/checkout@v7
 
@@ -145,10 +149,17 @@ jobs:
         id: depth
         uses: ./.github/actions/test-depth
 
+      - name: Decide what the change touches
+        id: scope
+        uses: ./.github/actions/changed-scopes
+        with:
+          deep: ${{ steps.depth.outputs.deep }}
+
       - name: Set matrix
         id: set-matrix
         env:
           DEEP: ${{ steps.depth.outputs.deep }}
+          QUEUE: ${{ steps.depth.outputs.queue }}
         run: |
           if [ "${DEEP}" = "true" ]; then
             platforms=$(jq -cn --argjson core '${{ env.IDE_CORE }}' --argjson deep '${{ env.IDE_DEEP }}' '$core + $deep')
@@ -156,6 +167,15 @@ jobs:
           else
             platforms='${{ env.IDE_CORE }}'
             forward='${{ env.IDE_INSTALL_FORWARD_CORE }}'
+          fi
+          # A pull request builds no macOS IDE, matching "build-standalone.yml",
+          # which freezes no macOS bundle for one -- so asking for the macOS IDE
+          # here on a reduced run would be asking to unpack a bundle that nothing
+          # built. Restored by the merge queue and by "#deepTest".
+          if [ "${QUEUE}" != "true" ]; then
+            drop_macos='map(select(.os | startswith("macos") | not))'
+            platforms=$(jq -c "${drop_macos}" <<<"${platforms}")
+            forward=$(jq -c "${drop_macos}" <<<"${forward}")
           fi
           echo "Platforms: ${platforms}"
           echo 'build={"include": '"${platforms}"'}' >> "${GITHUB_OUTPUT}"
@@ -186,6 +206,8 @@ jobs:
   # of building does.
   tools:
     name: "Build tooling"
+    needs: set-matrix
+    if: ${{ needs.set-matrix.outputs.ide == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -255,6 +277,8 @@ jobs:
   # need, and the step inside it costs seconds when there is nothing to look up.
   bundles:
     name: "Command line tools"
+    needs: set-matrix
+    if: ${{ needs.set-matrix.outputs.ide == 'true' }}
     runs-on: ubuntu-latest
     # Long enough to sit out a whole "Standalone" run. The freeze itself is
     # ~35 minutes; the install, snap and examples jobs after it have taken the
@@ -273,6 +297,12 @@ jobs:
       # bare "Artifact not found" an unpacked editor later.
       artifacts: ${{ steps.resolve.outputs.artifacts }}
     steps:
+      # Note that a sibling run is no longer guaranteed even in the merge queue.
+      # "build-standalone.yml" is gated on what the change touches now, so a
+      # change to "ide/standalone" alone -- which is not a change to what gets
+      # frozen -- leaves this commit with no "Standalone" run anywhere. That is
+      # the case the base-branch fallback below was written for; what it costs is
+      # GRACE_SECONDS of waiting to establish that there is nothing to wait for.
       - name: Find the "Standalone" run that built the bundles
         id: resolve
         # `toJSON` rather than `inputs.tools_in_this_run == true`. Outside

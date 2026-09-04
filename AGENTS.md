@@ -199,12 +199,41 @@ poetry run pytest tests cad/freecad \
 poetry run behave                                                                        # integration tests (./features)
 ```
 
-CI fans these out over operating systems, and a pull request runs a reduced matrix: both Ubuntu 22.04 images
-and the second macOS are dropped. The full matrix runs nightly, on a manual dispatch, on a push, and on a
-pull request whose title or description contains `#deepTest`. `.github/actions/test-depth` is the one place
-that decides; `docs/source/contributing.rst` explains it to contributors. Note that a push to `devel` runs no
-matrix at all unless its head commit message starts with `Version updated` — the `set-matrix` job, and every
-job that depends on it, is skipped otherwise.
+CI fans these out over operating systems, and how much of that fan-out a run gets is decided in two places,
+which answer two different questions.
+
+`.github/actions/test-depth` answers **how deep**, in three tiers. A pull request gets `pr`: every image
+except macOS, and the oldest and newest supported Python only. Both Windows images stay on every tier and
+that is deliberate — Windows is where a path separator written on Linux goes wrong, so it is the platform a
+pull request most needs, not the one to economise on. The merge queue gets `queue`, which is what a pull
+request used to get — every current image, macOS included, and the full Python range — so the coverage a
+pull request drops is coverage the commit still earns before it lands, once per merge rather than once per
+push. Everything else gets `deep`: the nightly schedule, a manual dispatch, any push, and a pull request
+whose title or description contains `#deepTest`. `#deepTest` runs exactly what it ran before any of this
+existed.
+
+`.github/actions/changed-scopes` answers **which jobs at all**, by sorting the changed files into buckets: a
+documentation-only change runs the documentation build and nothing else, an `ai-agents/` change runs the
+Claude Code plugin, a `.devcontainer/` change runs the container's behave and `pc` jobs but not its pytest.
+It is fail-safe — a path it does not recognise counts as both source and a dependency, so it runs everything a source change runs, the standalone bundles included. It does not turn on the four subjects that only their own directory turns on (the documentation, the extension, the IDE, the plugin), and that is not a gap: each is built from one fixed directory, so a path outside them cannot change what they contain —
+and it is a job condition rather than a `paths:` filter, because `merge_group` supports no `paths:` filter
+(so a trigger-level list is one the merge queue ignores, which is how a README typo used to freeze four
+standalone bundles in the queue) and because a workflow skipped by `paths:` never creates the check run a
+*required* check waits for, while a skipped job reports `skipped`, which counts as passing. Do not move these
+gates back onto the triggers.
+
+One bucket boundary in there is a deliberate trade rather than a fact, and it is the standalone bundles.
+`Standalone` is gated on **dependencies** (`pyproject.toml`, `poetry.lock`, root `requirements*`) and on
+`dev-tools/pyinstaller/`, `dev-tools/snap/`, `.snapcraft.yaml` and `install.sh` — not on `src/**`. Freezing
+is the most expensive thing here, and what makes a bundle differ from a working wheel is nearly always what
+went into it. A source change *can* break the freeze all the same (see `dev-tools/pyinstaller/README.md`),
+and the safety net for that is the push trigger of `build-standalone.yml`, which still lists `src/**` and
+fires on the push to `devel` after the merge — do not remove it, it is now the only thing that builds a
+bundle for a source change short of `#deepTest`.
+
+`docs/source/contributing.rst` explains both to contributors. Note that a push to `devel` runs no matrix at
+all unless its head commit message starts with `Version updated` — the `set-matrix` job, and every job that
+depends on it, is skipped otherwise.
 
 **Neither gate trusts pytest's exit code.** On Windows it disagrees with the run in both directions — exit `0`
 with a test having failed (which is what #444 was written for), and exit `127` after a session where every test

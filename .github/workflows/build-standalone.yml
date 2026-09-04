@@ -27,10 +27,12 @@ on:
         default: true
   merge_group:
   # Freezing pulls ~500MB of OpenCASCADE per runner, so this does not run on
-  # every change: only on the ones that can change what is frozen. The two
-  # lists are duplicated because GitHub Actions does not support YAML anchors.
-  # "main" is absent on purpose: a push there runs "deploy.yml", which calls
-  # this workflow itself. Listing it here would build everything twice.
+  # every change: only on the ones that can change what is frozen.
+  #
+  # On a push that is a "paths:" filter, and it stays one -- a push is a single
+  # commit on a branch, which is exactly what the filter was designed for.
+  # "main" is absent on purpose: a push there runs "deploy.yml", which calls this
+  # workflow itself. Listing it here would build everything twice.
   #
   # Both "snap/**" and ".snapcraft.yaml" are listed. The recipe lives at the
   # root, but snapcraft still reads assets -- hooks, gui, keys -- from "snap/".
@@ -48,18 +50,20 @@ on:
       - "src/**"
       - "pyproject.toml"
       - "requirements*.txt"
+  # A pull request carries no "paths:" filter any more, and that is not the same
+  # as running on everything -- the filtering moved into the "build" job below,
+  # where the merge queue obeys it too.
+  #
+  # It had to move. "merge_group" supports no "paths:" filter at all: GitHub
+  # filters that event on branches only. So the list above governed the pull
+  # request and then stopped governing anything the moment the same commit
+  # entered the queue, where this workflow froze four bundles for a change to a
+  # README. The second reason is required checks: a workflow skipped by a
+  # "paths:" filter creates no check run, and a required check that is never
+  # created leaves a pull request waiting forever, while a job skipped by an
+  # "if:" reports "skipped", which counts as passing.
   pull_request:
     branches: ["main", "devel"]
-    paths:
-      - "dev-tools/pyinstaller/**"
-      - "dev-tools/snap/**"
-      - ".snapcraft.yaml"
-      - "snap/**"
-      - "install.sh"
-      - ".github/workflows/build-standalone.yml"
-      - "src/**"
-      - "pyproject.toml"
-      - "requirements*.txt"
 
 permissions:
   contents: read
@@ -223,6 +227,22 @@ env:
     {"os": "ubuntu-22.04-arm", "platform": "ubuntu-22.04-arm64"},
     {"os": "macos-15-intel", "platform": "macos-15-x86_64"}]
 
+  # Which architectures the snap is packed for. Both on a deep run and on a push
+  # to "devel"; amd64 alone on a pull request.
+  #
+  # The snap is not published yet -- it is a build artifact of this workflow, and
+  # "deploy.yml" attaches the bundles rather than the snaps -- so what these jobs
+  # prove is that the recipe still wraps a bundle and that the wrapped bundle
+  # still starts. That property does not differ by architecture: the recipe is
+  # one file, the two jobs run it over two payloads whose difference the "Build"
+  # and "Install" jobs above have already exercised, and each is ~45 minutes of
+  # squashing ~875MB. So a pull request packs one and the push that follows the
+  # merge packs both.
+  SNAP_CORE: >-
+    [{"os": "ubuntu-24.04", "arch": "amd64", "bundle": "ubuntu-24.04-x86_64"}]
+  SNAP_QUEUE_ONLY: >-
+    [{"os": "ubuntu-24.04-arm", "arch": "arm64", "bundle": "ubuntu-24.04-arm64"}]
+
   # Extra "Install" legs: a bundle run on a runner that did not build it.
   #
   # Every platform this run froze is installed on the image that froze it -- the
@@ -288,6 +308,11 @@ jobs:
       build: ${{ steps.set-matrix.outputs.build }}
       install: ${{ steps.set-matrix.outputs.install }}
       examples: ${{ steps.set-matrix.outputs.examples }}
+      snap: ${{ steps.set-matrix.outputs.snap }}
+      # Whether this change can alter what gets frozen at all. See
+      # ".github/actions/changed-scopes"; the note on "pull_request" above says
+      # why the answer lives here rather than in a "paths:" filter.
+      bundle: ${{ steps.scope.outputs.bundle }}
     steps:
       - uses: actions/checkout@v7
 
@@ -295,11 +320,19 @@ jobs:
         id: depth
         uses: ./.github/actions/test-depth
 
+      - name: Decide what the change touches
+        id: scope
+        uses: ./.github/actions/changed-scopes
+        with:
+          deep: ${{ steps.depth.outputs.deep }}
+
       - name: Set matrix
         id: set-matrix
         env:
           DEEP: ${{ steps.depth.outputs.deep }}
+          QUEUE: ${{ steps.depth.outputs.queue }}
         run: |
+          snap='${{ env.SNAP_CORE }}'
           if [ "${DEEP}" = "true" ]; then
             platforms=$(jq -cn --argjson core '${{ env.PLATFORMS_CORE }}' --argjson deep '${{ env.PLATFORMS_DEEP }}' '$core + $deep')
             forward=$(jq -cn --argjson core '${{ env.INSTALL_FORWARD_CORE }}' --argjson deep '${{ env.INSTALL_FORWARD_DEEP }}' '$core + $deep')
@@ -308,6 +341,34 @@ jobs:
             platforms='${{ env.PLATFORMS_CORE }}'
             forward='${{ env.INSTALL_FORWARD_CORE }}'
             examples='${{ env.EXAMPLES_CORE }}'
+          fi
+          if [ "${QUEUE}" = "true" ]; then
+            snap=$(jq -cn --argjson core "${snap}" --argjson rest '${{ env.SNAP_QUEUE_ONLY }}' '$core + $rest')
+          fi
+          # A pull request freezes no macOS bundle. This is the most expensive
+          # leg in the file -- a ~35 minute freeze on a runner that bills at 10x,
+          # and then the same again for the two "Examples" suites that run
+          # through it -- and it is the one nothing else in a pull request pays
+          # for twice. The merge queue restores it, so no macOS bundle reaches a
+          # release, or even the "devel" branch, unbuilt; "#deepTest" restores it
+          # on the pull request itself.
+          #
+          # Selected by "os" rather than by a list of names, so a macOS image
+          # added to any of the three lists above is covered without a fourth
+          # list having to be remembered.
+          if [ "${QUEUE}" != "true" ]; then
+            drop_macos='map(select(.os | startswith("macos") | not))'
+            platforms=$(jq -c "${drop_macos}" <<<"${platforms}")
+            forward=$(jq -c "${drop_macos}" <<<"${forward}")
+            examples=$(jq -c "${drop_macos}" <<<"${examples}")
+            # And the "All" suite, which sweeps the example packages the public
+            # index carries. Its step is "continue-on-error" -- several of those
+            # packages have not been updated for build123d 0.11, so it fails on
+            # code this repository cannot fix -- which leaves it a job whose only
+            # way to report anything is to fail at "install.sh", something the
+            # "Install" job above has already done for the same platform. Same
+            # reasoning, and the same TODO, as "Examples (All)" in "test.yml".
+            examples=$(jq -c 'map(select(.suite != "All"))' <<<"${examples}")
           fi
           echo "Platforms: ${platforms}"
           echo 'build={"include": '"${platforms}"'}' >> "${GITHUB_OUTPUT}"
@@ -349,10 +410,25 @@ jobs:
           done
           echo 'install={"include": '"${install}"'}' >> "${GITHUB_OUTPUT}"
           echo 'examples={"include": '"${examples}"'}' >> "${GITHUB_OUTPUT}"
+          # The snap wraps a bundle this run froze, so it is checked the same way
+          # the two lists above are.
+          echo "Snap: ${snap}"
+          orphans=$(jq -r --argjson built "${built}" \
+            '[.[] | select(.bundle as $p | $built | index($p) | not) | .bundle] | unique | join(" ")' \
+            <<<"${snap}")
+          if [ -n "${orphans}" ]; then
+            echo "::error::the Snap matrix asks for bundles this run does not build: ${orphans}"
+            exit 1
+          fi
+          echo 'snap={"include": '"${snap}"'}' >> "${GITHUB_OUTPUT}"
 
   build:
     name: "Build (${{ matrix.platform }})"
     needs: set-matrix
+    # Everything below needs this job, so this is the whole workflow's gate: a
+    # change that cannot alter what is frozen skips the freeze, the installs, the
+    # snaps and the examples together.
+    if: ${{ needs.set-matrix.outputs.bundle == 'true' }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.build) }}
@@ -543,7 +619,7 @@ jobs:
   # take the ubuntu-24.04 bundles.
   snap:
     name: "Snap (${{ matrix.arch }})"
-    needs: build
+    needs: [set-matrix, build]
     # Skipped on the release path and in the merge queue, like the examples
     # below. Nothing downstream consumes these: "deploy.yml" publishes the
     # wheels and the standalone archives, and a job whose output no release
@@ -554,14 +630,11 @@ jobs:
       (github.event_name == 'push' && github.ref == 'refs/heads/devel')
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            arch: amd64
-            bundle: ubuntu-24.04-x86_64
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            bundle: ubuntu-24.04-arm64
+      # One architecture on a pull request, both on a push to "devel" and on a
+      # dispatch. SNAP_CORE and SNAP_QUEUE_ONLY above say which and why; an
+      # output rather than a literal list here because a leg whose bundle a
+      # reduced run did not freeze has to be absent rather than skipped.
+      matrix: ${{ fromJson(needs.set-matrix.outputs.snap) }}
     runs-on: ${{ matrix.os }}
     # Squashing ~875MB of frozen bundle is most of this.
     timeout-minutes: 45
