@@ -16,4 +16,4 @@ render streamed daemon output without paying the ~1.6s cost of importing
 is ``partcad_utils.logging``), so existing imports keep working unchanged.
 """
 
-__version__ = "0.8.50"
+__version__ = "0.8.51"
