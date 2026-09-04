@@ -48,12 +48,17 @@ SUBJECTS = {
 }
 
 
+def step_script(step_id):
+    """One step of the composite action, as a shell script."""
+    action = yaml.safe_load(ACTION.read_text())
+    steps = [s for s in action["runs"]["steps"] if s.get("id") == step_id]
+    assert len(steps) == 1, f"the action no longer has exactly one '{step_id}' step"
+    return steps[0]["run"]
+
+
 def classify_script():
     """The 'classify' step of the composite action, as a shell script."""
-    action = yaml.safe_load(ACTION.read_text())
-    steps = [s for s in action["runs"]["steps"] if s.get("id") == "classify"]
-    assert len(steps) == 1, "the action no longer has exactly one 'classify' step"
-    return steps[0]["run"]
+    return step_script("classify")
 
 
 def classify(tmp_path, paths, all_=False):
@@ -320,3 +325,106 @@ def test_every_top_level_entry_is_classified_deliberately(tmp_path):
             path = entry
         _, buckets = classify(tmp_path, [path])
         assert buckets == want, f"{path} classified as {buckets}, expected {want}"
+
+
+# --- The "files" step: which files the change touched, and whether we saw them all ---
+#
+# The gate is only as good as this list. If it comes back short and the step does
+# not notice, the buckets are computed from a subset of the change and the jobs
+# for everything missing are skipped -- silently, because a skipped job looks
+# exactly like a job that had nothing to do.
+#
+# Both endpoints cap what they return, and they differ in what they tell you
+# about it, which is why each needs its own check and its own test:
+#
+#   * "pulls/{n}/files" pages up to 3000 entries, and the pull request itself
+#     carries "changed_files", the real total. Two numbers, so a comparison
+#     works.
+#   * "compare/{base}...{head}" caps ".files" at 300 and reports no total at
+#     all. There is no second number, so a full 300 has to be *assumed*
+#     truncated. The check here was a comparison against ".files | length" --
+#     the length of the capped array itself, which equals the number of lines
+#     written whether or not anything was dropped, so it could never fire. Found
+#     by CodeRabbit on #608; these are what would have caught it.
+
+
+def gh_stub(directory, file_count, declared=None, fail=False):
+    """A stand-in for the "gh" CLI that serves a fixed number of filenames."""
+    stub = directory / "gh"
+    stub.write_text(
+        "#!/bin/bash\n"
+        f"if [ '{fail}' = 'True' ]; then exit 1; fi\n"
+        'for arg in "$@"; do\n'
+        '  case "$arg" in\n'
+        # The pull request itself, asked for its "changed_files" count.
+        f"    *'/pulls/'*'/files') seq 1 {file_count} | sed 's|^|src/f|;s|$|.py|'; exit 0 ;;\n"
+        f"    *'/pulls/'*) echo '{declared if declared is not None else file_count}'; exit 0 ;;\n"
+        f"    *'/compare/'*) seq 1 {file_count} | sed 's|^|src/f|;s|$|.py|'; exit 0 ;;\n"
+        "  esac\n"
+        "done\n"
+        "exit 1\n"
+    )
+    stub.chmod(0o755)
+
+
+def run_files_step(tmp_path, event, file_count, declared=None, deep=False, fail=False):
+    """Run the "files" step and return whether it gave up and asked for everything."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    gh_stub(bin_dir, file_count, declared, fail)
+    output = tmp_path / "files-output"
+    output.touch()
+
+    result = subprocess.run(
+        ["bash", "-c", step_script("files")],
+        env={
+            "PATH": f"{bin_dir}:/usr/bin:/bin",
+            "GH_TOKEN": "stub",
+            "DEEP": "true" if deep else "false",
+            "EVENT_NAME": event,
+            "REPO": "partcad/partcad",
+            "PR_NUMBER": "608",
+            "MG_BASE": "0" * 40,
+            "MG_HEAD": "1" * 40,
+            "RUNNER_TEMP": str(tmp_path),
+            "GITHUB_OUTPUT": str(output),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    values = dict(line.partition("=")[::2] for line in output.read_text().splitlines())
+    return values["all"] == "true"
+
+
+def test_a_merge_group_at_the_cap_is_treated_as_truncated(tmp_path):
+    """300 is the cap, and the response cannot say whether it was reached or hit."""
+    assert run_files_step(tmp_path, "merge_group", file_count=300) is True
+
+
+def test_a_merge_group_below_the_cap_is_classified(tmp_path):
+    assert run_files_step(tmp_path, "merge_group", file_count=299) is False
+
+
+def test_a_pull_request_shorter_than_its_own_count_is_truncated(tmp_path):
+    """Here there *is* a second number, and it is the one that matters."""
+    assert run_files_step(tmp_path, "pull_request", file_count=10, declared=40) is True
+
+
+def test_a_complete_pull_request_listing_is_classified(tmp_path):
+    assert run_files_step(tmp_path, "pull_request", file_count=10, declared=10) is False
+
+
+def test_an_api_failure_runs_everything(tmp_path):
+    assert run_files_step(tmp_path, "pull_request", file_count=10, fail=True) is True
+
+
+def test_an_unknown_event_runs_everything(tmp_path):
+    """Only a pull request and a merge queue reach this step; a new trigger must
+    not arrive with an empty list and skip the whole workflow."""
+    assert run_files_step(tmp_path, "issue_comment", file_count=10) is True
+
+
+def test_a_deep_run_never_asks(tmp_path):
+    """It short-circuits before the API call -- the stub would fail if reached."""
+    assert run_files_step(tmp_path, "pull_request", file_count=10, deep=True, fail=True) is True

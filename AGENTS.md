@@ -211,7 +211,7 @@ existed.
 `.github/actions/changed-scopes` answers **which jobs at all**, by sorting the changed files into buckets: a
 documentation-only change runs the documentation build and nothing else, an `ai-agents/` change runs the
 Claude Code plugin, a `.devcontainer/` change runs the container's behave and `pc` jobs but not its pytest.
-It is fail-safe — a path it does not recognise counts as code *and* as a dependency, turning everything on —
+It is fail-safe — a path it does not recognise counts as both source and a dependency, so it runs everything a source change runs, the standalone bundles included. It does not turn on the four subjects that only their own directory turns on (the documentation, the extension, the IDE, the plugin), and that is not a gap: each is built from one fixed directory, so a path outside them cannot change what they contain —
 and it is a job condition rather than a `paths:` filter, because `merge_group` supports no `paths:` filter
 (so a trigger-level list is one the merge queue ignores, which is how a README typo used to freeze four
 standalone bundles in the queue) and because a workflow skipped by `paths:` never creates the check run a

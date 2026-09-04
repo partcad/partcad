@@ -792,7 +792,7 @@ and turns each subject on or off:
 
    * - A change touching only...
      - runs
-   * - ``docs/``, ``*.md``, ``*.rst``, ``.claude/``, ``openspec/``
+   * - ``docs/``, ``.claude/``, ``openspec/``, and any ``*.md`` or ``*.rst`` no row below claims
      - ``Documentation``
    * - ``ai-agents/``, ``.claude-plugin/``
      - ``Claude Code plugin``
@@ -813,6 +813,13 @@ and turns each subject on or off:
    * - ``.github/``
      - everything, this being the thing that decides what runs
 
+**The rows are matched in order, and a directory's row beats the extension row above it.** That is what the
+first row's qualifier is about: ``ai-agents/skills/render/SKILL.md`` is the plugin, not prose about it, and
+``examples/feature_render/README.md`` is what ``pc render -r`` wrote and the ``Examples (PartCAD)`` job
+compares against a fresh render. Both are Markdown and neither is documentation. The exception to the
+exception is ``AGENTS.md`` and ``CLAUDE.md``, which are documentation wherever they sit -- this repository
+keeps a package's own under ``src/`` -- so they are named before the source directories rather than after.
+
 Two of those rows are the same distinction from either side, and it is the only place a source change and a
 dependency change are treated differently. Freezing is the most expensive thing this repository does -- ~500MB
 of OpenCASCADE per runner -- and what makes a frozen bundle differ from a working wheel is nearly always what
@@ -828,7 +835,10 @@ last row falls: an unclassified path counts as **both** source and dependency, s
 a directory somebody has named as source.
 
 Two properties are worth knowing before you edit that list. It is **fail-safe**: a path it has not been taught
-falls through to "code" and turns everything on, so a new directory can only ever run too much. And it is a job
+counts as both source and a dependency, so it runs everything a source change runs, the standalone bundles
+included, and a new directory can only ever run too much. It does not turn on the four subjects that only their
+own directory turns on -- the documentation, the extension, the IDE, the plugin -- and that is not a gap: each
+is built from one fixed directory, so a path outside them cannot change what they contain. And it is a job
 condition rather than a ``paths:`` filter on the trigger, deliberately -- ``merge_group`` supports no ``paths:``
 filter at all, so a trigger-level list is one the merge queue ignores; and a workflow skipped by ``paths:``
 never creates the check run that a *required* check waits for, while a job skipped by a condition reports

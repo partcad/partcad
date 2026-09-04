@@ -7,10 +7,20 @@ description: >
   the job summary. Used by the gating job of every workflow that runs on
   "pull_request" and "merge_group".
 
-  Fail-safe by construction: a path this action does not recognise is "code",
-  and "code" turns everything on. Adding a directory to the repository can
-  therefore only ever run too much, never too little -- which is the direction
-  a mistake here has to fall.
+  Fail-safe by construction: a path this action does not recognise counts as
+  both source and a dependency, so it runs everything a change to the source
+  tree runs -- the tests, the wheel, the dev container and the standalone
+  bundles.
+
+  What it does not turn on is the four subjects that only their own directory
+  turns on: the documentation, the VS Code extension, the IDE and the Claude
+  Code plugin. That is not a gap. Each of those is built from one fixed
+  directory -- "docs/source", "ide/vscode", "ide/standalone", "ai-agents" --
+  so a path outside them cannot change what they contain, and an unclassified
+  path is by definition outside them.
+
+  Adding a directory to the repository can therefore only ever run too much,
+  never too little -- which is the direction a mistake here has to fall.
 
   It is deliberately NOT a "paths:" filter on the trigger. Two reasons, and both
   are load-bearing:
@@ -127,13 +137,22 @@ runs:
           fi
           ;;
         merge_group)
-          # "compare" returns at most 300 files and reports the real total, so
-          # the same check applies.
+          # "compare" caps ".files" at 300 entries, and -- unlike a pull request
+          # -- reports no count of what it left out. There is no second number to
+          # check the list against: ".files | length" reads the very array that
+          # was capped, so it equals the number of lines written whether or not
+          # anything was dropped, which is a check that can never fire. (It was
+          # one here, until CodeRabbit pointed it out on #608.)
+          #
+          # So a full 300 is treated as truncated. It may be exactly 300 changed
+          # files and it may be the first 300 of a thousand; nothing in the
+          # response tells the two apart, and the cost of being wrong in one
+          # direction is a merge group that runs a little too much while in the
+          # other it is a merge group that silently skips the jobs for a path it
+          # never saw.
           gh api "repos/${REPO}/compare/${MG_BASE}...${MG_HEAD}" \
             --jq '.files[]?.filename' > "${RUNNER_TEMP}/changed-files.txt" || truncated=true
-          declared=$(gh api "repos/${REPO}/compare/${MG_BASE}...${MG_HEAD}" \
-            --jq '.files | length' || echo 0)
-          if [ "${declared:-0}" -gt "$(wc -l < "${RUNNER_TEMP}/changed-files.txt")" ]; then
+          if [ "$(wc -l < "${RUNNER_TEMP}/changed-files.txt")" -ge 300 ]; then
             truncated=true
           fi
           ;;
