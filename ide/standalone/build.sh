@@ -464,7 +464,7 @@ if [ "${INSTALL_EXTENSIONS}" = "1" ]; then
   "${PYTHON}" "${SCRIPT_DIR}/tools/resolve_extensions.py" \
     --repo-root "${REPO_ROOT}" \
     --policy "${SCRIPT_DIR}/extensions.json" \
-    --local "PartCAD.partcad=${EXTENSION_VSIX}" \
+    --local "PartCAD.partcad-official=${EXTENSION_VSIX}" \
     --local "PartCAD.partcad-ide-bootstrap=${WORK_DIR}/partcad-ide-bootstrap.vsix" \
     --output "${PLAN_FILE}" \
     --explain

@@ -360,11 +360,11 @@ msgstr "Установка расширения"
 #: ../../source/tutorial.rst:267
 msgid ""
 "Install the `PartCAD "
-"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
 "extension from the VS Code marketplace."
 msgstr ""
 "Установите расширение `PartCAD "
-"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
 "из маркетплейса VS Code."
 
 #: ../../source/tutorial.rst:272

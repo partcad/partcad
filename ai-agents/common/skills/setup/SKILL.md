@@ -206,29 +206,29 @@ sharing neither with a Visual Studio Code or VSCodium on the machine.
 Otherwise, check whether it is installed already, by its extension id:
 
 ```sh
-"${EDITOR_CLI}" --list-extensions | grep -qix "partcad.partcad" && echo "already installed"
+"${EDITOR_CLI}" --list-extensions | grep -qix "partcad.partcad-official" && echo "already installed"
 ```
 
 `openvmp.partcad` in that list is not it. That is the identity the extension
 was published under before it moved, and it is now a stub whose only content is
-a dependency on `PartCAD.partcad` — so an installation holding it has either
-pulled the real extension in already or will on its next update. Installing
-`PartCAD.partcad` is what the stub is for, done now instead of whenever that
-update arrives, so treat the extension as missing unless `partcad.partcad`
-itself is listed.
+a dependency on `PartCAD.partcad-official` — so an installation holding it has
+either pulled the real extension in already or will on its next update.
+Installing `PartCAD.partcad-official` is what the stub is for, done now instead
+of whenever that update arrives, so treat the extension as missing unless
+`partcad.partcad-official` itself is listed.
 
 ### 3. Install it
 
-The extension's id is `PartCAD.partcad`, and each editor resolves it against
-its own gallery: Visual Studio Code against the Visual Studio Marketplace,
-VSCodium against [Open VSX](https://open-vsx.org/), where PartCAD publishes it
-for exactly that reason — the Marketplace's terms restrict its use to
-Microsoft's own products, so a VSCodium pointed at that one would be in the
+The extension's id is `PartCAD.partcad-official`, and each editor resolves it
+against its own gallery: Visual Studio Code against the Visual Studio
+Marketplace, VSCodium against [Open VSX](https://open-vsx.org/), where PartCAD
+publishes it for exactly that reason — the Marketplace's terms restrict its use
+to Microsoft's own products, so a VSCodium pointed at that one would be in the
 wrong. Which gallery answers is therefore the editor's business and not this
 skill's, and the command is the same either way:
 
 ```sh
-"${EDITOR_CLI}" --install-extension PartCAD.partcad
+"${EDITOR_CLI}" --install-extension PartCAD.partcad-official
 ```
 
 Use `${EDITOR_CLI}` rather than a literal name: it is what distinguishes an

@@ -367,11 +367,11 @@ msgstr "Instalar la extensión"
 #: ../../source/tutorial.rst:267
 msgid ""
 "Install the `PartCAD "
-"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
 "extension from the VS Code marketplace."
 msgstr ""
 "Instale la extensión `PartCAD "
-"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ "
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ "
 "desde el mercado de VS Code."
 
 #: ../../source/tutorial.rst:272

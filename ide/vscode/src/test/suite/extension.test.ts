@@ -11,7 +11,7 @@ suite('PartCAD VSCode Extension Test Suite', () => {
     });
 
     test('Extension activation', async () => {
-        const ext = vscode.extensions.getExtension('partcad.partcad');
+        const ext = vscode.extensions.getExtension('partcad.partcad-official');
         assert.notStrictEqual(ext, undefined);
         await ext?.activate();
         assert.strictEqual(ext?.isActive, true);

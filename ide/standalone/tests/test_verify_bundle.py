@@ -18,7 +18,7 @@ from conftest import COMPONENT_ROOT
 
 PLAN = {
     "install": [
-        {"id": "PartCAD.partcad", "source": "local", "url": None, "path": "partcad.vsix", "required": True},
+        {"id": "PartCAD.partcad-official", "source": "local", "url": None, "path": "partcad.vsix", "required": True},
         {"id": "redhat.vscode-yaml", "source": "gallery", "url": None, "required": False},
     ],
     "skip": [{"id": "ms-python.vscode-pylance", "reason": "proprietary"}],
@@ -70,7 +70,7 @@ def make_bundle(tmp_path, with_tools=True):
 
     extensions = resources / "app" / "extensions"
     extensions.mkdir()
-    add_extension(extensions, "PartCAD", "partcad")
+    add_extension(extensions, "PartCAD", "partcad-official")
     add_extension(extensions, "redhat", "vscode-yaml")
 
     for path in (tmp_path / "partcad-ide" / "partcad-ide", tmp_path / "partcad-ide" / "bin" / "partcad-ide"):
@@ -113,12 +113,12 @@ def test_a_complete_bundle_passes(tmp_path):
 def test_a_missing_required_extension_fails(tmp_path, capsys):
     resources = make_bundle(tmp_path)
     for entry in (resources / "app" / "extensions").iterdir():
-        if entry.name.startswith("PartCAD.partcad-"):
+        if entry.name.startswith("PartCAD.partcad-official-"):
             (entry / "package.json").unlink()
             entry.rmdir()
 
     assert run(resources, tmp_path) == 1
-    assert "required extension PartCAD.partcad is not installed" in capsys.readouterr().out
+    assert "required extension PartCAD.partcad-official is not installed" in capsys.readouterr().out
 
 
 def test_a_missing_optional_extension_only_warns(tmp_path, capsys):
@@ -173,7 +173,7 @@ def test_the_activity_bar_is_reported(tmp_path, capsys):
     # ships with, so the build says what it will be.
     resources = make_bundle(tmp_path)
     extensions = resources / "app" / "extensions"
-    manifest = extensions / "PartCAD.partcad-1.0.0" / "package.json"
+    manifest = extensions / "PartCAD.partcad-official-1.0.0" / "package.json"
     package = json.loads(manifest.read_text(encoding="utf-8"))
     package["contributes"] = {
         "viewsContainers": {"activitybar": [{"id": "partcad-container", "title": "PartCAD"}]}
@@ -181,7 +181,7 @@ def test_the_activity_bar_is_reported(tmp_path, capsys):
     manifest.write_text(json.dumps(package), encoding="utf-8")
 
     assert run(resources, tmp_path) == 0
-    assert "activity bar: PartCAD (partcad-container, from partcad.partcad)" in capsys.readouterr().out
+    assert "activity bar: PartCAD (partcad-container, from partcad.partcad-official)" in capsys.readouterr().out
 
 
 def test_an_extension_with_no_activity_bar_icon_is_not_reported(tmp_path, capsys):

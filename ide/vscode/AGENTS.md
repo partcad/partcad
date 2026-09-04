@@ -460,28 +460,44 @@ PartCAD `Context` view (or restart VS Code) to pick up the change.
 
 ## The marketplace identity
 
-This extension is `PartCAD.partcad`. It used to be `OpenVMP.partcad`, and a publisher is half of an
+This extension is `PartCAD.partcad-official`. It used to be `OpenVMP.partcad`, and a publisher is half of an
 extension's identity, so that was a different extension rather than an earlier name for this one -- nothing
 in the marketplace or the editor carries an installation across.
 
-Two things follow, and both are already done:
+The `name` is the other half, and it is `partcad-official` rather than `partcad` because the marketplace does
+not let two publishers share an extension name: `partcad` belongs to the old entry, which `ide/vscode-shim`
+still publishes to, so this one cannot also be called that. `displayName` is unaffected -- the extension is
+"PartCAD" in the Extensions view either way, which is what a user searches for. Do not try `partcad_official`:
+`vsce` validates both `name` and `publisher` against `/^[a-z0-9][a-z0-9\-]*$/i` and rejects an underscore.
+
+Three things follow, and all are already done:
 
 * **The old entry is not abandoned.** `ide/vscode-shim` is published to it: no code, one
-  `extensionDependencies` on `PartCAD.partcad`, so an installation of the old entry updates into a dependency
-  on this one. Its `AGENTS.md` has the rest, including the ordering rule -- **this extension has to be
-  published first**, because the editor fails an install whose dependency cannot be resolved.
+  `extensionDependencies` on `PartCAD.partcad-official`, so an installation of the old entry updates into a
+  dependency on this one. Its `AGENTS.md` has the rest, including the ordering rule -- **this extension has to
+  be published first**, because the editor fails an install whose dependency cannot be resolved.
 
-* **`globalStorageUri` moved with the identity.** It is named after the extension, so bundles this extension
-  had downloaded into `globalStorage/openvmp.partcad/` are not in `globalStorage/partcad.partcad/` where it
-  now looks. `resolveServicePath` reads the old root as a fallback (`legacyBundleRoot` in
-  `src/common/provision.ts`) -- without it, an upgrade across the move tells a user whose PartCAD is sitting
-  right there that none was found, and downloads a second copy. It is a fallback and not the download target:
-  new bundles go to the current root, so the old directory is superseded rather than kept in step.
+* **`globalStorageUri` moved with the identity, twice.** It is named after the extension, so bundles this
+  extension had downloaded into `globalStorage/openvmp.partcad/` (before the publisher moved) or
+  `globalStorage/partcad.partcad/` (before the name did) are not in
+  `globalStorage/partcad.partcad-official/` where it now looks. `resolveServicePath` reads both old roots as
+  fallbacks (`legacyBundleRoots` in `src/common/provision.ts`) -- without them, an upgrade across a move tells
+  a user whose PartCAD is sitting right there that none was found, and downloads a second copy. They are
+  fallbacks and not the download target: new bundles go to the current root, so the old directories are
+  superseded rather than kept in step.
+
+* **The id is not a prefix of `PartCAD.partcad-ide-bootstrap` any more.** It was, and the checks in
+  `.github/workflows/build-ide-standalone.yml` that look for the extension inside a built IDE still require a
+  version digit after the id rather than a bare `*`, which is what kept them from accepting the bootstrap
+  extension in its place. Keep that -- it costs nothing and the next id may share a prefix again.
 
 The extension id appears outside this package too -- `ide/standalone/build.sh` installs it into the IDE by id,
 `.github/workflows/build-ide-standalone.yml` checks the built IDE contains it (matched case-insensitively,
-since the editor lowercases the directory it installs into), and `.devcontainer/devcontainer.json` lists it.
-Those are the places to change together if it ever moves again.
+since the editor lowercases the directory it installs into), `.devcontainer/devcontainer.json` lists it,
+`ide/standalone/tests/` asserts on it, and `src/test/suite/extension.test.ts` activates the extension by it.
+`ide/vscode-shim/package.json` depends on it. Those are the places to change together if it ever moves again,
+along with the install instructions in `README.md`, `docs/source/installation.rst` and
+`ai-agents/common/skills/setup/SKILL.md`.
 
 ## Commit
 

@@ -46,7 +46,7 @@ def _extension_bundle(*, version="0.8.0"):
             "Code",
             "User",
             "globalStorage",
-            "partcad.partcad",
+            "partcad.partcad-official",
             "partcad-bundle",
             version,
             "pc",

@@ -72,7 +72,7 @@ The plugin folder is named `claude`, but the command namespace comes from
   own command line tool on `PATH` are what say which one, since Visual Studio
   Code, VSCodium and the PartCAD IDE are indistinguishable otherwise. The IDE
   already carries the extension and is left alone. The other two both install
-  `PartCAD.partcad` — the same command, each resolving it against its own
+  `PartCAD.partcad-official` — the same command, each resolving it against its own
   gallery: the Visual Studio Marketplace, and Open VSX for VSCodium, which is
   not pointed at the Marketplace because its terms restrict it to Microsoft's
   own products (see *Licensing* in
