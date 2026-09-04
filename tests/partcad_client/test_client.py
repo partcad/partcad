@@ -287,6 +287,22 @@ def test_turning_the_bound_off_leaves_the_socket_blocking(socket_dir, monkeypatc
         server.stop()
 
 
+@pytest.mark.parametrize("setting", [None, "", "   "])
+def test_the_default_bound_applies_when_nothing_is_set(socket_dir, monkeypatch, setting):
+    """The branch every command that does not set the variable goes through.
+
+    Blank is treated as unset rather than as a value, unlike the 'PC_*' flags
+    'partcad_utils.booleans' reads, where an empty value deliberately turns one
+    off. There is no "off" for a bound -- 0 says that -- so there is nothing for
+    a blank to mean but "no answer given".
+    """
+    if setting is None:
+        monkeypatch.delenv("PC_DAEMON_IDLE_TIMEOUT", raising=False)
+    else:
+        monkeypatch.setenv("PC_DAEMON_IDLE_TIMEOUT", setting)
+    assert client_module.idle_timeout() == client_module.DEFAULT_IDLE_TIMEOUT
+
+
 def test_the_default_bound_is_used_when_the_setting_is_not_a_number(socket_dir, monkeypatch):
     monkeypatch.setenv("PC_DAEMON_IDLE_TIMEOUT", "soon")
     assert client_module.idle_timeout() == client_module.DEFAULT_IDLE_TIMEOUT
