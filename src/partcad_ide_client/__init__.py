@@ -32,7 +32,7 @@ from .protocol import (
     make_object,
 )
 
-__version__ = "0.8.51"
+__version__ = "0.8.52"
 
 __all__ = [
     "CONNECT_TIMEOUT",
