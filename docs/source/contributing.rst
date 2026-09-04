@@ -724,8 +724,16 @@ CI fans out over operating systems, and a pull request does not pay for all of t
     Everything, the older OS versions included: the nightly schedule, a manual workflow run, and any push,
     which includes the release. On a pull request, put ``#deepTest`` anywhere in the title or the description
     and re-run the checks. Worth doing when the change touches packaging, dependencies, the standalone bundle
-    or the snap, or anything else where an older OS version could behave differently. ``#deepTest`` runs
-    exactly what it always ran -- it is unaffected by everything on this page.
+    or the snap, or anything else where an older OS version could behave differently. It runs exactly what it
+    always ran -- it is unaffected by everything on this page.
+
+    .. note::
+
+       The marker is matched as a plain substring, so a pull request that merely *mentions* it -- one editing
+       this page, say -- opts itself in and runs the full matrix. That is deliberate: a matcher clever enough
+       to tell a marker from a mention is a rule you would have to know before your opt-in worked, and
+       over-running is the safe direction. If a description has to name the marker without asking for it,
+       write it split across two code spans.
 
 A push to ``devel`` is the exception to all three: it runs no matrix at all unless its head commit message
 starts with ``Version updated``, which is the release commit. That exception applies to pushes and to nothing
