@@ -1,8 +1,10 @@
 # PartCAD has moved
 
-This extension is published by **PartCAD** now, not by **OpenVMP**. Its new home
-on the marketplace is
-[`PartCAD.partcad`](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad).
+This extension is published by **PartCAD** now, not by **OpenVMP**, and under the
+name `partcad-official`: the marketplace does not let two publishers share one
+extension name, and `partcad` is the name of this entry. Its new home on the
+marketplace is
+[`PartCAD.partcad-official`](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official).
 
 **There is nothing to do.** This package depends on the extension in its new
 home, so installing or updating it brings the real PartCAD extension with it.
@@ -16,7 +18,7 @@ those installations have moved.
 ## Installing PartCAD directly
 
 If you are installing PartCAD for the first time, install
-[the PartCAD extension](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad)
+[the PartCAD extension](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official)
 instead of this one.
 
 ## Learn more

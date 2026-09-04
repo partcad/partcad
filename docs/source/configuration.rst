@@ -138,7 +138,7 @@ below), so the checker masks each template construct before parsing rather than
 rendering the file, which would need the values the template is waiting for. It
 is the same checker :doc:`ASSY files <assy>` go through, and the `PartCAD
 extension for VS Code
-<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_ runs it
+<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_ runs it
 on the open document -- so a mistyped section is underlined as it is typed,
 including in the file that is stopping the package from loading at all. Set
 ``partcad.lint.enabled`` to ``false`` to turn that off.

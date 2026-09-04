@@ -714,12 +714,12 @@ Running ``/pc:setup`` from a terminal inside Visual Studio Code or VSCodium inst
 with the command line tools. The rest of this section is how to do it by hand.
 
 This extension is available through the VS Code marketplace.
-The corresponding marketplace page is `here <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_.
+The corresponding marketplace page is `here <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_.
 Install it from the Extensions view, or by id from a terminal:
 
 .. code-block:: shell
 
-  $ code --install-extension PartCAD.partcad
+  $ code --install-extension PartCAD.partcad-official
 
 Every `GitHub release <https://github.com/partcad/partcad/releases>`_ also carries the packaged extension as
 ``partcad-<version>.vsix``, next to the wheels and the bundles. Install it from the command line, or with
@@ -738,14 +738,16 @@ Python and nothing compiled in it.
   **VSCodium** installs it from `Open VSX <https://open-vsx.org/>`_, the gallery VSCodium comes configured
   with and where PartCAD publishes the extension for it. It is not pointed at the Visual Studio Marketplace,
   whose terms restrict its use to Microsoft's own products. Search for ``PartCAD`` in the Extensions view, or
-  run ``codium --install-extension PartCAD.partcad``; the ``.vsix`` above works there too. The
+  run ``codium --install-extension PartCAD.partcad-official``; the ``.vsix`` above works there too. The
   :ref:`PartCAD IDE <partcad-ide>` needs neither gallery -- it ships the extension inside the application.
 
 If you installed the extension before it moved
 ==============================================
 
-The extension used to be published as ``OpenVMP.partcad``. It is ``PartCAD.partcad`` now, which the marketplace
-treats as a separate extension rather than as a rename.
+The extension used to be published as ``OpenVMP.partcad``. It is ``PartCAD.partcad-official`` now -- a different
+publisher, and a different name because the marketplace does not let two publishers share one extension name and
+``partcad`` stays with the old entry. Either way the marketplace treats the result as a separate extension rather
+than as a rename.
 
 There is nothing to do. The old entry still exists and now depends on the new one, so it updates like any other
 extension and brings the extension in its new home with it. Your settings, which live in your ``settings.json``

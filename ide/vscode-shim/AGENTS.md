@@ -1,21 +1,26 @@
 # ide/vscode-shim
 
 The `OpenVMP.partcad` marketplace entry, as a transition shim. It ships **no code**: one `package.json` whose
-only substantive line is an `extensionDependencies` on `PartCAD.partcad`.
+only substantive line is an `extensionDependencies` on `PartCAD.partcad-official`.
 
 ## Why it exists
 
 The extension in `ide/vscode` used to be published by the `OpenVMP` publisher, so its marketplace identity was
-`OpenVMP.partcad`. It is published by `PartCAD` now, which makes it `PartCAD.partcad` -- a **different
-extension** as far as the marketplace and the editor are concerned. A publisher is part of an extension's
-identity and there is no rename: nothing carries an installed `OpenVMP.partcad` over to the new entry, and an
-abandoned entry keeps serving the last version it was given, forever, to everyone who already has it.
+`OpenVMP.partcad`. It is published by `PartCAD` now, which makes it a **different extension** as far as the
+marketplace and the editor are concerned. A publisher is part of an extension's identity and there is no
+rename: nothing carries an installed `OpenVMP.partcad` over to the new entry, and an abandoned entry keeps
+serving the last version it was given, forever, to everyone who already has it.
 
 So the old entry is not abandoned. It is replaced by this, and a user who has it installed gets it as an
 ordinary update. The editor resolves `extensionDependencies` at install time, so the update pulls
-`PartCAD.partcad` in and the window ends up with the real extension running. Nothing is asked of the user and
-nothing they configured moves: `partcad.*` settings live in their `settings.json` under keys the new extension
-contributes, not in anything the old one owned.
+`PartCAD.partcad-official` in and the window ends up with the real extension running. Nothing is asked of the
+user and nothing they configured moves: `partcad.*` settings live in their `settings.json` under keys the new
+extension contributes, not in anything the old one owned.
+
+The new entry is `PartCAD.partcad-official` rather than `PartCAD.partcad` because of this package: the
+marketplace does not let two publishers share an extension name, and this one holds `partcad`. That is a
+consequence of keeping the old entry alive, not a second decision -- the name is the price of the shim, and it
+goes away with it.
 
 This is the same shape as `dev-tools/shim/`, which keeps `pip install partcad-cli` working now
 that everything ships in one `partcad` wheel, and it is temporary in the same way. Delete it once the installed
@@ -30,7 +35,8 @@ base has moved.
 
 * **The identity is the old one, exactly.** `name: partcad` and `publisher: OpenVMP` are what make this an
   update to the entry people have installed rather than a third extension beside it. Changing either one
-  publishes something nobody receives.
+  publishes something nobody receives. This is also why the real extension is named `partcad-official`: the
+  name here is not available to it, and the entry people have installed is the one that must not move.
 
 * **`extensionDependencies`, not `extensionPack`.** A pack is a bookmark: the editor installs its members and
   then lets the user remove them one by one, and removing the member is not removing the pack. A dependency is
@@ -72,8 +78,8 @@ nothing is bundled, so the script reaches `vsce` through `npx` at a pinned versi
 dependency that would need a node project to install it. Run it from this directory -- it reads the version
 out of `../vscode/package.json`.
 
-**Publish `PartCAD.partcad` before this.** The editor fails an install whose `extensionDependencies` cannot be
-resolved, so releasing this against a publisher that has nothing under it yet would break the very
+**Publish `PartCAD.partcad-official` before this.** The editor fails an install whose `extensionDependencies`
+cannot be resolved, so releasing this against a publisher that has nothing under it yet would break the very
 installations it is meant to carry over.
 
 That order is no longer only written down here: `deploy.yml`'s `publish-vscode-extension` job publishes the two

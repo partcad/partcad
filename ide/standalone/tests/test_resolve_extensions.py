@@ -60,8 +60,8 @@ def test_an_unknown_key_is_an_error():
 
 
 def test_locally_built_extensions_are_required():
-    plan = build_plan(["a.b"], {}, local={"PartCAD.partcad": "/tmp/partcad.vsix"})
-    (entry,) = [item for item in plan["install"] if item["id"] == "PartCAD.partcad"]
+    plan = build_plan(["a.b"], {}, local={"PartCAD.partcad-official": "/tmp/partcad.vsix"})
+    (entry,) = [item for item in plan["install"] if item["id"] == "PartCAD.partcad-official"]
     assert entry["required"] and entry["source"] == "local" and entry["path"] == "/tmp/partcad.vsix"
 
 
@@ -72,12 +72,12 @@ def test_the_shipped_policy_matches_the_shipped_recommendations():
     plan = resolve_extensions.load_plan(
         REPO_ROOT,
         COMPONENT_ROOT / "extensions.json",
-        {"PartCAD.partcad": "partcad.vsix", "PartCAD.partcad-ide-bootstrap": "bootstrap.vsix"},
+        {"PartCAD.partcad-official": "partcad.vsix", "PartCAD.partcad-ide-bootstrap": "bootstrap.vsix"},
     )
     installed = {entry["id"] for entry in plan["install"]}
     required = {entry["id"] for entry in plan["install"] if entry["required"]}
 
-    assert "PartCAD.partcad" in required, "the IDE has to ship the PartCAD extension"
+    assert "PartCAD.partcad-official" in required, "the IDE has to ship the PartCAD extension"
     assert "PartCAD.partcad-ide-bootstrap" in required, "without it the IDE does not open the PartCAD workbench"
     # An `extensionDependency` of the PartCAD extension: it does not activate
     # without it. The viewer used to be a second one; it is built into the

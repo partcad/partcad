@@ -737,10 +737,11 @@ jobs:
           ls "${resources}/app/extensions"
           # Matched without regard to case: the editor lowercases the directory
           # it installs an extension into. The version, not a bare "*", is what
-          # follows the id: "PartCAD.partcad-ide-bootstrap" is installed here too
-          # and a trailing "*" alone would accept it in place of the extension
-          # this is checking for.
-          find "${resources}/app/extensions" -maxdepth 1 -iname "partcad.partcad-[0-9]*" | grep -q . || {
+          # follows the id, so that an id which merely begins the same way
+          # cannot satisfy this: "PartCAD.partcad-ide-bootstrap" is installed
+          # here too, and it begins with the whole of the extension's former
+          # name.
+          find "${resources}/app/extensions" -maxdepth 1 -iname "partcad.partcad-official-[0-9]*" | grep -q . || {
             echo "::error::the installed IDE has no PartCAD extension"
             exit 1
           }
@@ -1032,13 +1033,14 @@ jobs:
           & (Join-Path $app "resources\partcad-cli\pc.exe") version
           # Matched without regard to case (`-match` is, and the editor
           # lowercases the directory it installs an extension into). The version,
-          # not a bare "*", is what follows the id: "PartCAD.partcad-ide-bootstrap"
-          # is installed here too and a trailing "*" alone would accept it in
-          # place of the extension this is checking for. `-Filter` cannot express
-          # that -- it takes wildcards, not character classes -- so this filters
-          # in PowerShell instead.
+          # not a bare "*", is what follows the id, so that an id which merely
+          # begins the same way cannot satisfy this:
+          # "PartCAD.partcad-ide-bootstrap" is installed here too, and it begins
+          # with the whole of the extension's former name. `-Filter` cannot
+          # express that -- it takes wildcards, not character classes -- so this
+          # filters in PowerShell instead.
           $extensions = Join-Path $app "resources\app\extensions"
-          if (-not (Get-ChildItem $extensions -Directory | Where-Object { $_.Name -match "^partcad\.partcad-\d" })) {
+          if (-not (Get-ChildItem $extensions -Directory | Where-Object { $_.Name -match "^partcad\.partcad-official-\d" })) {
             throw "the installed IDE has no PartCAD extension"
           }
           # The examples the welcome window offers to open, packaged into the
@@ -1050,6 +1052,45 @@ jobs:
           # The PATH entries the installer adds for a new terminal.
           $path = (Get-ItemProperty -Path "HKCU:\Environment" -Name Path).Path
           if ($path -notlike "*PartCAD IDE\bin*") { throw "the installer did not add bin to PATH" }
+
+      # What the install above cannot show: it wrote into an empty directory, so
+      # the installer's "[InstallDelete]" had nothing to delete and a regression
+      # in it would look exactly like this. An upgrade is where it does the work.
+      # The extension's id changed once -- "PartCAD.partcad" to
+      # "PartCAD.partcad-official" -- and "[Files]" only overwrites, so without
+      # the delete an older install's extension directory would still be sitting
+      # beside this one: two directories with two ids are two extensions, both
+      # loaded, both contributing the same activity bar entry and racing to
+      # register the same commands.
+      #
+      # So plant what an older install would have left behind, run the setup
+      # program over it the way an upgrade runs, and check both halves: the
+      # stale directory is gone, and the directories "[InstallDelete]" also
+      # matches -- this extension's own, and the bootstrap's -- were put back by
+      # "[Files]" rather than deleted on the way past.
+      - name: Upgrade over a stale extension directory
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE"
+          $extensions = Join-Path $app "resources\app\extensions"
+          $stale = Join-Path $extensions "partcad.partcad-0.8.0"
+          New-Item -ItemType Directory -Path $stale -Force | Out-Null
+          Set-Content -Path (Join-Path $stale "package.json") `
+            -Value '{"name":"partcad","publisher":"PartCAD","version":"0.8.0"}'
+
+          $setup = Get-ChildItem archives -Filter "*setup.exe" | Select-Object -First 1
+          if (-not $setup) { throw "no installer in the artifact" }
+          Start-Process -FilePath $setup.FullName -Wait `
+            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/LOG=upgrade.log"
+          Get-Content upgrade.log -Tail 20
+
+          if (Test-Path $stale) { throw "the upgrade left $stale behind" }
+          if (-not (Get-ChildItem $extensions -Directory | Where-Object { $_.Name -match "^partcad\.partcad-official-\d" })) {
+            throw "the upgrade removed the PartCAD extension instead of replacing it"
+          }
+          if (-not (Get-ChildItem $extensions -Filter "partcad.partcad-ide-bootstrap-*")) {
+            throw "the upgrade removed the PartCAD IDE bootstrap extension instead of replacing it"
+          }
 
       # The same first start as the job above, on the platform where the setup
       # program is the installer: `pc init` in %USERPROFILE%\.partcad\projects\start,

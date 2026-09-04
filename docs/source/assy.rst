@@ -481,7 +481,7 @@ a scene. Say so outright with ``--schema``:
 
     pc lint --file workcell.assy --schema scene
 
-The `PartCAD extension for VS Code <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad>`_
+The `PartCAD extension for VS Code <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_
 runs exactly that while an ASSY file is open and shows the findings in the
 Problems view. It answers the same question from the package contents it has
 already loaded, which is the declaration itself rather than a guess at it, and
