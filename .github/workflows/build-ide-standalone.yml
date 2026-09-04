@@ -142,6 +142,11 @@ jobs:
       # this one, so this is the whole workflow's gate. See
       # ".github/actions/changed-scopes".
       ide: ${{ steps.scope.outputs.ide }}
+      # Whether this run's scope froze the command line bundles. The IDE build
+      # embeds them, so this is what says whether they can be expected for this
+      # commit or have to come from the base branch -- see "Find the
+      # \"Standalone\" run that built the bundles" below.
+      bundle: ${{ steps.scope.outputs.bundle }}
     steps:
       - uses: actions/checkout@v7
 
@@ -339,6 +344,10 @@ jobs:
           # bundles or an older commit's.
           GRACE_SECONDS: "300"
           POLL_SECONDS: "30"
+          # "true" when this run's scope also froze the bundles. When it did not,
+          # the sibling "Standalone" run is there but empty by design, and the
+          # base branch is where the bundles are.
+          BUNDLE_IN_THIS_RUN: ${{ needs.set-matrix.outputs.bundle }}
         run: |
           set -euo pipefail
 
@@ -436,6 +445,19 @@ jobs:
             fi
 
             if [ -n "${barren}" ]; then
+              # A run with no bundles is not the same thing as a run that failed
+              # to produce them. Since the scope gate landed, "Standalone" runs
+              # on every pull request and *skips* its builds when the change
+              # does not warrant freezing -- so a change confined to "ide/" or
+              # "ide/vscode/" turns the IDE build on, leaves the freeze off, and
+              # leaves exactly this behind: a sibling run, concluded success,
+              # holding nothing. That is the case (2) below was written for,
+              # arriving as an empty run rather than as no run at all.
+              if [ "${BUNDLE_IN_THIS_RUN:-true}" != "true" ]; then
+                say "Run(s)${barren} hold no bundles, and this run's scope froze none." \
+                    "Taking them from ${base} instead."
+                break
+              fi
               echo "::error::The \"Standalone\" workflow run(s) for ${HEAD_SHA}" \
                 "--${barren} -- finished without leaving a single" \
                 "partcad-standalone-* artifact, so there is no command line" \
@@ -811,7 +833,14 @@ jobs:
         shell: bash
         run: |
           case "${{ runner.os }}" in
-            macOS)   binary="${HOME}/Applications/PartCAD IDE.app/Contents/MacOS/VSCodium" ;;
+            macOS)
+              # Asked of the bundle rather than hardcoded: `build.sh` leaves
+              # `CFBundleExecutable` as the upstream editor set it -- the macOS
+              # launcher finds the executable through the bundle, so there is
+              # nothing to rename -- and it is VSCodium's business what that is.
+              app="${HOME}/Applications/PartCAD IDE.app"
+              binary="${app}/Contents/MacOS/$(plutil -extract CFBundleExecutable raw "${app}/Contents/Info.plist")"
+              ;;
             Windows) binary="$(dirname "$(dirname "$(readlink -f "${HOME}/partcad-bin/partcad-ide")")")/partcad-ide.exe" ;;
             *)       binary="$(dirname "$(dirname "$(readlink -f "${HOME}/partcad-bin/partcad-ide")")")/partcad-ide" ;;
           esac
@@ -893,7 +922,10 @@ jobs:
           # same way "Check the IDE ships what it is supposed to" resolves the
           # resources directory, rather than assuming a layout `install.sh` owns.
           if [ "${{ runner.os }}" = "macOS" ]; then
-            export PARTCAD_IDE_PATH="${HOME}/Applications/PartCAD IDE.app/Contents/MacOS/VSCodium"
+            # As in "Run the application binary": the executable's name belongs
+            # to the editor this was built from, so it is read, not assumed.
+            app="${HOME}/Applications/PartCAD IDE.app"
+            export PARTCAD_IDE_PATH="${app}/Contents/MacOS/$(plutil -extract CFBundleExecutable raw "${app}/Contents/Info.plist")"
           else
             app="$(dirname "$(dirname "$(readlink -f "${HOME}/partcad-bin/partcad-ide")")")"
             export PARTCAD_IDE_PATH="${app}/partcad-ide"
