@@ -86,11 +86,31 @@ env:
   #    breakage specific to the older release is rare enough to be worth
   #    finding nightly rather than on every push.
   #
-  # No macOS entry any more. It used to drop 'macos-26' and leave 'macos-latest',
-  # which was the single largest saving here -- until the label moved and those
-  # became one image. There is one macOS leg now and it runs on every pull
-  # request: dropping it would mean testing no macOS at all.
+  # No macOS entry here. It used to drop 'macos-26' and leave 'macos-latest',
+  # which was the single largest saving in this file -- until the label moved and
+  # those became one image. There is one macOS leg now, and taking it out of the
+  # *deep* set would mean the nightly run tested no macOS at all. Which pull
+  # requests do not pay for it is OSES_QUEUE_ONLY below; that is a different
+  # question and a different list.
   OSES_DEEP_ONLY: '["ubuntu-22.04", "ubuntu-22.04-arm"]'
+  # And the ones a *pull request* does not pay for either -- dropped on the "pr"
+  # tier and kept from the merge queue up. See ".github/actions/test-depth" for
+  # what separates the two now: a pull request is re-run on every push to it,
+  # while the queue runs once, immediately before the commit lands.
+  #
+  # Which ones, and why these:
+  #  * "macos-latest". The single most expensive leg in the file -- macOS minutes
+  #    bill at 10x -- and the one whose breakages are least likely to be found by
+  #    a contributor's own machine. Nothing merges without it: the merge queue
+  #    runs it, and a queued commit that fails there never lands.
+  #  * "windows-2022". The pinned second Windows image, which is here so that a
+  #    move of the "windows-latest" alias cannot become the only Windows we ever
+  #    tested on. That is a question for the queue and the nightly run, not for
+  #    every push to a branch; "windows-latest" still runs on every one.
+  #
+  # NOT here, deliberately: "ubuntu-24.04-arm". arm64 is an architecture rather
+  # than a second image of one, and "cadquery-ocp" ships separate wheels for it.
+  OSES_QUEUE_ONLY: '["windows-2022", "macos-latest"]'
   PYTHONS: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
   # The two ends of the range a *sandbox* can be built at:
   # sandbox_versions.MIN_PYTHON_VERSION_CADQUERY and MAX_PYTHON_VERSION_CAD.
@@ -159,6 +179,11 @@ env:
   # specific breakage, and adding it here would multiply the most expensive jobs
   # in the workflow by BEHAVE_SHARDS.
   OSES_SLIM: '["ubuntu-latest", "windows-latest", "macos-latest"]'
+  # The slim axis has no deep-only image in it, but it does have the macOS one,
+  # and on the sharded behave jobs that is four legs of 10x-billed runner per
+  # Python version. Dropped on the "pr" tier for the same reason as above and
+  # restored in the merge queue.
+  OSES_SLIM_QUEUE_ONLY: '["macos-latest"]'
   # Behave's Python axis: the oldest and the newest PartCAD is supported on.
   # Behave drives the command line rather than the sandbox, so what matters here
   # is the interpreter PartCAD itself runs on. 'test-pub-repo', which renders
@@ -173,21 +198,15 @@ jobs:
   build-containers:
     name: "Build Docker Containers"
     runs-on: ubuntu-24.04
-    # Only a version bump runs the matrix on a push to "devel": every other push
-    # there is followed by one within the hour, and running it twice buys
-    # nothing.
+    # The KiCad sandbox image, which only "test-pytest" below consumes, so it
+    # follows that job's gate rather than carrying one of its own.
     #
-    # "github.event_name != 'push'" leads, and is not decoration. Only a push
-    # carries "head_commit"; on a "schedule" it is null, "startsWith" reads that
-    # as the empty string, and "github.ref" for the nightly run of the default
-    # branch *is* "refs/heads/devel" -- so without this clause the whole
-    # condition is false and the nightly run is skipped. It was, every night
-    # from the day this guard was written until this line was added, which is
-    # the deep matrix ".github/actions/test-depth" promises and nothing else
-    # provides: a pull request drops OSES_DEEP_ONLY on the strength of it.
-    # A manual dispatch, a merge queue and a pull request are all in the same
-    # position and are all covered by leading with the event name.
-    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    # "needs: set-matrix" is also what carries the "only a version bump runs the
+    # matrix on a push to devel" guard here. That guard lives on "set-matrix"
+    # (see the long note there); a job that needs a skipped job is skipped, so
+    # stating it twice would only be two places to keep in step.
+    needs: set-matrix
+    if: ${{ needs.set-matrix.outputs.pytest == 'true' }}
     permissions:
       packages: write
     steps:
@@ -217,15 +236,34 @@ jobs:
   set-matrix:
     name: "Set matrix"
     runs-on: ubuntu-latest
-    # Same guard as "build-containers" above, for the same reasons: a push to
-    # "devel" runs this only for a version bump, and the event name leads
-    # because a "schedule" carries no "head_commit" to read.
+    # Only a version bump runs the matrix on a push to "devel": every other push
+    # there is followed by one within the hour, and running it twice buys
+    # nothing. Stated here and nowhere else in this file -- every other job needs
+    # this one, directly or through another, and a job that needs a skipped job
+    # is skipped.
+    #
+    # "github.event_name != 'push'" leads, and is not decoration. Only a push
+    # carries "head_commit"; on a "schedule" it is null, "startsWith" reads that
+    # as the empty string, and "github.ref" for the nightly run of the default
+    # branch *is* "refs/heads/devel" -- so without this clause the whole
+    # condition is false and the nightly run is skipped. It was, every night
+    # from the day this guard was written until this line was added, which is
+    # the deep matrix ".github/actions/test-depth" promises and nothing else
+    # provides: a pull request drops OSES_DEEP_ONLY and OSES_QUEUE_ONLY on the
+    # strength of it. A manual dispatch, a merge queue and a pull request are all
+    # in the same position and are all covered by leading with the event name.
     if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       matrix-sandbox: ${{ steps.set-matrix.outputs.matrix-sandbox }}
       matrix-slim: ${{ steps.set-matrix.outputs.matrix-slim }}
       matrix-behave: ${{ steps.set-matrix.outputs.matrix-behave }}
+      # Which of the jobs below this change can say anything about. Every one of
+      # them reads its own name here; see ".github/actions/changed-scopes".
+      deep: ${{ steps.depth.outputs.deep }}
+      pytest: ${{ steps.scope.outputs.pytest }}
+      behave: ${{ steps.scope.outputs.behave }}
+      examples: ${{ steps.scope.outputs.examples }}
     steps:
       - uses: actions/checkout@v7
 
@@ -233,40 +271,71 @@ jobs:
         id: depth
         uses: ./.github/actions/test-depth
 
+      - name: Decide what the change touches
+        id: scope
+        uses: ./.github/actions/changed-scopes
+        with:
+          deep: ${{ steps.depth.outputs.deep }}
+
       - name: Set matrix
         id: set-matrix
         env:
           DEEP: ${{ steps.depth.outputs.deep }}
+          # "false" on a pull request and "true" from the merge queue up. The
+          # two axes are separate: DEEP adds the older OS versions, QUEUE adds
+          # the images and the interpreters a pull request does not pay for.
+          QUEUE: ${{ steps.depth.outputs.queue }}
         run: |
           # The OS axis of the full matrix, with the deep-only images removed
-          # when this is not a deep run. 'matrix-slim' is untouched: it is
-          # already the '*-latest' images only, none of which are deep-only.
-          if [ "${DEEP}" = "true" ]; then
-            OSES='${{ env.OSES }}'
-          else
-            OSES=$(jq -cn --argjson all '${{ env.OSES }}' --argjson deep_only '${{ env.OSES_DEEP_ONLY }}' '$all - $deep_only')
+          # when this is not a deep run and the queue-only ones removed on top of
+          # that when it is a pull request.
+          OSES='${{ env.OSES }}'
+          OSES_SLIM='${{ env.OSES_SLIM }}'
+          PYTHONS='${{ env.PYTHONS }}'
+          if [ "${DEEP}" != "true" ]; then
+            OSES=$(jq -cn --argjson all "${OSES}" --argjson deep_only '${{ env.OSES_DEEP_ONLY }}' '$all - $deep_only')
+          fi
+          if [ "${QUEUE}" != "true" ]; then
+            OSES=$(jq -cn --argjson all "${OSES}" --argjson queue_only '${{ env.OSES_QUEUE_ONLY }}' '$all - $queue_only')
+            OSES_SLIM=$(jq -cn --argjson all "${OSES_SLIM}" --argjson queue_only '${{ env.OSES_SLIM_QUEUE_ONLY }}' '$all - $queue_only')
+            # The oldest and the newest supported interpreter, and nothing in
+            # between. That is the rule EXCLUDES already applies to every image
+            # but ubuntu-latest -- a version specific breakage shows up at one
+            # end of the range or the other -- and on a pull request it applies
+            # to ubuntu-latest as well. Derived from PYTHONS rather than written
+            # out, so adding a supported version cannot leave a stale literal
+            # here naming an interpreter nobody runs any more.
+            PYTHONS=$(jq -cn --argjson all "${PYTHONS}" '[$all[0], $all[-1]]')
           fi
           echo "Operating systems: ${OSES}"
-          # EXCLUDES still names images that may have just been dropped. That is
-          # harmless -- an exclude for a combination the matrix does not contain
-          # simply matches nothing -- and keeps one list to maintain rather than
-          # two that have to agree.
-          echo 'matrix={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS }}, "exclude": ${{ env.EXCLUDES }}}' >> "${GITHUB_OUTPUT}"
-          # The same OS axis as 'matrix', so it follows the depth too, but the
+          echo "Operating systems (slim): ${OSES_SLIM}"
+          echo "Python versions: ${PYTHONS}"
+          # EXCLUDES still names images and interpreters that may have just been
+          # dropped. That is harmless -- an exclude for a combination the matrix
+          # does not contain simply matches nothing -- and keeps one list to
+          # maintain rather than two that have to agree.
+          echo 'matrix={"os": '"${OSES}"', "python-version": '"${PYTHONS}"', "exclude": ${{ env.EXCLUDES }}}' >> "${GITHUB_OUTPUT}"
+          # The same OS axis as 'matrix', so it follows both tiers too, but the
           # two versions a sandbox can be built at rather than every version
           # PartCAD runs on -- and no excludes, which would leave only one of
           # the two on every image but ubuntu-latest. See PYTHONS_SANDBOX above.
+          # Not narrowed by the pull request tier either: those two versions are
+          # already the ends of their range, so "first and last only" is what
+          # this list is.
           echo 'matrix-sandbox={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS_SANDBOX }}}' >> "${GITHUB_OUTPUT}"
           # 'test-pub-repo' renders the public index, so its subject is the
           # sandbox as well; only its OS axis is the reduced one.
-          echo 'matrix-slim={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SANDBOX }}}' >> "${GITHUB_OUTPUT}"
+          echo 'matrix-slim={"os": '"${OSES_SLIM}"', "python-version": ${{ env.PYTHONS_SANDBOX }}}' >> "${GITHUB_OUTPUT}"
           # Behave is single-process and dominates CI wall-clock, so it runs
           # sharded across parallel jobs. The "shard" axis is derived from
           # BEHAVE_SHARDS (1..N) here, so the number of behave jobs can never
           # drift from it, and crosses os/python. Behave uses the slim matrix
-          # (like test-pub-repo), so sharding does not multiply the full matrix.
+          # (like test-pub-repo), so sharding does not multiply the full matrix
+          # -- and dropping macOS from the slim axis on a pull request takes
+          # BEHAVE_SHARDS jobs per Python version with it, which is why it is
+          # the largest single saving there.
           SHARDS_JSON=$(python3 -c "import json, os; print(json.dumps(list(range(1, int(os.environ['BEHAVE_SHARDS']) + 1))))")
-          echo 'matrix-behave={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}, "shard": '"$SHARDS_JSON"'}' >> "${GITHUB_OUTPUT}"
+          echo 'matrix-behave={"os": '"${OSES_SLIM}"', "python-version": ${{ env.PYTHONS_SLIM }}, "shard": '"$SHARDS_JSON"'}' >> "${GITHUB_OUTPUT}"
 
   # cache-preheat:
   #   name: "Update caches"
@@ -288,6 +357,11 @@ jobs:
       - set-matrix
       - build-containers
       # - cache-preheat
+    # Skipped when nothing this suite can see has changed -- documentation, the
+    # Claude Code plugin, the VS Code extension, the dev container's own
+    # configuration. "changed-scopes" is fail-safe: a path it does not recognise
+    # counts as code and turns this back on.
+    if: ${{ needs.set-matrix.outputs.pytest == 'true' }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -390,6 +464,11 @@ jobs:
     needs:
       - set-matrix
       # - cache-preheat
+    # Same gate as "Pytest" above. Note that a change to ".devcontainer" is not
+    # in it: these jobs run natively, with mamba, and never enter the dev
+    # container. The behave suite that *does* run inside it is "Run: behave" in
+    # "test-dev.yml", and that one is gated on the container.
+    if: ${{ needs.set-matrix.outputs.behave == 'true' }}
     strategy:
       fail-fast: false
       # Sharded, reduced matrix: the slim OS/Python set (OSES_SLIM/PYTHONS_SLIM),
@@ -508,6 +587,7 @@ jobs:
     needs:
       - set-matrix
       # - cache-preheat
+    if: ${{ needs.set-matrix.outputs.examples == 'true' }}
     strategy:
       fail-fast: false
       # The sandbox matrix: this job renders every part type this repository
@@ -653,6 +733,21 @@ jobs:
     needs:
       - set-matrix
       # - cache-preheat
+    # Deep runs only: the nightly schedule, a manual dispatch, a push, or
+    # "#deepTest". Not on a pull request and not in the merge queue.
+    #
+    # Because it cannot report anything there. The one step that exercises
+    # anything is "continue-on-error", and has been since the public index went
+    # to build123d 0.11 -- so on the full matrix this is fifteen jobs whose only
+    # way to fail is to fail at "setup-all", which every "Pytest" leg beside it
+    # has already proven on the same image and the same interpreter. What it is
+    # genuinely for is the log: a daily sweep over the whole public index, which
+    # a nightly run still delivers.
+    #
+    # Put it back on the reduced tiers the day the step stops being
+    # "continue-on-error" -- see the TODO on it below. A job that can fail is
+    # worth running before a merge; this one cannot.
+    if: ${{ needs.set-matrix.outputs.deep == 'true' && needs.set-matrix.outputs.examples == 'true' }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -717,6 +812,12 @@ jobs:
     needs:
       - set-matrix
       # - cache-preheat
+    # Deep runs only, for exactly the reason "Examples (All)" above is: its one
+    # substantive step is "continue-on-error", so before a merge it is six jobs
+    # of up to an hour that cannot report a regression. The nightly run keeps
+    # the sweep, and the two exit codes it prints as a notice are where a
+    # regression in it shows up.
+    if: ${{ needs.set-matrix.outputs.deep == 'true' && needs.set-matrix.outputs.examples == 'true' }}
     strategy:
       fail-fast: false
       # Reduced matrix on purpose: up to 60 minutes per job, and it hits the

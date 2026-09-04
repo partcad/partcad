@@ -35,9 +35,13 @@ env:
     '["ubuntu-latest", "ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-22.04-arm", "windows-latest", "windows-2022",
     "macos-latest"]'
   # Dropped unless the run is deep: the Ubuntu 22.04 images. No macOS, because
-  # there is only one macOS leg left and dropping it would test none. See
-  # ".github/actions/test-depth" and OSES_DEEP_ONLY in "test.yml".
+  # there is only one macOS leg left and dropping it from the *deep* set would
+  # test none. See ".github/actions/test-depth" and OSES_DEEP_ONLY in "test.yml".
   OSES_DEEP_ONLY: '["ubuntu-22.04", "ubuntu-22.04-arm"]'
+  # Dropped on a pull request and kept from the merge queue up, as in "test.yml"
+  # -- that file carries the reasoning for which images are here and why arm64
+  # is not.
+  OSES_QUEUE_ONLY: '["windows-2022", "macos-latest"]'
   PYTHONS: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
   # Same cost trade-off as test.yml: the full Python range runs on
   # ubuntu-latest only, every other image builds on the oldest and the newest
@@ -78,6 +82,12 @@ jobs:
     if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      # Which of the four artifacts below this change can say anything about.
+      # See ".github/actions/changed-scopes".
+      wheel: ${{ steps.scope.outputs.wheel }}
+      docs: ${{ steps.scope.outputs.docs }}
+      vsix: ${{ steps.scope.outputs.vsix }}
+      plugin: ${{ steps.scope.outputs.plugin }}
     steps:
       - uses: actions/checkout@v7
 
@@ -85,20 +95,35 @@ jobs:
         id: depth
         uses: ./.github/actions/test-depth
 
+      - name: Decide what the change touches
+        id: scope
+        uses: ./.github/actions/changed-scopes
+        with:
+          deep: ${{ steps.depth.outputs.deep }}
+
       - name: Set matrix
         id: set-matrix
         env:
           DEEP: ${{ steps.depth.outputs.deep }}
+          QUEUE: ${{ steps.depth.outputs.queue }}
         run: |
-          if [ "${DEEP}" = "true" ]; then
-            OSES='${{ env.OSES }}'
-          else
-            OSES=$(jq -cn --argjson all '${{ env.OSES }}' --argjson deep_only '${{ env.OSES_DEEP_ONLY }}' '$all - $deep_only')
+          # Both tiers, exactly as in "test.yml": DEEP adds the older OS
+          # versions, QUEUE adds the images and the interpreters a pull request
+          # does not pay for.
+          OSES='${{ env.OSES }}'
+          PYTHONS='${{ env.PYTHONS }}'
+          if [ "${DEEP}" != "true" ]; then
+            OSES=$(jq -cn --argjson all "${OSES}" --argjson deep_only '${{ env.OSES_DEEP_ONLY }}' '$all - $deep_only')
+          fi
+          if [ "${QUEUE}" != "true" ]; then
+            OSES=$(jq -cn --argjson all "${OSES}" --argjson queue_only '${{ env.OSES_QUEUE_ONLY }}' '$all - $queue_only')
+            PYTHONS=$(jq -cn --argjson all "${PYTHONS}" '[$all[0], $all[-1]]')
           fi
           echo "Operating systems: ${OSES}"
+          echo "Python versions: ${PYTHONS}"
           # Leftover excludes for dropped images match nothing; see the note in
           # the same step in "test.yml".
-          echo 'matrix={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS }}, "exclude": ${{ env.EXCLUDES }}}' >> "${GITHUB_OUTPUT}"
+          echo 'matrix={"os": '"${OSES}"', "python-version": '"${PYTHONS}"', "exclude": ${{ env.EXCLUDES }}}' >> "${GITHUB_OUTPUT}"
 
   build:
     needs: set-matrix
@@ -107,10 +132,11 @@ jobs:
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
-    # As in "test.yml": a push to "devel" runs this only for a version bump, and
-    # the event name leads because a "schedule" carries no "head_commit" -- see
-    # the long note there.
-    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    # The "only a version bump on devel" guard is inherited from "set-matrix"
+    # through "needs" -- a job that needs a skipped job is skipped -- so what is
+    # left to state here is what this change can say about the wheel. See
+    # ".github/actions/changed-scopes".
+    if: ${{ needs.set-matrix.outputs.wheel == 'true' }}
     env:
       # 'startsWith', not '== windows-latest': the matrix now also contains a
       # pinned windows-2022, which needs the very same venv layout.
@@ -158,16 +184,38 @@ jobs:
           python -m pip install --no-index --find-links=dist --find-links=dev-tools/shim/dist partcad-cli
           mamba deactivate
 
+  # The documentation, built once -- one Linux runner, one interpreter, one
+  # "sphinx-build -W".
+  #
+  # It used to be a step of the matrix above, which meant that a change to a
+  # single ".rst" file built the wheel on every image and every Python version
+  # to get at it, and that a change to the wheel rebuilt the documentation
+  # fifteen times over. Neither is worth anything: Sphinx is pure Python and
+  # "docs/source/conf.py" enables no extensions at all -- there is no autodoc,
+  # so the build never imports PartCAD and cannot be affected by the platform it
+  # runs on or by the source tree it sits next to.
+  #
+  # Its own job also means the documentation can be gated on the documentation.
+  # A prose-only pull request now runs this and nothing else in this workflow.
+  docs:
+    name: "Documentation"
+    needs: set-matrix
+    if: ${{ needs.set-matrix.outputs.docs == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          # The interpreter Read the Docs builds with; see ".readthedocs.yaml".
+          python-version: "3.13"
       - name: Build documentation
-        shell: bash -el {0}
         run: |
-          . ~/.bashrc
-          . ~/.bash_profile
-          mamba activate ${{ format('env-test-build-{0}', matrix.python-version) }}
-          # python -m pip install -r .devcontainer/requirements.txt
           python -m pip install -r docs/requirements.txt
-          sphinx-build  -M html docs/source docs/build -n -W
-          mamba deactivate
+          # "-W": a warning is an error. That is the whole point of this job --
+          # a broken cross reference is how the published documentation ends up
+          # with a link that goes nowhere.
+          sphinx-build -M html docs/source docs/build -n -W
 
   # The VS Code extension, built once -- one Linux runner, one ".vsix", the same
   # package "deploy.yml" attaches to the release. It is not part of the matrix
@@ -180,10 +228,10 @@ jobs:
   # skips it, exactly as it skips everything else here.
   build-vscode-extension:
     name: "VS Code extension"
-    # As in "test.yml": a push to "devel" runs this only for a version bump, and
-    # the event name leads because a "schedule" carries no "head_commit" -- see
-    # the long note there.
-    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    # The "only a version bump on devel" guard comes through "needs", as it does
+    # for "build" above; this is the extension's own gate.
+    needs: set-matrix
+    if: ${{ needs.set-matrix.outputs.vsix == 'true' }}
     uses: ./.github/workflows/vsix.yml
 
   # The Claude Code plugin, on the same footing as the extension above: built
@@ -195,8 +243,9 @@ jobs:
   # matched that path filter and would have built the plugin here and there both.
   build-claude-plugin:
     name: "Claude Code plugin"
-    # As in "test.yml": a push to "devel" runs this only for a version bump, and
-    # the event name leads because a "schedule" carries no "head_commit" -- see
-    # the long note there.
-    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    # The "only a version bump on devel" guard comes through "needs", as above.
+    # This is the one job a change under "ai-agents/" runs, and it is the only
+    # thing such a change can break.
+    needs: set-matrix
+    if: ${{ needs.set-matrix.outputs.plugin == 'true' }}
     uses: ./.github/workflows/plugin.yml

@@ -27,10 +27,12 @@ on:
         default: true
   merge_group:
   # Freezing pulls ~500MB of OpenCASCADE per runner, so this does not run on
-  # every change: only on the ones that can change what is frozen. The two
-  # lists are duplicated because GitHub Actions does not support YAML anchors.
-  # "main" is absent on purpose: a push there runs "deploy.yml", which calls
-  # this workflow itself. Listing it here would build everything twice.
+  # every change: only on the ones that can change what is frozen.
+  #
+  # On a push that is a "paths:" filter, and it stays one -- a push is a single
+  # commit on a branch, which is exactly what the filter was designed for.
+  # "main" is absent on purpose: a push there runs "deploy.yml", which calls this
+  # workflow itself. Listing it here would build everything twice.
   #
   # Both "snap/**" and ".snapcraft.yaml" are listed. The recipe lives at the
   # root, but snapcraft still reads assets -- hooks, gui, keys -- from "snap/".
@@ -48,18 +50,20 @@ on:
       - "src/**"
       - "pyproject.toml"
       - "requirements*.txt"
+  # A pull request carries no "paths:" filter any more, and that is not the same
+  # as running on everything -- the filtering moved into the "build" job below,
+  # where the merge queue obeys it too.
+  #
+  # It had to move. "merge_group" supports no "paths:" filter at all: GitHub
+  # filters that event on branches only. So the list above governed the pull
+  # request and then stopped governing anything the moment the same commit
+  # entered the queue, where this workflow froze four bundles for a change to a
+  # README. The second reason is required checks: a workflow skipped by a
+  # "paths:" filter creates no check run, and a required check that is never
+  # created leaves a pull request waiting forever, while a job skipped by an
+  # "if:" reports "skipped", which counts as passing.
   pull_request:
     branches: ["main", "devel"]
-    paths:
-      - "dev-tools/pyinstaller/**"
-      - "dev-tools/snap/**"
-      - ".snapcraft.yaml"
-      - "snap/**"
-      - "install.sh"
-      - ".github/workflows/build-standalone.yml"
-      - "src/**"
-      - "pyproject.toml"
-      - "requirements*.txt"
 
 permissions:
   contents: read
@@ -288,6 +292,10 @@ jobs:
       build: ${{ steps.set-matrix.outputs.build }}
       install: ${{ steps.set-matrix.outputs.install }}
       examples: ${{ steps.set-matrix.outputs.examples }}
+      # Whether this change can alter what gets frozen at all. See
+      # ".github/actions/changed-scopes"; the note on "pull_request" above says
+      # why the answer lives here rather than in a "paths:" filter.
+      bundle: ${{ steps.scope.outputs.bundle }}
     steps:
       - uses: actions/checkout@v7
 
@@ -295,10 +303,17 @@ jobs:
         id: depth
         uses: ./.github/actions/test-depth
 
+      - name: Decide what the change touches
+        id: scope
+        uses: ./.github/actions/changed-scopes
+        with:
+          deep: ${{ steps.depth.outputs.deep }}
+
       - name: Set matrix
         id: set-matrix
         env:
           DEEP: ${{ steps.depth.outputs.deep }}
+          QUEUE: ${{ steps.depth.outputs.queue }}
         run: |
           if [ "${DEEP}" = "true" ]; then
             platforms=$(jq -cn --argjson core '${{ env.PLATFORMS_CORE }}' --argjson deep '${{ env.PLATFORMS_DEEP }}' '$core + $deep')
@@ -308,6 +323,23 @@ jobs:
             platforms='${{ env.PLATFORMS_CORE }}'
             forward='${{ env.INSTALL_FORWARD_CORE }}'
             examples='${{ env.EXAMPLES_CORE }}'
+          fi
+          # A pull request freezes no macOS bundle. This is the most expensive
+          # leg in the file -- a ~35 minute freeze on a runner that bills at 10x,
+          # and then the same again for the two "Examples" suites that run
+          # through it -- and it is the one nothing else in a pull request pays
+          # for twice. The merge queue restores it, so no macOS bundle reaches a
+          # release, or even the "devel" branch, unbuilt; "#deepTest" restores it
+          # on the pull request itself.
+          #
+          # Selected by "os" rather than by a list of names, so a macOS image
+          # added to any of the three lists above is covered without a fourth
+          # list having to be remembered.
+          if [ "${QUEUE}" != "true" ]; then
+            drop_macos='map(select(.os | startswith("macos") | not))'
+            platforms=$(jq -c "${drop_macos}" <<<"${platforms}")
+            forward=$(jq -c "${drop_macos}" <<<"${forward}")
+            examples=$(jq -c "${drop_macos}" <<<"${examples}")
           fi
           echo "Platforms: ${platforms}"
           echo 'build={"include": '"${platforms}"'}' >> "${GITHUB_OUTPUT}"
@@ -353,6 +385,10 @@ jobs:
   build:
     name: "Build (${{ matrix.platform }})"
     needs: set-matrix
+    # Everything below needs this job, so this is the whole workflow's gate: a
+    # change that cannot alter what is frozen skips the freeze, the installs, the
+    # snaps and the examples together.
+    if: ${{ needs.set-matrix.outputs.bundle == 'true' }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.build) }}

@@ -1,0 +1,274 @@
+name: "Changed scopes"
+description: >
+  Decides which *subjects* a change touches -- the wheel, the docs, the dev
+  container, the VS Code extension, the standalone bundles, the Claude Code
+  plugin -- so that a pull request and the merge queue run the jobs that can
+  actually say something about it and skip the ones that cannot. Says why in
+  the job summary. Used by the gating job of every workflow that runs on
+  "pull_request" and "merge_group".
+
+  Fail-safe by construction: a path this action does not recognise is "code",
+  and "code" turns everything on. Adding a directory to the repository can
+  therefore only ever run too much, never too little -- which is the direction
+  a mistake here has to fall.
+
+  It is deliberately NOT a "paths:" filter on the trigger. Two reasons, and both
+  are load-bearing:
+
+   * "merge_group" does not support "paths" at all. GitHub filters that event on
+     branches only, so a trigger-level filter is a filter a pull request obeys
+     and the merge queue ignores -- which is how a README typo came to run the
+     whole "Standalone" workflow the moment it entered the queue.
+   * a workflow skipped by a "paths:" filter creates no check run, and a
+     *required* check that is never created leaves the pull request waiting for
+     it forever. A job skipped by an "if:" reports the conclusion "skipped",
+     which branch protection and the merge queue both count as passing. Gating
+     jobs is therefore the only form of this that is safe to point required
+     checks at.
+
+inputs:
+  deep:
+    description: >
+      "true" when this run is a deep one (see ".github/actions/test-depth").
+      Every output is then "true" whatever changed: "#deepTest", the nightly
+      schedule, a manual dispatch and every push run the complete set of jobs,
+      which is what makes the reduced ones safe to reduce.
+    required: false
+    default: "false"
+  token:
+    description: "Token used to ask the API which files the change touches."
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  buckets:
+    description: "The buckets this change touches, space separated."
+    value: ${{ steps.classify.outputs.buckets }}
+  wheel:
+    description: "Build the Python distributions."
+    value: ${{ steps.classify.outputs.wheel }}
+  docs:
+    description: "Build the Sphinx documentation."
+    value: ${{ steps.classify.outputs.docs }}
+  pytest:
+    description: "Run the unit tests."
+    value: ${{ steps.classify.outputs.pytest }}
+  behave:
+    description: "Run the behave suite."
+    value: ${{ steps.classify.outputs.behave }}
+  examples:
+    description: "Render the example packages."
+    value: ${{ steps.classify.outputs.examples }}
+  devcontainer:
+    description: "Build the dev container and run the integration jobs inside it."
+    value: ${{ steps.classify.outputs.devcontainer }}
+  devcontainer-pytest:
+    description: >
+      Run pytest *inside* the dev container. False for a change that touches
+      nothing but the container's own configuration: that job duplicates the
+      "Pytest" matrix in "test.yml", while the behave and "pc" jobs beside it
+      are what actually exercise the container end to end.
+    value: ${{ steps.classify.outputs.devcontainer-pytest }}
+  bundle:
+    description: "Freeze the standalone (PyInstaller) bundles."
+    value: ${{ steps.classify.outputs.bundle }}
+  ide:
+    description: "Build the PartCAD IDE."
+    value: ${{ steps.classify.outputs.ide }}
+  vsix:
+    description: "Package the VS Code extension and run its JavaScript tests."
+    value: ${{ steps.classify.outputs.vsix }}
+  plugin:
+    description: "Build and validate the Claude Code plugin."
+    value: ${{ steps.classify.outputs.plugin }}
+
+runs:
+  using: composite
+  steps:
+    - id: files
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        DEEP: ${{ inputs.deep }}
+        EVENT_NAME: ${{ github.event_name }}
+        REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        # The merge queue's temporary branch: everything already queued, plus
+        # this pull request on top. Comparing the two is what "the change" means
+        # there -- "github.sha" on its own would be the whole repository.
+        MG_BASE: ${{ github.event.merge_group.base_sha }}
+        MG_HEAD: ${{ github.event.merge_group.head_sha }}
+      run: |
+        set -euo pipefail
+
+        # A deep run does not need the list at all, and asking for it on a push
+        # or a schedule would be asking a question with no answer -- there is no
+        # pull request and no merge group to compare against.
+        if [ "${DEEP}" = "true" ]; then
+          echo "all=true" >> "${GITHUB_OUTPUT}"
+          exit 0
+        fi
+
+        # Whether the API told us everything. Both endpoints below cap the file
+        # list they return, and a truncated list is a list that can be missing
+        # the one path that should have turned a job on -- so a cap that bites
+        # falls back to running everything rather than to guessing.
+        truncated=false
+
+        case "${EVENT_NAME}" in
+        pull_request | pull_request_target)
+          # Up to 3000 files over 10 pages; "changed_files" on the pull request
+          # itself says how many there really are.
+          gh api "repos/${REPO}/pulls/${PR_NUMBER}/files" --paginate \
+            --jq '.[].filename' > "${RUNNER_TEMP}/changed-files.txt" || truncated=true
+          declared=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.changed_files' || echo 0)
+          if [ "${declared:-0}" -gt "$(wc -l < "${RUNNER_TEMP}/changed-files.txt")" ]; then
+            truncated=true
+          fi
+          ;;
+        merge_group)
+          # "compare" returns at most 300 files and reports the real total, so
+          # the same check applies.
+          gh api "repos/${REPO}/compare/${MG_BASE}...${MG_HEAD}" \
+            --jq '.files[]?.filename' > "${RUNNER_TEMP}/changed-files.txt" || truncated=true
+          declared=$(gh api "repos/${REPO}/compare/${MG_BASE}...${MG_HEAD}" \
+            --jq '.files | length' || echo 0)
+          if [ "${declared:-0}" -gt "$(wc -l < "${RUNNER_TEMP}/changed-files.txt")" ]; then
+            truncated=true
+          fi
+          ;;
+        *)
+          # Nothing else reaches here: every other trigger is deep and returned
+          # above. Kept as a belt so a new trigger cannot silently arrive with an
+          # empty file list and skip the whole workflow.
+          truncated=true
+          ;;
+        esac
+
+        if [ "${truncated}" = "true" ] || [ ! -s "${RUNNER_TEMP}/changed-files.txt" ]; then
+          echo "::notice::could not enumerate the changed files; running everything"
+          echo "all=true" >> "${GITHUB_OUTPUT}"
+          exit 0
+        fi
+
+        echo "all=false" >> "${GITHUB_OUTPUT}"
+        echo "Changed files:"
+        sed 's/^/  /' "${RUNNER_TEMP}/changed-files.txt"
+
+    - id: classify
+      shell: bash
+      env:
+        ALL: ${{ steps.files.outputs.all }}
+      run: |
+        set -euo pipefail
+
+        buckets=""
+        add() { case " ${buckets} " in *" $1 "*) ;; *) buckets="${buckets}$1 " ;; esac; }
+
+        if [ "${ALL}" = "true" ]; then
+          add code; add docs; add ai; add devcontainer; add vscode; add ide
+          add packaging; add ci
+        else
+          while IFS= read -r f; do
+            [ -n "${f}" ] || continue
+            # First match wins, so the order is the policy. Every rule that
+            # names a directory comes before the rules that match by extension:
+            # "examples/**/README.md" is what "pc render -r" wrote and a check
+            # compares, not documentation, and "ai-agents/**/*.md" is the plugin
+            # itself rather than prose about it.
+            case "${f}" in
+            .github/*)
+              # CI configuration. Turns everything on: a change here is a change
+              # to the thing that decides what runs, and it has to be able to
+              # prove itself.
+              add ci ;;
+            .devcontainer/*)
+              add devcontainer ;;
+            ai-agents/*|.claude-plugin/*)
+              # The Claude Code plugin, which is Markdown and JSON and ships.
+              add ai ;;
+            .claude/*|.cursor/*|openspec/*)
+              # Agent scaffolding for people working in this repository. Nothing
+              # packages it and no test reads it.
+              add docs ;;
+            ide/vscode/*|ide/vscode-shim/*)
+              add vscode ;;
+            ide/standalone/*|.vscode/*)
+              # ".vscode/extensions.json" is what the IDE ships with.
+              add ide ;;
+            dev-tools/pyinstaller/*|dev-tools/snap/*|.snapcraft.yaml|snap/*|install.sh)
+              add packaging ;;
+            docs/*|.readthedocs.yaml)
+              add docs ;;
+            examples/*)
+              # Named before the extension rules below, and before the
+              # "AGENTS.md" rule, so that a rendered "README.md" under
+              # "examples/" stays what it is: an output the "Examples (PartCAD)"
+              # job compares against a fresh render, not prose.
+              add code ;;
+            AGENTS.md|CLAUDE.md|*/AGENTS.md|*/CLAUDE.md)
+              # This repository keeps a package's documentation for agents beside
+              # its source -- "src/partcad/AGENTS.md" and its four siblings are
+              # linked from the root file as the documentation of each package.
+              # Named here, before the source directories below, because that is
+              # what they are. Two filenames rather than "src/**/*.md", so a
+              # Markdown file that turned out to be *data* under "src/" still
+              # counts as code.
+              add docs ;;
+            src/*|tests/*|features/*|cad/*|tools/*|dev-tools/*)
+              add code ;;
+            *.md|*.rst|LICENSE.txt|apache20.svg)
+              add docs ;;
+            *)
+              # Anything this action has not been taught, "pyproject.toml",
+              # "poetry.lock", "conftest.py" and "requirements*.txt" included.
+              add code ;;
+            esac
+          done < "${RUNNER_TEMP}/changed-files.txt"
+        fi
+
+        buckets="${buckets% }"
+        echo "buckets=${buckets}" >> "${GITHUB_OUTPUT}"
+
+        has() { case " ${buckets} " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+        any() { for b in "$@"; do has "${b}" && return 0; done; return 1; }
+        emit() { if any "${@:2}"; then echo "$1=true"; else echo "$1=false"; fi >> "${GITHUB_OUTPUT}"; }
+
+        # Which buckets each subject listens to. "ci" is in every one of them.
+        emit wheel               code ci
+        # Sphinx reads "docs/source" and nothing else -- "conf.py" enables no
+        # extensions, so there is no autodoc pulling in the source tree.
+        emit docs                docs ci
+        emit pytest              code ci
+        emit behave              code ci
+        emit examples            code ci
+        # The dev container image is built from ".devcontainer" and installs the
+        # project into itself, so both matter to it.
+        emit devcontainer        code ci devcontainer
+        emit devcontainer-pytest code ci
+        # "src/**" is why the bundles are frozen at all; "packaging" is how.
+        emit bundle              code ci packaging
+        # Not "code": the IDE downloads the bundles rather than freezing them,
+        # so what rebuilds it is the application around them.
+        emit ide                 ci packaging vscode ide
+        emit vsix                ci vscode
+        emit plugin              ci ai
+
+        {
+          echo "### Changed scopes"
+          echo
+          if [ "${ALL}" = "true" ]; then
+            echo "Running everything (deep run, or the changed files could not be listed)."
+          else
+            echo "Buckets touched: \`${buckets}\`"
+          fi
+          echo
+          echo "| Subject | Runs |"
+          echo "| --- | --- |"
+          for subject in wheel docs pytest behave examples devcontainer \
+                         devcontainer-pytest bundle ide vsix plugin; do
+            value=$(grep -m1 "^${subject}=" "${GITHUB_OUTPUT}" | cut -d= -f2)
+            printf '| `%s` | %s |\n' "${subject}" "$([ "${value}" = "true" ] && echo yes || echo no)"
+          done
+        } >> "${GITHUB_STEP_SUMMARY}"
+        cat "${GITHUB_STEP_SUMMARY}"

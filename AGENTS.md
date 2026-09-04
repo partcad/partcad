@@ -195,12 +195,30 @@ poetry run pytest tests cad/freecad \
 poetry run behave                                                                        # integration tests (./features)
 ```
 
-CI fans these out over operating systems, and a pull request runs a reduced matrix: both Ubuntu 22.04 images
-and the second macOS are dropped. The full matrix runs nightly, on a manual dispatch, on a push, and on a
-pull request whose title or description contains `#deepTest`. `.github/actions/test-depth` is the one place
-that decides; `docs/source/contributing.rst` explains it to contributors. Note that a push to `devel` runs no
-matrix at all unless its head commit message starts with `Version updated` — the `set-matrix` job, and every
-job that depends on it, is skipped otherwise.
+CI fans these out over operating systems, and how much of that fan-out a run gets is decided in two places,
+which answer two different questions.
+
+`.github/actions/test-depth` answers **how deep**, in three tiers. A pull request gets `pr`: one image per OS
+and architecture, no macOS, and the oldest and newest supported Python only. The merge queue gets `queue`,
+which is what a pull request used to get — every current image, macOS included, and the full Python range —
+so the coverage a pull request drops is coverage the commit still earns before it lands, once per merge
+rather than once per push. Everything else gets `deep`: the nightly schedule, a manual dispatch, any push,
+and a pull request whose title or description contains `#deepTest`. `#deepTest` runs exactly what it ran
+before any of this existed.
+
+`.github/actions/changed-scopes` answers **which jobs at all**, by sorting the changed files into buckets: a
+documentation-only change runs the documentation build and nothing else, an `ai-agents/` change runs the
+Claude Code plugin, a `.devcontainer/` change runs the container's behave and `pc` jobs but not its pytest.
+It is fail-safe — a path it does not recognise counts as code and turns everything on — and it is a job
+condition rather than a `paths:` filter, because `merge_group` supports no `paths:` filter (so a
+trigger-level list is one the merge queue ignores, which is how a README typo used to freeze four standalone
+bundles in the queue) and because a workflow skipped by `paths:` never creates the check run a *required*
+check waits for, while a skipped job reports `skipped`, which counts as passing. Do not move these gates back
+onto the triggers.
+
+`docs/source/contributing.rst` explains both to contributors. Note that a push to `devel` runs no matrix at
+all unless its head commit message starts with `Version updated` — the `set-matrix` job, and every job that
+depends on it, is skipped otherwise.
 
 **Neither gate trusts pytest's exit code.** On Windows it disagrees with the run in both directions — exit `0`
 with a test having failed (which is what #444 was written for), and exit `127` after a session where every test
