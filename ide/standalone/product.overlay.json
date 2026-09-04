@@ -18,6 +18,15 @@
   "urlProtocol": "partcad-ide",
   "serverApplicationName": "partcad-ide-server",
   "serverDataFolderName": ".partcad-ide-server",
+  // `build.sh` renames every `bin/codium*` to `partcad-ide*`, the tunnel binary
+  // included, so the name upstream left here points at a file that is no longer
+  // there: `partcad-ide serve-web` died with
+  // `spawn .../bin/codium-tunnel ENOENT`, on every platform, and so did
+  // `tunnel`. The mutexes go with it -- they exist to keep two *different*
+  // applications' tunnels apart, which VSCodium's names cannot do.
+  "tunnelApplicationName": "partcad-ide-tunnel",
+  "win32TunnelServiceMutex": "partcad-ide-tunnelservice",
+  "win32TunnelMutex": "partcad-ide-tunnel",
   "darwinBundleIdentifier": "org.partcad.ide",
   "win32AppUserModelId": "PartCAD.PartCADIDE",
   "win32DirName": "PartCAD IDE",

@@ -669,6 +669,16 @@ with open(sys.argv[1], 'rb') as handle:
     print(plistlib.load(handle)['CFBundleExecutable'])
 " "${APP_ROOT}/Contents/Info.plist")"
   EXECUTABLE="${APP_ROOT}/Contents/MacOS/${BUNDLE_EXECUTABLE}"
+  # Read here because it is read *before* the plist is branded further down, and
+  # what the helper applications are named after is the application's name, not
+  # its executable's. VSCodium spells both "VSCodium" and so the two are
+  # interchangeable today; they are different fields and only one of them is the
+  # one Electron resolves a helper from.
+  UPSTREAM_BUNDLE_NAME="$("${PYTHON}" -c "
+import plistlib, sys
+with open(sys.argv[1], 'rb') as handle:
+    print(plistlib.load(handle)['CFBundleName'])
+" "${APP_ROOT}/Contents/Info.plist")"
   ;;
 esac
 
@@ -745,6 +755,61 @@ else
 fi
 
 if [ "${OS_NAME}" = "macos" ]; then
+  # Electron resolves the four helper applications it spawns -- the renderer, the
+  # GPU process, the plugin host and the generic one -- by name, from the outer
+  # bundle's `CFBundleName`. Branding the plist above therefore renames what
+  # Electron looks for, and a bundle whose helpers are still VSCodium's dies in
+  # `electron_main_delegate_mac.mm` with "Unable to find helper app" -- before it
+  # opens a window, creates a user data directory or writes one line of log.
+  # 0.8.33 and 0.8.49 shipped that way: unlaunchable on every Mac, and silent
+  # about why, which is what left "Start it once" below blaming the runner.
+  #
+  # Three names change per helper, not one. The directory is what Electron looks
+  # up; the executable inside it has to follow, because a helper's `Info.plist`
+  # carries no `CFBundleExecutable` and macOS falls back to the bundle's base
+  # name; and `CFBundleName` follows so the process does not report itself as
+  # the editor this was built from.
+  log "==> Renaming the Electron helper applications"
+  FRAMEWORKS_DIR="${APP_ROOT}/Contents/Frameworks"
+  for helper_suffix in "" " (GPU)" " (Plugin)" " (Renderer)"; do
+    helper_old="${FRAMEWORKS_DIR}/${UPSTREAM_BUNDLE_NAME} Helper${helper_suffix}.app"
+    helper_new="${FRAMEWORKS_DIR}/PartCAD IDE Helper${helper_suffix}.app"
+    if [ ! -d "${helper_old}" ]; then
+      # Not the name this build expected. There is exactly one helper per suffix
+      # in the bundle, so if upstream has renamed them, say what is there and use
+      # it rather than failing a build over a name -- but only when it is
+      # unambiguous, because renaming the wrong directory produces the same dead
+      # application this whole block exists to prevent.
+      helper_found=""
+      for candidate in "${FRAMEWORKS_DIR}"/*" Helper${helper_suffix}.app"; do
+        [ -d "${candidate}" ] || continue
+        [ -z "${helper_found}" ] || fail "more than one helper application matches
+       '* Helper${helper_suffix}.app' in ${FRAMEWORKS_DIR}; expected ${helper_old}"
+        helper_found="${candidate}"
+      done
+      [ -n "${helper_found}" ] ||
+        fail "no helper application at ${helper_old}, and nothing matching
+       '* Helper${helper_suffix}.app' beside it. The VSCodium bundle layout
+       changed; renaming has to follow it, or the IDE does not start on macOS."
+      warn "expected ${helper_old##*/}, found ${helper_found##*/}; renaming that instead"
+      helper_old="${helper_found}"
+    fi
+    helper_old_executable="$(basename "${helper_old}" .app)"
+    rm -rf "${helper_new}"
+    mv "${helper_old}" "${helper_new}"
+    mv "${helper_new}/Contents/MacOS/${helper_old_executable}" \
+      "${helper_new}/Contents/MacOS/PartCAD IDE Helper${helper_suffix}"
+    # The signature seals the names that just changed, so it cannot survive them.
+    # The whole bundle is re-signed below, which covers these.
+    rm -rf "${helper_new}/Contents/_CodeSignature"
+    helper_id="$(printf '%s' "${helper_suffix}" | tr -d ' ()' | tr '[:upper:]' '[:lower:]')"
+    "${PYTHON}" "${SCRIPT_DIR}/tools/brand.py" plist \
+      --path "${helper_new}/Contents/Info.plist" \
+      --name "PartCAD IDE Helper${helper_suffix}" \
+      --identifier "org.partcad.ide.helper${helper_id}" \
+      --version "${VERSION}"
+  done
+
   # Everything above edited files inside a signed bundle, which invalidates the
   # signature: macOS then refuses to open the application at all. Ad-hoc signing
   # makes it launchable again. It is not a Developer ID signature and does not
@@ -820,7 +885,13 @@ fi
 
 ##############################################  SMOKE TEST  ##################################################
 
-log "==> Checking the application starts"
+# `--version` through `bin/partcad-ide` says the *command line* runs. It does not
+# say the application starts: that launcher ends in `ELECTRON_RUN_AS_NODE=1`,
+# which is Electron being Node -- no browser process, no helper applications, no
+# window. It printed a version out of a macOS bundle that could not launch at all
+# for two releases. Kept, because a broken CLI is worth catching too, and no
+# longer described as more than it is.
+log "==> Checking the command line runs"
 IDE_VERSION="$("${LAUNCHER}" --version | head -n 1)" ||
   fail "${LAUNCHER} does not run"
 log "    ${LAUNCHER} --version -> ${IDE_VERSION}"
@@ -833,6 +904,9 @@ if [ "${INSTALL_EXTENSIONS}" = "1" ]; then
     --executable "${EXECUTABLE}"
     --launcher "${LAUNCHER}"
   )
+  if [ "${OS_NAME}" = "macos" ]; then
+    VERIFY_ARGS+=(--app-root "${APP_ROOT}")
+  fi
   if [ -n "${CLI_BUNDLE}" ]; then
     VERIFY_ARGS+=(--expect-tools)
   fi

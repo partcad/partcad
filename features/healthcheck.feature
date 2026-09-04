@@ -5,26 +5,39 @@ Feature: 'pc healthcheck' command
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
 
+  # The four bounds of `requires-python` in `pyproject.toml` (">=3.10,<3.15"),
+  # one scenario each. 3.13 used to be here as an *unsupported* version, which
+  # is what the check said and `pyproject.toml` had not said for some time.
   @failure @python-version
-  Scenario: Running health check with an invalid version
+  Scenario: Running health check on a version older than the minimum
     Given system python version is "3.7"
     When I run partcad healthcheck
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "Python version 3.7 is not supported"
 
   @success @python-version
-  Scenario: Running health check with a valid version
+  Scenario: Running health check on a supported version
     Given system python version is "3.11"
     When I run partcad healthcheck
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "PythonVersion: Passed"
 
-  @failure @python-version
-  Scenario: Running health check with a invalid version
-    Given system python version is "3.13"
+  # The interpreter the standalone bundle carries. While the check stopped at
+  # 3.12, the bundle spent every start reporting that the Python it ships is
+  # unsupported and telling the user to change a system Python it does not use.
+  @success @python-version
+  Scenario: Running health check on the newest supported version
+    Given system python version is "3.14"
     When I run partcad healthcheck
     Then the command should exit with a status code of "0"
-    Then STDOUT should contain "Python version 3.13 is not supported"
+    Then STDOUT should contain "PythonVersion: Passed"
+
+  @failure @python-version
+  Scenario: Running health check on a version newer than the maximum
+    Given system python version is "3.15"
+    When I run partcad healthcheck
+    Then the command should exit with a status code of "0"
+    Then STDOUT should contain "Python version 3.15 is not supported"
 
   @success @python-version @filters
   Scenario: Run healthcheck command with dry run and filter

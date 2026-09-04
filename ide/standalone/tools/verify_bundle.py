@@ -24,6 +24,7 @@ import argparse
 import json
 import os
 import pathlib
+import plistlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -31,6 +32,11 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import jsonc  # noqa: E402  (the path has to be set up first)
 
 SERVICE_EXECUTABLES = ("partcad-json-rpc", "partcad-json-rpc.exe")
+
+# The helper applications Electron spawns on macOS, by the suffix each one's
+# name ends in. The unsuffixed entry is the generic helper and is the one the
+# other three are derived from; all four have to be there.
+MACOS_HELPER_SUFFIXES = ("", " (GPU)", " (Plugin)", " (Renderer)")
 
 # The extension that carries the welcome window (`../bootstrap`), and the
 # examples it offers to open (`copy_examples.py` puts them there).
@@ -235,6 +241,46 @@ def check_entry_point(app_dir: pathlib.Path, problems: list[str], notes: list[st
     notes.append(f"entry point: {main} (software WebGL enabled)")
 
 
+def check_macos_helpers(app_root: pathlib.Path, problems: list[str], notes: list[str]) -> None:
+    """The Electron helper applications are named for the branded application.
+
+    Electron resolves the helper it spawns for each child process from the outer
+    bundle's `CFBundleName`, so renaming the application without renaming
+    `Contents/Frameworks/<name> Helper*.app` gives a bundle that dies at
+    `electron_main_delegate_mac.mm` with "Unable to find helper app". It happens
+    before a window, a user data directory or a log line exists, which is why
+    0.8.33 and 0.8.49 both shipped it: everything downstream of the launch --
+    the extensions, `product.json`, the embedded tools -- verified fine, and
+    `bin/partcad-ide --version` runs Electron as Node and never looks for a
+    helper at all.
+
+    Checked here rather than only by starting the application because it is a
+    property of the bundle, and a static check says which of the four is wrong.
+    """
+    info_plist = app_root / "Contents" / "Info.plist"
+    if not info_plist.is_file():
+        problems.append(f"no Info.plist at {info_plist}")
+        return
+    with open(info_plist, "rb") as handle:
+        bundle_name = plistlib.load(handle).get("CFBundleName")
+    if not bundle_name:
+        problems.append(f"{info_plist} has no CFBundleName; Electron has no helper name to resolve")
+        return
+
+    frameworks = app_root / "Contents" / "Frameworks"
+    for suffix in MACOS_HELPER_SUFFIXES:
+        name = f"{bundle_name} Helper{suffix}"
+        helper = frameworks / f"{name}.app"
+        if not helper.is_dir():
+            # What is there instead, if anything: "no helper application at ..."
+            # on its own does not say that a rename is what was missed.
+            stale = sorted(entry.name for entry in frameworks.glob(f"*Helper{suffix}.app"))
+            found = f" (found {', '.join(stale)} instead: the rename did not happen)" if stale else ""
+            problems.append(f"no helper application at {helper}{found}")
+            continue
+        check_executable(helper / "Contents" / "MacOS" / name, f"helper executable '{name}'", problems, notes)
+
+
 def check_executable(path: pathlib.Path, description: str, problems: list[str], notes: list[str]) -> None:
     if not path.is_file():
         problems.append(f"no {description} at {path}")
@@ -257,6 +303,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--executable", type=pathlib.Path, required=True, help="the renamed application executable")
     parser.add_argument("--launcher", type=pathlib.Path, required=True, help="the bin/ command line launcher")
     parser.add_argument(
+        "--app-root",
+        type=pathlib.Path,
+        help="the macOS application bundle ('...app'), when one was built",
+    )
+    parser.add_argument(
         "--expect-tools",
         action="store_true",
         help="require the PartCAD command line tools to be embedded in the application",
@@ -271,6 +322,8 @@ def main(argv: list[str] | None = None) -> int:
     check_entry_point(args.resources / "app", problems, notes)
     check_executable(args.executable, "application executable", problems, notes)
     check_executable(args.launcher, "command line launcher", problems, notes)
+    if args.app_root is not None:
+        check_macos_helpers(args.app_root, problems, notes)
 
     extensions_dir = args.resources / "app" / "extensions"
     present = installed_extensions(extensions_dir)

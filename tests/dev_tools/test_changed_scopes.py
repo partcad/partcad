@@ -126,6 +126,37 @@ def test_an_unknown_path_runs_everything(tmp_path):
     assert subjects["pytest"] and subjects["behave"] and subjects["wheel"] and subjects["bundle"]
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "ide/standalone/build.sh",
+        "ide/standalone/AGENTS.md",
+        "ide/vscode/src/extension.ts",
+        "ide/vscode/AGENTS.md",
+    ],
+)
+def test_the_ide_is_built_without_freezing_a_bundle(tmp_path, path):
+    """The combination "build-ide-standalone.yml" has to be able to survive.
+
+    The IDE embeds the frozen command line bundles but does not freeze them, so
+    a change to the application around them turns `ide` on and leaves `bundle`
+    off -- deliberately, and it is the whole point of `ide` not listening to
+    `code`. What follows from it is not obvious, and cost a red pull request:
+    "Standalone" still *runs* on that pull request and skips its builds, so the
+    IDE build's sibling run exists and holds nothing. "Find the 'Standalone' run
+    that built the bundles" has to read that as "take them from the base
+    branch", which is what it does for a commit with no run at all, rather than
+    as a failure to produce them.
+
+    If this ever becomes "bundle is on too", that fallback stops being exercised
+    -- and the case it covers, a release built from a commit whose scope froze
+    nothing, is not one to discover on a release.
+    """
+    subjects, _ = classify(tmp_path, [path])
+    assert subjects["ide"] is True
+    assert subjects["bundle"] is False
+
+
 def test_source_alone_does_not_freeze_a_bundle(tmp_path):
     """The one place a source change and a dependency change part company.
 
