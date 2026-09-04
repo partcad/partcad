@@ -182,13 +182,13 @@
         "properties": {
           "partcad.open.useDocker": {
             "default": false,
-            "description": "Let PartCAD run a third-party application (\"Open in...\": FreeCAD, Blender, Gazebo, KiCad) in a Docker container when it is not installed on this machine. The container is named after the application ('partcad-freecad', 'partcad-blender', 'partcad-gazebo', 'partcad-kicad'), keeps the workspace mounted at the path it has here, and shows its windows on this machine's X display - which macOS and Windows need an X server for.",
+            "description": "Let PartCAD run a third-party application (\"Open in...\": FreeCAD, Blender, Gazebo, MuJoCo, KiCad) in a Docker container when it is not installed on this machine. The container is named after the application ('partcad-freecad', 'partcad-blender', 'partcad-gazebo', 'partcad-mujoco', 'partcad-kicad'), keeps the workspace mounted at the path it has here, and shows its windows on this machine's X display - which macOS and Windows need an X server for.",
             "scope": "machine",
             "type": "boolean"
           },
           "partcad.open.dockerImage": {
             "default": "",
-            "description": "Create that container from this image instead of the application's default one (FreeCAD: 'linuxserver/freecad:latest', Blender: 'linuxserver/blender:latest', Gazebo: 'gazebosim/gz-harmonic:latest', KiCad: the 'ghcr.io/partcad/partcad-container-kicad' image of this release). Applies to whichever application is opened next and only when its container is created; remove an existing one to have it recreated.",
+            "description": "Create that container from this image instead of the application's default one (FreeCAD: 'linuxserver/freecad:latest', Blender: 'linuxserver/blender:latest', Gazebo: 'gazebosim/gz-harmonic:latest', MuJoCo: 'ghcr.io/google-deepmind/mujoco:latest', KiCad: the 'ghcr.io/partcad/partcad-container-kicad' image of this release). Applies to whichever application is opened next and only when its container is created; remove an existing one to have it recreated.",
             "scope": "machine",
             "type": "string"
           }
@@ -618,6 +618,13 @@
         "group": "Open in",
         "title": "Blender",
         "icon": "$(link-external)"
+      },
+      {
+        "command": "partcad.openInMuJoCo",
+        "category": "PartCAD",
+        "group": "Open in",
+        "title": "MuJoCo",
+        "icon": "$(link-external)"
       }
     ],
     "submenus": [
@@ -891,11 +898,15 @@
       "partcad.submenu.openWith": [
         {
           "command": "partcad.openInFreeCAD",
-          "when": "view == partcadExplorer && viewItem != sceneWorld"
+          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf"
         },
         {
           "command": "partcad.openInGazebo",
           "when": "view == partcadExplorer && viewItem == sceneWorld"
+        },
+        {
+          "command": "partcad.openInMuJoCo",
+          "when": "view == partcadExplorer && (viewItem == sceneWorld || viewItem == sceneMjcf)"
         },
         {
           "command": "partcad.openInKiCad",
@@ -903,7 +914,7 @@
         },
         {
           "command": "partcad.openInBlender",
-          "when": "view == partcadExplorer && viewItem != sceneWorld"
+          "when": "view == partcadExplorer && viewItem != sceneWorld && viewItem != sceneMjcf"
         }
       ]
     },

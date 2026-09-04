@@ -10,7 +10,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import asyncio
-import base64
 import os
 import sys
 import tempfile
@@ -65,6 +64,22 @@ SKETCH_EXTENSION_MAPPING = {
     "dxf": "dxf",
     "cadquery": "py",
     "build123d": "py",
+}
+
+# The scene types that are file formats, and the extension each is stored in.
+# The counterpart of the two mappings above for the third kind of object a file
+# can hold: an arrangement rather than a shape or a drawing. It exists for the
+# same reason they do -- to tell from a file name what a conversion should read
+# it as -- and it is what `pc open --with mujoco` uses to work out whether the
+# file it was handed already is a model MuJoCo reads.
+#
+# 'assy' is in it and is not convertible ad-hoc (see
+# 'partcad.adhoc.adhoc.PACKAGE_ONLY_TYPES'): naming it is what lets the refusal
+# say what the file is instead of reporting an unknown extension.
+SCENE_EXTENSION_MAPPING = {
+    "assy": "assy",
+    "world": "world",
+    "mjcf": "xml",
 }
 
 # The 2D projections '//builtin/render' implements, and the file extension each
@@ -913,50 +928,12 @@ class Shape(ShapeConfiguration):
     async def _materialize_output_script(self, ctx, impl):
         """The on-disk path of the script that writes this file type.
 
-        For a local package - which the built-in ones are - that is a file in
-        the package. For a plugin-backed package it is fetched from the plugin
-        (like a file-backed object) and written into the package's cache
-        directory, the same way a partType's wrapper script is.
+        'output.materialize_script()' is the whole of it: nothing about finding
+        an implementation's script depends on the shape it is about to be run
+        for, and the simulation runner needs the very same answer for a plugin
+        that writes no file at all (see 'partcad.simulation').
         """
-        if not impl.script:
-            raise Exception(
-                "No implementation of '%s' is declared: neither %s nor this package provides a 'path'"
-                % (impl.format_name, output.BUILTIN_PACKAGES[impl.section])
-            )
-
-        package_name = impl.config.get("package") or output.BUILTIN_PACKAGES[impl.section]
-        project = ctx.get_project(package_name)
-        if project is None:
-            raise Exception("The package implementing '%s' is not found: %s" % (impl.format_name, package_name))
-        impl.project = project
-
-        # The script is named by the package's own configuration and is about to
-        # be executed, so it has to come from inside that package: a 'path' of
-        # '../../..' would otherwise both read and, for a plugin-backed package,
-        # write outside it.
-        config_dir = os.path.abspath(project.config_dir)
-        script_abs = os.path.abspath(os.path.join(config_dir, impl.script))
-        if os.path.commonpath([config_dir, script_abs]) != config_dir:
-            raise Exception("The implementation of '%s' is outside its package: %s" % (impl.format_name, impl.script))
-        if os.path.exists(script_abs):
-            return script_abs
-
-        get_data_async = getattr(project, "get_data_async", None)
-        if get_data_async is None:
-            raise Exception("The implementation of '%s' is not found: %s" % (impl.format_name, script_abs))
-
-        data = await get_data_async("files/" + impl.script)
-        if data is None:
-            raise Exception(
-                "The repository did not provide the implementation of '%s': %s" % (impl.format_name, impl.script)
-            )
-        content = base64.b64decode(data) if isinstance(data, str) else bytes(data)
-        dirs = os.path.dirname(script_abs)
-        if dirs and not os.path.exists(dirs):
-            os.makedirs(dirs, exist_ok=True)
-        with open(script_abs, "wb") as f:
-            f.write(content)
-        return script_abs
+        return await output.materialize_script(ctx, impl)
 
     async def _output_request(self, obj, impl, kwargs, overlay=None, ports=None):
         """What the implementation is handed.

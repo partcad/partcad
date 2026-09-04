@@ -1,0 +1,110 @@
+desc: PartCAD example project which demonstrates simulating a part or an assembly.
+
+docs:
+  usage: |
+    A part says what it *is*. `simulate:` is where it says what it is supposed
+    to **do** -- or, as here, what it is supposed not to do:
+
+    ```shell
+    pc sim -a stable      # the stack stands; the validation passes
+    pc sim -a unstable    # the top block falls off; that validation passes too
+    pc sim                # every simulation this package declares
+    ```
+
+    The two assemblies are the same two blocks. In `stable` the upper one sits
+    squarely on the lower one; in `unstable` it is pushed 18 mm out of 20 off
+    the edge, so its centre of mass is past the corner it rests on. Nothing
+    static distinguishes them -- both render, export and list the same way --
+    and neither does anything PartCAD can check by looking. What separates them
+    is what happens when the world is switched on.
+
+    Each `simulate:` states four things: the `scene:` the object is placed in
+    (here the default, `//builtin/scene:subject`, an empty world holding the
+    subject and nothing else), the `offset:` that puts it there -- the blocks
+    are drawn about their own centres, so the stack is lifted 10 mm to stand its
+    bottom face on the floor -- the `simulation:` plugin that runs it (here the
+    default, `//builtin/simulate:mujoco`), and the `validation:` expression that
+    says whether what happened is what was supposed to happen.
+
+    The two validations are opposite conditions on the very same simulation, so
+    both runs pass and the *results* are what differ: nothing in `stable` moves
+    more than a couple of millimetres in ten seconds, and something in
+    `unstable` ends up more than 5 mm lower than it started. `--json` prints
+    everything the plugin reported, which for MuJoCo is where every body was
+    before and after:
+
+    ```shell
+    pc sim --json -a unstable
+    ```
+
+    Running MuJoCo needs no MuJoCo on this machine: the plugin runs in a PartCAD
+    sandbox that installs it, and the scene reaches it as the MJCF PartCAD
+    writes. That is an ordinary export, so the same file can be written out and
+    looked at -- or opened in MuJoCo:
+
+    ```shell
+    pc export -a -t mjcf -O ./ unstable
+    pc open --with mujoco ./unstable.xml
+    ```
+
+parts:
+  block:
+    desc: A 20 mm cube, centred on its own origin
+    type: cadquery
+    path: block.py
+    simulate:
+      # A part declares these exactly as an assembly does. One block on a floor
+      # has nowhere to fall, which is the point: it is the control the two
+      # assemblies below are read against.
+      rests:
+        desc: A block set down on the floor stays where it was put
+        offset: [[0, 0, 10], [0, 0, 1], 0]
+        validation: |
+          max(
+              abs(after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2])
+              for name in before["bodies"]
+          ) < 2.0
+
+assemblies:
+  stable:
+    desc: Two blocks, the upper one squarely on top of the lower one
+    type: assy
+    simulate:
+      stands:
+        desc: Nothing moves, because there is no reason for anything to move
+        # The blocks are drawn about their own centres, so the stack spans z
+        # from -10 to 30. Lift it by 10 to stand its bottom face on the floor of
+        # the scene: this is what an 'offset:' is for -- reconciling the frame
+        # the object is drawn in with the frame the scene places things in.
+        offset: [[0, 0, 10], [0, 0, 1], 0]
+        # 'before' and 'after' are what the MuJoCo plugin reported: where every
+        # body was when the world started, and where it was ten seconds later,
+        # in millimetres. Two millimetres of settling is contact softness, not
+        # motion.
+        validation: |
+          max(
+              abs(after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2])
+              for name in before["bodies"]
+          ) < 2.0
+
+  unstable:
+    desc: The same two blocks, with the upper one 18 mm out of 20 off the edge
+    type: assy
+    simulate:
+      falls:
+        desc: The top block topples off and ends up on the floor
+        offset: [[0, 0, 10], [0, 0, 1], 0]
+        # The opposite condition, on the very same simulation: something ended
+        # up markedly lower than it started. The top block falls a whole block's
+        # height, so 5 mm is far below what happens and far above the settling
+        # the stable stack shows.
+        validation: |
+          max(
+              before["bodies"][name]["pos"][2] - after["bodies"][name]["pos"][2]
+              for name in before["bodies"]
+          ) > 5.0
+
+render:
+  readme:
+  svg:
+    prefix: ./

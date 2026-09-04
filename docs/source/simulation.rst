@@ -6,8 +6,15 @@ PartCAD can read a `URDF <https://wiki.ros.org/urdf>`_ file as an assembly
 assembly between URDF and ASSY in either direction (``pc convert assembly``).
 It does the same for `SDFormat <http://sdformat.org/>`_ -- what Gazebo describes
 a simulation *world* in -- against a :ref:`scene <scenes>` rather than an
-assembly: ``type: world``, ``pc export -S -t world``, ``pc convert scene``.
-This page is the design record for that work: what the conversions actually
+assembly: ``type: world``, ``pc export -S -t world``, ``pc convert scene``. And
+it does the same for `MJCF <https://mujoco.readthedocs.io/en/stable/XMLreference.html>`_,
+what `MuJoCo <https://mujoco.org/>`_ describes a model in: ``type: mjcf``,
+``pc export -t mjcf``, as an assembly or as a scene.
+
+It can also **run** one. ``simulate:`` is where a part or an assembly says what
+it is supposed to do -- or not do -- once it is placed in a world and the world
+is switched on, and ``pc sim`` places it, runs it and checks the claim. This
+page is the design record for all of that: what the conversions actually
 preserve, what they cannot, and what it would take for PartCAD to hold
 everything a physical simulation needs.
 
@@ -445,6 +452,220 @@ than dropped in silence, the mirror image of the reader refusing to invent one.
    distance function. SDFormat is what this section is about, and it is called
    ``world`` everywhere in PartCAD -- the scene type, the export file type, and
    the extension of the files themselves.
+
+Reading and writing MJCF
+========================
+
+MJCF is what MuJoCo describes a model in, and it is the third description of a
+placed arrangement PartCAD reads. ``type: mjcf`` declares one, in
+``assemblies:`` or in ``scenes:``, and ``pc export -t mjcf`` writes one.
+
+It is the only one of the three that is **both** an assembly type and a scene
+type, and that is not a hedge. A URDF describes one robot and a ``.world``
+describes one world, so each of them reaches PartCAD as one kind of object. An
+MJCF file is routinely used for both -- the same element holds a manipulator and
+the table it is bolted to -- and nothing in the file says which it is. So both
+types exist, one reader serves them
+(``AssemblyFactoryMjcf``/``SceneFactoryMjcf``), and the package says what it
+meant by declaring it in one section or the other.
+
+The reader maps ``<worldbody>`` onto the tree the other two readers produce: a
+body is a sub-assembly, a body of one geom *is* that geom named after the body,
+a body of several holds one part per geom under ``<object>/<body>/<geom>``, and
+every geom becomes a part of the package. Three things about MJCF are easy to
+get wrong and are handled in ``mujoco_common.py`` rather than at each call site:
+
+* **Angles are degrees by default** -- the opposite of URDF and SDFormat, which
+  are radians with no way to say otherwise. ``<compiler angle="radian">`` says
+  so; a file that omits the element is in degrees.
+* **An orientation has five spellings** -- ``quat``, ``axisangle``, ``euler``
+  (in whichever sequence ``<compiler eulerseq>`` names), ``xyaxes`` and
+  ``zaxis`` -- and all five appear in real models. All five are read; only
+  ``quat`` is ever written, because it is the one spelling that needs no
+  ``<compiler>`` to be read back.
+* **Sizes are half-sizes.** A box's ``size`` is its half-extents and a
+  cylinder's is ``(radius, half-length)``, where SDFormat and URDF state the
+  whole thing.
+
+``<default>`` classes are applied (including ``childclass``), ``<include>`` is
+spliced in before anything is read, and everything a static arrangement cannot
+hold -- joints, actuators, tendons, sensors, lights, cameras, contacts,
+keyframes -- is counted and reported exactly as the other two readers report
+what they drop.
+
+The exporter is handed the assembly tree itself (``decode: false``) for the
+reason the URDF and world exporters are, and writes one ``<body>`` per node with
+a ``<geom type="mesh">`` per shape. Meshes are written in millimetres and
+referenced with ``scale="0.001 0.001 0.001"``, and MuJoCo reads **binary** STL
+only, which is why ``ascii`` defaults to false and an ``ascii: true`` is
+reported rather than quietly written.
+
+Three of its parameters exist because a simulation needs what a scene does not
+say:
+
+``static``
+   A scene states where things are, so every body is welded to the world unless
+   this is turned off, which gives each of them a ``<freejoint>``. A simulation
+   of a model that cannot move has nothing to report.
+
+``flatten``
+   Write every node that holds geometry as a body of the ``<worldbody>`` itself,
+   at the world pose the tree puts it at, rather than nesting the bodies as the
+   tree nests. A nested body with no joint above it is one rigid body with its
+   parent -- right for a rigid product, wrong for a stack of blocks that is
+   meant to be able to fall over.
+
+``light`` and ``ground_plane``
+   What makes the file usable rather than what the scene says, the same way the
+   world exporter's ``sun`` and ``ground_plane`` are. The plane is a ``<geom>``
+   of the ``<worldbody>`` itself, so it is static whatever ``static`` says.
+
+Every description is a Jinja2 template
+======================================
+
+An ASSY file has always been rendered as a `Jinja2 <https://jinja.palletsprojects.com/>`_
+template before it is parsed, which is what lets one file describe a family of
+assemblies. A URDF, a ``.world`` and an MJCF model are declared exactly the same
+way and were not, so a package could parameterize one kind of arrangement and
+not the other three. All four share one implementation now, and the parameters
+reach every one of them under the same names: ``param_<name>`` for each declared
+parameter, and ``name`` for the object's own.
+
+.. code-block:: yaml
+
+   scenes:
+     cell:
+       type: mjcf
+       path: cell.xml
+       parameters:
+         conveyor_length: 2.0
+
+.. code-block:: xml
+
+   <body name="conveyor">
+     <geom type="box" size="{{ param_conveyor_length / 2 }} 0.3 0.05"/>
+   </body>
+
+The rendered file is written under PartCAD's own state directory rather than
+beside the original -- rendering is derived data, and instantiating an object
+must not drop files into the user's source tree -- and the file is left exactly
+as it is when rendering changes nothing, which is the usual case. What the file
+*references* keeps resolving against the directory the package declared it in:
+each reader is handed that directory separately, which is what keeps a
+``package://`` mesh, a ``model://`` include and an ``<asset>`` file working in a
+template.
+
+Running a simulation
+====================
+
+``simulate:`` is an optional section of a part or an assembly. Each entry in it
+is one simulation, and states four things:
+
+``scene:``
+   The scene the object is placed in, by full path. The object's own full path
+   is assigned to that scene's ``subject`` parameter -- unconditionally, and
+   whatever else the entry says -- which is what lets one scene serve every
+   object that names it. Nothing special is declared for it: a simulation scene
+   is an ordinary scene with an ordinary parameter, and a Jinja2 template is
+   what places the subject.
+
+   The default is ``//builtin/scene:subject``, an empty world holding the
+   subject and nothing else. A package that needs more -- a fixture to drop the
+   part onto, a conveyor to push it along -- writes a scene of its own.
+
+``offset:``
+   Where in that scene the object goes, in the scene's frame. It is stated here
+   rather than in the scene because it is a fact about *this* object -- where
+   its origin sits relative to the floor it is meant to stand on -- and the
+   scene is shared.
+
+``simulation:``
+   The simulation plugin that runs it, by full path. The default is
+   ``//builtin/simulate:mujoco``.
+
+``validation:``
+   A Python expression over ``before`` and ``after`` that says whether what
+   happened is what was supposed to happen.
+
+.. code-block:: yaml
+
+   assemblies:
+     stack:
+       type: assy
+       simulate:
+         stands:
+           desc: Nothing moves, because there is no reason for anything to move
+           offset: [[0, 0, 10], [0, 0, 1], 0]
+           validation: |
+             max(
+                 abs(after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2])
+                 for name in before["bodies"]
+             ) < 2.0
+
+``pc sim`` runs them -- one object, or everything a package declares, or
+everything a package tree declares with ``-r`` -- and exits non-zero when a
+validation does not hold. ``--json`` prints the whole of what each plugin
+reported. ``examples/feature_simulate`` is two assemblies of two blocks each,
+identical but for 18 millimetres, whose simulations therefore end differently.
+
+Simulation plugins
+==================
+
+A simulation plugin is the third kind of implementation a package can declare,
+beside the export and render ones, and it is declared in exactly the same form:
+a ``path`` to a script, the sandbox that script needs, and its parameters. What
+differs is what it does with them. The contract is deliberately narrow:
+
+  **a scene with the subject in it goes in, JSON carrying ``before`` and
+  ``after`` comes out.**
+
+.. code-block:: yaml
+
+   simulation:
+     mujoco:
+       path: simulate_mujoco.py
+       format: mjcf
+       formatOptions:
+         static: false
+         flatten: true
+       pythonRequirements:
+         - mujoco>=3.2,<4
+       duration: 10.0
+
+The scene arrives as a **file**, in the format ``format:`` names, because a
+simulator reads its own model format and PartCAD already knows how to write
+several; ``formatOptions:`` is how that export is asked for, and is where a
+physics plugin says that it wants every body free to move. That also keeps a
+plugin free of OCP: it is handed a path.
+
+``before`` and ``after`` are all PartCAD knows about a result. What is *inside*
+them, and anything else beside them, is the plugin's own vocabulary -- the
+MuJoCo plugin states where every body ended up, in millimetres; another might
+state a temperature field -- and PartCAD neither reads nor validates it. It
+carries the two objects to the ``validation:`` expression the package wrote and
+reports what that says. Every judgement in that sentence belongs to the package.
+
+The built-in plugin loads the MJCF, steps it for ``duration`` seconds of
+simulated time, and reports each body's position and orientation before and
+after. Running it needs no MuJoCo on the machine: the plugin runs in a PartCAD
+sandbox that installs one.
+
+Opening a scene in a simulator
+==============================
+
+``pc open --with gazebo`` hands a ``.world`` file to Gazebo, and
+``pc open --with mujoco`` hands an MJCF model to MuJoCo. Both open a window on
+the machine the command was run on, never through the daemon -- see
+``partcad_client.external`` for why.
+
+MuJoCo reads MJCF and no other model format, so a Gazebo world it is pointed at
+is not a slow way of opening a scene, it is a file it cannot read. PartCAD
+writes it out as MJCF first. That conversion is the one thing here that does
+cross the wire, for the reason converting a solid into a mesh for Blender does:
+it drives a CAD wrapper, whose runtime lives in the daemon's environment. An
+ASSY scene is refused rather than converted -- it is nothing but references to
+the parts of a package, and an ad-hoc conversion has no package to resolve them
+against.
 
 ==========================================
 What a physical simulation actually needs

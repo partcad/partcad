@@ -39,10 +39,13 @@ __all__ = [
     "PACKAGE_ONLY_TYPES",
     "PART_TYPE_EXTENSION",
     "PART_TYPE_IS_MESH",
+    "SCENE_TYPE_EXTENSION",
     "is_mesh",
     "is_mesh_file",
     "is_mesh_type",
+    "readable_scene_type",
     "readable_type",
+    "scene_type_of_file",
     "type_of_file",
     "types_of_extension",
 ]
@@ -133,6 +136,25 @@ EXTENSION_ALIASES: Dict[str, str] = {
 # is handed, and saying what it is beats reporting it as an unknown name.
 ASSY_EXTENSION = "assy"
 
+# The scene types that are file formats, and the extension each is stored in,
+# inlined from `partcad.shape.SCENE_EXTENSION_MAPPING` (the same reason as every
+# other table here, and the same completeness test).
+#
+# A second question from the one above, for a second kind of application. Blender
+# reads triangles, so what `pc open` has to know about a file it is handed is
+# whether the file holds any. MuJoCo reads a *scene description* and only its
+# own -- so what has to be known there is which description format the file is,
+# and that is what this answers.
+#
+# 'assy' is in it and is not convertible ad-hoc (see PACKAGE_ONLY_TYPES below):
+# naming it is what lets the refusal say what the file is rather than report an
+# unknown extension.
+SCENE_TYPE_EXTENSION: Dict[str, str] = {
+    "assy": "assy",
+    "world": "world",
+    "mjcf": "xml",
+}
+
 # Object types that only mean anything inside a package, inlined from
 # `partcad.adhoc.adhoc.PACKAGE_ONLY_TYPES` (the same reason as every other table
 # here, and the same completeness test). A conversion cannot be asked for one:
@@ -205,6 +227,34 @@ def readable_type(path: str, object_type: Optional[str] = None) -> Optional[str]
     if object_type and object_type.lower() in PART_TYPE_EXTENSION:
         return object_type.lower()
     return type_of_file(path)
+
+
+SCENE_EXTENSION_TYPES: Dict[str, str] = {
+    extension: object_type for object_type, extension in SCENE_TYPE_EXTENSION.items()
+}
+
+
+def scene_type_of_file(path: str) -> Optional[str]:
+    """The scene type ``path`` holds, judged by its name alone, or None.
+
+    No extension is shared by two scene types, so unlike `type_of_file` this
+    never has to decline to answer for ambiguity - only for an extension no
+    scene type claims, which is most of them.
+    """
+    return SCENE_EXTENSION_TYPES.get(_extension_of(path))
+
+
+def readable_scene_type(path: str, object_type: Optional[str] = None) -> Optional[str]:
+    """The scene type a conversion should read ``path`` as, or None.
+
+    The declared type when it is a scene format, and the file's own name
+    otherwise - the same rule `readable_type` applies to parts, for the same
+    reason: a declared type that is not a file format says nothing about how to
+    read the file that is actually there.
+    """
+    if object_type and object_type.lower() in SCENE_TYPE_EXTENSION:
+        return object_type.lower()
+    return scene_type_of_file(path)
 
 
 def is_mesh_type(object_type: Optional[str]) -> Optional[bool]:

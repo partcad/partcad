@@ -71,6 +71,7 @@ These examples showcase particular PartCAD features:
 - [Convert sketch inside a package or standalone (ad-hoc)](./feature_convert_sketch)
 - [Import parts or assemblies (with optional format conversion)](./feature_import)
 - [Interfaces and mating](./feature_interface)
+- [Simulate a part or an assembly, and validate what happened](./feature_simulate)
 - [Part enrichment](./feature_enrich)
 - [Parts built by a part type the package defines itself](./produce_part_wrapper)
 - [Mono-repo and Multi-repo](./feature_monorepo)

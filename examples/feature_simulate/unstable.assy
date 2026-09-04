@@ -1,0 +1,17 @@
+# The same two blocks, with the upper one pushed 18 mm out of 20 off the edge.
+#
+# Nothing about the arrangement itself says this is a problem: it is a perfectly
+# good description of where two blocks are, and every static thing PartCAD does
+# with it -- rendering it, exporting it, listing what it is made of -- gives the
+# same kind of answer it gives for `stable`. What separates the two is what
+# happens when the world is switched on, which is what `pc sim` is for: the
+# centre of mass of the top block is 8 mm beyond the edge it is resting on, so
+# it topples off and ends up on the floor.
+links:
+  - part: block
+    name: bottom
+    location: [[0, 0, 0], [0, 0, 1], 0]
+
+  - part: block
+    name: top
+    location: [[18, 0, 20], [0, 0, 1], 0]

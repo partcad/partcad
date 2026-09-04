@@ -340,7 +340,7 @@ squiggle on a working file, so anything PartCAD's own tooling writes has to vali
 ## Opening a file in a third-party application
 
 The Explorer's per-item **"Open in > ..."** menu hands the item's file to `partcad.openExternal`, which runs
-`pc --no-ansi open --with <tool> [--type <type>] [--use-docker] [--docker-image <image>] <path> --json`. Four
+`pc --no-ansi open --with <tool> [--type <type>] [--use-docker] [--docker-image <image>] <path> --json`. Five
 applications, each offered for the objects it can actually open:
 
 | Menu entry | Command | Shown for |
@@ -348,12 +348,17 @@ applications, each offered for the objects it can actually open:
 | FreeCAD | `partcad.openInFreeCAD` | parts and assemblies |
 | Blender | `partcad.openInBlender` | parts and assemblies |
 | Gazebo | `partcad.openInGazebo` | scenes of type `world` (`viewItem == sceneWorld`) |
+| MuJoCo | `partcad.openInMuJoCo` | scenes of type `mjcf` or `world` (`viewItem == sceneMjcf` or `sceneWorld`) |
 | KiCad | `partcad.openInKiCad` | parts of type `kicad` (`viewItem == partKicad`) |
 
-The two narrow ones are why `PartcadItem` gives those objects a context value of their own: `viewItem` is one
+The narrow ones are why `PartcadItem` gives those objects a context value of their own: `viewItem` is one
 string compared exactly, so "a scene Gazebo can open" and "a part KiCad can open" have to *be* separate
-values. Both are then added back to every other clause that names their kind, because a world scene is a scene
+values. Each is then added back to every other clause that names their kind, because a world scene is a scene
 everywhere else and a KiCad part is a part.
+
+MuJoCo is offered for both scene formats and Gazebo for only one, which is not an oversight: `pc open`
+converts a world to MJCF on the way (a scene conversion, the counterpart of the mesh one it does for
+Blender) and nothing converts the other way yet.
 
 **It never reaches the daemon, and there is no RPC method for it** -- a stronger version of the rule
 `pc lint --file` follows. A daemon can be remote: "open this in FreeCAD" sent to one would put a window on

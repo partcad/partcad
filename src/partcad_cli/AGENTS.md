@@ -66,12 +66,16 @@ not installed, and the X forwarding into it are `partcad_client.external`, so th
 a package-graph question, which is exactly the round trip this command does not make. The VS Code extension's
 "Open in..." context menu runs `pc open --json`, so the two cannot drift apart.
 
-**One step inside it does cross the wire, and it is the exception that states the rule.** Blender reads meshes
-and nothing else, so a part that is not already one has to be converted before it is handed over -- and turning
-a solid into a mesh drives a CAD wrapper, whose sandboxed Python runtime lives in the daemon's environment and
-may not exist on the client at all. So `pc open --with blender` sends `adhoc.convert`, the same method
-`pc adhoc convert` sends, on the same absolute paths: file in, file out, `needs_context=False`, nothing left on
-the daemon to go stale, and no new method in the registry. The window still opens here. Which types are meshes
+**One step inside it does cross the wire, and it is the exception that states the rule.** Two applications read
+one thing only: Blender reads meshes, and MuJoCo reads MJCF. A part that is not already a mesh, or a scene that
+is not already an MJCF model, has to be converted before it is handed over -- and both conversions drive a CAD
+wrapper, whose sandboxed Python runtime lives in the daemon's environment and
+may not exist on the client at all. So `pc open --with blender` and `pc open --with mujoco` send
+`adhoc.convert`, the same method
+`pc adhoc convert` sends, on the same absolute paths, with `kind` saying whether a part or a scene is being
+converted: file in, file out, `needs_context=False`, nothing left on
+the daemon to go stale, and no new method in the registry. The window still opens here. Which types are meshes,
+and which are scene descriptions,
 is `partcad_client.object_types` -- an inlined copy of PartCAD's tables, so the client stays cheap to import,
 with `tests/partcad/unit/test_client_object_types.py` failing when the copy drifts. This is the only daemon
 call an in-process command makes, and `IN_PROCESS_DAEMON_CALLS` in

@@ -141,7 +141,13 @@ class SceneFactoryWorld(SceneFactoryMixin, AssemblyFactoryFile):
 
         request = {
             "operation": "import_world",
-            "world_file": os.path.abspath(self.path),
+            # A world file is a Jinja2 template like every other file an object
+            # is declared by, so what is parsed is the rendered file - which is
+            # the file itself unless the template said something. 'base_dir' is
+            # the directory the package declared it in, and is what the meshes
+            # and models it names are still resolved against.
+            "world_file": os.path.abspath(self.rendered_source()),
+            "base_dir": os.path.dirname(os.path.abspath(self.path)),
             "output_folder": self._generated_dir(),
             "model_paths": self._model_paths(),
             "ignoreCollision": self.config.get("ignoreCollision", False),

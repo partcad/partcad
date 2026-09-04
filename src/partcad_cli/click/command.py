@@ -137,7 +137,9 @@ command_groups = [
     },
     {
         # `search` sits beside `list`: both enumerate the objects in a package,
-        # one filtered by keyword and one not.
+        # one filtered by keyword and one not. `sim` sits beside `test`: both
+        # ask whether an object is any good, one about making it and one about
+        # what it does once it is made.
         "name": "Object commands",
         "commands": [
             "list",
@@ -145,6 +147,7 @@ command_groups = [
             "add",
             "import",
             "test",
+            "sim",
             "inspect",
             "info",
             "bom",

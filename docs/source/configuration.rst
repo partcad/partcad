@@ -1668,7 +1668,8 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 
   assemblies:
     <assembly name>:
-      type: <assy|step>  # Assembly YAML, or a STEP file with an assembly structure
+      type: <assy|step|urdf|mjcf>  # Assembly YAML, a STEP file with an assembly structure,
+                                   # a URDF robot description, or a MuJoCo model
       path: <(optional) the source file path>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
       fileUrl: <(fileFrom=url only) the URL to download the source file from>
@@ -1692,6 +1693,9 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 
 The ``assy`` type is used to define assemblies in `Assembly YAML` format, and
 the ``step`` type reads the structure out of a STEP file (see :ref:`assembly_step`).
+The ``urdf`` and ``mjcf`` types read a robot description as an assembly directly
+(see :doc:`simulation`); ``mjcf`` is also a :ref:`scene <scenes>` type, and the
+section that declares it is what decides which it is.
 The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.
 The source file does not have to be a part of the package: ``fileFrom`` and
 ``fileUrl`` pull it from a remote location on first use, exactly as they do for
@@ -2064,7 +2068,7 @@ Declare scenes
 
   scenes:
     <scene name>:
-      type: <assy|world>  # Assembly YAML read as a scene, or a Gazebo world file
+      type: <assy|world|mjcf>  # Assembly YAML read as a scene, a Gazebo world, or a MuJoCo model
       desc: <(optional) textual description>
       path: <(optional) the source file path>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
@@ -2150,6 +2154,144 @@ package around it:
 file the package does not declare yet, leaving the package holding PartCAD's own
 objects. ``pc add scene world warehouse.world`` declares the file where it lies
 instead.
+
+MuJoCo models
+-------------
+
+The ``mjcf`` type reads a `MuJoCo <https://mujoco.org/>`_ model as a scene, the
+same way ``world`` reads a Gazebo one: every body is placed where its ``pos``
+and orientation put it inside the body that holds it, and every geom becomes a
+part of the package named ``<scene>/<body>``.
+
+It is the one format that is **both** a scene type and an assembly type, and
+which of the two a given file is depends on the section that declares it rather
+than on the file. A URDF describes one robot and a ``.world`` describes one
+world; an MJCF file is used for both -- the same element holds a manipulator and
+the table it is bolted to -- and nothing in it says which it is. So the package
+says so:
+
+.. code-block:: yaml
+
+  assemblies:
+    arm:
+      type: mjcf
+      path: arm.xml        # a product
+
+  scenes:
+    cell:
+      type: mjcf
+      path: cell.xml       # an arrangement
+
+It is a best-effort reader in the same way the world reader is: joints,
+actuators, tendons, sensors, lights, cameras, contacts and keyframes are counted
+and reported, and ``pc info`` lists what was dropped. The reverse direction is
+the ``mjcf`` export file type, which writes an ``.xml`` file plus the meshes it
+references:
+
+.. code-block:: shell
+
+  pc export -S -t mjcf :cell     # a scene
+  pc export -t mjcf :arm         # or an assembly
+
+It is also the format ``pc sim`` hands a scene to MuJoCo in, and the one
+``pc open --with mujoco`` converts to; see :ref:`simulate`.
+
+.. _simulate:
+
+===========
+Simulations
+===========
+
+A part says what it *is*. ``simulate:`` is an optional section of a part or an
+assembly where it says what it is supposed to **do** once it is placed in a
+world and the world is switched on -- or, more often, what it is supposed not to
+do: not fall over, not slide off, not come apart. ``pc sim`` runs them.
+
+.. code-block:: yaml
+
+  parts:            # or assemblies:
+    <name>:
+      simulate:
+        <simulation name>:
+          desc: <(optional) what this simulation is about>
+          scene: <(optional) the scene to place this object in, by full path>
+          offset: <(optional) OCCT Location object: where in that scene it goes>
+          simulation: <(optional) the simulation plugin, by full path>
+          validation: <(optional) a Python expression that is true when it went as it should>
+          params: <(optional) parameter values handed to the plugin>
+
+The object's own full path is assigned to the scene's ``subject`` parameter --
+unconditionally, and whatever else the entry says. That is what lets one scene
+serve every object that names it, and nothing special is declared for it: a
+simulation scene is an ordinary scene with an ordinary parameter, and the
+Jinja2 template its file is read as (see :doc:`assy`) is what places the subject.
+
+Neither ``scene:`` nor ``simulation:`` has to be given. The defaults are
+``//builtin/scene:subject`` -- an empty world holding the subject and nothing
+else -- and ``//builtin/simulate:mujoco``, which together are what "does this
+stand up on its own" means:
+
+.. code-block:: yaml
+
+  assemblies:
+    stack:
+      type: assy
+      simulate:
+        stands:
+          # The blocks are drawn about their own centres, so lift the stack to
+          # stand its bottom face on the floor of the scene.
+          offset: [[0, 0, 10], [0, 0, 1], 0]
+          validation: |
+            max(
+                abs(after["bodies"][name]["pos"][2] - before["bodies"][name]["pos"][2])
+                for name in before["bodies"]
+            ) < 2.0
+
+``offset:`` is stated here rather than in the scene because it is a fact about
+*this* object -- where its origin sits relative to the floor it is meant to
+stand on -- and the scene is shared.
+
+``validation:`` is a Python expression evaluated over ``before`` and ``after``,
+the two objects the plugin produced, and ``result``, the whole of what it
+returned. It is the only thing PartCAD reads out of a result: what is *inside*
+those objects is the plugin's vocabulary, and the expression is written by
+whoever knows both the object and the plugin. An entry that states none runs and
+reports, and passes nothing.
+
+Simulation plugins
+------------------
+
+A simulation plugin is the third kind of implementation a package can declare,
+beside the export and render ones of :ref:`output-files`, and it is declared in
+exactly the same form -- a ``path`` to a script, the sandbox that script needs,
+and the parameters it is handed:
+
+.. code-block:: yaml
+
+  simulation:
+    <name>:
+      desc: <(optional) textual description>
+      path: <the script that runs the simulation>
+      package: <(optional) the package holding it, when it is not this one>
+      format: <the file type the scene is exported to before the plugin starts>
+      formatOptions: <(optional) export parameters for that conversion>
+      pythonVersion: <(optional) the sandbox interpreter>
+      pythonRequirements: <(optional) what that sandbox needs installed>
+      <anything else>: <a parameter handed to the script>
+
+The contract is narrow on purpose: **a scene with the subject in it goes in, as
+a file in the format** ``format:`` **names, and JSON carrying** ``before`` **and**
+``after`` **comes out.** The scene arrives as a file because a simulator reads
+its own model format and PartCAD already knows how to write several -- which is
+also what keeps a plugin free of any CAD dependency.
+
+PartCAD ships one, ``//builtin/simulate:mujoco``: it is handed the scene as
+MJCF, steps it under gravity for ``duration`` seconds of simulated time, and
+reports each body's position (in millimetres) and orientation before and after.
+Running it needs no MuJoCo on the machine, since the plugin runs in a PartCAD
+sandbox that installs one.
+
+See :doc:`simulation` and ``examples/feature_simulate``.
 
 .. _materials:
 

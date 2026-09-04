@@ -17,6 +17,7 @@ Feature: `pc open` command
     And OUTPUT should contain "gazebo"
     And OUTPUT should contain "kicad"
     And OUTPUT should contain "blender"
+    And OUTPUT should contain "mujoco"
 
   @failure @pc-open
   Scenario: A file that is not there is reported rather than opened
@@ -42,6 +43,16 @@ Feature: `pc open` command
     # reads, and it is looked for on this machine exactly as a STEP file is.
     Given a file named "warehouse.world" does not exist
     When I run "pc --no-ansi open --with gazebo warehouse.world"
+    Then the command should exit with a non-zero status code
+    And OUTPUT should contain "No such file"
+
+  @failure @pc-open
+  Scenario: A model file that is not there is reported rather than opened in MuJoCo
+    # The other simulator in the "Open in..." menu. MuJoCo reads MJCF, so an
+    # '.xml' is handed over as it is and nothing is converted -- which means the
+    # file itself is still the first thing that has to exist.
+    Given a file named "stack.xml" does not exist
+    When I run "pc --no-ansi open --with mujoco stack.xml"
     Then the command should exit with a non-zero status code
     And OUTPUT should contain "No such file"
 

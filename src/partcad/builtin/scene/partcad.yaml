@@ -1,0 +1,58 @@
+# The scenes PartCAD ships with itself.
+#
+# One scene, and it is a template: `subject` places whatever is being simulated
+# and nothing else. It exists because `simulate:` has to name a scene -- a
+# simulation is of a thing *in a world*, and a part on its own has no world --
+# and most of the time the world nothing else stands in is the right one.
+#
+# A package that needs more than that (a fixture to drop the part onto, a
+# conveyor to push it along) writes a scene of its own and names it in
+# `simulate: { scene: ... }`. There is nothing special about this one: it is an
+# ordinary `assy` scene in an ordinary package, and the only thing that makes it
+# the default is that `simulation.py` falls back to it.
+#
+# The floor and the light are deliberately not here. They are not part of what
+# a scene says; they are what makes a *simulation* runnable, and every format a
+# scene is handed to a simulator in writes its own (see the `ground_plane` and
+# `light` parameters of the `mjcf` export, and `sun`/`ground_plane` of `world`).
+
+name: //builtin/scene
+desc: |
+  The scenes PartCAD ships with itself. `subject` is the empty world that holds
+  the object being simulated, and is the scene a `simulate:` gets when it names
+  none of its own.
+
+scenes:
+  subject:
+    type: assy
+    path: subject.assy
+    desc: |
+      An empty world holding one object: whatever `subject` names, placed where
+      `subject_offset` puts it. The scene a `simulate:` that names no scene of
+      its own is run in.
+    parameters:
+      # The full path of the object being simulated ("//package:part"). Assigned
+      # by `pc sim` from the object whose `simulate:` is being run -- always,
+      # and whatever else the declaration says. Empty means "nothing to place",
+      # which is what makes this scene declarable without being runnable.
+      subject:
+        type: string
+        default: ""
+      # Which kind of object that is, since an ASSY link names a part and an
+      # assembly with different keys. `pc sim` fills it in from what it resolved.
+      subject_kind:
+        type: string
+        default: assembly
+      # Where the subject goes: seven numbers, the translation, then the axis of
+      # rotation, then the angle in degrees - a PartCAD location with the
+      # brackets and the commas taken out.
+      #
+      # Not the location as it is written everywhere else, and the schema is why:
+      # a parameter value has to be spellable in an instance name
+      # ("scene;subject_offset=..."), where ',', ';' and '=' are the separators,
+      # so a value that carries one cannot be asked for by name. Seven
+      # whitespace-separated numbers say exactly the same thing and carry none of
+      # them; 'subject.assy' puts the brackets back.
+      subject_offset:
+        type: string
+        default: "0 0 0 0 0 1 0"

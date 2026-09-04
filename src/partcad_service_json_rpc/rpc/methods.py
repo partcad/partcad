@@ -51,6 +51,7 @@ _OPERATIONS = {
     "adhoc.convert": operations.adhoc_convert,
     "adhoc.render": operations.adhoc_render,
     "test.run": operations.test_run,
+    "simulate.run": operations.simulate_run,
     "lint.run": operations.lint_run,
     "daemon.reset": operations.daemon_reset,
     "daemon.status": operations.daemon_status,

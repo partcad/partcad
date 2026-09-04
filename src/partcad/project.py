@@ -111,15 +111,16 @@ PARAMETER_PASSING_TYPES = ("alias", "enrich")
 
 # Object types whose parts the object itself materializes, rather than the
 # package declaring them: a STEP assembly's components become the parts
-# '<assembly>/<component>', a URDF's links the parts '<assembly>/<link>', and a
-# Gazebo world's links the parts '<scene>/<model>/<link>'. Such a part is only
+# '<assembly>/<component>', a URDF's links the parts '<assembly>/<link>', a
+# Gazebo world's links the parts '<scene>/<model>/<link>', and an MJCF model's
+# geoms the parts '<object>/<body>'. Such a part is only
 # in 'Project.parts' once the object has been built, so 'get_part' builds it on
 # demand (see '_materialize_derived_part'). Keyed by the kind that declares the
-# object, because 'assemblies:' and 'scenes:' are separate namespaces and a
-# 'world' is only ever a scene.
+# object, because 'assemblies:' and 'scenes:' are separate namespaces: a
+# 'world' is only ever a scene, while 'mjcf' is declared in either.
 PART_PRODUCING_TYPES = {
-    "assembly": ("step", "urdf"),
-    "scene": ("world",),
+    "assembly": ("step", "urdf", "mjcf"),
+    "scene": ("world", "mjcf"),
 }
 # The historical name, kept because it is the assembly half every caller here
 # used to read.

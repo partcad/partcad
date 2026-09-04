@@ -21,14 +21,16 @@ context menu passes the source file of the object the user clicked -- and no
 more than that: which file KiCad is actually pointed at, given the STEP a
 `kicad` part is, is a fact about KiCad and lives in the tool table.
 
-**One thing here does cross the wire, and it is not the opening.** Blender reads
-meshes and nothing else, so a part that is not already one has to be converted
-before it is handed over -- and converting a solid into a mesh drives a CAD
+**One thing here does cross the wire, and it is not the opening.** Two of the
+applications read one thing only: Blender reads meshes, and MuJoCo reads MJCF.
+A part that is not already a mesh, or a scene that is not already an MJCF model,
+has to be converted before it is handed over -- and both conversions drive a CAD
 wrapper, whose runtime lives in the daemon's environment and may not exist on
 this machine at all. So the conversion is `adhoc.convert`, the same method
-`pc adhoc convert` sends, on the same absolute paths; it carries no context
-(it is file-in, file-out) and it leaves nothing on the daemon to go stale. The
-window still opens here, from this process, on this machine's display.
+`pc adhoc convert` sends, on the same absolute paths, with `kind` saying which
+of the two it is; it carries no context (it is file-in, file-out) and it leaves
+nothing on the daemon to go stale. The window still opens here, from this
+process, on this machine's display.
 
 The application is run from this machine when it is installed here, and
 otherwise -- with `--use-docker` -- from a container PartCAD keeps for it. The
@@ -53,8 +55,8 @@ from ..service import run
     default="freecad",
     show_default=True,
     metavar="APPLICATION",
-    help="Which application to open the file in: freecad, blender, gazebo (a scene's world file) "
-    "or kicad (a board).",
+    help="Which application to open the file in: freecad, blender, gazebo (a scene's world file), "
+    "mujoco (a scene, converted to MJCF if it is not one already) or kicad (a board).",
 )
 @click.option(
     "--type",
@@ -62,9 +64,10 @@ from ..service import run
     type=str,
     default=None,
     metavar="TYPE",
-    help="The PartCAD type the object was declared with ('step', 'cadquery', ...). Only needed when "
-    "the file name does not say -- a '.py' is three different script types -- and only for an "
-    "application that reads meshes, which is what decides whether the file has to be converted first.",
+    help="The PartCAD type the object was declared with ('step', 'cadquery', 'world', ...). Only "
+    "needed when the file name does not say -- a '.py' is three different script types -- and only "
+    "for an application that reads meshes or one that reads a scene description, which is what "
+    "decides whether the file has to be converted first.",
 )
 @click.option(
     "--use-docker",
@@ -91,11 +94,15 @@ def cli(click_ctx, tool: str, object_type: str, use_docker: bool, docker_image: 
     # help, and there is no reason for that to touch the tool tables.
     from partcad_client import external
 
-    def transcode(source: str, source_type: str, target: str, target_type: str) -> None:
+    def transcode(source: str, source_type: str, target: str, target_type: str, kind: str = "part") -> None:
         """Make ``target`` out of ``source``, on the daemon: this is CAD work.
 
         The only round trip this command makes, and it is made only for an
-        application that cannot read what the user asked to open. Paths are
+        application that cannot read what the user asked to open. ``kind`` says
+        which of the two conversions it is -- a part, for an application that
+        reads meshes, or a scene, for one that reads only its own description of
+        an arrangement -- and it defaults to the older of the two so that a
+        caller written against the four-argument form still works. Paths are
         already absolute (`external` resolved them), which is what
         `adhoc.convert` expects.
         """
@@ -103,7 +110,7 @@ def cli(click_ctx, tool: str, object_type: str, use_docker: bool, docker_image: 
             click_ctx.obj,
             "adhoc.convert",
             {
-                "kind": "part",
+                "kind": kind,
                 "input_type": source_type,
                 "output_type": target_type,
                 "input_filename": source,

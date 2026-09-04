@@ -146,10 +146,18 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] Automatically maintaining the bill of materials
     - [x] Generating user-friendly visual assembly instructions (`PDF` and `HTML` instruction books)
   - [x] Using `URDF`, with links, joints and physics
+  - [x] Using `MJCF`, the format `MuJoCo` describes a model in
   - [x] Using a `STEP` file that stays the source
 - Scenes (3D) — placed arrangements of objects: a workcell, a table, a simulation world
   - [x] Stating where things are, rather than how they got there
   - [x] Exporting to a `Gazebo` world (SDFormat), and opening it in Gazebo
+  - [x] Exporting to `MJCF`, and opening it in `MuJoCo`
+- Simulation — what an object is supposed to do once the world is switched on
+  - [x] `simulate:` on a part or an assembly: a scene, where in it the object goes, and the condition that
+        says whether it went as it should
+  - [x] `pc sim`, which runs it and validates the result
+  - [x] Simulation plugins, declared the way export and render implementations are — a scene goes in,
+        `before` and `after` come out
 - Part models (3D)
   - Using scripting languages
     - [x] [CadQuery]
@@ -187,9 +195,10 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - Object-Oriented Programming approach to maintaining part interfaces and mating information
   - Live preview of 3D models while working in Visual Studio Code, with the bill of materials, the assembly
     instructions and supplier quotes on tabs beside the 3D view
-  - Open an object in the application that made it (`pc open`): `FreeCAD`, `Blender`, `Gazebo`, `KiCad` —
+  - Open an object in the application that made it (`pc open`): `FreeCAD`, `Blender`, `Gazebo`, `MuJoCo`,
+    `KiCad` —
     installed locally, or run in a container when it is not; an object `Blender` cannot read is converted to
-    a mesh on the way
+    a mesh on the way, and a scene `MuJoCo` cannot read to `MJCF`
   - Render 2D projections, from any viewing angle (`--view`, or an arbitrary one), with the connection
     ports and interfaces drawn on top if asked
     - [x] `SVG`
@@ -210,6 +219,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `glTF`
     - [x] `URDF`
     - [x] `Gazebo` world (SDFormat)
+    - [x] `MJCF` (MuJoCo)
   - Output types a package implements itself, for both `render:` and `export:`
 
 ## Installation

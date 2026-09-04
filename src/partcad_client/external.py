@@ -42,6 +42,15 @@ the daemon serves `pc adhoc convert` with. The converted copy is written under
 the workspace's own state directory, which is already mounted into the container
 at the path it has here, so one name means the same thing on both sides.
 
+Some read a *scene* and only their own description of one. MuJoCo is that one:
+it reads MJCF, and a Gazebo world handed to it is not a slow way of opening a
+scene, it is a file it cannot read. So the same thing happens for the same
+reason -- the scene is written out as MJCF first, through the very same
+``transcode`` callback with ``kind="scene"``. The two conversions differ in what
+they ask of the file (does it hold triangles, versus which description language
+is it) and in what they convert (a part, versus a scene); everything after that
+is shared, which is why one callback serves both.
+
 A containerised GUI needs an X server on the host, which is the one place where
 this cannot paper over the difference between platforms. On Linux the display is
 usually a socket that can simply be shared, cookie and all, and nothing has to be
@@ -151,6 +160,17 @@ class Tool:
     # it two questions -- it is a mesh, and Blender ships no importer for it, so
     # it takes the STL route like a solid does.
     imports: Tuple[str, ...] = ()
+    # The PartCAD *scene* type this application reads, for one that reads a
+    # description of an arrangement rather than geometry. MuJoCo is the one
+    # PartCAD knows about: it reads MJCF and no other model format, so a Gazebo
+    # world it is pointed at is written out as MJCF first.
+    #
+    # Deliberately a separate field from `mesh_via` rather than a generalization
+    # of it, because the two ask different questions of the file. `mesh_via`
+    # asks whether it holds triangles, which is a property of what is in it;
+    # this asks which description language it is written in, which is a property
+    # of the file itself. One tool sets one of the two.
+    scene_type: Optional[str] = None
 
     @property
     def container_name(self) -> str:
@@ -197,6 +217,19 @@ class Tool:
         # A mesh this application has no importer for is no better off than a
         # solid: it is converted too, to the one format that always works.
         return extension not in self.imports
+
+    def needs_scene(self, path: str, object_type: Optional[str] = None) -> bool:
+        """Whether ``path`` has to be converted into this application's own format.
+
+        False for every application that takes what it is given, and false for
+        one that reads a scene description when the file already is one it
+        reads. A file that is no scene at all comes back True and is refused
+        with the reason by `_transcode_scene`, which is better than handing a
+        simulator a STEP file and letting it say something of its own.
+        """
+        if self.scene_type is None:
+            return False
+        return object_types.readable_scene_type(path, object_type) != self.scene_type
 
     def file_for(self, path: str) -> str:
         """The file this application is really given, from the one it was handed.
@@ -354,9 +387,30 @@ BLENDER = Tool(
 )
 
 
+MUJOCO = Tool(
+    name="mujoco",
+    display_name="MuJoCo",
+    # DeepMind's own image, `:latest` for the reason every other one here is:
+    # a user asking for a container wants the current MuJoCo, and
+    # `--docker-image` is the answer for anyone who wants another.
+    image="ghcr.io/google-deepmind/mujoco:latest",
+    # `simulate` is the viewer the MuJoCo release ships; `mujoco` is what a
+    # distribution package sometimes calls it. Whichever the machine has is the
+    # one used.
+    binaries=("simulate", "mujoco"),
+    macos_apps=("MuJoCo.app",),
+    macos_executable="Contents/MacOS/simulate",
+    windows_globs=("MuJoCo*/bin/simulate.exe", "mujoco*/bin/simulate.exe"),
+    # MuJoCo reads MJCF and no other model format. A scene given as anything
+    # else -- a Gazebo world, above all -- is written out as MJCF first, which
+    # is `pc export -t mjcf` and so is the daemon's work.
+    scene_type="mjcf",
+)
+
+
 # The tools `pc open --with` accepts. Each is a row here, not a branch anywhere
 # below.
-TOOLS: Dict[str, Tool] = {tool.name: tool for tool in (FREECAD, GAZEBO, KICAD, BLENDER)}
+TOOLS: Dict[str, Tool] = {tool.name: tool for tool in (FREECAD, GAZEBO, KICAD, BLENDER, MUJOCO)}
 
 
 def tool_names() -> List[str]:
@@ -399,7 +453,7 @@ def open_file(
     image: Optional[str] = None,
     log: Optional[Callable[[str], None]] = None,
     object_type: Optional[str] = None,
-    transcode: Optional[Callable[[str, Optional[str], str, str], None]] = None,
+    transcode: Optional[Callable[..., None]] = None,
 ) -> OpenResult:
     """Open ``path`` in ``tool``, natively if it is installed, else in a container.
 
@@ -413,13 +467,16 @@ def open_file(
     (a '.py' is three different script types). It decides nothing on its own; it
     is one of the two things `object_types.is_mesh` reads.
 
-    ``transcode`` is how a file that is not a mesh becomes one, for an
-    application that reads nothing else. Called as
-    ``transcode(source, source_type, target, target_type)`` and expected to leave
-    ``target`` on disk. It is a callback rather than something done here because
-    turning a solid into a mesh is CAD work: it belongs to the daemon, and this
-    module is the half that must keep running without one. A caller that passes
-    none can still open a mesh in Blender; a solid is refused with the reason.
+    ``transcode`` is how a file this application cannot read becomes one it can:
+    a mesh for an application that reads nothing else, an MJCF model for one that
+    reads only its own scene description. Called as
+    ``transcode(source, source_type, target, target_type, kind)`` -- where
+    ``kind`` is "part" or "scene" -- and expected to leave ``target`` on disk. It
+    is a callback rather than something done here because both conversions are
+    CAD work: they belong to the daemon, and this module is the half that must
+    keep running without one. A caller that passes none can still open a mesh in
+    Blender and an MJCF model in MuJoCo; anything needing a conversion is refused
+    with the reason.
     """
     say = log or (lambda _message: None)
 
@@ -442,6 +499,8 @@ def open_file(
     opened = resolved
     if spec.needs_mesh(resolved, object_type):
         opened = _transcode(spec, resolved, root, object_type, transcode, say)
+    elif spec.needs_scene(resolved, object_type):
+        opened = _transcode_scene(spec, resolved, root, object_type, transcode, say)
 
     native = native_command(spec)
     if native is not None:
@@ -468,7 +527,7 @@ def open_file(
 
 
 # ---------------------------------------------------------------------------
-# Making a mesh out of what the application cannot read
+# Making something the application can read out of what it cannot
 # ---------------------------------------------------------------------------
 
 
@@ -498,7 +557,7 @@ def _transcode(
     source: str,
     root: str,
     object_type: Optional[str],
-    transcode: Optional[Callable[[str, Optional[str], str, str], None]],
+    transcode: Optional[Callable[..., None]],
     say: Callable[[str], None],
 ) -> str:
     """Convert ``source`` to the mesh format ``spec`` reads, and return that file."""
@@ -532,7 +591,74 @@ def _transcode(
             "run `pc open` rather than calling this directly." % (spec.display_name, source)
         )
 
-    target = transcode_path(root, source, spec.mesh_via)
+    return _produce(spec, source, source_type, root, spec.mesh_via, spec.mesh_via, "part", transcode, say)
+
+
+def _transcode_scene(
+    spec: Tool,
+    source: str,
+    root: str,
+    object_type: Optional[str],
+    transcode: Optional[Callable[..., None]],
+    say: Callable[[str], None],
+) -> str:
+    """Convert ``source`` into the scene description ``spec`` reads, and return it.
+
+    The counterpart of `_transcode` for an application that reads an arrangement
+    rather than geometry, and it refuses for its own reasons: a file that is no
+    scene at all cannot become one (a STEP file is a shape, and there is nothing
+    to place it in), and an ASSY file is a set of references to the parts of a
+    package, so there is nothing here to resolve them against.
+    """
+    source_type = object_types.readable_scene_type(source, object_type)
+    if source_type is None:
+        raise ExternalToolError(
+            "%s reads %s, and %s is not one -- PartCAD can convert a scene into it, and this is not a "
+            "scene file it knows (it reads: %s).\n"
+            "If it is one, say so with --type ('pc open --type ...'); the VS Code extension passes the "
+            "declared type of the object you clicked."
+            % (
+                spec.display_name,
+                spec.scene_type.upper(),
+                source,
+                ", ".join(sorted(object_types.SCENE_TYPE_EXTENSION)),
+            )
+        )
+    reason = object_types.PACKAGE_ONLY_TYPES.get(source_type)
+    if reason is not None:
+        raise ExternalToolError(
+            "%s cannot open %s: %s, so it only means anything inside a package and there is "
+            "nothing here to convert.\n"
+            "Export the scene from its package instead, and open that: pc export -S -t %s -O <dir> <scene>"
+            % (spec.display_name, source, reason, spec.scene_type)
+        )
+    if transcode is None:
+        raise ExternalToolError(
+            "%s reads %s, and %s is not one. Converting it needs the PartCAD daemon; "
+            "run `pc open` rather than calling this directly." % (spec.display_name, spec.scene_type.upper(), source)
+        )
+
+    extension = object_types.SCENE_TYPE_EXTENSION[spec.scene_type]
+    return _produce(spec, source, source_type, root, spec.scene_type, extension, "scene", transcode, say)
+
+
+def _produce(
+    spec: Tool,
+    source: str,
+    source_type: str,
+    root: str,
+    target_type: str,
+    extension: str,
+    kind: str,
+    transcode: Callable[..., None],
+    say: Callable[[str], None],
+) -> str:
+    """Run one conversion and return the file it left behind.
+
+    Shared by the two above: what differs between them is what is converted and
+    what makes it necessary, and none of that is here.
+    """
+    target = transcode_path(root, source, extension)
     if os.path.isfile(target) and os.path.getmtime(target) >= os.path.getmtime(source):
         # The conversion is the slow part of opening a part, and the source has
         # not changed since the last one. A `touch` of the source is enough to
@@ -542,12 +668,12 @@ def _transcode(
 
     with contextlib.suppress(OSError):
         os.makedirs(os.path.dirname(target), exist_ok=True)
-    say("Converting %s to %s for %s..." % (source, spec.mesh_via.upper(), spec.display_name))
-    transcode(source, source_type, target, spec.mesh_via)
+    say("Converting %s to %s for %s..." % (source, target_type.upper(), spec.display_name))
+    transcode(source, source_type, target, target_type, kind)
     if not os.path.isfile(target):
         raise ExternalToolError(
             "Failed to convert %s to %s for %s; the conversion wrote nothing to %s."
-            % (source, spec.mesh_via.upper(), spec.display_name, target)
+            % (source, target_type.upper(), spec.display_name, target)
         )
     return target
 

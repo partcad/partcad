@@ -114,15 +114,25 @@ isort --check src/partcad tests/partcad
   corrected `fileHash` has to move the cache key, or `pc test` answers the new declaration with the old one's
   failure.
 
-- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships two packages inside itself, reachable from
-  every context as `//builtin/export` and `//builtin/render` (loaded on demand by `Context.get_project`, see
-  `output.py`). They declare the file types `pc export` and `pc render` write, in exactly the form a user's
-  package declares one — a `path` to a script, its `pythonRequirements`, and the export parameters. So adding a
+- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships four packages inside itself, reachable from
+  every context as `//builtin/export`, `//builtin/render`, `//builtin/simulate` and `//builtin/scene` (loaded
+  on demand by `Context.get_project`, see `output.py`). The first three declare implementations — the file
+  types `pc export` and `pc render` write, and the simulation plugins `pc sim` runs a scene through — in
+  exactly the form a user's package declares one: a `path` to a script, its `pythonRequirements`, and the
+  parameters. So adding a
   format, changing its defaults or changing which dependencies it needs is an edit to `builtin/*/partcad.yaml`, not
-  to `shape.py`. The scripts run in a sandbox through `wrappers/wrapper_export.py`; they are data files, so
+  to `shape.py`. The scripts run in a sandbox through `wrappers/wrapper_export.py` (and
+  `wrappers/wrapper_simulate.py`); they are data files, so
   anything new under `builtin/` has to be listed in `pyproject.toml`'s `package-data` and in the PyInstaller
   spec (see "Packaging" in the root [AGENTS.md](../../AGENTS.md)). The requirement strings there are the versions
   `sandbox_versions.py` pins, which `tests/partcad/unit/test_output.py` enforces.
+
+  `//builtin/scene` is the odd one out: it declares an *object* rather than a way of producing one — the
+  scene a `simulate:` places its subject in when it names none of its own. It is an ordinary `assy` scene
+  whose `.assy` is a Jinja2 template, and the only thing that makes it the default is that
+  `simulation.DEFAULT_SCENE` names it. `simulation:` is deliberately **not** in `output.SECTIONS`: everything
+  that reads that tuple is asking which file types exist, and a simulation is not one — but a plugin is an
+  `output.Implementation` like any other.
 
 - **Drawing ports and interfaces** (`./src/partcad/render_overlay.py`, `./src/partcad/wrappers/stroke_text.py`):
   `pc render --with-ports`/`--with-interfaces` draws the connection metadata on top of a projection.

@@ -8,8 +8,6 @@
 #
 
 import asyncio
-from jinja2 import FileSystemLoader
-from jinja2.sandbox import SandboxedEnvironment
 import fnmatch
 import os
 import yaml
@@ -43,38 +41,13 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             pc_logging.error("ERROR: Assembly file not found: %s" % self.path)
             return {}
 
-        # Pass the parameter values to the ASSY template as
-        # 'param_<name>'. The configuration has been through
-        # 'AssemblyConfiguration.normalize()' by now, so every
-        # parameter is in the expanded form and carries the value to
-        # use: the declared default, overridden by '~/.partcad/config.yaml'
-        # or '--extra_param', overridden by the values given in the
-        # object name (e.g. '//package:assembly;length=96').
-        params = {}
-        parameters = self.config.get("parameters") or {}
-        for param_name, param in parameters.items():
-            params["param_" + param_name] = param["default"]
-        params["name"] = self.config["name"]
-
-        # Read the body of the configuration file
-        fp = open(self.path, "r")
-        config = fp.read()
-        fp.close()
-
-        # Resolve Jinja templates
-        # NOTE: the environment is sandboxed. An ASSY file comes from a
-        # package, which may well be somebody else's, and a plain Jinja
-        # environment lets a template reach through attribute access into
-        # the interpreter this runs in.
-        # NOTE: autoescape must stay off. The rendered document is YAML,
-        # not HTML, so escaping corrupts every parameter value that
-        # contains '&', '<', '>', '"' or "'" (e.g. 'a & b' would reach
-        # the parser as 'a &amp; b'). This matches how 'partcad.yaml'
-        # itself is rendered in 'ProjectLocal'.
-        template = SandboxedEnvironment(
-            loader=FileSystemLoader(os.path.dirname(self.path) + os.path.sep),
-        ).from_string(config)
-        config = template.render(params)
+        # Read the body of the configuration file and resolve the Jinja
+        # templates in it. Both are 'AssemblyFactoryFile': an ASSY file is a
+        # template exactly as a URDF, a Gazebo world and an MJCF model are, and
+        # one implementation of that is what keeps the four agreeing on which
+        # values a template sees and under what names.
+        with open(self.path, "r", encoding="utf-8") as fp:
+            config = self.render_template(fp.read())
 
         # Parse the resulting config
         assy = None

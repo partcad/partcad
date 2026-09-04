@@ -12,6 +12,62 @@
       },
       "additionalProperties": false
     },
+    "simulation-section": {
+      "type": ["object", "null"],
+      "description": "The simulation plugins this package implements. One is declared exactly as an export or a render implementation is - a script, the sandbox it needs and its parameters - and is named by full path from a 'simulate:'",
+      "patternProperties": {
+        "^[a-zA-Z0-9_.-]+$": { "$ref": "#/definitions/simulation-type" }
+      },
+      "additionalProperties": false
+    },
+    "simulation-type": {
+      "type": ["object", "null"],
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "path": { "type": "string", "minLength": 1, "description": "The script that runs the simulation, relative to the package that declares it" },
+        "package": { "type": "string", "minLength": 1, "description": "The package holding 'path', when it is not this one" },
+        "format": { "type": "string", "minLength": 1, "description": "The file type the scene is exported to before the plugin is started" },
+        "formatOptions": { "type": "object", "description": "Export parameters for that conversion, e.g. 'static: false' to let the bodies move" },
+        "pythonVersion": { "type": "string", "minLength": 1 },
+        "pythonRequirements": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": true
+    },
+    "simulate": {
+      "type": ["object", "null"],
+      "description": "The simulations this object declares: what it is supposed to do, or not do, once it is placed in a world and the world is run. 'pc sim' runs them",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/simulate-entry" }
+      },
+      "additionalProperties": false
+    },
+    "simulate-entry": {
+      "type": ["object", "null"],
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "scene": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The scene this object is simulated in, by full path. Its 'subject' parameter is assigned this object's own full path. Defaults to '//builtin/scene:subject', an empty world holding the subject and nothing else"
+        },
+        "offset": { "$ref": "#/definitions/OCCTLocation" },
+        "simulation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The simulation plugin that runs it, by full path, declared in that package's 'simulation:' section. Defaults to '//builtin/simulate:mujoco'"
+        },
+        "validation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A Python expression over 'before', 'after' and 'result' that is true when the simulation went as it should"
+        },
+        "params": {
+          "type": "object",
+          "description": "Parameter values handed to the simulation plugin, overriding what its own declaration defaults to (e.g. 'duration')"
+        }
+      },
+      "additionalProperties": false
+    },
     "output-type": {
       "oneOf": [
         { "type": "null" },
@@ -528,6 +584,7 @@
     },
     "render": { "$ref": "#/definitions/render" },
     "export": { "$ref": "#/definitions/output-section" },
+    "simulation": { "$ref": "#/definitions/simulation-section" },
     "dependencies": {
       "type": ["object", "null"],
       "patternProperties": {
@@ -657,6 +714,7 @@
                 "parameters": { "$ref": "#/definitions/shape-parameter"},
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
+                "simulate": { "$ref": "#/definitions/simulate" },
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
@@ -754,7 +812,11 @@
             {
               "type": "object",
               "properties": {
-                "type": { "type": "string", "enum": ["assy", "step", "urdf", "alias", "enrich"] },
+                "type": {
+                  "type": "string",
+                  "enum": ["assy", "step", "urdf", "mjcf", "alias", "enrich"],
+                  "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'urdf' a URDF robot description, 'mjcf' a MuJoCo model"
+                },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
@@ -814,6 +876,7 @@
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
+                "simulate": { "$ref": "#/definitions/simulate" },
                 "manufacturable": { "type": "boolean" },
                 "unless": { "$ref": "#/definitions/unless" },
                 "connect": { "$ref": "#/definitions/connect" },
@@ -840,8 +903,8 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": ["assy", "world", "alias", "enrich"],
-                  "description": "'assy' is an Assembly YAML file read as a scene, which is the same format without the 'how' sections; 'world' is a Gazebo world (SDFormat) file"
+                  "enum": ["assy", "world", "mjcf", "alias", "enrich"],
+                  "description": "'assy' is an Assembly YAML file read as a scene, which is the same format without the 'how' sections; 'world' is a Gazebo world (SDFormat) file; 'mjcf' is a MuJoCo model, which is declared as an assembly or as a scene depending on what it holds"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "path": { "type": "string", "minLength": 1 },

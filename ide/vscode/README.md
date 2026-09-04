@@ -117,20 +117,23 @@ in a tool that draws, next to what the extension does with it.
   workspace, never beside your file, and is reused until the object changes.
 * **Gazebo**, for a scene that *is* a Gazebo world -- one of type `world`, which is also what
   **Export > Gazebo world...** writes out of any scene.
+* **MuJoCo**, for a scene held in a simulator's format -- one of type `mjcf` or `world`. MuJoCo reads MJCF
+  and no other model format, so a world is written out as MJCF first and MuJoCo is given that, the same way
+  a solid is converted for Blender.
 * **KiCad**, for a part of type `kicad`. What is opened is the board (`.kicad_pro`) beside the STEP the part
   is, because that is the file KiCad has anything to say about.
 
 This runs on your machine and never goes anywhere near the PartCAD daemon: the extension runs `pc open`, which
 looks for the application installed here and starts it. If there is none, and `partcad.open.useDocker` is on,
 PartCAD runs it in a Docker container instead -- one container per application, named after it
-(`partcad-freecad`, `partcad-blender`, `partcad-gazebo`, `partcad-kicad`), created from the application's image (or
+(`partcad-freecad`, `partcad-blender`, `partcad-gazebo`, `partcad-mujoco`, `partcad-kicad`), created from the application's image (or
 `partcad.open.dockerImage`) the first time and reused afterwards, with your
 workspace and the PartCAD daemon's socket mounted at the paths they have here, so one path means the same thing
 on both sides. Its windows come out on your X display. On Linux that is the display you are already using; on
 macOS and Windows it needs an X server (XQuartz, VcXsrv) that PartCAD cannot install for you, so it tells you
 which one to install and what to allow rather than starting a container whose windows go nowhere. Remove the
 container of the application in question (`docker rm -f partcad-freecad`, `partcad-blender`,
-`partcad-gazebo` or `partcad-kicad`) to have the next open create a fresh one. With
+`partcad-gazebo`, `partcad-mujoco` or `partcad-kicad`) to have the next open create a fresh one. With
 `partcad.open.useDocker` off, a machine that has neither the application nor Docker is told so rather than
 left with a menu entry that quietly does nothing.
 

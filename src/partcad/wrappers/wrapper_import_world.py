@@ -553,7 +553,12 @@ def process(request):
         ignore_collision = frozenset(ignore_collision or ())
 
     context = {
-        "world_dir": os.path.dirname(os.path.abspath(world_file)),
+        # Where relative, 'file://' and 'model://' references are resolved
+        # from. Not the parsed file's own directory: a world file is a Jinja2
+        # template, and a rendered one sits in PartCAD's state directory while
+        # the meshes and models it names sit beside the file the package
+        # declared.
+        "world_dir": request.get("base_dir") or os.path.dirname(os.path.abspath(world_file)),
         "model_paths": list(request.get("model_paths") or []),
         "output_folder": request["output_folder"],
         "precision": request.get("precision", 6),

@@ -25,7 +25,7 @@ that is worth keeping.
 
 from partcad import factory
 from partcad.adhoc.adhoc import PACKAGE_ONLY_TYPES
-from partcad.shape import PART_EXTENSION_MAPPING
+from partcad.shape import PART_EXTENSION_MAPPING, SCENE_EXTENSION_MAPPING
 from partcad_client import object_types
 
 # Registering the part factories is `partcad.globals`' doing, and it happens on
@@ -74,3 +74,14 @@ def test_the_extensions_that_are_other_spellings_name_types_that_exist():
         if object_type not in object_types.PART_TYPE_IS_MESH
     )
     assert not unknown, f"EXTENSION_ALIASES maps to types that do not exist: {', '.join(unknown)}"
+
+
+def test_the_scene_formats_are_the_ones_partcad_stores_a_scene_in():
+    """The second table, for the second question `pc open` asks of a file.
+
+    Blender reads triangles, so what matters there is whether the file holds
+    any; MuJoCo reads MJCF, so what matters there is which description language
+    the file is written in. Both answers are inlined in the client and both can
+    drift, so both are checked here.
+    """
+    assert object_types.SCENE_TYPE_EXTENSION == SCENE_EXTENSION_MAPPING

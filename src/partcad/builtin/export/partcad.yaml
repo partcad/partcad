@@ -199,3 +199,57 @@ export:
     # the index that looks one up by name, which costs a walk of the tree that
     # is already in hand. See 'wrappers/wrapper_export.properties_index()'.
     properties: true
+
+  mjcf:
+    desc: |
+      MJCF, the XML MuJoCo describes a model in: an `.xml` file plus the mesh
+      files it references. It is the format a scene or an assembly is handed to
+      a MuJoCo simulation in (`pc sim`, see `//builtin/simulate`), and it is
+      what `pc open --with mujoco` converts a scene to before opening it.
+
+      Like `world` and `urdf` it is handed the assembly *tree* itself rather
+      than the geometry it decodes to (`decode: false`) - one body per object
+      placed in the scene, named, placed and looked up by what the tree says.
+      See `builtin/export/export_mjcf.py`.
+    path: export_mjcf.py
+    extension: xml
+    # 'decode: false' -- see wrappers/wrapper_export.py, and the same note on
+    # 'world' above.
+    decode: false
+    pythonRequirements:
+      - cadquery-ocp==7.9.3.1.1
+    # The meshes are written by this exporter itself, so it takes the mesh
+    # options too. 'ascii' stays false: MuJoCo reads binary STL only.
+    tolerance: 0.1
+    angularTolerance: 0.1
+    ascii: false
+    # A scene states where things are, so nothing in it is meant to move: every
+    # body is welded to the world unless this is turned off, which is what
+    # gives each of them a '<freejoint>'. `pc sim` turns it off, because a
+    # simulation of a model that cannot move has nothing to report.
+    static: true
+    # Write every node that holds geometry as a body of the '<worldbody>'
+    # itself, at the world pose the tree puts it at, rather than nesting the
+    # bodies as the tree nests. A nested body with no joint above it is one
+    # rigid body with its parent, which is right for a rigid product and wrong
+    # for a stack of blocks that is meant to be able to fall over. `pc sim`
+    # turns it on for the same reason it turns 'static' off.
+    flatten: false
+    # What makes the file usable rather than what the scene says: a model with
+    # no light renders black, and one with no ground has nothing to stand on.
+    # The plane is a geom of the '<worldbody>' itself, so it is static whatever
+    # 'static' says.
+    light: true
+    ground_plane: true
+    # 'model_name' defaults to the object's label, 'mesh_dir' to
+    # '<file stem>_meshes' next to the model file, 'density' (kg/m^3) to the
+    # exporter's own default, and 'timestep' to MuJoCo's.
+    # model_name: <name>
+    # mesh_dir: <directory>
+    # density: 2700.0
+    # timestep: 0.002
+    gravity: [0.0, 0.0, -9.81]
+    # Hand the exporter what the parts report about themselves - mass, friction,
+    # colour - so that it writes those rather than losing them. See
+    # 'wrappers/wrapper_export.properties_index()'.
+    properties: true

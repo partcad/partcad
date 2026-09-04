@@ -157,3 +157,54 @@ def test_a_partType_reference_is_not_an_error_it_is_just_not_a_format():
     """`type: //package:name` is a legitimate declaration, and it names a wrapper."""
     assert object_types.readable_type("/w/cube.step", "//package:mine") == "step"
     assert object_types.readable_type("/w/cube.dat", "//package:mine") is None
+
+
+# ---------------------------------------------------------------------------
+# Scene types: which description language a file is written in
+# ---------------------------------------------------------------------------
+
+
+def test_the_scene_formats_are_the_ones_a_file_can_hold_an_arrangement_in():
+    assert set(object_types.SCENE_TYPE_EXTENSION) == {"assy", "world", "mjcf"}
+
+
+def test_no_two_scene_types_share_an_extension():
+    """Which makes `scene_type_of_file` an answer rather than a guess.
+
+    Unlike the part types, where '.py' is three script types at once, a scene
+    file's name says exactly which description language it is - so nothing here
+    ever has to decline to answer for ambiguity.
+    """
+    extensions = list(object_types.SCENE_TYPE_EXTENSION.values())
+    assert len(set(extensions)) == len(extensions)
+
+
+@pytest.mark.parametrize(
+    "path, expected",
+    [
+        ("/w/warehouse.world", "world"),
+        ("/w/stack.xml", "mjcf"),
+        ("/w/bench.assy", "assy"),
+        ("/w/cube.step", None),
+        ("/w/cube", None),
+    ],
+)
+def test_the_name_says_which_description_language_it_is(path, expected):
+    assert object_types.scene_type_of_file(path) == expected
+
+
+def test_a_declared_scene_type_settles_it_whatever_the_file_is_called():
+    """'.sdf' is a world to whoever declared it and nothing to a file name."""
+    assert object_types.readable_scene_type("/w/warehouse.sdf", "world") == "world"
+    assert object_types.readable_scene_type("/w/warehouse.sdf") is None
+
+
+def test_a_declared_type_that_is_no_scene_format_defers_to_the_file():
+    assert object_types.readable_scene_type("/w/stack.xml", "alias") == "mjcf"
+
+
+def test_the_assy_scene_is_the_one_that_cannot_be_converted_on_its_own():
+    """It is references to the parts of a package, and there is no package."""
+    assert "assy" in object_types.PACKAGE_ONLY_TYPES
+    assert "world" not in object_types.PACKAGE_ONLY_TYPES
+    assert "mjcf" not in object_types.PACKAGE_ONLY_TYPES

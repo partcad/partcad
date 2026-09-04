@@ -105,10 +105,13 @@ Host commands
     pc open --with blender cube.stl         # a mesh, in Blender
     pc open --with blender cube.step        # a solid, converted to STL for Blender first
     pc open --with gazebo warehouse.world   # a scene, in Gazebo
+    pc open --with mujoco stack.xml         # a scene, in MuJoCo
+    pc open --with mujoco warehouse.world   # a world, converted to MJCF for MuJoCo first
     pc open --with kicad Arduino_Nano.step  # a board, in KiCad
 
   ``--with`` names the application: ``freecad`` (the default), ``blender``, ``gazebo`` for a Gazebo world --
-  which is what a :ref:`scene <scenes>` of type ``world`` is, and what ``pc export -S -t world`` writes -- and
+  which is what a :ref:`scene <scenes>` of type ``world`` is, and what ``pc export -S -t world`` writes --
+  ``mujoco`` for a scene, and
   ``kicad`` for a board. A locally installed one is always
   used when there is one: the command looks on the ``PATH``, in ``/Applications`` on macOS, under
   ``Program Files`` on Windows, and for a flatpak on Linux. Gazebo is looked for under all three of the names
@@ -124,9 +127,13 @@ Host commands
   one -- and the VS Code extension passes the declared type of the object you clicked. A ``.blend`` is
   Blender's own file and is opened, not converted.
 
+  MuJoCo reads MJCF and no other model format, so the same thing happens for the same reason: a scene that is
+  not already an MJCF model -- a Gazebo world, above all -- is written out as one and MuJoCo is given that.
+  It is the same daemon round trip and the same conversion machinery, asked for a scene instead of a part.
+
   An object that only means something inside a package -- an ASSY file, a URDF -- has nothing to convert
   ad-hoc, and is refused with that rather than converted wrongly: export it to a mesh first
-  (``pc export -t stl``) and open that.
+  (``pc export -t stl``), or a scene to MJCF (``pc export -S -t mjcf``), and open that.
 
   KiCad is handed the board rather than the file named, when the two are not the same: a ``kicad`` part *is*
   the STEP file KiCad's command line writes out of the board, so ``pc open --with kicad`` on it opens the
@@ -136,16 +143,16 @@ Host commands
 
   With ``--use-docker``, a machine that has no local installation runs the application in a container instead
   — one container per application, named after it (``partcad-freecad``, ``partcad-blender``,
-  ``partcad-gazebo``, ``partcad-kicad``), created from the application's image
+  ``partcad-gazebo``, ``partcad-mujoco``, ``partcad-kicad``), created from the application's image
   (``--docker-image`` overrides it; FreeCAD's is ``linuxserver/freecad:latest``, since the FreeCAD project
   publishes no image of its own, Blender's is ``linuxserver/blender:latest`` for the same reason, Gazebo's is
-  ``gazebosim/gz-harmonic:latest``, and KiCad's is the
+  ``gazebosim/gz-harmonic:latest``, MuJoCo's is ``ghcr.io/google-deepmind/mujoco:latest``, and KiCad's is the
   ``ghcr.io/partcad/partcad-container-kicad`` image PartCAD already builds for ``kicad`` parts) the first
   time and reused afterwards, so a container you have prepared
   keeps being the one that is used. Without ``--use-docker``, a machine with neither the application nor
   Docker is told so rather than being left with a command that quietly did nothing. Remove the application's
   own container (``docker rm -f partcad-freecad``, ``partcad-blender``,
-  ``partcad-gazebo``, ``partcad-kicad``) to have the next ``pc open``
+  ``partcad-gazebo``, ``partcad-mujoco``, ``partcad-kicad``) to have the next ``pc open``
   create a fresh one. The workspace and the directory holding this workspace's daemon socket are mounted **at
   the paths they have on the host**, which is what lets one path mean the same thing on both sides. A file
   that is not in this workspace gets its own workspace mounted instead, so that whatever is mounted always
@@ -239,6 +246,20 @@ Object commands
   :ref:`software` an object declares -- every reference has to resolve, and the file it resolves to has to be
   obtainable and be the one that was meant. A board nobody can flash is not a board anybody can make.
 
+``pc sim``
+  Run the simulations a part or an assembly declares in its ``simulate:`` section, and check the
+  ``validation:`` condition each of them states. Use ``-a`` when the object is an assembly, ``-r`` to run
+  everything the imported packages declare too, ``-f`` to run only the simulation of a given name, and
+  ``--json`` to print the whole of what each simulation plugin reported. A validation that does not hold
+  exits non-zero.
+
+  Where ``pc test`` asks whether a part can be *made*, this asks whether it *works*: it places the object in
+  the scene the declaration names, at the ``offset:`` the declaration states, runs the scene through the
+  simulation plugin the declaration names, and evaluates the ``validation:`` expression over the ``before``
+  and ``after`` the plugin hands back. Nothing needs installing to run one -- the plugin runs in a PartCAD
+  sandbox -- and both the scene and the plugin have built-in defaults, so ``simulate:`` is often four lines.
+  See :doc:`simulation` and ``examples/feature_simulate``.
+
 ``pc inspect``
   View a part, assembly, or scene visually. Use ``-V`` for a verbal (text) description instead of a visual
   one, and ``-p <name>=<value>`` to set parameters.
@@ -275,11 +296,12 @@ Object commands
 ``pc export``
   Export a 3D view of parts, assemblies, or scenes. Use ``-a`` for an assembly and ``-S`` for a scene.
   Choose the format with ``-t``:
-  ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, ``gltf``, ``iges``, ``urdf``, ``world``, or any
+  ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, ``gltf``, ``iges``, ``urdf``, ``world``,
+  ``mjcf``, or any
   file type a package implements itself (see :ref:`output-files`). Use ``-O`` to set the output directory and
   ``-r`` to export recursively. ``urdf`` writes a ``.urdf`` file plus a directory of the mesh files it
-  references, and ``world`` writes a Gazebo ``.world`` file (SDFormat) the same way -- that is the format a
-  scene has. ``-e``
+  references, and ``world`` (a Gazebo ``.world``, SDFormat) and ``mjcf`` (a MuJoCo model) write theirs the
+  same way -- those are the formats a scene has. ``-e``
   names a further package whose ``export:`` options and implementations are used, which is how one package's
   exporter is applied to another package's objects.
 

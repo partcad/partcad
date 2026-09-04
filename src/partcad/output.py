@@ -38,6 +38,7 @@ declares only a parameter keeps the built-in implementation and re-tunes it.
 
 from __future__ import annotations
 
+import base64
 import copy
 import os
 from typing import Optional
@@ -50,6 +51,14 @@ EXPORT = "export"
 RENDER = "render"
 SECTIONS = (EXPORT, RENDER)
 
+# The third section that is resolved the same way and does not produce an
+# output file: 'simulation:' declares the plugins 'pc sim' runs a scene
+# through. It is deliberately not in SECTIONS -- everything that reads that
+# tuple is asking "which file types are there", and a simulation is not one --
+# but it is an 'Implementation' like any other: a script, the sandbox it needs,
+# and the parameters it is handed. See 'partcad.simulation'.
+SIMULATE = "simulation"
+
 # Where the built-in packages live, both as package paths and on disk. They are
 # inside the 'partcad' Python package so that they ship with it and are always
 # present, wheel or frozen bundle alike.
@@ -57,12 +66,19 @@ BUILTIN_ROOT_PACKAGE = "//builtin"
 BUILTIN_PACKAGES = {
     EXPORT: "//builtin/export",
     RENDER: "//builtin/render",
+    SIMULATE: "//builtin/simulate",
 }
+# The one built-in package that declares objects rather than implementations:
+# the scene every 'simulate:' that names no scene of its own is run in, whose
+# 'subject' parameter is whatever is being simulated.
+BUILTIN_SCENE_PACKAGE = "//builtin/scene"
 BUILTIN_ROOT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin")
 BUILTIN_PATHS = {
     BUILTIN_ROOT_PACKAGE: BUILTIN_ROOT_PATH,
     BUILTIN_PACKAGES[EXPORT]: os.path.join(BUILTIN_ROOT_PATH, EXPORT),
     BUILTIN_PACKAGES[RENDER]: os.path.join(BUILTIN_ROOT_PATH, RENDER),
+    BUILTIN_PACKAGES[SIMULATE]: os.path.join(BUILTIN_ROOT_PATH, "simulate"),
+    BUILTIN_SCENE_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "scene"),
 }
 
 # File types declared in a 'render:' section like any other, but which no
@@ -125,6 +141,14 @@ IMPLEMENTATION_KEYS = frozenset({"path", "package", "pythonRequirements", "pytho
 OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
 RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 
+# The same, for the 'simulation:' section. Both say how the scene reaches the
+# plugin rather than what the plugin is handed once it has it: 'format' is the
+# file type it is exported to, and 'formatOptions' the export parameters that
+# go with it (a physics simulation wants every body free to move, which is the
+# opposite of what a scene means on its own). They configure the run, so they
+# are held out of the plugin's request for the same reason 'path' is.
+SIMULATION_KEYS = frozenset({"format", "formatOptions"})
+
 # The request key the implementation script's path travels under. It is passed
 # in the request rather than on the command line because the two positional
 # arguments of a wrapper are already spent on the output path and the working
@@ -163,9 +187,16 @@ class Implementation:
         self.decode = config.get("decode", True) is not False
 
     @property
+    def reserved(self) -> frozenset:
+        """The fields of this configuration that are not parameters."""
+        if self.section == SIMULATE:
+            return RESERVED_KEYS | SIMULATION_KEYS
+        return RESERVED_KEYS
+
+    @property
     def parameters(self) -> dict:
         """The fields handed to the implementation as its 'request'."""
-        return {key: value for key, value in self.config.items() if key not in RESERVED_KEYS}
+        return {key: value for key, value in self.config.items() if key not in self.reserved}
 
     def extension(self, default: str) -> str:
         return self.config.get("extension") or default
@@ -282,6 +313,10 @@ def config_sections(section: str) -> tuple:
     Both sections are read either way, and the one that owns the file type is
     read last so that it wins. What the other one provides is a fallback:
 
+    A 'simulation:' has no such fallback and never will: an export
+    implementation writes a file and a simulation plugin runs one, so neither
+    is usable where the other is asked for.
+
     'export:' falls back to 'render:' for history. PartCAD had only a 'render:'
     section before 'export:' existed, and packages configured their STEP and
     STL output there; those configurations keep working.
@@ -294,6 +329,8 @@ def config_sections(section: str) -> tuple:
     'export:' request never falls back to a 'render:' implementation for a
     format that 'render:' owns.
     """
+    if section == SIMULATE:
+        return (SIMULATE,)
     return (RENDER, EXPORT) if section == EXPORT else (EXPORT, RENDER)
 
 
@@ -333,3 +370,57 @@ def all_formats(ctx) -> list:
     for section in (RENDER, EXPORT):
         formats.extend(name for name in format_names(builtin_formats(ctx, section)) if name not in formats)
     return formats
+
+
+async def materialize_script(ctx, impl) -> str:
+    """The on-disk path of the script that implements a file type or a plugin.
+
+    For a local package - which the built-in ones are - that is a file in the
+    package. For a plugin-backed package it is fetched from the plugin (like a
+    file-backed object) and written into the package's cache directory, the same
+    way a partType's wrapper script is.
+
+    Here rather than on 'Shape' because the answer is about the implementation
+    and not about what it is being run for: an export writes a shape out, a
+    simulation runs a scene, and both are a script named by a package that has
+    to be found the same way and confined to that package the same way.
+    """
+    if not impl.script:
+        raise Exception(
+            "No implementation of '%s' is declared: neither %s nor this package provides a 'path'"
+            % (impl.format_name, BUILTIN_PACKAGES[impl.section])
+        )
+
+    package_name = impl.config.get("package") or BUILTIN_PACKAGES[impl.section]
+    project = ctx.get_project(package_name)
+    if project is None:
+        raise Exception("The package implementing '%s' is not found: %s" % (impl.format_name, package_name))
+    impl.project = project
+
+    # The script is named by the package's own configuration and is about to be
+    # executed, so it has to come from inside that package: a 'path' of
+    # '../../..' would otherwise both read and, for a plugin-backed package,
+    # write outside it.
+    config_dir = os.path.abspath(project.config_dir)
+    script_abs = os.path.abspath(os.path.join(config_dir, impl.script))
+    if os.path.commonpath([config_dir, script_abs]) != config_dir:
+        raise Exception("The implementation of '%s' is outside its package: %s" % (impl.format_name, impl.script))
+    if os.path.exists(script_abs):
+        return script_abs
+
+    get_data_async = getattr(project, "get_data_async", None)
+    if get_data_async is None:
+        raise Exception("The implementation of '%s' is not found: %s" % (impl.format_name, script_abs))
+
+    data = await get_data_async("files/" + impl.script)
+    if data is None:
+        raise Exception(
+            "The repository did not provide the implementation of '%s': %s" % (impl.format_name, impl.script)
+        )
+    content = base64.b64decode(data) if isinstance(data, str) else bytes(data)
+    dirs = os.path.dirname(script_abs)
+    if dirs and not os.path.exists(dirs):
+        os.makedirs(dirs, exist_ok=True)
+    with open(script_abs, "wb") as f:
+        f.write(content)
+    return script_abs

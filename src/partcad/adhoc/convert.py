@@ -48,3 +48,25 @@ def convert_sketch_file(input_filename: str, input_type: str, output_filename: s
         output_type (str): Format of the output file (e.g., svg, dxf).
     """
     write_output_file(input_filename, input_type, output_filename, output_type, kind="sketch", verb="Convert")
+
+
+def convert_scene_file(input_filename: str, input_type: str, output_filename: str, output_type: str) -> None:
+    """Convert a scene file from one format to another using an ad-hoc context.
+
+    The same file-in, file-out operation as the two above, for the third kind of
+    object a file can hold. `pc open --with mujoco` is what asks for it: MuJoCo
+    reads MJCF and nothing else, so a Gazebo world it is pointed at is written
+    out as MJCF first -- which is CAD work, and so is the daemon's.
+
+    Args:
+        input_filename: Path to the input file.
+        input_type: Format of the input file (e.g. world, mjcf).
+        output_filename: Path to save the output file.
+        output_type: Format of the output file.
+    """
+    reject_package_only(
+        input_type,
+        output_type,
+        advice="Use 'pc export' on the scene in its package instead.",
+    )
+    write_output_file(input_filename, input_type, output_filename, output_type, kind="scene", verb="Convert")

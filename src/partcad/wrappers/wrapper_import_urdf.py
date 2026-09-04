@@ -793,7 +793,11 @@ def process(request):
         ignore_collision = frozenset(ignore_collision or ())
 
     context = {
-        "urdf_dir": os.path.dirname(os.path.abspath(urdf_file)),
+        # Where relative and 'package://' references are resolved from.
+        # Not the parsed file's own directory: a URDF is a Jinja2 template,
+        # and a rendered one sits in PartCAD's state directory while the
+        # meshes it names sit beside the file the package declared.
+        "urdf_dir": request.get("base_dir") or os.path.dirname(os.path.abspath(urdf_file)),
         "package_paths": list(request.get("package_paths") or []),
         "output_folder": request["output_folder"],
         "precision": request.get("precision", 6),

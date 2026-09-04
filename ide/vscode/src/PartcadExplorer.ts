@@ -83,6 +83,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         vscode.commands.registerCommand(`partcad.openInGazebo`, (item) => this.openWith('gazebo', item));
         vscode.commands.registerCommand(`partcad.openInKiCad`, (item) => this.openWith('kicad', item));
         vscode.commands.registerCommand(`partcad.openInBlender`, (item) => this.openWith('blender', item));
+        vscode.commands.registerCommand(`partcad.openInMuJoCo`, (item) => this.openWith('mujoco', item));
 
         vscode.commands.registerCommand(`partcad.test`, (item) => this.test(item));
 

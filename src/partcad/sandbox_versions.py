@@ -87,6 +87,22 @@ MIN_PYTHON_VERSION_ZSTD_STDLIB = "3.14"
 # package that never mentions URDF grows a dependency on the ROS stack.
 URDF_PARSER_PY = "urdf-parser-py==0.0.4"
 
+# The simulator the built-in MuJoCo simulation plugin runs a scene in
+# ('//builtin/simulate'). Installed only into the sandbox that plugin runs in,
+# so neither PartCAD nor a package that never simulates anything grows a
+# dependency on it.
+#
+# A range rather than an exact pin, and deliberately not in the "pins must be
+# exact" set that 'test_cad_pins_are_exact' guards. That rule is about the
+# packages that write the OCP native module, where two versions in one sandbox
+# crash the wrapper with no traceback; MuJoCo shares a native module with
+# nothing, is never in a sandbox with the CAD stack, and PartCAD does not link
+# against it. What the plugin calls -- 'MjModel.from_xml_path', 'MjData',
+# 'mj_forward', 'mj_step' -- is MuJoCo's oldest and most stable API, unchanged
+# across the whole of 3.x, so the ceiling is the next major version rather than
+# a release nobody has seen yet.
+MUJOCO = "mujoco>=3.2,<4"
+
 # Only needed by the sandboxes that rasterize or export 2D formats.
 #
 # Deliberately held at the versions this repo already shipped, not bumped to the
