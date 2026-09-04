@@ -22,11 +22,22 @@ here. A copy of the rules would be a second thing to keep in step, and it would
 agree with itself while disagreeing with CI.
 """
 
+import os
 import pathlib
 import subprocess
 
 import pytest
 import yaml
+
+# POSIX only, and not because the tests are lazy about paths: every job that
+# runs this action is `runs-on: ubuntu-latest`, so a Linux shell is the only one
+# it will ever be interpreted by. Windows has no `bash` that would tell us
+# anything about that -- `bash.exe` on a GitHub Windows runner is the WSL
+# launcher, which answers a script with "use 'wsl --install -d <Distro>' to
+# install" and exits non-zero (which is how these tests took the whole Windows
+# `Pytest` session down with them under `-x`, on the run that introduced them).
+# Git Bash would run them, and would be testing a shell CI never uses.
+pytestmark = pytest.mark.skipif(os.name == "nt", reason="the action is bash, and it only ever runs on Linux runners")
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 ACTION = REPO_ROOT / ".github" / "actions" / "changed-scopes" / "action.yml"
