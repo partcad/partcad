@@ -44,7 +44,9 @@ class _PassTest(Test):
 
 def _cache_read_identity(manufacturable):
     Test.MAX_CONCURRENT_TESTS = 8
-    Test.semaphore = None  # let each asyncio.run() build its own in its own loop
+    # No semaphore to reset between the two asyncio.run() calls below: the gate
+    # in 'partcad.concurrency' keeps one per loop, which is what a daemon
+    # serving a second command needs too.
     ctx = _FakeCtx()
     asyncio.run(_PassTest("cam").test_cached([], ctx, _FakeShape(manufacturable)))
     # The (shape_hash, (cache_key,)) the test looked up in the cache.

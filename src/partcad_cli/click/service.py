@@ -81,6 +81,13 @@ def run(cli_ctx, method: str, params: dict = None, span_name: str = None, needs_
                 )
                 call_params["context"] = result.get("context")
             return conn.call(method, call_params, on_event=_on_event)
+    except _client.DaemonStalled as e:
+        # The command is over either way; this only decides how it reads. A
+        # ClickException exits 1 with one line, where the traceback a bare
+        # RuntimeError produces would bury the report the client has already
+        # written to the log -- and would suggest a fault in the CLI rather than
+        # in the service it was waiting for.
+        raise click.ClickException(str(e))
     except _client.DaemonError as e:
         code = getattr(e, "code", None)
         if code == _INVALID_CONFIG:

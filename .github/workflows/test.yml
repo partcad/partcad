@@ -546,13 +546,20 @@ jobs:
           # Through 'bounded.sh', which aborts a command that stops making
           # progress and dumps every thread's stack -- see the file for why.
           #
-          # KNOWN OPEN: on 'ubuntu-24.04-arm' the 'test' command below stops
-          # producing output shortly after '//pub/examples/partcad/produce_assembly_urdf'
-          # and never resumes; the same commands pass on 'ubuntu-latest' (x86_64)
-          # in the same run, on both sandbox Pythons. Every version-bump CI run
-          # on 'devel' from 0.8.19 onward ended up cancelled on it. The wrapper
-          # does not fix that hang. It makes the next occurrence say where the
-          # threads are stopped, which is what nobody has had so far.
+          # The hang this wrapper was written for is fixed: 'pc test' admitted
+          # its tests through a plain 'asyncio.Semaphore', and 'CamTest' runs the
+          # whole suite over everything an assembly is procured from from inside
+          # the call that semaphore had already admitted. Once as many callers as
+          # 'threadsMax' were each waiting on such a nested run, every permit was
+          # held by somebody waiting for a permit; the loop stopped, the daemon
+          # never answered 'test.run', and the CLI sat in 'framing.read_message'
+          # until this wrapper's bound. See 'partcad.concurrency.ReentrantGate'.
+          #
+          # The wrapper stays. It is the bound that turned that into a reported
+          # failure with a traceback rather than a job cancelled at
+          # 'timeout-minutes' with the log ending mid-sentence -- which is how
+          # every version-bump run on 'devel' from 0.8.19 onward ended, and how
+          # the next hang would end without it.
           ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples/partcad
           # TODO(clairbee): Limit RAM usage by restricting the number of threads?
           ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --package //pub/examples/partcad

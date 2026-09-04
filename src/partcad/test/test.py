@@ -9,17 +9,24 @@
 
 from abc import ABC, abstractmethod
 import copy
-import asyncio
 
 from .. import logging as pc_logging
+from ..concurrency import ReentrantGate
+
+# Shared by every Test, because MAX_CONCURRENT_TESTS is a cap on tests as a
+# whole rather than on any one of them.
+#
+# Re-entrant, and it has to be: 'CamTest.test' runs the whole suite over every
+# object the assembly under test is procured from, from inside the call this
+# gate has already admitted. Counting those nested runs as new arrivals is what
+# used to wedge 'pc test -r' for good -- with every permit held by a caller
+# waiting for a permit, no test ever finished and the daemon stopped answering.
+_gate = ReentrantGate("partcad.test.concurrency")
 
 
 def semaphore_wrapper(f):
     async def wrapper(*args, **kwargs):
-        if Test.semaphore is None:
-            Test.semaphore = asyncio.Semaphore(Test.MAX_CONCURRENT_TESTS)
-        async with Test.semaphore:
-            return await f(*args, **kwargs)
+        return await _gate.run(Test.MAX_CONCURRENT_TESTS, f, *args, **kwargs)
 
     return wrapper
 
@@ -30,8 +37,6 @@ class Test(ABC):
     TEST_FAILED = False
     TEST_PASSED = True
     MAX_CONCURRENT_TESTS = None
-
-    semaphore = None
 
     def __init__(self, name: str) -> None:
         self.name = name

@@ -46,6 +46,16 @@ isort --check src/partcad tests/partcad
   it waits for its parts, and each of those takes a thread from the constrained one -- assemblies waiting there
   is how enough of them at once run it out of threads, every one waiting for a part with nowhere left to run.
 
+- **Admission limits**: `threadsMax` also caps how many tests and how many linting checks run at once, and both
+  go through `concurrency.ReentrantGate` rather than a bare `asyncio.Semaphore`. A check may run the other
+  checks itself -- `CamTest` runs the whole suite over everything an assembly is procured from, from inside the
+  call the gate has already admitted -- so nested work is charged to the permit its caller already holds. A
+  semaphore counts it as a new arrival instead, and once as many callers as the limit are each waiting on a
+  nested call, every permit is held by somebody waiting for one and the loop stops for good. That is what hung
+  `pc test -r`, and with it the daemon serving it. The gate keeps one semaphore per event loop for the same
+  reason `sandbox_lock.py` polls: these are taken from several loops at once, and the daemon runs one
+  `asyncio.run()` per request, so a semaphore kept for the process belongs to whichever request created it.
+
 - **Sandbox concurrency**: a wrapper runs in a sandbox *environment* -- the runtime's own conda prefix, or the
   session v-env of a package that has requirements of its own -- and `sandbox_lock.py` is what holds those
   apart. `EnvironmentLock` is a readers/writer lock keyed on the environment's path: running a wrapper reads it,

@@ -1,20 +1,23 @@
 import json
-import asyncio
 from enum import Enum
 from abc import ABC, abstractmethod
 
 from ..project import Project
 from ..context import Context
 from .. import logging as pc_logging
+from ..concurrency import ReentrantGate
 from partcad.cache_hash import CacheHash
+
+# Separate from the tests' gate: the two limits are unrelated. Per loop for the
+# same reason, though -- the daemon runs one 'asyncio.run()' per request, so a
+# semaphore kept in a class attribute belongs to whichever request created it
+# and refuses every request after that one.
+_gate = ReentrantGate("partcad.lint.concurrency")
 
 
 def semaphore_wrapper(f):
     async def wrapper(*args, **kwargs):
-        if Linting.semaphore is None:
-            Linting.semaphore = asyncio.Semaphore(Linting.MAX_CONCURRENT_CHECKS)
-        async with Linting.semaphore:
-            return await f(*args, **kwargs)
+        return await _gate.run(Linting.MAX_CONCURRENT_CHECKS, f, *args, **kwargs)
 
     return wrapper
 
@@ -47,7 +50,6 @@ class LintingReport:
 
 
 class Linting(ABC):
-    semaphore = None
     MAX_CONCURRENT_CHECKS = None
 
     def __init__(self, name: str) -> None:
