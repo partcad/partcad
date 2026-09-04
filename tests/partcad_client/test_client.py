@@ -228,6 +228,33 @@ def test_no_bound_is_applied_when_the_timeout_is_disabled(socket_dir, monkeypatc
     assert client_module.idle_timeout() == 0.0
 
 
+@pytest.mark.parametrize("setting", ["0", "-1", "-0.5"])
+def test_turning_the_bound_off_leaves_the_socket_blocking(socket_dir, monkeypatch, setting):
+    """ "No bound" has to mean waiting, not failing instantly or not connecting.
+
+    'settimeout(0)' does not make a socket wait forever, it makes it
+    non-blocking, and the first read then fails with BlockingIOError -- which is
+    not the TimeoutError a stall is reported from, so it would have escaped
+    'call' as an unhandled error on every request. A negative value is worse
+    still: 'settimeout()' raises ValueError, inside the connect that 'connect()'
+    wraps in a bare except, so the client would have silently stopped using the
+    daemon and spawned a one-shot stdio service per command instead.
+    """
+    monkeypatch.setenv("PC_DAEMON_IDLE_TIMEOUT", setting)
+    assert client_module.idle_timeout() == 0.0
+
+    server, path = _serve(socket_dir, {"ping": lambda s, p: "pong"})
+    try:
+        # The real '_connect_socket', with only the launcher stubbed out: the
+        # socket it builds is what this is about, and starting a daemon is not.
+        monkeypatch.setattr(client_module, "start_daemon", lambda cwd, extra_args: path)
+        client = client_module._connect_socket(None, ())
+        assert client.call("ping") == "pong"
+        client.close()
+    finally:
+        server.stop()
+
+
 def test_the_default_bound_is_used_when_the_setting_is_not_a_number(socket_dir, monkeypatch):
     monkeypatch.setenv("PC_DAEMON_IDLE_TIMEOUT", "soon")
     assert client_module.idle_timeout() == client_module.DEFAULT_IDLE_TIMEOUT
