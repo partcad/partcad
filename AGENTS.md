@@ -284,7 +284,11 @@ without `#deepTest`. The
 serves every platform: the extension is a JSON-RPC client with no Python and no compiled content in it. The
 same workflow packages the transition shim beside it, under the extension's version — which the shim does not
 state anywhere, but reads at package time, so the two cannot drift. A shim older than the entry it replaces is
-one the marketplace never delivers, and a second literal to bump is how that happens. Changing
+one the marketplace never delivers, and a second literal to bump is how that happens. Both are published to the
+galleries by `deploy.yml`'s `publish-vscode-extension` job, after the release and only on `main`, from the same
+artifact the release carries — so what the Visual Studio Marketplace and Open VSX serve is what is attached to
+the release, byte for byte. That job is also what enforces the extension-before-shim order the shim's
+`AGENTS.md` sets out; it skips a gallery whose token is unset rather than failing the release. Changing
 `.vscode/extensions.json` changes what the IDE ships with — see `ide/standalone/README.md`. The plugin is built
 the same way, by `.github/workflows/plugin.yml`, and published two ways by `deploy.yml`: `pc-<version>.zip` on
 the release, and the `plugin-dist` branch, which is what `/plugin marketplace add partcad/partcad@plugin-dist`
