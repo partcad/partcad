@@ -832,3 +832,115 @@ def test_info_reports_the_urdf_without_building_it():
     assert info["RootLink"] == "base_link"
     assert info["UrdfMovableJoints"] == ["shoulder_pan (revolute)"]
     assert DROPPED_LABELS["joint_kinematics"] in info["UrdfDropped"]
+
+
+#
+# Where the mass comes from
+#
+
+MATERIAL_DATA = "tests/partcad/unit/data/urdf_material"
+
+# Each plate in the fixture is 20 x 20 x 5 mm.
+PLATE_VOLUME_M3 = 20.0 * 20.0 * 5.0 * 1e-9
+
+
+def _link_mass(robot, name):
+    for link in robot.findall("link"):
+        if link.get("name") == name:
+            inertial = link.find("inertial")
+            return None if inertial is None else float(inertial.find("mass").get("value"))
+    raise AssertionError("no link named %s" % name)
+
+
+def test_the_material_index_resolves_what_each_part_is_made_of():
+    """What travels to the sandbox: a density and a name, per shape.
+
+    The reference cannot be resolved in the sandbox - it names another package
+    - so it is resolved here, in the PartCAD process, and sent along.
+    """
+    ctx = pc.init(MATERIAL_DATA)
+    rig = ctx._get_assembly("//:rig")
+    # Read from the envelope that would be sent, which is what the exporter
+    # sees - and what an assembly served from the cache still has, where it has
+    # no instantiated children to walk.
+    index = rig._material_index(ctx, asyncio.run(rig.get_shape(ctx)))
+
+    assert index["//:plastic-plate"] == {"density": 0.00132, "name": "PLA"}
+    assert index["//:steel-plate"] == {"density": 0.00785, "name": "Steel"}
+    # No material at all, so nothing to resolve and nothing to send.
+    assert "//:bare-plate" not in index
+
+
+def test_a_part_is_weighed_with_its_own_material(tmp_path):
+    """The mass in the URDF is the part's volume times its material's density.
+
+    Before materials, every part that did not state a mass was weighed as
+    aluminium. A plastic plate came out twice as heavy as it is.
+    """
+    ctx = pc.init(MATERIAL_DATA)
+    rig = ctx._get_assembly("//:rig")
+    robot = ET.parse(_export_urdf(ctx, rig, str(tmp_path), name="rig")).getroot()
+
+    # 1320 kg/m^3 and 7850 kg/m^3, from 'materials:' in the fixture.
+    assert _link_mass(robot, "plastic-plate") == pytest.approx(PLATE_VOLUME_M3 * 1320.0)
+    assert _link_mass(robot, "steel-plate") == pytest.approx(PLATE_VOLUME_M3 * 7850.0)
+    # Same geometry, different materials: the masses must differ.
+    assert _link_mass(robot, "plastic-plate") != pytest.approx(_link_mass(robot, "steel-plate"))
+
+
+def test_a_part_with_no_material_falls_back_and_says_so(tmp_path, caplog):
+    """The guess is still there, but it is no longer silent."""
+    ctx = pc.init(MATERIAL_DATA)
+    rig = ctx._get_assembly("//:rig")
+    with caplog.at_level("WARNING"):
+        robot = ET.parse(_export_urdf(ctx, rig, str(tmp_path), name="rig")).getroot()
+
+    assert _link_mass(robot, "bare-plate") == pytest.approx(PLATE_VOLUME_M3 * 2700.0)
+    # Named, so the reader knows which link was guessed at rather than only
+    # that something was.
+    messages = "\n".join(record.message for record in caplog.records)
+    assert "bare-plate" in messages and "aluminium" in messages
+    # The parts that had a material are not complained about.
+    assert "plastic-plate" not in messages
+
+
+def test_an_explicit_density_option_overrides_the_materials(tmp_path):
+    """Naming a density is a deliberate 'weigh all of this as such-and-such'."""
+    ctx = pc.init(MATERIAL_DATA)
+    rig = ctx._get_assembly("//:rig")
+    robot = ET.parse(_export_urdf(ctx, rig, str(tmp_path), name="rig", density=1000.0)).getroot()
+
+    for name in ("plastic-plate", "steel-plate", "bare-plate"):
+        assert _link_mass(robot, name) == pytest.approx(PLATE_VOLUME_M3 * 1000.0)
+
+
+def test_the_urdf_material_is_called_by_its_formal_name(tmp_path):
+    """'PLA', not the sanitized package path the reference would become."""
+    ctx = pc.init(MATERIAL_DATA)
+    rig = ctx._get_assembly("//:rig")
+    robot = ET.parse(_export_urdf(ctx, rig, str(tmp_path), name="rig")).getroot()
+
+    names = {material.get("name") for material in robot.findall("link/visual/material")}
+    assert "PLA" in names
+    assert "Steel" in names
+
+
+def test_a_stated_mass_still_wins_over_the_material(tmp_path, caplog):
+    """A measurement beats anything derived, and derivation must not run for it.
+
+    The URDF example's 'base' states its mass, so exporting it back reproduces
+    that number and never reaches the density at all - which is why 'base' is
+    not among the links reported as guessed. Its 'forearm' and 'wrist' state no
+    mass and have no material, so they are: that was always a guess, and the
+    only change is that it is no longer a silent one.
+    """
+    ctx = pc.init(EXAMPLES)
+    robot_obj = ctx._get_assembly(URDF_EXAMPLE)
+    with caplog.at_level("WARNING"):
+        exported = ET.parse(_export_urdf(ctx, robot_obj, str(tmp_path), name="robot")).getroot()
+
+    assert float(exported.find("link/inertial/mass").get("value")) == pytest.approx(0.78)
+
+    guessed = "\n".join(record.message for record in caplog.records)
+    assert "'base'" not in guessed
+    assert "'forearm'" in guessed and "'wrist'" in guessed

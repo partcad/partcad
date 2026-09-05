@@ -208,3 +208,103 @@ def round_packed(packed, precision):
         [round(v, precision) for v in axis],
         round(angle, precision),
     ]
+
+
+# Cubic and quintic millimetres to their metre counterparts. A volume becomes a
+# mass once a density (kg/m^3) is applied; the second moment OCCT integrates has
+# units of length^5, so it needs the fifth power.
+MM3_TO_M3 = 1e-9
+MM5_TO_M5 = 1e-15
+
+# A PartCAD material states its density in g/mm^3, the units every length in
+# PartCAD is already in. URDF and SDFormat state density in kg/m^3. One g/mm^3 is
+# 1e-3 kg per 1e-9 m^3, so the factor is 1e6: PLA at 0.00132 g/mm^3 is
+# 1320 kg/m^3, which is the 1.32 g/cm^3 a datasheet quotes.
+G_MM3_TO_KG_M3 = 1e6
+
+
+def density_from_material(material):
+    """A material's density as kg/m^3, or None if it states none.
+
+    'material' is what the exporter was handed for one shape: the resolved
+    density of that shape's material, in g/mm^3, under 'density'. Resolving the
+    reference is the caller's job and happens in the PartCAD process - a
+    sandboxed exporter has no context to look a package up in.
+    """
+    if not isinstance(material, dict):
+        return None
+    density = material.get("density")
+    if density is None:
+        return None
+    try:
+        density = float(density)
+    except (TypeError, ValueError):
+        return None
+    return density * G_MM3_TO_KG_M3 if density > 0.0 else None
+
+
+def combine_inertials(solids):
+    """The mass, centre of mass and inertia of solids of differing densities.
+
+    Each entry of 'solids' is ``(volume, com, inertia, density)``:
+
+      * ``volume`` in mm^3 and ``com`` in mm, in the link's frame;
+      * ``inertia`` the 3x3 unit-density second moment **about that solid's own
+        centre of mass**, in mm^5 -- which is what OCCT's
+        ``GProp_GProps.MatrixOfInertia()`` returns for
+        ``BRepGProp.VolumeProperties_s`` (verified: the value does not change
+        when the shape is translated away from the origin);
+      * ``density`` in kg/m^3.
+
+    Returns ``(mass, com, inertia)`` with the mass in kg, the centre of mass in
+    metres and the inertia a dict of the six URDF/SDFormat components in kg.m^2
+    about that centre of mass -- the frame both formats state ``<inertia>`` in.
+    None when there is no volume to compute from.
+
+    One density for the whole link cannot express a link that mixes materials -
+    a steel insert in a plastic housing weighs what neither material alone
+    would say - so each solid is weighed with its own density and the results
+    are combined: the masses add, the centre of mass is their weighted mean,
+    and each solid's tensor is carried from its own centre of mass to the
+    combined one by the parallel-axis theorem. With a single solid this reduces
+    to exactly the old arithmetic (the shift is zero), which is why converting
+    a single-material link changes nothing.
+    """
+    entries = []
+    for volume, com, inertia, density in solids:
+        if volume is None or volume <= 0.0:
+            continue
+        mass = volume * MM3_TO_M3 * density
+        if mass <= 0.0:
+            continue
+        entries.append((mass, tuple(float(v) for v in com), inertia, density))
+    if not entries:
+        return None
+
+    total = sum(entry[0] for entry in entries)
+    # Millimetres, to stay in the frame the centres arrived in.
+    centre_mm = tuple(sum(entry[0] * entry[1][axis] for entry in entries) / total for axis in (0, 1, 2))
+
+    combined = [[0.0] * 3 for _ in range(3)]
+    for mass, com, inertia, density in entries:
+        factor = density * MM5_TO_M5
+        # From this solid's own centre of mass to the combined one, in metres.
+        offset = [(com[axis] - centre_mm[axis]) / MM_PER_M for axis in (0, 1, 2)]
+        squared = sum(value * value for value in offset)
+        for row in (0, 1, 2):
+            for col in (0, 1, 2):
+                shift = mass * ((squared if row == col else 0.0) - offset[row] * offset[col])
+                combined[row][col] += float(inertia[row][col]) * factor + shift
+
+    return (
+        total,
+        tuple(value / MM_PER_M for value in centre_mm),
+        {
+            "ixx": combined[0][0],
+            "ixy": combined[0][1],
+            "ixz": combined[0][2],
+            "iyy": combined[1][1],
+            "iyz": combined[1][2],
+            "izz": combined[2][2],
+        },
+    )

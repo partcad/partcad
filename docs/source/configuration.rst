@@ -1829,6 +1829,32 @@ nothing gets inertial properties computed from its geometry. A property PartCAD
 holds that URDF has no way to state is reported rather than dropped in silence
 (see :doc:`simulation`).
 
+Where the density for that computation comes from, most specific first:
+
+1. The ``density`` option (kg/m^3), when one is set - in the ``export:``
+   section of a package's ``partcad.yaml``, the way every other file-type
+   option is. Setting it is a deliberate "weigh all of this as
+   such-and-such", so it wins over everything derived.
+2. The part's own :ref:`material <materials>`, which is what
+   ``properties: material:`` points at. Its density is per part, so a link
+   assembled from parts of different materials is weighed material by material
+   - the masses add, and the centre of mass is pulled towards the denser part -
+   rather than averaged under one density.
+3. Aluminium, 2700 kg/m^3, as a last resort. Every link weighed this way is
+   named in a warning: a plastic part silently weighed as aluminium is wrong by
+   a factor of two, and nothing in the file says so.
+
+.. code-block:: yaml
+
+  # partcad.yaml -- weigh everything as steel, whatever the parts are made of
+  export:
+    urdf:
+      density: 7850.0
+
+A part that states ``physics: mass:`` never reaches any of this. The
+``<material>`` element is named after the material's ``formal`` name (``PLA``)
+where the reference resolves, rather than after the package path.
+
 ``pc convert assembly`` goes further than exporting: it rewrites the package
 around the assembly and switches its declared type.
 

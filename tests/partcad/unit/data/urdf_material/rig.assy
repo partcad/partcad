@@ -1,0 +1,7 @@
+links:
+  - part: plastic-plate
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: steel-plate
+    location: [[50, 0, 0], [0, 0, 1], 0]
+  - part: bare-plate
+    location: [[100, 0, 0], [0, 0, 1], 0]

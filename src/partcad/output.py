@@ -142,6 +142,13 @@ SCRIPT_KEY = "__script__"
 # placement is baked into the shape instead of staying readable as data.
 DECODE_KEY = "__decode__"
 
+# The request key carrying what each shape's material is: '<package>:<name>' ->
+# {"density": g/mm^3, "name": the formal name}. Filled only for a file type that
+# asked for 'properties', and only in the PartCAD process - a sandboxed
+# implementation is handed the material as a string and has no context to
+# resolve it in. See 'Shape._material_index()'.
+MATERIALS_KEY = "materials"
+
 
 class Implementation:
     """Who writes a file of a given type, and with what.
