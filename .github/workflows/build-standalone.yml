@@ -461,7 +461,36 @@ jobs:
         shell: bash
         run: dev-tools/pyinstaller/build.sh --platform=${{ matrix.platform }}
 
+      # Three attempts, because losing this one costs the whole build.
+      #
+      # `upload-artifact` reaches the artifact service over the network, and on
+      # the `macos-15-intel` runners that request has twice resolved to nothing:
+      #
+      #     ##[error]Failed to CreateArtifact: Unable to make request: ENOTFOUND
+      #
+      # It blocked the 0.8.47 and 0.8.54 releases, both on `macos-15-x86_64`,
+      # and both times *after* the bundle was built -- the log says "there will
+      # be 2 files uploaded" and "Artifact name is valid!" and then fails a DNS
+      # lookup. What that throws away is the most expensive thing this
+      # repository does, ~500MB of OpenCASCADE frozen over the better part of an
+      # hour, and "deploy.yml" makes `publish-to-pypi` wait on this workflow, so
+      # it takes the wheel, the bundles, the extension and the plugin with it.
+      #
+      # Spelled out rather than looped. A step that `uses:` an action cannot be
+      # wrapped in a shell loop, a composite action cannot help either
+      # (`continue-on-error` is not supported on a composite's steps), and the
+      # repository has no retry action to reach for -- `version-bump.yml` writes
+      # its own loop for the same reason. Only the last attempt is allowed to
+      # fail the job.
+      #
+      # `overwrite: true` on the retries: a first attempt that got far enough to
+      # create the artifact and then died would otherwise make every retry fail
+      # with "an artifact with this name already exists", turning one transient
+      # error into a permanent one. It is not needed on the first attempt, and
+      # not set there, so a genuine duplicate name is still an error.
       - name: Upload the bundle
+        id: upload
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: partcad-standalone-${{ matrix.platform }}
@@ -471,6 +500,47 @@ jobs:
             dist/standalone/*.sha256
           if-no-files-found: error
           retention-days: 14
+
+      # Long enough for a failed DNS lookup to be worth repeating, short enough
+      # that it is noise against the build that just ran.
+      - name: Wait before retrying the upload
+        if: steps.upload.outcome == 'failure'
+        shell: bash
+        run: sleep 30
+
+      - name: Upload the bundle (second attempt)
+        id: upload-retry
+        if: steps.upload.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: partcad-standalone-${{ matrix.platform }}
+          path: |
+            dist/standalone/*.tar.xz
+            dist/standalone/*.zip
+            dist/standalone/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+      - name: Wait before the last upload attempt
+        if: steps.upload.outcome == 'failure' && steps.upload-retry.outcome == 'failure'
+        shell: bash
+        run: sleep 60
+
+      # The one that is allowed to fail the job.
+      - name: Upload the bundle (final attempt)
+        if: steps.upload.outcome == 'failure' && steps.upload-retry.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: partcad-standalone-${{ matrix.platform }}
+          path: |
+            dist/standalone/*.tar.xz
+            dist/standalone/*.zip
+            dist/standalone/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
 
   # Every platform this run built that "install.sh" can install, which is every
   # one except Windows -- there is no shell installer there -- plus the macOS
