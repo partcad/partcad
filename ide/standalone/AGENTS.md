@@ -52,6 +52,41 @@ Three things about how it is done:
 `tools/verify_bundle.py` fails the build if the wrapper is missing, if `main` does not point at it, or if it
 does not contain the switch -- each of which leaves an IDE that either has no software WebGL or does not start.
 
+## The macOS bundle
+
+**Electron resolves the four helper applications it spawns from the outer bundle's `CFBundleName`.** Renaming
+the application without renaming `Contents/Frameworks/<name> Helper*.app` gives a bundle that dies at
+`electron_main_delegate_mac.mm` with "Unable to find helper app". It happens before a window, a user data
+directory or a single line of log exists, so the bundle leaves nothing behind to explain itself. 0.8.33 and
+0.8.49 shipped that way: unlaunchable on every Mac.
+
+Three names change per helper, not one -- the directory Electron looks up, the executable inside it (a helper's
+`Info.plist` carries no `CFBundleExecutable`, so macOS falls back to the bundle's base name), and
+`CFBundleName`. The rename runs **before** `codesign --force --deep`, which seals the names it is given.
+`check_macos_helpers` in `tools/verify_bundle.py` fails the build when any of the four is missing or still
+carries the upstream name, and says which.
+
+**Two plist fields, and only one of them is the helper's.** VSCodium spells `CFBundleName` and
+`CFBundleExecutable` the same -- both "VSCodium" -- so they look interchangeable and are not: the executable in
+`Contents/MacOS` is `CFBundleExecutable`, and what a helper is named after is `CFBundleName`. `build.sh` reads
+the latter into `UPSTREAM_BUNDLE_NAME` *before* `brand.py plist` overwrites it, and keeps `BUNDLE_EXECUTABLE`
+for the main executable. Where the expected name is not there, a unique `* Helper<suffix>.app` beside it is
+renamed instead and said out loud, so an upstream rename does not fail a build over a name -- but two matches
+fail, because renaming the wrong directory produces the same dead application the rename exists to prevent.
+
+**`bin/partcad-ide --version` does not test that the application starts, and never could.** That launcher ends
+in `ELECTRON_RUN_AS_NODE=1` -- Electron being Node: no browser process, no helper applications, no window. It
+printed a version out of a macOS bundle that could not launch, for two releases, while the job stayed green.
+Anything claiming to smoke-test the *editor* has to run the binary in `Contents/MacOS` (the top of the
+directory, on Linux and Windows), keep its output, and assert the process is still alive -- which is what
+"Run the application binary" in `.github/workflows/build-ide-standalone.yml` does.
+
+**A check that fails on one platform is evidence about that platform, not a reason to stop asking.** "Start it
+once" had never passed on macOS and was made `continue-on-error` there, reasoning that a hosted runner's
+session was the likelier suspect. It was not the runner; it was the helpers, and the demotion is what let the
+two releases after it ship unlaunchable. It is blocking on every platform again, and it passes. If a start
+check fails on one platform, get the application's own stderr before concluding anything about the runner.
+
 ## Test
 
 ```bash
