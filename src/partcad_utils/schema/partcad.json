@@ -12,6 +12,50 @@
       },
       "additionalProperties": false
     },
+    "materials": {
+      "type": ["object", "null"],
+      "description": "What the parts of this package can be made of. A material is not a shape - there is nothing to render, export or measure - it is a set of facts about a substance that the things with geometry refer to by name",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "The short form: the full name of the substance ('pla: Polylactic Acid')"
+            },
+            { "type": "null" },
+            {
+              "type": "object",
+              "properties": {
+                "formal": { "type": "string", "minLength": 1, "description": "The short formal name, e.g. 'PLA'" },
+                "full": { "type": "string", "minLength": 1, "description": "The full name of the substance, e.g. 'Polylactic Acid'" },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "url": { "$ref": "#/definitions/url" },
+                "density": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Density in g/mm^3, the units every length in PartCAD is already in. A datasheet quotes g/cm^3, which is 1000x larger"
+                },
+                "mu": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Coefficient of sliding friction, dimensionless. The same number SDFormat states as '<friction><ode><mu>', URDF as '<gazebo><mu1>' and MJCF as the first 'friction' component; a part made of this material gets it unless it states a 'friction' of its own"
+                },
+                "tags": {
+                  "oneOf": [
+                    { "type": "string", "minLength": 1 },
+                    { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                  ],
+                  "description": "What the material is good at, as the package chose to say it. Free-form on purpose"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "simulation-section": {
       "type": ["object", "null"],
       "description": "The simulation plugins this package implements. One is declared exactly as an export or a render implementation is - a script, the sandbox it needs and its parameters - and is named by full path from a 'simulate:'",
@@ -42,7 +86,7 @@
       "additionalProperties": false
     },
     "simulate-entry": {
-      "type": ["object", "null"],
+      "type": "object",
       "properties": {
         "desc": { "type": "string", "maxLength": 1000 },
         "scene": {
@@ -54,7 +98,7 @@
         "simulation": {
           "type": "string",
           "minLength": 1,
-          "description": "The simulation plugin that runs it, by full path, declared in that package's 'simulation:' section. Defaults to '//builtin/simulate:mujoco'"
+          "description": "The simulation plugin that runs it, by full path, declared in that package's 'simulation:' section. Required: PartCAD implements no simulator, so a package imports one (e.g. github.com/partcad/partcad-sim-mujoco) and names it here"
         },
         "validation": {
           "type": "string",
@@ -66,6 +110,7 @@
           "description": "Parameter values handed to the simulation plugin, overriding what its own declaration defaults to (e.g. 'duration')"
         }
       },
+      "required": ["simulation"],
       "additionalProperties": false
     },
     "output-type": {
@@ -585,6 +630,7 @@
     "render": { "$ref": "#/definitions/render" },
     "export": { "$ref": "#/definitions/output-section" },
     "simulation": { "$ref": "#/definitions/simulation-section" },
+    "materials": { "$ref": "#/definitions/materials" },
     "dependencies": {
       "type": ["object", "null"],
       "patternProperties": {

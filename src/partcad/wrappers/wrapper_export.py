@@ -70,6 +70,16 @@ DECODE_KEY = "__decode__"
 # declares it and never sees the index.
 PROPERTIES_KEY = "properties"
 
+# The key the core puts what each shape inherits from its material under, keyed
+# by the same full name the index below is keyed by. A shape says what it is
+# made of by *name*, and turning ':aluminium' into a coefficient of friction
+# means resolving it against the package that wrote it and then loading the
+# package that catalogues it - which the core can do and a sandbox cannot. So
+# the facts arrive already resolved, per shape, and are merged into the index
+# below underneath whatever each shape said about itself. See
+# 'partcad.material.physics_by_shape()'.
+MATERIALS_KEY = "__materials__"
+
 
 def properties_index(request):
     """Full name -> what that shape reports about itself, over the whole request.
@@ -80,10 +90,26 @@ def properties_index(request):
     that walks the tree ('decode: false') *and* for one that is handed live
     geometry ('decode: true'), whose decoding throws every envelope away.
 
+    What the shape's *material* says is folded in here too, underneath what the
+    shape itself says: a part that states a friction of its own keeps it, and one
+    that only states what it is made of gets the material's. That way an exporter
+    reads 'physics' and never learns that materials exist - which is what keeps
+    all three of them (URDF, SDFormat, MJCF) agreeing about it for free.
+
     Only shapes that report something appear. A shape with no name cannot be
     looked up and is skipped, but its children are still walked.
     """
     index = {}
+    materials = request.get(MATERIALS_KEY) or {}
+
+    def resolved(name, properties):
+        """One shape's properties, with its material's physics under its own."""
+        facts = materials.get(name)
+        if not facts:
+            return properties
+        physics = dict(facts)
+        physics.update(properties.get("physics") or {})
+        return dict(properties, physics=physics)
 
     def walk(obj):
         if isinstance(obj, list):
@@ -97,14 +123,15 @@ def properties_index(request):
             properties = obj.get(PROPERTIES_KEY)
             name = obj.get("name")
             if name and isinstance(properties, dict) and properties:
-                index[name] = properties
+                index[name] = resolved(name, properties)
             for child in obj.get(ocp_serialize.KEY_ASSEMBLY) or []:
                 walk(child)
             return
         for key, value in obj.items():
             # Never the index itself: it is keyed by name, not by anything that
-            # holds an envelope, and walking it would be pointless.
-            if key != PROPERTIES_KEY:
+            # holds an envelope, and walking it would be pointless. Nor the
+            # material table, which is keyed by reference and holds no shapes.
+            if key not in (PROPERTIES_KEY, MATERIALS_KEY):
                 walk(value)
 
     walk(request)
@@ -166,6 +193,10 @@ if __name__ == "__main__":
     # - are still there to be read.
     if request.get(PROPERTIES_KEY) is True:
         request[PROPERTIES_KEY] = properties_index(request)
+    # Read by 'properties_index' above and nothing else: an implementation is
+    # handed the physics of each shape, not a table of substances to look one up
+    # in. A format that declares no 'properties: true' never asked for either.
+    request.pop(MATERIALS_KEY, None)
     if request.pop(DECODE_KEY, True) is not False:
         request = ocp_serialize.decode(request)
     if script is None:

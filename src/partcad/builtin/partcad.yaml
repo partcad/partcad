@@ -7,12 +7,16 @@
 #
 #   - `//builtin/export` -- the 3D/CAD formats `pc export` writes.
 #   - `//builtin/render` -- the 2D projections `pc render` writes.
-#   - `//builtin/simulate` -- the simulation plugins `pc sim` runs a scene with.
 #
 # And one that declares an object rather than a way of producing one:
 #
 #   - `//builtin/scene` -- the empty world a `simulate:` places its subject in
 #     when it names no scene of its own.
+#
+# There is deliberately no `//builtin/simulate`. A simulator is somebody's
+# program with a release cycle of its own, so PartCAD ships the concept -- the
+# `simulation:` section, the sandbox wrapper, the MJCF export -- and a package
+# supplies the physics (`partcad/partcad-sim-mujoco` for MuJoCo).
 #
 # A package that wants to produce a format differently does not patch anything
 # here. It declares the same format in its own `export:`/`render:` section with
@@ -22,9 +26,8 @@
 name: //builtin
 desc: |
   The packages PartCAD ships with itself: the built-in ways of producing output
-  files, declared in `//builtin/export` and `//builtin/render`; the built-in
-  simulation plugins in `//builtin/simulate`; and the scene a simulation places
-  its subject in, in `//builtin/scene`.
+  files, declared in `//builtin/export` and `//builtin/render`, and the scene a
+  simulation places its subject in, in `//builtin/scene`.
 
 dependencies:
   export:
@@ -33,9 +36,6 @@ dependencies:
   render:
     type: local
     path: render
-  simulate:
-    type: local
-    path: simulate
   scene:
     type: local
     path: scene

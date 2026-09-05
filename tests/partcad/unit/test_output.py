@@ -221,7 +221,6 @@ def test_builtin_requirements_match_the_pinned_cad_stack():
         "svgpathtools": sandbox_versions.SVGPATHTOOLS,
         "ezdxf": sandbox_versions.EZDXF,
         "urdf-parser-py": sandbox_versions.URDF_PARSER_PY,
-        "mujoco": sandbox_versions.MUJOCO,
     }
     seen = set()
     for section, where, requirements in _builtin_requirements():
@@ -241,16 +240,8 @@ def _builtin_requirements():
     against one of those scripts gets (see '//builtin/render'). Both are
     installed into the sandbox, so both are pins that can drift.
     """
-    # 'simulation:' beside the two output sections: a simulation plugin declares
-    # its sandbox exactly as an export implementation does, so its pins drift
-    # exactly as easily. Its directory is not its section name, which is why the
-    # pair is spelled out rather than derived.
-    for section, directory in (
-        (output.EXPORT, output.EXPORT),
-        (output.RENDER, output.RENDER),
-        (output.SIMULATE, "simulate"),
-    ):
-        config = yaml.safe_load(open(os.path.join(BUILTIN_DIR, directory, "partcad.yaml")))
+    for section in output.SECTIONS:
+        config = yaml.safe_load(open(os.path.join(BUILTIN_DIR, section, "partcad.yaml")))
         yield section, section, config.get("pythonRequirements") or []
         for format_name, format_config in config[section].items():
             yield section, format_name, format_config.get("pythonRequirements") or []

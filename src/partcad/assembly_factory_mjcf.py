@@ -54,6 +54,7 @@ from .part_config import PartConfiguration
 
 # How a counter from the wrapper's 'dropped' summary is worded in the log.
 DROPPED_LABELS = {
+    "friction": "torsional and rolling friction (the sliding coefficient is kept)",
     "joint": "joints (the object shows the bodies at their initial pose)",
     "actuator": "actuators",
     "tendon": "tendons",

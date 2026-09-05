@@ -167,6 +167,22 @@ def test_lookup_of_a_missing_package_returns_neither(ctx):
 #
 
 
+def test_mu_is_the_coefficient_every_format_calls_that(root):
+    """One number, three spellings: SDFormat's 'mu', URDF's 'mu1', MJCF's slide."""
+    assert root.get_material("pla").mu == 0.35
+    assert root.get_material("abs").mu is None
+
+
+def test_what_a_material_lends_a_shape_is_stated_in_shape_terms(root):
+    """So merging it into a shape's own physics is an update, not a translation."""
+    from partcad import material as pc_material
+
+    assert pc_material.physics_of(root.get_material("pla")) == {"friction": 0.35}
+    # A material that states nothing this table carries lends nothing, which is
+    # different from lending a default: the simulator's own is what is left.
+    assert pc_material.physics_of(root.get_material("abs")) == {}
+
+
 def test_info_reports_both_density_units(root):
     info = root.get_material("pla").info()
     assert info["Formal"] == "PLA"

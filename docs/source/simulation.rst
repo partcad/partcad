@@ -580,8 +580,10 @@ is one simulation, and states four things:
    scene is shared.
 
 ``simulation:``
-   The simulation plugin that runs it, by full path. The default is
-   ``//builtin/simulate:mujoco``.
+   The simulation plugin that runs it, by full path. There is no default:
+   PartCAD implements no simulator, so a package imports one and says which.
+   `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is the
+   MuJoCo one.
 
 ``validation:``
    A Python expression over ``before`` and ``after`` that says whether what
@@ -589,12 +591,18 @@ is one simulation, and states four things:
 
 .. code-block:: yaml
 
+   dependencies:
+     sim-mujoco:
+       type: git
+       url: https://github.com/partcad/partcad-sim-mujoco.git
+
    assemblies:
      stack:
        type: assy
        simulate:
          stands:
            desc: Nothing moves, because there is no reason for anything to move
+           simulation: sim-mujoco:mujoco
            offset: [[0, 0, 10], [0, 0, 1], 0]
            validation: |
              max(
@@ -605,8 +613,9 @@ is one simulation, and states four things:
 ``pc sim`` runs them -- one object, or everything a package declares, or
 everything a package tree declares with ``-r`` -- and exits non-zero when a
 validation does not hold. ``--json`` prints the whole of what each plugin
-reported. ``examples/feature_simulate`` is two assemblies of two blocks each,
-identical but for 18 millimetres, whose simulations therefore end differently.
+reported. ``examples/feature_simulate`` has three assemblies of two blocks each:
+two identical but for 18 millimetres, and two identical but for the material.
+All three simulations pass, and no two of them end the same way.
 
 Simulation plugins
 ==================
@@ -638,6 +647,16 @@ several; ``formatOptions:`` is how that export is asked for, and is where a
 physics plugin says that it wants every body free to move. That also keeps a
 plugin free of OCP: it is handed a path.
 
+**PartCAD implements none of these**, and that is the point of the section.
+A simulator is somebody's program with a release cycle of its own; shipping one
+inside the wheel would make every PartCAD release a statement about which
+version of it you get, and would pin a large dependency on every user who never
+simulates anything. So PartCAD ships the concept -- the section, the sandbox
+wrapper, the runner, the MJCF export -- and a package supplies the physics, the
+same way ``//pub/feature/render/draftwright`` supplies technical drawings. The
+MuJoCo plugin is
+`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_.
+
 ``before`` and ``after`` are all PartCAD knows about a result. What is *inside*
 them, and anything else beside them, is the plugin's own vocabulary -- the
 MuJoCo plugin states where every body ended up, in millimetres; another might
@@ -645,10 +664,65 @@ state a temperature field -- and PartCAD neither reads nor validates it. It
 carries the two objects to the ``validation:`` expression the package wrote and
 reports what that says. Every judgement in that sentence belongs to the package.
 
-The built-in plugin loads the MJCF, steps it for ``duration`` seconds of
+The MuJoCo plugin loads the MJCF, steps it for ``duration`` seconds of
 simulated time, and reports each body's position and orientation before and
 after. Running it needs no MuJoCo on the machine: the plugin runs in a PartCAD
 sandbox that installs one.
+
+Friction, and why it is a material property
+===========================================
+
+Whether a stack of blocks stands up is not a property of its geometry. Two 20 mm
+cubes squarely stacked, ten seconds under gravity, nothing else changed:
+
+=================  ==========================================
+sliding friction   what happens
+=================  ==========================================
+0.04               the top block slides off -- 35 mm, and it ends up on the floor
+0.4                the same
+0.5                it stays -- 3 mm of settling
+1.05               it stays -- 1 mm
+=================  ==========================================
+
+So the answer to "will this stand?" is a fact about the *material*, and
+``materials:`` is where a package already says what its parts are made of. A
+material states ``mu`` beside its ``density``; a part that names that material
+gets that coefficient; and the coefficient is written into whichever format the
+object is exported to:
+
+======================  ==========================================
+format                  where it is written
+======================  ==========================================
+PartCAD                 the ``friction`` property of a shape
+SDFormat (``.world``)   ``<collision><surface><friction><ode><mu>``
+URDF                    ``<gazebo reference="..."><mu1>``
+MJCF                    the first component of a geom's ``friction``
+======================  ==========================================
+
+All four are the same dimensionless number, so the conversion between them is
+the identity -- which is the whole reason it is worth carrying, and why a
+material states one coefficient rather than one per format.
+
+``friction2`` -- the coefficient in the *second* friction direction, which
+SDFormat and URDF both spell ``mu2`` -- travels between those two unchanged.
+MJCF has no second direction at all: its other two ``friction`` components are a
+torsional and a rolling coefficient, which are different quantities. So a
+``friction2`` is reported as one MJCF cannot state rather than written into a
+slot that means something else, and torsion and roll on the way in are counted
+as dropped rather than turned into a PartCAD property that does not exist. Both
+are the same rule the URDF and SDFormat readers already follow.
+
+Two things are deliberately not done here. A material's **density** is not wired
+in the same way: it already has a home (``Material.mass()``), and making every
+part that names a material weigh what that material weighs changes the
+``<inertial>`` of every existing export -- a real improvement, and a change of
+its own. And PartCAD writes each *body's* coefficient and says nothing about how
+a simulator combines the two sides of a contact, because they do not agree about
+it: that is the simulator's model, not the part's.
+
+A part that states a ``friction`` of its own keeps it -- a measured part beats
+the substance it is made of -- and a part that states neither gets whatever the
+simulator defaults to, which is a number nobody chose.
 
 Opening a scene in a simulator
 ==============================

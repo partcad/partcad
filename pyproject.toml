@@ -102,7 +102,6 @@ aws = {file = ["requirements-aws.txt"]}
 "partcad.builtin" = ["*.yaml"]
 "partcad.builtin.export" = ["*.py", "*.yaml"]
 "partcad.builtin.render" = ["*.py", "*.yaml"]
-"partcad.builtin.simulate" = ["*.py", "*.yaml"]
 # The one built-in package that declares an object rather than an
 # implementation: the scene a `simulate:` places its subject in. Its `.assy` is
 # read as a Jinja2 template, so it ships as a data file like the rest.

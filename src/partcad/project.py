@@ -2578,7 +2578,13 @@ class Project(project_config.Configuration):
                             )
                         ]
                     elif import_config["type"] == "git":
-                        lines += ["### [%s](%s)" % (import_config["name"], import_config["url"])]
+                        # 'name' is optional in a dependency and most of them
+                        # omit it -- the alias is the name a package gave the
+                        # thing it imported. Reading it unguarded made a plain
+                        # git dependency crash 'pc render' with a bare KeyError,
+                        # which is why the other two branches below already fall
+                        # back to the alias.
+                        lines += ["### [%s](%s)" % (import_config.get("name", alias), import_config["url"])]
                     else:
                         lines += ["### %s" % import_config.get("name", alias)]
 

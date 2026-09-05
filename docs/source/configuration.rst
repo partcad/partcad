@@ -2226,18 +2226,24 @@ serve every object that names it, and nothing special is declared for it: a
 simulation scene is an ordinary scene with an ordinary parameter, and the
 Jinja2 template its file is read as (see :doc:`assy`) is what places the subject.
 
-Neither ``scene:`` nor ``simulation:`` has to be given. The defaults are
-``//builtin/scene:subject`` -- an empty world holding the subject and nothing
-else -- and ``//builtin/simulate:mujoco``, which together are what "does this
-stand up on its own" means:
+``scene:`` does not have to be given: the default is ``//builtin/scene:subject``,
+an empty world holding the subject and nothing else, which is what "does this
+stand up on its own" means. ``simulation:`` does have to be given -- PartCAD
+implements no simulator, so a package imports one and says which:
 
 .. code-block:: yaml
+
+  dependencies:
+    sim-mujoco:
+      type: git
+      url: https://github.com/partcad/partcad-sim-mujoco.git
 
   assemblies:
     stack:
       type: assy
       simulate:
         stands:
+          simulation: sim-mujoco:mujoco
           # The blocks are drawn about their own centres, so lift the stack to
           # stand its bottom face on the floor of the scene.
           offset: [[0, 0, 10], [0, 0, 1], 0]
@@ -2285,11 +2291,30 @@ a file in the format** ``format:`` **names, and JSON carrying** ``before`` **and
 its own model format and PartCAD already knows how to write several -- which is
 also what keeps a plugin free of any CAD dependency.
 
-PartCAD ships one, ``//builtin/simulate:mujoco``: it is handed the scene as
-MJCF, steps it under gravity for ``duration`` seconds of simulated time, and
-reports each body's position (in millimetres) and orientation before and after.
-Running it needs no MuJoCo on the machine, since the plugin runs in a PartCAD
-sandbox that installs one.
+**PartCAD ships none of these.** A simulator is somebody's program with a
+release cycle of its own, so PartCAD ships the concept -- this section, the
+sandbox a plugin runs in, and the export a scene reaches it through -- and a
+package supplies the physics.
+`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is the
+MuJoCo one: it is handed the scene as MJCF, steps it under gravity for
+``duration`` seconds of simulated time, and reports each body's position (in
+millimetres) and orientation before and after. Running it needs no MuJoCo on the
+machine, since the plugin runs in a PartCAD sandbox that installs one.
+
+Friction is a material property
+-------------------------------
+
+Whether a stack of blocks stands up is not a property of its geometry. Two 20 mm
+blocks squarely stacked stay put when they are aluminium (``mu: 1.05`` -- dry
+aluminium galls) and the top one slides off when they are PTFE (``mu: 0.04``),
+and nothing about the arrangement changes in between.
+
+So it is stated where it belongs, on the :ref:`material <materials>`, and a part
+that names one gets it: ``mu`` becomes the shape's ``friction`` property unless
+the shape states a ``friction`` of its own, and every format writes it in its own
+spelling -- SDFormat's ``<friction><ode><mu>``, URDF's ``<gazebo><mu1>``, MJCF's
+first ``friction`` component. A part that says nothing gets whatever the
+simulator defaults to, which is a number nobody chose.
 
 See :doc:`simulation` and ``examples/feature_simulate``.
 
@@ -2318,6 +2343,7 @@ can do applies to it. What it is, is a set of facts about a substance:
       desc: <(optional) textual description>
       url: <(optional) where to read about it>
       density: <(optional) density in g/mm^3>
+      mu: <(optional) coefficient of sliding friction, dimensionless>
       tags: <(optional) a list of free-form tags, or a single tag>
 
 The short form gives the full name and nothing else:

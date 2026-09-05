@@ -19,6 +19,7 @@ from typing import Optional
 
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
+from . import material as pc_material
 from . import output
 from .shape_config import ShapeConfiguration
 from .utils import total_size
@@ -480,14 +481,43 @@ class Shape(ShapeConfiguration):
         of the object type that produces the shape, while these describe the
         shape that came out. Nothing here takes part in the cache hash, which is
         why a cached entry can be shared by objects that state different ones.
+
+        The material is the one thing that can be written in either place and
+        means the same thing both times: 'properties: material:' says it about
+        the shape, and the 'material' MCFTT parameter asks it of the type that
+        produces the shape (see 'get_mcftt()', and :ref:`materials` in the
+        configuration guide, which documents the parameter form). Whichever a
+        package wrote, it is what this shape is made of - so both arrive here as
+        one property, and everything downstream reads one place.
         """
         if not isinstance(self.config, dict):
             return None
         properties = self.config.get(shape_envelope.KEY_PROPERTIES)
-        if not isinstance(properties, dict):
-            return None
+        properties = properties if isinstance(properties, dict) else {}
         properties = {key: value for key, value in properties.items() if value not in (None, {}, [], "")}
+        if not properties.get("material"):
+            declared = self._parameter_material()
+            if declared:
+                properties["material"] = declared
         return properties or None
+
+    def _parameter_material(self):
+        """The material named by the 'material' MCFTT parameter, or None.
+
+        Read straight out of the configuration rather than through
+        'get_mcftt()': that one is a coroutine, it writes a default back into
+        the configuration when there is none, and it warns about an object that
+        never claimed to have a material - none of which belongs on the path
+        that stamps metadata onto every shape.
+        """
+        parameters = self.config.get("parameters")
+        if not isinstance(parameters, dict):
+            return None
+        declared = parameters.get("material")
+        if not isinstance(declared, dict):
+            return None
+        value = declared.get("default")
+        return value if isinstance(value, str) and value else None
 
     async def get_cached_properties_async(self, ctx):
         """What the cache recorded beside this shape's geometry, or None.
@@ -935,7 +965,7 @@ class Shape(ShapeConfiguration):
         """
         return await output.materialize_script(ctx, impl)
 
-    async def _output_request(self, obj, impl, kwargs, overlay=None, ports=None):
+    async def _output_request(self, ctx, obj, impl, kwargs, overlay=None, ports=None):
         """What the implementation is handed.
 
         The shape, every parameter the layered configuration ended up with, and
@@ -971,6 +1001,19 @@ class Shape(ShapeConfiguration):
         # exporter looks them up in is built in the sandbox, out of the request
         # that arrives there - see wrappers/wrapper_export.py. Nothing has to be
         # collected here, and nothing has to be instantiated to collect it.
+        #
+        # A material is the exception, and only because it is a *name*: what a
+        # shape carries is ':aluminium', and turning that into a coefficient of
+        # friction means resolving it against the package that wrote it and
+        # loading the package that catalogues it - neither of which the sandbox
+        # can do. So the names are resolved here and the facts travel beside the
+        # shapes, keyed by the shape that inherits them; the wrapper merges them
+        # under what each shape said about itself. See
+        # 'partcad.material.physics_by_shape()'.
+        if request.get(output.PROPERTIES_KEY):
+            facts = pc_material.physics_by_shape(ctx, request)
+            if facts:
+                request[pc_material.FACTS_KEY] = facts
         return request
 
     async def _overlay_ports_async(self, ctx, overlay, cache):
@@ -1034,7 +1077,7 @@ class Shape(ShapeConfiguration):
                 ctx, effective_overlay, ports_cache if ports_cache is not None else {}
             )
 
-        request = await self._output_request(obj, impl, kwargs, overlay=effective_overlay, ports=ports)
+        request = await self._output_request(ctx, obj, impl, kwargs, overlay=effective_overlay, ports=ports)
         request[output.SCRIPT_KEY] = os.path.abspath(script)
         # Whether the sandbox rebuilds the envelopes into live geometry before
         # the implementation sees them. Off for an implementation that needs what

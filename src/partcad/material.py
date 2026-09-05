@@ -15,10 +15,18 @@ did not read. This module is the object that string now points at.
 A 'Material' is deliberately **not** a 'Shape', for the same reason 'Software'
 is not: there is nothing to tessellate, render, export or measure. PLA is not a
 thing with geometry, it is a set of facts about a substance - what it is
-formally called, how dense it is, what it is good and bad at - that the things
-with geometry refer to. Density is the one of those facts PartCAD can compute
-with today (mass = volume x density), and it is why the value is carried in the
-units the rest of PartCAD works in rather than the ones a datasheet prints.
+formally called, how dense it is, how well it grips, what it is good and bad at
+- that the things with geometry refer to. Density and friction are the two of
+those facts PartCAD computes with (mass = volume x density; 'mu' is what decides
+whether a stack of them stands up), and it is why both are carried in the units
+the rest of PartCAD works in rather than the ones a datasheet prints.
+
+'mu' is the one that reaches a simulation. Whether two blocks stay stacked is
+not a property of their geometry at all: squarely stacked 20 mm cubes stay put
+at mu = 0.2 and scatter at mu = 0.0, and nothing about the arrangement changes
+in between. A part that says what it is made of therefore says whether it stands
+up, and 'PHYSICS_FROM_MATERIAL' below is where that stops being a fact nobody
+reads. See docs/source/simulation.rst.
 
 Materials are addressed like every other object, as '<package>:<name>', so a
 part in one package names a material catalogued in another exactly as it names
@@ -31,8 +39,27 @@ questions of.
 import typing
 
 from . import logging as pc_logging
-from . import telemetry
+from . import shape_envelope, telemetry
 from .utils import resolve_resource_path
+
+# The request key the resolved material facts travel to a sandbox under.
+#
+# An exporter never sees a material *name*: resolving one means loading the
+# package that catalogues it, which only the core can do. So the core resolves
+# every material the tree it is exporting names, and the export wrapper merges
+# the facts under each shape's own properties - see
+# 'wrappers/wrapper_export.properties_index()'. No exporter knows any of this
+# happened; each goes on reading 'physics' as it always did.
+FACTS_KEY = "__materials__"
+
+# What a material contributes to the physics of a shape made of it: the material
+# field, and the PartCAD property it fills in where the shape states none.
+#
+# One entry, and that is deliberate rather than a start. 'density' is the other
+# fact a material states, and wiring it here would change the computed mass of
+# every part that names a material - a real improvement, and a different change
+# with a diff of its own. 'mu' has nowhere to go at all until this table exists.
+PHYSICS_FROM_MATERIAL = {"mu": "friction"}
 
 
 @telemetry.instrument()
@@ -101,6 +128,25 @@ class Material:
         return None if density is None else density * 1000.0
 
     @property
+    def mu(self) -> typing.Optional[float]:
+        """The coefficient of sliding friction, or None if none was stated.
+
+        Dimensionless, and the same number all three simulation formats state:
+        SDFormat's ``<surface><friction><ode><mu>``, URDF's ``<gazebo><mu1>``
+        and MJCF's first ``friction`` component. PartCAD calls it 'friction' as
+        a shape property and 'mu' here, because that is what a datasheet and
+        every one of those formats calls it.
+
+        It is a property of a *pair* of surfaces in reality and of one surface
+        in every simulator, which is the approximation all three formats make
+        and this makes with them: what is stated is this material against a
+        typical counterface, and the simulator combines the two sides its own
+        way.
+        """
+        value = self.config.get("mu")
+        return None if value is None else float(value)
+
+    @property
     def tags(self) -> list[str]:
         """What the material is good at, as the package chose to say it.
 
@@ -144,6 +190,8 @@ class Material:
             info["Desc"] = self.desc
         if self.density is not None:
             info["Density"] = "%g g/mm^3 (%g g/cm^3)" % (self.density, self.density_g_cm3)
+        if self.mu is not None:
+            info["Mu"] = "%g" % self.mu
         if self.tags:
             info["Tags"] = ", ".join(self.tags)
         if self.url:
@@ -188,3 +236,91 @@ def lookup(ctx, ref: str, quiet: bool = False):
         # 'get_material' has already said why, unless it was asked not to.
         return project, None
     return project, material
+
+
+def physics_of(material) -> dict:
+    """What a material says about the physics of anything made of it.
+
+    Only the facts 'PHYSICS_FROM_MATERIAL' maps, under the PartCAD property
+    names a shape would have stated them under itself - so that what arrives
+    from a material and what a shape declares are the same vocabulary, and
+    merging them is one dictionary update rather than a translation.
+    """
+    facts = {}
+    for field, prop in PHYSICS_FROM_MATERIAL.items():
+        value = getattr(material, field, None)
+        if value is not None:
+            facts[prop] = value
+    return facts
+
+
+def physics_by_shape(ctx, request) -> dict:
+    """The physics each shape inherits from its material, by the shape's full name.
+
+    The same walk 'wrappers/wrapper_export.properties_index()' does on the far
+    side of the pipe, asking a different question of the same envelopes: which
+    shape names a material, and what does that material say. Kept short and
+    duplicated rather than shared, because the two live on opposite sides of a
+    process boundary and the sandbox cannot import this.
+
+    Keyed by *shape* rather than by material reference, which is what lets a
+    reference be relative. A material is named the way every other object is,
+    so ':aluminium' means "in my own package" -- and whose package that is is a
+    fact about the shape that wrote it, not about the string. Two packages in
+    one tree may each catalogue an 'aluminium' of their own and each get theirs.
+
+    Empty when nothing names a material, or when nothing any of them names has
+    a fact 'PHYSICS_FROM_MATERIAL' carries; an empty answer is left out of the
+    request entirely, so an export of a package with no materials in it is
+    exactly what it was.
+
+    A reference that does not resolve is reported once, by 'lookup()', and
+    contributes nothing: a part whose material is a typo gets the simulator's
+    default, which is what it got before anyone declared a material at all.
+    """
+    facts = {}
+    resolved = {}
+
+    def physics_for(owner, ref):
+        """What 'ref' contributes, looked up once per (package, reference)."""
+        key = (owner, ref)
+        if key not in resolved:
+            package, name = resolve_resource_path(owner, ref)
+            _project, material = lookup(ctx, "%s:%s" % (package, name), quiet=False)
+            resolved[key] = physics_of(material) if material is not None else {}
+        return resolved[key]
+
+    def walk(obj):
+        if isinstance(obj, list):
+            for item in obj:
+                walk(item)
+            return
+        if not isinstance(obj, dict):
+            return
+        if shape_envelope.KEY_BREP in obj or shape_envelope.KEY_ASSEMBLY in obj:
+            properties = obj.get(shape_envelope.KEY_PROPERTIES)
+            name = obj.get("name")
+            if name and isinstance(properties, dict) and isinstance(properties.get("material"), str):
+                physics = physics_for(owner_package(name), properties["material"])
+                if physics:
+                    facts[name] = physics
+            for child in obj.get(shape_envelope.KEY_ASSEMBLY) or []:
+                walk(child)
+            return
+        for key, value in obj.items():
+            if key != shape_envelope.KEY_PROPERTIES:
+                walk(value)
+
+    walk(request)
+    return facts
+
+
+def owner_package(shape_name: str) -> str:
+    """The package a shape's full name ("//pkg:part") belongs to.
+
+    Split from the right: a package path is full of '/' and starts with '//',
+    and an object name carries no ':' at all, so the last one is the separator.
+    A name with no ':' is a package with nothing after it, which is what an
+    assembly with no name of its own carries.
+    """
+    return shape_name.rsplit(":", 1)[0] if ":" in shape_name else shape_name

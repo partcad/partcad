@@ -114,25 +114,39 @@ isort --check src/partcad tests/partcad
   corrected `fileHash` has to move the cache key, or `pc test` answers the new declaration with the old one's
   failure.
 
-- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships four packages inside itself, reachable from
-  every context as `//builtin/export`, `//builtin/render`, `//builtin/simulate` and `//builtin/scene` (loaded
-  on demand by `Context.get_project`, see `output.py`). The first three declare implementations — the file
-  types `pc export` and `pc render` write, and the simulation plugins `pc sim` runs a scene through — in
+- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships three packages inside itself, reachable from
+  every context as `//builtin/export`, `//builtin/render` and `//builtin/scene` (loaded
+  on demand by `Context.get_project`, see `output.py`). The first two declare implementations — the file
+  types `pc export` and `pc render` write — in
   exactly the form a user's package declares one: a `path` to a script, its `pythonRequirements`, and the
   parameters. So adding a
   format, changing its defaults or changing which dependencies it needs is an edit to `builtin/*/partcad.yaml`, not
-  to `shape.py`. The scripts run in a sandbox through `wrappers/wrapper_export.py` (and
-  `wrappers/wrapper_simulate.py`); they are data files, so
+  to `shape.py`. The scripts run in a sandbox through `wrappers/wrapper_export.py`; they are data files, so
   anything new under `builtin/` has to be listed in `pyproject.toml`'s `package-data` and in the PyInstaller
   spec (see "Packaging" in the root [AGENTS.md](../../AGENTS.md)). The requirement strings there are the versions
-  `sandbox_versions.py` pins, which `tests/partcad/unit/test_output.py` enforces.
+  `sandbox_versions.py` pins, which `tests/partcad/unit/test_output.py` enforces — as does a check that every
+  built-in package validates against PartCAD's own configuration schema, since nothing else reads them.
 
   `//builtin/scene` is the odd one out: it declares an *object* rather than a way of producing one — the
   scene a `simulate:` places its subject in when it names none of its own. It is an ordinary `assy` scene
   whose `.assy` is a Jinja2 template, and the only thing that makes it the default is that
-  `simulation.DEFAULT_SCENE` names it. `simulation:` is deliberately **not** in `output.SECTIONS`: everything
-  that reads that tuple is asking which file types exist, and a simulation is not one — but a plugin is an
-  `output.Implementation` like any other.
+  `simulation.DEFAULT_SCENE` names it.
+
+  **There is deliberately no `//builtin/simulate`.** `simulation:` is a third section resolved exactly like
+  the other two — a plugin is an `output.Implementation` like any other — and PartCAD implements none of it.
+  A simulator is somebody's program with a release cycle of its own, so PartCAD ships the concept (the
+  section, `wrappers/wrapper_simulate.py`, the runner in `simulation.py`, the `mjcf` export a scene reaches a
+  plugin through) and a package supplies the physics: `partcad/partcad-sim-mujoco` is the MuJoCo one.
+  `simulation:` is also **not** in `output.SECTIONS`: everything that reads that tuple is asking which file
+  types exist, and a simulation is not one.
+
+- **A material is a fact a simulation reads** (`material.py`): `mu` sits beside `density`, and
+  `PHYSICS_FROM_MATERIAL` is what makes it reach an exporter. A shape names its material by a *reference*
+  (`:aluminium`), and resolving one needs the package graph — which the core has and a sandbox does not. So
+  `physics_by_shape()` resolves every reference in an export request against the package of the shape that
+  wrote it (which is what lets the reference be relative), and `wrapper_export.properties_index()` merges what
+  it found *underneath* what each shape states itself. No exporter knows materials exist, which is what keeps
+  URDF's `<mu1>`, SDFormat's `<mu>` and MJCF's `friction` agreeing for free.
 
 - **Drawing ports and interfaces** (`./src/partcad/render_overlay.py`, `./src/partcad/wrappers/stroke_text.py`):
   `pc render --with-ports`/`--with-interfaces` draws the connection metadata on top of a projection.

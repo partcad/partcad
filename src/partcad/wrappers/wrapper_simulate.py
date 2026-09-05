@@ -6,9 +6,10 @@
 """Sandbox entry point for a simulation plugin.
 
 The counterpart of 'wrapper_export.py' for the ``simulation:`` section: every
-simulation PartCAD runs -- the built-in one in '//builtin/simulate' as much as
-one a package implements itself -- is a Python script run through here, inside
-a PartCAD sandbox with whatever that plugin declared it needs.
+simulation PartCAD runs is a Python script run through here, inside a PartCAD
+sandbox with whatever that plugin declared it needs. Every one of them comes
+from a package: PartCAD implements no simulator (see 'partcad.output.SIMULATE'),
+and 'partcad/partcad-sim-mujoco' is the MuJoCo one.
 
 The contract is deliberately narrow, and it is the whole of what a simulation
 plugin is:
@@ -26,8 +27,8 @@ The script is executed with these globals available:
     request  -- ``scene_file`` (the absolute path of the exported scene),
                 ``scene_format``, ``scene_name``, ``subject`` (the full path of
                 the object being simulated) and ``subject_kind``, plus every
-                parameter declared for this plugin (see
-                '//builtin/simulate/partcad.yaml')
+                parameter declared for this plugin (see the plugin package's
+                own 'partcad.yaml')
     path     -- an existing directory the run may write artifacts into (a
                 trajectory, a video, a log). Nothing has to be written there;
                 it exists so that a plugin that produces one has somewhere to

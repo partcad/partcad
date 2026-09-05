@@ -207,6 +207,58 @@ def test_a_geom_takes_the_attributes_of_its_default_class(tmp_path, no_occt):
     assert no_occt[0][0] == "box"
 
 
+def test_a_geoms_sliding_friction_is_read_as_the_property_all_three_formats_state(tmp_path, no_occt):
+    """The MJCF end of the round trip 'mu' makes.
+
+    One coefficient, three spellings: MJCF's first 'friction' component,
+    SDFormat's '<friction><ode><mu>' and URDF's '<gazebo><mu1>' are the same
+    number, and PartCAD calls it 'friction' in all three.
+    """
+    path = model(
+        tmp_path,
+        '<body name="brick"><geom type="sphere" size="0.01" friction="0.04 0.005 0.0001"/></body>',
+    )
+
+    (node,) = read(path, output_folder=str(tmp_path))["root"]["links"]
+
+    assert node["physics"] == {"friction": 0.04}
+
+
+def test_torsional_and_rolling_friction_are_reported_rather_than_invented_properties_for(tmp_path, no_occt):
+    """PartCAD has a property for sliding friction and none for the other two."""
+    path = model(
+        tmp_path,
+        '<body name="brick"><geom type="sphere" size="0.01" friction="0.5 0.01 0.002"/></body>',
+    )
+
+    result = read(path, output_folder=str(tmp_path))
+
+    assert result["root"]["links"][0]["physics"] == {"friction": 0.5}
+    assert result["dropped"]["friction"] == 1
+
+
+def test_mujocos_own_defaults_are_not_read_as_something_the_model_said(tmp_path, no_occt):
+    """A geom that states no friction states no friction."""
+    path = model(tmp_path, '<body name="brick"><geom type="sphere" size="0.01"/></body>')
+
+    (node,) = read(path, output_folder=str(tmp_path))["root"]["links"]
+
+    assert "physics" not in node
+
+
+def test_what_the_body_says_about_its_mass_and_what_the_geom_says_about_contact_both_survive(tmp_path, no_occt):
+    path = model(
+        tmp_path,
+        '<body name="brick"><inertial pos="0 0 0" mass="0.5" diaginertia="1 1 1"/>'
+        '<geom type="sphere" size="0.01" friction="0.3 0 0"/></body>',
+    )
+
+    (node,) = read(path, output_folder=str(tmp_path))["root"]["links"]
+
+    assert node["physics"]["friction"] == 0.3
+    assert node["physics"]["mass"] == 0.5
+
+
 def test_what_a_static_tree_cannot_hold_is_counted_rather_than_dropped_in_silence(tmp_path, no_occt):
     path = model(
         tmp_path,
@@ -503,6 +555,18 @@ def test_flattening_places_every_shape_in_the_world_at_its_world_pose(export_mjc
     # Each is placed where the tree put it, the group's own placement included.
     assert [float(v) for v in bodies[0].get("pos").split()] == pytest.approx([0.1, 0.0, 0.01])
     assert [float(v) for v in bodies[1].get("pos").split()] == pytest.approx([0.1, 0.0, 0.03])
+
+
+def test_the_friction_written_is_the_one_the_round_trip_reads_back(export_mjcf, tmp_path, no_occt):
+    """Out as MJCF's three-component 'friction', back as PartCAD's one."""
+    root = {"name": "//p:bench", "label": "bench", "assembly": [envelope("//p:cube", "cube", b"CUBE")]}
+    properties = {"//p:cube": {"physics": {"friction": 0.04}}}
+    path = tmp_path / "bench.xml"
+
+    exported(export_mjcf, path, root, properties=properties)
+    (node,) = read(path, output_folder=str(tmp_path))["root"]["links"]
+
+    assert node["physics"]["friction"] == pytest.approx(0.04)
 
 
 def test_what_a_part_says_about_itself_is_written_rather_than_recomputed(export_mjcf, tmp_path):

@@ -204,7 +204,8 @@ export:
     desc: |
       MJCF, the XML MuJoCo describes a model in: an `.xml` file plus the mesh
       files it references. It is the format a scene or an assembly is handed to
-      a MuJoCo simulation in (`pc sim`, see `//builtin/simulate`), and it is
+      a MuJoCo simulation in (`pc sim`, through a plugin package such as
+      `partcad/partcad-sim-mujoco`), and it is
       what `pc open --with mujoco` converts a scene to before opening it.
 
       Like `world` and `urdf` it is handed the assembly *tree* itself rather

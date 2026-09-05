@@ -45,6 +45,7 @@ import wrapper_common  # noqa: E402
 # What an MJCF model may carry that a PartCAD tree has nowhere to put. Counted
 # and reported; see 'DROPPED_LABELS' in assembly_factory_mjcf.py for the wording.
 DROPPABLE = (
+    "friction",
     "joint",
     "actuator",
     "tendon",
@@ -141,6 +142,23 @@ def mesh_assets(root, context):
     return assets
 
 
+def geom_physics(attributes, context):
+    """What a ``<geom>`` says about its contact, as named PartCAD properties.
+
+    MJCF states friction as three coefficients in one attribute -- sliding,
+    torsional and rolling. PartCAD has a property for the first and none for the
+    other two, so the first is kept under the name every format states it under
+    ('friction' here, ``mu`` in SDFormat, ``mu1`` in URDF) and the other two are
+    counted and reported rather than invented properties for.
+    """
+    values = mujoco_common.numbers(attributes.get("friction"), context["warnings"], "friction")
+    if not values:
+        return {}
+    if len(values) > 1 and any(abs(value) > 0 for value in values[1:]):
+        context["dropped"].add("friction")
+    return {"friction": values[0]}
+
+
 def geom_node(attributes, name, context, body_name):
     """The part node for one ``<geom>``, or None when there is no shape in it.
 
@@ -162,6 +180,9 @@ def geom_node(attributes, name, context, body_name):
     color = mujoco_common.color_hex(attributes.get("rgba"))
     if color:
         node["color"] = color
+    physics = geom_physics(attributes, context)
+    if physics:
+        node["physics"] = physics
 
     if kind == "mesh":
         asset_name = (attributes.get("mesh") or "").strip()
@@ -350,7 +371,10 @@ def body_node(body, prefix, context, childclass=None, depth=0):
         node = geom_node(attributes, name, context, body_name)
         if node is not None:
             if physics:
-                node["physics"] = physics
+                # Merged rather than assigned: what the body says about its mass
+                # and what the geom says about its contact are different facts
+                # about the same shape, and the geom has already stated its own.
+                node["physics"] = dict(node.get("physics") or {}, **physics)
             nodes.append(node)
 
     children = []

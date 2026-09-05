@@ -194,3 +194,35 @@ def test_render_assembly_readme_keeps_package_config_intact():
 
     # 'top' overrides the SVG prefix; that override belongs to 'top' alone.
     assert prj.config_obj["render"] == before
+
+
+def test_a_git_dependency_with_no_name_is_listed_by_its_alias(tmp_path):
+    """'name' is optional in a dependency, and reading it unguarded crashed.
+
+    The local and the fallback branches of the import listing already fell back
+    to the alias; the git one did not, so the first package to declare a plain
+    git dependency - `examples/feature_simulate`, which imports a simulation
+    plugin - could not render its own README at all.
+    """
+    root = tmp_path / "workspace"
+    root.mkdir()
+    (root / "partcad.yaml").write_text(
+        "name: //p\n"
+        "desc: A package that imports one\n"
+        "dependencies:\n"
+        "  sim-mujoco:\n"
+        "    type: git\n"
+        "    url: https://github.com/partcad/partcad-sim-mujoco.git\n"
+        "render:\n  readme:\n",
+        encoding="utf-8",
+    )
+    output_dir = str(tmp_path / "out")
+    os.makedirs(output_dir)
+
+    prj = pc.Context(str(root)).get_project("//")
+    prj.render(format="readme", output_dir=output_dir)
+
+    with open(os.path.join(output_dir, "README.md")) as f:
+        lines = f.read().splitlines()
+
+    assert "### [sim-mujoco](https://github.com/partcad/partcad-sim-mujoco.git)" in lines

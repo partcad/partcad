@@ -24,7 +24,8 @@ is never of a part alone:
                 declared exactly as an export or a render implementation is
                 (see 'partcad.output'), in a ``simulation:`` section: a scene
                 goes in as a file, JSON carrying ``before`` and ``after`` comes
-                out. See 'wrappers/wrapper_simulate.py'.
+                out. See 'wrappers/wrapper_simulate.py'. It is always somebody
+                else's package -- PartCAD ships no simulator.
     validation  a Python expression over ``before`` and ``after`` that says
                 whether what happened is what was supposed to happen. It is the
                 only thing PartCAD reads out of a plugin's result: what is
@@ -32,10 +33,10 @@ is never of a part alone:
                 and the expression is written by whoever knows both the part and
                 the plugin.
 
-Neither ``scene`` nor ``simulation`` has to be named. The defaults are the two
-built-in packages -- an empty world holding the subject, run in MuJoCo -- which
-is what "does this part stand up on its own" means and is most of what anybody
-asks.
+``scene`` does not have to be named -- the default is the built-in empty world
+holding the subject, which is what "does this part stand up on its own" means
+and is most of what anybody asks. ``simulation`` does: PartCAD implements no
+simulator (see 'output.SIMULATE'), so a package imports one and says which.
 
 What is deliberately *not* here: PartCAD does not know what a simulation
 result means. It exports the scene, starts the plugin, hands the two objects the
@@ -57,10 +58,16 @@ from .utils import resolve_resource_path
 # The section of 'partcad.yaml' a part or an assembly declares its simulations in.
 SECTION = "simulate"
 
-# The scene a declaration that names none is run in, and the plugin a
-# declaration that names none is run by.
+# The scene a declaration that names none is run in. There is no counterpart
+# for the plugin: PartCAD implements no simulator (see 'output.SIMULATE'), so
+# 'simulation:' has to be named and there is nothing sensible to default it to.
 DEFAULT_SCENE = output.BUILTIN_SCENE_PACKAGE + ":subject"
-DEFAULT_SIMULATION = output.BUILTIN_PACKAGES[output.SIMULATE] + ":mujoco"
+
+# The package that implements the one PartCAD knows about, named in the message
+# a declaration that forgot 'simulation:' gets. Not a default and not a
+# dependency -- a string in an error, so that "you have to name one" also
+# answers "name what?".
+KNOWN_SIMULATION = "partcad/partcad-sim-mujoco"
 
 # The parameter every scene used as a simulation scene is handed the subject's
 # full path in. Required of the scene: a scene that does not declare it cannot
@@ -122,10 +129,23 @@ class SimulationDeclaration:
 
     def __init__(self, name: str, config: dict):
         self.name = name
+        if config and not isinstance(config, dict):
+            # A declaration that is not a mapping - most often a section written
+            # as one unnamed simulation, which is not a form PartCAD has. Read
+            # as empty and reported, so that it fails saying what is wrong with
+            # it rather than on an attribute of a string.
+            pc_logging.error(
+                "The simulation '%s' is not a mapping of settings: '%s' is a section of named simulations"
+                % (name, SECTION)
+            )
+            config = {}
         self.config = config or {}
         self.desc = self.config.get("desc")
         self.scene = self.config.get("scene") or DEFAULT_SCENE
-        self.simulation = self.config.get("simulation") or DEFAULT_SIMULATION
+        # No default: see 'KNOWN_SIMULATION'. 'run_async' is what reports it,
+        # so that a package listing an object with a broken 'simulate:' still
+        # lists it.
+        self.simulation = self.config.get("simulation") or None
         self.validation = self.config.get("validation")
         self.offset = normalize_offset(self.config.get("offset"), name)
         # Parameter overrides handed to the plugin, on top of what its own
@@ -198,12 +218,12 @@ def normalize_offset(offset, name: str) -> list:
 def declared(config: dict) -> list:
     """The simulations an object declares, in the order they are declared.
 
-    Accepts the two shapes a section like this is written in: a mapping of names
-    to declarations, which is what every other named section of 'partcad.yaml'
-    is, and a single unnamed declaration, which is what one simulation looks
-    like when there is no reason to name it. The latter is given the name
-    "default" so that everything downstream - the report, '-f', the JSON - has
-    one to print.
+    A mapping of names to declarations, which is what every other named section
+    of 'partcad.yaml' is - 'export:', 'render:', 'simulation:'. There is
+    deliberately no unnamed single-declaration short form: telling one from the
+    other means guessing from which keys are present, and the name is not
+    ceremony - it is what '-f' selects, what the report prints beside the
+    verdict, and what names the directory a run's scene is written to.
     """
     section = (config or {}).get(SECTION)
     if not section:
@@ -211,8 +231,6 @@ def declared(config: dict) -> list:
     if not isinstance(section, dict):
         pc_logging.error("The '%s' section must be a mapping of simulation names" % SECTION)
         return []
-    if any(key in section for key in ("scene", "simulation", "validation", "offset", "params")):
-        return [SimulationDeclaration("default", section)]
     return [SimulationDeclaration(name, value or {}) for name, value in section.items()]
 
 
@@ -338,6 +356,12 @@ async def run_async(ctx, shape, kind: str, declaration: SimulationDeclaration) -
 
     with pc_logging.Action("Simulate", shape.project_name, "%s/%s" % (shape.name, declaration.name)):
         try:
+            if not declaration.simulation:
+                raise Exception(
+                    "the simulation '%s' names no 'simulation:' plugin to run it. PartCAD implements no "
+                    "simulator itself; import one and name it, e.g. '%s' for MuJoCo"
+                    % (declaration.name, KNOWN_SIMULATION)
+                )
             impl = resolve_plugin(ctx, shape.project_name, declaration.simulation)
             scene_package, scene_name = resolve_resource_path(shape.project_name, declaration.scene)
             params = scene_parameters(ctx, scene_package, scene_name, declaration, object_name, kind)

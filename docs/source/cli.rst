@@ -257,8 +257,12 @@ Object commands
   the scene the declaration names, at the ``offset:`` the declaration states, runs the scene through the
   simulation plugin the declaration names, and evaluates the ``validation:`` expression over the ``before``
   and ``after`` the plugin hands back. Nothing needs installing to run one -- the plugin runs in a PartCAD
-  sandbox -- and both the scene and the plugin have built-in defaults, so ``simulate:`` is often four lines.
-  See :doc:`simulation` and ``examples/feature_simulate``.
+  sandbox that installs whatever it needs.
+
+  PartCAD implements no simulator: a package imports one and names it in ``simulation:``
+  (`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is the MuJoCo one). The *scene* does
+  have a built-in default -- an empty world holding the object -- so a simulation of a part standing on its
+  own is a few lines. See :doc:`simulation` and ``examples/feature_simulate``.
 
 ``pc inspect``
   View a part, assembly, or scene visually. Use ``-V`` for a verbal (text) description instead of a visual

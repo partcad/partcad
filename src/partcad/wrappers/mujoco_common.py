@@ -7,9 +7,10 @@
 
 Shared by the MJCF reader (wrapper_import_mjcf), the MJCF exporter
 (builtin/export/export_mjcf.py) and the MuJoCo simulation plugin
-(builtin/simulate/simulate_mujoco.py), and dependency-free -- no OCP, no
-mujoco, nothing but the standard library and 'urdf_common' -- so it can be
-imported and unit-tested on its own.
+and dependency-free -- no OCP, no mujoco, nothing but the standard library and
+'urdf_common' -- so it can be imported and unit-tested on its own. (The
+simulator itself is not here and not in this wheel: a plugin package supplies
+it, see 'partcad.output.SIMULATE'.)
 
 MJCF is the third description of a placed arrangement PartCAD reads, after
 URDF and SDFormat, and it is the one that states a pose most freely: a body may

@@ -44,11 +44,23 @@ def test_a_named_declaration_per_simulation_is_the_usual_form():
     assert declared[0].validation == "True"
 
 
-def test_one_unnamed_declaration_is_read_as_one_simulation():
-    """There is often no reason to name the only simulation an object has."""
-    declared = simulation.declared({"simulate": {"validation": "True", "offset": [[0, 0, 1], [0, 0, 1], 0]}})
-    assert [entry.name for entry in declared] == ["default"]
-    assert declared[0].validation == "True"
+def test_there_is_no_unnamed_short_form():
+    """Telling one from the other would mean guessing from which keys are there.
+
+    And the name is not ceremony: it is what '-f' selects, what the report
+    prints beside the verdict, and what names the directory a run is written to.
+    A section written that way is read as one simulation per key, which is what
+    the configuration schema says it is.
+    """
+    declared = simulation.declared({"simulate": {"validation": "True"}})
+
+    # Read as one simulation named 'validation' whose settings are the string
+    # "True" - which is not a mapping, so it is reported and comes out empty
+    # rather than half-understood. The configuration schema says the same thing
+    # earlier, on the file.
+    assert [entry.name for entry in declared] == ["validation"]
+    assert declared[0].validation is None
+    assert declared[0].simulation is None
 
 
 def test_an_object_that_declares_nothing_has_no_simulations():
@@ -56,11 +68,20 @@ def test_an_object_that_declares_nothing_has_no_simulations():
     assert simulation.declared({"simulate": None}) == []
 
 
-def test_a_declaration_that_names_neither_gets_the_two_built_in_ones():
+def test_a_declaration_that_names_no_scene_gets_the_built_in_one():
     """The common case: does this part stand up on its own."""
     entry = declaration(validation="True")
     assert entry.scene == "//builtin/scene:subject"
-    assert entry.simulation == "//builtin/simulate:mujoco"
+
+
+def test_there_is_no_default_plugin_because_partcad_implements_none():
+    """A simulator is somebody's program, and PartCAD ships nobody's.
+
+    So there is nothing to default to, and a declaration that names no plugin
+    is reported rather than quietly run by one PartCAD picked.
+    """
+    assert declaration(validation="True").simulation is None
+    assert not hasattr(simulation, "DEFAULT_SIMULATION")
 
 
 def test_an_offset_is_the_identity_unless_one_is_stated():
@@ -151,29 +172,49 @@ def ctx(tmp_path):
     return pc.Context(str(root))
 
 
-def test_the_built_in_plugin_resolves_to_the_script_that_ships_with_partcad(ctx):
-    impl = simulation.resolve_plugin(ctx, "//", simulation.DEFAULT_SIMULATION)
+@pytest.fixture
+def plugin_ctx(tmp_path):
+    """A context holding a package that implements a simulation, as a real one does."""
+    root = tmp_path / "workspace"
+    root.mkdir()
+    (root / "run_it.py").write_text("output = {'success': True}\n", encoding="utf-8")
+    (root / "partcad.yaml").write_text(
+        "name: //sim\n"
+        "simulation:\n"
+        "  toy:\n"
+        "    path: run_it.py\n"
+        "    pythonRequirements:\n      - somesim==1.2.3\n"
+        "    format: mjcf\n"
+        "    formatOptions:\n      static: false\n      flatten: true\n"
+        "    duration: 10.0\n",
+        encoding="utf-8",
+    )
+    return pc.Context(str(root))
+
+
+def test_a_plugin_is_an_implementation_like_an_export_or_a_render_one(plugin_ctx):
+    impl = simulation.resolve_plugin(plugin_ctx, "//", "//:toy")
 
     assert impl.section == output.SIMULATE
-    assert impl.format_name == "mujoco"
-    assert impl.script == "simulate_mujoco.py"
+    assert impl.format_name == "toy"
+    assert impl.script == "run_it.py"
     assert impl.config["format"] == "mjcf"
     # A physics run needs bodies that can move, which a scene does not mean.
     assert impl.config["formatOptions"] == {"static": False, "flatten": True}
-    assert any(requirement.startswith("mujoco") for requirement in impl.python_requirements)
+    assert impl.python_requirements == ["somesim==1.2.3"]
 
 
-def test_the_way_the_scene_reaches_the_plugin_is_not_handed_to_the_plugin(ctx):
+def test_the_way_the_scene_reaches_the_plugin_is_not_handed_to_the_plugin(plugin_ctx):
     """'format' and 'formatOptions' configure the export, not the simulator."""
-    impl = simulation.resolve_plugin(ctx, "//", simulation.DEFAULT_SIMULATION)
+    impl = simulation.resolve_plugin(plugin_ctx, "//", "//:toy")
     assert "format" not in impl.parameters
     assert "formatOptions" not in impl.parameters
     assert impl.parameters["duration"] == 10.0
 
 
-def test_a_plugin_the_named_package_does_not_declare_says_what_it_does(ctx):
+def test_a_plugin_the_named_package_does_not_declare_says_what_it_does(plugin_ctx):
     with pytest.raises(Exception, match="declares no simulation 'nosuch'"):
-        simulation.resolve_plugin(ctx, "//", "//builtin/simulate:nosuch")
+        simulation.resolve_plugin(plugin_ctx, "//", "//:nosuch")
 
 
 def test_a_package_that_does_not_exist_is_reported(ctx):
@@ -192,14 +233,19 @@ def package(tmp_path):
     root = tmp_path / "workspace"
     root.mkdir()
     (root / "cube.step").write_text("", encoding="utf-8")
+    (root / "run_it.py").write_text("output = {'success': True}\n", encoding="utf-8")
     (root / "partcad.yaml").write_text(
         "name: //sim\n"
+        # A package that simulates something names a plugin, and something has
+        # to implement it: PartCAD implements none.
+        "simulation:\n  toy:\n    path: run_it.py\n    format: mjcf\n"
         "parts:\n"
         "  block:\n"
         "    type: step\n"
         "    path: cube.step\n"
         "    simulate:\n"
         "      stands:\n"
+        "        simulation: //sim:toy\n"
         "        offset: [[0, 0, 10], [0, 0, 1], 0]\n"
         '        validation: |\n          after["bodies"]["block"]["pos"][2] > 5.0\n',
         encoding="utf-8",
@@ -345,3 +391,16 @@ def test_a_part_reads_its_own_declaration(package):
     (entry,) = simulation.of_shape(part)
     assert entry.name == "stands"
     assert entry.offset == [[0.0, 0.0, 10.0], [0.0, 0.0, 1.0], 0.0]
+
+
+def test_a_declaration_that_names_no_plugin_says_where_to_get_one(package, monkeypatch):
+    """The one thing PartCAD cannot supply, and the message says who can."""
+    context, part = package
+    entry = simulation.SimulationDeclaration("stands", {"validation": "True"})
+
+    result = asyncio.run(simulation.run_async(context, part, "part", entry))
+
+    assert result.failed is True
+    assert result.passed is None
+    assert "names no 'simulation:'" in result.error
+    assert simulation.KNOWN_SIMULATION in result.error

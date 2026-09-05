@@ -157,7 +157,10 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
         says whether it went as it should
   - [x] `pc sim`, which runs it and validates the result
   - [x] Simulation plugins, declared the way export and render implementations are — a scene goes in,
-        `before` and `after` come out
+        `before` and `after` come out. The simulator is a package, not part of this wheel:
+        [`partcad-sim-mujoco`](https://github.com/partcad/partcad-sim-mujoco) runs one in `MuJoCo`
+  - [x] `mu` on a material, so that what a part is made of decides whether it stands up — written out as
+        SDFormat's `<mu>`, URDF's `<mu1>` and MJCF's `friction`
 - Part models (3D)
   - Using scripting languages
     - [x] [CadQuery]

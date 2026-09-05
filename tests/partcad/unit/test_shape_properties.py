@@ -453,3 +453,127 @@ def test_a_shape_with_no_name_cannot_be_indexed_but_does_not_stop_the_walk():
     }
 
     assert wrapper_export.properties_index(request) == {"pkg:leaf": BRASS}
+
+
+# What a shape inherits from its material
+# ---------------------------------------
+
+
+def test_a_material_fills_in_what_the_shape_did_not_state():
+    """The whole of how 'mu' reaches an exporter, and why none of them changed.
+
+    The core resolves each shape's material and sends what it says beside the
+    shapes; the index folds it in underneath the shape's own physics. An
+    exporter goes on reading 'physics' and never learns materials exist - which
+    is what makes URDF, SDFormat and MJCF agree about friction for free.
+    """
+    request = {
+        "wrapped": {
+            "name": "pkg:leaf",
+            "label": "leaf",
+            "properties": {"material": ":ptfe"},
+            "brep": "AAAA",
+        },
+        "properties": True,
+        "__materials__": {"pkg:leaf": {"friction": 0.04}},
+    }
+
+    assert wrapper_export.properties_index(request) == {
+        "pkg:leaf": {"material": ":ptfe", "physics": {"friction": 0.04}},
+    }
+
+
+def test_what_the_shape_states_itself_wins_over_its_material():
+    """A part that has been measured beats the substance it is made of."""
+    request = {
+        "wrapped": {
+            "name": "pkg:leaf",
+            "properties": {"material": ":ptfe", "physics": {"friction": 0.9, "mass": 2.0}},
+            "brep": "AAAA",
+        },
+        "properties": True,
+        "__materials__": {"pkg:leaf": {"friction": 0.04}},
+    }
+
+    index = wrapper_export.properties_index(request)
+    assert index["pkg:leaf"]["physics"] == {"friction": 0.9, "mass": 2.0}
+
+
+def test_the_table_is_keyed_by_shape_so_a_reference_can_be_relative():
+    """Two packages may each catalogue an 'aluminium' of their own.
+
+    ':aluminium' means "in my own package", so which material it is is a fact
+    about the shape that wrote it rather than about the string - which is why
+    the core resolves it and keys what it found by shape.
+    """
+    request = {
+        "wrapped": {
+            "name": "pkg:rig",
+            "assembly": [
+                {"name": "a:part", "properties": {"material": ":aluminium"}, "brep": "AAAA"},
+                {"name": "b:part", "properties": {"material": ":aluminium"}, "brep": "BBBB"},
+            ],
+        },
+        "properties": True,
+        "__materials__": {"a:part": {"friction": 1.05}, "b:part": {"friction": 0.2}},
+    }
+
+    index = wrapper_export.properties_index(request)
+    assert index["a:part"]["physics"] == {"friction": 1.05}
+    assert index["b:part"]["physics"] == {"friction": 0.2}
+
+
+def test_a_shape_with_no_material_is_left_exactly_as_it_was():
+    request = {
+        "wrapped": {"name": "pkg:leaf", "properties": STEEL, "brep": "AAAA"},
+        "properties": True,
+        "__materials__": {"pkg:other": {"friction": 0.04}},
+    }
+
+    assert wrapper_export.properties_index(request) == {"pkg:leaf": STEEL}
+
+
+def test_the_material_table_is_not_walked_for_shapes():
+    """It is keyed by name and holds no envelopes; walking it would find none."""
+    request = {
+        "wrapped": {"name": "pkg:leaf", "properties": STEEL, "brep": "AAAA"},
+        "properties": True,
+        "__materials__": {"pkg:leaf": {"friction": 0.04}, "brep": "not a shape"},
+    }
+
+    index = wrapper_export.properties_index(request)
+    assert set(index) == {"pkg:leaf"}
+
+
+def test_the_material_parameter_is_the_material_too(tmp_path):
+    """Two places name it, and they mean the same thing.
+
+    ':ref:`materials`' in the configuration guide documents the parameter form,
+    and 'properties:' documents the other; a part that wrote either is made of
+    what it said, so both reach an exporter - and a simulation - as one
+    property.
+    """
+    root = tmp_path / "workspace"
+    root.mkdir()
+    (root / "cube.stl").write_text("", encoding="utf-8")
+    (root / "partcad.yaml").write_text(
+        "name: //p\n"
+        "parts:\n"
+        "  as_parameter:\n"
+        "    type: stl\n    path: cube.stl\n"
+        "    parameters:\n      material:\n        type: string\n        default: '//cat:pla'\n"
+        "  as_property:\n"
+        "    type: stl\n    path: cube.stl\n"
+        "    properties:\n      material: '//cat:abs'\n"
+        "  both:\n"
+        "    type: stl\n    path: cube.stl\n"
+        "    parameters:\n      material:\n        type: string\n        default: '//cat:pla'\n"
+        "    properties:\n      material: '//cat:abs'\n",
+        encoding="utf-8",
+    )
+    project = pc.Context(str(root)).get_project("//")
+
+    assert project.get_part("as_parameter")._shape_properties() == {"material": "//cat:pla"}
+    assert project.get_part("as_property")._shape_properties() == {"material": "//cat:abs"}
+    # What the shape says about itself wins, the way it does everywhere else.
+    assert project.get_part("both")._shape_properties() == {"material": "//cat:abs"}

@@ -1,0 +1,14 @@
+# The same two blocks as `stable.assy`, squarely stacked, in PTFE.
+#
+# Nothing about the arrangement differs: the locations below are `stable.assy`'s,
+# character for character, and only the part is another one. What differs is what
+# the blocks are made of -- and that is enough to decide whether the stack stands
+# up, which is the whole point of this example.
+links:
+  - part: block_ptfe
+    name: bottom
+    location: [[0, 0, 0], [0, 0, 1], 0]
+
+  - part: block_ptfe
+    name: top
+    location: [[0, 0, 20], [0, 0, 1], 0]
