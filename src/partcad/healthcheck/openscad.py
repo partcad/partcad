@@ -6,8 +6,10 @@ its own OpenSCAD and that copy is preferred over anything installed on the host,
 so the bundle behaves the same on every machine rather than depending on
 whatever version a host happens to have; everywhere else -- the wheels, a source
 checkout -- there is no bundled copy and this falls back to the host's, exactly
-as before. Only the Linux and Windows bundles carry OpenSCAD; see
-``dev-tools/pyinstaller/build.sh`` for why macOS does not.
+as before. Every bundle carries OpenSCAD except the Linux arm64 one, which has
+none to carry: upstream publishes the pinned release for x86_64 only. See
+``dev-tools/pyinstaller/build.sh``, which also says why macOS carries a
+development snapshot where the other platforms carry a release.
 """
 
 import os
@@ -39,15 +41,37 @@ from partcad.healthcheck.tests import HealthCheckReport, HealthCheckTest
 #
 # Windows ships the upstream portable build, a single statically linked
 # executable with no libraries of its own.
-BUNDLED_SUBPATH = ("openscad", "openscad.exe") if os.name == "nt" else ("openscad", "AppRun")
+#
+# macOS ships the ``OpenSCAD.app`` out of the upstream ``.dmg``, entire. The
+# binary within it resolves its Qt frameworks through
+# ``@executable_path/../Frameworks``, so it is the surrounding bundle that makes
+# it runnable -- the same reason Linux keeps the whole AppImage tree. This is the
+# path Homebrew's cask links onto PATH as ``openscad``, and ``build.sh`` asserts
+# the same one after staging.
+def bundled_subpath(os_name: str, platform_name: str) -> "tuple[str, ...]":
+    """Return the payload's path within a bundle for the platform named.
+
+    A function rather than three inline branches so that the two platforms this
+    process is not running on can still be asserted -- the layout is a fact about
+    an artifact built elsewhere, and a wrong one is only discovered by a user
+    whose bundle cannot find its OpenSCAD.
+    """
+    if os_name == "nt":
+        return ("openscad", "openscad.exe")
+    if platform_name == "darwin":
+        return ("openscad", "OpenSCAD.app", "Contents", "MacOS", "OpenSCAD")
+    return ("openscad", "AppRun")
+
+
+BUNDLED_SUBPATH = bundled_subpath(os.name, sys.platform)
 
 
 def find_bundled_executable() -> "str | None":
     """Return the OpenSCAD shipped inside the standalone bundle, or None.
 
     Returns None whenever PartCAD is not running from a bundle, and also when it
-    is running from a bundle built without OpenSCAD (macOS, or a bundle built by
-    hand without staging the payload).
+    is running from a bundle built without OpenSCAD (Linux arm64, or a bundle
+    built by hand without staging the payload).
     """
     if not getattr(sys, "frozen", False):
         return None
@@ -159,10 +183,15 @@ class MacOpenSCADCheck(OpenSCADCheck):
         The snapshot cask rather than the release one: Homebrew disabled
         ``openscad`` on 2026-09-01 because the pinned 2021.01 release does not
         pass the macOS Gatekeeper check, so ``brew install openscad`` cannot
-        succeed on any machine any more. 2021.01 is also x86_64 only -- the
-        reason ``dev-tools/pyinstaller/build.sh`` does not bundle OpenSCAD on
-        macOS -- so on Apple Silicon it was the wrong build to reach for even
-        while it installed.
+        succeed on any machine any more. 2021.01 is also x86_64 only, so on
+        Apple Silicon it was the wrong build to reach for even while it
+        installed. ``dev-tools/pyinstaller/build.sh`` carries the same snapshot
+        into the macOS bundles, for both of those reasons.
+
+        This is the wheel's path to an OpenSCAD, and it needs Homebrew. A
+        standalone bundle does not come here at all: it carries its own copy,
+        which ``test()`` above resolves first, so the check passes and never
+        offers this fix.
         """
         env = os.environ.copy()
         env["HOMEBREW_NO_AUTO_UPDATE"] = "1"

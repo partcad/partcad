@@ -885,12 +885,18 @@ def _extract(archive_path: str, dest: str, ext: str) -> None:
 def _reject_unsafe_links(members, dest: str) -> None:
     """Refuse an archive whose links would reach outside ``dest``.
 
-    The bundle carries two of them -- ``partcad`` and ``partcad-json-rpc`` are
-    relative symlinks to ``pc``, so that one ~38MB payload serves all three
-    names -- which is why link members are extracted rather than skipped. What
-    ``filter="data"`` enforces on a modern interpreter is enforced here too, for
-    the older ones this falls back to: a link target may be neither absolute nor
-    a path that climbs out of the archive.
+    The bundle carries these, which is why link members are extracted rather
+    than skipped: ``partcad`` and ``partcad-json-rpc`` are relative symlinks to
+    ``pc``, so that one ~38MB payload serves all three names, and on macOS the
+    bundled ``OpenSCAD.app`` brings the links a framework bundle is built from
+    (``Versions/Current`` -> ``A`` and the like). Those are relative and internal
+    too, and have to stay that way: an absolute one anywhere in that app would
+    fail ``pc upgrade`` on macOS here, while ``install.sh``, which unpacks with
+    the system ``tar``, would not notice.
+
+    What ``filter="data"`` enforces on a modern interpreter is enforced here too,
+    for the older ones this falls back to: a link target may be neither absolute
+    nor a path that climbs out of the archive.
     """
     for member in members:
         if not (member.issym() or member.islnk()):
