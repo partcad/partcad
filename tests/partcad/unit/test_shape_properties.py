@@ -545,27 +545,45 @@ def test_the_material_table_is_not_walked_for_shapes():
     assert set(index) == {"pkg:leaf"}
 
 
-def test_the_material_parameter_is_the_material_too(tmp_path):
-    """Two places name it, and they mean the same thing.
+def test_a_type_that_accepts_a_material_records_what_it_was_asked_for(tmp_path):
+    """The one path from a *user* declaration into 'properties:', and where it is.
 
-    ':ref:`materials`' in the configuration guide documents the parameter form,
-    and 'properties:' documents the other; a part that wrote either is made of
-    what it said, so both reach an exporter - and a simulation - as one
-    property.
+    'parameters:' is what was asked of the type; 'properties:' is what the shape
+    turned out to be, and a package never writes it by hand. For a type that
+    produces one homogeneous body, those are the same answer and nothing else is
+    going to give it - a CadQuery script does not report a material - so the
+    part factory records it as the shape is created.
     """
+    root = tmp_path / "workspace"
+    root.mkdir()
+    (root / "cube.stl").write_text("", encoding="utf-8")
+    (root / "cube.step").write_text("", encoding="utf-8")
+    (root / "partcad.yaml").write_text(
+        "name: //p\n" "parts:\n"
+        # 'stl' is homogeneous, so it accepts the parameter.
+        "  homogeneous:\n"
+        "    type: stl\n    path: cube.stl\n"
+        "    parameters:\n      material:\n        type: string\n        default: '//cat:pla'\n"
+        # 'step' is not: its file states a material per solid and says it better,
+        # so the property is the reader's to fill in, not a declaration's.
+        "  from_a_reader:\n" "    type: step\n    path: cube.step\n" "    properties:\n      material: '//cat:abs'\n",
+        encoding="utf-8",
+    )
+    project = pc.Context(str(root)).get_project("//")
+
+    assert project.get_part("homogeneous")._shape_properties() == {"material": "//cat:pla"}
+    assert project.get_part("from_a_reader")._shape_properties() == {"material": "//cat:abs"}
+
+
+def test_a_material_already_recorded_outranks_what_was_asked_for(tmp_path):
+    """A reader that found the real answer beats the declaration's request."""
     root = tmp_path / "workspace"
     root.mkdir()
     (root / "cube.stl").write_text("", encoding="utf-8")
     (root / "partcad.yaml").write_text(
         "name: //p\n"
         "parts:\n"
-        "  as_parameter:\n"
-        "    type: stl\n    path: cube.stl\n"
-        "    parameters:\n      material:\n        type: string\n        default: '//cat:pla'\n"
-        "  as_property:\n"
-        "    type: stl\n    path: cube.stl\n"
-        "    properties:\n      material: '//cat:abs'\n"
-        "  both:\n"
+        "  block:\n"
         "    type: stl\n    path: cube.stl\n"
         "    parameters:\n      material:\n        type: string\n        default: '//cat:pla'\n"
         "    properties:\n      material: '//cat:abs'\n",
@@ -573,7 +591,22 @@ def test_the_material_parameter_is_the_material_too(tmp_path):
     )
     project = pc.Context(str(root)).get_project("//")
 
-    assert project.get_part("as_parameter")._shape_properties() == {"material": "//cat:pla"}
-    assert project.get_part("as_property")._shape_properties() == {"material": "//cat:abs"}
-    # What the shape says about itself wins, the way it does everywhere else.
-    assert project.get_part("both")._shape_properties() == {"material": "//cat:abs"}
+    assert project.get_part("block")._shape_properties() == {"material": "//cat:abs"}
+
+
+def test_a_type_that_rejects_the_parameter_cannot_acquire_one_by_the_back_door(tmp_path):
+    """A 'step' part declaring a 'material' parameter is refused, as it always was."""
+    root = tmp_path / "workspace"
+    root.mkdir()
+    (root / "cube.step").write_text("", encoding="utf-8")
+    (root / "partcad.yaml").write_text(
+        "name: //p\n"
+        "parts:\n"
+        "  block:\n"
+        "    type: step\n    path: cube.step\n"
+        "    parameters:\n      material:\n        type: string\n        default: '//cat:pla'\n",
+        encoding="utf-8",
+    )
+    project = pc.Context(str(root)).get_project("//")
+
+    assert project.get_part("block", quiet=True) is None

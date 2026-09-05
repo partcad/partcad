@@ -9,7 +9,7 @@
 
 import typing
 
-from . import factory
+from . import factory, shape_envelope
 from .part import Part
 from .shape_factory import ShapeFactory
 from . import telemetry
@@ -127,7 +127,59 @@ class PartFactory(ShapeFactory):
         """
         return sorted(self.ACCEPTED_OBJECT_TYPE_PARAMETERS)
 
+    # Object-type parameters that are also something the shape reports about
+    # itself, mapped to the 'properties:' key each becomes.
+    #
+    # The two sections are not two spellings of one thing: 'parameters:' is what
+    # was *asked of* the type that produces the shape, and 'properties:' is what
+    # the shape *turned out to be* - which is why a 'step' part, whose file
+    # already states a material per solid, does not accept the parameter at all
+    # (see 'PartFactoryHomogen'). But for a type that does accept it, the answer
+    # to "what did this turn out to be made of" is exactly what was asked for,
+    # and nothing else is going to say so: a CadQuery script does not report a
+    # material.
+    #
+    # 'color' is deliberately absent. The parameter is free-form text ("red")
+    # and the property is '#RRGGBB', so promoting one would need a conversion,
+    # and inventing one here would write a colour nobody stated.
+    OBJECT_TYPE_PARAMETER_PROPERTIES = {"material": "material"}
+
+    def record_object_type_properties(self, config: object) -> None:
+        """Write what this part was asked to be into what it reports being.
+
+        The one place a *user* declaration becomes a 'properties:' entry, and it
+        is instantiation code doing it - which is the rule for that section:
+        'properties:' is filled in by whatever built the shape (a URDF reader
+        naming a link's material, a STEP reader reading one out of the file),
+        never written by hand in a package.
+
+        Only for the parameters this type accepts, so a type that rejects
+        'material' cannot acquire one by the back door, and only where nothing
+        has been recorded already - a reader that found the real answer in the
+        file outranks what the declaration asked for.
+        """
+        if not isinstance(config, dict):
+            return
+        parameters = config.get("parameters")
+        if not isinstance(parameters, dict):
+            return
+        for name, key in self.OBJECT_TYPE_PARAMETER_PROPERTIES.items():
+            if name not in self.ACCEPTED_OBJECT_TYPE_PARAMETERS:
+                continue
+            declared = parameters.get(name)
+            if not isinstance(declared, dict):
+                continue
+            value = declared.get("default")
+            if not isinstance(value, str) or not value:
+                continue
+            properties = config.get(shape_envelope.KEY_PROPERTIES)
+            if not isinstance(properties, dict):
+                properties = {}
+                config[shape_envelope.KEY_PROPERTIES] = properties
+            properties.setdefault(key, value)
+
     def _create_part(self, config: object) -> Part:
+        self.record_object_type_properties(config)
         part = Part(self.target_project.name, config)
         # What this part's type contributes, so that reading an object-type
         # parameter off the part applies the type's default without the reader

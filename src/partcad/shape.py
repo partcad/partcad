@@ -482,42 +482,20 @@ class Shape(ShapeConfiguration):
         shape that came out. Nothing here takes part in the cache hash, which is
         why a cached entry can be shared by objects that state different ones.
 
-        The material is the one thing that can be written in either place and
-        means the same thing both times: 'properties: material:' says it about
-        the shape, and the 'material' MCFTT parameter asks it of the type that
-        produces the shape (see 'get_mcftt()', and :ref:`materials` in the
-        configuration guide, which documents the parameter form). Whichever a
-        package wrote, it is what this shape is made of - so both arrive here as
-        one property, and everything downstream reads one place.
+        Read as it stands, and nothing is derived here. What a shape turned out
+        to be made of is written into 'properties:' by whatever instantiated it
+        - a reader that found it in the file, or the part factory promoting the
+        'material' its type was asked for (see
+        'PartFactory.record_object_type_properties()'). By the time a shape is
+        being asked what it reports, that has already happened.
         """
         if not isinstance(self.config, dict):
             return None
         properties = self.config.get(shape_envelope.KEY_PROPERTIES)
-        properties = properties if isinstance(properties, dict) else {}
+        if not isinstance(properties, dict):
+            return None
         properties = {key: value for key, value in properties.items() if value not in (None, {}, [], "")}
-        if not properties.get("material"):
-            declared = self._parameter_material()
-            if declared:
-                properties["material"] = declared
         return properties or None
-
-    def _parameter_material(self):
-        """The material named by the 'material' MCFTT parameter, or None.
-
-        Read straight out of the configuration rather than through
-        'get_mcftt()': that one is a coroutine, it writes a default back into
-        the configuration when there is none, and it warns about an object that
-        never claimed to have a material - none of which belongs on the path
-        that stamps metadata onto every shape.
-        """
-        parameters = self.config.get("parameters")
-        if not isinstance(parameters, dict):
-            return None
-        declared = parameters.get("material")
-        if not isinstance(declared, dict):
-            return None
-        value = declared.get("default")
-        return value if isinstance(value, str) and value else None
 
     async def get_cached_properties_async(self, ctx):
         """What the cache recorded beside this shape's geometry, or None.

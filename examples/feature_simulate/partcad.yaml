@@ -125,12 +125,20 @@ parts:
     desc: A 20 mm cube of aluminium, centred on its own origin
     type: cadquery
     path: block.py
-    properties:
-      # A relative reference, resolved in this package - so this example works
+    parameters:
+      # What the part is asked to be made of. 'cadquery' is one of the part
+      # types that accept a 'material' - it produces one homogeneous body, so a
+      # single answer is true of the whole of it - and the factory records that
+      # answer as the shape's 'material' property, which is what the exporters
+      # and the simulation read.
+      #
+      # A relative reference, resolved in this package, so this example works
       # the same whether it is used from the examples tree or checked out on its
       # own. A material catalogued somewhere else is named the same way any
       # other object in another package is.
-      material: ":aluminium"
+      material:
+        type: string
+        default: ":aluminium"
     simulate:
       # A part declares these exactly as an assembly does. One block on a floor
       # has nowhere to fall, which is the point: it is the control the three
@@ -153,8 +161,10 @@ parts:
     # the cache entry rather than in it. Two parts cut from one solid can be
     # made of different things.
     path: block.py
-    properties:
-      material: ":ptfe"
+    parameters:
+      material:
+        type: string
+        default: ":ptfe"
 
 assemblies:
   stable:

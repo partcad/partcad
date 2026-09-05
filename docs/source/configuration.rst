@@ -2310,11 +2310,34 @@ aluminium galls) and the top one slides off when they are PTFE (``mu: 0.04``),
 and nothing about the arrangement changes in between.
 
 So it is stated where it belongs, on the :ref:`material <materials>`, and a part
-that names one gets it: ``mu`` becomes the shape's ``friction`` property unless
-the shape states a ``friction`` of its own, and every format writes it in its own
-spelling -- SDFormat's ``<friction><ode><mu>``, URDF's ``<gazebo><mu1>``, MJCF's
-first ``friction`` component. A part that says nothing gets whatever the
-simulator defaults to, which is a number nobody chose.
+that names one gets it. A part names one the way it always has -- with the
+``material`` parameter, on a part type that accepts one (see `Parameters`_) --
+and the factory records the answer as the shape's ``material`` property, which
+is what reads it from there on:
+
+.. code-block:: yaml
+
+  parts:
+    block:
+      type: cadquery
+      path: block.py
+      parameters:
+        material:
+          type: string
+          default: ":aluminium"
+
+``mu`` then becomes the shape's ``friction`` property unless the shape states a
+``friction`` of its own, and every format writes it in its own spelling --
+SDFormat's ``<friction><ode><mu>``, URDF's ``<gazebo><mu1>``, MJCF's first
+``friction`` component. A part that says nothing gets whatever the simulator
+defaults to, which is a number nobody chose.
+
+Note which section that is. ``parameters:`` is what is *asked of* the type that
+produces the shape and is where a package writes what it wants; ``properties:``
+is what the shape *turned out to be*, and is filled in by whatever built it -- a
+URDF reader naming a link's material, a STEP reader finding one in the file, or
+the part factory recording what its type was asked for. A package does not write
+``properties:`` by hand.
 
 See :doc:`simulation` and ``examples/feature_simulate``.
 

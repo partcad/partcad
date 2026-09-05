@@ -148,6 +148,14 @@ isort --check src/partcad tests/partcad
   it found *underneath* what each shape states itself. No exporter knows materials exist, which is what keeps
   URDF's `<mu1>`, SDFormat's `<mu>` and MJCF's `friction` agreeing for free.
 
+  Which reference it reads is `properties: material:`, and **a package never writes that by hand**.
+  `parameters:` is what is asked of the type that produces the shape; `properties:` is what the shape turned
+  out to be, and is filled in by whatever built it. For a type that accepts a `material` parameter — the
+  homogeneous ones, `PartFactoryHomogen` — what it turned out to be made of is exactly what was asked for, and
+  `PartFactory.record_object_type_properties()` is the instantiation code that writes it down. A `step` part
+  accepts no such parameter (its file states a material per solid, and says it better), so nothing is promoted
+  and the reader that read the file is what fills the property in.
+
 - **Drawing ports and interfaces** (`./src/partcad/render_overlay.py`, `./src/partcad/wrappers/stroke_text.py`):
   `pc render --with-ports`/`--with-interfaces` draws the connection metadata on top of a projection.
   `render_overlay.py` answers only *where* the ports are — a lookup for a part, a walk for an assembly (and so

@@ -111,12 +111,20 @@ pc open --with mujoco ./unstable.xml
 <table><tr>
 <td valign=top><a href="block.py"><img src="././block.svg" alt="block" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>A 20 mm cube of aluminium, centred on its own origin</td>
+<td valign=top>Parameters:<br/><ul>
+<li>material: :aluminium</li>
+</ul>
+</td>
 </tr></table>
 
 ### block_ptfe
 <table><tr>
 <td valign=top><a href="block.py"><img src="././block_ptfe.svg" alt="block_ptfe" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>The same 20 mm cube, in PTFE</td>
+<td valign=top>Parameters:<br/><ul>
+<li>material: :ptfe</li>
+</ul>
+</td>
 </tr></table>
 
 <br/><br/>
