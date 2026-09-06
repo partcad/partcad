@@ -183,8 +183,8 @@ That downloads the bundle for the current operating system and architecture from
 Nothing else on the system is touched, and no ``sudo`` is asked for. If ``~/.local/bin`` is not on your
 ``PATH``, the installer says so and prints the line to add.
 
-The bundle is around 200MB unpacked and 63MB to download on Linux x86_64, and about half that on macOS and
-on Linux arm64, which carry no bundled OpenSCAD. It carries no CAD kernel: PartCAD builds every shape in a
+Most of the bundle is the OpenSCAD it carries, so that is what its size follows: the Linux arm64 build, which
+carries none, is roughly half the size of the others. It carries no CAD kernel: PartCAD builds every shape in a
 sandbox it provisions itself -- and it carries the conda that provisions it, so nothing has to be installed
 first, and the ``conda`` sandbox is what you get rather than the ``venv`` fallback the wheels use when there
 is no conda (see :ref:`python-sandbox`). ``pc healthcheck`` reports what this machine is missing.
@@ -598,8 +598,9 @@ What is inside
   Studio Code is built from, with its extensions coming from `Open VSX <https://open-vsx.org/>`_.
 * The PartCAD extension -- which carries the PartCAD Viewer itself -- and the extensions PartCAD works
   with: Python, YAML and the rest of the list in ``.vscode/extensions.json``.
-* The PartCAD command line tools, the same ones the standalone bundle installs, including OpenSCAD on
-  Linux and Windows.
+* The PartCAD command line tools, the same ones the standalone bundle installs, including the OpenSCAD they
+  bundle -- on every platform the IDE ships for, since the one build that carries none is Linux arm64 and
+  there is no Linux arm64 IDE.
 
 Pylance is not among them: it is proprietary and licensed for use only with Microsoft's products.
 Open-source type checking for Python is included in its place.
