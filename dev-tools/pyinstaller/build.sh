@@ -1004,7 +1004,35 @@ if [ -d "${OPENSCAD_BUNDLED_DIR}" ]; then
   macos) openscad_entry_point="${OPENSCAD_BUNDLED_DIR}/OpenSCAD.app/Contents/MacOS/OpenSCAD" ;;
   *) openscad_entry_point="${OPENSCAD_BUNDLED_DIR}/AppRun" ;;
   esac
-  openscad_version_output="$(cd "${SMOKE_DIR}" && "${openscad_entry_point}" --version 2>&1)"
+  # The status is captured rather than left to `set -e`, and the output is
+  # printed on failure. It has to be captured to match the version below, which
+  # means an unexplained abort here would take the one message that explains it
+  # down with it, still inside the variable -- which is exactly what happened
+  # when this payload moved to a Qt6 snapshot and the runner turned out to be
+  # short of a library.
+  openscad_smoke_status=0
+  openscad_version_output="$(cd "${SMOKE_DIR}" && "${openscad_entry_point}" --version 2>&1)" ||
+    openscad_smoke_status=$?
+  if [ "${openscad_smoke_status}" -ne 0 ]; then
+    echo "error: the bundled OpenSCAD did not run (exit ${openscad_smoke_status})" >&2
+    echo "       ${openscad_entry_point}" >&2
+    printf '       %s\n' "${openscad_version_output}" >&2
+    # 127 from a file that exists is the dynamic loader, not a missing path: the
+    # Linux payload is an AppImage and resolves several libraries from the host
+    # (see the note above `stage_openscad`). Name them rather than leaving the
+    # next reader to guess which one the machine is short of.
+    if command -v ldd >/dev/null 2>&1; then
+      for openscad_object in "${openscad_entry_point}" "${OPENSCAD_BUNDLED_DIR}/usr/bin/openscad"; do
+        [ -e "${openscad_object}" ] || continue
+        openscad_missing="$(ldd "${openscad_object}" 2>/dev/null | grep "not found" || true)"
+        if [ -n "${openscad_missing}" ]; then
+          echo "       ${openscad_object} cannot resolve:" >&2
+          printf '         %s\n' "${openscad_missing}" >&2
+        fi
+      done
+    fi
+    exit 1
+  fi
   echo "    ${openscad_version_output}"
   case "${openscad_version_output}" in
   *"OpenSCAD version ${OPENSCAD_VERSION}"*) ;;
