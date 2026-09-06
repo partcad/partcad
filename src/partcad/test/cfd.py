@@ -16,4 +16,5 @@ class CfdTest(CaeTest):
     """
 
     def __init__(self) -> None:
+        """Named "cfd", which is what `pc test -f cfd` filters on."""
         super().__init__(pc_cae.CFD)

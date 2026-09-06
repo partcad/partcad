@@ -18,4 +18,4 @@ class CaeCommands(Loader):
 
 @click.command(cls=CaeCommands, help="Run an engineering analysis on a part")
 def cli() -> None:
-    pass
+    """The `pc cae` group: one subcommand per analysis PartCAD can run."""

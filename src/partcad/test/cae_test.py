@@ -36,6 +36,7 @@ from .test import Test
 
 class CaeTest(Test):
     def __init__(self, analysis: str) -> None:
+        """One check per analysis, named after it: `pc test -f fea` selects it."""
         super().__init__(analysis)
         self.analysis = analysis
 
@@ -86,6 +87,14 @@ class CaeTest(Test):
         return "." + self.analysis + "=" + hashlib.md5("\n".join(parts).encode()).hexdigest()
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
+        """Run the analysis, and pass the shape only if it found nothing.
+
+        Three ways to fail, and they are different failures: the part declared
+        the section wrongly, the implementation could not be run at all (no
+        solver on this machine), or the analysis ran and reported something.
+        Only the last is a verdict on the part, but none of them is a pass --
+        a part that was asked about and not answered has not been checked.
+        """
         try:
             config = self._config(shape)
         except pc_cae.CaeConfigError as e:

@@ -27,9 +27,11 @@ class FakeShape:
     """The little of a shape that `cae.config_of()` reads."""
 
     def __init__(self, config):
+        """Stand in for a shape carrying `config` as its declaration."""
         self.config = config
 
     def get_final_config(self):
+        """What an alias or an enrich would have resolved to; here, itself."""
         return self.config
 
 
@@ -69,6 +71,7 @@ class FakeShape:
     ],
 )
 def test_parse_force(value, newtons):
+    """Every spelling of a load, and the newtons it has to come out as."""
     assert cae.parse_force(value) == pytest.approx(newtons)
 
 
@@ -93,12 +96,14 @@ def test_parse_force_error_names_the_field():
 
 
 def test_fix_as_a_list_of_interfaces():
+    """The short form: these interfaces, every instance of each."""
     config = AnalysisConfig("fea", {"fix": ["m3-screw", "//other:rail"]})
     assert config.fixtures == {"m3-screw": [EVERY_INSTANCE], "//other:rail": [EVERY_INSTANCE]}
     assert config.loads == {}
 
 
 def test_fix_as_a_map_of_instances():
+    """The long form, in all three ways one entry can name its instances."""
     config = AnalysisConfig("fea", {"fix": {"m3-screw": ["left", "right"], "rail": None, "pin": "one"}})
     assert config.fixtures == {
         "m3-screw": ["left", "right"],
@@ -109,6 +114,7 @@ def test_fix_as_a_map_of_instances():
 
 
 def test_fix_refuses_what_is_not_a_name():
+    """An interface and an instance are names; anything else is a mistake."""
     with pytest.raises(CaeConfigError):
         AnalysisConfig("fea", {"fix": [{"m3-screw": 1}]})
     with pytest.raises(CaeConfigError):
@@ -119,6 +125,7 @@ def test_fix_refuses_what_is_not_a_name():
 
 
 def test_load_flat_and_nested():
+    """One value for the whole interface, or one per named instance."""
     config = AnalysisConfig(
         "fea",
         {"load": {"hook": "5 kg", "rail": {"left": "30 N", "right": 2}}},
@@ -129,11 +136,13 @@ def test_load_flat_and_nested():
 
 
 def test_load_refuses_a_list():
+    """A list would say what is loaded without saying with what."""
     with pytest.raises(CaeConfigError):
         AnalysisConfig("fea", {"load": ["hook"]})
 
 
 def test_load_refuses_an_empty_instance_map():
+    """`hook: {}` is an interface named and then nothing said about it."""
     with pytest.raises(CaeConfigError, match="names no instance"):
         AnalysisConfig("fea", {"load": {"hook": {}}})
 
@@ -158,6 +167,7 @@ def test_malformed_sections_say_what_is_wrong(section, message):
 
 
 def test_config_of_reads_the_named_section():
+    """A part may declare both, and each analysis reads only its own."""
     shape = FakeShape({"fea": {"fix": ["a"]}, "cfd": {"load": {"b": "1 N"}}})
     assert cae.config_of(shape, "fea").fixtures == {"a": [EVERY_INSTANCE]}
     assert cae.config_of(shape, "cfd").loads == {"b": {EVERY_INSTANCE: 1.0}}
@@ -169,11 +179,13 @@ def test_config_of_is_none_when_nothing_is_declared():
 
 
 def test_config_of_refuses_an_analysis_partcad_does_not_run():
+    """Asking about an analysis that does not exist is a caller's bug."""
     with pytest.raises(CaeConfigError):
         cae.config_of(FakeShape({}), "thermal")
 
 
 def test_to_data_is_json_and_names_the_analysis():
+    """It crosses a sandbox boundary as JSON, so it has to survive the trip."""
     config = AnalysisConfig("cfd", {"fix": ["wall"], "load": {"inlet": "2 N"}})
     data = config.to_data()
     assert json.loads(json.dumps(data)) == {
@@ -187,6 +199,7 @@ def test_to_data_is_json_and_names_the_analysis():
 
 
 def _port(interface, instance="", port="p"):
+    """One record shaped as `render_overlay.collect_async()` produces them."""
     return {
         "port": port,
         "interface": interface,
@@ -218,6 +231,7 @@ def test_assign_ports_does_not_match_another_package_when_qualified():
 
 
 def test_assign_ports_selects_named_instances():
+    """A condition on one instance leaves the interface's others alone."""
     config = AnalysisConfig("fea", {"fix": {"rail": ["left"]}})
     records = [_port("//pkg:rail", "left", "a"), _port("//pkg:rail", "right", "b")]
     assigned, _ = cae.assign_ports(config, records)
@@ -240,6 +254,7 @@ def test_a_load_on_an_interface_applies_to_every_instance():
 
 
 def test_a_named_instance_overrides_the_interface_wide_load():
+    """The specific value wins where both are declared."""
     config = AnalysisConfig("fea", {"load": {"rail": {"left": "1 N", EVERY_INSTANCE: "9 N"}}})
     records = [_port("//pkg:rail", "left", "a"), _port("//pkg:rail", "right", "b")]
     assigned, _ = cae.assign_ports(config, records)
@@ -266,6 +281,7 @@ def test_assign_ports_leaves_out_the_ports_nothing_names():
 
 
 def test_normalize_findings_accepts_every_shape_an_implementation_may_use():
+    """A reader should not have to know which shape the solver chose."""
     assert cae.normalize_findings(None) == []
     assert cae.normalize_findings([]) == []
     assert cae.normalize_findings(["too thin"]) == [{"message": "too thin"}]
@@ -277,6 +293,7 @@ def test_normalize_findings_accepts_every_shape_an_implementation_may_use():
 
 
 def test_findings_report_orders_the_worst_first():
+    """What breaks the part is what a reader needs to see at the top."""
     report = cae.findings_report(
         "//pkg:bracket",
         "fea",
@@ -293,4 +310,5 @@ def test_findings_report_orders_the_worst_first():
 
 
 def test_findings_report_says_so_when_there_is_nothing():
+    """A pass is an answer and is printed as one, not as an empty list."""
     assert "found nothing" in cae.findings_report("//pkg:bracket", "fea", [])

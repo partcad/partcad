@@ -191,6 +191,15 @@ class AnalysisConfig:
     """
 
     def __init__(self, analysis: str, config: Optional[dict]) -> None:
+        """Read one `fea:`/`cfd:` section, converting every load to newtons.
+
+        Raises:
+            CaeConfigError: the section is absent, is not a mapping, names a key
+                that is neither `fix:` nor `load:`, or holds a value that is not
+                a force. Every one of those is a sentence rather than a code,
+                because it is what `pc cae` prints and what the IDE's tab shows
+                where the results would have been.
+        """
         self.analysis = analysis
         self.fixtures: dict[str, list[str]] = {}
         self.loads: dict[str, dict[str, float]] = {}
@@ -213,6 +222,14 @@ class AnalysisConfig:
             raise CaeConfigError("'%s:' declares neither 'fix:' nor 'load:'" % analysis)
 
     def _parse_fix(self, fix) -> None:
+        """Read `fix:`, which comes in three shapes that mean two things.
+
+        A bare name and a list of them say "every instance of these interfaces";
+        a mapping says which instances, and an entry with nothing under it means
+        the whole of that interface again. All three normalize to the same
+        `interface -> instances` mapping, so nothing downstream has to know
+        which spelling the package used.
+        """
         if fix is None:
             return
         if isinstance(fix, str):
@@ -232,6 +249,13 @@ class AnalysisConfig:
         raise CaeConfigError("'fix:' is neither a list of interfaces nor a map of them: %r" % (fix,))
 
     def _parse_load(self, load) -> None:
+        """Read `load:`, converting every value to a force in newtons.
+
+        Flat (`hook: 5 kg`) applies to every instance of the interface; nested
+        (`rail: {left: 30 N}`) names the instance. Unlike `fix:` there is no
+        list form -- a list of interfaces would say what is loaded without
+        saying with what, which is not a boundary condition.
+        """
         if load is None:
             return
         if not isinstance(load, dict):
@@ -264,6 +288,7 @@ class AnalysisConfig:
         }
 
     def __repr__(self) -> str:
+        """The parsed conditions, with the loads as the newtons they became."""
         return "AnalysisConfig(%r, fix=%r, load=%r)" % (self.analysis, self.fixtures, self.loads)
 
 

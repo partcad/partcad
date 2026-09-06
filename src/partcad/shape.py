@@ -1481,6 +1481,7 @@ class Shape(ShapeConfiguration):
         output_dir=None,
         **kwargs,
     ) -> dict:
+        """`analyze_async` for a caller that has no event loop of its own."""
         return asyncio.run(self.analyze_async(ctx, analysis, implementation, project, filepath, output_dir, **kwargs))
 
     async def render_svg_somewhere_async(

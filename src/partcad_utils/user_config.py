@@ -436,6 +436,13 @@ class UserConfig(vyper.Vyper):
         return cls(settings=data)
 
     def __init__(self, settings: dict = None):
+        """Resolve the configuration: the file, the `PC_*` environment, `settings`.
+
+        Each option below is read once and kept as an attribute, so that a
+        caller asks the object rather than the layers underneath it. `settings`
+        is what `from_dict` passes when a daemon is rebuilding a *caller's*
+        configuration rather than resolving its own.
+        """
         super().__init__()
         self.set_config_type("yaml")
 

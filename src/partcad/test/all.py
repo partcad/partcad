@@ -22,6 +22,11 @@ _global_tests: list[Test] = []
 
 
 def tests(concurrency_cap: int) -> list[Test]:
+    """Every check `pc test` runs, built once and shared by every caller.
+
+    `concurrency_cap` is a cap on the tests as a whole rather than on any one of
+    them, which is why it is set on the base class here rather than passed down.
+    """
     if concurrency_cap is None:
         concurrency_cap = max(os.cpu_count(), 8)
     Test.MAX_CONCURRENT_TESTS = concurrency_cap

@@ -16,4 +16,5 @@ class FeaTest(CaeTest):
     """
 
     def __init__(self) -> None:
+        """Named "fea", which is what `pc test -f fea` filters on."""
         super().__init__(pc_cae.FEA)

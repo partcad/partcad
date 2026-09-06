@@ -127,6 +127,12 @@ def _failed(exception):
 
 
 def process(script, path, request):
+    """Run one implementation script and normalize whatever it answered with.
+
+    A script may set `output` or define `process(path, request)`; either way what
+    comes back here is reduced to the two consistent shapes the core expects,
+    plus the optional `warnings`, `unsupported` and `findings` it may carry.
+    """
     try:
         result = runpy.run_path(
             script,

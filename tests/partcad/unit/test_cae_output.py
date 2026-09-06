@@ -35,6 +35,7 @@ EXAMPLES = "examples"
 
 @pytest.fixture(scope="module")
 def ctx():
+    """A context over the shipped examples, for the questions about `//builtin`."""
     return pc.Context(EXAMPLES)
 
 
@@ -114,6 +115,7 @@ def package(tmp_path):
 
 
 def _bracket(package):
+    """The one part of the fixture package, which declares an `fea:` section."""
     part = package.get_part(":bracket")
     assert part is not None
     return part
@@ -167,6 +169,7 @@ def test_the_default_implementation_comes_from_the_user_configuration(package, m
 
 
 def test_an_implementation_may_be_named_for_one_run(package):
+    """What `pc cae fea --implementation` and the IDE's field both do."""
     part = _bracket(package)
     project, format_name = part._analysis_implementation(package, cae.FEA, "//cae-test:plot")
     assert (project.name, format_name) == ("//cae-test", "plot")
@@ -180,6 +183,7 @@ def test_a_package_on_its_own_means_the_analysis_of_that_package(package):
 
 
 def test_a_missing_implementation_package_says_which_one(package):
+    """A package nobody declared as a dependency is named, not just refused."""
     part = _bracket(package)
     with pytest.raises(Exception, match="//nowhere"):
         part._analysis_implementation(package, cae.FEA, "//nowhere:fea")
@@ -203,6 +207,7 @@ def test_an_implementation_package_that_did_not_load_says_so(package, monkeypatc
 
 
 def test_the_part_declaration_is_read_as_boundary_conditions(package):
+    """The `fea:` section of a real package reaches `partcad.cae` intact."""
     part = _bracket(package)
     config = cae.config_of(part, cae.FEA)
     assert config.fixtures == {"m3-screw": [cae.EVERY_INSTANCE]}
@@ -226,6 +231,7 @@ def test_analysing_what_declares_nothing_says_so(package):
 
 
 def test_the_defaults_name_the_public_calculix_package():
+    """Every analysis has a default, and each names its own file type."""
     from partcad_utils.user_config import DEFAULT_CAE_IMPLEMENTATIONS, user_config
 
     assert set(DEFAULT_CAE_IMPLEMENTATIONS) == set(cae.ANALYSES)
@@ -235,6 +241,7 @@ def test_the_defaults_name_the_public_calculix_package():
 
 
 def test_an_unknown_analysis_has_no_configured_implementation():
+    """Asked about an analysis PartCAD does not run, the configuration says so."""
     from partcad_utils.user_config import user_config
 
     with pytest.raises(ValueError):
@@ -259,11 +266,12 @@ def wrapper_export():
     class _Stub:
         @staticmethod
         def exception_to_str(exc):
+            """The half of `wrapper_common` the wrapper needs, without the CAD stack."""
             return None if exc is None else str(exc)
 
         @staticmethod
         def handle_exception(exc, script=None):
-            pass
+            """Swallowed here: the real one logs into the sandbox's own channel."""
 
     saved = sys.modules.get("wrapper_common")
     sys.modules["wrapper_common"] = _Stub
@@ -285,6 +293,7 @@ def wrapper_export():
 
 
 def _script(tmp_path, body):
+    """An implementation script on disk, for the meta-wrapper to run."""
     path = tmp_path / "solve.py"
     path.write_text(body)
     return str(path)
