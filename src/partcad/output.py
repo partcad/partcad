@@ -12,7 +12,7 @@ PartCAD writes output files in two flavours, each declared in a section of
     'render:'   the 2D projections 'pc render' writes
 
 Two more sections are resolved by exactly the same machinery and produce no
-output file at all -- 'importers:' (who *reads* a file format into a PartCAD
+output file at all -- 'import:' (who *reads* a file format into a PartCAD
 object) and 'simulation:' (who runs a scene). See SIMULATE and IMPORT below.
 
 A section has one subsection per file type, whose fields are that type's
@@ -34,7 +34,7 @@ that reaches the merged options from a calling package is inert (see
 The built-in implementations are not special-cased anywhere: they are declared
 in exactly this form by three packages that ship inside 'partcad' itself and
 that every context can reach -- '//builtin/export', '//builtin/render' and
-'//builtin/importers' (see 'builtin/'). Resolving a file type means layering the configuration of the
+'//builtin/import' (see 'builtin/'). Resolving a file type means layering the configuration of the
 package that asked for it on top of the built-in package's, so a package that
 declares 'path' for a type replaces the implementation for itself and one that
 declares only a parameter keeps the built-in implementation and re-tunes it.
@@ -72,7 +72,7 @@ SECTIONS = (EXPORT, RENDER)
 # 'partcad/partcad-sim-mujoco'.
 SIMULATE = "simulation"
 
-# The fourth, and the mirror image of 'export:': 'importers:' declares who turns a
+# The fourth, and the mirror image of 'export:': 'import:' declares who turns a
 # file of some third-party format *into* a PartCAD object. It is not in SECTIONS
 # for the same reason 'simulation:' is not -- everything reading that tuple is
 # asking "which output file types are there", and an importer produces no file.
@@ -91,7 +91,7 @@ SIMULATE = "simulation"
 # format live with that engine's plugin -- 'mjcf' in 'partcad/partcad-sim-mujoco'
 # and 'world' in 'partcad/partcad-sim-gazebo'.
 #
-# The section is spelled 'importers:' and not 'import:' because that name is
+# The section is spelled 'import:' and not 'import:' because that name is
 # taken: 'import:' is the historical spelling of 'dependencies:', and
 # 'ProjectConfiguration' does not merely warn about it - it copies the value
 # into 'dependencies' and deletes the key (see 'project_config.py'). A section
@@ -117,7 +117,7 @@ SIMULATE = "simulation"
 # Everything else is handed to the reader as a parameter, which is what lets a
 # format carry its own options ('ignoreCollision', 'modelPaths') without PartCAD
 # knowing they exist.
-IMPORT = "importers"
+IMPORT = "import"
 
 # Where the built-in packages live, both as package paths and on disk. They are
 # inside the 'partcad' Python package so that they ship with it and are always
@@ -126,7 +126,7 @@ BUILTIN_ROOT_PACKAGE = "//builtin"
 BUILTIN_PACKAGES = {
     EXPORT: "//builtin/export",
     RENDER: "//builtin/render",
-    IMPORT: "//builtin/importers",
+    IMPORT: "//builtin/import",
 }
 # The one built-in package that declares objects rather than implementations:
 # the scene a 'simulate:' that names no scene of its own is run in, whose
@@ -210,7 +210,7 @@ RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 # are held out of the plugin's request for the same reason 'path' is.
 SIMULATION_KEYS = frozenset({"format", "formatOptions"})
 
-# The same, for the 'importers:' section. None of these is a parameter of the
+# The same, for the 'import:' section. None of these is a parameter of the
 # reader: 'kinds' says which object kinds may be declared with this type,
 # 'noun' and 'dropped' are how the core words what the reader reports, and
 # 'extension' (already reserved above) is how the source file is found. The
@@ -392,10 +392,10 @@ def config_sections(section: str) -> tuple:
     Both sections are read either way, and the one that owns the file type is
     read last so that it wins. What the other one provides is a fallback:
 
-    Neither a 'simulation:' nor an 'importers:' has such a fallback, and neither
+    Neither a 'simulation:' nor an 'import:' has such a fallback, and neither
     ever will: an export implementation writes a file, an importer reads one and
     a simulation plugin runs one, so none of the three is usable where another
-    is asked for. An 'importers:' in particular is the one section whose entries
+    is asked for. An 'import:' in particular is the one section whose entries
     share their names with 'export:' entries on purpose -- 'mjcf' is both the
     format written and the format read -- and reading either as a fallback for
     the other would hand a writer a file to parse.
@@ -444,7 +444,7 @@ def section_of(ctx, format_name: str) -> Optional[str]:
 
 
 def import_declaration(ctx, project, type_name: str):
-    """The 'importers:' implementation for an object type, or None if there is none.
+    """The 'import:' implementation for an object type, or None if there is none.
 
     'type_name' is what a declaration's 'type:' said, and comes in two spellings
     that mean the same thing in the end:
@@ -464,7 +464,10 @@ def import_declaration(ctx, project, type_name: str):
     'UnknownTypeException' path and has a better message than anything here
     could produce.
     """
-    if not isinstance(type_name, str) or not type_name:
+    if not isinstance(type_name, str) or not type_name or ctx is None or project is None:
+        # Nothing to resolve against. Reached by a caller that is asking whether
+        # a type exists at all rather than building anything with it, and the
+        # answer there is the same as for a name nobody declared.
         return None
 
     layers = []

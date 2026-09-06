@@ -9,7 +9,7 @@ The mirror image of 'wrapper_export.py': that one turns a PartCAD object into a
 file of somebody else's format, and this one turns such a file back into a
 PartCAD object. Every reader PartCAD has is a Python script run through here,
 inside a sandbox with whatever that reader declared it needs -- the ones that
-ship with PartCAD ('builtin/importers/') no differently from the ones a plugin
+ship with PartCAD ('builtin/import/') no differently from the ones a plugin
 package supplies.
 
 The contract is:

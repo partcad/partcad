@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Unit tests for the 'importers:' section: object types a package supplies.
+"""Unit tests for the 'import:' section: object types a package supplies.
 
 What is under test here is the *mechanism*, not any one format. The three
 readers PartCAD ships have suites of their own ('test_assembly_urdf.py',
@@ -60,7 +60,7 @@ def write_package(root, *, kinds, section, extra_type_fields="", object_fields="
     (root / "partcad.yaml").write_text(
         textwrap.dedent("""
             name: //p
-            importers:
+            import:
               demo:
                 path: reader.py
                 extension: demo
@@ -188,7 +188,57 @@ def test_the_builtin_readers_ship_beside_their_declaration():
     """A 'path' naming a file that is not in the wheel is a broken package."""
     root = output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.IMPORT]]
     with open(os.path.join(root, "partcad.yaml"), encoding="utf-8") as f:
-        section = yaml.safe_load(f)["importers"]
+        section = yaml.safe_load(f)["import"]
 
     for format_name, declaration in section.items():
         assert os.path.isfile(os.path.join(root, declaration["path"])), format_name
+
+
+def test_a_dependency_under_import_fails_loudly(package):
+    """The section changed hands, so the old meaning has to be told, not guessed.
+
+    'import:' was the name of 'dependencies:'. Migrating it in silence is what
+    stopped being possible: a reader declaration copied into 'dependencies'
+    would be fetched as a package, and the failure would surface nowhere near
+    the file that caused it.
+    """
+    (package / "partcad.yaml").write_text(
+        "name: //p\n" "import:\n" "  robots:\n" "    type: git\n" "    url: https://github.com/openvmp/robots.git\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(pc.exception.ObsoleteImportSectionError) as caught:
+        pc.Context(str(package))
+
+    # The message has to name the offending entry and say what to do.
+    assert "robots" in str(caught.value)
+    assert "dependencies:" in str(caught.value)
+
+
+def test_a_half_written_dependency_is_recognised_too(package):
+    """'url:' alone is a dependency: 'type:' may simply not be typed yet."""
+    (package / "partcad.yaml").write_text(
+        "name: //p\nimport:\n  robots:\n    url: https://github.com/openvmp/robots.git\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(pc.exception.ObsoleteImportSectionError):
+        pc.Context(str(package))
+
+
+def test_a_reader_declaration_is_not_mistaken_for_a_dependency(package):
+    """The check has to be silent for every package using the section as it is now."""
+    ctx = write_package(package, kinds="[assembly]", section="assemblies")
+
+    assert ctx.get_assembly("//:thing") is not None
+
+
+def test_the_builtin_package_declares_readers_and_not_dependencies():
+    """PartCAD's own 'import:' has to pass the check it imposes on everyone else."""
+    from partcad.project_config import Configuration
+
+    root = output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.IMPORT]]
+    with open(os.path.join(root, "partcad.yaml"), encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    assert Configuration._obsolete_import_entries(config["import"]) == []

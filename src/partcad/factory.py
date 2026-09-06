@@ -177,15 +177,20 @@ def instantiate(kind: str, t: str, ctx, source_project, target_project, config):
     # becomes. The import is deferred: this module is loaded before the package
     # machinery the resolution needs.
     if kind in IMPORTED_KINDS and IMPORTED_KINDS[kind] in all[kind]:
-        from .assembly_factory_imported import ImportedTypeError
+        from .assembly_factory_imported import ImportedKindError, ImportedTypeError
 
         try:
             return all[kind][IMPORTED_KINDS[kind]](ctx, source_project, target_project, config)
-        except ImportedTypeError as e:
-            # Nothing declares it, or what does cannot produce this kind. Either
-            # way it is a bad declaration and belongs in the message below,
-            # which is what the caller records against the one object.
+        except ImportedKindError as e:
+            # Declared, but in the wrong section. That has a better message than
+            # the generic one below, which would list every type there is
+            # without mentioning the one the package actually named.
             raise UnknownTypeException(kind, t, config.get("name"), message=str(e)) from e
+        except ImportedTypeError:
+            # Nothing declares it. That is an ordinary unknown type, so it falls
+            # through to the ordinary error - which also keeps a retired type
+            # below reported as retired rather than as an import that is missing.
+            pass
 
     # An unknown type is a bad declaration, not a bad package: it is raised so
     # the caller records it against the one object and carries on with the rest.

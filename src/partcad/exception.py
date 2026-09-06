@@ -12,6 +12,21 @@ class NeedsUpdateException(Exception):
     pass
 
 
+class ObsoleteImportSectionError(Exception):
+    """A package's 'import:' section holds dependencies rather than readers.
+
+    'import:' was the old name of 'dependencies:'. It now names the section that
+    declares which third-party file formats a package can read, so the two
+    cannot both be served: a package that still means the old thing has to say
+    'dependencies:'.
+
+    It used to be migrated in silence, which is exactly what stopped being
+    possible - a silent rewrite would take a reader declaration and try to fetch
+    it as a package. Raised rather than warned for the same reason: a package
+    read the wrong way produces failures nowhere near their cause.
+    """
+
+
 class EmptyShapesError(Exception):
     """Exception raised when no shapes are found for rendering."""
 

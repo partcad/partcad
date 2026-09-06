@@ -140,18 +140,22 @@ isort --check src/partcad tests/partcad
   `simulation:` is also **not** in `output.SECTIONS`: everything that reads that tuple is asking which file
   types exist, and a simulation is not one.
 
-  **`importers:` is the fourth, and the mirror image of `export:`.** It declares who turns somebody else's
+  **`import:` is the fourth, and the mirror image of `export:`.** It declares who turns somebody else's
   file format *into* a PartCAD object, and it is why there is no `assembly_factory_urdf.py` any more:
   `assembly_factory_imported.py` is one factory for every such type, and the reader it runs is named by the
   declaration. Everything below the reader — sandbox, tree walk, part registration, the report of what was
   dropped — was identical in the three factories that used to exist, so only the reader knows XML and only
-  the reader is a plugin. `//builtin/importers` ships `urdf`; `mjcf` and `world` belong to the two engine
+  the reader is a plugin. `//builtin/import` ships `urdf`; `mjcf` and `world` belong to the two engine
   plugins, beside the exporter and the simulator that share their knowledge of the format.
 
-  Two things about it are easy to get wrong. It is spelled **`importers:` and not `import:`** because
-  `import:` is the historical spelling of `dependencies:`, and `project_config.py` does not merely warn about
-  that — it copies the value into `dependencies` and **deletes the key**, so a section by that name is eaten
-  before anything can read it. And an object type that no built-in factory is registered for is what
+  Two things about it are easy to get wrong. **`import:` was the old name of `dependencies:`**, and
+  `project_config.py` used to migrate it in silence — copy the value across and delete the key — which would
+  now eat a reader declaration before anything could read it, then try to fetch it as a package. So the
+  migration is gone and the old use is detected and raised on instead: `Configuration._obsolete_import_entries()`
+  looks for a dependency's required `type:` (`git`/`tar`/`local`/`external`) or its transport-only keys
+  (`url`, `relPath`, `revision`, `subfolder`, `onlyInRoot`, `cacheVersion`, `includePaths`, `plugin`), none of
+  which a reader declaration has. Do not restore the copy: guessing is what made the two ambiguous. And an
+  object type that no built-in factory is registered for is what
   `factory.instantiate()` routes here, which is also how `project.produces_own_parts()` decides, by exclusion,
   which objects materialize parts of their own: PartCAD cannot list the types in a section whose whole point
   is that it does not know what is in it.

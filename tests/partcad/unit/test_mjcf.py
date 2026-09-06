@@ -30,7 +30,7 @@ import partcad as pc
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "builtin", "export"))
-sys.path.append(os.path.join(os.path.dirname(pc.__file__), "builtin", "importers"))
+sys.path.append(os.path.join(os.path.dirname(pc.__file__), "builtin", "import"))
 
 import mujoco_common  # noqa: E402
 import primitive_shapes  # noqa: E402

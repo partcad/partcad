@@ -45,6 +45,43 @@ class Configuration:
 
     name: str
 
+    # What tells an old 'import:' (dependencies) from a new one (readers).
+    #
+    # 'type:' is the decisive one: the dependency schema *requires* it, and its
+    # four values name transports. A reader declaration has no 'type' at all -
+    # what it declares is 'path', 'kinds', 'extension' and so on - so the word
+    # cannot mean both things by accident.
+    DEPENDENCY_TRANSPORTS = frozenset({"git", "tar", "local", "external"})
+    # The keys only a dependency has, so that an entry still being written -
+    # a 'url:' with no 'type:' yet - is recognised for what it is rather than
+    # read as a reader with an odd field.
+    DEPENDENCY_ONLY_KEYS = frozenset(
+        {"url", "relPath", "revision", "subfolder", "onlyInRoot", "cacheVersion", "includePaths", "plugin"}
+    )
+
+    @classmethod
+    def _obsolete_import_entries(cls, section) -> list:
+        """The names under 'import:' that describe a dependency, not a reader.
+
+        Empty for a section that declares readers, which is what makes this safe
+        to call on every package: the check costs one pass over a handful of
+        keys and says nothing about a package using the section as it is meant
+        to be used now.
+
+        An entry that is neither - no marker, no reader fields - is left alone
+        here and fails later, where the message can say what a reader
+        declaration is missing.
+        """
+        if not isinstance(section, dict):
+            return []
+        obsolete = []
+        for entry_name, entry in section.items():
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("type") in cls.DEPENDENCY_TRANSPORTS or (cls.DEPENDENCY_ONLY_KEYS & set(entry)):
+                obsolete.append(entry_name)
+        return obsolete
+
     def __init__(
         self,
         name: str,
@@ -92,13 +129,35 @@ class Configuration:
         if not "render" in self.config_obj or self.config_obj["render"] is None:
             self.config_obj["render"] = {}
 
-        # Backward compatibility for "import" -> "dependencies" renaming
-        if "import" in self.config_obj and "dependencies" not in self.config_obj:
-            pc_logging.warning(
-                f"{name}: 'import' key is deprecated and will be removed in future versions. Use 'dependencies' instead.",
+        # 'import:' used to be the name of 'dependencies:', and for a while a
+        # package that still used it was migrated here in silence. It cannot be
+        # any more: 'import:' is now the section that declares object types a
+        # package can read (see 'output.IMPORT'), so copying it into
+        # 'dependencies' would take a perfectly good reader declaration and try
+        # to fetch it as a package.
+        #
+        # The two are told apart by what the entries carry, and the markers are
+        # decisive rather than a guess. 'type:' is *required* of a dependency
+        # and its four values name transports; a reader declaration has no
+        # 'type' at all, and could not use one of those words if it did. The
+        # rest are the other transport-only keys, listed so that a
+        # half-finished dependency is still recognised as one.
+        #
+        # A package that hits this is told to rename the section, and nothing is
+        # migrated for it: an automatic rewrite is what made this ambiguous in
+        # the first place.
+        obsolete = self._obsolete_import_entries(self.config_obj.get("import"))
+        if obsolete:
+            raise pc_exception.ObsoleteImportSectionError(
+                "%s: 'import:' now declares object types this package can read, not its dependencies. "
+                "The %s %s %s a dependency, not a reader. Rename the section to 'dependencies:'."
+                % (
+                    name,
+                    "entries" if len(obsolete) > 1 else "entry",
+                    ", ".join("'%s'" % entry for entry in obsolete),
+                    "describe" if len(obsolete) > 1 else "describes",
+                )
             )
-            self.config_obj["dependencies"] = self.config_obj["import"]
-            del self.config_obj["import"]  # Clean up old key
 
         # option: "partcad"
         # description: the version of PartCAD required to handle this package

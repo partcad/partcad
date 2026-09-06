@@ -1,7 +1,7 @@
 # The readers PartCAD ships with: the third-party file formats a package can
 # declare an assembly or a scene as, without writing anything itself.
 #
-# Every subsection of `importers:` below declares one object type. It is the same
+# Every subsection of `import:` below declares one object type. It is the same
 # shape as an `export:` entry and is resolved by the same machinery, which is
 # the point -- reading a format and writing it are one piece of knowledge, and
 # a package that teaches PartCAD one can teach it the other in the same file:
@@ -20,7 +20,7 @@
 #                              `request`.
 #
 # A package overrides any of this by declaring the same type in its own
-# `importers:` section, and replaces the reader outright by naming `path` there.
+# `import:` section, and replaces the reader outright by naming `path` there.
 #
 # What is *not* here is as deliberate as what is. The two scene formats that
 # belong to a simulation engine are declared by that engine's plugin package --
@@ -30,13 +30,13 @@
 # describes a robot rather than any one engine's world, and ROS, MuJoCo,
 # PyBullet and Isaac all read it.
 
-name: //builtin/importers
+name: //builtin/import
 desc: |
   The readers PartCAD ships with: the third-party formats an assembly or a
   scene can be declared as. A package adds one of its own, or replaces one of
-  these, by declaring that type in its own `importers:` section.
+  these, by declaring that type in its own `import:` section.
 
-importers:
+import:
   urdf:
     desc: |
       Unified Robot Description Format: a robot as a tree of links joined by

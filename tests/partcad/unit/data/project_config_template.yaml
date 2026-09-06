@@ -1,4 +1,4 @@
-import:
+dependencies:
 parts:
   {{package_name}}:
     type: cadquery

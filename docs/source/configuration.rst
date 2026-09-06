@@ -2196,20 +2196,20 @@ references:
 It is also the format ``pc sim`` hands a scene to MuJoCo in, and the one
 ``pc open --with mujoco`` converts to; see :ref:`simulate`.
 
-.. _importers:
+.. _import-section:
 
 =========
 Importers
 =========
 
 ``urdf``, ``mjcf`` and ``world`` are not object types PartCAD hard-codes. Each
-is one entry of an ``importers:`` section -- a declaration saying which script
+is one entry of an ``import:`` section -- a declaration saying which script
 reads that format, what its sandbox needs, and which object kinds it may
 produce -- and a package writes one to teach PartCAD a format of its own:
 
 .. code-block:: yaml
 
-  importers:
+  import:
     demo:
       desc: The DemoCAD scene format
       path: read_demo.py           # the reader, in this package
@@ -2249,7 +2249,13 @@ words what the reader counted: every one of these formats describes something a
 static tree cannot hold, and the division of labour is that the *reader* counts
 what it had to drop and the *declaration* says what to call it.
 
-PartCAD ships three of these, in ``//builtin/importers``. ``urdf`` stays there
+The section shares its name with what ``dependencies:`` used to be called, and
+that spelling is now an error rather than a silent migration: a package whose
+``import:`` entries carry a ``type:`` of ``git``/``tar``/``local``/``external``,
+or any of the transport-only keys (``url``, ``relPath``, ``revision``, ...), is
+told to rename the section instead of having its readers fetched as packages.
+
+PartCAD ships three of these, in ``//builtin/import``. ``urdf`` stays there
 because a URDF describes a robot rather than any one engine's world, and ROS,
 MuJoCo, PyBullet and Isaac all read it. ``mjcf`` and ``world`` belong to
 `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ and

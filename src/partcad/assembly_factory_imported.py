@@ -66,10 +66,20 @@ def node_properties(node):
 
 
 class ImportedTypeError(Exception):
-    """The declaration names an 'import:' type that cannot serve it.
+    """Nothing declares an 'import:' type by this name.
 
-    Either nothing declares the type, or what does declare it says it produces
-    a different kind of object than the section it was declared in asks for.
+    Which is to say: an ordinary unknown type. 'factory.instantiate()' catches
+    it and raises its own 'UnknownTypeException', whose message lists what this
+    PartCAD does support - a better answer than anything here could give.
+    """
+
+
+class ImportedKindError(ImportedTypeError):
+    """A type is declared, but not for the kind it was declared as.
+
+    Worth its own message, unlike the case above: the package named something
+    real and put it in the wrong section, and saying which section it belongs
+    in is more use than a list of every type there is.
     """
 
 
@@ -87,7 +97,7 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
             )
         kinds = output.import_kinds(self.impl)
         if self.OBJECT_KIND not in kinds:
-            raise ImportedTypeError(
+            raise ImportedKindError(
                 "the object type '%s' reads %s, so it cannot be declared as %s"
                 % (
                     config.get("type"),

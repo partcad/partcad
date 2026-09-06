@@ -68,7 +68,7 @@ def mocked_git_open():
 
 
 def builtin_import_declaration(format_name: str) -> dict:
-    """One entry of the built-in ``importers:`` section, read off the shipped file.
+    """One entry of the built-in ``import:`` section, read off the shipped file.
 
     The wording of what a reader had to drop, the sandbox it needs and which
     object kinds it may produce all live in that declaration now rather than in
@@ -82,9 +82,9 @@ def builtin_import_declaration(format_name: str) -> dict:
 
     import partcad as pc
 
-    path = os.path.join(os.path.dirname(pc.__file__), "builtin", "importers", "partcad.yaml")
+    path = os.path.join(os.path.dirname(pc.__file__), "builtin", "import", "partcad.yaml")
     with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f)["importers"][format_name]
+        return yaml.safe_load(f)["import"][format_name]
 
 
 def builtin_import_labels(format_name: str) -> dict:
