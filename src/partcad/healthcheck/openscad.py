@@ -164,6 +164,26 @@ class MacOpenSCADCheck(OpenSCADCheck):
         macOS -- so on Apple Silicon it was the wrong build to reach for even
         while it installed.
         """
+        # Homebrew is not on every Mac, and this used to find that out by
+        # execing it: `subprocess.run(["brew", ...])` raises `FileNotFoundError`
+        # rather than returning non-zero, that is not a
+        # `subprocess.CalledProcessError`, and the `except` below did not catch
+        # it. The exception left `fix`, left `run_healthchecks`, and reached the
+        # user as a PyInstaller traceback -- taking every *later* fix with it, so
+        # `pc healthcheck --fix` on a Mac without Homebrew repaired nothing at
+        # all, not even the stale git locks it knows how to clear.
+        #
+        # Asked rather than caught, so the answer is a sentence about what to do
+        # instead: an auto-fix that cannot run is a normal outcome here, not an
+        # error.
+        if shutil.which("brew") is None:
+            pc_logging.error(
+                "Cannot install OpenSCAD automatically: Homebrew is not installed. "
+                "Install OpenSCAD yourself (https://openscad.org/downloads.html), or install "
+                "Homebrew and run 'brew install --cask openscad@snapshot'."
+            )
+            return False
+
         env = os.environ.copy()
         env["HOMEBREW_NO_AUTO_UPDATE"] = "1"
 
@@ -190,6 +210,12 @@ class MacOpenSCADCheck(OpenSCADCheck):
             return True
         except subprocess.CalledProcessError as error:
             pc_logging.error("OpenSCAD installation failed.")
+            pc_logging.debug(error)
+        except OSError as error:
+            # Homebrew disappearing between the check above and the exec, or
+            # being there and not executable. The Linux fixer already ends in a
+            # catch-all for the same reason.
+            pc_logging.error("OpenSCAD installation failed: could not run Homebrew.")
             pc_logging.debug(error)
         return False
 
