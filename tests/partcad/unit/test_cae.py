@@ -407,3 +407,47 @@ def test_a_load_named_for_one_instance_leaves_the_others_unloaded():
     assigned, unmatched = cae.assign_ports(config, records)
     assert [record["port"] for record in assigned] == ["a"]
     assert unmatched == []
+
+
+def test_an_instance_that_does_not_exist_is_reported_even_when_a_sibling_matched():
+    """Two bolts named, one on the object: the other is not quietly dropped.
+
+    A declaration is satisfied per *instance*, not per interface. Counting it as
+    matched because a sibling matched is how a solver ends up holding one bolt of
+    two and answering with a number that looks perfectly reasonable.
+    """
+    config = AnalysisConfig("fea", {"fix": {"rail": ["left", "right"]}})
+    assigned, unmatched = cae.assign_ports(config, [_port("//pkg:rail", "left", "a")])
+    assert [record["port"] for record in assigned] == ["a"]
+    assert unmatched == [("rail", "no instance named right")]
+
+
+def test_the_same_holds_for_a_load_named_per_instance():
+    """`load:` carries a force per instance, and a missing one is a missing force."""
+    config = AnalysisConfig("fea", {"load": {"rail": {"left": "1 N", "right": "2 N"}}})
+    assigned, unmatched = cae.assign_ports(config, [_port("//pkg:rail", "left", "a")])
+    assert [record["port"] for record in assigned] == ["a"]
+    assert unmatched == [("rail", "no instance named right")]
+
+
+def test_every_instance_is_satisfied_by_any_one_of_them():
+    """`fix: [rail]` asks for all of them, so one port matching is a match."""
+    config = AnalysisConfig("fea", {"fix": ["rail"]})
+    assigned, unmatched = cae.assign_ports(config, [_port("//pkg:rail", "left", "a")])
+    assert [record["port"] for record in assigned] == ["a"]
+    assert unmatched == []
+
+
+def test_an_instance_load_and_an_interface_wide_one_are_both_accounted_for():
+    """The instance's own value wins, and the interface-wide one still counts.
+
+    Both are declarations a user wrote, so a warning about either has to depend
+    on whether that one landed somewhere -- not on the other having landed.
+    """
+    config = AnalysisConfig("fea", {"load": {"rail": {EVERY_INSTANCE: "1 N", "left": "2 N"}}})
+    records = [_port("//pkg:rail", "left", "a"), _port("//pkg:rail", "right", "b")]
+    assigned, unmatched = cae.assign_ports(config, records)
+    by_port = {record["port"]: record for record in assigned}
+    assert by_port["a"]["load"] == pytest.approx(2.0)
+    assert by_port["b"]["load"] == pytest.approx(1.0)
+    assert unmatched == []

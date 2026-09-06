@@ -1466,6 +1466,17 @@ class Shape(ShapeConfiguration):
                 "%s failed for %s:%s: %s"
                 % (analysis.upper(), self.project_name, self.name, result.get("exception", "Unknown error"))
             )
+        if not os.path.exists(final_filepath):
+            # The meta-wrapper reports what the script returned and does not look
+            # at the path, so "success" alone is the script's word for it. This
+            # result is handed to a caller that acts on 'filepath' -- the IDE
+            # reads the bytes back, the CLI prints where to find them -- so a
+            # path to nothing is worse than a refusal. The same check
+            # '_convert_to_serialized()' makes of an exporter, for the same reason.
+            raise Exception(
+                "%s produced no model for %s:%s: %s was not written"
+                % (analysis.upper(), self.project_name, self.name, final_filepath)
+            )
         for warning in result.get("warnings") or []:
             pc_logging.warning("%s:%s: %s" % (self.project_name, self.name, warning))
 

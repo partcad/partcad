@@ -357,7 +357,12 @@ def assign_ports(config: AnalysisConfig, records: list) -> tuple[list, list[str]
     than with an error.
     """
     assigned = []
-    matched: set[str] = set()
+    # What actually landed somewhere, as (key, interface, the *instance the
+    # declaration named*). Per instance and not merely per interface: a `fix:`
+    # naming two bolts of which the object has one would otherwise count as
+    # satisfied by the one, and the other would go unheld with nothing said --
+    # which a solver answers with a plausible number rather than an error.
+    matched: set[tuple[str, str, str]] = set()
     # Which declared interfaces exist on the object at all, whatever instance
     # they carry. What tells "not implemented" from "no such instance".
     interfaces_seen: set[str] = set()
@@ -374,22 +379,27 @@ def assign_ports(config: AnalysisConfig, records: list) -> tuple[list, list[str]
         for name, instances in config.fixtures.items():
             if not _matches(interface, name):
                 continue
-            if EVERY_INSTANCE in instances or instance in instances:
-                entry = entry or dict(record)
-                entry["fix"] = True
-                matched.add("fix:" + name)
+            # Both spellings are recorded when both apply, because both are
+            # declarations a user could have got wrong on their own.
+            held = [one for one in (EVERY_INSTANCE, instance) if one in instances]
+            if not held:
+                continue
+            matched.update(("fix", name, one) for one in held)
+            entry = entry or dict(record)
+            entry["fix"] = True
 
         for name, values in config.loads.items():
             if not _matches(interface, name):
                 continue
-            amount = values.get(instance)
-            if amount is None:
-                amount = values.get(EVERY_INSTANCE)
+            # The instance's own value wins over the interface-wide one, so it
+            # is the one that counts as used.
+            declared = instance if instance in values else EVERY_INSTANCE
+            amount = values.get(declared)
             if amount is None:
                 continue
+            matched.add(("load", name, declared))
             entry = entry or dict(record)
             entry["load"] = amount
-            matched.add("load:" + name)
 
         if entry is not None:
             entry.setdefault("fix", False)
@@ -398,17 +408,17 @@ def assign_ports(config: AnalysisConfig, records: list) -> tuple[list, list[str]
 
     unmatched = []
     for key, declared in (("fix", config.fixtures), ("load", config.loads)):
-        for name in declared:
-            if "%s:%s" % (key, name) in matched:
+        for name, wanted in declared.items():
+            # `fix:` holds a list of instance names and `load:` a map of them to
+            # forces; iterating either yields the names, which is all this needs.
+            missing = [one for one in wanted if (key, name, one) not in matched]
+            if not missing:
                 continue
-            if name in interfaces_seen:
-                wanted = declared[name] if key == "fix" else list(declared[name])
-                named = ", ".join(sorted(str(one) for one in wanted if one != EVERY_INSTANCE))
-                unmatched.append(
-                    (name, "no instance named %s" % named if named else "it names no instance of it")
-                )
-            else:
+            if name not in interfaces_seen:
                 unmatched.append((name, "this object does not implement it"))
+                continue
+            named = ", ".join(sorted(str(one) for one in missing if one != EVERY_INSTANCE))
+            unmatched.append((name, "no instance named %s" % named if named else "it names no instance of it"))
     return assigned, unmatched
 
 
