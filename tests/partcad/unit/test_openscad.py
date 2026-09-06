@@ -115,6 +115,12 @@ def homebrew(tmp_path, monkeypatch):
     installing, ``fix`` deletes cached ``*openscad*.dmg`` files out of the real
     Homebrew download directory, which is not something a unit test may do to
     the machine running it.
+
+    ``shutil.which`` is answered as well, because ``fix`` now asks whether
+    Homebrew is there before reaching for it -- and the machines this suite runs
+    on, the Linux CI runners included, mostly do not have it. Without this the
+    fixture would describe a Mac that cannot install anything, which is what the
+    two tests below are specifically not about.
     """
     calls = []
 
@@ -128,6 +134,7 @@ def homebrew(tmp_path, monkeypatch):
 
     monkeypatch.setattr(pc_openscad.subprocess, "run", _run)
     monkeypatch.setattr(pc_openscad.Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(pc_openscad.shutil, "which", lambda name: "/opt/homebrew/bin/brew")
     return calls
 
 
@@ -142,6 +149,44 @@ def test_macos_install_does_not_let_homebrew_update_itself(homebrew):
     pc_openscad.MacOpenSCADCheck().fix()
     _, kwargs = homebrew[0]
     assert kwargs["env"]["HOMEBREW_NO_AUTO_UPDATE"] == "1"
+
+
+# What the fix does when Homebrew is not there at all.
+#
+# The tests above replace `subprocess.run`, so they never exec anything and
+# never noticed that the real call raises `FileNotFoundError` on a Mac without
+# Homebrew -- which is most Macs that have just installed the standalone IDE.
+# `pc healthcheck --fix` ended in a PyInstaller traceback, and took every fix
+# after it down with it.
+
+
+def test_macos_says_what_to_do_when_homebrew_is_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr(pc_openscad.shutil, "which", lambda name: None)
+    monkeypatch.setattr(pc_openscad.Path, "home", staticmethod(lambda: tmp_path))
+
+    def _never(*args, **kwargs):
+        raise AssertionError("Homebrew is absent; nothing should have been executed")
+
+    monkeypatch.setattr(pc_openscad.subprocess, "run", _never)
+    assert pc_openscad.MacOpenSCADCheck().fix() is False
+
+
+def test_macos_fix_does_not_raise_when_brew_cannot_be_executed(monkeypatch, tmp_path):
+    """`which` found it and the exec still failed -- a race, or a bad +x bit."""
+    monkeypatch.setattr(pc_openscad.shutil, "which", lambda name: "/opt/homebrew/bin/brew")
+    monkeypatch.setattr(pc_openscad.Path, "home", staticmethod(lambda: tmp_path))
+
+    def _missing(*args, **kwargs):
+        raise FileNotFoundError(2, "No such file or directory: 'brew'")
+
+    monkeypatch.setattr(pc_openscad.subprocess, "run", _missing)
+    assert pc_openscad.MacOpenSCADCheck().fix() is False
+
+
+def test_macos_still_installs_when_homebrew_is_present(homebrew):
+    """The guard does not get in the way of the machines that can install."""
+    assert pc_openscad.MacOpenSCADCheck().fix() is True
+    assert [command for command, _ in homebrew] == [["brew", "install", "--cask", "openscad@snapshot"]]
 
 
 # Where each platform's payload sits inside the bundle. Every test above builds
