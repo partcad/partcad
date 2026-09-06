@@ -329,20 +329,34 @@ def test_a_part_that_declares_nothing_is_not_checked(package, monkeypatch):
     assert asyncio.run(CaeTest(cae.CFD).test([], package, part)) is CaeTest.TEST_PASSED
 
 
-def test_an_analysis_that_could_not_run_is_not_a_pass(package, monkeypatch, caplog):
-    """No solver on this machine is not a verdict on the part -- and not a pass.
+def test_an_analysis_that_could_not_run_is_skipped_loudly(package, monkeypatch, caplog):
+    """No solver on this machine is not a verdict on the part, so not a failure.
 
-    The part was asked about and has not been answered, which is the one thing
-    the check must never report as "fine".
+    PartCAD ships no solver and the default implementation needs a native binary,
+    so failing here would make declaring `fea:` break `pc test` for everyone who
+    has not installed CalculiX -- including this repository's own examples. The
+    check does not apply on such a machine, and says so.
     """
     import asyncio
 
     part = _bracket(package)
     _analysis(part, monkeypatch, error=Exception("ccx: not found"))
-    with caplog.at_level("ERROR"):
-        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_FAILED
-    assert "FEA could not be run" in caplog.text
+    with caplog.at_level("WARNING"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_PASSED
+    # Loudly: a silent pass would read as "this part was analysed".
+    assert "was not run" in caplog.text
     assert "ccx: not found" in caplog.text
+
+
+def test_a_skipped_analysis_is_not_reported_as_an_error(package, monkeypatch, caplog):
+    """It is a property of the machine, so it must not read as a failed part."""
+    import asyncio
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, error=Exception("ccx: not found"))
+    with caplog.at_level("WARNING"):
+        asyncio.run(CaeTest(cae.FEA).test([], package, part))
+    assert not [record for record in caplog.records if record.levelname == "ERROR"]
 
 
 def test_a_configuration_error_from_the_analysis_reads_as_one(package, monkeypatch, caplog):

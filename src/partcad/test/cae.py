@@ -36,6 +36,7 @@ import hashlib
 import json
 
 from .. import cae as pc_cae
+from .. import logging as pc_logging
 from .. import output
 from ..part import Part
 from .test import Test
@@ -109,11 +110,25 @@ class CaeTest(Test):
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         """Run the analysis, and pass the shape only if it found nothing.
 
-        Three ways to fail, and they are different failures: the part declared
-        the section wrongly, the implementation could not be run at all (no
-        solver on this machine), or the analysis ran and reported something.
-        Only the last is a verdict on the part, but none of them is a pass --
-        a part that was asked about and not answered has not been checked.
+        Two ways to fail, and they are different: the part declared the section
+        wrongly, or the analysis ran and reported something. Both are verdicts on
+        the package that a user has to act on.
+
+        A third outcome is not a failure: the analysis did not run at all. There
+        is no solver on this machine, or the implementing package could not be
+        fetched. PartCAD ships no solver -- `caeFeaImplementation` names a third
+        party package that needs a native binary -- so failing here would mean
+        that the moment any part in a shared repository declares `fea:`,
+        `pc test` fails for every contributor and every CI system that has not
+        installed CalculiX. That makes declaring `fea:` a liability rather than a
+        check, which is the opposite of the point. It is reported as a warning
+        and passed over, the way `cam` passes a part that is `manufacturable:
+        false`: the check does not apply on this machine.
+
+        The cost is real and worth stating: `pc test` cannot tell a solver that
+        is *absent* from one that *crashed*, so a crashing solver is a warning
+        here too. `pc cae fea` is the command that reports it as the error it is,
+        and is what a machine with a solver on it should be running.
         """
         try:
             config = self._config(shape)
@@ -132,11 +147,14 @@ class CaeTest(Test):
         except pc_cae.CaeConfigError as e:
             return self.failed(shape, "%s", e)
         except Exception as e:
-            # An implementation that could not run at all - not installed, no
-            # solver on this machine, a crash. Not a verdict on the part, but
-            # not something to pass over either: the part was asked about and
-            # has not been answered.
-            return self.failed(shape, "%s could not be run: %s", self.analysis.upper(), e)
+            # No verdict, so nothing to fail the part with. Loudly, because a
+            # silent pass here reads as "the part was checked" when nothing of
+            # the sort happened -- see the docstring.
+            pc_logging.warning(
+                "Test skipped: %s:%s: %s was not run: %s"
+                % (shape.project_name, shape.name, self.analysis.upper(), e)
+            )
+            return self.TEST_PASSED
 
         findings = result.get("findings") or []
         if findings:

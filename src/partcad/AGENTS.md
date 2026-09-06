@@ -146,6 +146,12 @@ isort --check src/partcad tests/partcad
   `pc test -r` over a package tree must not start a solver for every bolt in it, and a bolt with no `fea:` has
   nothing to tell one. Declaring `fea:` is how a user asks for the check, which is why it needs no flag.
 
+  A second gate is the machine: an analysis that could not run at all -- no solver installed, the implementing
+  package not fetched -- is reported as skipped and passed, not failed. PartCAD ships no solver, so the other
+  way round would mean that one part declaring `fea:` breaks `pc test` for everyone without CalculiX, this
+  repository's own `examples/feature_cae` included. The cost is that a solver which *crashes* is skipped too,
+  because nothing here can tell that from one that is absent; `pc cae` is where that is an error.
+
 - **Drawing ports and interfaces** (`./src/partcad/render_overlay.py`, `./src/partcad/wrappers/stroke_text.py`):
   `pc render --with-ports`/`--with-interfaces` draws the connection metadata on top of a projection.
   `render_overlay.py` answers only *where* the ports are — a lookup for a part, a walk for an assembly (and so

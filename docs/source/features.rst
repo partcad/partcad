@@ -122,7 +122,13 @@ What comes back is two things: the model, written to
 and the **findings** -- a JSON array of what the analysis has to say about the
 part. ``pc test`` gains an ``fea`` and a ``cfd`` check that fail a part whose
 analysis produced any finding, and they apply only to a part that declares the
-matching section, so a package of bolts pays nothing for them.
+matching section, so a package of bolts pays nothing for them. Where no solver is
+installed they report that they did not run, and pass: the absence is a property
+of the machine rather than of the part.
+
+``examples/feature_cae`` is the pair of cases to check an implementation against
+— a cantilever and a pipe, each with a closed-form answer to compare the solver
+with.
 
 See :ref:`pc cae <cae>` for the command and the units it accepts.
 

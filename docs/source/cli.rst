@@ -313,7 +313,9 @@ Object commands
 
   ``pc test`` runs the same analyses. Its ``fea`` and ``cfd`` tests apply to a part that declares the matching
   section — and to nothing else, so a package of bolts pays nothing for them — and fail it when the analysis
-  produces any finding.
+  produces any finding. A machine with no solver installed is not a failure: the check reports that it did not
+  run and passes, because PartCAD ships no solver and declaring ``fea:`` must not break ``pc test`` for every
+  contributor who has not installed one. ``pc cae`` is what reports a missing solver as the error it is.
 
 ``pc convert``
   Convert parts, sketches, assemblies or scenes to another format and update their type in the package.
