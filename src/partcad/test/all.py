@@ -40,7 +40,7 @@ def tests(concurrency_cap: int) -> list[Test]:
                 CamFormingTest(),
                 ConnectTest(),
                 # Only ever run for a part that declares the matching section;
-                # see 'cae_test.CaeTest'. A package with no 'fea:'/'cfd:' in
+                # see 'test/cae.py'. A package with no 'fea:'/'cfd:' in
                 # it pays nothing for these two being here.
                 FeaTest(),
                 CfdTest(),

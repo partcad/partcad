@@ -24,12 +24,19 @@ Two things bound how expensive this is, and both are the same gate:
 Everything else - which implementation, what the boundary conditions mean, what
 units they are in - is `partcad.cae` and `Shape.analyze_async()`, shared with
 `pc cae fea` so that the test and the command cannot disagree about a part.
+
+Named after what it checks, like `cam.py` and `connect.py` beside it, and
+emphatically *not* `cae_test.py`: that matches pytest's default `*_test.py`
+pattern, so any collection that reaches `src/` imports this module as a test
+file -- under a package name that does not resolve -- and the run dies during
+collection rather than running anything.
 """
 
 import hashlib
 import json
 
 from .. import cae as pc_cae
+from .. import output
 from ..part import Part
 from .test import Test
 
@@ -65,9 +72,14 @@ class CaeTest(Test):
           re-tunes a solver's parameters has changed the question as surely as
           changing the load would.
 
-        The last of those is read as the *declared* text and not as anything
-        computed from running it - re-running the analysis to decide whether a
-        cached answer may be used would cost precisely what the cache saves.
+        The last of those is the options as `analysis_getopts()` resolves them,
+        which is the whole layering and not just the object's own `cae:`
+        section: the implementing package's defaults are most of what a solver
+        is told, and a package that re-tunes one of them would otherwise be
+        answered with the verdict from before it did. They are read as the
+        *declared* text and not as anything computed from running it -
+        re-running the analysis to decide whether a cached answer may be used
+        would cost precisely what the cache saves.
         """
         try:
             config = self._config(shape)
@@ -78,12 +90,20 @@ class CaeTest(Test):
         if config is None:
             return ""
 
-        from partcad_utils.user_config import user_config
-
-        parts = [json.dumps(config.to_data(), sort_keys=True), user_config.cae_implementation(self.analysis)]
-        section = (shape.config or {}).get("cae")
-        if section:
-            parts.append(json.dumps(section, sort_keys=True, default=str))
+        parts = [json.dumps(config.to_data(), sort_keys=True)]
+        try:
+            options_project, format_name = shape._analysis_implementation(ctx, self.analysis, None)
+            parts.append("%s:%s" % (options_project.name, format_name))
+            opts, _output_dir = shape._output_getopts(
+                ctx, format_name, output.CAE, ctx.get_project(shape.project_name), options_project
+            )
+            parts.append(json.dumps(opts, sort_keys=True, default=str))
+        except Exception as e:
+            # The implementation could not be resolved -- not installed, not a
+            # dependency, misspelt. That is its own question and its own answer,
+            # so it gets its own key rather than borrowing the one belonging to
+            # a run that did resolve.
+            parts.append("unresolved:%s" % e)
         return "." + self.analysis + "=" + hashlib.md5("\n".join(parts).encode()).hexdigest()
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:

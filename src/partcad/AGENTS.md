@@ -124,7 +124,7 @@ isort --check src/partcad tests/partcad
   spec (see "Packaging" in the root [AGENTS.md](../../AGENTS.md)). The requirement strings there are the versions
   `sandbox_versions.py` pins, which `tests/partcad/unit/test_output.py` enforces.
 
-- **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae_test.py`):
+- **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae.py`):
   `pc cae fea`/`pc cae cfd` are a third output section, `cae:`, resolved by the very code that resolves
   `export:` and `render:` -- same `path`/`package`, same sandbox, same meta-wrapper (`wrapper_export.py`), and
   `Shape._run_implementation_async()` is the body all three share. It is deliberately **not** in

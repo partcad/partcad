@@ -29,6 +29,7 @@ import pytest
 
 import partcad as pc
 from partcad import cae, output
+from partcad.test.cae import CaeTest
 
 EXAMPLES = "examples"
 
@@ -160,12 +161,29 @@ def test_an_implementation_that_says_no_extension_is_refused(package, tmp_path):
 
 def test_the_default_implementation_comes_from_the_user_configuration(package, monkeypatch):
     """'pc cae fea :bracket' works in a package that says nothing about solvers."""
-    from partcad_utils.user_config import user_config
-
-    monkeypatch.setattr(user_config, "cae_fea_implementation", "//cae-test:fea", raising=False)
+    monkeypatch.setattr(package.user_config, "cae_fea_implementation", "//cae-test:fea")
     part = _bracket(package)
     project, format_name = part._analysis_implementation(package, cae.FEA, None)
     assert (project.name, format_name) == ("//cae-test", "fea")
+
+
+def test_the_default_comes_from_the_context_and_not_the_process(package, monkeypatch):
+    """A daemon builds its context from the *caller's* configuration.
+
+    Its own is whatever the environment held when something first started it, so
+    reading the process-wide singleton here would run the analysis under the
+    daemon's default while `cae.defaults` -- which the IDE pre-fills its field
+    from -- reported the caller's. The two would disagree silently, and the
+    field would name a solver that did not run.
+    """
+    from partcad_utils.user_config import user_config as process_wide
+
+    monkeypatch.setattr(process_wide, "cae_fea_implementation", "//wrong:fea")
+    monkeypatch.setattr(package.user_config, "cae_fea_implementation", "//cae-test:fea")
+
+    part = _bracket(package)
+    project, _format_name = part._analysis_implementation(package, cae.FEA, None)
+    assert project.name == "//cae-test"
 
 
 def test_an_implementation_may_be_named_for_one_run(package):
@@ -200,10 +218,37 @@ def test_an_implementation_package_that_did_not_load_says_so(package, monkeypatc
     by a distance.
     """
     project = package.get_project("//cae-test")
-    monkeypatch.setattr(project, "broken", True, raising=False)
+    monkeypatch.setattr(project, "broken", True)
     part = _bracket(package)
     with pytest.raises(Exception, match="did not load"):
         part._analysis_implementation(package, cae.FEA, "//cae-test:fea")
+
+
+def test_the_cache_key_follows_the_implementations_own_options(package, tmp_path, monkeypatch):
+    """A solver parameter is part of the question, so it has to move the key.
+
+    Most of what a solver is told comes from the *implementing* package's
+    defaults rather than from the object's own `cae:` section, so a key built
+    from the object's section alone would answer a re-tuned mesh size with the
+    verdict from before it was re-tuned.
+    """
+    monkeypatch.setattr(package.user_config, "cae_fea_implementation", "//cae-test:fea")
+    before = CaeTest(cae.FEA).cache_key_suffix(package, _bracket(package))
+
+    (tmp_path / "partcad.yaml").write_text(PACKAGE.replace("iterations: 3", "iterations: 9"))
+    retuned = pc.Context(str(tmp_path))
+    retuned.user_config.cae_fea_implementation = "//cae-test:fea"
+    after = CaeTest(cae.FEA).cache_key_suffix(retuned, retuned.get_part(":bracket"))
+
+    assert before and after and before != after
+
+
+def test_the_cache_key_is_its_own_when_the_implementation_does_not_resolve(package, monkeypatch):
+    """An unresolved implementation is its own answer and must not borrow a real one's key."""
+    monkeypatch.setattr(package.user_config, "cae_fea_implementation", "//nowhere:fea")
+    key = CaeTest(cae.FEA).cache_key_suffix(package, _bracket(package))
+    monkeypatch.setattr(package.user_config, "cae_fea_implementation", "//cae-test:fea")
+    assert key != CaeTest(cae.FEA).cache_key_suffix(package, _bracket(package))
 
 
 def test_the_part_declaration_is_read_as_boundary_conditions(package):

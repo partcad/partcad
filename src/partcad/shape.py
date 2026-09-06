@@ -930,13 +930,14 @@ class Shape(ShapeConfiguration):
             if builtin_package is None:
                 # 'cae:' has no built-in package to fall back to, so an
                 # unresolved implementation means the configured one was not
-                # found rather than that somebody forgot a 'path'. Say which
-                # knob names it, since it is a user-configuration default rather
-                # than anything in the package being analysed.
+                # found rather than that somebody forgot a 'path'. Name both
+                # knobs and say which is which: the user configuration holds the
+                # default, and '--implementation' overrides one run.
                 raise Exception(
                     "No implementation of '%s' is declared. Name one in a 'cae:' section, "
-                    "or set the default with 'pc cae %s --implementation <package>:<type>'"
-                    % (impl.format_name, impl.format_name)
+                    "override it for one run with 'pc cae %s --implementation <package>:<type>', "
+                    "or set the default in the 'cae%sImplementation' user configuration option"
+                    % (impl.format_name, impl.format_name, impl.format_name.capitalize())
                 )
             raise Exception(
                 "No implementation of '%s' is declared: neither %s nor this package provides a 'path'"
@@ -1314,9 +1315,14 @@ class Shape(ShapeConfiguration):
         says which declaration in the implementing package to read.
         """
         if not implementation:
-            from partcad_utils.user_config import user_config
-
-            implementation = user_config.cae_implementation(analysis)
+            # The *context's* configuration, not the process-wide singleton. A
+            # daemon builds its context from the caller's configuration (see
+            # 'operations.context_create'), and its own is whatever the
+            # environment held when something first started it. Reading the
+            # singleton here would run the analysis under the daemon's default
+            # while 'cae.defaults' -- which the IDE pre-fills its field from --
+            # reported the caller's.
+            implementation = ctx.user_config.cae_implementation(analysis)
         implementation = str(implementation).strip()
         if not implementation:
             raise Exception("No '%s' implementation is configured" % analysis)
@@ -1368,13 +1374,15 @@ class Shape(ShapeConfiguration):
             ) from e
 
         assigned, unmatched = pc_cae.assign_ports(config, records)
-        for name in unmatched:
-            # A boundary condition that names an interface the part does not
-            # implement is silently doing nothing, and a solver told to hold
-            # nothing still answers with nonsense rather than with an error.
+        for name, reason in unmatched:
+            # A boundary condition that matched no port is silently doing
+            # nothing, and a solver told to hold nothing still answers with
+            # nonsense rather than with an error. The reason is carried rather
+            # than assumed: a misspelt *instance* name reads very differently
+            # from an interface the object never implements.
             pc_logging.warning(
-                "%s:%s: '%s:' names the interface '%s', which this object does not implement"
-                % (self.project_name, self.name, config.analysis, name)
+                "%s:%s: '%s:' names the interface '%s', but %s"
+                % (self.project_name, self.name, config.analysis, name, reason)
             )
         if not assigned:
             raise pc_cae.CaeConfigError(

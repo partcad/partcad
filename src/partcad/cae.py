@@ -171,7 +171,12 @@ def _instance_names(value, what: str) -> list[str]:
         for item in value:
             if not isinstance(item, str):
                 raise CaeConfigError("%s names an instance that is not a name: %r" % (what, item))
-        return list(value) if value else [EVERY_INSTANCE]
+        if not value:
+            # Not the same as `None`. Writing nothing under an interface says
+            # "all of it"; writing an empty list is naming the instances and
+            # then naming none, which is what `load: {}` is already refused for.
+            raise CaeConfigError("%s names no instance" % what)
+        return list(value)
     raise CaeConfigError("%s is neither an interface instance nor a list of them: %r" % (what, value))
 
 
@@ -342,18 +347,29 @@ def assign_ports(config: AnalysisConfig, records: list) -> tuple[list, list[str]
     reads as each of them carrying it, which is the conservative reading and the
     one a user checking a bracket wants.
 
-    Returns the assigned records and the declarations nothing matched, which the
-    caller reports: an interface named in `fix:` that the part does not implement
-    is a boundary condition silently doing nothing, and that is worth a warning
-    every time.
+    Returns the assigned records and the declarations nothing matched, as
+    `(name, reason)` pairs. The reason matters: an interface the part does not
+    implement at all and an interface whose *named instance* does not exist are
+    both silent no-ops, and reporting the first for the second hides a misspelt
+    instance name behind a sentence saying the interface is missing. Either way
+    it is a boundary condition doing nothing, which is worth a warning every
+    time -- a solver told to hold nothing still answers with nonsense rather
+    than with an error.
     """
     assigned = []
     matched: set[str] = set()
+    # Which declared interfaces exist on the object at all, whatever instance
+    # they carry. What tells "not implemented" from "no such instance".
+    interfaces_seen: set[str] = set()
 
     for record in records:
         interface = record.get("interface")
         instance = record.get("instance") or ""
         entry = None
+
+        for name in config.interfaces:
+            if _matches(interface, name):
+                interfaces_seen.add(name)
 
         for name, instances in config.fixtures.items():
             if not _matches(interface, name):
@@ -380,8 +396,19 @@ def assign_ports(config: AnalysisConfig, records: list) -> tuple[list, list[str]
             entry.setdefault("load", 0.0)
             assigned.append(entry)
 
-    unmatched = [name for name in config.fixtures if "fix:" + name not in matched]
-    unmatched += [name for name in config.loads if "load:" + name not in matched]
+    unmatched = []
+    for key, declared in (("fix", config.fixtures), ("load", config.loads)):
+        for name in declared:
+            if "%s:%s" % (key, name) in matched:
+                continue
+            if name in interfaces_seen:
+                wanted = declared[name] if key == "fix" else list(declared[name])
+                named = ", ".join(sorted(str(one) for one in wanted if one != EVERY_INSTANCE))
+                unmatched.append(
+                    (name, "no instance named %s" % named if named else "it names no instance of it")
+                )
+            else:
+                unmatched.append((name, "this object does not implement it"))
     return assigned, unmatched
 
 

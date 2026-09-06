@@ -227,7 +227,7 @@ def test_assign_ports_does_not_match_another_package_when_qualified():
     config = AnalysisConfig("fea", {"fix": ["//pkg:m3-screw"]})
     assigned, unmatched = cae.assign_ports(config, [_port("//other:m3-screw")])
     assert assigned == []
-    assert unmatched == ["//pkg:m3-screw"]
+    assert unmatched == [("//pkg:m3-screw", "this object does not implement it")]
 
 
 def test_assign_ports_selects_named_instances():
@@ -267,7 +267,33 @@ def test_assign_ports_reports_what_nothing_matched():
     config = AnalysisConfig("fea", {"fix": ["absent"], "load": {"also-absent": "1 N"}})
     assigned, unmatched = cae.assign_ports(config, [_port("//pkg:rail")])
     assert assigned == []
-    assert sorted(unmatched) == ["absent", "also-absent"]
+    assert sorted(unmatched) == [
+        ("absent", "this object does not implement it"),
+        ("also-absent", "this object does not implement it"),
+    ]
+
+
+def test_a_misspelt_instance_is_not_reported_as_a_missing_interface():
+    """The two are different mistakes and read very differently.
+
+    Saying "this object does not implement m3-screw" about an object that
+    implements it, because the *instance* was misspelt, sends the reader to look
+    at `implements:` for something that is already there.
+    """
+    config = AnalysisConfig("fea", {"fix": {"rail": ["lefft"]}})
+    assigned, unmatched = cae.assign_ports(config, [_port("//pkg:rail", "left")])
+    assert assigned == []
+    assert unmatched == [("rail", "no instance named lefft")]
+
+
+def test_an_empty_fix_instance_list_is_refused():
+    """`rail:` with nothing under it is every instance; `rail: []` is none.
+
+    The second is naming the instances and then naming none, which is what
+    `load: {}` is already refused for.
+    """
+    with pytest.raises(CaeConfigError, match="names no instance"):
+        AnalysisConfig("fea", {"fix": {"rail": []}})
 
 
 def test_assign_ports_leaves_out_the_ports_nothing_names():

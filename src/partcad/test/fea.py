@@ -5,7 +5,7 @@
 #
 
 from .. import cae as pc_cae
-from .cae_test import CaeTest
+from .cae import CaeTest
 
 
 class FeaTest(CaeTest):
