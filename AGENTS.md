@@ -114,15 +114,6 @@ a CAD addon, or documentation.
   `ide/vscode` it is a thin client of the JSON-RPC service (the standalone PyInstaller bundle), because
   FreeCAD's embedded Python cannot host `partcad` itself.
 
-* [dev-tools/cae-calculix/](./dev-tools/cae-calculix/README.md):
-
-  The [CalculiX](https://www.calculix.de/) implementations of `pc cae fea` and `pc cae cfd` -- the default
-  `caeFeaImplementation`/`caeCfdImplementation`. **Staged here, not published from here**: it is a PartCAD
-  package rather than part of the wheel, and it is destined for `partcad/partcad-cae-calculix`, reached
-  through the public index as `//pub/feature/cae/calculix` the way `//pub/feature/render/draftwright` is.
-  Nothing in this repository builds, tests or ships it; its README says how to publish it. It sits under
-  `dev-tools/` for the same reason the shim below does -- a distributable thing that is not the wheel.
-
 * [dev-tools/shim/](./dev-tools/shim/pyproject.toml):
 
   The `partcad-cli` compatibility package: no modules, no entry points, one dependency on `partcad`. It exists

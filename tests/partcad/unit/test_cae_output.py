@@ -185,6 +185,23 @@ def test_a_missing_implementation_package_says_which_one(package):
         part._analysis_implementation(package, cae.FEA, "//nowhere:fea")
 
 
+def test_an_implementation_package_that_did_not_load_says_so(package, monkeypatch):
+    """A package that failed to load is reported as that, not as a bad declaration.
+
+    A broken package is not None -- it resolves, carrying an empty configuration
+    -- so without this guard the next thing to go wrong is 'analysis_getopts'
+    reporting that the implementation declared no 'extension:', which sends the
+    reader to look at a file that was never read. A git dependency that could
+    not be fetched is what this looks like in practice, and is the common case
+    by a distance.
+    """
+    project = package.get_project("//cae-test")
+    monkeypatch.setattr(project, "broken", True, raising=False)
+    part = _bracket(package)
+    with pytest.raises(Exception, match="did not load"):
+        part._analysis_implementation(package, cae.FEA, "//cae-test:fea")
+
+
 def test_the_part_declaration_is_read_as_boundary_conditions(package):
     part = _bracket(package)
     config = cae.config_of(part, cae.FEA)

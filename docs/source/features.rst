@@ -112,7 +112,9 @@ declared in a ``cae:`` section exactly as an export or a render implementation i
 declared in its own (see :ref:`cae-section`), and named by the
 ``caeFeaImplementation`` / ``caeCfdImplementation`` user configuration options --
 ``//pub/feature/cae/calculix:fea`` and ``//pub/feature/cae/calculix:cfd`` by
-default. ``pc cae fea --implementation`` overrides it for one run, and so does
+default, which are `CalculiX <https://www.calculix.de/>`_ (see
+`partcad-cae-calculix <https://github.com/partcad/partcad-cae-calculix>`_ for
+what it needs installed and what every parameter means). ``pc cae fea --implementation`` overrides it for one run, and so does
 the field over the model in the IDE's FEA tab.
 
 What comes back is two things: the model, written to

@@ -1335,6 +1335,19 @@ class Shape(ShapeConfiguration):
                 "The package implementing '%s' is not found: %s. "
                 "Add it to this package's 'dependencies:', or name another one." % (analysis, package)
             )
+        if getattr(options_project, "broken", False):
+            # A package that failed to load answers every question about itself
+            # with nothing, so without this the next thing to go wrong is
+            # 'analysis_getopts' reporting that the implementation declared no
+            # 'extension:' -- which sends the reader to look at a file that was
+            # never read. Whatever went wrong is already in the log above; what
+            # is worth saying here is which package it was and that this is why
+            # the analysis is not running.
+            raise Exception(
+                "The package implementing '%s' did not load: %s. "
+                "The reason is reported above; a dependency that could not be fetched is the usual one."
+                % (analysis, options_project.name)
+            )
         return options_project, format_name
 
     async def _analysis_boundary_async(self, ctx, config):
