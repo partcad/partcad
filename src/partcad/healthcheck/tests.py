@@ -107,7 +107,21 @@ def run_healthchecks(filters: str = None, fix: bool = False, dry_run: bool = Fal
                     report.warning(test.findings)
                     if fix and test.auto_fixable():
                         report.debug("Attempting to fix issues...")
-                        report.fixed = test.fix()
+                        # A fix that raises is a failed fix, not the end of the
+                        # run. It was the end of the run: the macOS OpenSCAD fix
+                        # exec'd a Homebrew that was not installed, the
+                        # `FileNotFoundError` came out here, and `--fix` died
+                        # before reaching any of the checks after it -- so a Mac
+                        # with no Homebrew could not clear its stale git locks
+                        # either, for a reason that had nothing to do with them.
+                        # Each fix is independent and the caller asked for all of
+                        # them.
+                        try:
+                            report.fixed = test.fix()
+                        except Exception as error:
+                            report.fixed = False
+                            report.error(f"Auto fix raised: {error}")
+                            pc_logging.exception(f"Healthcheck '{test.name}' failed while fixing")
                         if report.fixed:
                             report.info(f"Auto fix successful")
                         else:
