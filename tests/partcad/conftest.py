@@ -65,3 +65,28 @@ def mocked_git_open():
         return patch("partcad.project_factory_git.open", mock_open(read_data=""), create=True)
 
     return _patch
+
+
+def builtin_import_declaration(format_name: str) -> dict:
+    """One entry of the built-in ``importers:`` section, read off the shipped file.
+
+    The wording of what a reader had to drop, the sandbox it needs and which
+    object kinds it may produce all live in that declaration now rather than in
+    a Python constant, so a test that checks any of them has to read the file
+    PartCAD actually ships. Reading it directly, rather than through a context,
+    is deliberate: the declaration is the artifact under test.
+    """
+    import os
+
+    import yaml
+
+    import partcad as pc
+
+    path = os.path.join(os.path.dirname(pc.__file__), "builtin", "importers", "partcad.yaml")
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f)["importers"][format_name]
+
+
+def builtin_import_labels(format_name: str) -> dict:
+    """How the built-in declaration words each counter a reader can report."""
+    return builtin_import_declaration(format_name).get("dropped") or {}

@@ -53,7 +53,6 @@ import pyexpat  # noqa: F401
 sys.path.append(os.path.dirname(__file__))
 import primitive_shapes  # noqa: E402
 import urdf_common  # noqa: E402
-import wrapper_common  # noqa: E402
 
 # Mesh formats a URDF may name, mapped to the PartCAD part type that reads them.
 # COLLADA (.dae) is deliberately absent: it is common in URDF and PartCAD has no
@@ -774,8 +773,8 @@ def unsupported(context, message):
     context["warnings"].append(message)
 
 
-def process(request):
-    urdf_file = request["urdf_file"]
+def process(path, request):  # pylint: disable=unused-argument
+    urdf_file = request["source_file"]
     if not os.path.isfile(urdf_file):
         raise FileNotFoundError(urdf_file)
 
@@ -798,7 +797,7 @@ def process(request):
         # and a rendered one sits in PartCAD's state directory while the
         # meshes it names sit beside the file the package declared.
         "urdf_dir": request.get("base_dir") or os.path.dirname(os.path.abspath(urdf_file)),
-        "package_paths": list(request.get("package_paths") or []),
+        "package_paths": list(request.get("search_paths") or []),
         "output_folder": request["output_folder"],
         "precision": request.get("precision", 6),
         "ignore_collision": ignore_collision,
@@ -866,6 +865,7 @@ def process(request):
             % (reference or "the robot as a whole"),
         )
 
+    movable = [{"name": joint.name, "type": joint.type} for joint in robot.joints if joint.type != "fixed"]
     return {
         "root": root,
         "robot_name": robot.name,
@@ -874,19 +874,13 @@ def process(request):
         "joints": joints,
         "warnings": warnings,
         "dropped": dropped.summary(),
-        "movable_joints": [{"name": joint.name, "type": joint.type} for joint in robot.joints if joint.type != "fixed"],
+        "movable_joints": movable,
+        # What 'pc info' shows about the URDF itself, already worded: a reader
+        # speaks its format's vocabulary, and 'Robot' and 'RootLink' are that
+        # vocabulary. Everything above is data for 'pc convert'.
+        "info": {
+            "Robot": robot.name,
+            "RootLink": root_name,
+            "UrdfMovableJoints": ["%s (%s)" % (joint["name"], joint["type"]) for joint in movable],
+        },
     }
-
-
-if __name__ == "__main__":
-    # argv[1] carries the operation name for readability in process listings; the
-    # authoritative request travels via stdin.
-    _, request = wrapper_common.handle_input()
-    try:
-        model = process(request)
-        model["success"] = True
-        model["exception"] = None
-    except Exception as e:
-        wrapper_common.handle_exception(e)
-        model = {"success": False, "exception": str(e), "root": None}
-    wrapper_common.handle_output(model)

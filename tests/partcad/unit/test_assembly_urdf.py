@@ -23,8 +23,11 @@ import yaml
 import partcad as pc
 from partcad.actions.assembly import convert_assembly_action, import_assy_action
 from partcad.adhoc.convert import convert_cad_file
-from partcad.assembly_factory_urdf import DROPPED_LABELS
 from partcad.geom import Location
+
+from ..conftest import builtin_import_labels
+
+DROPPED_LABELS = builtin_import_labels("urdf")
 
 EXAMPLES = "examples"
 URDF_EXAMPLE = "//produce_assembly_urdf:robot"
@@ -98,7 +101,7 @@ def link_frames(urdf_assembly):
     what a conversion has to reproduce, and what the generated connections claim
     to. Composed from the table the import records rather than from the tree.
     """
-    links = urdf_assembly.urdf_factory.urdf_info["links"]
+    links = urdf_assembly.import_factory.import_info["links"]
     resolved = {}
 
     def absolute(name):
@@ -340,7 +343,7 @@ def test_urdf_reports_what_it_could_not_keep():
     assert info["Robot"] == "partcad_urdf_example"
     assert info["RootLink"] == "base_link"
 
-    dropped = info["UrdfDropped"]
+    dropped = info["Dropped"]
     # What is genuinely not represented: the kinematics of a movable joint, and
     # the geometry the links were not built from.
     for key in ("joint_kinematics", "visual"):
@@ -384,7 +387,7 @@ def test_an_unknown_gazebo_setting_is_reported_and_can_be_fatal(tmp_path):
     asyncio.run(robot.do_instantiate())
     # What it did understand became a property; what it did not was reported.
     assert ctx.get_part(":robot/a").config["properties"]["physics"]["friction"] == pytest.approx(0.4)
-    assert any("stormFactor" in warning for warning in robot.urdf_factory.urdf_info["warnings"])
+    assert any("stormFactor" in warning for warning in robot.import_factory.import_info["warnings"])
 
     strict = _urdf_package(tmp_path / "strict", body, options="    strict: true\n")
     with pytest.raises(Exception, match="stormFactor"):
@@ -831,4 +834,4 @@ def test_info_reports_the_urdf_without_building_it():
     assert info["Robot"] == "partcad_urdf_example"
     assert info["RootLink"] == "base_link"
     assert info["UrdfMovableJoints"] == ["shoulder_pan (revolute)"]
-    assert DROPPED_LABELS["joint_kinematics"] in info["UrdfDropped"]
+    assert DROPPED_LABELS["joint_kinematics"] in info["Dropped"]

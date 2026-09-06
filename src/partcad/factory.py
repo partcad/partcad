@@ -134,6 +134,15 @@ all = {
 }
 
 
+# The key each kind's generic 'import:' factory is registered under. Reserved
+# rather than a real type name: nothing may be declared as '__imported__', so a
+# package cannot shadow the mechanism that resolves its own declarations.
+IMPORTED_KINDS = {
+    "assembly": "__imported__",
+    "scene": "__imported__",
+}
+
+
 def register(kind: str, t: str, factory_class: Factory.__class__):
     all[kind][t] = factory_class
 
@@ -156,6 +165,27 @@ def instantiate(kind: str, t: str, ctx, source_project, target_project, config):
     # generic wrapper factory, which resolves the partType and runs it.
     if kind == "part" and isinstance(t, str) and ":" in t and "wrapper" in all[kind]:
         return all[kind]["wrapper"](ctx, source_project, target_project, config)
+
+    # An assembly or a scene 'type' nothing is registered for may still be a
+    # format somebody declared a reader for, in an 'import:' section - PartCAD's
+    # own ('urdf'), or a plugin package's, named by a package path exactly as a
+    # partType is ('sim-mujoco:mjcf'). The generic factory resolves the
+    # declaration and runs the reader; see 'assembly_factory_imported'.
+    #
+    # Tried after the registered types so that a built-in factory always wins,
+    # and only for these two kinds because those are the two an imported file
+    # becomes. The import is deferred: this module is loaded before the package
+    # machinery the resolution needs.
+    if kind in IMPORTED_KINDS and IMPORTED_KINDS[kind] in all[kind]:
+        from .assembly_factory_imported import ImportedTypeError
+
+        try:
+            return all[kind][IMPORTED_KINDS[kind]](ctx, source_project, target_project, config)
+        except ImportedTypeError as e:
+            # Nothing declares it, or what does cannot produce this kind. Either
+            # way it is a bad declaration and belongs in the message below,
+            # which is what the caller records against the one object.
+            raise UnknownTypeException(kind, t, config.get("name"), message=str(e)) from e
 
     # An unknown type is a bad declaration, not a bad package: it is raised so
     # the caller records it against the one object and carries on with the rest.

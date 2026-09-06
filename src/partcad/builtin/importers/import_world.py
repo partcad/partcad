@@ -40,10 +40,9 @@ sys.path.append(os.path.dirname(__file__))
 import gazebo_common  # noqa: E402
 import primitive_shapes  # noqa: E402
 import urdf_common  # noqa: E402
-import wrapper_common  # noqa: E402
 
 # What a world may carry that a PartCAD scene has nowhere to put. Counted and
-# reported; see 'DROPPED_LABELS' in scene_factory_world.py for the wording.
+# reported; the 'dropped:' map of this type's declaration is what words them.
 DROPPABLE = (
     "joint",
     "light",
@@ -536,8 +535,8 @@ def world_element(root, path):
     raise ValueError("%s: no <world> and no <model> to read" % path)
 
 
-def process(request):
-    world_file = request["world_file"]
+def process(path, request):  # pylint: disable=unused-argument
+    world_file = request["source_file"]
     if not os.path.isfile(world_file):
         raise FileNotFoundError(world_file)
 
@@ -559,7 +558,7 @@ def process(request):
         # the meshes and models it names sit beside the file the package
         # declared.
         "world_dir": request.get("base_dir") or os.path.dirname(os.path.abspath(world_file)),
-        "model_paths": list(request.get("model_paths") or []),
+        "model_paths": list(request.get("search_paths") or []),
         "output_folder": request["output_folder"],
         "precision": request.get("precision", 6),
         "ignore_collision": ignore_collision,
@@ -601,18 +600,7 @@ def process(request):
         "world_name": name_of(world, os.path.splitext(os.path.basename(world_file))[0]),
         "warnings": context["warnings"],
         "dropped": context["dropped"].summary(),
+        # See the note in 'import_urdf.py': this is what 'pc info' shows about
+        # the world itself, in SDFormat's own words.
+        "info": {"World": name_of(world, os.path.splitext(os.path.basename(world_file))[0])},
     }
-
-
-if __name__ == "__main__":
-    # argv[1] carries the operation name for readability in process listings; the
-    # authoritative request travels via stdin.
-    _, request = wrapper_common.handle_input()
-    try:
-        model = process(request)
-        model["success"] = True
-        model["exception"] = None
-    except Exception as e:
-        wrapper_common.handle_exception(e)
-        model = {"success": False, "exception": str(e), "root": None}
-    wrapper_common.handle_output(model)

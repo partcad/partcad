@@ -11,6 +11,10 @@ PartCAD writes output files in two flavours, each declared in a section of
     'export:'   the 3D and CAD formats 'pc export' writes
     'render:'   the 2D projections 'pc render' writes
 
+Two more sections are resolved by exactly the same machinery and produce no
+output file at all -- 'importers:' (who *reads* a file format into a PartCAD
+object) and 'simulation:' (who runs a scene). See SIMULATE and IMPORT below.
+
 A section has one subsection per file type, whose fields are that type's
 parameters. Some of them are not parameters but say how the file is produced -
 'path' (the implementation script), 'package' (where that script lives),
@@ -28,9 +32,9 @@ that reaches the merged options from a calling package is inert (see
 'Implementation.python_version()').
 
 The built-in implementations are not special-cased anywhere: they are declared
-in exactly this form by two packages that ship inside 'partcad' itself and that
-every context can reach, '//builtin/export' and '//builtin/render' (see
-'builtin/'). Resolving a file type means layering the configuration of the
+in exactly this form by three packages that ship inside 'partcad' itself and
+that every context can reach -- '//builtin/export', '//builtin/render' and
+'//builtin/importers' (see 'builtin/'). Resolving a file type means layering the configuration of the
 package that asked for it on top of the built-in package's, so a package that
 declares 'path' for a type replaces the implementation for itself and one that
 declares only a parameter keeps the built-in implementation and re-tunes it.
@@ -68,6 +72,53 @@ SECTIONS = (EXPORT, RENDER)
 # 'partcad/partcad-sim-mujoco'.
 SIMULATE = "simulation"
 
+# The fourth, and the mirror image of 'export:': 'importers:' declares who turns a
+# file of some third-party format *into* a PartCAD object. It is not in SECTIONS
+# for the same reason 'simulation:' is not -- everything reading that tuple is
+# asking "which output file types are there", and an importer produces no file.
+#
+# It exists because reading a format and writing it are one piece of knowledge.
+# A package that teaches PartCAD to write MJCF knows MJCF; making it declare the
+# reader beside the writer is what lets the pair travel together, be versioned
+# together, and be replaced together. Before this section there was no way to
+# say it: every reader was a factory class registered in 'globals.py', so adding
+# one meant editing PartCAD.
+#
+# Unlike 'simulation:', this one does have a built-in package. A reader is not a
+# simulator: it is XML and geometry, it depends on nothing with a release cycle
+# of its own, and 'urdf' in particular describes a robot rather than any one
+# engine's world, so it ships here. The two that *are* an engine's own scene
+# format live with that engine's plugin -- 'mjcf' in 'partcad/partcad-sim-mujoco'
+# and 'world' in 'partcad/partcad-sim-gazebo'.
+#
+# The section is spelled 'importers:' and not 'import:' because that name is
+# taken: 'import:' is the historical spelling of 'dependencies:', and
+# 'ProjectConfiguration' does not merely warn about it - it copies the value
+# into 'dependencies' and deletes the key (see 'project_config.py'). A section
+# by that name would be read as a dependency list and then removed before
+# anything here could see it. The plural also reads better beside 'partTypes:',
+# which is the other section where a package declares something PartCAD then
+# resolves by name.
+#
+# What an entry declares, beyond the implementation keys every section shares:
+#
+#   'kinds'      which object kinds the reader can produce ('assembly',
+#                'scene', or both). A format used for one thing only says so,
+#                and declaring it under the wrong section is then an error a
+#                package gets told about rather than a tree that comes out
+#                empty.
+#   'extension'  the source file's extension, used to find the file when the
+#                declaration names no 'path'.
+#   'noun'       what one of these is called in a log line ('model', 'world').
+#   'dropped'    what each counter of the reader's 'dropped' summary is called
+#                when it is reported -- the reader counts, the declaration
+#                words it.
+#
+# Everything else is handed to the reader as a parameter, which is what lets a
+# format carry its own options ('ignoreCollision', 'modelPaths') without PartCAD
+# knowing they exist.
+IMPORT = "importers"
+
 # Where the built-in packages live, both as package paths and on disk. They are
 # inside the 'partcad' Python package so that they ship with it and are always
 # present, wheel or frozen bundle alike.
@@ -75,6 +126,7 @@ BUILTIN_ROOT_PACKAGE = "//builtin"
 BUILTIN_PACKAGES = {
     EXPORT: "//builtin/export",
     RENDER: "//builtin/render",
+    IMPORT: "//builtin/importers",
 }
 # The one built-in package that declares objects rather than implementations:
 # the scene a 'simulate:' that names no scene of its own is run in, whose
@@ -86,6 +138,7 @@ BUILTIN_PATHS = {
     BUILTIN_ROOT_PACKAGE: BUILTIN_ROOT_PATH,
     BUILTIN_PACKAGES[EXPORT]: os.path.join(BUILTIN_ROOT_PATH, EXPORT),
     BUILTIN_PACKAGES[RENDER]: os.path.join(BUILTIN_ROOT_PATH, RENDER),
+    BUILTIN_PACKAGES[IMPORT]: os.path.join(BUILTIN_ROOT_PATH, IMPORT),
     BUILTIN_SCENE_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "scene"),
 }
 
@@ -157,6 +210,13 @@ RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 # are held out of the plugin's request for the same reason 'path' is.
 SIMULATION_KEYS = frozenset({"format", "formatOptions"})
 
+# The same, for the 'importers:' section. None of these is a parameter of the
+# reader: 'kinds' says which object kinds may be declared with this type,
+# 'noun' and 'dropped' are how the core words what the reader reports, and
+# 'extension' (already reserved above) is how the source file is found. The
+# reader is handed everything else.
+IMPORT_KEYS = frozenset({"kinds", "noun", "dropped"})
+
 # The request key the implementation script's path travels under. It is passed
 # in the request rather than on the command line because the two positional
 # arguments of a wrapper are already spent on the output path and the working
@@ -208,6 +268,8 @@ class Implementation:
         """The fields of this configuration that are not parameters."""
         if self.section == SIMULATE:
             return RESERVED_KEYS | SIMULATION_KEYS
+        if self.section == IMPORT:
+            return RESERVED_KEYS | IMPORT_KEYS
         return RESERVED_KEYS
 
     @property
@@ -330,9 +392,13 @@ def config_sections(section: str) -> tuple:
     Both sections are read either way, and the one that owns the file type is
     read last so that it wins. What the other one provides is a fallback:
 
-    A 'simulation:' has no such fallback and never will: an export
-    implementation writes a file and a simulation plugin runs one, so neither
-    is usable where the other is asked for.
+    Neither a 'simulation:' nor an 'importers:' has such a fallback, and neither
+    ever will: an export implementation writes a file, an importer reads one and
+    a simulation plugin runs one, so none of the three is usable where another
+    is asked for. An 'importers:' in particular is the one section whose entries
+    share their names with 'export:' entries on purpose -- 'mjcf' is both the
+    format written and the format read -- and reading either as a fallback for
+    the other would hand a writer a file to parse.
 
     'export:' falls back to 'render:' for history. PartCAD had only a 'render:'
     section before 'export:' existed, and packages configured their STEP and
@@ -346,8 +412,8 @@ def config_sections(section: str) -> tuple:
     'export:' request never falls back to a 'render:' implementation for a
     format that 'render:' owns.
     """
-    if section == SIMULATE:
-        return (SIMULATE,)
+    if section in (SIMULATE, IMPORT):
+        return (section,)
     return (RENDER, EXPORT) if section == EXPORT else (EXPORT, RENDER)
 
 
@@ -375,6 +441,84 @@ def section_of(ctx, format_name: str) -> Optional[str]:
         if format_name in builtin_formats(ctx, section):
             return section
     return None
+
+
+def import_declaration(ctx, project, type_name: str):
+    """The 'importers:' implementation for an object type, or None if there is none.
+
+    'type_name' is what a declaration's 'type:' said, and comes in two spellings
+    that mean the same thing in the end:
+
+      'mjcf'                a bare name. Layered the way a file type is - the
+                            built-in package underneath, the package that
+                            declares the object on top - so a package can
+                            re-tune a reader's parameters, or replace the reader
+                            outright, for its own objects.
+      'sim-mujoco:mjcf'     a full path, resolved against 'project' exactly as
+                            a 'simulation:' plugin is. This is how a
+                            package names a reader that is nobody's built-in,
+                            and it is the spelling a plugin's own README gives.
+
+    Returns None rather than raising for an unknown name: the caller is
+    'factory.instantiate()', where "nothing declares this type" is the ordinary
+    'UnknownTypeException' path and has a better message than anything here
+    could produce.
+    """
+    if not isinstance(type_name, str) or not type_name:
+        return None
+
+    layers = []
+    if ":" in type_name:
+        # Late, to keep this module importable from 'factory' without dragging
+        # the package machinery in behind it.
+        from .utils import resolve_resource_path
+
+        plugin_package, format_name = resolve_resource_path(project.name, type_name)
+        plugin_project = ctx.get_project(plugin_package)
+        if plugin_project is None:
+            pc_logging.error(
+                "The package implementing the '%s' object type is not found: %s" % (format_name, plugin_package)
+            )
+            return None
+        layers.append((plugin_project.name, plugin_project.config_obj))
+    else:
+        format_name = type_name
+        builtin = builtin_project(ctx, IMPORT)
+        if builtin is not None:
+            layers.append((builtin.name, builtin.config_obj))
+        # The declaring package itself, taken as the object it is rather than
+        # looked up by name: a package's 'name:' is what it calls itself, and
+        # the context registers the root one under '//' whatever that says, so
+        # a lookup here would miss exactly the package that is asking.
+        layers.append((project.name, project.config_obj))
+
+    opts = {}
+    found = False
+    for layer_package, config_obj in layers:
+        section_obj = config_obj.get(IMPORT)
+        if not isinstance(section_obj, dict) or format_name not in section_obj:
+            continue
+        found = True
+        opts = merge(opts, stamp(normalize(section_obj[format_name]), layer_package))
+    if not found:
+        return None
+    return Implementation(IMPORT, format_name, opts)
+
+
+def import_kinds(impl) -> tuple:
+    """The object kinds an importer declares it can produce.
+
+    A declaration that says nothing can produce either, which is what an
+    importer with no opinion means: the format describes a tree of placed
+    shapes, and whether that tree is a product or an arrangement of products is
+    what the section it is declared in says (see 'partcad.scene').
+    """
+    kinds = impl.config.get("kinds")
+    if isinstance(kinds, str):
+        kinds = [kinds]
+    if not isinstance(kinds, (list, tuple)) or not kinds:
+        return ("assembly", "scene")
+    return tuple(str(kind) for kind in kinds)
 
 
 def all_formats(ctx) -> list:

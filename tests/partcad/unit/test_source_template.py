@@ -51,7 +51,7 @@ def package(tmp_path):
 
 
 def factory_of(project, name, params=None):
-    return project.get_scene(name, params).mjcf_factory
+    return project.get_scene(name, params).import_factory
 
 
 def test_a_file_with_no_template_in_it_is_the_file_itself(package):
@@ -113,6 +113,12 @@ def test_the_reader_is_told_where_the_file_was_declared(package):
         async def ensure_async(self, _requirement):
             return None
 
+        async def prepare_for_package(self, _project):
+            # The generic reader path installs the implementing package's own
+            # requirements before its file-type ones, the way the export path
+            # does.
+            return None
+
         async def run_async(self, command, request):
             return await capture(command, request)
 
@@ -120,4 +126,4 @@ def test_the_reader_is_told_where_the_file_was_declared(package):
     asyncio.run(factory._read_async())
 
     assert seen["base_dir"] == os.path.dirname(os.path.abspath(factory.path))
-    assert seen["mjcf_file"] != os.path.abspath(factory.path)
+    assert seen["source_file"] != os.path.abspath(factory.path)

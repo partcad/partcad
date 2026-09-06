@@ -115,16 +115,32 @@ PARAMETER_PASSING_TYPES = ("alias", "enrich")
 # Gazebo world's links the parts '<scene>/<model>/<link>', and an MJCF model's
 # geoms the parts '<object>/<body>'. Such a part is only
 # in 'Project.parts' once the object has been built, so 'get_part' builds it on
-# demand (see '_materialize_derived_part'). Keyed by the kind that declares the
-# object, because 'assemblies:' and 'scenes:' are separate namespaces: a
-# 'world' is only ever a scene, while 'mjcf' is declared in either.
-PART_PRODUCING_TYPES = {
-    "assembly": ("step", "urdf", "mjcf"),
-    "scene": ("world", "mjcf"),
-}
-# The historical name, kept because it is the assembly half every caller here
-# used to read.
-PART_PRODUCING_ASSEMBLY_TYPES = PART_PRODUCING_TYPES["assembly"]
+# demand (see '_materialize_derived_part').
+# 'step' is the one built-in factory that does it. Every other one is an
+# 'import:' type - a URDF, an MJCF model, a Gazebo world, or whatever a plugin
+# package teaches PartCAD to read next - and those cannot be listed here,
+# because the whole point of the section is that PartCAD does not know what is
+# in it (see 'output.IMPORT').
+#
+# So the test is by exclusion: a type no built-in factory is registered for is
+# an imported one. That is exact for a working package, and for a broken one -
+# a typo in 'type:' - it means this claims the object and the build then fails
+# with the type error, which is the same failure the object was going to
+# produce anyway and says the same thing.
+#
+# It has to stay a dictionary lookup and nothing more: '_derived_part_owner()'
+# runs on every part lookup, and resolving the declaration would need a context
+# and a package fetch to answer a question asked thousands of times.
+PART_PRODUCING_BUILTIN_TYPES = ("step",)
+
+
+def produces_own_parts(kind: str, type_name) -> bool:
+    """Whether objects of this type materialize their own parts."""
+    if not isinstance(type_name, str) or not type_name:
+        return False
+    if type_name in PART_PRODUCING_BUILTIN_TYPES:
+        return True
+    return type_name not in factory.all.get(kind, {})
 
 # How often a caller waiting on somebody else's derived-part build looks again.
 # It waits for a CAD build, so the granularity costs nothing next to what it is
@@ -1273,9 +1289,12 @@ class Project(project_config.Configuration):
         prefix = part_name.split(";")[0]
         while "/" in prefix:
             prefix = prefix.rsplit("/", 1)[0]
-            for kind, types in PART_PRODUCING_TYPES.items():
+            # Both namespaces are searched: 'assemblies:' and 'scenes:' are
+            # separate, and a format read as either ('mjcf') is declared in
+            # whichever the package meant.
+            for kind in ("assembly", "scene"):
                 config = (self._object_configs.get(kind) or {}).get(prefix)
-                if config and config.get("type") in types:
+                if config and produces_own_parts(kind, config.get("type")):
                     return kind, prefix
         return None
 

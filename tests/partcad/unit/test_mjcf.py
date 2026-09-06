@@ -30,11 +30,12 @@ import partcad as pc
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "builtin", "export"))
+sys.path.append(os.path.join(os.path.dirname(pc.__file__), "builtin", "importers"))
 
 import mujoco_common  # noqa: E402
 import primitive_shapes  # noqa: E402
 import urdf_common  # noqa: E402
-import wrapper_import_mjcf  # noqa: E402
+import import_mjcf  # noqa: E402
 
 EXAMPLES = "examples"
 STL_EXAMPLE = os.path.abspath(os.path.join(EXAMPLES, "produce_part_stl", "cube.stl"))
@@ -51,12 +52,12 @@ def no_occt(monkeypatch, tmp_path):
         return path
 
     monkeypatch.setattr(primitive_shapes, "write_primitive_step", write)
-    monkeypatch.setattr(wrapper_import_mjcf.primitive_shapes, "write_primitive_step", write)
+    monkeypatch.setattr(import_mjcf.primitive_shapes, "write_primitive_step", write)
     return written
 
 
 def read(path, **request):
-    return wrapper_import_mjcf.process(dict({"mjcf_file": str(path)}, **request))
+    return import_mjcf.process(None, dict({"source_file": str(path)}, **request))
 
 
 def model(tmp_path, body, extra="", compiler=""):
@@ -404,8 +405,8 @@ def mjcf_package(tmp_path, monkeypatch):
 
     scene = project.get_scene("stack")
     assembly = project.get_assembly("robot")
-    monkeypatch.setattr(scene.mjcf_factory, "_read_async", read_stub)
-    monkeypatch.setattr(assembly.mjcf_factory, "_read_async", read_stub)
+    monkeypatch.setattr(scene.import_factory, "_read_async", read_stub)
+    monkeypatch.setattr(assembly.import_factory, "_read_async", read_stub)
     return project, scene, assembly
 
 
@@ -432,21 +433,25 @@ def test_every_geom_becomes_a_part_of_the_package(mjcf_package):
 
 
 def test_the_object_records_what_the_model_said_and_what_was_dropped(mjcf_package):
-    from partcad.assembly_factory_mjcf import DROPPED_LABELS
+    from ..conftest import builtin_import_labels
+
+    DROPPED_LABELS = builtin_import_labels("mjcf")
 
     _project, scene, _assembly = mjcf_package
-    scene.mjcf_factory._report(model_tree())
+    scene.import_factory._report(model_tree())
 
-    assert scene.mjcf_factory.mjcf_info["model_name"] == "stack"
-    assert scene.mjcf_factory.mjcf_info["dropped"] == {"joint": 2}
+    assert scene.import_factory.import_info["model_name"] == "stack"
+    assert scene.import_factory.import_info["dropped"] == {"joint": 2}
     assert "joint" in DROPPED_LABELS
 
 
 def test_every_counter_the_reader_keeps_has_a_wording():
     """A counter with no label reads as a bare key in 'pc info'."""
-    from partcad.assembly_factory_mjcf import DROPPED_LABELS
+    from ..conftest import builtin_import_labels
 
-    assert set(wrapper_import_mjcf.DROPPABLE) <= set(DROPPED_LABELS)
+    DROPPED_LABELS = builtin_import_labels("mjcf")
+
+    assert set(import_mjcf.DROPPABLE) <= set(DROPPED_LABELS)
 
 
 #

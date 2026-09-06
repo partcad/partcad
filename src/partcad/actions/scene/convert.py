@@ -23,7 +23,7 @@ different models of *connection* - a URDF joint against a pair of PartCAD ports
 things are, and SDFormat's poses are placements just as an ASSY's ``location:``
 is, so nothing has to be invented in either direction: what a world's joints
 say is what a scene does not carry in the first place (see
-'scene_factory_world').
+'assembly_factory_imported').
 """
 
 import asyncio
@@ -70,7 +70,7 @@ def world_to_assy(project: Project, scene_name: str, config: dict, out_dir: Path
     scene = project.get_scene(scene_name)
     if scene is None:
         raise ValueError("Scene '%s' not found in '%s'" % (scene_name, project.name))
-    factory = getattr(scene, "world_factory", None)
+    factory = getattr(scene, "import_factory", None)
     if factory is None:
         raise ValueError("Scene '%s' is not a world scene" % scene_name)
 

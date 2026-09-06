@@ -40,10 +40,9 @@ sys.path.append(os.path.dirname(__file__))
 import mujoco_common  # noqa: E402
 import primitive_shapes  # noqa: E402
 import urdf_common  # noqa: E402
-import wrapper_common  # noqa: E402
 
 # What an MJCF model may carry that a PartCAD tree has nowhere to put. Counted
-# and reported; see 'DROPPED_LABELS' in assembly_factory_mjcf.py for the wording.
+# and reported; the 'dropped:' map of this type's declaration words them.
 DROPPABLE = (
     "friction",
     "joint",
@@ -407,8 +406,8 @@ def body_node(body, prefix, context, childclass=None, depth=0):
     return group
 
 
-def process(request):
-    model_file = request["mjcf_file"]
+def process(path, request):  # pylint: disable=unused-argument
+    model_file = request["source_file"]
     if not os.path.isfile(model_file):
         raise FileNotFoundError(model_file)
 
@@ -491,18 +490,7 @@ def process(request):
         "model_name": model_name,
         "warnings": context["warnings"],
         "dropped": context["dropped"].summary(),
+        # See the note in 'import_urdf.py': this is what 'pc info' shows about
+        # the model itself, in MJCF's own words.
+        "info": {"Model": model_name},
     }
-
-
-if __name__ == "__main__":
-    # argv[1] carries the operation name for readability in process listings; the
-    # authoritative request travels via stdin.
-    _, request = wrapper_common.handle_input()
-    try:
-        model = process(request)
-        model["success"] = True
-        model["exception"] = None
-    except Exception as e:
-        wrapper_common.handle_exception(e)
-        model = {"success": False, "exception": str(e), "root": None}
-    wrapper_common.handle_output(model)

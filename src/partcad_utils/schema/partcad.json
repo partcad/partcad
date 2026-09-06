@@ -77,6 +77,39 @@
       },
       "additionalProperties": true
     },
+    "import-section": {
+      "type": ["object", "null"],
+      "description": "The object types this package can read: third-party file formats an assembly or a scene may be declared as. One is declared exactly as an export implementation is - a script, the sandbox it needs and its parameters - and is named by an object's 'type:', by full path when the package is not this one",
+      "patternProperties": {
+        "^[a-zA-Z0-9_.-]+$": { "$ref": "#/definitions/import-type" }
+      },
+      "additionalProperties": false
+    },
+    "import-type": {
+      "type": ["object", "null"],
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "path": { "type": "string", "minLength": 1, "description": "The reader script, relative to the package that declares it" },
+        "package": { "type": "string", "minLength": 1, "description": "The package holding 'path', when it is not this one" },
+        "extension": { "type": "string", "minLength": 1, "description": "The source file's extension" },
+        "kinds": {
+          "description": "Which object kinds this type may be declared as. Both, where the file itself does not say which it is",
+          "oneOf": [
+            { "type": "string", "enum": ["assembly", "scene"] },
+            { "type": "array", "items": { "type": "string", "enum": ["assembly", "scene"] }, "uniqueItems": true, "minItems": 1 }
+          ]
+        },
+        "noun": { "type": "string", "minLength": 1, "description": "What one of these is called in a log line ('model', 'world', 'robot')" },
+        "dropped": {
+          "type": "object",
+          "description": "How each counter of the reader's 'dropped' summary is worded when it is reported. The reader counts; this names",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "pythonVersion": { "type": "string", "minLength": 1 },
+        "pythonRequirements": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": true
+    },
     "simulate": {
       "type": ["object", "null"],
       "description": "The simulations this object declares: what it is supposed to do, or not do, once it is placed in a world and the world is run. 'pc sim' runs them",
@@ -630,6 +663,7 @@
     "render": { "$ref": "#/definitions/render" },
     "export": { "$ref": "#/definitions/output-section" },
     "simulation": { "$ref": "#/definitions/simulation-section" },
+    "importers": { "$ref": "#/definitions/import-section" },
     "materials": { "$ref": "#/definitions/materials" },
     "dependencies": {
       "type": ["object", "null"],
@@ -931,6 +965,37 @@
               },
               "required": ["type"],
               "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "An assembly read from a third-party file format by a plugin package (its 'type' names an entry of that package's 'importers:' section, by full path). The reader's own parameters are allowed.",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
+                },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "fileHash": { "$ref": "#/definitions/file-hash" },
+                "parameters": { "$ref": "#/definitions/shape-parameter"},
+                "dependencies": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "render": { "$ref": "#/definitions/render" },
+                "export": { "$ref": "#/definitions/output-section" },
+                "simulate": { "$ref": "#/definitions/simulate" },
+                "manufacturable": { "type": "boolean" },
+                "unless": { "$ref": "#/definitions/unless" },
+                "properties": { "$ref": "#/definitions/shape-properties" },
+                "software": { "$ref": "#/definitions/software-refs" }
+              },
+              "required": ["type"],
+              "additionalProperties": true
             }
           ]
         }
@@ -999,6 +1064,36 @@
               },
               "required": ["type"],
               "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "A scene read from a third-party file format by a plugin package (its 'type' names an entry of that package's 'importers:' section, by full path). The reader's own parameters are allowed.",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
+                },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "fileHash": { "$ref": "#/definitions/file-hash" },
+                "parameters": { "$ref": "#/definitions/shape-parameter"},
+                "dependencies": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "render": { "$ref": "#/definitions/render" },
+                "export": { "$ref": "#/definitions/output-section" },
+                "simulate": { "$ref": "#/definitions/simulate" },
+                "manufacturable": { "type": "boolean", "default": false },
+                "unless": { "$ref": "#/definitions/unless" },
+                "properties": { "$ref": "#/definitions/shape-properties" }
+              },
+              "required": ["type"],
+              "additionalProperties": true
             }
           ]
         }

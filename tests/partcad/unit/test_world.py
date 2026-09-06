@@ -28,11 +28,12 @@ import partcad as pc
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "builtin", "export"))
+sys.path.append(os.path.join(os.path.dirname(pc.__file__), "builtin", "importers"))
 
 import gazebo_common  # noqa: E402
 import primitive_shapes  # noqa: E402
 import urdf_common  # noqa: E402
-import wrapper_import_world  # noqa: E402
+import import_world  # noqa: E402
 
 EXAMPLES = "examples"
 WORLD_EXAMPLE = os.path.join(EXAMPLES, "produce_scene_assy", "warehouse.world")
@@ -50,7 +51,7 @@ def no_occt(monkeypatch, tmp_path):
         return path
 
     monkeypatch.setattr(primitive_shapes, "write_primitive_step", write)
-    monkeypatch.setattr(wrapper_import_world.primitive_shapes, "write_primitive_step", write)
+    monkeypatch.setattr(import_world.primitive_shapes, "write_primitive_step", write)
     return written
 
 
@@ -99,7 +100,7 @@ def test_an_unreadable_pose_is_reported_and_treated_as_the_identity():
 
 
 def test_the_example_world_becomes_a_tree_of_placed_models(no_occt):
-    result = wrapper_import_world.process({"world_file": WORLD_EXAMPLE, "output_folder": "unused", "model_paths": []})
+    result = import_world.process(None, {"source_file": WORLD_EXAMPLE, "output_folder": "unused", "search_paths": []})
 
     assert result["world_name"] == "warehouse"
     root = result["root"]
@@ -128,7 +129,7 @@ def test_the_example_world_becomes_a_tree_of_placed_models(no_occt):
 
 
 def test_the_primitives_are_written_out_at_the_right_size(no_occt):
-    wrapper_import_world.process({"world_file": WORLD_EXAMPLE, "output_folder": "unused", "model_paths": []})
+    import_world.process(None, {"source_file": WORLD_EXAMPLE, "output_folder": "unused", "search_paths": []})
 
     # Metres in the file, millimetres in PartCAD. The two pallets are the same
     # box, so they share one file.
@@ -137,7 +138,7 @@ def test_the_primitives_are_written_out_at_the_right_size(no_occt):
 
 
 def test_what_a_scene_cannot_hold_is_counted_rather_than_dropped_in_silence(no_occt):
-    result = wrapper_import_world.process({"world_file": WORLD_EXAMPLE, "output_folder": "unused", "model_paths": []})
+    result = import_world.process(None, {"source_file": WORLD_EXAMPLE, "output_folder": "unused", "search_paths": []})
 
     dropped = result["dropped"]
     assert dropped["light"] == 1
@@ -149,7 +150,7 @@ def test_what_a_scene_cannot_hold_is_counted_rather_than_dropped_in_silence(no_o
 
 
 def test_the_geometry_not_placed_is_kept_as_parts_of_its_own(no_occt):
-    result = wrapper_import_world.process({"world_file": WORLD_EXAMPLE, "output_folder": "unused", "model_paths": []})
+    result = import_world.process(None, {"source_file": WORLD_EXAMPLE, "output_folder": "unused", "search_paths": []})
 
     unplaced = result["root"]["parts"]
     assert [node["name"] for node in unplaced] == ["pallet_a/link/visual"]
@@ -159,11 +160,11 @@ def test_the_geometry_not_placed_is_kept_as_parts_of_its_own(no_occt):
 
 
 def test_ignore_collision_builds_from_the_visual_geometry_instead(no_occt):
-    result = wrapper_import_world.process(
+    result = import_world.process(None, 
         {
-            "world_file": WORLD_EXAMPLE,
+            "source_file": WORLD_EXAMPLE,
             "output_folder": "unused",
-            "model_paths": [],
+            "search_paths": [],
             "ignoreCollision": True,
         }
     )
@@ -183,7 +184,7 @@ def test_a_mesh_is_referenced_where_it_lies(tmp_path):
         % STL_EXAMPLE
     )
 
-    result = wrapper_import_world.process({"world_file": str(world), "output_folder": str(tmp_path), "model_paths": []})
+    result = import_world.process(None, {"source_file": str(world), "output_folder": str(tmp_path), "search_paths": []})
     node = result["root"]["links"][0]["links"][0]
     assert node["part_file"] == STL_EXAMPLE
     assert node["part_type"] == "stl"
@@ -201,7 +202,7 @@ def test_a_file_with_no_world_is_read_as_a_world_of_its_models(tmp_path):
         % STL_EXAMPLE
     )
 
-    result = wrapper_import_world.process({"world_file": str(model), "output_folder": str(tmp_path), "model_paths": []})
+    result = import_world.process(None, {"source_file": str(model), "output_folder": str(tmp_path), "search_paths": []})
     assert result["world_name"] == "pallet"
     assert [node["name"] for node in result["root"]["links"]] == ["pallet"]
 
@@ -217,7 +218,7 @@ def test_an_include_that_cannot_be_resolved_is_reported(tmp_path):
         % STL_EXAMPLE
     )
 
-    result = wrapper_import_world.process({"world_file": str(world), "output_folder": str(tmp_path), "model_paths": []})
+    result = import_world.process(None, {"source_file": str(world), "output_folder": str(tmp_path), "search_paths": []})
     assert result["dropped"]["include"] == 1
     assert any("nothing_like_this" in warning for warning in result["warnings"])
     # And the rest of the world is still read.
@@ -240,11 +241,11 @@ def test_an_include_that_resolves_is_read(tmp_path):
         </include></world></sdf>"""
     )
 
-    result = wrapper_import_world.process(
+    result = import_world.process(None, 
         {
-            "world_file": str(world),
+            "source_file": str(world),
             "output_folder": str(tmp_path),
-            "model_paths": [str(tmp_path / "models")],
+            "search_paths": [str(tmp_path / "models")],
         }
     )
     node = result["root"]["links"][0]
@@ -272,8 +273,8 @@ def test_an_included_file_with_more_than_one_model_says_which_one_it_placed(tmp_
         <include><uri>model://pair</uri></include></world></sdf>"""
     )
 
-    result = wrapper_import_world.process(
-        {"world_file": str(world), "output_folder": str(tmp_path), "model_paths": [str(tmp_path / "models")]}
+    result = import_world.process(None, 
+        {"source_file": str(world), "output_folder": str(tmp_path), "search_paths": [str(tmp_path / "models")]}
     )
 
     assert result["dropped"]["include"] == 1
@@ -301,8 +302,8 @@ def test_a_model_nested_in_an_included_one_is_read_rather_than_counted_as_droppe
         <include><uri>model://stack</uri></include></world></sdf>"""
     )
 
-    result = wrapper_import_world.process(
-        {"world_file": str(world), "output_folder": str(tmp_path), "model_paths": [str(tmp_path / "models")]}
+    result = import_world.process(None, 
+        {"source_file": str(world), "output_folder": str(tmp_path), "search_paths": [str(tmp_path / "models")]}
     )
 
     # 'summary()' keeps only the non-zero counters, so nothing dropped is no key.
@@ -322,7 +323,7 @@ def test_a_world_with_no_geometry_is_an_error(tmp_path):
     world = tmp_path / "empty.world"
     world.write_text('<sdf version="1.9"><world name="empty"/></sdf>')
     with pytest.raises(ValueError, match="No geometry"):
-        wrapper_import_world.process({"world_file": str(world), "output_folder": str(tmp_path), "model_paths": []})
+        import_world.process(None, {"source_file": str(world), "output_folder": str(tmp_path), "search_paths": []})
 
 
 #
@@ -391,7 +392,7 @@ def world_scene(tmp_path, monkeypatch):
     async def read(_self=None):
         return scene_tree()
 
-    monkeypatch.setattr(scene.world_factory, "_read_async", read)
+    monkeypatch.setattr(scene.import_factory, "_read_async", read)
     return project, scene
 
 
@@ -424,22 +425,26 @@ def test_a_world_scene_registers_every_shape_as_a_part_of_the_package(world_scen
 
 def test_the_scene_records_what_the_world_said_and_what_was_dropped(world_scene):
     """What 'pc info' reports about a world scene, without building its geometry."""
-    from partcad.scene_factory_world import DROPPED_LABELS
+    from ..conftest import builtin_import_labels
+
+    DROPPED_LABELS = builtin_import_labels("world")
 
     _project, scene = world_scene
-    factory = scene.world_factory
+    factory = scene.import_factory
     factory._report(scene_tree())
 
-    assert factory.world_info["world_name"] == "warehouse"
-    assert factory.world_info["dropped"] == {"light": 1}
+    assert factory.import_info["world_name"] == "warehouse"
+    assert factory.import_info["dropped"] == {"light": 1}
     assert DROPPED_LABELS["light"] == "lights"
 
 
 def test_every_counter_the_reader_keeps_has_a_wording():
     """A counter with no label reads as a bare key in 'pc info'."""
-    from partcad.scene_factory_world import DROPPED_LABELS
+    from ..conftest import builtin_import_labels
 
-    assert set(wrapper_import_world.DROPPABLE) == set(DROPPED_LABELS)
+    DROPPED_LABELS = builtin_import_labels("world")
+
+    assert set(import_world.DROPPABLE) == set(DROPPED_LABELS)
 
 
 #
@@ -689,8 +694,8 @@ def test_a_world_written_here_reads_back_as_the_same_arrangement(export_world, t
     path = tmp_path / "bench.world"
     export_world.process(str(path), {"wrapped": root, "properties": properties})
 
-    result = wrapper_import_world.process(
-        {"world_file": str(path), "output_folder": str(tmp_path / "gen"), "model_paths": []}
+    result = import_world.process(None, 
+        {"source_file": str(path), "output_folder": str(tmp_path / "gen"), "search_paths": []}
     )
 
     models = result["root"]["links"]

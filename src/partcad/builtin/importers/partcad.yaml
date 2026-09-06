@@ -1,0 +1,148 @@
+# The readers PartCAD ships with: the third-party file formats a package can
+# declare an assembly or a scene as, without writing anything itself.
+#
+# Every subsection of `importers:` below declares one object type. It is the same
+# shape as an `export:` entry and is resolved by the same machinery, which is
+# the point -- reading a format and writing it are one piece of knowledge, and
+# a package that teaches PartCAD one can teach it the other in the same file:
+#
+#   - `path`                -- the reader script. It runs in a PartCAD sandbox
+#                              and is handed the source file plus every other
+#                              field of this section (see below).
+#   - `extension`           -- the source file's extension.
+#   - `pythonRequirements`  -- what the sandbox needs installed to run `path`.
+#   - `kinds`               -- which object kinds this type may be declared as.
+#   - `noun`                -- what one of these is called in a log line.
+#   - `dropped`             -- how each counter of the reader's `dropped`
+#                              summary is worded when it is reported. The
+#                              reader counts; this names.
+#   - anything else         -- a parameter, passed to the reader as part of its
+#                              `request`.
+#
+# A package overrides any of this by declaring the same type in its own
+# `importers:` section, and replaces the reader outright by naming `path` there.
+#
+# What is *not* here is as deliberate as what is. The two scene formats that
+# belong to a simulation engine are declared by that engine's plugin package --
+# `mjcf` by `partcad/partcad-sim-mujoco` and `world` by
+# `partcad/partcad-sim-gazebo` -- because they travel with the exporter and the
+# simulator that share their knowledge of the format. `urdf` stays here: it
+# describes a robot rather than any one engine's world, and ROS, MuJoCo,
+# PyBullet and Isaac all read it.
+
+name: //builtin/importers
+desc: |
+  The readers PartCAD ships with: the third-party formats an assembly or a
+  scene can be declared as. A package adds one of its own, or replaces one of
+  these, by declaring that type in its own `importers:` section.
+
+importers:
+  urdf:
+    desc: |
+      Unified Robot Description Format: a robot as a tree of links joined by
+      joints, read at its zero pose. A URDF is a product rather than an
+      arrangement of products, so it is an assembly and not a scene.
+
+      It is a best-effort reader. A URDF describes a machine that moves and a
+      PartCAD tree describes where things are, so what a static arrangement
+      cannot hold -- the joints themselves above all -- is counted and reported
+      rather than passed over in silence.
+    path: import_urdf.py
+    extension: urdf
+    kinds: [assembly]
+    noun: robot
+    # 'urdf-parser-py' is what parses the file; 'cadquery-ocp' turns URDF's box,
+    # cylinder and sphere into geometry. Order matters here as it does in every
+    # install list: OCP comes last (see 'sandbox_versions.GUARD_INVALIDATED_BY').
+    pythonRequirements:
+      - urdf-parser-py==0.0.4
+      - cadquery-ocp==7.9.3.1.1
+    # How many digits the placements coming back are rounded to. Six is a
+    # micrometre at millimetre scale, which is finer than any URDF states.
+    precision: 6
+    # Build a link from its visual geometry rather than its collision geometry:
+    # true for every link, or a list of the link names it applies to.
+    ignoreCollision: false
+    # Core URDF that PartCAD has no property for always stops the import;
+    # 'strict' extends that to '<gazebo>', whose vocabulary is open and where an
+    # unknown setting is otherwise only reported.
+    strict: false
+    dropped:
+      joint_kinematics: "movable joints (the assembly shows them at their zero position)"
+      collision: "collision geometry (kept as parts of its own, but not placed)"
+      visual: "visual geometry (kept as parts of its own, but not placed)"
+      transmission: transmissions
+      gazebo: "Gazebo settings with no PartCAD property"
+      sensor: sensors
+      calibration: "joint calibration references"
+
+  # The two below are here only until the packages that own them are published:
+  # `mjcf` belongs to `partcad/partcad-sim-mujoco` and `world` to
+  # `partcad/partcad-sim-gazebo`, beside the exporter and the simulator that
+  # share their knowledge of the format. See the note at the top of this file.
+
+  mjcf:
+    desc: |
+      MJCF, the XML MuJoCo describes a model in: a `<worldbody>` holding bodies,
+      each body holding geoms and further bodies. Read at the model's initial
+      state -- every body where its own `pos` and orientation put it -- which is
+      the tree an ASSY file produces.
+
+      It is the one format routinely used for both an assembly and a scene, and
+      nothing in the file says which: an MJCF model of a robot arm is an
+      assembly, an MJCF model of the table it stands on is a scene. So it
+      declares both, and the section a package puts it in is what it meant.
+
+      Reading a model is not running one: this is XML and arithmetic, and no
+      MuJoCo installation is involved. Running it is `pc sim`.
+    path: import_mjcf.py
+    extension: xml
+    kinds: [assembly, scene]
+    noun: model
+    pythonRequirements:
+      - cadquery-ocp==7.9.3.1.1
+    precision: 6
+    # How deep an '<include>' chain is followed before the reader gives up and
+    # reports it, so that a file including itself is an error and not a hang.
+    max_depth: 16
+    dropped:
+      friction: "torsional and rolling friction (the sliding coefficient is kept)"
+      joint: "joints (the object shows the bodies at their initial pose)"
+      actuator: actuators
+      tendon: tendons
+      equality: "equality constraints"
+      contact: "contact pairs and exclusions"
+      sensor: sensors
+      light: lights
+      camera: cameras
+      site: sites
+      keyframe: keyframes
+      plugin: "engine plugins"
+      geometry: "geoms PartCAD has no shape for"
+      include: "included files that could not be resolved"
+
+  world:
+    desc: |
+      SDFormat, the XML Gazebo describes a simulation world in: models placed in
+      a world, each model holding links. A world is an arrangement of things
+      rather than one product, so it is a scene and never an assembly.
+    path: import_world.py
+    extension: world
+    kinds: [scene]
+    noun: world
+    pythonRequirements:
+      - cadquery-ocp==7.9.3.1.1
+    precision: 6
+    max_depth: 16
+    ignoreCollision: false
+    dropped:
+      joint: "joints (the scene shows the models at their initial pose)"
+      light: lights
+      sensor: sensors
+      plugin: "simulator plugins"
+      actor: actors
+      physics: "physics settings"
+      collision: "collision geometry (kept as parts of its own, but not placed)"
+      visual: "visual geometry (kept as parts of its own, but not placed)"
+      geometry: "shapes PartCAD has no geometry for"
+      include: "included models that could not be resolved"

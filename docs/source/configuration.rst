@@ -2196,6 +2196,68 @@ references:
 It is also the format ``pc sim`` hands a scene to MuJoCo in, and the one
 ``pc open --with mujoco`` converts to; see :ref:`simulate`.
 
+.. _importers:
+
+=========
+Importers
+=========
+
+``urdf``, ``mjcf`` and ``world`` are not object types PartCAD hard-codes. Each
+is one entry of an ``importers:`` section -- a declaration saying which script
+reads that format, what its sandbox needs, and which object kinds it may
+produce -- and a package writes one to teach PartCAD a format of its own:
+
+.. code-block:: yaml
+
+  importers:
+    demo:
+      desc: The DemoCAD scene format
+      path: read_demo.py           # the reader, in this package
+      extension: demo              # the source file's extension
+      kinds: [assembly, scene]     # what it may be declared as
+      noun: model                  # what one is called in a log line
+      pythonRequirements:
+        - cadquery-ocp==7.9.3.1.1
+      precision: 6                 # anything else is the reader's parameter
+      dropped:
+        joint: "joints (the object shows the bodies at their initial pose)"
+
+An object then names it the way it names any object type. A reader in the same
+package is named directly; one in another package is named by full path, exactly
+as a :ref:`partType <part-types>` or a ``simulation:`` plugin is:
+
+.. code-block:: yaml
+
+  scenes:
+    cell:
+      type: sim-gazebo:world       # the reader in the imported package
+      path: cell.world
+
+The reader itself is handed the file and its parameters, and returns a tree of
+placed shapes as plain data -- each node naming the *file* its geometry is read
+from rather than carrying geometry. The part factory for that file's own format
+reads it afterwards, so a mesh a scene references is never copied or rewritten.
+Only the primitives a format defines (a box, a cylinder, a sphere) have no file
+to name, and the reader writes those out itself. See
+``wrappers/wrapper_import.py`` for the contract in full.
+
+Two fields are worth dwelling on. ``kinds:`` is a claim the core holds the
+declaration to: a format that describes one robot is an assembly and declaring
+it under ``scenes:`` is an error, while a format used for both -- MJCF is the
+one that routinely is -- says both and lets the section decide. ``dropped:``
+words what the reader counted: every one of these formats describes something a
+static tree cannot hold, and the division of labour is that the *reader* counts
+what it had to drop and the *declaration* says what to call it.
+
+PartCAD ships three of these, in ``//builtin/importers``. ``urdf`` stays there
+because a URDF describes a robot rather than any one engine's world, and ROS,
+MuJoCo, PyBullet and Isaac all read it. ``mjcf`` and ``world`` belong to
+`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ and
+`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_
+respectively, beside the exporter and the simulator that share their knowledge
+of the format: reading a format and writing it are one piece of knowledge, and
+this is what lets the pair travel together and be versioned together.
+
 .. _simulate:
 
 ===========

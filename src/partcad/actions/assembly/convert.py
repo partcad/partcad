@@ -288,7 +288,7 @@ def urdf_to_assy(project: Project, assembly_name: str, config: dict, out_dir: Pa
     assembly = project.get_assembly(assembly_name)
     if assembly is None:
         raise ValueError("Assembly '%s' not found in '%s'" % (assembly_name, project.name))
-    factory = getattr(assembly, "urdf_factory", None)
+    factory = getattr(assembly, "import_factory", None)
     if factory is None:
         raise ValueError("Assembly '%s' is not a URDF assembly" % assembly_name)
 
