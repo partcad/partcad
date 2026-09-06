@@ -1442,6 +1442,15 @@ class Shape(ShapeConfiguration):
             )
             final_filepath = os.path.abspath(final_filepath)
             ctx.ensure_dirs_for_file(final_filepath)
+            # A model is the answer to *this* run, and the path it goes to is
+            # stable -- '<part>.<analysis>.<extension>', beside the package. So
+            # one an earlier run left there would satisfy the check below and be
+            # handed back as the new result: last week's stresses under today's
+            # load, with nothing to say they are not today's. Removed before the
+            # implementation is asked, which makes the file's existence
+            # afterwards mean what it is read as meaning.
+            if os.path.exists(final_filepath):
+                os.remove(final_filepath)
 
             obj = await self.get_wrapped(ctx)
             if obj is None:
@@ -1472,7 +1481,9 @@ class Shape(ShapeConfiguration):
             # result is handed to a caller that acts on 'filepath' -- the IDE
             # reads the bytes back, the CLI prints where to find them -- so a
             # path to nothing is worse than a refusal. The same check
-            # '_convert_to_serialized()' makes of an exporter, for the same reason.
+            # '_convert_to_serialized()' makes of an exporter, for the same
+            # reason. Sound only because the path was cleared above: otherwise
+            # this passes on a file the implementation never touched.
             raise Exception(
                 "%s produced no model for %s:%s: %s was not written"
                 % (analysis.upper(), self.project_name, self.name, final_filepath)
