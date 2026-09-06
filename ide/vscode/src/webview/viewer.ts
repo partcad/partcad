@@ -73,18 +73,32 @@ const tabs = new Tabs(byId('tabs'), onTabSelected);
 let shown: ShowMessage | undefined;
 
 /**
- * Which object the panes belong to.
+ * Which request each tab is waiting for, and the counter the tokens come from.
  *
  * A daemon round trip outlives a change of selection easily - a bill of
  * materials walks the whole assembly tree, a supply quote goes out to the
- * network - so every request carries the generation it was made for and an
- * answer for an older one is dropped rather than painted over what is now on
- * screen. The same reason 'scene.ts' keeps a generation of its own.
+ * network, and an analysis runs a solver - so every request carries a token of
+ * its own and an answer whose token is no longer the one this tab is waiting for
+ * is dropped rather than painted over what is now on screen. The same reason
+ * 'scene.ts' keeps a generation of its own.
+ *
+ * A token per *request* rather than per object, because the two analysis tabs
+ * are asked more than once for the same object: a user who runs FEA, retypes the
+ * implementation and runs it again has two solvers in flight over one part, and
+ * the first to finish is not the one they asked last.
  */
-let generation = 0;
+let lastToken = 0;
+const awaiting = new Map<TabId, number>();
 
-/** The tabs already asked for, for the current generation. */
+/** The tabs already asked for, for the object now on screen. */
 const requested = new Set<TabId>();
+
+/** Ask the host to fill a tab in, and remember which answer to accept. */
+function request(tab: TabId, implementation?: string): void {
+    lastToken += 1;
+    awaiting.set(tab, lastToken);
+    fetchTab({ type: 'fetchTab', tab, token: lastToken, implementation });
+}
 
 /** The instructions, once they have arrived: it owns the paging. */
 let instructions: DocumentView | undefined;
@@ -145,7 +159,8 @@ function tabsFor(message: ShowMessage): TabSpec[] {
 
 function show(message: ShowMessage): void {
     shown = message;
-    generation += 1;
+    // Nothing in flight belongs to this object, whatever it was asked for.
+    awaiting.clear();
     requested.clear();
     instructions = undefined;
     for (const tab of DATA_TABS) {
@@ -163,7 +178,7 @@ function show(message: ShowMessage): void {
 
 function clear(): void {
     shown = undefined;
-    generation += 1;
+    awaiting.clear();
     requested.clear();
     instructions = undefined;
     clearGeometry();
@@ -180,7 +195,7 @@ function clear(): void {
 function runAnalysis(tab: TabId, implementation: string): void {
     requested.add(tab);
     caeViews[tab]?.setBusy('Running the analysis…');
-    fetchTab({ type: 'fetchTab', tab, token: generation, implementation: implementation || undefined });
+    request(tab, implementation || undefined);
 }
 
 function onTabSelected(tab: TabId): void {
@@ -206,7 +221,7 @@ function onTabSelected(tab: TabId): void {
     } else {
         reset(tab).appendChild(placeholder('Asking PartCAD…'));
     }
-    fetchTab({ type: 'fetchTab', tab, token: generation });
+    request(tab);
 }
 
 function onTabData(
@@ -216,10 +231,12 @@ function onTabData(
     error: string | undefined,
     implementation: string | undefined,
 ): void {
-    if (token !== generation) {
-        // For an object that is no longer on screen.
+    if (awaiting.get(tab) !== token) {
+        // For an object that is no longer on screen, or for a run this tab has
+        // since been asked to replace.
         return;
     }
+    awaiting.delete(tab);
 
     if (isAnalysisTab(tab)) {
         // The analysis panes are not rebuilt: they own a field the user types

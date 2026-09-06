@@ -59,12 +59,13 @@ export interface ClearMessage {
 /**
  * The answer to one 'fetchTab'.
  *
- * 'token' is the generation of the object the request was made for. A daemon
- * round trip outlives a change of selection easily - a bill of materials walks
- * the whole assembly tree, a supply quote goes out to the network - so an answer
+ * 'token' is the 'fetchTab' this answers, echoed back untouched. A daemon round
+ * trip outlives a change of selection easily - a bill of materials walks the
+ * whole assembly tree, a supply quote goes out to the network - so an answer
  * that arrives after the panel moved on has to be dropped rather than painted
- * over what is now on screen. An analysis outlives one by a great deal more: a
- * solver runs for as long as it runs.
+ * over what is now on screen. An analysis outlives one by a great deal more (a
+ * solver runs for as long as it runs) and can be asked twice over for one
+ * object, which is why the token counts requests and not objects.
  */
 export interface TabDataMessage {
     type: 'tabData';
@@ -85,7 +86,7 @@ export interface TabDataMessage {
 
 export type HostMessage = ShowMessage | ClearMessage | TabDataMessage;
 
-/** Renderer to host: fill this tab in for the object of generation 'token'. */
+/** Renderer to host: fill this tab in, quoting 'token' back in the answer. */
 export interface FetchTabMessage {
     type: 'fetchTab';
     tab: TabId;

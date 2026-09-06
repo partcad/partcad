@@ -156,7 +156,9 @@ Three things about them are worth knowing:
   actually asked for -- from `cae.defaults`, which is the user configuration's `caeFeaImplementation` /
   `caeCfdImplementation` -- and it is filled in even when the analysis failed, because that is exactly when
   the user needs to see what was tried and type something else. Editing it and pressing Run or Enter re-asks
-  with that implementation, which is the same override `pc cae fea --implementation` is.
+  with that implementation, which is the same override `pc cae fea --implementation` is. Once it has been
+  typed in, it is the user's: a later answer no longer pre-fills over it, however long the run that produced
+  the answer had been going.
 * **The model is drawn according to its extension**, because which format an analysis writes is the
   implementation's decision and not PartCAD's. `glb`/`gltf`/`stl` get an orbit camera; `png`/`jpg`/`svg` and
   the other still-image types get an image that pans and zooms (wheel to zoom about the pointer, drag to pan,

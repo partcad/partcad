@@ -78,6 +78,7 @@ function decodeBase64(content: string): Uint8Array {
  */
 class ImageView {
     private readonly image = el('img', 'cae-image');
+    private readonly listeners = new AbortController();
     private scale = 1;
     private x = 0;
     private y = 0;
@@ -88,48 +89,72 @@ class ImageView {
         host.appendChild(this.image);
         this.image.draggable = false;
 
-        host.addEventListener('wheel', (event: WheelEvent) => {
-            event.preventDefault();
-            const rect = host.getBoundingClientRect();
-            // Zoom about the pointer rather than the centre: the thing being
-            // looked at should stay under the cursor.
-            const px = event.clientX - rect.left;
-            const py = event.clientY - rect.top;
-            const factor = Math.exp(-event.deltaY / 400);
-            const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, this.scale * factor));
-            const applied = next / this.scale;
-            this.x = px - (px - this.x) * applied;
-            this.y = py - (py - this.y) * applied;
-            this.scale = next;
-            this.apply();
-        });
-        host.addEventListener('pointerdown', (event: PointerEvent) => {
-            this.dragging = { x: event.clientX - this.x, y: event.clientY - this.y };
-            host.setPointerCapture(event.pointerId);
-        });
-        host.addEventListener('pointermove', (event: PointerEvent) => {
-            if (this.dragging === undefined) {
-                return;
-            }
-            this.x = event.clientX - this.dragging.x;
-            this.y = event.clientY - this.dragging.y;
-            this.apply();
-        });
+        // Every listener under one signal, so that 'dispose()' is one call and
+        // cannot forget one: they are added to the *host*, which outlives this
+        // view, so emptying the pane does not take them with it.
+        const on = { signal: this.listeners.signal };
+
+        host.addEventListener(
+            'wheel',
+            (event: WheelEvent) => {
+                event.preventDefault();
+                const rect = host.getBoundingClientRect();
+                // Zoom about the pointer rather than the centre: the thing being
+                // looked at should stay under the cursor.
+                const px = event.clientX - rect.left;
+                const py = event.clientY - rect.top;
+                const factor = Math.exp(-event.deltaY / 400);
+                const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, this.scale * factor));
+                const applied = next / this.scale;
+                this.x = px - (px - this.x) * applied;
+                this.y = py - (py - this.y) * applied;
+                this.scale = next;
+                this.apply();
+            },
+            on,
+        );
+        host.addEventListener(
+            'pointerdown',
+            (event: PointerEvent) => {
+                this.dragging = { x: event.clientX - this.x, y: event.clientY - this.y };
+                host.setPointerCapture(event.pointerId);
+            },
+            on,
+        );
+        host.addEventListener(
+            'pointermove',
+            (event: PointerEvent) => {
+                if (this.dragging === undefined) {
+                    return;
+                }
+                this.x = event.clientX - this.dragging.x;
+                this.y = event.clientY - this.dragging.y;
+                this.apply();
+            },
+            on,
+        );
         const release = (event: PointerEvent) => {
             this.dragging = undefined;
             if (host.hasPointerCapture(event.pointerId)) {
                 host.releasePointerCapture(event.pointerId);
             }
         };
-        host.addEventListener('pointerup', release);
-        host.addEventListener('pointercancel', release);
-        host.addEventListener('dblclick', () => this.reset());
+        host.addEventListener('pointerup', release, on);
+        host.addEventListener('pointercancel', release, on);
+        host.addEventListener('dblclick', () => this.reset(), on);
     }
 
     public show(source: string, alt: string): void {
         this.image.src = source;
         this.image.alt = alt;
         this.reset();
+    }
+
+    /** Let go of the host: the listeners, the classes, and the <img> itself. */
+    public dispose(): void {
+        this.listeners.abort();
+        this.image.remove();
+        this.host.classList.remove('cae-canvas', 'cae-image-host');
     }
 
     private reset(): void {
@@ -155,8 +180,10 @@ class MeshView {
     private readonly scene = new THREE.Scene();
     private readonly camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100000);
     private readonly controls: OrbitControls;
+    private readonly observer: ResizeObserver;
     private model: THREE.Object3D | undefined;
-    private running = false;
+    private frameRequest: number | undefined;
+    private disposed = false;
 
     constructor(private readonly host: HTMLElement) {
         host.classList.add('cae-canvas');
@@ -175,11 +202,19 @@ class MeshView {
         const fill = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
         this.scene.add(fill);
 
-        new ResizeObserver(() => this.resize()).observe(host);
+        this.observer = new ResizeObserver(() => this.resize());
+        this.observer.observe(host);
     }
 
     public async show(bytes: Uint8Array, extension: string): Promise<void> {
         const object = extension === 'stl' ? loadStl(bytes) : await loadGltf(bytes, extension);
+        if (this.disposed) {
+            // Parsing a mesh outlives the tab it was parsed for easily. Whoever
+            // disposed of this view has a newer one on screen, so drop what was
+            // just built rather than adding it to a scene nobody draws.
+            dispose(object);
+            return;
+        }
         if (this.model !== undefined) {
             this.scene.remove(this.model);
             dispose(this.model);
@@ -211,23 +246,48 @@ class MeshView {
     }
 
     private start(): void {
-        if (this.running) {
+        if (this.frameRequest !== undefined || this.disposed) {
             return;
         }
-        this.running = true;
         const tick = () => {
             this.controls.update();
             this.renderer.render(this.scene, this.camera);
-            requestAnimationFrame(tick);
+            this.frameRequest = requestAnimationFrame(tick);
         };
-        tick();
+        this.frameRequest = requestAnimationFrame(tick);
+    }
+
+    /**
+     * Give the GPU back.
+     *
+     * A WebGL context is a scarce thing - a browser keeps a handful and drops
+     * the oldest when asked for one too many - and a render loop that nothing
+     * disposes of keeps drawing a canvas nobody can see. So every analysis that
+     * replaces this view has to end it, not merely stop referring to it.
+     */
+    public dispose(): void {
+        this.disposed = true;
+        if (this.frameRequest !== undefined) {
+            cancelAnimationFrame(this.frameRequest);
+            this.frameRequest = undefined;
+        }
+        this.observer.disconnect();
+        this.controls.dispose();
+        if (this.model !== undefined) {
+            this.scene.remove(this.model);
+            dispose(this.model);
+            this.model = undefined;
+        }
+        this.renderer.dispose();
+        this.renderer.domElement.remove();
+        this.host.classList.remove('cae-canvas');
     }
 
     /** Match the canvas to the pane, which has no size at all while hidden. */
     public resize(): void {
         const width = this.host.clientWidth;
         const height = this.host.clientHeight;
-        if (width === 0 || height === 0) {
+        if (this.disposed || width === 0 || height === 0) {
             return;
         }
         this.camera.aspect = width / height;
@@ -291,11 +351,21 @@ function dispose(object: THREE.Object3D): void {
  */
 export class CaeView {
     private readonly field = el('input', 'cae-implementation') as HTMLInputElement;
+    /** Whether the user has typed in the field, which makes its value theirs. */
+    private edited = false;
     private readonly body = el('div', 'cae-body');
     private readonly model = el('div', 'cae-model');
     private readonly findings = el('div', 'cae-findings');
     private imageView: ImageView | undefined;
     private meshView: MeshView | undefined;
+    /**
+     * Which contents the model band is showing, counted up on every change.
+     *
+     * A solver's answer is slow and a mesh takes a moment to parse, so anything
+     * that arrives late has to be able to tell whether the band it was meant for
+     * is still the one on screen.
+     */
+    private shown = 0;
 
     constructor(pane: HTMLElement, analysis: string, onRun: (implementation: string) => void) {
         pane.classList.add('cae');
@@ -312,6 +382,9 @@ export class CaeView {
         const run = el('button', 'cae-run', 'Run');
         const fire = () => onRun(this.field.value.trim());
         run.addEventListener('click', fire);
+        this.field.addEventListener('input', () => {
+            this.edited = true;
+        });
         this.field.addEventListener('keydown', (event: KeyboardEvent) => {
             if (event.key === 'Enter') {
                 fire();
@@ -330,9 +403,17 @@ export class CaeView {
         this.setBusy('Waiting for PartCAD…');
     }
 
-    /** Pre-fill the field with what the host used, without disturbing a typed value. */
+    /**
+     * Pre-fill the field with what the host used, without disturbing the user's.
+     *
+     * "Not disturbing" is not the same as "not focused". A user who types a
+     * package and clicks away has still typed it, and the answer to the run that
+     * was already in flight arrives afterwards - so what counts is whether this
+     * field has ever been edited, not where the caret is now. Once it has, the
+     * value is the user's and the host only ever gets to agree with it.
+     */
     public suggest(implementation: string | undefined): void {
-        if (implementation && document.activeElement !== this.field) {
+        if (implementation && !this.edited) {
             this.field.value = implementation;
         }
     }
@@ -340,21 +421,21 @@ export class CaeView {
     /** The pane while the solver is running, which is not a quick thing. */
     public setBusy(text: string): void {
         this.showFindings([]);
-        empty(this.model);
+        this.clearModel();
         this.model.appendChild(placeholder(text));
     }
 
     /** A refusal, which for these two tabs is usually the answer itself. */
     public showError(message: string): void {
         this.showFindings([]);
-        empty(this.model);
+        this.clearModel();
         this.model.appendChild(el('p', 'error', message));
     }
 
     public render(data: CaeData): void {
         this.suggest(data.implementation);
         this.showFindings(data.findings ?? []);
-        empty(this.model);
+        const shown = this.clearModel();
 
         const extension = (data.extension || '').toLowerCase();
         if (!data.content) {
@@ -365,8 +446,8 @@ export class CaeView {
         }
 
         if (IMAGE_TYPES[extension] !== undefined) {
-            // A fresh one each time: 'this.model' was emptied above, so the
-            // previous view's <img> and its listeners went with it.
+            // A fresh one each time: 'clearModel()' disposed of whatever the
+            // previous run put here, listeners included.
             this.imageView = new ImageView(this.model);
             this.imageView.show(
                 `data:${IMAGE_TYPES[extension]};base64,${data.content}`,
@@ -379,7 +460,12 @@ export class CaeView {
             const view = new MeshView(this.model);
             this.meshView = view;
             void view.show(decodeBase64(data.content), extension).catch((error: unknown) => {
-                empty(this.model);
+                if (shown !== this.shown) {
+                    // A later run already replaced this band. Reporting now
+                    // would wipe its result and blame it for an older failure.
+                    return;
+                }
+                this.clearModel();
                 this.model.appendChild(el('p', 'error', `Failed to display the model: ${error}`));
             });
             return;
@@ -399,6 +485,25 @@ export class CaeView {
     /** The canvas had no size while the tab was hidden; WebGL does not notice. */
     public resize(): void {
         this.meshView?.resize();
+    }
+
+    /**
+     * Empty the model band, ending whatever was drawing into it.
+     *
+     * 'empty()' takes the nodes away and nothing else: a 'MeshView' left behind
+     * goes on holding a WebGL context and asking for animation frames for a
+     * canvas that is no longer in the document, and an 'ImageView' goes on
+     * listening on the band. Both are ended here, and the count this returns is
+     * how anything slow that was working for the old contents finds out.
+     */
+    private clearModel(): number {
+        this.imageView?.dispose();
+        this.imageView = undefined;
+        this.meshView?.dispose();
+        this.meshView = undefined;
+        empty(this.model);
+        this.shown += 1;
+        return this.shown;
     }
 
     /**
