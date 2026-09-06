@@ -20,6 +20,17 @@ The script is executed with these globals available:
                 script can adapt to what it was handed
     path     -- the absolute path of the file to write
 
+A 'cae:' implementation is run through here too, and is handed three more keys:
+'analysis' ("fea"/"cfd"), the 'fix' and 'load' the part declared, and 'boundary',
+the ports each of them landed on with their locations (see 'partcad.cae'). It
+answers with the same dict plus one key of its own:
+
+    output = {"success": True, "findings": [...]}   # wrote the model, and found this
+
+'findings' is a JSON array - strings or objects with a 'message' and, optionally,
+a 'severity' and a 'where'. An empty one means the analysis found nothing to
+report, which is what "pc test" requires of a part.
+
 and reports what happened in one of two ways, whichever suits it:
 
     output = {"success": True}                        # wrote the file
@@ -150,7 +161,14 @@ def process(script, path, request):
     # What the implementation could not represent in the target format, which is
     # not a failure: the file is correct, it just says less than the package
     # does. Reported by 'Shape._render_one_async()'.
-    for key in ("warnings", "unsupported"):
+    #
+    # 'findings' is the second output of a 'cae:' implementation: what the
+    # analysis has to say about the part, beside the model it wrote. It travels
+    # here rather than in a file of its own because an analysis has exactly one
+    # verdict and two files would let them disagree - and because the IDE's FEA
+    # tab is a webview with no file system, so a finding has to arrive as data.
+    # Meaningless for an export or a render implementation, which never set it.
+    for key in ("warnings", "unsupported", "findings"):
         if output.get(key):
             result[key] = output[key]
     return result

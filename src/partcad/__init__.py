@@ -92,6 +92,13 @@ from . import actions, exception, healthcheck, logging, tags, utils
 # while some other module happened to import it first, which is not something
 # to leave a request path depending on.
 from . import plugin  # noqa: F401
+
+# Imported for the binding as well: 'partcad.cae' is what the daemon's
+# 'cae.analyze'/'cae.defaults' operations reach the analyses through, and it is
+# what 'partcad.test.cae_test' and 'Shape.analyze_async()' read. It resolves
+# anyway because 'shape' imports it, and that is exactly the dependency the
+# 'plugin' line above exists not to have.
+from . import cae  # noqa: F401
 from .assembly import Assembly
 from .assembly_connect import ConnectHold, ConnectHow
 from .consts import *

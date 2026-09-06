@@ -50,6 +50,22 @@ EXPORT = "export"
 RENDER = "render"
 SECTIONS = (EXPORT, RENDER)
 
+# The analysis section, which is an output section of the same shape and is
+# deliberately not one of 'SECTIONS'. A file type declared under 'cae:' is
+# produced by a script exactly as an export or a render one is - same 'path',
+# same 'package', same sandbox, same parameters - and 'Implementation' below
+# serves it unchanged. What differs is who asks for it and what comes back:
+# 'pc cae fea' asks, and the implementation answers with findings beside the
+# file it wrote (see 'partcad.cae').
+#
+# It stays out of 'SECTIONS' because 'SECTIONS' answers the question "which
+# sections does a file type of 'pc export'/'pc render' live in": a 'fea' left in
+# there would be offered to 'pc render -t' and would fall back to a 'render:'
+# implementation, and neither is a thing a solver can do.
+CAE = "cae"
+ANALYSIS_SECTIONS = (CAE,)
+ALL_SECTIONS = SECTIONS + ANALYSIS_SECTIONS
+
 # Where the built-in packages live, both as package paths and on disk. They are
 # inside the 'partcad' Python package so that they ship with it and are always
 # present, wheel or frozen bundle alike.
@@ -279,8 +295,13 @@ def stamp(config: dict, package_name: str) -> dict:
 def config_sections(section: str) -> tuple:
     """The 'partcad.yaml' sections a file type's configuration is read from.
 
-    Both sections are read either way, and the one that owns the file type is
-    read last so that it wins. What the other one provides is a fallback:
+    'cae:' is read alone. It has no fallback and is nobody's fallback: an
+    analysis is not a file another CAD tool opens, and neither an export nor a
+    render implementation could stand in for one.
+
+    For the other two, both sections are read either way, and the one that owns
+    the file type is read last so that it wins. What the other one provides is a
+    fallback:
 
     'export:' falls back to 'render:' for history. PartCAD had only a 'render:'
     section before 'export:' existed, and packages configured their STEP and
@@ -294,16 +315,29 @@ def config_sections(section: str) -> tuple:
     'export:' request never falls back to a 'render:' implementation for a
     format that 'render:' owns.
     """
+    if section == CAE:
+        return (CAE,)
     return (RENDER, EXPORT) if section == EXPORT else (EXPORT, RENDER)
 
 
 def builtin_project(ctx, section: str):
-    """The package that declares the built-in implementations of a section."""
-    return ctx.get_project(BUILTIN_PACKAGES[section])
+    """The package that declares the built-in implementations of a section.
+
+    None for 'cae:', which has no built-in implementations and is not meant to
+    get one: PartCAD ships no solver, and the default implementation of each
+    analysis is a package path in the user configuration (see
+    'UserConfig.cae_fea_implementation'). Everything downstream therefore has to
+    cope with a section whose bottom layer is missing - which is already the case
+    for a file type a package declares that '//builtin' has never heard of.
+    """
+    package = BUILTIN_PACKAGES.get(section)
+    return ctx.get_project(package) if package else None
 
 
 def builtin_formats(ctx, section: str) -> dict:
     """The file types a section declares built-in implementations for."""
+    if section not in BUILTIN_PACKAGES:
+        return {}
     project = builtin_project(ctx, section)
     if project is None:
         pc_logging.error("The built-in package is missing: %s" % BUILTIN_PACKAGES[section])

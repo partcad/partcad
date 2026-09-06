@@ -28,6 +28,7 @@ from .sync_threads import threadpool_manager
 from . import render_overlay
 from . import sandbox_versions
 from . import wrapper
+from . import cae as pc_cae
 
 if TYPE_CHECKING:
     from partcad.context import Context
@@ -850,13 +851,19 @@ class Shape(ShapeConfiguration):
                     opts = output.merge(opts, layer)
         return opts, output_dir
 
-    def _output_filepath(self, opts, output_dir, extension, project=None, filepath=None):
+    def _output_filepath(self, opts, output_dir, extension, project=None, filepath=None, stem_suffix=""):
         """Where a file of this type goes when the caller did not say.
 
         'prefix' names the directory the file goes in, relative to the output
         directory or, failing that, to the package. A prefix that carries an
         extension is taken to name the file itself, which is the one way to
         give an object's output a name of its own.
+
+        'stem_suffix' goes between the object's name and the extension, and is
+        what makes an analysis write 'bracket.fea.vtu' rather than
+        'bracket.vtu': the analysis is part of what the file is, and a part has
+        as many analysis results as it has analyses. Empty for everything else,
+        where the file type is already the extension.
         """
         if filepath is not None:
             return filepath
@@ -873,7 +880,7 @@ class Shape(ShapeConfiguration):
         # A directory that does not exist yet is still a directory: '--create-dirs'
         # is what creates it, and that happens once the name is known.
         if os.path.isdir(filepath) or not os.path.splitext(filepath)[1]:
-            filepath = os.path.join(filepath, self.name + extension)
+            filepath = os.path.join(filepath, self.name + stem_suffix + extension)
         return filepath
 
     def output_getopts(self, ctx, format_name, project=None, filepath=None, options_project=None, output_dir=None):
@@ -918,13 +925,27 @@ class Shape(ShapeConfiguration):
         (like a file-backed object) and written into the package's cache
         directory, the same way a partType's wrapper script is.
         """
+        builtin_package = output.BUILTIN_PACKAGES.get(impl.section)
         if not impl.script:
+            if builtin_package is None:
+                # 'cae:' has no built-in package to fall back to, so an
+                # unresolved implementation means the configured one was not
+                # found rather than that somebody forgot a 'path'. Say which
+                # knob names it, since it is a user-configuration default rather
+                # than anything in the package being analysed.
+                raise Exception(
+                    "No implementation of '%s' is declared. Name one in a 'cae:' section, "
+                    "or set the default with 'pc cae %s --implementation <package>:<type>'"
+                    % (impl.format_name, impl.format_name)
+                )
             raise Exception(
                 "No implementation of '%s' is declared: neither %s nor this package provides a 'path'"
-                % (impl.format_name, output.BUILTIN_PACKAGES[impl.section])
+                % (impl.format_name, builtin_package)
             )
 
-        package_name = impl.config.get("package") or output.BUILTIN_PACKAGES[impl.section]
+        package_name = impl.config.get("package") or builtin_package
+        if package_name is None:
+            raise Exception("The implementation of '%s' does not say which package it lives in" % impl.format_name)
         project = ctx.get_project(package_name)
         if project is None:
             raise Exception("The package implementing '%s' is not found: %s" % (impl.format_name, package_name))
@@ -1025,6 +1046,60 @@ class Shape(ShapeConfiguration):
         cache[overlay.interfaces] = records
         return records
 
+    async def _run_implementation_async(self, ctx, impl, script, request, final_filepath):
+        """Run one output implementation in a sandbox and read back its verdict.
+
+        Shared by every file PartCAD produces through a script: the export and
+        render formats, and the analyses of 'cae:'. What differs between them is
+        what goes into the request and what is made of the answer, both of which
+        belong to the caller; what is the same is the sandbox, the meta-wrapper
+        and the shape of the reply, and a second copy of those is a second thing
+        to keep correct.
+
+        Returns the implementation's result dict, or None when it said nothing
+        that could be read - which has already been reported by then.
+        """
+        request[output.SCRIPT_KEY] = os.path.abspath(script)
+        # Whether the sandbox rebuilds the envelopes into live geometry before
+        # the implementation sees them. Off for an implementation that needs what
+        # the envelopes say about each node (the URDF exporter names every link
+        # and places every joint from that), none of which decoding carries over
+        # into the geometry it builds.
+        request[output.DECODE_KEY] = impl.decode
+        request_serialized = shape_envelope.serialize(request)
+
+        runtime = ctx.get_python_runtime(version=impl.python_version())
+        await runtime.prepare_for_package(impl.project)
+        # Installed one at a time, not with asyncio.gather(): the order
+        # matters, since build123d overwrites the OCP native module that
+        # cadquery-ocp installs (see sandbox_versions.GUARD_INVALIDATED_BY).
+        for dep in impl.python_requirements:
+            await runtime.ensure_async(dep)
+
+        with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
+            command = [
+                wrapper.get("export.py"),
+                final_filepath,
+                os.path.abspath(impl.project.config_dir),
+            ]
+            exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
+            if exitcode != 0 and len(errors) == 0:
+                errors = "Failed to execute command '%s' with exit code %s" % (" ".join(command), exitcode)
+            if errors:
+                pc_logging.error(errors)
+                raise Exception(errors)
+
+        response_lines = response_serialized.strip().splitlines()
+        if not response_lines:
+            self.error("Empty response from the '%s' implementation: %s" % (impl.format_name, script))
+            return None
+
+        try:
+            return shape_envelope.deserialize(response_lines[-1].strip())
+        except Exception as e:
+            self.error("Failed to deserialize response: %s" % e)
+            return None
+
     async def _render_one_async(
         self,
         ctx,
@@ -1058,45 +1133,8 @@ class Shape(ShapeConfiguration):
             )
 
         request = await self._output_request(obj, impl, kwargs, overlay=effective_overlay, ports=ports)
-        request[output.SCRIPT_KEY] = os.path.abspath(script)
-        # Whether the sandbox rebuilds the envelopes into live geometry before
-        # the implementation sees them. Off for an implementation that needs what
-        # the envelopes say about each node (the URDF exporter names every link
-        # and places every joint from that), none of which decoding carries over
-        # into the geometry it builds.
-        request[output.DECODE_KEY] = impl.decode
-        request_serialized = shape_envelope.serialize(request)
-
-        runtime = ctx.get_python_runtime(version=impl.python_version())
-        await runtime.prepare_for_package(impl.project)
-        # Installed one at a time, not with asyncio.gather(): the order
-        # matters, since build123d overwrites the OCP native module that
-        # cadquery-ocp installs (see sandbox_versions.GUARD_INVALIDATED_BY).
-        for dep in impl.python_requirements:
-            await runtime.ensure_async(dep)
-
-        with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
-            command = [
-                wrapper.get("export.py"),
-                final_filepath,
-                os.path.abspath(impl.project.config_dir),
-            ]
-            exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
-            if exitcode != 0 and len(errors) == 0:
-                errors = "Failed to execute command '%s' with exit code %s" % (" ".join(command), exitcode)
-            if errors:
-                pc_logging.error(errors)
-                raise Exception(errors)
-
-        response_lines = response_serialized.strip().splitlines()
-        if not response_lines:
-            self.error("Empty response from the '%s' implementation: %s" % (format_name, script))
-            return
-
-        try:
-            result = shape_envelope.deserialize(response_lines[-1].strip())
-        except Exception as e:
-            self.error("Failed to deserialize response: %s" % e)
+        result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+        if result is None:
             return
 
         if not result.get("success", False):
@@ -1208,6 +1246,242 @@ class Shape(ShapeConfiguration):
         asyncio.run(
             self.render_async(ctx, format_name, project, filepath, options_package, output_dir, overlay, **kwargs)
         )
+
+    # ------------------------------------------------------------------ #
+    #
+    # Computer-aided engineering: the third thing a script produces from a
+    # shape, beside a file another tool opens ('export:') and a picture of it
+    # ('render:'). It runs through exactly the same machinery - a file type
+    # declared in a section, an implementation named by 'path' and 'package',
+    # the same sandbox and the same meta-wrapper - and differs in two places
+    # only. What goes in carries the part's boundary conditions ('fea:'/'cfd:',
+    # see 'partcad.cae'), and what comes back carries findings beside the file.
+
+    def analysis_getopts(
+        self,
+        ctx,
+        analysis: str,
+        format_name: str,
+        project=None,
+        filepath=None,
+        options_project=None,
+        output_dir=None,
+    ):
+        """Resolve one analysis: its implementation, options and output path.
+
+        The counterpart of 'output_getopts' for the 'cae:' section, and different
+        from it in two ways that both follow from an analysis not being a file
+        type of the object:
+
+        * The file is named after the analysis as well as the object, because a
+          part has as many results as it has analyses: 'bracket.fea.vtu'.
+        * There is no default extension to fall back on. Which model format an
+          analysis writes is the implementation's decision - a 3D field, a 2D
+          plot - so the implementation has to state it, and an implementation
+          that does not is a bug in that package rather than something to guess
+          at on its behalf.
+        """
+        opts, configured_output_dir = self._output_getopts(ctx, format_name, output.CAE, project, options_project)
+        output_dir = output_dir or configured_output_dir
+
+        if filepath is not None and os.path.isdir(filepath):
+            # A directory was passed where a file was expected: it names where
+            # the file goes, not the file.
+            output_dir, filepath = filepath, None
+
+        impl = output.Implementation(output.CAE, format_name, opts)
+        extension = impl.extension(None)
+        if not extension:
+            raise Exception(
+                "The '%s' implementation does not say what file it writes: it needs an 'extension:'" % format_name
+            )
+        filepath = self._output_filepath(
+            opts, output_dir, "." + extension, project, filepath, stem_suffix="." + analysis
+        )
+        return impl, filepath
+
+    def _analysis_implementation(self, ctx, analysis: str, implementation: Optional[str]):
+        """Who runs this analysis: the package and the file type in it.
+
+        An implementation is named as '<package>:<file type>' - the same spelling
+        every other PartCAD object uses - and defaults to the user configuration
+        ('caeFeaImplementation'/'caeCfdImplementation'), which is what makes
+        'pc cae fea :bracket' work in a package that says nothing about solvers.
+
+        The file type need not be called after the analysis. What decides the
+        analysis is the command that was run, because that is what says which
+        section of the part holds the boundary conditions; the file type only
+        says which declaration in the implementing package to read.
+        """
+        if not implementation:
+            from partcad_utils.user_config import user_config
+
+            implementation = user_config.cae_implementation(analysis)
+        implementation = str(implementation).strip()
+        if not implementation:
+            raise Exception("No '%s' implementation is configured" % analysis)
+
+        package, separator, format_name = implementation.rpartition(":")
+        if not separator:
+            # A package on its own: the file type is the analysis's own name,
+            # which is what a package publishing one implementation calls it.
+            package, format_name = implementation, analysis
+        format_name = format_name or analysis
+        package = ctx.resolve_package_path(package or ".")
+
+        options_project = ctx.get_project(package)
+        if options_project is None:
+            raise Exception(
+                "The package implementing '%s' is not found: %s. "
+                "Add it to this package's 'dependencies:', or name another one." % (analysis, package)
+            )
+        if getattr(options_project, "broken", False):
+            # A package that failed to load answers every question about itself
+            # with nothing, so without this the next thing to go wrong is
+            # 'analysis_getopts' reporting that the implementation declared no
+            # 'extension:' -- which sends the reader to look at a file that was
+            # never read. Whatever went wrong is already in the log above; what
+            # is worth saying here is which package it was and that this is why
+            # the analysis is not running.
+            raise Exception(
+                "The package implementing '%s' did not load: %s. "
+                "The reason is reported above; a dependency that could not be fetched is the usual one."
+                % (analysis, options_project.name)
+            )
+        return options_project, format_name
+
+    async def _analysis_boundary_async(self, ctx, config):
+        """Where the boundary conditions this analysis was given actually are.
+
+        The part names interfaces; a solver needs coordinate frames. The lookup
+        is the very one 'pc render --with-ports' does, so a user who cannot work
+        out why a fixture did nothing can draw the same ports on a projection and
+        look at them.
+        """
+        from .render_overlay import Overlay, collect_async
+
+        try:
+            records = await collect_async(self, ctx, Overlay(ports=True))
+        except Exception as e:
+            raise pc_cae.CaeConfigError(
+                "Failed to locate the ports the '%s:' section names: %s" % (config.analysis, e)
+            ) from e
+
+        assigned, unmatched = pc_cae.assign_ports(config, records)
+        for name in unmatched:
+            # A boundary condition that names an interface the part does not
+            # implement is silently doing nothing, and a solver told to hold
+            # nothing still answers with nonsense rather than with an error.
+            pc_logging.warning(
+                "%s:%s: '%s:' names the interface '%s', which this object does not implement"
+                % (self.project_name, self.name, config.analysis, name)
+            )
+        if not assigned:
+            raise pc_cae.CaeConfigError(
+                "'%s:' names no port of this object: none of the interfaces it lists is implemented here"
+                % config.analysis
+            )
+        return assigned
+
+    async def analyze_async(
+        self,
+        ctx: Context,
+        analysis: str,
+        implementation: Optional[str] = None,
+        project: Optional[Project] = None,
+        filepath=None,
+        output_dir=None,
+        **kwargs,
+    ) -> dict:
+        """Run one CAE analysis on this shape and report what it found.
+
+        Args:
+            ctx: Execution context.
+            analysis: "fea" or "cfd" - which section of the object holds the
+                boundary conditions, and what the output file is named after.
+            implementation: '<package>:<file type>' naming who runs it,
+                overriding the user configuration's default for this run.
+            project: The package the object belongs to, whose 'cae:' section
+                re-tunes the implementation's parameters.
+            filepath: The file to write. None resolves it from the
+                configuration and the object's name.
+            output_dir: Where the file goes when 'filepath' does not say.
+            kwargs: Analysis parameters, overriding what the configuration says.
+
+        Returns:
+            The model file that was written and the findings, as plain data.
+
+        Raises:
+            partcad.cae.CaeConfigError: the object declares no boundary
+                conditions for this analysis, or declares them wrongly. Both are
+                answers to the user's question rather than failures, and both
+                are reported as the sentence they carry.
+        """
+        config = pc_cae.config_of(self, analysis)
+        if config is None:
+            raise pc_cae.CaeConfigError(
+                "%s:%s declares no '%s:' section, so there is nothing to analyse"
+                % (self.project_name, self.name, analysis)
+            )
+
+        if project is None:
+            project = ctx.get_project(self.project_name)
+        options_project, format_name = self._analysis_implementation(ctx, analysis, implementation)
+
+        with pc_logging.Action(analysis.upper(), self.project_name, self.name):
+            impl, final_filepath = self.analysis_getopts(
+                ctx, analysis, format_name, project, filepath, options_project, output_dir
+            )
+            final_filepath = os.path.abspath(final_filepath)
+            ctx.ensure_dirs_for_file(final_filepath)
+
+            obj = await self.get_wrapped(ctx)
+            if obj is None:
+                raise Exception("Cannot analyse '%s': shape is empty" % self.name)
+
+            boundary = await self._analysis_boundary_async(ctx, config)
+            script = await self._materialize_output_script(ctx, impl)
+
+            request = await self._output_request(obj, impl, kwargs)
+            request.update(config.to_data())
+            # The ports each condition landed on, in the shape's own coordinate
+            # system. 'fix' and 'load' above say what the user wrote; this says
+            # where it goes, which is what a solver needs.
+            request["boundary"] = boundary
+
+            result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+
+        if result is None:
+            raise Exception("The '%s' implementation reported nothing: %s" % (format_name, script))
+        if not result.get("success", False):
+            raise Exception(
+                "%s failed for %s:%s: %s"
+                % (analysis.upper(), self.project_name, self.name, result.get("exception", "Unknown error"))
+            )
+        for warning in result.get("warnings") or []:
+            pc_logging.warning("%s:%s: %s" % (self.project_name, self.name, warning))
+
+        return {
+            "object": "%s:%s" % (self.project_name, self.name),
+            "analysis": analysis,
+            "implementation": "%s:%s" % (options_project.name, format_name),
+            "filepath": final_filepath,
+            "extension": os.path.splitext(final_filepath)[1].lstrip("."),
+            "findings": pc_cae.normalize_findings(result.get("findings")),
+            "boundary": boundary,
+        }
+
+    def analyze(
+        self,
+        ctx: Context,
+        analysis: str,
+        implementation: Optional[str] = None,
+        project: Optional[Project] = None,
+        filepath=None,
+        output_dir=None,
+        **kwargs,
+    ) -> dict:
+        return asyncio.run(self.analyze_async(ctx, analysis, implementation, project, filepath, output_dir, **kwargs))
 
     async def render_svg_somewhere_async(
         self,

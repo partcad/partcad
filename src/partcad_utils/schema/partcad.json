@@ -12,6 +12,60 @@
       },
       "additionalProperties": false
     },
+    "cae-analysis": {
+      "type": "object",
+      "description": "The boundary conditions one analysis is run under. 'fix:' names what is held still, 'load:' what is pulled on; both name interface types this object implements, and 'load' values are a force (or a mass, which is the default reading of a bare number - in kilograms)",
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "fix": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+            {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_/./:-]+$": {
+                  "oneOf": [
+                    { "type": "null" },
+                    { "type": "string" },
+                    { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "load": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_/./:-]+$": {
+              "oneOf": [
+                { "$ref": "#/definitions/cae-load-value" },
+                {
+                  "type": "object",
+                  "patternProperties": {
+                    "^[a-zA-Z0-9_/./-]*$": { "$ref": "#/definitions/cae-load-value" }
+                  },
+                  "additionalProperties": false,
+                  "minProperties": 1
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "cae-load-value": {
+      "description": "A force, or a mass to weigh into one. A number is a mass in kilograms; a string ends in a unit name, case-insensitively, with or without a preceding space and with or without a plural 's': n/nm/mn/kn/newton for force, mg/g/kg/ton/tonne/lb/pound for mass",
+      "oneOf": [
+        { "type": "number" },
+        { "type": "string", "minLength": 1 }
+      ]
+    },
     "output-type": {
       "oneOf": [
         { "type": "null" },
@@ -528,6 +582,7 @@
     },
     "render": { "$ref": "#/definitions/render" },
     "export": { "$ref": "#/definitions/output-section" },
+    "cae": { "$ref": "#/definitions/output-section" },
     "dependencies": {
       "type": ["object", "null"],
       "patternProperties": {
@@ -657,6 +712,9 @@
                 "parameters": { "$ref": "#/definitions/shape-parameter"},
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
+                "cae": { "$ref": "#/definitions/output-section" },
+                "fea": { "$ref": "#/definitions/cae-analysis" },
+                "cfd": { "$ref": "#/definitions/cae-analysis" },
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },

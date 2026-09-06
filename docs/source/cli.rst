@@ -224,8 +224,9 @@ Object commands
   Run tests on a part, assembly, or scene. Use ``-r`` to test imported packages recursively, ``-f`` to filter
   by name prefix, and ``-s``/``-i``/``-a``/``-S`` to indicate a sketch, interface, assembly, or scene.
   The tests cover whether the object builds (``cad``), whether it can be manufactured or purchased
-  (``cam`` and the methods below it), and whether an assembly's connection instructions can be followed
-  (``connect``); see "Testing the instructions" in :doc:`assy`.
+  (``cam`` and the methods below it), whether an assembly's connection instructions can be followed
+  (``connect``; see "Testing the instructions" in :doc:`assy`), and whether the engineering analyses a part
+  asks for come back clean (``fea`` and ``cfd``; see :ref:`pc cae <cae>`).
 
   The manufacturability test asks for exactly what ``pc supply`` would order. An assembly that is sold
   assembled (see :ref:`procurement`) passes once a supplier carries it, and is not taken apart: the parts
@@ -262,6 +263,57 @@ Object commands
   apart from the hardware. Each software line names the package it came from and the revision of that
   package, because a firmware image — unlike a bracket — is a different file once its package publishes
   again.
+
+.. _cae:
+
+``pc cae``
+  Run an engineering analysis on a part and report what it found. Subcommands: ``fea`` (finite element
+  analysis) and ``cfd`` (computational fluid dynamics). Both take one part::
+
+      pc cae fea :bracket
+      pc cae cfd -i //pub/feature/cae/openfoam:cfd :duct
+
+  The part says what it is held by and what it carries, in a section named after the analysis. ``fix:`` names
+  what is held still — a list of interface types, or a map from an interface type to the instances of it that
+  are held. ``load:`` names what is pulled on — a map from an interface type to one value for all of its
+  instances, or a nested map naming the instance::
+
+      parts:
+        bracket:
+          type: build123d
+          path: bracket.py
+          fea:
+            fix:
+              - m3-screw          # every instance of it is held
+            load:
+              hook: 5 kg          # every instance carries this
+              rail:
+                left: 30 N        # one named instance carries this
+                right: 30 N
+
+  A ``load`` value is a **force**. It may be written as a number and a unit — ``n``, ``nm``, ``mn``, ``kn`` or
+  ``newton`` for force, ``mg``, ``g``, ``kg``, ``ton``, ``tonne``, ``lb`` or ``pound`` for mass — matched
+  case-insensitively, with or without a space in front of it and with or without a plural ``s``. A bare number
+  is a **mass in kilograms**, which is what "the shelf carries 5" means. A mass is weighed into a force at
+  9.8 N/kg, so what is stored and handed to the solver is always newtons. ``cfd:`` takes the same two keys with
+  the same meaning: what is held still, and what force the flow puts on it.
+
+  The model the analysis produces is written to ``<part>.<analysis>.<extension>`` and saved as it stands.
+  Which format that is — 3D or 2D — is the implementation's choice, and PartCAD does not convert it. The
+  **findings** are the other half of the answer: a JSON array of what the analysis has to say about the part,
+  printed as a table, or as the array itself with ``--json``. ``pc cae`` exits non-zero when there is at least
+  one, so it can be used as a gate.
+
+  Who runs the analysis is ``<package>:<file type>``. It defaults to the ``caeFeaImplementation`` /
+  ``caeCfdImplementation`` :doc:`user configuration <configuration>` options — ``//pub/feature/cae/calculix:fea``
+  and ``//pub/feature/cae/calculix:cfd`` — and ``-i``/``--implementation`` overrides it for one run. PartCAD
+  ships no solver: an implementation is a package like any other, declared in a ``cae:`` section exactly as an
+  export or a render implementation is declared in its own (see :ref:`output-files`), and installed as a
+  dependency.
+
+  ``pc test`` runs the same analyses. Its ``fea`` and ``cfd`` tests apply to a part that declares the matching
+  section — and to nothing else, so a package of bolts pays nothing for them — and fail it when the analysis
+  produces any finding.
 
 ``pc convert``
   Convert parts, sketches, assemblies or scenes to another format and update their type in the package.

@@ -30,7 +30,15 @@ const TAB_COMMANDS: Record<string, string> = {
     bom: 'partcad.bom',
     instructions: 'partcad.assemblyGuide',
     supply: 'partcad.supplyQuote',
+    // Both analyses are the one operation; which of them is asked for travels
+    // as an argument, exactly as 'pc cae fea' and 'pc cae cfd' are one
+    // operation with the analysis in the request.
+    fea: 'partcad.cae',
+    cfd: 'partcad.cae',
 };
+
+/** The tabs that run an analysis rather than ask a question about the object. */
+const ANALYSIS_TABS = new Set(['fea', 'cfd']);
 
 /**
  * The "PartCAD Viewer" editor tab.
@@ -46,6 +54,8 @@ export class PartcadViewer implements vscode.Disposable {
 
     private panel: vscode.WebviewPanel | undefined;
     private lastShow: ViewerMessage | undefined;
+    /** The configured CAE implementations, once the daemon has been asked. */
+    private caeDefaults: Record<string, string> | undefined;
 
     constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -137,9 +147,21 @@ export class PartcadViewer implements vscode.Disposable {
      * assembly that has no assembly steps is told why, and the reader sees that
      * instead of an empty tab.
      */
-    private async fetchTab(tab: string, token: number): Promise<void> {
+    private async fetchTab(tab: string, token: number, implementation?: string): Promise<void> {
+        const analysis = ANALYSIS_TABS.has(tab);
+        // Which implementation the request ends up carrying, so that the field
+        // over the model can be pre-filled with it -- including when the
+        // analysis failed, which is exactly when the user needs to see what was
+        // tried and type something else.
+        const used = analysis ? implementation || (await this.caeDefault(tab)) : undefined;
         const post = (payload: { data?: unknown; error?: string }) =>
-            void this.panel?.webview.postMessage({ type: 'tabData', tab, token, ...payload });
+            void this.panel?.webview.postMessage({
+                type: 'tabData',
+                tab,
+                token,
+                ...(used !== undefined ? { implementation: used } : {}),
+                ...payload,
+            });
 
         const command = TAB_COMMANDS[tab];
         if (command === undefined) {
@@ -159,11 +181,42 @@ export class PartcadViewer implements vscode.Disposable {
             if (!(await vscode.commands.getCommands(true)).includes(command)) {
                 throw new Error('PartCAD is not connected. Use "Restart PartCAD" to reconnect.');
             }
-            post({ data: await vscode.commands.executeCommand(command, { pkg: target.package, name: target.name }) });
+            const args: Record<string, unknown> = { pkg: target.package, name: target.name };
+            if (analysis) {
+                args.analysis = tab;
+                args.implementation = used;
+                // The panel is a webview with no file system in reach, so the
+                // model has to arrive as bytes rather than as the path the
+                // daemon wrote it to -- which may not even be this machine.
+                args.inline = true;
+            }
+            post({ data: await vscode.commands.executeCommand(command, args) });
         } catch (error: any) {
             traceError(`PartCAD Viewer: failed to fetch the '${tab}' tab: ${error?.message ?? error}`);
             post({ error: `${error?.message ?? error}` });
         }
+    }
+
+    /**
+     * The implementation an analysis runs under when nobody has said otherwise.
+     *
+     * Asked of the daemon once per panel and remembered, because it is the
+     * user's configuration rather than anything about the object on screen. A
+     * PartCAD too old to answer, or none connected at all, leaves the field
+     * empty rather than failing the fetch: the analysis itself will report the
+     * real problem a moment later.
+     */
+    private async caeDefault(analysis: string): Promise<string | undefined> {
+        if (this.caeDefaults === undefined) {
+            try {
+                this.caeDefaults =
+                    ((await vscode.commands.executeCommand('partcad.caeDefaults')) as Record<string, string>) ?? {};
+            } catch (error: any) {
+                traceVerbose(`PartCAD Viewer: no CAE defaults: ${error?.message ?? error}`);
+                this.caeDefaults = {};
+            }
+        }
+        return this.caeDefaults[analysis];
     }
 
     private create(column: vscode.ViewColumn, preserveFocus: boolean): void {
@@ -186,11 +239,11 @@ export class PartcadViewer implements vscode.Disposable {
             }
         });
         panel.webview.onDidReceiveMessage(
-            (message: { type: string; message?: string; tab?: string; token?: number }) => {
+            (message: { type: string; message?: string; tab?: string; token?: number; implementation?: string }) => {
                 if (message.type === 'error') {
                     traceError(`PartCAD Viewer: ${message.message}`);
                 } else if (message.type === 'fetchTab') {
-                    void this.fetchTab(message.tab ?? '', message.token ?? 0);
+                    void this.fetchTab(message.tab ?? '', message.token ?? 0, message.implementation);
                 } else if (message.type === 'ready' && this.lastShow !== undefined) {
                     // The webview finished booting after we had already been asked
                     // to show something (a restored tab, or a show that raced the
@@ -242,6 +295,8 @@ export class PartcadViewer implements vscode.Disposable {
 						</div>
 						<div id="pane-bom" class="pane" hidden></div>
 						<div id="pane-instructions" class="pane" hidden></div>
+						<div id="pane-fea" class="pane" hidden></div>
+						<div id="pane-cfd" class="pane" hidden></div>
 						<div id="pane-supply" class="pane" hidden></div>
 					</div>
 				</div>

@@ -151,6 +151,10 @@ command_groups = [
             "convert",
             "export",
             "render",
+            # Beside `export` and `render` because that is what it is: the third
+            # thing a script produces from a shape, configured in a section of
+            # `partcad.yaml` of the same shape as theirs.
+            "cae",
         ],
     },
     {

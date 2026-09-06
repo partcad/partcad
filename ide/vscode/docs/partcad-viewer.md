@@ -7,6 +7,8 @@ The panel is a strip of tabs over one object, not a canvas:
 | **3D** | everything | the viewer protocol, from whichever `partcad` asked for the shape to be shown |
 | **Bill of Materials** | assemblies | the daemon's `bom` (what `pc bom` prints) |
 | **Instructions** | assemblies | the daemon's `assembly.guide` (the book `pc render -t html\|pdf` writes) |
+| **FEA** | parts | the daemon's `cae.analyze` (what `pc cae fea` runs) |
+| **CFD** | parts | the daemon's `cae.analyze` (what `pc cae cfd` runs) |
 | **Supply** | everything | the daemon's `supply.quote` (the cart `pc supply quote` fills) |
 
 The 3D view is always the first: "show this part" means the geometry. The rest are questions about
@@ -79,6 +81,8 @@ the protocol has no authentication.
 | `src/webview/bom.ts` | The Bill of Materials tab |
 | `src/webview/document.ts` | The Instructions tab: `partcad/document.py`'s model, drawn |
 | `src/webview/supply.ts` | The Supply tab: the list, and one item's suppliers |
+| `src/webview/cae.ts` | The FEA and CFD tabs: the result model, and the findings |
+| `src/partcad/cae.py` | What a part declares about an analysis, and in what units |
 | `src/partcad/assembly_guide.py` | The instruction book, built once for every format |
 | `src/partcad/document.py` | The renderer-independent document model |
 
@@ -139,6 +143,33 @@ at a time. The illustrations are inlined as data URIs rather than pointed at, be
 directory that is deleted as soon as the document is built — and because the CSP forbids fetching anything
 anyway. An assembly PartCAD cannot write instructions for (not an ASSY file, or not meant to be built) is
 refused with the reason, and the tab shows that.
+
+**FEA** and **CFD** are the one thing in this panel that *does* something rather than asks about
+something: selecting the tab runs a solver, through the same `Shape.analyze_async()` that `pc cae fea` and
+`pc cae cfd` run. A part with no `fea:`/`cfd:` section of its own is told so in the tab, which is why the tab
+is offered for every part rather than only for the ones that declare it -- "this part says nothing about FEA"
+is the answer somebody who went looking for the tab came to read.
+
+Three things about them are worth knowing:
+
+* **Which solver ran is a field over the model, centred.** It is pre-filled with the implementation the host
+  actually asked for -- from `cae.defaults`, which is the user configuration's `caeFeaImplementation` /
+  `caeCfdImplementation` -- and it is filled in even when the analysis failed, because that is exactly when
+  the user needs to see what was tried and type something else. Editing it and pressing Run or Enter re-asks
+  with that implementation, which is the same override `pc cae fea --implementation` is.
+* **The model is drawn according to its extension**, because which format an analysis writes is the
+  implementation's decision and not PartCAD's. `glb`/`gltf`/`stl` get an orbit camera; `png`/`jpg`/`svg` and
+  the other still-image types get an image that pans and zooms (wheel to zoom about the pointer, drag to pan,
+  double-click to reset). Anything else is named, along with what could have been drawn, and the path the
+  model was written to. The model arrives as bytes rather than as that path: a webview has no file system in
+  reach, and the daemon may not even be on this machine.
+* **The findings are the bottom fifth of the pane, and only when there are any.** An analysis that found
+  nothing is a pass, and a pass gives the model the whole pane. This is also what `pc test` checks: its `fea`
+  and `cfd` tests fail a part whose analysis produced any finding.
+
+The 3D viewer here is deliberately not `scene.ts`. That one is a studio -- an environment map, a light rig,
+contact shadows, auto-rotation -- and an analysis result is the opposite kind of picture: its colours are the
+answer, so relighting them falsifies them, and it is read rather than admired, so it must hold still.
 
 **Supply** fills a `ProviderCart` exactly as `pc supply quote` does — an assembly becomes the things to order,
 a part is one thing — and asks every supplier of each line item **on its own**. One cart per line item, not one
