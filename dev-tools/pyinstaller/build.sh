@@ -47,48 +47,136 @@ OPENSCAD_STAGE_DIR="${REPO_ROOT}/build/openscad"
 CONDA_STAGE_DIR="${REPO_ROOT}/build/conda"
 PYTHON="${PYTHON:-python3}"
 
-# The OpenSCAD every bundle carries -- one version across all of them, which is
-# what makes a `.scad` part render the same wherever `pc` runs.
+###########################################  OPENSCAD BUILDS  ################################################
 #
-# A development snapshot rather than a release, because the last release cannot
-# be that one version. 2021.01 ships an x86_64-only `.dmg`, so an arm64 Mac
-# would need Rosetta 2 -- Homebrew's `openscad` cask says so in the open, with a
-# `requires_rosetta` caveat -- and Homebrew then `disable!`d that cask outright
-# on 2026-09-01, `because: :fails_gatekeeper_check`, which took every macOS CI
-# job down with it (see #583). One version everywhere therefore has to be a
-# snapshot; what that costs is the expiry note below.
+# The OpenSCAD every bundle carries. This block is the ONE place the builds are
+# chosen: the URLs, their checksums and the version are here, and nothing below
+# constructs a download URL of its own. Bump all of it together.
 #
-# The date has to be one that every platform actually published on. That is not
-# automatic: upstream builds roughly every 2.6 days rather than nightly, and the
-# gaps run to 35 days on Linux and Windows and 76 on macOS, so a bump picks a
-# date from the listing rather than constructing one.
+# ---------------------------------------------------------------------------
+# WHY ONE VERSION EVERYWHERE
+# ---------------------------------------------------------------------------
+#
+# Every platform must carry OpenSCAD built from the SAME upstream source, and
+# the snapshot date in these filenames is what identifies that source. It is a
+# feature-parity requirement, not tidiness: OpenSCAD's language and its exports
+# both move between builds, so bundles built from different sources disagree
+# about what a `.scad` file means. A part that renders on one machine would fail
+# to parse, or render differently, on another -- and "the same part builds the
+# same everywhere" is the promise the bundle exists to keep. A user who reports
+# a rendering difference should never have to ask which platform they were on.
+#
+# So the three URLs below always name one date. Do not bump one platform alone,
+# and do not mix dates to get a newer build on some platform: an older date that
+# all platforms share beats a newer one that they do not.
+#
+# ---------------------------------------------------------------------------
+# HOW TO FIND THE LATEST BUILD THAT QUALIFIES
+# ---------------------------------------------------------------------------
+#
+# Not "yesterday", and not the newest date in the directory. Upstream builds
+# roughly every 2.6 days rather than nightly, a given date can be missing a
+# platform, and the gaps run to 35 days on Linux and Windows and 76 on macOS --
+# so the newest date overall very often has no `.dmg`. What is needed is the
+# newest date carrying all three artifacts, which this prints:
+#
+#   curl -s https://files.openscad.org/snapshots/ |
+#     grep -oE 'OpenSCAD-[0-9A-Za-z._-]+' |
+#     grep -E '^OpenSCAD-[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-x86_64\.AppImage|-x86-64\.zip|\.dmg)$' |
+#     sort -u |
+#     sed -E 's/^OpenSCAD-([0-9]{4}\.[0-9]{2}\.[0-9]{2}).*/\1/' |
+#     uniq -c | awk '$1 == 3 { print $2 }' | tail -1
+#
+# (The two `grep`s are separate on purpose. Anchoring the match to the whole
+# filename is what rejects the `.sha256` and `.sha512` sidecars, and the
+# `-x86-64-Installer.exe` sitting next to the Windows zip; `sort -u` first is
+# what stops a listing that names each file twice counting it twice. Drop the
+# `tail -1` to see every qualifying date, oldest first.)
+#
+# ---------------------------------------------------------------------------
+# HOW TO CONSTRUCT THE URLS
+# ---------------------------------------------------------------------------
+#
+# Base: https://files.openscad.org/snapshots/ -- the development snapshots, not
+# the releases at the parent path. See "WHY A SNAPSHOT" below for why a release
+# is not an option, and note that this directory is the one upstream prunes.
+#
+# The three filenames share almost nothing, so read them off carefully:
+#
+#   Linux x86_64   OpenSCAD-<date>-x86_64.AppImage    underscore before 64
+#   Windows x86_64 OpenSCAD-<date>-x86-64.zip         hyphen before 64, and it
+#                                                     sits beside an
+#                                                     "-x86-64-Installer.exe"
+#                                                     that is NOT what we want
+#   macOS          OpenSCAD-<date>.dmg                no architecture token: the
+#                                                     .dmg is Universal 2 and
+#                                                     serves both Macs
+#
+# There is no Linux arm64 line. Upstream builds no current arm64 snapshot -- the
+# only two aarch64 artifacts in the directory are one-offs from 2021 and 2023,
+# under a naming scheme ("...ai-aarch64") it no longer uses -- so that bundle
+# carries no OpenSCAD and `pc` there uses the host's, exactly as the wheels do.
+#
+# Each checksum below is the `.sha256` upstream publishes beside its artifact:
+#
+#   curl -s "<url>.sha256"
+#
+# They are copied in here rather than fetched at build time, even though they
+# exist and are correct, because a snapshot directory is rolling: pinning the
+# bytes rather than the name is what stops a rebuild of a given PartCAD version
+# picking up something republished under the date it asked for. (The conda
+# payload further down still reads its sidecar -- its upstream is a tagged
+# release, which does not move.)
+#
+# ---------------------------------------------------------------------------
+# WHY A SNAPSHOT, AND WHAT IT COSTS
+# ---------------------------------------------------------------------------
+#
+# The last release, 2021.01, cannot be the shared version. It ships an
+# x86_64-only `.dmg`, so an arm64 Mac would need Rosetta 2 -- Homebrew's
+# `openscad` cask says so in the open, with a `requires_rosetta` caveat -- and
+# Homebrew then `disable!`d that cask outright on 2026-09-01, `because:
+# :fails_gatekeeper_check`, which took every macOS CI job down with it (#583).
+#
+# **The pin therefore expires.** Upstream prunes `snapshots/` on a rolling window
+# of about a year -- measured at 143 Linux and Windows builds spanning 368 days,
+# 119 macOS builds spanning 365 -- so a pin left alone for a year stops resolving
+# and NO bundle builds, on any platform, releases included. It fails loudly: the
+# fetch 404s, `fetch_and_verify` does not retry a 4xx, and `stage_openscad` prints
+# what happened and points back here. The durable fix is to mirror these three
+# artifacts somewhere the project controls.
+#
 OPENSCAD_VERSION="2026.09.05"
 
-# **This pin expires.** Upstream prunes `snapshots/` on a rolling window of
-# about a year -- measured at 143 Linux and Windows builds spanning 368 days,
-# 119 macOS builds spanning 365 -- so a pin left alone for a year stops
-# resolving and every bundle stops building, on every platform, release
-# included. It fails loudly rather than quietly: the fetch 404s, which
-# `fetch_and_verify` deliberately does not retry, and `stage_openscad` says what
-# to do about it.
-#
-# To bump: pick a date from https://files.openscad.org/snapshots/ that has all
-# three artifacts, and take the three hashes from the `.sha256` published beside
-# each one:
-#
-#   for f in OpenSCAD-<date>-x86_64.AppImage OpenSCAD-<date>-x86-64.zip OpenSCAD-<date>.dmg; do
-#     curl -s "https://files.openscad.org/snapshots/${f}.sha256"
-#   done
-#
-# Verified against these literals rather than against the sidecars at build
-# time, even though the sidecars exist and are correct. A snapshot directory is
-# rolling: pinning the bytes rather than the name is what stops a rebuild of a
-# given PartCAD version picking up something republished under the date it asked
-# for. (The conda payload below still reads its sidecar -- its upstream is a
-# tagged release, which does not move.)
+OPENSCAD_URL_LINUX_X86_64="https://files.openscad.org/snapshots/OpenSCAD-2026.09.05-x86_64.AppImage"
 OPENSCAD_SHA256_LINUX_X86_64="931c230683182e51c30f8e895f3e3e0b545be67f2e54e8ddba7de0e7df093513"
+
+OPENSCAD_URL_WINDOWS_X86_64="https://files.openscad.org/snapshots/OpenSCAD-2026.09.05-x86-64.zip"
 OPENSCAD_SHA256_WINDOWS_X86_64="cc4e9ed6b515fab2ba095bf92a2215d9a7bc9fde90fa9653968c83d673caa35a"
+
+OPENSCAD_URL_MACOS="https://files.openscad.org/snapshots/OpenSCAD-2026.09.05.dmg"
 OPENSCAD_SHA256_MACOS="52829dc59f9e96f5154c7bdad01158acfc3dd97511611f43054ee918fda5e003"
+
+# The URLs are written out in full rather than composed from OPENSCAD_VERSION,
+# so that what gets downloaded is readable and greppable without running the
+# script. This is the cost of that: a half-finished bump, where the version moved
+# and a URL did not, would otherwise be found only by the smoke test at the end
+# of a build -- or on the one platform nobody rebuilt.
+for openscad_url in \
+  "${OPENSCAD_URL_LINUX_X86_64}" \
+  "${OPENSCAD_URL_WINDOWS_X86_64}" \
+  "${OPENSCAD_URL_MACOS}"; do
+  case "${openscad_url}" in
+  *"OpenSCAD-${OPENSCAD_VERSION}"*) ;;
+  *)
+    echo "error: '${openscad_url}' is not OpenSCAD ${OPENSCAD_VERSION}." >&2
+    echo "       The URLs and OPENSCAD_VERSION are bumped together; see the" >&2
+    echo "       OPENSCAD BUILDS block in build.sh." >&2
+    exit 1
+    ;;
+  esac
+done
+unset openscad_url
 
 # The conda the bundle carries, as the tag of a `micromamba-releases` release --
 # "<micromamba version>-<build>", where `micromamba --version` prints only the
@@ -481,32 +569,30 @@ VERIFY
 # runnable. That is also the path Homebrew's cask links onto PATH as `openscad`,
 # and it is what `partcad.healthcheck.openscad.BUNDLED_SUBPATH` expects to find.
 stage_openscad() {
-  local artifact expected download_dir payload_dir entry_point mount_point
+  local artifact url expected download_dir payload_dir entry_point mount_point
   download_dir="${OPENSCAD_STAGE_DIR}/download-${OPENSCAD_VERSION}"
   payload_dir="${OPENSCAD_PAYLOAD_DIR}"
 
+  # Which of the builds chosen at the top of this file this platform takes. The
+  # URLs live there and nothing is composed here, so there is one place to look
+  # at, and to change, when the pin moves.
+  #
   # Keyed on the operating system and architecture rather than on PLATFORM,
   # which now also carries the OS version: which OpenSCAD to fetch does not
   # depend on whether this is Ubuntu 22.04 or 24.04.
-  #
-  # Note how little the three names have in common -- a hyphen before the
-  # architecture on Linux, a differently spelled one on Windows, and no
-  # architecture token at all on macOS -- and that the Windows zip sits beside an
-  # "-x86-64-Installer.exe" that differs from it by a suffix. They are spelled
-  # out rather than composed for that reason.
   case "${OS_NAME}-${ARCH_NAME}" in
   linux-x86_64)
-    artifact="OpenSCAD-${OPENSCAD_VERSION}-x86_64.AppImage"
+    url="${OPENSCAD_URL_LINUX_X86_64}"
     expected="${OPENSCAD_SHA256_LINUX_X86_64}"
     entry_point="${payload_dir}/AppRun"
     ;;
   windows-x86_64)
-    artifact="OpenSCAD-${OPENSCAD_VERSION}-x86-64.zip"
+    url="${OPENSCAD_URL_WINDOWS_X86_64}"
     expected="${OPENSCAD_SHA256_WINDOWS_X86_64}"
     entry_point="${payload_dir}/openscad.exe"
     ;;
   macos-x86_64 | macos-arm64)
-    artifact="OpenSCAD-${OPENSCAD_VERSION}.dmg"
+    url="${OPENSCAD_URL_MACOS}"
     expected="${OPENSCAD_SHA256_MACOS}"
     entry_point="${payload_dir}/OpenSCAD.app/Contents/MacOS/OpenSCAD"
     ;;
@@ -521,6 +607,11 @@ stage_openscad() {
     ;;
   esac
 
+  # The file name is the last path segment of the chosen URL rather than a
+  # second spelling of it. The unpackers below key off it -- the Windows zip's
+  # inner directory is its own basename -- so the two cannot drift apart.
+  artifact="${url##*/}"
+
   if [ -e "${entry_point}" ]; then
     echo "==> OpenSCAD ${OPENSCAD_VERSION} already staged"
     return 0
@@ -533,14 +624,14 @@ stage_openscad() {
   # The expiry the pin comment warns about surfaces here, as a 404 from a
   # perfectly well-formed URL. Saying so beats leaving a reader to work out why
   # a build that passed last year does not resolve today.
-  if ! fetch_and_verify "https://files.openscad.org/snapshots/${artifact}" \
-    "${download_dir}/${artifact}" "${expected}"; then
+  if ! fetch_and_verify "${url}" "${download_dir}/${artifact}" "${expected}"; then
     echo "error: could not fetch OpenSCAD ${OPENSCAD_VERSION} (${artifact})." >&2
     echo "       If that was an HTTP 404, the pinned snapshot has been pruned:" >&2
     echo "       upstream keeps roughly a year of them. Pick a date from" >&2
     echo "       https://files.openscad.org/snapshots/ that carries all three" >&2
-    echo "       artifacts and bump OPENSCAD_VERSION and the three OPENSCAD_SHA256_*" >&2
-    echo "       values together -- see the comment beside them in build.sh." >&2
+    echo "       artifacts and bump the whole OPENSCAD BUILDS block at the top" >&2
+    echo "       of build.sh -- version, URLs and checksums together. That block" >&2
+    echo "       carries the command that finds the newest qualifying date." >&2
     exit 1
   fi
 

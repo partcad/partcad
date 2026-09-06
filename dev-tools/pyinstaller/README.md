@@ -427,9 +427,10 @@ Three things, at three levels:
 
 ## OpenSCAD
 
-Every bundle but Linux arm64 carries OpenSCAD, and they all carry **the same version** — that is what makes a
-`.scad` part render the same wherever `pc` runs. It is pinned in `build.sh` and downloaded at build time from
-`files.openscad.org` (checksum-verified). `partcad.healthcheck.openscad.find_executable()` prefers it over
+Every bundle but Linux arm64 carries OpenSCAD, and they all carry **the same build** — that is what makes a
+`.scad` part render the same wherever `pc` runs. The three download URLs, their checksums and the version live
+in one block, `OPENSCAD BUILDS` at the top of `build.sh`, which is also where the reasoning below is written
+down for whoever bumps it next; nothing else in the build composes a URL of its own. `partcad.healthcheck.openscad.find_executable()` prefers it over
 any OpenSCAD on the host, and falls back to `shutil.which` when there is no bundled copy — which is what the
 wheels always do. A user can opt out of the bundled copy with `--ignore-bundled-openscad` /
 `IGNORE_BUNDLED_OPENSCAD=1` (`user_config.ignore_bundled_openscad`), which makes the resolver skip the
@@ -446,6 +447,16 @@ where the AppImage's library dependencies are absent.
 Linux arm64 carries nothing because upstream builds no current arm64 snapshot. The only two aarch64 artifacts
 in the whole directory are one-offs from 2021 and 2023, under a naming scheme (`...ai-aarch64`) it no longer
 uses. `pc` there uses the host's OpenSCAD, exactly as the wheels do.
+
+### One build for every platform
+
+The requirement is stronger than "the same version number": every platform carries OpenSCAD built from the
+**same upstream source**, which the snapshot date in the filenames is what identifies. OpenSCAD's language and
+its exports both move between builds, so bundles built from different sources disagree about what a `.scad`
+file means — a part that renders on one machine could fail to parse, or render differently, on another. An
+older date that all three platforms share therefore beats a newer one that they do not, and no platform is
+ever bumped alone. `build.sh` carries the command that finds the newest date with all three artifacts, which
+is not the same as the newest date in the directory.
 
 ### It is a development snapshot, and the pin expires
 
@@ -520,9 +531,10 @@ and glib beside the ones Python needs, on the frozen application's own library s
 ~100MB. That means a bare `pyinstaller partcad.spec` produces a bundle without OpenSCAD; `build.sh` is the
 supported way to build one, as it already is for the dependency pre-flight.
 
-To move to a different OpenSCAD, change `OPENSCAD_VERSION` and the three `OPENSCAD_SHA256_*` values in
-`build.sh` together, as described above — one date that carries all three artifacts, and the hash of each read
-from the `.sha256` beside it.
+To move to a different OpenSCAD, replace the `OPENSCAD BUILDS` block at the top of `build.sh` wholesale — the
+version, the three URLs and the three checksums, all naming one date. That block documents how to find a date
+that qualifies and how the three filenames differ; a startup check refuses a bump that moved the version but
+left a URL behind.
 
 That sandbox is also why `partcad/wrappers/*.py` are bundled as *data* rather than frozen as modules: they are
 handed to that other interpreter as a file path.
