@@ -95,13 +95,13 @@ def distribution_name(requirement: str) -> str:
     return name.replace("_", "-").lower()
 
 
-def read_records(site_packages: pathlib.Path) -> dict[str, dict[str, tuple[str, str]]]:
+def read_records(site_packages: pathlib.Path) -> dict[str, dict[str, str]]:
     """Map each installed path to the distributions that claim it and the hash each recorded.
 
     Keyed by the path as the RECORD spells it (relative to site-packages), then
     by the dist-info directory it came from.
     """
-    claims: dict[str, dict[str, tuple[str, str]]] = {}
+    claims: dict[str, dict[str, str]] = {}
     for dist_info in sorted(site_packages.glob("*.dist-info")):
         record = dist_info / "RECORD"
         if not record.exists():
@@ -109,25 +109,18 @@ def read_records(site_packages: pathlib.Path) -> dict[str, dict[str, tuple[str, 
         for row in csv.reader(record.read_text(encoding="utf-8", errors="replace").splitlines()):
             if len(row) < 2 or not row[1].startswith("sha256="):
                 continue
-            claims.setdefault(row[0], {})[dist_info.name] = (row[1][len("sha256=") :], dist_info.name)
+            claims.setdefault(row[0], {})[dist_info.name] = row[1][len("sha256=") :]
     return claims
 
 
-def contested_paths(claims: dict[str, dict[str, tuple[str, str]]]) -> dict[str, dict[str, str]]:
+def contested_paths(claims: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
     """Only the paths two or more distributions install with *different* contents.
 
     Two wheels shipping a byte-identical `__init__.py` overwrite each other
     harmlessly and forever; there is nothing to get wrong there, and reporting
     it would bury the one case that matters.
     """
-    contested = {}
-    for path, owners in claims.items():
-        if len(owners) < 2:
-            continue
-        hashes = {digest for digest, _ in owners.values()}
-        if len(hashes) > 1:
-            contested[path] = {dist: digest for dist, (digest, _) in owners.items()}
-    return contested
+    return {path: owners for path, owners in claims.items() if len(owners) > 1 and len(set(owners.values())) > 1}
 
 
 def site_packages_dir() -> pathlib.Path:
