@@ -199,6 +199,22 @@ concurrency:
 # embeds. If Windows ever does need two, the host-to-build mapping has to exist
 # first, or the choice is a guess with a version number on it.
 env:
+  # The libraries the bundled OpenSCAD AppImage resolves from the host. It is not
+  # fully self-contained -- see dev-tools/pyinstaller/build.sh -- and every job
+  # that runs the Linux x86_64 payload needs these: the freeze (its own smoke
+  # test runs it), the install (it runs it after unpacking), and the examples.
+  # Defined once here because three copies of a list like this drift.
+  #
+  # libegl1 and libopengl0 are the two the Qt5 release never wanted and the Qt6
+  # snapshot does. They were not guessed: the build's smoke test runs `ldd` over
+  # the payload when it will not start, and named exactly `libEGL.so.1` and
+  # `libOpenGL.so.0` as unresolvable while everything else resolved through the
+  # AppImage's own `usr/lib`. Add to this list the same way rather than by
+  # reasoning about what Qt "should" need.
+  OPENSCAD_HOST_LIBRARIES: >-
+    libgl1 libx11-6 libxcb1 libfontconfig1 libfreetype6 libglib2.0-0 libharfbuzz0b
+    libegl1 libopengl0
+
   # Built on every run.
   PLATFORMS_CORE: >-
     [{"os": "ubuntu-24.04", "platform": "ubuntu-24.04-x86_64"},
@@ -468,8 +484,7 @@ jobs:
       - name: Install the bundled OpenSCAD's host libraries (Linux x86_64)
         if: matrix.platform == 'ubuntu-22.04-x86_64' || matrix.platform == 'ubuntu-24.04-x86_64'
         run: |
-          sudo apt-get install --yes --no-install-recommends \
-            libgl1 libx11-6 libxcb1 libfontconfig1 libfreetype6 libglib2.0-0 libharfbuzz0b
+          sudo apt-get install --yes --no-install-recommends ${{ env.OPENSCAD_HOST_LIBRARIES }}
 
       # The platform id is passed rather than detected: the runner image label is
       # the authoritative answer to which OS version this is, and recovering it
@@ -640,6 +655,15 @@ jobs:
           partcad --help
           pc init
           pc list
+
+      # Same libraries as the freeze and the examples: this job runs the payload
+      # too, and had no step for them because the older OpenSCAD release found
+      # what it needed on the runner unaided.
+      - name: Install the bundled OpenSCAD's host libraries (Linux x86_64)
+        if: startsWith(matrix.platform, 'ubuntu-') && endsWith(matrix.platform, '-x86_64')
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ${{ env.OPENSCAD_HOST_LIBRARIES }}
 
       # The bundled OpenSCAD has to survive being packed, downloaded and
       # unpacked with its executable bit intact, which the build's own smoke
@@ -960,8 +984,7 @@ jobs:
         if: matrix.platform == 'ubuntu-24.04-x86_64'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            libgl1 libx11-6 libxcb1 libfontconfig1 libfreetype6 libglib2.0-0 libharfbuzz0b
+          sudo apt-get install --yes --no-install-recommends ${{ env.OPENSCAD_HOST_LIBRARIES }}
 
       # Linux arm64 is the one bundle that carries no OpenSCAD -- upstream builds
       # no current arm64 snapshot (see build.sh) -- so it falls back to a host
