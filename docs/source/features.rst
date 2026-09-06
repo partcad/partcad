@@ -128,7 +128,9 @@ of the machine rather than of the part.
 
 ``examples/feature_cae`` is the pair of cases to check an implementation against
 — a cantilever and a pipe, each with a closed-form answer to compare the solver
-with.
+with. Against CalculiX the cantilever reads 0.1655 mm where the model predicts
+0.16-0.18 mm; the pipe does not converge yet, and that package's ``README.md``
+says why.
 
 See :ref:`pc cae <cae>` for the command and the units it accepts.
 
