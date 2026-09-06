@@ -561,10 +561,10 @@ jobs:
       # with enough of its signed bundle intact to still launch, which is the
       # half of this that only a runner can answer.
       #
-      # Linux arm64 is excluded because it carries no payload -- upstream
-      # publishes the pinned release for x86_64 only. Windows does carry one and
-      # is still not covered here; that predates this step growing a macOS leg,
-      # and the build's own smoke test is what exercises it there.
+      # Linux arm64 is excluded because it carries no payload -- upstream builds
+      # no current arm64 snapshot. Windows does carry one and is still not
+      # covered here; that predates this step growing a macOS leg, and the
+      # build's own smoke test is what exercises it there.
       - name: Run the bundled OpenSCAD after installation
         if: runner.os == 'macOS' || (startsWith(matrix.platform, 'ubuntu-') && endsWith(matrix.platform, '-x86_64'))
         shell: bash
@@ -876,15 +876,15 @@ jobs:
           sudo apt-get install --yes --no-install-recommends \
             libgl1 libx11-6 libxcb1 libfontconfig1 libfreetype6 libglib2.0-0 libharfbuzz0b
 
-      # Linux arm64 is the one bundle that carries no OpenSCAD -- upstream
-      # publishes the pinned release for x86_64 only (see build.sh) -- so it
-      # falls back to a host one, exactly as the wheels do.
+      # Linux arm64 is the one bundle that carries no OpenSCAD -- upstream builds
+      # no current arm64 snapshot (see build.sh) -- so it falls back to a host
+      # one, exactly as the wheels do.
       - name: Install OpenSCAD (Linux arm64)
         if: matrix.platform == 'ubuntu-24.04-arm64'
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends openscad
 
       # macOS installs nothing here on purpose, and used to install the
-      # "openscad@snapshot" cask. The bundle now carries that same snapshot, and
+      # "openscad@snapshot" cask. Every bundle now carries that same snapshot, and
       # `find_executable` prefers the bundled copy, so a host install would leave
       # this job green whether or not the payload works -- exactly what the
       # Linux x86_64 leg avoids by installing the AppImage's libraries and not

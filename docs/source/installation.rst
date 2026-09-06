@@ -387,15 +387,15 @@ consequences worth knowing:
   installations have these; a stripped-down container or a minimal server may not, and there the bundled
   OpenSCAD will not start -- pass ``--ignore-bundled-openscad`` to fall back to a host OpenSCAD if you have
   one.
-* On macOS the bundled OpenSCAD is a development snapshot rather than the last release, on both
-  architectures. The release predates Apple silicon and ships an Intel-only build that would quietly
-  require Rosetta 2, and Homebrew disabled it in September 2026 for failing the macOS Gatekeeper check --
-  so the snapshot is both the only build that runs everywhere and the only one still installable. It is a
-  newer OpenSCAD than the Linux and Windows bundles carry, which can mean small differences in what a
-  ``.scad`` part renders to.
+* The bundled OpenSCAD is a development snapshot rather than the last release, and it is the *same*
+  snapshot on every platform, so a ``.scad`` part renders the same wherever you run ``pc``. The last
+  release, 2021.01, could not be that shared version: it predates Apple silicon and ships an Intel-only
+  build that would quietly require Rosetta 2, and Homebrew disabled it in September 2026 for failing the
+  macOS Gatekeeper check. It is a considerably newer OpenSCAD than 2021.01, so a part may render
+  differently than it did with a 2021.01 you had installed.
 
-The Linux arm64 bundles carry no OpenSCAD: upstream publishes the pinned release for x86_64 only. Install
-OpenSCAD yourself there and PartCAD will use it.
+The Linux arm64 bundles carry no OpenSCAD: upstream builds no current arm64 snapshot. Install OpenSCAD
+yourself there and PartCAD will use it.
 
 One thing is deliberately not in the bundle, because PartCAD runs it as an external program rather than
 importing it, exactly as the wheels do: **git**, used for your git configuration when packages are fetched

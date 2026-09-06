@@ -37,8 +37,9 @@ runs:
         # The snapshot cask is the maintained one, and on these runners it is
         # the only candidate: they are arm64, and 2021.01 ships an x86_64-only
         # .dmg, so fetching that release directly would quietly require Rosetta 2
-        # rather than fix anything. "dev-tools/pyinstaller/build.sh" carries the
-        # same snapshot into the macOS bundles, for the same two reasons.
+        # rather than fix anything. "dev-tools/pyinstaller/build.sh" carries that
+        # same snapshot into every bundle, on every platform, for the same two
+        # reasons -- one OpenSCAD version everywhere.
         #
         # These are the wheel-based jobs, which have no bundle and so need an
         # OpenSCAD on the host. The bundle-based jobs in "build-standalone.yml"

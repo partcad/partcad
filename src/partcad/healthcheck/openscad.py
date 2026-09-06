@@ -7,9 +7,11 @@ so the bundle behaves the same on every machine rather than depending on
 whatever version a host happens to have; everywhere else -- the wheels, a source
 checkout -- there is no bundled copy and this falls back to the host's, exactly
 as before. Every bundle carries OpenSCAD except the Linux arm64 one, which has
-none to carry: upstream publishes the pinned release for x86_64 only. See
-``dev-tools/pyinstaller/build.sh``, which also says why macOS carries a
-development snapshot where the other platforms carry a release.
+none to carry: upstream builds no current arm64 snapshot. Every bundle that does
+carry one carries the same version, so a ``.scad`` part renders the same
+wherever ``pc`` runs; see ``dev-tools/pyinstaller/build.sh`` for why that shared
+version is a development snapshot rather than a release, and for the expiry that
+comes with it.
 """
 
 import os
@@ -185,8 +187,8 @@ class MacOpenSCADCheck(OpenSCADCheck):
         pass the macOS Gatekeeper check, so ``brew install openscad`` cannot
         succeed on any machine any more. 2021.01 is also x86_64 only, so on
         Apple Silicon it was the wrong build to reach for even while it
-        installed. ``dev-tools/pyinstaller/build.sh`` carries the same snapshot
-        into the macOS bundles, for both of those reasons.
+        installed. ``dev-tools/pyinstaller/build.sh`` carries that same snapshot
+        into every bundle, for both of those reasons.
 
         This is the wheel's path to an OpenSCAD, and it needs Homebrew. A
         standalone bundle does not come here at all: it carries its own copy,
@@ -224,6 +226,17 @@ class MacOpenSCADCheck(OpenSCADCheck):
 
 
 class WindowsOpenSCADCheck(OpenSCADCheck):
+    """Install OpenSCAD for a Windows host that has none.
+
+    Deliberately still the 2021.01 *release*, where the standalone bundle carries
+    a development snapshot: this installs onto a user's machine, and a stable
+    release is the right thing to put there. The two are pinned separately and
+    they do not have to agree -- this is the wheel's path to an OpenSCAD, and a
+    bundle never reaches it, because it carries its own and ``test()`` resolves
+    that one first. It used to be the same version as the bundle's only because
+    the bundle was on the release too.
+    """
+
     def __init__(self):
         super().__init__()
         self.installation_path = os.path.join(UserConfig.get_config_dir(), "OpenSCAD")
