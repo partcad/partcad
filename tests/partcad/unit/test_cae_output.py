@@ -359,6 +359,48 @@ def test_a_skipped_analysis_is_not_reported_as_an_error(package, monkeypatch, ca
     assert not [record for record in caplog.records if record.levelname == "ERROR"]
 
 
+def test_a_skip_is_not_remembered(package, monkeypatch):
+    """A pass that turned on the machine must not outlive the machine.
+
+    The cache key describes the *question* -- the shape, the boundary
+    conditions, the implementation and its options -- and nothing in it
+    describes whether a solver is installed, because a test cannot know what its
+    implementation needs. So installing CalculiX changes no key, and a cached
+    skip would answer in hundredths of a second without ever going near the
+    solver that is now there. `pc test` would keep reporting a pass for a part
+    nobody has analysed.
+    """
+    import asyncio
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, error=Exception("ccx: not found"))
+
+    test_ctx = {}
+    assert asyncio.run(CaeTest(cae.FEA).test([], package, part, test_ctx)) is CaeTest.TEST_PASSED
+    assert test_ctx.get(CaeTest.NOT_CACHEABLE) is True
+
+
+def test_a_real_verdict_is_remembered(package, monkeypatch):
+    """The opt-out is for the skip alone: an analysis that ran is cacheable.
+
+    Running a solver is the expensive thing `pc test`'s cache exists for, so a
+    run that produced an answer -- pass or fail -- has to stay cacheable.
+    """
+    import asyncio
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, result={"findings": [], "filepath": "bracket.fea.glb"})
+    clean = {}
+    assert asyncio.run(CaeTest(cae.FEA).test([], package, part, clean)) is CaeTest.TEST_PASSED
+    assert CaeTest.NOT_CACHEABLE not in clean
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, result={"findings": [{"message": "too thin", "severity": "error"}]})
+    found = {}
+    assert asyncio.run(CaeTest(cae.FEA).test([], package, part, found)) is CaeTest.TEST_FAILED
+    assert CaeTest.NOT_CACHEABLE not in found
+
+
 def test_a_configuration_error_from_the_analysis_reads_as_one(package, monkeypatch, caplog):
     """Not every bad declaration is caught before the analysis starts.
 

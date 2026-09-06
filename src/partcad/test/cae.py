@@ -107,7 +107,7 @@ class CaeTest(Test):
             parts.append("unresolved:%s" % e)
         return "." + self.analysis + "=" + hashlib.md5("\n".join(parts).encode()).hexdigest()
 
-    async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
+    async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = None) -> bool:
         """Run the analysis, and pass the shape only if it found nothing.
 
         Two ways to fail, and they are different: the part declared the section
@@ -130,6 +130,14 @@ class CaeTest(Test):
         here too. `pc cae fea` is the command that reports it as the error it is,
         and is what a machine with a solver on it should be running.
         """
+        # Not `= {}` in the signature, the way the sibling checks have it: this
+        # is the one that *writes* to `test_ctx` (`NOT_CACHEABLE`, below), and a
+        # default argument is one dict shared by every call that omits one. A
+        # direct call with no context would otherwise set the flag on the
+        # default itself and leave it set for every later caller.
+        if test_ctx is None:
+            test_ctx = {}
+
         try:
             config = self._config(shape)
         except pc_cae.CaeConfigError as e:
@@ -150,6 +158,14 @@ class CaeTest(Test):
             # No verdict, so nothing to fail the part with. Loudly, because a
             # silent pass here reads as "the part was checked" when nothing of
             # the sort happened -- see the docstring.
+            #
+            # And not remembered. This is the one verdict here that is about the
+            # machine rather than about the part, and the cache key describes
+            # only the question -- the boundary conditions, the implementation,
+            # its options. Installing CalculiX changes none of them, so a cached
+            # pass would outlive the reason for it and answer in hundredths of a
+            # second without going near the solver that is now there.
+            test_ctx[self.NOT_CACHEABLE] = True
             pc_logging.warning(
                 "Test skipped: %s:%s: %s was not run: %s"
                 % (shape.project_name, shape.name, self.analysis.upper(), e)

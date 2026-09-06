@@ -152,6 +152,13 @@ isort --check src/partcad tests/partcad
   repository's own `examples/feature_cae` included. The cost is that a solver which *crashes* is skipped too,
   because nothing here can tell that from one that is absent; `pc cae` is where that is an error.
 
+  That skip is the one verdict `pc test` does **not** cache, via `Test.NOT_CACHEABLE` on the `test_ctx`. A
+  cache key describes the question -- the shape's hash, the boundary conditions, the implementation and its
+  options -- and nothing in it describes the machine, because a test cannot know what its implementation needs
+  installed. Installing CalculiX therefore changes no key, and a remembered skip would answer in hundredths of
+  a second without going near the solver that is now there. `CaeTest` is the only test that reaches that state,
+  and the flag exists for it.
+
 - **Drawing ports and interfaces** (`./src/partcad/render_overlay.py`, `./src/partcad/wrappers/stroke_text.py`):
   `pc render --with-ports`/`--with-interfaces` draws the connection metadata on top of a projection.
   `render_overlay.py` answers only *where* the ports are — a lookup for a part, a walk for an assembly (and so

@@ -315,7 +315,10 @@ Object commands
   section — and to nothing else, so a package of bolts pays nothing for them — and fail it when the analysis
   produces any finding. A machine with no solver installed is not a failure: the check reports that it did not
   run and passes, because PartCAD ships no solver and declaring ``fea:`` must not break ``pc test`` for every
-  contributor who has not installed one. ``pc cae`` is what reports a missing solver as the error it is.
+  contributor who has not installed one. ``pc cae`` is what reports a missing solver as the error it is. That
+  pass is not remembered, unlike every other verdict ``pc test`` reaches: it is a statement about the machine,
+  and installing a solver changes nothing a cache key is built from, so a remembered one would outlive its
+  reason.
 
 ``pc convert``
   Convert parts, sketches, assemblies or scenes to another format and update their type in the package.
