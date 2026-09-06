@@ -121,3 +121,55 @@ def test_ctx_root_reports_the_loaded_package():
     # provisional '//' the Context starts out with.
     assert ctx.name != pc.consts.ROOT
     assert ctx.get_project(ctx.name) is ctx.root
+
+
+# --------------------------------------------------------------------------- #
+# What "offline" is decided by                                                 #
+# --------------------------------------------------------------------------- #
+
+
+def test_the_probe_is_a_public_resolver_when_nothing_is_proxied(monkeypatch):
+    """The historical answer, and the right one on a host that dials out itself."""
+    monkeypatch.delenv("HTTPS_PROXY", raising=False)
+    monkeypatch.delenv("https_proxy", raising=False)
+    assert pc.context.connectivity_probe() == ("8.8.8.8", 53)
+
+
+@pytest.mark.parametrize(
+    "proxy, expected",
+    [
+        ("http://127.0.0.1:33893", ("127.0.0.1", 33893)),
+        ("http://proxy.example.com:3128", ("proxy.example.com", 3128)),
+        # No scheme is a spelling people use, and urlparse reads it as a path
+        # unless one is supplied.
+        ("proxy.example.com:3128", ("proxy.example.com", 3128)),
+        # No port either: an HTTP proxy's default.
+        ("http://proxy.example.com", ("proxy.example.com", 80)),
+        ("http://user:secret@proxy.example.com:8080", ("proxy.example.com", 8080)),
+    ],
+)
+def test_a_proxied_host_is_asked_about_its_proxy(monkeypatch, proxy, expected):
+    """Where every packet goes through a proxy, only the proxy can answer.
+
+    8.8.8.8 is unreachable in such an environment while git and every download
+    work, so probing it reports offline on a machine that can fetch everything
+    PartCAD needs -- and 'is_connected()' gates the clone, so an import is then
+    never attempted at all.
+    """
+    monkeypatch.setenv("HTTPS_PROXY", proxy)
+    monkeypatch.delenv("https_proxy", raising=False)
+    assert pc.context.connectivity_probe() == expected
+
+
+def test_the_lowercase_spelling_is_read_too(monkeypatch):
+    """'https_proxy' is what most tools set; both spellings are in the wild."""
+    monkeypatch.delenv("HTTPS_PROXY", raising=False)
+    monkeypatch.setenv("https_proxy", "http://proxy.example.com:3128")
+    assert pc.context.connectivity_probe() == ("proxy.example.com", 3128)
+
+
+def test_an_unparseable_proxy_falls_back_rather_than_failing(monkeypatch):
+    """A value with no host in it says nothing, so the resolver answers instead."""
+    monkeypatch.setenv("HTTPS_PROXY", "://")
+    monkeypatch.delenv("https_proxy", raising=False)
+    assert pc.context.connectivity_probe() == ("8.8.8.8", 53)

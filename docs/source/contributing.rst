@@ -396,6 +396,56 @@ not ``~/.gnupg/``:
 
 .. _Dev Containers CLI: https://github.com/devcontainers/cli
 
+Without Docker: a native checkout
+---------------------------------
+
+Both routes above start a container, and a container needs a Docker daemon. Some machines have none and cannot be
+given one — the sandbox a cloud coding agent runs in, a CI runner with no privileged access. There the dev container
+is not a thing to insist on, so install into the checkout and run everything directly:
+
+.. code-block:: bash
+
+  $ ./dev-tools/setup-native.sh
+
+That runs ``poetry install``, repairs the one thing a parallel install gets wrong (below), and reports which of
+OpenSCAD, a Docker daemon and conda this machine has, and what each one's absence costs. Afterwards, every command in
+the rest of this page works with its ``devcontainer exec`` prefix dropped and its ``poetry run`` kept.
+
+This is a fallback rather than a second supported environment, and it is worth being explicit about what it does not
+give you:
+
+* **The** ``pre-commit`` **hooks do not run.** ``pre-commit`` is installed by the dev container's image, not by
+  ``poetry install``, and ``.git/hooks/pre-commit`` is written by ``pre-commit install`` running inside the container.
+  So there is no hook to fail, and ``git commit`` runs no gate at all without saying so. Run ``pytest``, ``behave``
+  and the linters yourself before committing; CI runs them regardless.
+* **OpenSCAD is the one missing tool that fails rather than skips.** A ``.scad`` part raises "OpenSCAD executable is
+  not found" and the tests that convert one fail with it. ``apt-get update && apt-get install -y openscad`` on a
+  Debian-ish host, a Homebrew cask on macOS. The ``update`` is not optional on an image whose package lists have gone
+  stale: without it the fetch 404s on point releases that have since been superseded.
+* **Without a Docker daemon** the KiCad example is skipped and nothing else is affected.
+* **Without conda** the ``pythonSandbox`` option falls back to ``venv``, which builds a real virtual environment of
+  PartCAD's own and runs the CAD wrappers in it. It cannot provision an *interpreter version*, so a package asking for
+  a Python this host does not have renders on the host's instead and says so; everything else behaves the same.
+
+.. warning::
+
+  **A** ``poetry install`` **can leave the checkout segfaulting, and nothing reports it.** ``cadquery-ocp`` and
+  ``cadquery-ocp-novtk`` are separate distributions that install the very same 160 MB ``OCP/OCP.cpython-*.so``.
+  Poetry installs in parallel, so on a machine slow enough to lose that race two workers write that one path at
+  once and what lands is a blend of the two wheels. Both installs report success.
+
+  What you see is much later and somewhere else: ``import OCP`` hands a corrupt ELF to the dynamic loader, and the
+  interpreter dies with ``Fatal Python error: Segmentation fault`` — during pytest *collection*, since a test module
+  imports build123d at import time, so no test has failed and there is nothing to point at.
+
+  .. code-block:: bash
+
+    $ python3 dev-tools/check_installed_files.py         # report
+    $ python3 dev-tools/check_installed_files.py --fix   # report and reinstall
+
+  ``setup-native.sh`` runs the second of those. The dev container's image installs from
+  ``.devcontainer/requirements.txt`` with pip, one wheel at a time, which is why this is not the container's problem.
+
 Install Dependencies
 --------------------
 

@@ -157,6 +157,39 @@ npx --yes @devcontainers/cli exec --workspace-folder . <command>
 
 Everything below is written as the command to pass to `exec`.
 
+#### When there is no dev container to enter
+
+`devcontainer up` needs a Docker daemon, and some machines have none — a cloud agent session, a bare CI
+runner. There the container is not a thing to insist on; it is a thing that cannot happen, and the fallback is
+to install into the checkout and run everything directly:
+
+```bash
+./dev-tools/setup-native.sh          # poetry install, plus what installing outside the container gets wrong
+```
+
+Then drop the `devcontainer exec` prefix from every command below and keep the `poetry run` one.
+
+This is a fallback and not a second supported environment. What it does not give you:
+
+* **`pre-commit`.** It is installed by the container's image, not by `poetry install`, and `.git/hooks/` is
+  written by `pre-commit install` running *inside* the container. So on such a machine there is no hook to
+  fail and `git commit` silently runs no gate at all — which is worse than a hook that refuses, because
+  nothing tells you. Run what the hooks run (`pytest`, `behave`, and the linters) before committing, and read
+  their output; CI runs them either way.
+* **OpenSCAD, a Docker daemon, conda.** `setup-native.sh` reports which of the three are missing and what each
+  costs. Only OpenSCAD's absence turns into failures rather than skips, and on a Debian-ish host
+  `apt-get update && apt-get install -y openscad` is the whole fix (the `update` is not optional on an image
+  whose package lists have gone stale — without it the fetch 404s on versions that have since been
+  superseded). Without conda the Python sandbox falls back to `venv`, which is a real sandbox and passes the
+  suite — see `pythonSandbox` in `src/partcad_utils/user_config.py`.
+
+The one failure worth recognising on sight: **a `poetry install` on a slow machine can leave the checkout
+segfaulting.** `cadquery-ocp` and `cadquery-ocp-novtk` both install `OCP/OCP.cpython-*.so`, Poetry installs in
+parallel, and two workers writing that one 160 MB path at once leave a blend of the two behind. Nothing
+reports it; `import OCP` then dies in the dynamic loader, so pytest *collection* ends with `Fatal Python
+error: Segmentation fault` and no failing test. `dev-tools/check_installed_files.py --fix` detects and repairs
+exactly that, and `setup-native.sh` runs it. Do not go looking for a bug in the change under test.
+
 ### Environment setup
 
 Dependencies are already installed in the image. Only re-run this if you change `pyproject.toml`:
