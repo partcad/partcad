@@ -271,6 +271,133 @@ def test_analysing_what_declares_nothing_says_so(package):
 
 
 # --------------------------------------------------------------------------- #
+# The check `pc test` runs                                                    #
+# --------------------------------------------------------------------------- #
+#
+# `CaeTest` has one verdict -- "did the analysis say anything?" -- and three
+# ways of not reaching it, which are different failures and have to read as
+# different sentences. None of them needs a solver: what runs the analysis is
+# `Shape.analyze_async`, and every branch below is what the check does with what
+# that returned or raised.
+
+
+def _analysis(part, monkeypatch, result=None, error=None):
+    """Stand in for the solver: hand the check a result, or raise at it."""
+
+    async def analyze_async(ctx, analysis, **kwargs):
+        if error is not None:
+            raise error
+        return result
+
+    monkeypatch.setattr(part, "analyze_async", analyze_async)
+
+
+def test_the_check_passes_a_part_whose_analysis_found_nothing(package, monkeypatch):
+    """An empty findings array is the pass. That is the whole verdict."""
+    import asyncio
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, result={"findings": [], "filepath": "bracket.fea.vtu"})
+    assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_PASSED
+
+
+def test_the_check_fails_a_part_whose_analysis_reported_something(package, monkeypatch, caplog):
+    """A finding is the failure, and the report says what was found."""
+    import asyncio
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, result={"findings": [{"message": "too thin", "severity": "error"}]})
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_FAILED
+    assert "too thin" in caplog.text
+
+
+def test_a_part_that_declares_nothing_is_not_checked(package, monkeypatch):
+    """`cfd:` is undeclared on this part, so the CFD check has nothing to say.
+
+    Passing rather than failing is the point: a `pc test -r` over a package tree
+    would otherwise fail every bolt in it for not asking to be analysed.
+    """
+    import asyncio
+
+    part = _bracket(package)
+
+    async def never(*args, **kwargs):
+        raise AssertionError("the analysis must not be run for an undeclared section")
+
+    monkeypatch.setattr(part, "analyze_async", never)
+    assert asyncio.run(CaeTest(cae.CFD).test([], package, part)) is CaeTest.TEST_PASSED
+
+
+def test_an_analysis_that_could_not_run_is_not_a_pass(package, monkeypatch, caplog):
+    """No solver on this machine is not a verdict on the part -- and not a pass.
+
+    The part was asked about and has not been answered, which is the one thing
+    the check must never report as "fine".
+    """
+    import asyncio
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, error=Exception("ccx: not found"))
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_FAILED
+    assert "FEA could not be run" in caplog.text
+    assert "ccx: not found" in caplog.text
+
+
+def test_a_configuration_error_from_the_analysis_reads_as_one(package, monkeypatch, caplog):
+    """Not every bad declaration is caught before the analysis starts.
+
+    `analyze_async` re-reads the section and resolves the implementation, so it
+    raises `CaeConfigError` of its own -- and that is a failure of the package,
+    not a machine that could not run a solver. The two read differently.
+    """
+    import asyncio
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, error=cae.CaeConfigError("'fea:' names no load"))
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_FAILED
+    assert "names no load" in caplog.text
+    assert "could not be run" not in caplog.text
+
+
+def test_a_malformed_section_fails_the_check_with_its_own_sentence(package, monkeypatch, caplog):
+    """A package that got the declaration wrong hears why, from `pc test` too."""
+    import asyncio
+
+    part = _bracket(package)
+    part.config["fea"] = {"load": {"hook": "5 bananas"}}
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_FAILED
+    assert "bananas" in caplog.text
+
+
+def test_the_cache_key_of_a_malformed_section_is_its_own(package):
+    """Correcting the declaration has to re-run, not re-read the old failure."""
+    part = _bracket(package)
+    good = CaeTest(cae.FEA).cache_key_suffix(package, part)
+    part.config["fea"] = {"load": {"hook": "5 bananas"}}
+    broken = CaeTest(cae.FEA).cache_key_suffix(package, part)
+    assert broken.startswith(".malformed=")
+    assert broken != good
+
+
+def test_an_undeclared_analysis_adds_nothing_to_the_cache_key(package):
+    """A shape this check does not apply to keeps the key it already had."""
+    assert CaeTest(cae.CFD).cache_key_suffix(package, _bracket(package)) == ""
+
+
+def test_only_a_part_is_analysed(package):
+    """An assembly's members each carry their own conditions; the whole has none."""
+
+    class NotAPart:
+        """Anything that is not a `Part` -- an assembly, a sketch, a scene."""
+
+    assert CaeTest(cae.FEA).cache_key_suffix(package, NotAPart()) == ""
+
+
+# --------------------------------------------------------------------------- #
 # The user configuration                                                      #
 # --------------------------------------------------------------------------- #
 

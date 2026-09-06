@@ -338,3 +338,72 @@ def test_findings_report_orders_the_worst_first():
 def test_findings_report_says_so_when_there_is_nothing():
     """A pass is an answer and is printed as one, not as an empty list."""
     assert "found nothing" in cae.findings_report("//pkg:bracket", "fea", [])
+
+
+# --------------------------------------------------------------------------- #
+# The shapes a declaration can take, and the ones it cannot                   #
+# --------------------------------------------------------------------------- #
+
+
+def test_one_interface_name_holds_all_of_it():
+    """`fix: m3-screw` is the degenerate case of the list, and means the same."""
+    config = AnalysisConfig("fea", {"fix": "m3-screw"})
+    assert config.fixtures == {"m3-screw": [EVERY_INSTANCE]}
+
+
+def test_fix_that_is_neither_a_list_nor_a_map_is_refused():
+    """A number under `fix:` names no interface, and saying so beats guessing."""
+    with pytest.raises(CaeConfigError, match="neither a list of interfaces nor a map"):
+        AnalysisConfig("fea", {"fix": 7})
+
+
+def test_an_instance_that_is_neither_a_name_nor_a_list_is_refused():
+    """`fix: {m3-screw: 3}` names an instance called what, exactly?"""
+    with pytest.raises(CaeConfigError, match="neither an interface instance nor a list"):
+        AnalysisConfig("fea", {"fix": {"m3-screw": 3}})
+
+
+def test_the_repr_says_what_was_parsed():
+    """The loads read back as the newtons they became, not as what was written."""
+    text = repr(AnalysisConfig("fea", {"fix": ["m3-screw"], "load": {"hook": "1 kg"}}))
+    assert "fea" in text and "m3-screw" in text
+    assert str(GRAVITY) in text
+
+
+# --------------------------------------------------------------------------- #
+# Findings an implementation did not shape the way PartCAD expects            #
+# --------------------------------------------------------------------------- #
+
+
+def test_findings_that_are_not_a_list_become_one():
+    """A solver that answered with a sentence still gets its sentence printed."""
+    assert cae.normalize_findings("it breaks") == [{"message": "it breaks"}]
+
+
+def test_a_single_finding_need_not_be_wrapped_in_a_list():
+    """One dict is one finding, which is the shape a script most easily returns."""
+    assert cae.normalize_findings({"message": "it breaks"}) == [{"message": "it breaks"}]
+
+
+def test_a_finding_with_no_recognisable_text_still_prints_as_something():
+    """Better the whole record than a row of blanks with the detail hidden."""
+    (finding,) = cae.normalize_findings([{"severity": "error", "stress": 1.0}])
+    assert "stress" in finding["message"]
+    assert finding["severity"] == "error"
+
+
+def test_a_port_that_belongs_to_no_interface_is_passed_over():
+    """A bare coordinate frame is not something a condition can name."""
+    config = AnalysisConfig("fea", {"fix": ["m3-screw"]})
+    assigned, unmatched = cae.assign_ports(config, [_port(None)])
+    assert assigned == []
+    assert unmatched == [("m3-screw", "this object does not implement it")]
+
+
+def test_a_load_named_for_one_instance_leaves_the_others_unloaded():
+    """The other instances are not "loaded with nothing"; they are left out."""
+    config = AnalysisConfig("fea", {"load": {"rail": {"left": "1 N"}}})
+    records = [_port("//pkg:rail", "left", "a"), _port("//pkg:rail", "right", "b")]
+    assigned, unmatched = cae.assign_ports(config, records)
+    assert [record["port"] for record in assigned] == ["a"]
+    assert unmatched == []
