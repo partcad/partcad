@@ -5,6 +5,7 @@ import base64
 import io
 import json
 import logging
+import shutil
 import tarfile
 import typing as t
 import tempfile
@@ -55,6 +56,28 @@ for _name, _path in json.loads(os.environ.get("PC_CONTAINER_ALLOWED_COMMANDS", "
 logging.info("Allowed commands: %s", ", ".join(sorted(ALLOWED_COMMANDS)))
 
 
+def _within(path, prefix):
+    """The parts of `path` below `prefix`, or None if it is not below it.
+
+    Separator-agnostic in both directions, and that is the whole point of it.
+    The paths a caller sends are the caller's: a Windows client names
+    `D:\\pkg` and `D:\\pkg\\solve.py`, and this server runs inside a Linux
+    image where `os.sep` is `/`. Matching on `os.sep` alone left every one of
+    those unsubstituted -- so the command kept naming a directory on a machine
+    that is not this one, and the implementation was a path to nothing.
+
+    Returns `()` for the prefix itself, so "it is the directory" and "it is not
+    below it" stay distinguishable.
+    """
+    if path == prefix:
+        return ()
+    for separator in ("/", "\\"):
+        if path.startswith(prefix + separator):
+            tail = path[len(prefix) + 1 :]
+            return tuple(part for part in tail.replace("\\", "/").split("/") if part)
+    return None
+
+
 @jsonrpc.method("execute")
 def handle_execute_command(
     command: t.List[str],
@@ -102,32 +125,46 @@ def handle_execute_command(
         if not isinstance(command[i], str):
             raise PartcadJsonRpcException(-32602, f"Command parameter at index {i} is not a string")
         for host_path in sorted(extracted, key=len, reverse=True):
-            if command[i] == host_path or command[i].startswith(host_path + os.sep):
-                command[i] = extracted[host_path] + command[i][len(host_path) :]
+            inside = _within(command[i], host_path)
+            if inside is not None:
+                command[i] = os.path.join(extracted[host_path], *inside) if inside else extracted[host_path]
                 break
 
     # TODO(clairbee): input data validation for output files
 
-    # Replace the file names with temporary files
-    temp_files = []
+    # The files this call exchanges with the caller, in one directory of their
+    # own so that the whole lot goes away together.
+    #
+    # Plain files rather than 'tempfile.NamedTemporaryFile', which holds the
+    # file open: on Windows nothing else may then open it by name, so writing
+    # an input, or handing an output to the command, fails with "Permission
+    # denied". This server runs inside a Linux image and would never meet that
+    # -- but the code is also exercised directly by
+    # 'tests/partcad/unit/test_container_execute.py', which is where it showed
+    # up, and a file that is only open when something is reading or writing it
+    # is the simpler thing in any case.
+    exchange = tempfile.mkdtemp()
+
+    def exchanged(index, name):
+        """A path in the exchange directory, named after where it is used."""
+        return os.path.join(exchange, "%d%s" % (index, os.path.splitext(name)[1]))
+
     for i in range(1, len(command)):
         if not isinstance(command[i], str):
             raise PartcadJsonRpcException(-32602, f"Command parameter at index {i} is not a string")
         if command[i] in input_files:
-            temp_file = tempfile.NamedTemporaryFile(delete=True, suffix=os.path.splitext(command[i])[1])
-            temp_files.append(temp_file)
-            with open(temp_file.name, "wb") as f:
+            temp_file = exchanged(i, command[i])
+            with open(temp_file, "wb") as f:
                 f.write(base64.b64decode(input_files[command[i]]))
-            command[i] = temp_file.name
+            command[i] = temp_file
 
     temp_output_files = {}
     for i in range(1, len(command)):
         if not isinstance(command[i], str):
             raise PartcadJsonRpcException(-32602, f"Command parameter at index {i} is not a string")
         if command[i] in output_files:
-            temp_output_file = tempfile.NamedTemporaryFile(delete=True, suffix=os.path.splitext(command[i])[1])
-            temp_output_files[command[i]] = temp_output_file
-            command[i] = temp_output_file.name
+            temp_output_files[command[i]] = exchanged(i, command[i])
+            command[i] = temp_output_files[command[i]]
 
     # Check if command is in allowlist
     if command[0] not in ALLOWED_COMMANDS:
@@ -158,12 +195,23 @@ def handle_execute_command(
             "exit_code": process.returncode,
             "stdout": base64.b64encode(stdout).decode("utf-8"),
             "stderr": base64.b64encode(stderr).decode("utf-8"),
+            # Only the ones the command actually wrote: an implementation that
+            # failed has left nothing there, and reporting an empty file for it
+            # would be a path to nothing rather than a refusal.
             "output_files": {
-                k: base64.b64encode(open(v.name, "rb").read()).decode("utf-8") for k, v in temp_output_files.items()
+                name: base64.b64encode(open(path, "rb").read()).decode("utf-8")
+                for name, path in temp_output_files.items()
+                if os.path.isfile(path)
             },
         }
     except Exception as e:
         raise PartcadJsonRpcException(-32000, f"Execution error: {str(e)}")
+    finally:
+        # Everything this call unpacked and everything it exchanged. The server
+        # is long-lived -- one container serves every analysis a machine runs --
+        # so a directory per call that is never removed is a disk that fills up.
+        for directory in list(extracted.values()) + [exchange]:
+            shutil.rmtree(directory, ignore_errors=True)
 
 
 if __name__ == "__main__":

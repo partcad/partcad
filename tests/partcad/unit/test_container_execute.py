@@ -334,3 +334,63 @@ def test_what_the_implementation_printed_is_a_warning_and_not_a_failure(runtime,
     assert exitcode == 0
     assert not errors
     assert _deserialize(stdout)["success"] is True
+
+
+# --------------------------------------------------------------------------- #
+# The caller's paths are the caller's                                         #
+# --------------------------------------------------------------------------- #
+
+
+def test_within_is_separator_agnostic(server):
+    """The prefix test, on both spellings and on neither."""
+    assert server._within("/pkg", "/pkg") == ()
+    assert server._within("/pkg/solve.py", "/pkg") == ("solve.py",)
+    assert server._within("D:\\pkg\\a\\solve.py", "D:\\pkg") == ("a", "solve.py")
+    # A path that merely starts with the same characters is not below it.
+    assert server._within("/pkgs/solve.py", "/pkg") is None
+    assert server._within("/other", "/pkg") is None
+
+
+def test_a_windows_client_reaches_a_posix_container(server, package, tmp_path):
+    """The case the container exists for: no gmsh here, so run it over there.
+
+    A Windows machine is one of the two that cannot install the mesher the
+    CalculiX analyses need, so it is exactly the machine that reaches for a
+    container -- and every path it sends is spelled with a backslash while the
+    image it reaches is Linux. Matching on the *server's* separator left those
+    unsubstituted, so the command still named `D:\\...` inside the container.
+    """
+    output = "D:\\work\\result.glb"
+    command = [
+        "python",
+        os.path.join(WRAPPERS, "wrapper_export.py"),
+        output,
+        "D:\\pkg",
+        "D:\\pkg\\solve.py",
+    ]
+    result = server.handle_execute_command(
+        command=command,
+        stdin=base64.b64encode(_serialize({"question": "over there"}).encode("utf-8")).decode("utf-8"),
+        output_files=[output],
+        input_dirs={WRAPPERS: pc_runtime.pack_directory(WRAPPERS), "D:\\pkg": pc_runtime.pack_directory(str(package))},
+    )
+
+    assert result["exit_code"] == 0, base64.b64decode(result["stderr"]).decode("utf-8")
+    assert _deserialize(base64.b64decode(result["stdout"]).decode("utf-8"))["findings"] == ["over there"]
+    # And the model comes back under the name the caller asked for, backslashes
+    # and all -- that is the name it will write it to at its end.
+    assert list(result["output_files"]) == [output]
+
+
+def test_a_failed_implementation_reports_no_output_file(server, package, tmp_path):
+    """A file the command never wrote is not one to hand back.
+
+    Returning an empty one would be a path to nothing where the caller checks
+    for the model's existence to decide whether the analysis delivered.
+    """
+    (package / "solve.py").write_text("def process(path, request):\n    return {'success': False}\n")
+    output, result = _run(server, package, tmp_path)
+
+    assert result["exit_code"] == 0
+    assert result["output_files"] == {}
+    assert _deserialize(base64.b64decode(result["stdout"]).decode("utf-8"))["success"] is False
