@@ -9,8 +9,10 @@
 import asyncio
 import contextlib
 import docker
+import io
 import os
 import subprocess
+import tarfile
 import time
 import base64
 
@@ -75,6 +77,38 @@ async def wait_for_port(host, port, timeout=30):
             if writer:
                 writer.close()
                 await writer.wait_closed()
+
+
+def pack_directory(path: str) -> str:
+    """A directory as a base64 gzipped tar, for sending to a container.
+
+    What `input_files` cannot carry. Anything that runs *code* needs its
+    siblings: an implementation script imports the module it shares with the
+    rest of its package, and so does the wrapper that runs it, so sending the
+    one file the command names leaves it unable to start.
+
+    Deterministic where it can be: entries sorted, and the mtimes and ownership
+    left out, so that packing the same directory twice produces the same bytes.
+    That is not for reproducibility's sake -- nothing compares these -- but so
+    that a diff between two runs is a difference in the package rather than in
+    the clock.
+    """
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz", compresslevel=6) as tar:
+
+        def sanitize(info: tarfile.TarInfo) -> tarfile.TarInfo:
+            info.mtime = 0
+            info.uid = info.gid = 0
+            info.uname = info.gname = ""
+            return info
+
+        for entry in sorted(os.listdir(path)):
+            if entry in (".git", "__pycache__", ".venv"):
+                # Never wanted in a sandbox, and '.git' alone can be most of
+                # what a package weighs.
+                continue
+            tar.add(os.path.join(path, entry), arcname=entry, filter=sanitize)
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
 class SandboxUnavailable(Exception):
@@ -309,11 +343,14 @@ class Runtime:
         output_files: list[str] = None,
         env: dict = None,
         timeout: float = None,
+        input_dirs: list[str] = None,
     ):
         if input_files is None:
             input_files = []
         if output_files is None:
             output_files = []
+        if input_dirs is None:
+            input_dirs = []
 
         if self.rpc_client:
             # Load the contents of the given files
@@ -327,6 +364,7 @@ class Runtime:
                     "cwd": cwd,
                     "input_files": file_contents,
                     "output_files": output_files,
+                    "input_dirs": {path: pack_directory(path) for path in input_dirs},
                 },
             )
             if not response:
