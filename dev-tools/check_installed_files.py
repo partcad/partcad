@@ -6,27 +6,31 @@
 #
 """Catch the one thing a parallel `poetry install` can get wrong: a file two wheels both own.
 
-`cadquery-ocp` and `cadquery-ocp-novtk` are separate distributions that ship the
-very same native module, `OCP/OCP.cpython-*.so` -- 160 MB of it. That much is
-known and deliberate; `partcad.sandbox_versions.GUARD_INVALIDATED_BY` exists
-because of it, and orders the installs inside a sandbox so the build with VTK in
-it is the one that survives.
-
-What that ordering assumes is that the two installs happen one after the other.
-`poetry install` runs its installer with several workers, and `poetry.lock` puts
-both distributions in the same install batch, so on a machine slow enough to
-lose the race the two workers write that one path *at the same time*. What lands
-is neither wheel's file: a blend of both, of whichever length the last writer
-left behind, with the other's bytes in the middle of it.
+Two distributions are allowed to install the same path, and pip will let the
+second overwrite the first without complaint. That is only safe while the two
+installs happen one after the other. `poetry install` runs its installer with
+several workers, so two of them can write that one path *at the same time*, and
+what lands is neither wheel's file: a blend of both, of whichever length the
+last writer left behind, with the other's bytes in the middle of it.
 
 Nothing notices. pip records both RECORDs as installed, the file is present and
-executable and the right size, and `poetry install` reports success. The failure
-comes later and somewhere else: `import OCP` hands a corrupt ELF to the dynamic
-loader, which walks a relocation table that no longer means anything and dies in
-`_dl_relocate_object`. The process takes SIGSEGV with no Python traceback and no
-message at all -- and since `tests/partcad/unit/test_assembly.py` imports
-build123d at module scope, that is a whole pytest *collection* killed by a
-segmentation fault, which is a very long way from "one file is corrupt".
+the right size, and `poetry install` reports success. The failure comes later
+and somewhere else. For a native module it is the worst kind: the `import` hands
+a corrupt ELF to the dynamic loader, which walks a relocation table that no
+longer means anything and dies in `_dl_relocate_object` -- SIGSEGV, with no
+Python traceback and no message at all. When something imports it at module
+scope, as `tests/partcad/unit/test_assembly.py` imports build123d, that is a
+whole pytest *collection* killed by a segmentation fault, which is a very long
+way from "one file is corrupt".
+
+That is what happened here, to `OCP/OCP.cpython-*.so`: `cadquery-ocp` and
+`cadquery-ocp-novtk` are separate distributions that ship the very same 160 MB
+native module, and `poetry.lock` put both in one install batch. `cadquery-ocp`
+is no longer declared in `pyproject.toml` -- see the comment on the `partcad`
+dependency group -- so that particular file has one owner again and cannot be
+written twice. This stays because the next such pair will not announce itself
+either, and because a *sandbox* still installs both (ordered, one `pip install`
+at a time, by `partcad.sandbox_versions.GUARD_INVALIDATED_BY`).
 
 So this reads what pip already recorded. Every `RECORD` names the hash of every
 file its wheel installed; a path claimed by two distributions with two different
@@ -37,9 +41,11 @@ reports.
     python3 dev-tools/check_installed_files.py           # report
     python3 dev-tools/check_installed_files.py --fix     # report and reinstall
 
-`--fix` reinstalls the distribution that has to win, taking that from
-`GUARD_INVALIDATED_BY` rather than restating it here, and `--no-deps` so that
-repairing one file cannot re-resolve the environment around it.
+`--fix` reinstalls the distribution that has to win where `GUARD_INVALIDATED_BY`
+names one, rather than restating that here, and `--no-deps` so that repairing
+one file cannot re-resolve the environment around it. A contested path no rule
+covers is reported and left alone: which copy should survive is not something to
+guess at.
 
 Run it after `poetry install` on any machine that installs natively -- a cloud
 agent session, a CI runner outside the dev container. The dev container's image
@@ -141,6 +147,47 @@ def check(site_packages: pathlib.Path) -> list[tuple[str, dict[str, str]]]:
     return broken
 
 
+def missing_files(site_packages: pathlib.Path) -> dict[str, list[str]]:
+    """Distributions with a file they recorded installing that is no longer there.
+
+    The other half of two wheels owning one path, and the half that shows up
+    when one of them is *removed*: uninstalling a distribution deletes the files
+    its RECORD names, including the ones the wheel beside it also installed, so
+    a `poetry sync` that drops one leaves the other believing it owns files that
+    are gone. That is what `poetry sync` does to `OCP/` when it removes
+    `cadquery-ocp` from a checkout that predates its removal from
+    `pyproject.toml` -- `cadquery-ocp-novtk` stays installed and `import OCP`
+    stops working, with nothing in the output of either command about it.
+
+    Existence only, no hashing: this walks every RECORD in the environment, and
+    the question here is not whether a file was overwritten but whether anything
+    is there at all.
+    """
+    gone: dict[str, list[str]] = {}
+    for path, owners in read_records(site_packages).items():
+        if (site_packages / path).exists():
+            continue
+        for dist in owners:
+            gone.setdefault(dist, []).append(path)
+    return gone
+
+
+def dist_info_requirement(dist_info: str) -> str:
+    """'cadquery_ocp_novtk-7.9.3.1.1.dist-info' -> 'cadquery-ocp-novtk==7.9.3.1.1'."""
+    stem = dist_info[: -len(".dist-info")] if dist_info.endswith(".dist-info") else dist_info
+    name, _, version = stem.rpartition("-")
+    return "%s==%s" % (name.replace("_", "-"), version)
+
+
+def reinstall(requirement: str) -> int:
+    """`--no-deps`, so that putting one distribution's files back cannot re-resolve the rest."""
+    print("Reinstalling %s" % requirement)
+    return subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--force-reinstall", "--no-deps", requirement],
+        check=False,
+    ).returncode
+
+
 def repair(broken: list[tuple[str, dict[str, str]]], winners: set[str]) -> int:
     """Reinstall the distribution that has to end up owning each damaged path."""
     wanted = {}
@@ -160,13 +207,10 @@ def repair(broken: list[tuple[str, dict[str, str]]], winners: set[str]) -> int:
         return 1
 
     for requirement, path in sorted(wanted.items()):
-        print("Reinstalling %s so that its copy of %s is the one that survives" % (requirement, path))
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--force-reinstall", "--no-deps", requirement],
-            check=False,
-        )
-        if result.returncode != 0:
-            return result.returncode
+        print("%s owns %s, so it goes in last" % (requirement, path))
+        code = reinstall(requirement)
+        if code != 0:
+            return code
     return 0
 
 
@@ -187,34 +231,53 @@ def main() -> int:
 
     site_packages = args.site_packages or site_packages_dir()
     broken = check(site_packages)
-    if not broken:
-        print("%s: every file two wheels share is one wheel's file." % site_packages)
+    gone = missing_files(site_packages)
+    if not broken and not gone:
+        print("%s: every file two wheels share is one wheel's file, and nothing is missing." % site_packages)
         return 0
 
-    print("Files below were written by two wheels at once and match neither:", file=sys.stderr)
-    for path, owners in broken:
-        installed = site_packages / path
-        size = installed.stat().st_size if installed.exists() else 0
-        print("  %s (%d bytes on disk)" % (path, size), file=sys.stderr)
-        for dist, digest in sorted(owners.items()):
-            print("      claimed by %s, sha256=%s" % (dist, digest), file=sys.stderr)
+    if broken:
+        print("Files below were written by two wheels at once and match neither:", file=sys.stderr)
+        for path, owners in broken:
+            installed = site_packages / path
+            size = installed.stat().st_size if installed.exists() else 0
+            print("  %s (%d bytes on disk)" % (path, size), file=sys.stderr)
+            for dist, digest in sorted(owners.items()):
+                print("      claimed by %s, sha256=%s" % (dist, digest), file=sys.stderr)
+
+    if gone:
+        print("Distributions below recorded installing files that are not there:", file=sys.stderr)
+        for dist, paths in sorted(gone.items()):
+            print("  %s is missing %d of its files, among them:" % (dist, len(paths)), file=sys.stderr)
+            for path in sorted(paths)[:3]:
+                print("      %s" % path, file=sys.stderr)
 
     if not args.fix:
         print(
             "\nRerun with --fix, or reinstall those distributions by hand. Until then an\n"
-            "import of the affected module can take the interpreter down with SIGSEGV and\n"
-            "no traceback.",
+            "import of an affected module either fails outright or, where the file is a\n"
+            "corrupt native module, takes the interpreter down with SIGSEGV and no traceback.",
             file=sys.stderr,
         )
         return 1
 
-    code = repair(broken, load_pinned_winners())
-    if code != 0:
-        return code
+    # The overwritten files first: repairing those reinstalls a whole
+    # distribution, which may well put back the missing ones too.
+    if broken:
+        code = repair(broken, load_pinned_winners())
+        if code != 0:
+            return code
+
+    for dist in sorted(missing_files(site_packages)):
+        code = reinstall(dist_info_requirement(dist))
+        if code != 0:
+            return code
 
     still_broken = check(site_packages)
-    if still_broken:
-        print("Still damaged after the reinstall: %s" % ", ".join(p for p, _ in still_broken), file=sys.stderr)
+    still_gone = missing_files(site_packages)
+    if still_broken or still_gone:
+        names = [p for p, _ in still_broken] + sorted(still_gone)
+        print("Still damaged after the reinstall: %s" % ", ".join(names), file=sys.stderr)
         return 1
     print("Repaired.")
     return 0

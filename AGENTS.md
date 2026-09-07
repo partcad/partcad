@@ -164,31 +164,48 @@ runner. There the container is not a thing to insist on; it is a thing that cann
 to install into the checkout and run everything directly:
 
 ```bash
-./dev-tools/setup-native.sh          # poetry install, plus what installing outside the container gets wrong
+./dev-tools/setup-native.sh          # poetry install, OpenSCAD, and what installing outside the container gets wrong
 ```
 
 Then drop the `devcontainer exec` prefix from every command below and keep the `poetry run` one.
 
-This is a fallback and not a second supported environment. What it does not give you:
+That script installs **OpenSCAD** as part of setting up, because PartCAD treats it as part of the toolchain
+rather than as an optional extra — the standalone bundles carry one, `pc healthcheck` asks after it, and a
+`.scad` part fails without it rather than degrading. It stops if it cannot get one, rather than leaving that
+to be found by a test run half an hour later.
+
+This is still a fallback and not a second supported environment. What it does not give you:
 
 * **`pre-commit`.** It is installed by the container's image, not by `poetry install`, and `.git/hooks/` is
   written by `pre-commit install` running *inside* the container. So on such a machine there is no hook to
   fail and `git commit` silently runs no gate at all — which is worse than a hook that refuses, because
   nothing tells you. Run what the hooks run (`pytest`, `behave`, and the linters) before committing, and read
   their output; CI runs them either way.
-* **OpenSCAD, a Docker daemon, conda.** `setup-native.sh` reports which of the three are missing and what each
-  costs. Only OpenSCAD's absence turns into failures rather than skips, and on a Debian-ish host
-  `apt-get update && apt-get install -y openscad` is the whole fix (the `update` is not optional on an image
-  whose package lists have gone stale — without it the fetch 404s on versions that have since been
-  superseded). Without conda the Python sandbox falls back to `venv`, which is a real sandbox and passes the
-  suite — see `pythonSandbox` in `src/partcad_utils/user_config.py`.
+* **A Docker daemon.** Only the KiCad example needs one, and a machine without one has to *say* so:
+  `PC_USE_DOCKER=false` (or `useDocker: false`), which is what a container image built with no Docker in it
+  should carry. Say nothing and a missing daemon is a failure, deliberately — silence there would turn a
+  runner whose Docker died into a green run with one fewer test in it.
+* **conda.** Without it the Python sandbox falls back to `venv`, which is a real sandbox and passes the suite;
+  it just cannot provision an *interpreter version*, so a package asking for a Python this host does not have
+  renders on the host's and says so. See `pythonSandbox` in `src/partcad_utils/user_config.py`.
 
-The one failure worth recognising on sight: **a `poetry install` on a slow machine can leave the checkout
-segfaulting.** `cadquery-ocp` and `cadquery-ocp-novtk` both install `OCP/OCP.cpython-*.so`, Poetry installs in
-parallel, and two workers writing that one 160 MB path at once leave a blend of the two behind. Nothing
-reports it; `import OCP` then dies in the dynamic loader, so pytest *collection* ends with `Fatal Python
-error: Segmentation fault` and no failing test. `dev-tools/check_installed_files.py --fix` detects and repairs
-exactly that, and `setup-native.sh` runs it. Do not go looking for a bug in the change under test.
+One failure mode is worth recognising on sight, because nothing about it names its cause: **two wheels that
+install the same file can leave the checkout segfaulting.** Poetry installs in parallel, so both workers can
+write that one path at once and what lands is a blend of the two — reported as success by both. An `import` of
+a native module like that dies inside the dynamic loader, so pytest *collection* ends with `Fatal Python
+error: Segmentation fault` and no failing test to point at. `dev-tools/check_installed_files.py --fix` detects
+and repairs it, and `setup-native.sh` runs it. Do not go looking for a bug in the change under test.
+
+The pair that did this was `cadquery-ocp` and `cadquery-ocp-novtk`, both of which ship one 160 MB
+`OCP/OCP.cpython-*.so`. `cadquery-ocp` is no longer named in `pyproject.toml` — nothing here imports
+`cadquery` in process, and build123d pulls the novtk build in regardless — so one distribution owns the file
+and this cannot happen to *that* file any more. The checker stays because the next such pair will not
+announce itself either.
+
+It also catches the other half of it, which **an existing checkout hits exactly once**: an uninstall deletes
+the files its RECORD names, including the ones the wheel beside it also installed. So `poetry sync` removing
+`cadquery-ocp` takes `OCP/` away from `cadquery-ocp-novtk`, which stays installed, and `import OCP` stops
+working with nothing said about it anywhere. `check_installed_files.py --fix` reports and repairs that too.
 
 ### Environment setup
 

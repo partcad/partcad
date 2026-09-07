@@ -407,36 +407,40 @@ is not a thing to insist on, so install into the checkout and run everything dir
 
   $ ./dev-tools/setup-native.sh
 
-That runs ``poetry install``, repairs the one thing a parallel install gets wrong (below), and reports which of
-OpenSCAD, a Docker daemon and conda this machine has, and what each one's absence costs. Afterwards, every command in
-the rest of this page works with its ``devcontainer exec`` prefix dropped and its ``poetry run`` kept.
+That runs ``poetry install``, installs OpenSCAD, checks for the one thing a parallel install can get wrong (below),
+and reports what else this machine has. Afterwards, every command in the rest of this page works with its
+``devcontainer exec`` prefix dropped and its ``poetry run`` kept.
 
-This is a fallback rather than a second supported environment, and it is worth being explicit about what it does not
-give you:
+OpenSCAD is installed rather than merely reported because PartCAD treats it as part of the toolchain and not as an
+optional extra: the standalone bundles carry one, ``pc healthcheck`` asks after it, and a ``.scad`` part raises
+"OpenSCAD executable is not found" rather than degrading. The script uses ``apt-get`` or Homebrew, and stops if it has
+neither — an environment without OpenSCAD is not set up, and finding that out from a test run half an hour later is
+the outcome this avoids.
+
+This is still a fallback rather than a second supported environment, and it is worth being explicit about what it does
+not give you:
 
 * **The** ``pre-commit`` **hooks do not run.** ``pre-commit`` is installed by the dev container's image, not by
   ``poetry install``, and ``.git/hooks/pre-commit`` is written by ``pre-commit install`` running inside the container.
   So there is no hook to fail, and ``git commit`` runs no gate at all without saying so. Run ``pytest``, ``behave``
   and the linters yourself before committing; CI runs them regardless.
-* **OpenSCAD is the one missing tool that fails rather than skips.** A ``.scad`` part raises "OpenSCAD executable is
-  not found" and the tests that convert one fail with it. ``apt-get update && apt-get install -y openscad`` on a
-  Debian-ish host, a Homebrew cask on macOS. The ``update`` is not optional on an image whose package lists have gone
-  stale: without it the fetch 404s on point releases that have since been superseded.
-* **Without a Docker daemon** the KiCad example is skipped and nothing else is affected.
-* **Without conda** the ``pythonSandbox`` option falls back to ``venv``, which builds a real virtual environment of
-  PartCAD's own and runs the CAD wrappers in it. It cannot provision an *interpreter version*, so a package asking for
-  a Python this host does not have renders on the host's instead and says so; everything else behaves the same.
+* **A Docker daemon**, which only the KiCad example needs. A machine without one has to say so — ``PC_USE_DOCKER=false``
+  in the environment, or ``useDocker: false`` in the user configuration — and then that example is skipped. Say
+  nothing and a missing daemon *fails*, on purpose: a machine that never mentioned Docker is claiming one, and
+  passing over the test in silence would turn a runner whose daemon died into a green run with one fewer test in it.
+* **conda**, without which the ``pythonSandbox`` option falls back to ``venv``. That builds a real virtual environment
+  of PartCAD's own and runs the CAD wrappers in it; it just cannot provision an *interpreter version*, so a package
+  asking for a Python this host does not have renders on the host's instead and says so.
 
 .. warning::
 
-  **A** ``poetry install`` **can leave the checkout segfaulting, and nothing reports it.** ``cadquery-ocp`` and
-  ``cadquery-ocp-novtk`` are separate distributions that install the very same 160 MB ``OCP/OCP.cpython-*.so``.
-  Poetry installs in parallel, so on a machine slow enough to lose that race two workers write that one path at
-  once and what lands is a blend of the two wheels. Both installs report success.
+  **Two wheels that install the same file can leave the checkout segfaulting, and nothing reports it.** Poetry
+  installs in parallel, so on a machine slow enough to lose that race both workers write that one path at once and
+  what lands is a blend of the two wheels. Both installs report success.
 
-  What you see is much later and somewhere else: ``import OCP`` hands a corrupt ELF to the dynamic loader, and the
-  interpreter dies with ``Fatal Python error: Segmentation fault`` — during pytest *collection*, since a test module
-  imports build123d at import time, so no test has failed and there is nothing to point at.
+  What you see is much later and somewhere else: an ``import`` of a native module like that hands a corrupt ELF to
+  the dynamic loader, and the interpreter dies with ``Fatal Python error: Segmentation fault`` — during pytest
+  *collection*, if a test module imports it at import time, so no test has failed and there is nothing to point at.
 
   .. code-block:: bash
 
@@ -445,6 +449,18 @@ give you:
 
   ``setup-native.sh`` runs the second of those. The dev container's image installs from
   ``.devcontainer/requirements.txt`` with pip, one wheel at a time, which is why this is not the container's problem.
+
+  The pair that did this was ``cadquery-ocp`` and ``cadquery-ocp-novtk``, which both ship one 160 MB
+  ``OCP/OCP.cpython-*.so``. ``cadquery-ocp`` is no longer declared in ``pyproject.toml`` — nothing in this
+  environment imports ``cadquery`` in process, and build123d pulls the novtk build in regardless — so one
+  distribution owns that file and it can no longer be written twice. The checker stays for the next such pair, which
+  will not announce itself either.
+
+  It also stays for the other half of the same problem, which **an existing checkout will hit exactly once**:
+  uninstalling a distribution deletes the files its RECORD names, the ones a wheel beside it also installed
+  included. So ``poetry sync`` removing ``cadquery-ocp`` takes ``OCP/`` away from ``cadquery-ocp-novtk``, which
+  stays installed, and ``import OCP`` stops working with nothing in either command's output about it. The checker
+  reports a distribution whose recorded files are gone, and ``--fix`` puts them back.
 
 Install Dependencies
 --------------------

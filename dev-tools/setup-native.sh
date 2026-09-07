@@ -15,16 +15,21 @@
 # What it does, and why each step is not just `poetry install`:
 #
 #   1. `poetry install`, which is the same command the container runs.
-#   2. Repairs the file two wheels overwrite each other on. `poetry install`
-#      installs in parallel, `cadquery-ocp` and `cadquery-ocp-novtk` both write
-#      `OCP/OCP.cpython-*.so`, and a machine slow enough to lose that race ends
-#      up with a blend of the two: `import OCP` then takes SIGSEGV inside the
-#      dynamic loader, and since a test module imports build123d at import time
-#      that is the whole pytest *collection* dying with no message.
-#      `check_installed_files.py` explains this at length.
-#   3. Says what is missing and what it costs, rather than letting a suite fail
-#      thirty minutes later for a reason that has nothing to do with the change
-#      under test.
+#   2. Installs OpenSCAD, which `poetry install` cannot: it is not a Python
+#      package. PartCAD treats it as part of the toolchain rather than as an
+#      optional extra -- the standalone bundles carry one, `pc healthcheck`
+#      asks after it, and a `.scad` part *fails* without it rather than
+#      degrading -- so an environment without one is not set up, and this stops
+#      rather than leaving that to be discovered by a test run.
+#   3. Checks for a file two wheels both installed. `poetry install` installs in
+#      parallel, so any two distributions shipping one path can have both
+#      workers write it at once, and what lands is a blend of the two: an
+#      `import` of a native module like that takes SIGSEGV inside the dynamic
+#      loader, with no Python traceback anywhere. `check_installed_files.py`
+#      explains it at length.
+#   4. Says what else is missing and what it costs, rather than letting a suite
+#      fail thirty minutes later for a reason that has nothing to do with the
+#      change under test.
 #
 # Usage, from the repository root:
 #
@@ -39,19 +44,55 @@ if ! command -v poetry >/dev/null 2>&1; then
   exit 1
 fi
 
+SUDO=""
+if [ "$(id -u)" -ne 0 ]; then
+  if command -v sudo >/dev/null 2>&1; then
+    SUDO="sudo"
+  fi
+fi
+
 echo "==> poetry install"
 poetry install
+
+echo "==> OpenSCAD"
+if command -v openscad >/dev/null 2>&1; then
+  echo "    already installed: $(openscad --version 2>&1 | head -n 1)"
+elif command -v apt-get >/dev/null 2>&1; then
+  # `update` first, and not as an optimisation: an image whose package lists
+  # have gone stale resolves point releases that the archive has already
+  # superseded, and the fetch 404s on them rather than falling back.
+  $SUDO apt-get update
+  $SUDO apt-get install -y --no-install-recommends openscad
+elif command -v brew >/dev/null 2>&1; then
+  # The snapshot cask, and not `openscad`: Homebrew disabled the latter in
+  # September 2026 (the pinned 2021.01 release fails the macOS Gatekeeper
+  # check), and 2021.01 ships an x86_64-only .dmg anyway, so on Apple silicon
+  # it would need Rosetta. `.github/actions/setup-test/action.yml` says all of
+  # this, and also what to do when the cask puts no binary on PATH.
+  HOMEBREW_NO_AUTO_UPDATE=1 brew install --cask openscad@snapshot
+else
+  echo "    no apt-get and no brew here, so OpenSCAD has to be installed by hand:" >&2
+  echo "    https://openscad.org/downloads.html -- then re-run this script." >&2
+  exit 1
+fi
+
+if ! command -v openscad >/dev/null 2>&1; then
+  # A cask need not put a binary on PATH and an install can half-succeed, so
+  # ask the question that matters rather than trusting the exit code above.
+  echo "    OpenSCAD was installed but is not on PATH. Put it there and re-run;" >&2
+  echo "    '.github/actions/setup-test/action.yml' has what CI does on macOS." >&2
+  exit 1
+fi
 
 # Must run under the environment's own interpreter: it reads that
 # environment's `site-packages`, and repairs it with that environment's pip.
 echo "==> checking for files two wheels wrote at once"
 poetry run python dev-tools/check_installed_files.py --fix
 
-echo "==> what this machine has"
+echo "==> what else this machine has"
 
-# Reported, never installed. Which of these is worth having depends on what is
-# being changed, and how to get one is the platform's business, not this
-# script's -- `apt-get install openscad` on a Debian, a cask on a Mac.
+# Reported, never installed. Unlike OpenSCAD, neither of these is part of the
+# toolchain: without them some tests decline to run, and none of them fail.
 report() {
   # $1: the thing, $2: how to see whether it is here, $3: what its absence costs
   if eval "$2" >/dev/null 2>&1; then
@@ -61,10 +102,8 @@ report() {
   fi
 }
 
-report "OpenSCAD" "command -v openscad" \
-  "every '.scad' part fails rather than skips (tests/partcad/unit/test_convert_part.py and friends)"
 report "a Docker daemon" "docker info" \
-  "the KiCad example is skipped; nothing else needs it"
+  "the KiCad example needs one; export PC_USE_DOCKER=false to say this machine has none, or it counts as broken"
 report "conda" "command -v conda || command -v mamba" \
   "the Python sandbox falls back to 'venv', which cannot provision an interpreter version but is otherwise fine"
 

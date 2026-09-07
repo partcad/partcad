@@ -885,6 +885,16 @@ class UserConfig(vyper.Vyper):
         #              per subject.
         # values: [True | False]
         # default: True
+        #
+        # Bound to the environment like every other option here, and it is the
+        # one in this family a machine most needs to be able to answer without
+        # writing a configuration file: an image built with no Docker in it -- a
+        # cloud agent's container, a CI runner with no socket -- can say so once
+        # in its environment, and everything that would otherwise fail against a
+        # daemon that was never there can tell "there is none" from "there is
+        # none and nobody said so", which are different situations and deserve
+        # different outcomes.
+        self.bind_env("useDocker", "PC_USE_DOCKER")
         self.use_docker = self.get_bool("useDocker")
 
         # option: useDockerPython
@@ -897,6 +907,7 @@ class UserConfig(vyper.Vyper):
         # the 'useDockerPython' tag reports, so that a package can tell "not
         # asked for" from "asked for but unavailable"), and the plain attribute
         # is what actually happens once 'useDocker' has had its say.
+        self.bind_env("useDockerPython", "PC_USE_DOCKER_PYTHON")
         self.use_docker_python_declared = self.get_bool("useDockerPython")
         self.use_docker_python = self.use_docker and self.use_docker_python_declared
 
@@ -904,6 +915,7 @@ class UserConfig(vyper.Vyper):
         # description: use a Docker container for KiCad
         # values: [True | False]
         # default: True
+        self.bind_env("useDockerKicad", "PC_USE_DOCKER_KICAD")
         self.use_docker_kicad_declared = self.get_bool("useDockerKicad")
         self.use_docker_kicad = self.use_docker and self.use_docker_kicad_declared
 
