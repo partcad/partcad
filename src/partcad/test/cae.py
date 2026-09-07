@@ -38,6 +38,7 @@ import json
 from .. import cae as pc_cae
 from .. import logging as pc_logging
 from .. import output
+from .. import runtime as pc_runtime
 from ..part import Part
 from .test import Test
 
@@ -117,33 +118,45 @@ class CaeTest(Test):
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = None) -> bool:
         """Run the analysis, and pass the shape only if it found nothing.
 
-        Two ways to fail, and they are different: the part declared the section
-        wrongly, or the analysis ran and reported something. Both are verdicts on
-        the package that a user has to act on.
+        **There is one way to pass: the analysis ran and reported no findings.**
+        Everything else is a failure, and the report says which of them it was.
+        A part that declares `fea:` has asked a question, and any answer other
+        than "nothing to report" is something a user has to act on:
 
-        A **missing or misconfigured plugin is the third way to fail**, and it is
-        not the same as the fourth outcome below. The implementation is named by
-        the part or by the user configuration as `<package>:<file type>`; if that
-        package is not a dependency, did not load, or declares no such file type,
-        then what is wrong is the configuration, and it is wrong on every machine
-        rather than on this one. Nothing about installing a solver would fix it.
-        It fails, with the sentence saying which name did not resolve.
+        * the part declared the section wrongly;
+        * the implementation could not be resolved -- not a dependency, did not
+          load, declares no such file type;
+        * the implementation resolved and could not run: no mesher, no solver,
+          an unprovisionable sandbox, a crash;
+        * the analysis ran and reported findings.
 
-        A fourth outcome is not a failure: the plugin resolved and the analysis
-        still did not run. There is no solver binary on this machine. PartCAD
-        ships none -- the implementing package needs a native program that pip
-        cannot install -- so failing here would mean that the moment any part in
-        a shared repository declares `fea:`, `pc test` fails for every
-        contributor and every CI system that has not installed CalculiX. That
-        makes declaring `fea:` a liability rather than a check, which is the
-        opposite of the point. It is reported as a warning and passed over, the
-        way `cam` passes a part that is `manufacturable: false`: the check does
-        not apply on this machine.
+        **Not running is not a reason to skip.** A skip says the question does
+        not apply here; a plugin that was asked to do something and did not do it
+        has failed, and calling that a skip reports a part as checked when
+        nothing checked it. That was this check's earlier behaviour -- a missing
+        `ccx` warned and passed -- and it hid two things worth failing over: a
+        CFD implementation that never converges, and a plugin that cannot be
+        installed on this platform at all.
 
-        The cost is real and worth stating: `pc test` cannot tell a solver that
-        is *absent* from one that *crashed*, so a crashing solver is a warning
-        here too. `pc cae fea` is the command that reports it as the error it is,
-        and is what a machine with a solver on it should be running.
+        **One thing is still a skip**, and it is the only one: the implementation
+        declared a container and this machine has no container runtime. Nothing
+        was asked, because the thing that asks could not start. That is not the
+        implementation failing -- it may be perfectly good -- and PartCAD is the
+        only party that can report it, since the implementation never runs. A
+        plugin that brings its own dependencies is what makes this the only
+        remaining excuse: everything else it needs, it carries.
+
+        The consequence is real and is the point: declaring `fea:` in a shared
+        package makes `pc test` fail for everyone who has not installed what the
+        implementation needs. That is what declaring it means. A package that
+        does not want the whole world running a solver should not declare the
+        section, which is the same gate that keeps `pc test -r` from starting a
+        solver for every bolt in a tree.
+
+        What the failure must carry is *why*, because the reasons need different
+        actions: install a solver, use another machine, or fix the part. The
+        implementation is what knows which, so whatever it said is reported
+        verbatim -- see `partcad.cae.dysfunction_report()`.
         """
         # Not `= {}` in the signature, the way the sibling checks have it: this
         # is the one that *writes* to `test_ctx` (`NOT_CACHEABLE`, below), and a
@@ -166,12 +179,11 @@ class CaeTest(Test):
             return self.TEST_PASSED
 
         try:
-            # Resolved here, and separately, so that failing to resolve it is
-            # distinguishable from failing to run it. 'analyze_async' does the
-            # same again a moment later; the duplication is what buys the
-            # difference between "this configuration names nothing" and "this
-            # machine cannot run what it names", which this check reports as a
-            # failure and a skip respectively.
+            # Resolved here, and separately, so that failing to resolve it
+            # reads differently from failing to run it. Both are failures now,
+            # but they ask for different things: a name that resolves to nothing
+            # is a configuration to correct, and a plugin that will not run is a
+            # machine to equip or a platform to leave.
             #
             # Both halves are asked, because both are the configuration's fault:
             # whether the package resolves at all, and whether it declares the
@@ -196,23 +208,45 @@ class CaeTest(Test):
             result = await shape.analyze_async(ctx, self.analysis)
         except pc_cae.CaeConfigError as e:
             return self.failed(shape, "%s", e)
-        except Exception as e:
-            # No verdict, so nothing to fail the part with. Loudly, because a
-            # silent pass here reads as "the part was checked" when nothing of
-            # the sort happened -- see the docstring.
+        except pc_runtime.SandboxUnavailable as e:
+            # The one skip. Not "the implementation could not do it" but "the
+            # thing that runs implementations is not here": the plugin declared
+            # a container and this machine has no container runtime, so nothing
+            # was ever asked and nothing can report on the part. Skipping is
+            # right precisely because it says nothing about the implementation
+            # or the part -- unlike every other way of not producing an answer,
+            # which is the implementation failing and fails the check.
             #
-            # And not remembered. This is the one verdict here that is about the
-            # machine rather than about the part, and the cache key describes
-            # only the question -- the boundary conditions, the implementation,
-            # its options. Installing CalculiX changes none of them, so a cached
-            # pass would outlive the reason for it and answer in hundredths of a
-            # second without going near the solver that is now there.
+            # Uncacheable for the same reason the failures are: starting Docker
+            # changes no cache key.
             test_ctx[self.NOT_CACHEABLE] = True
             pc_logging.warning(
-                "Test skipped: %s:%s: %s was not run: %s"
-                % (shape.project_name, shape.name, self.analysis.upper(), e)
+                "%s:%s: %s was not run: %s" % (shape.project_name, shape.name, self.analysis.upper(), e)
             )
             return self.TEST_PASSED
+        except Exception as e:
+            # The implementation was asked and did not deliver. That is a
+            # failure whatever the reason -- no solver, no mesher, a sandbox
+            # that cannot be built, a crash -- because the part asked a question
+            # and got no answer.
+            #
+            # Not remembered, though. This is the one verdict here that can be
+            # about the machine rather than about the part, and the cache key
+            # describes only the question: the boundary conditions, the
+            # implementation, its options. Installing the solver changes none of
+            # them, so a cached failure would outlive the reason for it and go
+            # on failing a part that now analyses perfectly well.
+            test_ctx[self.NOT_CACHEABLE] = True
+            return self.failed(
+                shape,
+                "%s",
+                pc_cae.dysfunction_report(
+                    "%s:%s" % (shape.project_name, shape.name),
+                    self.analysis,
+                    "%s:%s" % (options_project.name, format_name),
+                    e,
+                ),
+            )
 
         findings = result.get("findings") or []
         if findings:

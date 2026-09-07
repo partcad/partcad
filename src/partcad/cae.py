@@ -49,6 +49,7 @@ runs in a sandbox like every other one.
 
 from __future__ import annotations
 
+import platform
 import re
 from typing import Optional
 
@@ -558,6 +559,30 @@ def normalize_findings(findings) -> list[dict]:
         else:
             normalized.append({"message": str(finding)})
     return normalized
+
+
+def dysfunction_report(name: str, analysis: str, implementation: str, error: Exception) -> str:
+    """Why an analysis produced no answer, as the failure a user has to act on.
+
+    The reasons need different actions -- install a solver, use another machine,
+    fix the package -- and only the implementation knows which one this is. So
+    what it said is reported verbatim rather than classified here: PartCAD does
+    not know what `ccx` is, and a rule here that recognised it would be wrong for
+    the next implementation.
+
+    What this adds is the two things the sentence usually omits and the reader
+    always needs: which implementation was asked, and which machine it did not
+    work on. "gmsh is not installed" is a puzzle; the same sentence under
+    `//pub/feature/cae/calculix:fea on Linux-aarch64` is an answer.
+    """
+    return "\n".join(
+        [
+            "%s: %s could not be run by %s" % (name, analysis.upper(), implementation),
+            "\t%s" % str(error).replace("\n", "\n\t"),
+            "\tplatform: %s-%s, Python %s"
+            % (platform.system(), platform.machine(), platform.python_version()),
+        ]
+    )
 
 
 def findings_report(name: str, analysis: str, findings: list) -> str:

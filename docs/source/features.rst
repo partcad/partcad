@@ -145,12 +145,22 @@ What comes back is two things: the model, written to
 and the **findings** -- a JSON array of what the analysis has to say about the
 part. ``pc test`` gains an ``fea`` and a ``cfd`` check that fail a part whose
 analysis produced any finding, and they apply only to a part that declares the
-matching section, so a package of bolts pays nothing for them. A plugin that
-cannot be resolved -- not a dependency, misspelt, or declaring no such file type
--- **fails** those checks: the configuration is wrong, and it is wrong wherever
-the package is opened. Where the plugin resolves and no *solver* is installed
-they report that they did not run, and pass: that absence is a property of the
-machine rather than of the part.
+matching section, so a package of bolts pays nothing for them. There is one way to pass -- the
+analysis ran and reported nothing -- and everything else **fails**: a malformed
+section, a plugin that cannot be resolved (not a dependency, misspelt, declaring
+no such file type), a plugin that resolves and cannot run (no mesher, no solver,
+a sandbox that will not build, a crash), and an analysis that ran and found
+something.
+
+Not running is deliberately not a skip. A skip says the question does not apply
+here; a part that declares ``fea:`` has asked, and a plugin that was asked and
+delivered nothing has failed. The consequence is the point: declaring ``fea:``
+in a shared package makes ``pc test`` fail for everyone who has not installed
+what that implementation needs. A package that does not want that should not
+declare the section. What the failure carries is *why* -- the implementation's
+own sentence, plus which implementation was asked and which machine it did not
+work on, because "gmsh is not installed" is a puzzle and the same sentence under
+``//pub/feature/cae/calculix:fea on Linux-aarch64`` is an answer.
 
 ``examples/feature_cae`` is the pair of cases to check an implementation against
 — a cantilever and a pipe, each with a closed-form answer to compare the solver
