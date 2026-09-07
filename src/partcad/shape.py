@@ -1128,21 +1128,51 @@ class Shape(ShapeConfiguration):
         request[output.DECODE_KEY] = impl.decode
         request_serialized = shape_envelope.serialize(request)
 
-        runtime = ctx.get_python_runtime(version=impl.python_version())
-        await runtime.prepare_for_package(impl.project)
-        # Installed one at a time, not with asyncio.gather(): the order
-        # matters, since build123d overwrites the OCP native module that
-        # cadquery-ocp installs (see sandbox_versions.GUARD_INVALIDATED_BY).
-        for dep in impl.python_requirements:
-            await runtime.ensure_async(dep)
+        # Where this implementation runs. A container when it declared one --
+        # the only sandbox that can carry what pip cannot install -- and the
+        # Python sandbox otherwise, which is every implementation that ships
+        # with PartCAD and most of those that do not.
+        container = impl.container
+        script_path = wrapper.get("export.py")
+        config_dir = os.path.abspath(impl.project.config_dir)
+        input_dirs = []
+
+        if container:
+            # Raises SandboxUnavailable when there is no container runtime,
+            # which is the one absence 'pc test' may skip on.
+            runtime = await ctx.get_container_runtime(container)
+            # The wrapper and the implementing package both go in whole. Sending
+            # only the files the command names would leave both unable to start:
+            # the wrapper imports its siblings, and so does the implementation
+            # script (see runtime.pack_directory).
+            input_dirs = [os.path.dirname(script_path), config_dir]
+        else:
+            runtime = ctx.get_python_runtime(version=impl.python_version())
+            await runtime.prepare_for_package(impl.project)
+            # Installed one at a time, not with asyncio.gather(): the order
+            # matters, since build123d overwrites the OCP native module that
+            # cadquery-ocp installs (see sandbox_versions.GUARD_INVALIDATED_BY).
+            for dep in impl.python_requirements:
+                await runtime.ensure_async(dep)
 
         with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
             command = [
-                wrapper.get("export.py"),
+                script_path,
                 final_filepath,
-                os.path.abspath(impl.project.config_dir),
+                config_dir,
             ]
-            exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
+            if container:
+                # The interpreter is named rather than pathed: the container's
+                # allowlist maps the name to the executable, which is what keeps
+                # a caller from naming one (see PC_CONTAINER_ALLOWED_COMMANDS in
+                # tools/containers/_common/pc-container-json-rpc.py).
+                command.insert(0, container.get("command") or "python")
+            exitcode, response_serialized, errors = await runtime.run_async(
+                command,
+                request_serialized,
+                input_dirs=input_dirs,
+                output_files=[final_filepath] if container else None,
+            )
             if exitcode != 0 and len(errors) == 0:
                 errors = "Failed to execute command '%s' with exit code %s" % (" ".join(command), exitcode)
             if errors:
