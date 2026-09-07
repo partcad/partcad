@@ -56,6 +56,17 @@ interfaces:
     ports:
       inlet:
 
+  pipe-outlet:
+    desc: |
+      The face the flow leaves through, held at the reference pressure.
+
+      An incompressible flow is posed by *differences* in pressure, so a part
+      that names an inlet and no outlet has asked a question with no answer --
+      the solver has nowhere to put what is being pushed in, and reports a dead
+      field or a divergence rather than an error. This is that missing half.
+    ports:
+      outlet:
+
   pipe-wall:
     desc: |
       Patches of the pipe's lateral surface, held no-slip. Twenty of them, at
@@ -130,6 +141,7 @@ parts:
       along the wall. Fully developed laminar flow: Hagen-Poiseuille.
     implements:
       pipe-inlet: [[0, 0, -50], [0, 0, 1], 0]
+      pipe-outlet: [[0, 0, 50], [0, 0, 1], 0]
       pipe-wall:
     cfd:
       implementation: calculix:cfd
@@ -137,6 +149,11 @@ parts:
         - pipe-wall
       load:
         pipe-inlet: 0.005 N
+      # Where it goes. Without this the problem has no downstream pressure
+      # reference and CalculiX answers it with a field that never moves -- see
+      # `pipe-outlet` above and README.md.
+      outlet:
+        - pipe-outlet
 
 # Only the parameters, and deliberately no `path:`/`package:`: which package
 # implements the analysis is the parts' answer above, and repeating it here
@@ -165,7 +182,9 @@ cae:
     density: 900              # a light oil, kg/m^3
     viscosity: 0.1            # Pa*s
     # 3 mm on a 100 mm bore. It has to stay under the 5 mm radius or the wall
-    # neighbourhoods swallow the axis and hold the whole fluid still.
+    # neighbourhoods swallow the axis and hold the whole fluid still. It is also
+    # what the inlet and the outlet stand for: a port is a coordinate frame, so
+    # the area a pressure is spread over is the disc of this radius.
     port_radius: 0.03
     duration: 2.0
     time_step: 0.005

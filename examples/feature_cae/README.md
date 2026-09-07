@@ -152,31 +152,63 @@ The regime is checked, not assumed: `Re = ρu_mean·d/μ` = **1.79**, far below 
 2300 where laminar flow ends, and the entrance length `0.06·Re·d` = 1.07 mm is
 **1.1 % of the pipe**, so the flow is fully developed over essentially all of it.
 
-### This one does not run at all, and not for the reason predicted
+### This one does not run, and here is exactly how far it gets
 
-An earlier draft of this file predicted the pipe would *disagree*, because
-`fix:` cannot say "the lateral surface" and the no-slip wall is therefore 20
-port-balls with gaps between them. That prediction was not tested, and it turns
-out not to be what happens. **There is no measurement to compare, because the
-CFD solve does not converge.** Observed runs settle at a dead field — peak speed
-of order 1e-16 m/s against an expected 0.03979 m/s — and end in
+**There is no measurement to compare: the CFD solve does not converge.** Three
+things were wrong with it, two of them since fixed, and the third is the one
+that matters.
+
+**1. No outlet — fixed.** An incompressible flow is posed by *differences* in
+pressure, and `cfd:` could name only walls (`fix:`) and an inlet (`load:`). With
+nothing saying where the flow goes, the problem has no downstream reference and
+CalculiX answers with a field that never moves: peak speed of order 1e-16 m/s
+against an expected 0.03979 m/s, and a "pressure drop" that is just the
+reference level. `cfd:` now takes an `outlet:`, which this part uses, and a
+`cfd:` without one is refused with a sentence saying why rather than solved into
+a dead field.
+
+**2. No temperature anywhere — fixed.** An isothermal run still solves the
+energy equation, and that equation had no Dirichlet condition on it: the
+temperature field drifted off its initial value over a few increments and the
+run ended in
+
+```
+ *ERROR in initialcfd: absolute temperature is nearly zero; maybe absolute zero
+        was wrongly defined or not defined at all (*PHYSICAL CONSTANTS card)
+```
+
+which reads as a mistake on a card that is in fact correct. The deck now holds
+the walls and the inlet at the reference temperature.
+
+**3. CalculiX's CFD solver diverges anyway — not fixed.** With both of those
+right the run reaches the solver and ends in
 
 ```
  *ERROR in compdt; strongly decreasing time increment; the solution diverged
 ```
 
-At least one cause is structural rather than a mesh artefact: **`cfd:` has no way
-to name an outlet.** It can name walls (`fix:`) and an inlet (`load:`), so the
-incompressible problem is posed with no downstream pressure reference. That is a
-gap in the schema, not a tuning problem, and it is the next thing this case
-argues for.
+and it is not the port model that does it. A deck built by hand for this same
+pipe — *true* end faces as the inlet and outlet, the *whole* lateral surface as
+the no-slip wall, 808 nodes rather than 178 — diverges identically, driven by
+pressure or by a prescribed inlet velocity, at reference pressures from 1 Pa to
+1e5 Pa. The first time increment CalculiX computes for it is 8.1e-7 s, which is
+an *acoustic* step for a flow moving at 0.02 m/s: `*CFD` demands
+`*SPECIFIC GAS CONSTANT` even under `COMPRESSIBLE=NO` (leave it out and
+`initialcfd` refuses the deck), and the step it derives from the resulting speed
+of sound collapses to 6.7e-9 s within one iteration.
 
-The neighbourhood model is also thinner here than "20 patches with gaps"
-suggests, and worth knowing about when the solve does converge. At the
-configured `mesh_size` the bore meshes to 174 nodes — about 2 elements across —
-the 20 wall balls catch 21 distinct nodes between them, and the inlet ball
-catches exactly **one**. One of the 20 wall ports reaches no material and is
-correctly reported as a finding.
+So this is a property of CalculiX's `*CFD` solver as driven here, not of the
+mesh, the boundary model or the schema. Fixing it is solver work — a different
+formulation, or a different solver — and until it is done `pc cae cfd` on this
+part reports that it did not converge, which is the honest answer.
+
+**The neighbourhood model is a separate problem, and it is also real.** At the
+configured `mesh_size` the bore meshes to 178 nodes — about 2 elements across —
+the 20 wall balls catch 23 distinct nodes between them, and the inlet and outlet
+balls catch exactly **one node each**. A CFD boundary condition is a *surface*;
+a PartCAD port is a coordinate frame, and a ball around one is not a face. Even
+with a converging solver this part would need the implementation to find the
+face a port lies on rather than the nodes near it.
 
 Two errors would still run in opposite directions once it solves — gaps leave
 the fluid unconstrained and read fast, while each ball reaches `port_radius`

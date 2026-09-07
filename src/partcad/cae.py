@@ -193,6 +193,9 @@ class AnalysisConfig:
             instance of it.
         loads: interface type -> instance -> newtons. The instance `"*"` is every
             instance of that interface.
+        outlets: interface type -> the instances the fluid leaves through, in
+            the same shape as `fixtures`. `cfd:` only -- a stress analysis has
+            nothing to let out.
         implementation: who runs this analysis, as `<package>:<file type>`, or
             None to leave it to the user configuration. A part that names one is
             saying "this is the solver I was written against", which is a
@@ -214,6 +217,7 @@ class AnalysisConfig:
         self.analysis = analysis
         self.fixtures: dict[str, list[str]] = {}
         self.loads: dict[str, dict[str, float]] = {}
+        self.outlets: dict[str, list[str]] = {}
         self.implementation: Optional[str] = None
 
         if config is None:
@@ -221,16 +225,25 @@ class AnalysisConfig:
         if not isinstance(config, dict):
             raise CaeConfigError("'%s:' is not a section: %r" % (analysis, config))
 
-        unknown = [key for key in config if key not in ("fix", "load", "desc", "implementation")]
+        # 'outlet:' is CFD's and only CFD's. A stress analysis has nothing to
+        # let out, and accepting the word there would let a part say something
+        # that reads as a boundary condition and is not one.
+        keys = ["fix", "load", "desc", "implementation"] + (["outlet"] if analysis == CFD else [])
+        unknown = [key for key in config if key not in keys]
         if unknown:
             raise CaeConfigError(
-                "'%s:' does not take %s; it takes 'fix:', 'load:' and 'implementation:'"
-                % (analysis, ", ".join(sorted(unknown)))
+                "'%s:' does not take %s; it takes %s and 'implementation:'"
+                % (
+                    analysis,
+                    ", ".join(sorted(unknown)),
+                    ", ".join("'%s:'" % key for key in keys if key not in ("desc", "implementation")),
+                )
             )
 
         self._parse_implementation(config.get("implementation"))
         self._parse_fix(config.get("fix"))
         self._parse_load(config.get("load"))
+        self._parse_outlet(config.get("outlet"))
 
         if not self.fixtures and not self.loads:
             raise CaeConfigError("'%s:' declares neither 'fix:' nor 'load:'" % analysis)
@@ -279,6 +292,37 @@ class AnalysisConfig:
             return
         raise CaeConfigError("'fix:' is neither a list of interfaces nor a map of them: %r" % (fix,))
 
+    def _parse_outlet(self, outlet) -> None:
+        """Read `outlet:`, which names where the fluid leaves.
+
+        The same three shapes as `fix:`, and for the same reason: it names
+        interfaces and, where it matters, which instances of them.
+
+        It exists because an incompressible flow is posed by *differences* in
+        pressure. `load:` says what drives the flow in; with nothing saying
+        where it goes, the problem has no downstream reference and a solver
+        answers it with a dead field or with a divergence -- which is what it
+        did, and what this key was added for. A part that names an inlet and no
+        outlet is not asking a harder question, it is asking one that has no
+        answer.
+        """
+        if outlet is None:
+            return
+        if isinstance(outlet, str):
+            self.outlets[outlet] = [EVERY_INSTANCE]
+            return
+        if isinstance(outlet, list):
+            for entry in outlet:
+                if not isinstance(entry, str):
+                    raise CaeConfigError("'outlet:' names an interface that is not a name: %r" % (entry,))
+                self.outlets[entry] = [EVERY_INSTANCE]
+            return
+        if isinstance(outlet, dict):
+            for interface, instances in outlet.items():
+                self.outlets[interface] = _instance_names(instances, "'outlet: %s:'" % interface)
+            return
+        raise CaeConfigError("'outlet:' is neither a list of interfaces nor a map of them: %r" % (outlet,))
+
     def _parse_load(self, load) -> None:
         """Read `load:`, converting every value to a force in newtons.
 
@@ -307,7 +351,8 @@ class AnalysisConfig:
     def interfaces(self) -> list[str]:
         """Every interface type this analysis has something to say about."""
         names = list(self.fixtures)
-        names.extend(name for name in self.loads if name not in self.fixtures)
+        names.extend(name for name in self.loads if name not in names)
+        names.extend(name for name in self.outlets if name not in names)
         return names
 
     def to_data(self) -> dict:
@@ -317,6 +362,11 @@ class AnalysisConfig:
             "fix": {name: list(instances) for name, instances in self.fixtures.items()},
             "load": {name: dict(values) for name, values in self.loads.items()},
         }
+        if self.outlets:
+            # Only when there is one: an implementation that has never heard of
+            # outlets is handed the request it always was, and a part that names
+            # none is not told it has an empty one.
+            data["outlet"] = {name: list(instances) for name, instances in self.outlets.items()}
         if self.implementation is not None:
             # Carried so that `pc test`'s cache key changes when the part is
             # re-pointed at another solver: two solvers are two answers, and the
@@ -326,7 +376,12 @@ class AnalysisConfig:
 
     def __repr__(self) -> str:
         """The parsed conditions, with the loads as the newtons they became."""
-        return "AnalysisConfig(%r, fix=%r, load=%r)" % (self.analysis, self.fixtures, self.loads)
+        return "AnalysisConfig(%r, fix=%r, load=%r, outlet=%r)" % (
+            self.analysis,
+            self.fixtures,
+            self.loads,
+            self.outlets,
+        )
 
 
 def config_of(shape, analysis: str) -> Optional[AnalysisConfig]:
@@ -433,16 +488,32 @@ def assign_ports(config: AnalysisConfig, records: list) -> tuple[list, list[str]
             entry = entry or dict(record)
             entry["load"] = amount
 
+        for name, instances in config.outlets.items():
+            if not _matches(interface, name):
+                continue
+            opened = [one for one in (EVERY_INSTANCE, instance) if one in instances]
+            if not opened:
+                continue
+            matched.update(("outlet", name, one) for one in opened)
+            entry = entry or dict(record)
+            entry["outlet"] = True
+
         if entry is not None:
             entry.setdefault("fix", False)
             entry.setdefault("load", 0.0)
+            # Only where the part has outlets at all, so that a record handed to
+            # an implementation that has never heard of them looks exactly as it
+            # always did.
+            if config.outlets:
+                entry.setdefault("outlet", False)
             assigned.append(entry)
 
     unmatched = []
-    for key, declared in (("fix", config.fixtures), ("load", config.loads)):
+    for key, declared in (("fix", config.fixtures), ("load", config.loads), ("outlet", config.outlets)):
         for name, wanted in declared.items():
-            # `fix:` holds a list of instance names and `load:` a map of them to
-            # forces; iterating either yields the names, which is all this needs.
+            # `fix:` and `outlet:` hold a list of instance names and `load:` a
+            # map of them to forces; iterating any of them yields the names,
+            # which is all this needs.
             missing = [one for one in wanted if (key, name, one) not in matched]
             if not missing:
                 continue

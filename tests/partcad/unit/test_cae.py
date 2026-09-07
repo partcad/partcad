@@ -121,6 +121,62 @@ def test_fix_refuses_what_is_not_a_name():
         AnalysisConfig("fea", {"fix": {"m3-screw": [5]}})
 
 
+# ---- outlet: ---------------------------------------------------------------
+
+
+def test_outlet_takes_the_three_shapes_fix_takes():
+    """It names interfaces and, where it matters, which instances of them."""
+    assert AnalysisConfig("cfd", {"load": {"in": "1 N"}, "outlet": "out"}).outlets == {"out": [EVERY_INSTANCE]}
+    assert AnalysisConfig("cfd", {"load": {"in": "1 N"}, "outlet": ["a", "b"]}).outlets == {
+        "a": [EVERY_INSTANCE],
+        "b": [EVERY_INSTANCE],
+    }
+    assert AnalysisConfig("cfd", {"load": {"in": "1 N"}, "outlet": {"out": ["left"]}}).outlets == {"out": ["left"]}
+
+
+def test_outlet_refuses_what_is_not_a_name():
+    with pytest.raises(CaeConfigError):
+        AnalysisConfig("cfd", {"load": {"in": "1 N"}, "outlet": [{"out": 1}]})
+    with pytest.raises(CaeConfigError):
+        AnalysisConfig("cfd", {"load": {"in": "1 N"}, "outlet": 5})
+
+
+def test_only_a_flow_has_an_outlet():
+    """A stress analysis has nothing to let out, so the word is not accepted.
+
+    Taking it silently would let a part write something that reads as a
+    boundary condition and is not one -- and `fea:` would then be quietly
+    ignoring half of what it was told.
+    """
+    with pytest.raises(CaeConfigError, match="outlet"):
+        AnalysisConfig("fea", {"fix": ["root"], "outlet": ["tip"]})
+
+
+def test_an_outlet_is_carried_to_the_implementation_only_when_there_is_one():
+    """An implementation that never heard of outlets sees what it always saw."""
+    assert "outlet" not in AnalysisConfig("cfd", {"fix": ["wall"], "load": {"in": "1 N"}}).to_data()
+    data = AnalysisConfig("cfd", {"fix": ["wall"], "load": {"in": "1 N"}, "outlet": ["out"]}).to_data()
+    assert data["outlet"] == {"out": [EVERY_INSTANCE]}
+
+
+def test_an_outlet_lands_on_its_port():
+    """The record an implementation reads the outlet off."""
+    config = AnalysisConfig("cfd", {"fix": ["wall"], "load": {"in": "1 N"}, "outlet": ["out"]})
+    records = [_port("//p:wall"), _port("//p:in"), _port("//p:out")]
+    assigned, unmatched = cae.assign_ports(config, records)
+    assert unmatched == []
+    assert [entry["interface"] for entry in assigned if entry.get("outlet")] == ["//p:out"]
+    # And the ones it does not name are told so, rather than left undecided.
+    assert [entry.get("outlet") for entry in assigned] == [False, False, True]
+
+
+def test_an_outlet_that_matched_nothing_is_reported():
+    """A boundary condition doing nothing is worth saying out loud."""
+    config = AnalysisConfig("cfd", {"fix": ["wall"], "load": {"in": "1 N"}, "outlet": ["out"]})
+    _assigned, unmatched = cae.assign_ports(config, [_port("//p:wall"), _port("//p:in")])
+    assert [name for name, _reason in unmatched] == ["out"]
+
+
 # ---- load: -----------------------------------------------------------------
 
 
