@@ -114,7 +114,8 @@ declared in its own (see :ref:`cae-section`), and named by the
 ``//pub/feature/cae/calculix:fea`` and ``//pub/feature/cae/calculix:cfd`` by
 default, which are `CalculiX <https://www.calculix.de/>`_ (see
 `partcad-cae-calculix <https://github.com/partcad/partcad-cae-calculix>`_ for
-what it needs installed and what every parameter means). ``pc cae fea --implementation`` overrides it for one run, and so does
+what it needs and what every parameter means -- it declares a ``container:`` and
+brings its own solver and mesher, so what it needs is a container runtime). ``pc cae fea --implementation`` overrides it for one run, and so does
 the field over the model in the IDE's FEA tab.
 
 A part may also name its own, which is what it was written against:
@@ -152,9 +153,12 @@ no such file type), a plugin that resolves and cannot run (no mesher, no solver,
 a sandbox that will not build, a crash), and an analysis that ran and found
 something.
 
-Not running is deliberately not a skip. A skip says the question does not apply
-here; a part that declares ``fea:`` has asked, and a plugin that was asked and
-delivered nothing has failed. The consequence is the point: declaring ``fea:``
+Not running is deliberately not a skip, with one exception: an implementation
+that declared a ``container:`` on a machine with no container runtime is reported
+as not run, because the thing that asks could not start and nothing was asked.
+Everywhere else a skip says the question does not apply here; a part that
+declares ``fea:`` has asked, and a plugin that was asked and delivered nothing
+has failed. The consequence is the point: declaring ``fea:``
 in a shared package makes ``pc test`` fail for everyone who has not installed
 what that implementation needs. A package that does not want that should not
 declare the section. What the failure carries is *why* -- the implementation's
@@ -165,8 +169,11 @@ work on, because "gmsh is not installed" is a puzzle and the same sentence under
 ``examples/feature_cae`` is the pair of cases to check an implementation against
 — a cantilever and a pipe, each with a closed-form answer to compare the solver
 with. Against CalculiX the cantilever reads 0.1655 mm where the model predicts
-0.16-0.18 mm; the pipe does not converge yet, and that package's ``README.md``
-says why.
+0.16-0.18 mm. The pipe declares no ``cfd:`` section: CalculiX's CFD solver
+diverges on it, a part that declares a section has asked a question, and an
+example that ships a check nothing can turn green is one readers learn to scroll
+past. The declaration is written out beside the part, and that example's
+``README.md`` has the measurement.
 
 See :ref:`pc cae <cae>` for the command and the units it accepts.
 
