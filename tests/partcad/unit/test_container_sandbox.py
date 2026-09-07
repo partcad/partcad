@@ -213,3 +213,81 @@ def test_a_daemon_that_does_not_answer_is_not_available(monkeypatch):
     monkeypatch.setattr(runtime, "_docker_available", None)
     monkeypatch.setattr(runtime.docker, "from_env", _raise)
     assert runtime.docker_available() is False
+
+
+# --------------------------------------------------------------------------- #
+# Which runtime is handed which arguments                                     #
+# --------------------------------------------------------------------------- #
+
+
+class _NarrowRuntime:
+    """A stand-in with `PythonRuntime`'s signature, which is not the base's.
+
+    `PythonRuntime.run_async` and `JavaScriptRuntime.run_async` both override
+    the base with `(cmd, stdin, cwd, session, timeout)`. They accept none of
+    `input_files`, `output_files`, `input_dirs` or `env`, so the base class's
+    parameters are not a contract they honour -- passing one is a TypeError, not
+    an ignored argument.
+    """
+
+    def __init__(self):
+        self.calls = []
+
+    async def prepare_for_package(self, project):
+        pass
+
+    async def ensure_async(self, dep):
+        pass
+
+    async def run_async(self, cmd, stdin="", cwd=None, session=None, timeout=None):
+        self.calls.append(cmd)
+        return 0, "", ""
+
+
+class _ContainerRuntime(_NarrowRuntime):
+    """The base class's signature, which is what a container runtime has."""
+
+    def __init__(self):
+        super().__init__()
+        self.kwargs = None
+
+    async def run_async(self, cmd, stdin="", cwd=None, session=None, timeout=None, **kwargs):
+        self.calls.append(cmd)
+        self.kwargs = kwargs
+        return 0, "", ""
+
+
+def test_a_python_sandbox_is_not_handed_container_arguments():
+    """The regression: `input_dirs` reached `PythonRuntime` and it raised.
+
+    Every implementation that ships with PartCAD runs in a Python sandbox, so
+    this is not an edge case -- it is `pc render` and `pc export` for everyone.
+    Asserted against a stub with the narrow signature, because a stub that
+    accepted anything would have passed while the real thing failed.
+    """
+    import asyncio
+    import inspect
+
+    from partcad import runtime as pc_runtime
+    from partcad import runtime_python
+
+    # The premise: the override really is narrower than the base.
+    narrow = set(inspect.signature(runtime_python.PythonRuntime.run_async).parameters)
+    base = set(inspect.signature(pc_runtime.Runtime.run_async).parameters)
+    for parameter in ("input_dirs", "output_files", "input_files", "env"):
+        assert parameter in base
+        assert parameter not in narrow
+
+    # And the consequence: handing one over is a TypeError, which is what CI saw.
+    runtime = _NarrowRuntime()
+    with pytest.raises(TypeError, match="input_dirs"):
+        asyncio.run(runtime.run_async(["x"], "", input_dirs=[]))
+
+
+def test_a_container_runtime_is_handed_what_it_needs():
+    """The other half: the container path must still send the directories."""
+    import asyncio
+
+    runtime = _ContainerRuntime()
+    asyncio.run(runtime.run_async(["python", "s.py"], "", input_dirs=["/pkg"], output_files=["/out.glb"]))
+    assert runtime.kwargs == {"input_dirs": ["/pkg"], "output_files": ["/out.glb"]}

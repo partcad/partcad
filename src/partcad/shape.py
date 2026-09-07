@@ -1167,11 +1167,18 @@ class Shape(ShapeConfiguration):
                 # a caller from naming one (see PC_CONTAINER_ALLOWED_COMMANDS in
                 # tools/containers/_common/pc-container-json-rpc.py).
                 command.insert(0, container.get("command") or "python")
+            # Only the container runtime is handed these. 'PythonRuntime' and
+            # 'JavaScriptRuntime' both override 'run_async' with a narrower
+            # signature -- (cmd, stdin, cwd, session, timeout) -- so the base
+            # class's parameters are not a contract they honour, and passing
+            # one down that path is a TypeError rather than an ignored argument.
+            extra = (
+                {"input_dirs": input_dirs, "output_files": [final_filepath]}
+                if container
+                else {}
+            )
             exitcode, response_serialized, errors = await runtime.run_async(
-                command,
-                request_serialized,
-                input_dirs=input_dirs,
-                output_files=[final_filepath] if container else None,
+                command, request_serialized, **extra
             )
             if exitcode != 0 and len(errors) == 0:
                 errors = "Failed to execute command '%s' with exit code %s" % (" ".join(command), exitcode)
