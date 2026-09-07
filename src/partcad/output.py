@@ -141,17 +141,10 @@ IMPLEMENTATION_KEYS = frozenset({"path", "package", "pythonRequirements", "pytho
 OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
 RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 
-# The request key the implementation script's path travels under. It is passed
-# in the request rather than on the command line because the two positional
-# arguments of a wrapper are already spent on the output path and the working
-# directory (see wrappers/wrapper_export.py, which spells this out again -- a
-# wrapper runs in a sandbox and cannot import 'partcad').
-SCRIPT_KEY = "__script__"
-
 # The request key that says whether the sandbox rebuilds the shape and assembly
-# envelopes into live OCCT geometry before the implementation sees them. It
-# travels beside the script path for the same reason: the wrapper has to know
-# before it deserializes anything. Declared on a file type as 'decode: false',
+# envelopes into live OCCT geometry before the implementation sees them. The
+# wrapper has to know before it deserializes anything, which is why it travels
+# in the request rather than being read off the configuration. Declared on a file type as 'decode: false',
 # which is what an implementation asks for when it needs what an envelope says
 # *about* a node: decoding mirrors the assembly tree in nested compounds, but
 # geometry is all it keeps - every node's 'name' and 'label' is dropped, and its

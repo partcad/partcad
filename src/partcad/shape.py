@@ -1119,7 +1119,6 @@ class Shape(ShapeConfiguration):
 
     async def _run_implementation_locked(self, ctx, impl, script, request, final_filepath):
         """The body of '_run_implementation_async', with the shape held still."""
-        request[output.SCRIPT_KEY] = os.path.abspath(script)
         # Whether the sandbox rebuilds the envelopes into live geometry before
         # the implementation sees them. Off for an implementation that needs what
         # the envelopes say about each node (the URDF exporter names every link
@@ -1156,10 +1155,16 @@ class Shape(ShapeConfiguration):
                 await runtime.ensure_async(dep)
 
         with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
+            # The meta-wrapper, what to write, where to run, and what to run.
+            # The implementation script is an argument and not part of the
+            # request because a container rewrites arguments naming a directory
+            # it was sent and cannot rewrite the request, which reaches it as
+            # one opaque string on standard input -- see wrapper_export.py.
             command = [
                 script_path,
                 final_filepath,
                 config_dir,
+                os.path.abspath(script),
             ]
             if container:
                 # The interpreter is named rather than pathed: the container's

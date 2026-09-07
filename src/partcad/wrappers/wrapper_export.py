@@ -12,6 +12,10 @@ PartCAD sandbox (so the script it runs may import OCP / build123d / cadquery),
 executes that script with 'runpy', and serializes its verdict back to
 'Shape.render_async()'.
 
+The script to run is the wrapper's third argument, after the output path and the
+working directory; see SCRIPT_ARGUMENT below for why it is an argument rather
+than part of the request.
+
 The script is executed with these globals available:
 
     request  -- the shape ('request["wrapped"]') plus every export parameter
@@ -58,11 +62,19 @@ sys.path.append(os.path.dirname(__file__))
 import ocp_serialize
 import wrapper_common
 
-# The key the request carries the implementation script under. Passed in the
-# request rather than on the command line: 'wrapper_common.handle_input()'
-# already spends both positional arguments on the output path and the working
+# Where the implementation script's path is: the third argument, after the two
+# 'wrapper_common.handle_input()' spends on the output path and the working
 # directory.
-SCRIPT_KEY = "__script__"
+#
+# On the command line rather than in the request, and that is not a matter of
+# taste. An implementation may run in a container, and a container's arguments
+# are rewritten on the way in -- the directories PartCAD sent are unpacked
+# somewhere of the container's choosing, and every argument naming one is
+# adjusted to match (see 'tools/containers/_common/pc-container-json-rpc.py').
+# The request cannot be: it arrives on standard input as one opaque serialized
+# string. A script path inside it would name a directory on the machine that
+# sent it and would be a path to nothing here.
+SCRIPT_ARGUMENT = 3
 
 # The key that says whether the envelopes are rebuilt into live OCCT geometry
 # before the implementation sees them. It has to travel in the request and be
@@ -185,7 +197,7 @@ if __name__ == "__main__":
     # envelopes become live geometry is the implementation's choice, and that
     # choice travels inside the request itself.
     path, request = wrapper_common.handle_input(decode=False)
-    script = request.pop(SCRIPT_KEY, None)
+    script = sys.argv[SCRIPT_ARGUMENT] if len(sys.argv) > SCRIPT_ARGUMENT else None
     # Before the decode, while the envelopes - and so the properties they carry
     # - are still there to be read.
     if request.get(PROPERTIES_KEY) is True:

@@ -243,6 +243,113 @@ class Runtime:
 
         self.rpc_client = RuntimeJsonRpcClient(host, port)
 
+    # ----------------------------------------------------------------- #
+    # What 'run' and 'run_async' both do                                  #
+    # ----------------------------------------------------------------- #
+    #
+    # They are the same command run two ways, and the parts that are not the
+    # subprocess call are the same in both. They used to be written out twice,
+    # and the copies had drifted: the container half of 'run_async' invented its
+    # exit code from whether anything reached stderr, read 'p.returncode' where
+    # 'p' does not exist, sent its standard input unencoded to a server that
+    # decodes base64, and returned two values on one path out of three. None of
+    # that was noticed because no implementation ran in a container until now.
+    # One copy of each is what keeps them from drifting again.
+
+    def _rpc_params(self, stdin, cwd, input_files, output_files, input_dirs):
+        """The parameters a container is asked with.
+
+        'stdin' is base64 because the server decodes it as base64, which is not
+        obvious from either end: 'base64.b64decode' does not refuse text that is
+        not base64 -- it drops every character outside the alphabet and decodes
+        what is left -- so an unencoded request arrives as noise rather than as
+        an error.
+        """
+        file_contents = {}
+        for file_path in input_files:
+            with open(file_path, "rb") as f:
+                file_contents[file_path] = base64.b64encode(f.read()).decode("utf-8")
+        return {
+            "stdin": base64.b64encode(stdin.encode("utf-8")).decode("utf-8") if stdin else None,
+            "cwd": cwd,
+            "input_files": file_contents,
+            "output_files": output_files,
+            "input_dirs": {path: pack_directory(path) for path in input_dirs},
+        }
+
+    def _rpc_result(self, response, output_files):
+        """What a container answered, as (stdout, stderr, exit code).
+
+        The output files it produced are written where the caller asked for
+        them, which is the point of naming them: the file was written inside the
+        container, under a name of the container's choosing.
+        """
+        result = response["result"]
+        stdout = result["stdout"]
+        stdout = base64.b64decode(stdout).decode("utf-8") if stdout else None
+        stderr = result["stderr"]
+        stderr = base64.b64decode(stderr).decode("utf-8") if stderr else None
+        for file_name, file_contents in (result.get("output_files") or {}).items():
+            if file_name in output_files:
+                with open(file_name, "wb") as f:
+                    f.write(base64.b64decode(file_contents))
+            else:
+                pc_logging.error(f"Unsolicited output file: {file_name}")
+        # What the command exited with, which the server reports. The fallback
+        # is for an image built before it did, and is what this used to do for
+        # every container: read any stderr at all as a failure.
+        returncode = result.get("exit_code")
+        return stdout, stderr, int(bool(stderr)) if returncode is None else returncode
+
+    def _finished(self, cmd, stdout, stderr, returncode):
+        """The triple every run returns, having reported what was written.
+
+        Anything on stderr from a command that succeeded is a warning and is
+        cleared: a library that prints is not a library that failed, and a
+        wrapper's sandbox deliberately moves everything that prints onto stderr
+        so that it cannot corrupt the response (see wrappers/wrapper_common.py).
+        That makes the exit code the only thing that says whether a run worked.
+        """
+        if stdout:
+            pc_logging.debug("Output of %s: %s" % (cmd, stdout))
+        if stderr:
+            # TODO(azhar): remove this when the issue is fixed
+            keywords = [
+                "DEPRECATION: Wheel filename",
+                "Invalid wheel filename (invalid version):",
+                "pip 25.3 will enforce this behaviour change.",
+            ]
+            stderr_lines = [
+                line.strip()
+                for line in stderr.splitlines()
+                if line.strip() and not any(keyword in line for keyword in keywords)
+            ]
+            if stderr_lines:
+                stderr = "\n".join(stderr_lines)
+                if returncode == 0:
+                    pc_logging.warning("%s produced stderr: %s" % (cmd, stderr))
+                    stderr = ""
+                else:
+                    pc_logging.error("Error in %s: %s" % (cmd, stderr))
+            else:
+                stderr = ""
+
+        # [Temporary Fix] Ignore exit code 3221226356(0xc0000374) and 3221225477(0xc0000005)
+        # This is a known and open issue on Windows related to the cadquery import
+        # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
+        if returncode in [3221226356, 3221225477]:
+            returncode = 0
+        return returncode, stdout, stderr
+
+    @staticmethod
+    def _no_response(name):
+        """Three values, like every other way out of a run.
+
+        Two was an unpacking error at the call site rather than the report that
+        a container answered nothing, which is a failure like any other.
+        """
+        return 1, None, "The container serving '%s' returned no response" % name
+
     def run(
         self,
         cmd: list[str],
@@ -251,6 +358,7 @@ class Runtime:
         input_files: list[str] = None,
         output_files: list[str] = None,
         env: dict = None,
+        input_dirs: list[str] = None,
     ):
         # 'env' replaces this process's environment for the child, and is only
         # ever passed by a runtime that has to place something of its own on it
@@ -262,35 +370,16 @@ class Runtime:
             input_files = []
         if output_files is None:
             output_files = []
+        if input_dirs is None:
+            input_dirs = []
 
         if self.rpc_client:
-            file_contents = {}
-            for file_path in input_files:
-                with open(file_path, "rb") as f:
-                    file_contents[file_path] = base64.b64encode(f.read()).decode("utf-8")
-
             response = self.rpc_client.execute(
-                cmd,
-                {
-                    "stdin": stdin,
-                    "cwd": cwd,
-                    "input_files": file_contents,
-                    "output_files": output_files,
-                },
+                cmd, self._rpc_params(stdin, cwd, input_files, output_files, input_dirs)
             )
             if not response:
-                return None, None
-            stdout = response["result"]["stdout"]
-            stdout = base64.b64decode(stdout).decode("utf-8") if stdout else None
-            stderr = response["result"]["stderr"]
-            stderr = base64.b64decode(stderr).decode("utf-8") if stderr else None
-            if response["result"]["output_files"]:
-                for file_name, file_contents in response["result"]["output_files"].items():
-                    if file_name in output_files:
-                        with open(file_name, "wb") as f:
-                            f.write(base64.b64decode(file_contents))
-                    else:
-                        pc_logging.error(f"Unsolicited output file: {file_name}")
+                return self._no_response(self.name)
+            stdout, stderr, returncode = self._rpc_result(response, output_files)
         else:
             with sandbox_lock.process_slots.slot():
                 p = subprocess.Popen(
@@ -308,31 +397,9 @@ class Runtime:
                     input=stdin,
                     # TODO(clairbee): add timeout
                 )
+            returncode = p.returncode
 
-        if stdout:
-            pc_logging.debug("Output of %s: %s" % (cmd, stdout))
-        if stderr:
-            if p.returncode == 0:
-                pc_logging.warning("%s produced stderr: %s" % (cmd, stderr))
-                stderr = ""
-            else:
-                pc_logging.error("Error in %s: %s" % (cmd, stderr))
-
-        # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
-        # f = open("/tmp/log", "w")
-        # f.write("Completed: %s\n" % cmd)
-        # f.write(" stdin: %s\n" % stdin)
-        # f.write(" stderr: %s\n" % stderr)
-        # f.write(" stdout: %s\n" % stdout)
-        # f.close()
-
-        exitcode = p.returncode if not self.rpc_client else int(stderr is not None)
-        # [Temporary Fix] Ignore exit code 3221226356(0xc0000374) and 3221225477(0xc0000005)
-        # This is a known and open issue on Windows related to the cadquery import
-        # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
-        if exitcode in [3221226356, 3221225477]:
-            exitcode = 0
-        return exitcode, stdout, stderr
+        return self._finished(cmd, stdout, stderr, returncode)
 
     async def run_async(
         self,
@@ -353,33 +420,12 @@ class Runtime:
             input_dirs = []
 
         if self.rpc_client:
-            # Load the contents of the given files
-            file_contents = dict(
-                map(lambda x: (x, base64.b64encode(open(x, "rb").read()).decode("utf-8")), input_files)
-            )
             response = await self.rpc_client.execute_async(
-                cmd,
-                {
-                    "stdin": stdin,
-                    "cwd": cwd,
-                    "input_files": file_contents,
-                    "output_files": output_files,
-                    "input_dirs": {path: pack_directory(path) for path in input_dirs},
-                },
+                cmd, self._rpc_params(stdin, cwd, input_files, output_files, input_dirs)
             )
             if not response:
-                return None, None
-            stdout = response["result"]["stdout"]
-            stdout = base64.b64decode(stdout).decode("utf-8") if stdout else None
-            stderr = response["result"]["stderr"]
-            stderr = base64.b64decode(stderr).decode("utf-8") if stderr else None
-            if response["result"]["output_files"]:
-                for file_name, file_contents in response["result"]["output_files"].items():
-                    if file_name in output_files:
-                        with open(file_name, "wb") as f:
-                            f.write(base64.b64decode(file_contents))
-                    else:
-                        pc_logging.error(f"Unsolicited output file: {file_name}")
+                return self._no_response(self.name)
+            stdout, stderr, returncode = self._rpc_result(response, output_files)
         else:
             async with sandbox_lock.process_slots.slot_async():
                 p = await asyncio.create_subprocess_exec(
@@ -396,43 +442,6 @@ class Runtime:
 
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
+            returncode = p.returncode
 
-        if stdout:
-            pc_logging.debug("Output of %s: %s" % (cmd, stdout))
-        if stderr:
-            # TODO(azhar): remove this when the issue is fixed
-            keywords = [
-                "DEPRECATION: Wheel filename",
-                "Invalid wheel filename (invalid version):",
-                "pip 25.3 will enforce this behaviour change.",
-            ]
-
-            stderr_lines = [
-                line.strip()
-                for line in stderr.splitlines()
-                if line.strip() and not any(keyword in line for keyword in keywords)
-            ]
-
-            if stderr_lines:
-                stderr = "\n".join(stderr_lines)
-                if p.returncode == 0:
-                    pc_logging.warning("%s produced stderr: %s" % (cmd, stderr))
-                    stderr = ""
-                else:
-                    pc_logging.error("Error in %s: %s" % (cmd, stderr))
-
-        # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
-        # f = open("/tmp/log", "w")
-        # f.write("Completed: %s\n" % cmd)
-        # f.write(" stdin: %s\n" % stdin)
-        # f.write(" stderr: %s\n" % stderr)
-        # f.write(" stdout: %s\n" % stdout)
-        # f.close()
-
-        exitcode = p.returncode if not self.rpc_client else int(stderr is not None)
-        # [Temporary Fix] Ignore exit code 3221226356(0xc0000374) and 3221225477(0xc0000005)
-        # This is a known and open issue on Windows related to the cadquery import
-        # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
-        if exitcode in [3221226356, 3221225477]:
-            exitcode = 0
-        return exitcode, stdout, stderr
+        return self._finished(cmd, stdout, stderr, returncode)
