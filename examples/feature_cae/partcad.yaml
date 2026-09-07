@@ -1,0 +1,190 @@
+desc: Two analyses whose answer is known before the solver runs.
+
+# TEMPORARY, until the public index carries `feature/cae`. The CalculiX package
+# is registered on the index's `devel` branch and has not reached `main`, which
+# is what `examples/partcad.yaml` and every `pc init` project pin -- so
+# `//pub/feature/cae/calculix`, which `caeFeaImplementation` names by default,
+# resolves to nothing and both commands below answer "the package implementing
+# 'fea' is not found". Depending on it directly makes this example run today
+# without repinning the whole examples tree at the index's `devel`, which would
+# also drag in changes that have nothing to do with this.
+#
+# Delete this and the two `implementation:` lines below once the index has it,
+# and the parts fall back to the user configuration like any other.
+dependencies:
+  calculix:
+    desc: Finite element and fluid dynamics analysis, by CalculiX.
+    type: git
+    url: https://github.com/partcad/partcad-cae-calculix.git
+
+docs:
+  intro: |
+    PartCAD ships no solver, so `pc cae fea` is only ever as right as whoever
+    implements it. These two parts are how you find out: each is a textbook case
+    with a closed-form answer, so the number the solver returns can be compared
+    against arithmetic rather than against expectations.
+
+    See README.md for the derivations, the expected values, and what a given
+    disagreement would mean.
+
+  usage: |
+    ```shell
+    # The default implementation, whatever `caeFeaImplementation` names
+    pc cae fea :cantilever
+    pc cae cfd :pipe
+
+    # A particular one, for this run only
+    pc cae fea -i calculix:fea :cantilever
+
+    # Where the boundary conditions actually landed
+    pc render -t svg --with-ports cantilever
+    ```
+
+interfaces:
+  beam-root:
+    desc: The clamped end of the cantilever.
+    ports:
+      root:
+
+  beam-tip:
+    desc: The free end of the cantilever, where the load is applied.
+    ports:
+      tip:
+
+  pipe-inlet:
+    desc: The face the flow is driven through.
+    ports:
+      inlet:
+
+  pipe-outlet:
+    desc: |
+      The face the flow leaves through, held at the reference pressure.
+
+      An incompressible flow is posed by *differences* in pressure, so a part
+      that names an inlet and no outlet has asked a question with no answer --
+      the solver has nowhere to put what is being pushed in, and reports a dead
+      field or a divergence rather than an error. This is that missing half.
+    ports:
+      outlet:
+
+  pipe-wall:
+    desc: |
+      Patches of the pipe's lateral surface, held no-slip. Twenty of them, at
+      four azimuths and five stations along the bore -- see README.md for why
+      this is a poor stand-in for "the wall" and what it costs.
+    ports:
+      px-m40:
+        location: [[5, 0, -40], [0, 0, 1], 0]
+      nx-m40:
+        location: [[-5, 0, -40], [0, 0, 1], 0]
+      py-m40:
+        location: [[0, 5, -40], [0, 0, 1], 0]
+      ny-m40:
+        location: [[0, -5, -40], [0, 0, 1], 0]
+      px-m20:
+        location: [[5, 0, -20], [0, 0, 1], 0]
+      nx-m20:
+        location: [[-5, 0, -20], [0, 0, 1], 0]
+      py-m20:
+        location: [[0, 5, -20], [0, 0, 1], 0]
+      ny-m20:
+        location: [[0, -5, -20], [0, 0, 1], 0]
+      px-p00:
+        location: [[5, 0, 0], [0, 0, 1], 0]
+      nx-p00:
+        location: [[-5, 0, 0], [0, 0, 1], 0]
+      py-p00:
+        location: [[0, 5, 0], [0, 0, 1], 0]
+      ny-p00:
+        location: [[0, -5, 0], [0, 0, 1], 0]
+      px-p20:
+        location: [[5, 0, 20], [0, 0, 1], 0]
+      nx-p20:
+        location: [[-5, 0, 20], [0, 0, 1], 0]
+      py-p20:
+        location: [[0, 5, 20], [0, 0, 1], 0]
+      ny-p20:
+        location: [[0, -5, 20], [0, 0, 1], 0]
+      px-p40:
+        location: [[5, 0, 40], [0, 0, 1], 0]
+      nx-p40:
+        location: [[-5, 0, 40], [0, 0, 1], 0]
+      py-p40:
+        location: [[0, 5, 40], [0, 0, 1], 0]
+      ny-p40:
+        location: [[0, -5, 40], [0, 0, 1], 0]
+
+parts:
+  cantilever:
+    type: build123d
+    desc: |
+      A 100x10x10 mm steel bar, clamped at one end and pulled down by 100 N at
+      the other. Tip deflection and peak bending stress are both closed forms.
+    implements:
+      beam-root: [[-50, 0, 0], [0, 0, 1], 0]
+      beam-tip: [[50, 0, 0], [0, 0, 1], 0]
+    fea:
+      # Temporary, with the `calculix` dependency at the top of this file: the
+      # public index does not carry `feature/cae` yet, so the default
+      # `caeFeaImplementation` resolves to nothing. Delete both and this falls
+      # back to the user configuration like any other part.
+      implementation: calculix:fea
+      fix:
+        - beam-root
+      load:
+        beam-tip: 100 N
+
+  pipe:
+    type: build123d
+    desc: |
+      The bore of a 10x100 mm pipe, driven by 5 mN at the inlet and held no-slip
+      along the wall. Fully developed laminar flow: Hagen-Poiseuille.
+    implements:
+      pipe-inlet: [[0, 0, -50], [0, 0, 1], 0]
+      pipe-outlet: [[0, 0, 50], [0, 0, 1], 0]
+      pipe-wall:
+    cfd:
+      implementation: calculix:cfd
+      fix:
+        - pipe-wall
+      load:
+        pipe-inlet: 0.005 N
+      # Where it goes. Without this the problem has no downstream pressure
+      # reference and CalculiX answers it with a field that never moves -- see
+      # `pipe-outlet` above and README.md.
+      outlet:
+        - pipe-outlet
+
+# Only the parameters, and deliberately no `path:`/`package:`: which package
+# implements the analysis is the parts' answer above, and repeating it here
+# would say it twice in a way that can disagree. A layer that names `path:` is
+# claiming to *be* the implementation -- see `output.stamp()` -- so a package
+# re-tuning someone else's parameters says neither.
+#
+# Every one of these is pinned because the closed forms in README.md assume it
+# -- most of all `self_weight`, which is on by default and which the textbook
+# cantilever does not have.
+cae:
+  fea:
+    youngs_modulus: 2.0e+11   # 200 GPa
+    poissons_ratio: 0.30
+    density: 7850
+    self_weight: false        # the closed form is the tip load alone
+    mesh_order: 2
+    mesh_size: 0.03
+    # 7.5 mm on a 100 mm bar: the half-diagonal of the 10x10 end face is
+    # 7.07 mm, so this is the smallest ball that clamps the whole face. It also
+    # clamps 7.5 mm of the length, which is the modelling error README.md is
+    # about.
+    port_radius: 0.075
+
+  cfd:
+    density: 900              # a light oil, kg/m^3
+    viscosity: 0.1            # Pa*s
+    # 3 mm on a 100 mm bore. It has to stay under the 5 mm radius or the wall
+    # neighbourhoods swallow the axis and hold the whole fluid still. It is also
+    # what the inlet and the outlet stand for: a port is a coordinate frame, so
+    # the area a pressure is spread over is the disc of this radius.
+    port_radius: 0.03
+    duration: 2.0
+    time_step: 0.005

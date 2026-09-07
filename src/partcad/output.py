@@ -50,6 +50,22 @@ EXPORT = "export"
 RENDER = "render"
 SECTIONS = (EXPORT, RENDER)
 
+# The analysis section, which is an output section of the same shape and is
+# deliberately not one of 'SECTIONS'. A file type declared under 'cae:' is
+# produced by a script exactly as an export or a render one is - same 'path',
+# same 'package', same sandbox, same parameters - and 'Implementation' below
+# serves it unchanged. What differs is who asks for it and what comes back:
+# 'pc cae fea' asks, and the implementation answers with findings beside the
+# file it wrote (see 'partcad.cae').
+#
+# It stays out of 'SECTIONS' because 'SECTIONS' answers the question "which
+# sections does a file type of 'pc export'/'pc render' live in": a 'fea' left in
+# there would be offered to 'pc render -t' and would fall back to a 'render:'
+# implementation, and neither is a thing a solver can do.
+CAE = "cae"
+ANALYSIS_SECTIONS = (CAE,)
+ALL_SECTIONS = SECTIONS + ANALYSIS_SECTIONS
+
 # Where the built-in packages live, both as package paths and on disk. They are
 # inside the 'partcad' Python package so that they ship with it and are always
 # present, wheel or frozen bundle alike.
@@ -121,21 +137,14 @@ def is_document_format(format_name: str, section_obj) -> bool:
 # The first group picks the implementation, the second places the output file.
 # What is left over is what the implementation is handed, so adding a field here
 # hides it from every implementation - including the ones packages write.
-IMPLEMENTATION_KEYS = frozenset({"path", "package", "pythonRequirements", "pythonVersion", "decode"})
+IMPLEMENTATION_KEYS = frozenset({"path", "package", "pythonRequirements", "pythonVersion", "decode", "container"})
 OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
 RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 
-# The request key the implementation script's path travels under. It is passed
-# in the request rather than on the command line because the two positional
-# arguments of a wrapper are already spent on the output path and the working
-# directory (see wrappers/wrapper_export.py, which spells this out again -- a
-# wrapper runs in a sandbox and cannot import 'partcad').
-SCRIPT_KEY = "__script__"
-
 # The request key that says whether the sandbox rebuilds the shape and assembly
-# envelopes into live OCCT geometry before the implementation sees them. It
-# travels beside the script path for the same reason: the wrapper has to know
-# before it deserializes anything. Declared on a file type as 'decode: false',
+# envelopes into live OCCT geometry before the implementation sees them. The
+# wrapper has to know before it deserializes anything, which is why it travels
+# in the request rather than being read off the configuration. Declared on a file type as 'decode: false',
 # which is what an implementation asks for when it needs what an envelope says
 # *about* a node: decoding mirrors the assembly tree in nested compounds, but
 # geometry is all it keeps - every node's 'name' and 'label' is dropped, and its
@@ -216,6 +225,45 @@ class Implementation:
         )
 
     @property
+    def container(self) -> Optional[dict]:
+        """The container this implementation runs in, if it does not run in a sandbox.
+
+        A Python sandbox can only bring what pip can install, and some
+        implementations need more than that: a native solver, a mesher with no
+        wheel for this platform, a whole third-party application. Such an
+        implementation declares an image instead, and PartCAD runs it there --
+
+            cae:
+              fea:
+                path: fea_calculix.py
+                container:
+                  image: ghcr.io/partcad/partcad-container-calculix:0.8.55
+
+        which is how a plugin becomes responsible for its own dependencies
+        rather than asking every user to install them. `port` defaults to the
+        5000 that `tools/containers/_common/pc-container-json-rpc.py` listens
+        on; `name` defaults to one derived from the image, so that two packages
+        naming the same image share a container rather than starting two.
+
+        The implementing package's declaration and nobody else's, for the reason
+        `python_version()` gives at length: this describes what *that* package's
+        script needs to run, and a caller asking for an analysis has no opinion
+        about it worth reading.
+        """
+        declared = self._declared("container")
+        if not declared:
+            return None
+        if isinstance(declared, str):
+            # The short form: the image and nothing else.
+            declared = {"image": declared}
+        if not isinstance(declared, dict) or not declared.get("image"):
+            raise ValueError(
+                "The '%s' implementation declares a 'container:' that names no 'image:': %r"
+                % (self.format_name, declared)
+            )
+        return dict(declared)
+
+    @property
     def python_requirements(self) -> list:
         """What the sandbox needs installed before this implementation runs.
 
@@ -279,8 +327,13 @@ def stamp(config: dict, package_name: str) -> dict:
 def config_sections(section: str) -> tuple:
     """The 'partcad.yaml' sections a file type's configuration is read from.
 
-    Both sections are read either way, and the one that owns the file type is
-    read last so that it wins. What the other one provides is a fallback:
+    'cae:' is read alone. It has no fallback and is nobody's fallback: an
+    analysis is not a file another CAD tool opens, and neither an export nor a
+    render implementation could stand in for one.
+
+    For the other two, both sections are read either way, and the one that owns
+    the file type is read last so that it wins. What the other one provides is a
+    fallback:
 
     'export:' falls back to 'render:' for history. PartCAD had only a 'render:'
     section before 'export:' existed, and packages configured their STEP and
@@ -294,16 +347,29 @@ def config_sections(section: str) -> tuple:
     'export:' request never falls back to a 'render:' implementation for a
     format that 'render:' owns.
     """
+    if section == CAE:
+        return (CAE,)
     return (RENDER, EXPORT) if section == EXPORT else (EXPORT, RENDER)
 
 
 def builtin_project(ctx, section: str):
-    """The package that declares the built-in implementations of a section."""
-    return ctx.get_project(BUILTIN_PACKAGES[section])
+    """The package that declares the built-in implementations of a section.
+
+    None for 'cae:', which has no built-in implementations and is not meant to
+    get one: PartCAD ships no solver, and the default implementation of each
+    analysis is a package path in the user configuration (see
+    'UserConfig.cae_fea_implementation'). Everything downstream therefore has to
+    cope with a section whose bottom layer is missing - which is already the case
+    for a file type a package declares that '//builtin' has never heard of.
+    """
+    package = BUILTIN_PACKAGES.get(section)
+    return ctx.get_project(package) if package else None
 
 
 def builtin_formats(ctx, section: str) -> dict:
     """The file types a section declares built-in implementations for."""
+    if section not in BUILTIN_PACKAGES:
+        return {}
     project = builtin_project(ctx, section)
     if project is None:
         pc_logging.error("The built-in package is missing: %s" % BUILTIN_PACKAGES[section])

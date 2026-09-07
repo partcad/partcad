@@ -42,6 +42,13 @@ reported rather than fatal, because the new version is installed beside the old 
 removed until the command exits. The VS Code extension's "Update PartCAD" runs `pc upgrade`, so the two cannot
 drift apart.
 
+**`pc cae` is a daemon command, and the one thing about it that is not is the exit code.** An analysis reads
+the package graph and drives a CAD wrapper, which puts it squarely on the daemon's side; what stays in the
+client is that `pc cae fea` exits non-zero when the analysis produced a finding, so it can be used as a gate
+in a script. Both subcommands are the same operation with the analysis as an argument -- `click/analysis.py`
+holds the options and the body, the way `click/viewport.py` holds the three that `pc render` and
+`pc adhoc render` share, so the two commands are a name and a docstring each and cannot drift apart.
+
 **`pc lint` sits on both sides of the line, one mode each.** `pc lint [-P/-r]` checks a *package*: which
 packages, resolved how, with which files, is the package graph, so it is a thin daemon client like any other.
 `pc lint --file` checks the *files named on the command line*, in this process: an ASSY file and a

@@ -1656,3 +1656,191 @@ def test_adhoc_render_reports_a_failed_render(monkeypatch, tmp_path):
     log = session.partcad.logging
     assert log.messages("error") == ["Failed to render: shape is empty"]
     assert not any(m.startswith("Render complete") for m in log.messages("info"))
+
+
+# ---- cae.analyze / cae.defaults --------------------------------------------
+#
+# The two methods behind `pc cae fea|cfd` and the IDE's FEA and CFD tabs. What
+# is pinned here is the operation glue: which shape is asked, what a refusal
+# reads as, and the two things a client gets that the analysis itself does not
+# produce -- the inlined bytes a webview needs, and the printed report a
+# terminal shows. Nothing here runs a solver.
+
+
+class FakeCae:
+    """The subset of ``partcad.cae`` these operations reach for."""
+
+    ANALYSES = ("fea", "cfd")
+    FEA = "fea"
+    CFD = "cfd"
+
+    class CaeConfigError(ValueError):
+        pass
+
+    @staticmethod
+    def findings_report(path, analysis, findings):
+        return "%s %s: %d finding(s)" % (path, analysis, len(findings))
+
+
+class FakeAnalysablePart(FakeObject):
+    """A part that answers `analyze_async` with whatever a test decided."""
+
+    def __init__(self, name, result=None, error=None):
+        super().__init__(name)
+        self.result = result if result is not None else {"findings": [], "filepath": "/w/bracket.fea.glb"}
+        self.error = error
+        self.calls = []
+
+    async def analyze_async(self, ctx, analysis, implementation=None, output_dir=None):
+        self.calls.append(
+            {
+                "analysis": analysis,
+                "implementation": implementation,
+                "output_dir": output_dir,
+                "create_dirs": ctx.option_create_dirs,
+            }
+        )
+        if self.error is not None:
+            raise self.error
+        return dict(self.result)
+
+
+def make_cae_session(part=None):
+    """A session whose `//` package holds one analysable part called `bracket`."""
+    session, seen = make_session()
+    session.partcad.cae = FakeCae()
+    session.partcad_ctx.user_config.cae_implementation = lambda analysis: "//pub/feature/cae/calculix:" + analysis
+    session.partcad.user_config.cae_implementation = session.partcad_ctx.user_config.cae_implementation
+    part = part if part is not None else FakeAnalysablePart("bracket")
+    session.partcad_ctx.projects["//"].add("parts", part)
+    session.partcad_ctx.shapes[("part", "//:bracket")] = part
+    return session, part
+
+
+def test_cae_analyze_runs_the_analysis_it_was_asked_for():
+    session, part = make_cae_session()
+
+    result = operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea"})
+
+    assert result["findings"] == []
+    assert part.calls == [{"analysis": "fea", "implementation": None, "output_dir": None, "create_dirs": False}]
+
+
+def test_cae_analyze_passes_the_per_run_overrides_through():
+    session, part = make_cae_session()
+
+    operations.cae_analyze(
+        session,
+        {
+            "package": "//",
+            "object": "bracket",
+            "analysis": "cfd",
+            "implementation": "//pkg:cfd",
+            "output_dir": "/w/out",
+            "create_dirs": True,
+        },
+    )
+
+    assert part.calls == [
+        {"analysis": "cfd", "implementation": "//pkg:cfd", "output_dir": "/w/out", "create_dirs": True}
+    ]
+
+
+def test_cae_analyze_refuses_an_analysis_partcad_does_not_run():
+    # Naming the ones it does run: the client asked for something, and "no" on
+    # its own leaves the reader guessing at the spelling.
+    session, _ = make_cae_session()
+
+    with pytest.raises(JsonRpcError) as raised:
+        operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "thermal"})
+    assert "thermal" in str(raised.value)
+    assert "fea, cfd" in str(raised.value)
+
+
+def test_cae_analyze_says_which_part_it_could_not_find():
+    # Only a part is analysed, so a name that is not one is "not found" as a
+    # part rather than as an object of some unstated kind.
+    session, _ = make_cae_session()
+
+    with pytest.raises(JsonRpcError) as raised:
+        operations.cae_analyze(session, {"package": "//", "object": "nope", "analysis": "fea"})
+    assert "Part //:nope is not found" in str(raised.value)
+
+
+def test_a_malformed_section_is_the_answer_rather_than_a_crash():
+    # What the IDE prints in the tab, verbatim: a part that says nothing about
+    # FEA is a question with an answer, not a failure of the machinery.
+    session, _ = make_cae_session(FakeAnalysablePart("bracket", error=FakeCae.CaeConfigError("declares no 'fea:'")))
+
+    with pytest.raises(JsonRpcError) as raised:
+        operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea"})
+    assert "declares no 'fea:'" in str(raised.value)
+
+
+def test_inline_hands_the_model_back_as_bytes(tmp_path):
+    # A webview has no file system in reach, so a model it cannot be handed is a
+    # model it cannot draw.
+    import base64
+
+    model = tmp_path / "bracket.fea.glb"
+    model.write_bytes(b"glTF-ish")
+    session, _ = make_cae_session(FakeAnalysablePart("bracket", result={"findings": [], "filepath": str(model)}))
+
+    result = operations.cae_analyze(
+        session, {"package": "//", "object": "bracket", "analysis": "fea", "inline": True}
+    )
+
+    assert base64.b64decode(result["content"]) == b"glTF-ish"
+
+
+def test_a_model_that_is_not_where_it_said_still_returns_the_findings(tmp_path):
+    # The findings are the more important half of the answer: an implementation
+    # that reported them and then lost its file has still answered.
+    session, _ = make_cae_session(
+        FakeAnalysablePart(
+            "bracket",
+            result={"findings": [{"message": "too thin"}], "filepath": str(tmp_path / "gone.glb")},
+        )
+    )
+
+    result = operations.cae_analyze(
+        session, {"package": "//", "object": "bracket", "analysis": "fea", "inline": True}
+    )
+
+    assert result["content"] is None
+    assert result["findings"] == [{"message": "too thin"}]
+    assert any("Failed to read the FEA model back" in m for m in session.partcad.logging.messages("warning"))
+
+
+def test_the_findings_are_printed_by_the_daemon_not_the_client():
+    # So that what a user sees does not depend on which client asked.
+    session, _ = make_cae_session(
+        FakeAnalysablePart("bracket", result={"findings": [{"message": "too thin"}], "filepath": "/w/b.glb"})
+    )
+
+    operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea"})
+
+    printed = session.partcad.logging.messages("info")
+    assert "//:bracket fea: 1 finding(s)" in printed
+    assert "FEA model: /w/b.glb" in printed
+
+
+def test_json_keeps_the_report_off_the_stream_the_client_parses():
+    # `--json` puts a machine-readable array on the client's stdout; a table
+    # printed beside it would be in the way of whatever reads it.
+    session, _ = make_cae_session()
+
+    operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea", "json": True})
+
+    assert session.partcad.logging.messages("info") == []
+
+
+def test_cae_defaults_answers_for_every_analysis():
+    # The IDE pre-fills its field from this, so an analysis missing from the
+    # answer is a tab with an empty box and nothing to type.
+    session, _ = make_cae_session()
+
+    assert operations.cae_defaults(session, {}) == {
+        "fea": "//pub/feature/cae/calculix:fea",
+        "cfd": "//pub/feature/cae/calculix:cfd",
+    }

@@ -21,6 +21,46 @@ import ocp_serialize
 _request_name = None
 _request_label = None
 
+# The response channel, once it has been taken away from everything else. See
+# 'protect_response_channel()'.
+_response_fd = None
+
+
+def protect_response_channel():
+    """Give the response a file descriptor nothing else can write to.
+
+    A wrapper answers PartCAD on its standard output, so anything else that
+    writes there corrupts the answer -- and "anything else" is not hypothetical.
+    OCCT's STEP writer prints a transfer summary on every 'Write()'; gmsh prints
+    unless told twice not to; a script's own 'print()' lands there, as do the
+    diagnostics in 'custom_cqgi.py' beside this file. A native library's output
+    goes to file descriptor 1 directly, so 'contextlib.redirect_stdout' does not
+    catch it and neither does reassigning 'sys.stdout' -- the only thing that
+    does is taking the descriptor away.
+
+    So descriptor 1 is pointed at standard error and the real one is kept here
+    for 'handle_output()'. Everything that prints keeps working and its output
+    lands in the log, where it is useful; the one thing that changes is that it
+    can no longer be mistaken for part of the response.
+
+    Called by 'handle_input()', which every wrapper starts with, so a wrapper
+    need not know this happened. Best effort: a platform or a context where the
+    descriptors cannot be moved leaves the channel as it was, which is what
+    every wrapper had before this.
+    """
+    global _response_fd
+    if _response_fd is not None:
+        return
+    try:
+        sys.stdout.flush()
+    except Exception:
+        pass
+    try:
+        _response_fd = os.dup(1)
+        os.dup2(2, 1)
+    except OSError:
+        _response_fd = None
+
 
 def handle_input(decode=True):
     """Read the (path, request) pair a wrapper is invoked with.
@@ -36,6 +76,9 @@ def handle_input(decode=True):
     if len(sys.argv) < 2:
         sys.stderr.write("Usage: %s <path>\n" % sys.argv[0])
         sys.exit(1)
+
+    # Before the script runs, and before anything it imports can print.
+    protect_response_channel()
 
     try:
         locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
@@ -68,9 +111,21 @@ def handle_input(decode=True):
 
 
 def handle_output(model):
+    """Answer PartCAD, on the descriptor `protect_response_channel()` kept.
+
+    Written with 'os.write' rather than through a file object, because the
+    descriptor is deliberately not 'sys.stdout' any more -- that one is standard
+    error now, and is where everything else in this process prints.
+    """
     # Serialize the output, echoing the request's name/label onto the shape.
-    sys.stdout.write(ocp_serialize.serialize(model, name=_request_name, label=_request_label))
-    sys.stdout.flush()
+    serialized = ocp_serialize.serialize(model, name=_request_name, label=_request_label)
+    if _response_fd is None:
+        sys.stdout.write(serialized)
+        sys.stdout.flush()
+        return
+    payload = serialized.encode("utf-8")
+    while payload:
+        payload = payload[os.write(_response_fd, payload) :]
 
 
 def combine(shapes, kind):

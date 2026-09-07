@@ -8,6 +8,7 @@
 
 import asyncio
 import os
+import re
 import sys
 import time
 import socket
@@ -20,6 +21,7 @@ from . import consts
 from . import logging as pc_logging
 from .mating import Mating
 from . import output
+from . import runtime
 from . import runtime_javascript_all
 from . import runtime_python_all
 from . import sandbox_versions
@@ -153,6 +155,9 @@ class Context:
 
         self.option_create_dirs = False
         self.runtimes_python = {}
+        # Container sandboxes, keyed by container name (derived from the image).
+        self.runtimes_container = {}
+        self.runtimes_container_lock = threading.RLock()
         self.runtimes_python_lock = threading.Lock()
         # Python versions already reported as held down to MAX_PYTHON_VERSION_CAD,
         # so the warning is said once rather than once per part.
@@ -1265,6 +1270,52 @@ class Context:
             if not runtime_name in self.runtimes_python:
                 self.runtimes_python[runtime_name] = runtime_python_all.create(self, version, python_runtime)
             return self.runtimes_python[runtime_name]
+
+    async def get_container_runtime(self, container: dict):
+        """The container an implementation declared, started or reused.
+
+        The third sandbox mechanism, beside the Python and JavaScript ones, and
+        the only one that can carry something pip cannot install: a native
+        solver, a mesher with no wheel for this platform, a whole application.
+        An implementation that needs one declares it (see
+        `output.Implementation.container`) and PartCAD runs it there.
+
+        Keyed on the image rather than on the implementation, so that two
+        packages naming the same image share one container instead of starting
+        two. Started once and reused for the life of the context -- the cost of
+        a container is in the starting, and an analysis over a tree of parts
+        would otherwise pay it per part.
+
+        Raises:
+            runtime.SandboxUnavailable: there is no container runtime here. The
+                one absence `pc test` may skip on, because the implementation
+                never gets to run and so cannot report it itself.
+        """
+        image = container["image"]
+        port = int(container.get("port") or 5000)
+        # A name derived from the image, so the container is recognisable in
+        # 'docker ps' and shared by everything that asked for that image.
+        name = container.get("name") or "pc-" + re.sub(r"[^A-Za-z0-9_.-]", "-", image)
+
+        with self.runtimes_container_lock:
+            existing = self.runtimes_container.get(name)
+        if existing is not None:
+            return existing
+
+        if not runtime.docker_available():
+            raise runtime.SandboxUnavailable(
+                "this implementation runs in a container (%s) and no container runtime is available here. "
+                "Install Docker and start it, or use an implementation that runs in a Python sandbox." % image
+            )
+
+        created = runtime.Runtime(self, name)
+        await created.use_docker(image, name, port)
+        with self.runtimes_container_lock:
+            # Another task may have won the race while the container started.
+            # Whoever is already in the map wins; a second container for the
+            # same name would not have been created anyway, since 'use_docker'
+            # reuses one by name.
+            return self.runtimes_container.setdefault(name, created)
 
     def get_javascript_runtime(self, version=None, javascript_runtime=None):
         """The sandboxed Node.js of the given major version.

@@ -129,16 +129,25 @@ send (`PartcadViewer`). `src/webview/` is what runs *inside* that webview: `view
 `scene.ts` the three.js renderer, and one module per tab beside it.
 
 **The panel is a strip of tabs over one object, not a canvas.** 3D first, then the bill of materials and the
-assembly instructions for an assembly, then supply information for anything that can be bought. Only the 3D
+assembly instructions for an assembly, then FEA and CFD for a part, then supply information for anything that
+can be bought. Only the 3D
 view comes over the viewer protocol; every other tab is a question about `<package>:<name>` that the renderer
 cannot ask itself -- the CSP forbids network access and the daemon is behind the host's JSON-RPC connection --
 so it asks the host (`fetchTab`) and the host answers (`tabData`), on first look. Which is why the show
 message carries the object's **package**: without it the panel offers the 3D view alone.
 
-None of those three is implemented here. `bom`, `assembly.guide` and `supply.quote` are the CLI's own operations
-(`pc bom`, the book `pc render -t html` writes, the cart `pc supply quote` fills), asked for as data rather
+None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote` and `cae.analyze` are the CLI's
+own operations (`pc bom`, the book `pc render -t html` writes, the cart `pc supply quote` fills, the analysis
+`pc cae fea`/`pc cae cfd` runs), asked for as data rather
 than as a file -- the same rule as everywhere else in this extension: extend the one backend, do not
 reimplement it in TypeScript.
+
+The FEA and CFD tabs are the one pair that *acts* rather than asks: selecting one runs a solver. The field
+over the model names which -- pre-filled from `cae.defaults` (the user configuration's
+`caeFeaImplementation`/`caeCfdImplementation`) and filled in even when the run failed, which is when a user
+most needs to see what was tried. The model is drawn by its extension, because the format is the
+implementation's choice: a mesh gets an orbit camera, a picture pans and zooms. See
+[docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
 Four things about it are load-bearing:
 

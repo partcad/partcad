@@ -27,10 +27,21 @@
 //
 
 import { renderBom } from './bom';
+import { CaeView } from './cae';
 import { DocumentView } from './document';
 import { el, empty, placeholder } from './dom';
 import { fetchTab, ready, reportError } from './host';
-import { BomData, GuideData, HostMessage, ShowMessage, SupplyData, TabId } from './messages';
+import {
+    ANALYSIS_TABS,
+    BomData,
+    CaeData,
+    GuideData,
+    HostMessage,
+    ShowMessage,
+    SupplyData,
+    TabId,
+    isAnalysisTab,
+} from './messages';
 import { clearGeometry, resizeCanvas, showGeometry } from './scene';
 import { SupplyView } from './supply';
 import { TabSpec, Tabs } from './tabs';
@@ -41,27 +52,53 @@ const panes: Record<TabId, HTMLElement> = {
     bom: byId('pane-bom'),
     instructions: byId('pane-instructions'),
     supply: byId('pane-supply'),
+    fea: byId('pane-fea'),
+    cfd: byId('pane-cfd'),
 };
 
+/** The tabs whose panes are rebuilt from scratch on every show. */
+const DATA_TABS: TabId[] = ['bom', 'instructions', 'supply'];
+
 const supplyView = new SupplyView(panes.supply);
+// Each analysis owns its pane for the life of the panel: the implementation
+// field is the user's, and rebuilding the pane on every show would take back
+// what they typed into it.
+const caeViews: Partial<Record<TabId, CaeView>> = {};
+for (const tab of ANALYSIS_TABS) {
+    caeViews[tab] = new CaeView(panes[tab], tab, (implementation) => runAnalysis(tab, implementation));
+}
 const tabs = new Tabs(byId('tabs'), onTabSelected);
 
 /** What the panel is showing, or undefined when it is empty. */
 let shown: ShowMessage | undefined;
 
 /**
- * Which object the panes belong to.
+ * Which request each tab is waiting for, and the counter the tokens come from.
  *
  * A daemon round trip outlives a change of selection easily - a bill of
  * materials walks the whole assembly tree, a supply quote goes out to the
- * network - so every request carries the generation it was made for and an
- * answer for an older one is dropped rather than painted over what is now on
- * screen. The same reason 'scene.ts' keeps a generation of its own.
+ * network, and an analysis runs a solver - so every request carries a token of
+ * its own and an answer whose token is no longer the one this tab is waiting for
+ * is dropped rather than painted over what is now on screen. The same reason
+ * 'scene.ts' keeps a generation of its own.
+ *
+ * A token per *request* rather than per object, because the two analysis tabs
+ * are asked more than once for the same object: a user who runs FEA, retypes the
+ * implementation and runs it again has two solvers in flight over one part, and
+ * the first to finish is not the one they asked last.
  */
-let generation = 0;
+let lastToken = 0;
+const awaiting = new Map<TabId, number>();
 
-/** The tabs already asked for, for the current generation. */
+/** The tabs already asked for, for the object now on screen. */
 const requested = new Set<TabId>();
+
+/** Ask the host to fill a tab in, and remember which answer to accept. */
+function request(tab: TabId, implementation?: string): void {
+    lastToken += 1;
+    awaiting.set(tab, lastToken);
+    fetchTab({ type: 'fetchTab', tab, token: lastToken, implementation });
+}
 
 /** The instructions, once they have arrived: it owns the paging. */
 let instructions: DocumentView | undefined;
@@ -106,17 +143,31 @@ function tabsFor(message: ShowMessage): TabSpec[] {
         // show. See 'partcad.scene'.
         specs.push({ id: 'instructions', label: 'Instructions', pane: panes.instructions });
     }
+    if (message.kind === 'part') {
+        // Only a part is analysed. An assembly is a set of parts that each have
+        // boundary conditions of their own, and a load on the whole of one says
+        // nothing about which member carries it - so 'pc cae' takes a part, and
+        // so does this. The tab is offered whether or not the part declares
+        // 'fea:'/'cfd:', because "this part says nothing about FEA" is the
+        // answer somebody looking for the tab came to read.
+        specs.push({ id: 'fea', label: 'FEA', pane: panes.fea });
+        specs.push({ id: 'cfd', label: 'CFD', pane: panes.cfd });
+    }
     specs.push({ id: 'supply', label: 'Supply', pane: panes.supply });
     return specs;
 }
 
 function show(message: ShowMessage): void {
     shown = message;
-    generation += 1;
+    // Nothing in flight belongs to this object, whatever it was asked for.
+    awaiting.clear();
     requested.clear();
     instructions = undefined;
-    for (const tab of ['bom', 'instructions', 'supply'] as TabId[]) {
+    for (const tab of DATA_TABS) {
         reset(tab);
+    }
+    for (const tab of ANALYSIS_TABS) {
+        caeViews[tab]?.setBusy('Select this tab to run the analysis.');
     }
 
     void showGeometry(message);
@@ -127,14 +178,24 @@ function show(message: ShowMessage): void {
 
 function clear(): void {
     shown = undefined;
-    generation += 1;
+    awaiting.clear();
     requested.clear();
     instructions = undefined;
     clearGeometry();
-    for (const tab of ['bom', 'instructions', 'supply'] as TabId[]) {
+    for (const tab of DATA_TABS) {
         reset(tab);
     }
+    for (const tab of ANALYSIS_TABS) {
+        caeViews[tab]?.setBusy('Nothing to analyse.');
+    }
     tabs.setTabs([{ id: '3d', label: '3D', pane: panes['3d'] }]);
+}
+
+/** Ask for an analysis again, with whatever implementation was typed in. */
+function runAnalysis(tab: TabId, implementation: string): void {
+    requested.add(tab);
+    caeViews[tab]?.setBusy('Running the analysis…');
+    request(tab, implementation || undefined);
 }
 
 function onTabSelected(tab: TabId): void {
@@ -144,19 +205,59 @@ function onTabSelected(tab: TabId): void {
         resizeCanvas();
         return;
     }
+    if (isAnalysisTab(tab)) {
+        // Same reason as the 3D view: a result mesh is drawn on a canvas that
+        // had no size while its tab was hidden.
+        caeViews[tab]?.resize();
+    }
     if (requested.has(tab)) {
         return;
     }
     requested.add(tab);
-    reset(tab).appendChild(placeholder('Asking PartCAD…'));
-    fetchTab({ type: 'fetchTab', tab, token: generation });
+    if (isAnalysisTab(tab)) {
+        // An analysis is not a lookup - a solver runs for as long as it runs -
+        // so the pane says what is happening rather than going blank.
+        caeViews[tab]?.setBusy('Running the analysis…');
+    } else {
+        reset(tab).appendChild(placeholder('Asking PartCAD…'));
+    }
+    request(tab);
 }
 
-function onTabData(tab: TabId, token: number, data: unknown, error: string | undefined): void {
-    if (token !== generation) {
-        // For an object that is no longer on screen.
+function onTabData(
+    tab: TabId,
+    token: number,
+    data: unknown,
+    error: string | undefined,
+    implementation: string | undefined,
+): void {
+    if (awaiting.get(tab) !== token) {
+        // For an object that is no longer on screen, or for a run this tab has
+        // since been asked to replace.
         return;
     }
+    awaiting.delete(tab);
+
+    if (isAnalysisTab(tab)) {
+        // The analysis panes are not rebuilt: they own a field the user types
+        // into, and 'reset()' would take it away mid-sentence.
+        const view = caeViews[tab];
+        view?.suggest(implementation);
+        if (error !== undefined) {
+            view?.showError(error);
+        } else if (data === null || data === undefined) {
+            view?.showError('PartCAD had nothing to say about this.');
+        } else {
+            try {
+                view?.render(data as CaeData);
+            } catch (e: unknown) {
+                view?.showError(`Failed to display this: ${e}`);
+                reportError(`failed to render the '${tab}' tab: ${e}`);
+            }
+        }
+        return;
+    }
+
     const pane = reset(tab);
 
     if (error !== undefined) {
@@ -203,7 +304,7 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
     } else if (message.type === 'show') {
         show(message);
     } else if (message.type === 'tabData') {
-        onTabData(message.tab, message.token, message.data, message.error);
+        onTabData(message.tab, message.token, message.data, message.error, message.implementation);
     }
 });
 
