@@ -235,6 +235,38 @@ jobs:
           configFile: tools/containers/devcontainer-kicad.json
           push: always
 
+      # The CalculiX runtime, and the one image here that has to be built for
+      # more than one architecture. gmsh publishes no wheel for 64-bit ARM Linux
+      # and no sdist, so an ARM machine can get a mesher only from a
+      # distribution package inside a container -- and an amd64-only image would
+      # be a plugin that has not brought its dependencies on half the machines
+      # it claims to support, which `pc test` reads as the implementation
+      # failing. Which it would be.
+      #
+      # 'devcontainers/ci' above builds for the runner's architecture alone, so
+      # this one goes through buildx with QEMU instead. That is slower, and the
+      # cost buys the arm64 half of the matrix an analysis it otherwise cannot
+      # run at all.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3.6.0
+        with:
+          platforms: arm64
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435  # v3.11.1
+
+      - name: Build Container for CalculiX
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83  # v6.18.0
+        with:
+          context: tools/containers
+          file: tools/containers/calculix/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          tags:
+            "${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-calculix:${{ steps.setup.outputs.IMAGE_TAG }}"
+          cache-from:
+            "type=registry,ref=${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-calculix:${{ steps.setup.outputs.IMAGE_TAG }}"
+          cache-to: type=inline
+          push: true
+
   set-matrix:
     name: "Set matrix"
     runs-on: ubuntu-latest
