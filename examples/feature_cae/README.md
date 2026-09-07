@@ -44,6 +44,12 @@ and `pc test` says so and moves on rather than failing the part.
 > written against, outranked only by `-i` — but the `dependencies:` entry and
 > these two lines exist for this reason and go away once the index carries
 > `feature/cae`. `partcad.yaml` says so where they are.
+>
+> `calculix` there is relative, and resolves against *this* package, so it means
+> the same thing however deep in a tree the command is run — which is what makes
+> `pc test -r` from the examples root work. A relative name a user types is not
+> the same: `-i calculix:fea` below means the `calculix` beside the user, so it
+> wants this directory.
 
 ## 1. Cantilever beam — `cantilever`
 

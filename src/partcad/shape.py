@@ -1360,28 +1360,85 @@ class Shape(ShapeConfiguration):
         )
         return impl, filepath
 
-    def _analysis_implementation(self, ctx, analysis: str, implementation: Optional[str]):
+    def _resolve_implementing_package(self, ctx, package: str, own: bool) -> str:
+        """Make a package name absolute, from the point of view of whoever said it.
+
+        'own' is what separates a name this object declared from one a user
+        typed. A user's is resolved against the current package, like every
+        other name a command line carries; this object's is resolved against the
+        package the object is in, because that is the package whose
+        'dependencies:' the name was written against.
+        """
+        if not own or not self.project_name:
+            return ctx.resolve_package_path(package or ".")
+        if not package or package == ".":
+            # The object's own package implements it, which is what a package
+            # shipping a solver alongside the parts it analyses would write.
+            return self.project_name
+        if package.startswith("/"):
+            # Already absolute; hand it over for the '/' -> '//' deprecation.
+            return ctx.resolve_package_path(package)
+        # The root package is named '//', so it already ends in the separator
+        # and joining on another one produces '///name'. That does still
+        # resolve -- 'get_project()' strips a fixed two characters and the
+        # extra one lands in the part it splits -- but it is not the spelling
+        # anything else uses, and a path built here is a path that can end up
+        # in a message. Build the canonical one.
+        base = self.project_name.rstrip("/")
+        return ctx.resolve_package_path((base + "/" if base else "//") + package)
+
+    def _analysis_implementation(
+        self,
+        ctx,
+        analysis: str,
+        implementation: Optional[str] = None,
+        declared: Optional[str] = None,
+    ):
         """Who runs this analysis: the package and the file type in it.
 
         An implementation is named as '<package>:<file type>' - the same spelling
-        every other PartCAD object uses - and defaults to the user configuration
-        ('caeFeaImplementation'/'caeCfdImplementation'), which is what makes
-        'pc cae fea :bracket' work in a package that says nothing about solvers.
+        every other PartCAD object uses - and can be said in three places, which
+        is why the precedence lives here rather than in each caller:
+
+        * 'implementation' is this *run's* answer: 'pc cae fea -i', the IDE's
+          field. It wins, because it is the most specific thing anybody said.
+        * 'declared' is the object's own, from 'implementation:' in its 'fea:' or
+          'cfd:' section - a statement about the part, naming the solver its
+          numbers were produced with.
+        * failing both, the user configuration
+          ('caeFeaImplementation'/'caeCfdImplementation'), which is what makes
+          'pc cae fea :bracket' work in a package that says nothing about
+          solvers.
+
+        A **relative** package name is resolved against whoever said it, and the
+        three do not agree about who that is. 'pc cae fea -i calculix:fea' means
+        the 'calculix' beside the user, so it resolves against the current
+        package the way every other name a user types does. 'implementation:' in
+        a package's own YAML means the 'calculix' that package imported, and has
+        to resolve against *that* package -- otherwise the same declaration
+        resolves differently depending on which directory the command was run
+        from, and 'pc test -r' over a tree of packages (which runs with the tree
+        root current, not each package) cannot resolve any of them.
 
         The file type need not be called after the analysis. What decides the
         analysis is the command that was run, because that is what says which
         section of the part holds the boundary conditions; the file type only
         says which declaration in the implementing package to read.
         """
+        # 'declared' is the only one of the three that belongs to the object.
+        own = False
         if not implementation:
-            # The *context's* configuration, not the process-wide singleton. A
-            # daemon builds its context from the caller's configuration (see
-            # 'operations.context_create'), and its own is whatever the
-            # environment held when something first started it. Reading the
-            # singleton here would run the analysis under the daemon's default
-            # while 'cae.defaults' -- which the IDE pre-fills its field from --
-            # reported the caller's.
-            implementation = ctx.user_config.cae_implementation(analysis)
+            if declared:
+                implementation, own = declared, True
+            else:
+                # The *context's* configuration, not the process-wide singleton.
+                # A daemon builds its context from the caller's configuration
+                # (see 'operations.context_create'), and its own is whatever the
+                # environment held when something first started it. Reading the
+                # singleton here would run the analysis under the daemon's
+                # default while 'cae.defaults' -- which the IDE pre-fills its
+                # field from -- reported the caller's.
+                implementation = ctx.user_config.cae_implementation(analysis)
         implementation = str(implementation).strip()
         if not implementation:
             raise Exception("No '%s' implementation is configured" % analysis)
@@ -1392,7 +1449,7 @@ class Shape(ShapeConfiguration):
             # which is what a package publishing one implementation calls it.
             package, format_name = implementation, analysis
         format_name = format_name or analysis
-        package = ctx.resolve_package_path(package or ".")
+        package = self._resolve_implementing_package(ctx, package, own)
 
         options_project = ctx.get_project(package)
         if options_project is None:
@@ -1497,9 +1554,11 @@ class Shape(ShapeConfiguration):
         # The part's own answer sits in the middle because it is a statement
         # about the part -- the solver it was written against -- and the two
         # things that outrank it are the two that are about this run and this
-        # machine.
+        # machine. Handed over separately rather than picked between here: the
+        # two are resolved against different packages when either names one
+        # relatively, and only the callee knows which it ended up using.
         options_project, format_name = self._analysis_implementation(
-            ctx, analysis, implementation or config.implementation
+            ctx, analysis, implementation, declared=config.implementation
         )
 
         with pc_logging.Action(analysis.upper(), self.project_name, self.name):

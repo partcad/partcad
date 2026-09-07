@@ -138,14 +138,17 @@ parts:
       load:
         pipe-inlet: 0.005 N
 
-# The implementation stays whatever the user configuration names; only the
-# parameters change. Every one of these is pinned because the closed forms below
-# assume it -- most of all `self_weight`, which is on by default and which the
-# textbook cantilever does not have.
+# Only the parameters, and deliberately no `path:`/`package:`: which package
+# implements the analysis is the parts' answer above, and repeating it here
+# would say it twice in a way that can disagree. A layer that names `path:` is
+# claiming to *be* the implementation -- see `output.stamp()` -- so a package
+# re-tuning someone else's parameters says neither.
+#
+# Every one of these is pinned because the closed forms in README.md assume it
+# -- most of all `self_weight`, which is on by default and which the textbook
+# cantilever does not have.
 cae:
   fea:
-    package: calculix
-    path: fea_calculix.py
     youngs_modulus: 2.0e+11   # 200 GPa
     poissons_ratio: 0.30
     density: 7850
@@ -159,8 +162,6 @@ cae:
     port_radius: 0.075
 
   cfd:
-    package: calculix
-    path: cfd_calculix.py
     density: 900              # a light oil, kg/m^3
     viscosity: 0.1            # Pa*s
     # 3 mm on a 100 mm bore. It has to stay under the 5 mm radius or the wall

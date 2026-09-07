@@ -98,7 +98,9 @@ class CaeTest(Test):
             # user configuration would have produced rather than the run that
             # happens, and re-pointing a part at another solver would be
             # answered from the cache of the first.
-            options_project, format_name = shape._analysis_implementation(ctx, self.analysis, config.implementation)
+            options_project, format_name = shape._analysis_implementation(
+                ctx, self.analysis, declared=config.implementation
+            )
             parts.append("%s:%s" % (options_project.name, format_name))
             opts, _output_dir = shape._output_getopts(
                 ctx, format_name, output.CAE, ctx.get_project(shape.project_name), options_project
@@ -175,7 +177,9 @@ class CaeTest(Test):
             # whether the package resolves at all, and whether it declares the
             # file type with the 'extension:' an analysis needs. Neither becomes
             # true or false depending on what is installed here.
-            options_project, format_name = shape._analysis_implementation(ctx, self.analysis, config.implementation)
+            options_project, format_name = shape._analysis_implementation(
+                ctx, self.analysis, declared=config.implementation
+            )
             shape.analysis_getopts(
                 ctx,
                 self.analysis,

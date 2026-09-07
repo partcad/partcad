@@ -466,7 +466,9 @@ def test_a_part_may_name_the_plugin_it_was_written_against(package, monkeypatch)
     monkeypatch.setattr(package.user_config, "cae_fea_implementation", "//nowhere:fea")
     monkeypatch.setitem(part.config["fea"], "implementation", "//cae-test:fea")
 
-    project, format_name = part._analysis_implementation(package, cae.FEA, cae.config_of(part, cae.FEA).implementation)
+    project, format_name = part._analysis_implementation(
+        package, cae.FEA, declared=cae.config_of(part, cae.FEA).implementation
+    )
     assert project.name == "//cae-test"
     assert format_name == cae.FEA
 
@@ -475,9 +477,172 @@ def test_the_command_line_still_outranks_the_part(package, monkeypatch):
     """'-i' is about this run, so it wins over what the part was written with."""
     part = _bracket(package)
     monkeypatch.setitem(part.config["fea"], "implementation", "//nowhere:fea")
-    project, format_name = part._analysis_implementation(package, cae.FEA, "//cae-test:plot")
+    project, format_name = part._analysis_implementation(
+        package, cae.FEA, "//cae-test:plot", declared=cae.config_of(part, cae.FEA).implementation
+    )
     assert project.name == "//cae-test"
     assert format_name == "plot"
+
+
+# --------------------------------------------------------------------------- #
+# A relative name belongs to whoever said it                                  #
+# --------------------------------------------------------------------------- #
+#
+# The tree below is the one `pc test -r` walks: a root package, a package under
+# it holding the part, and the plugin that package imported. The context is
+# created for the root, so the *current* package is the root and not the part's
+# -- which is the whole point. `pc test -r --package //pub/examples/partcad` runs
+# in exactly that arrangement, and a part deep in the tree that names its plugin
+# relatively has to resolve it from where it is rather than from where the
+# command was run.
+
+NESTED_ROOT = textwrap.dedent(
+    """
+    name: //cae-test
+    dependencies:
+      pkg:
+        type: local
+        path: pkg
+    """
+)
+
+NESTED_PACKAGE = textwrap.dedent(
+    """
+    dependencies:
+      plugin:
+        type: local
+        path: plugin
+    parts:
+      bracket:
+        type: step
+        path: bracket.step
+        fea:
+          implementation: plugin:fea
+          fix:
+            - m3-screw
+          load:
+            hook: 5 kg
+    """
+)
+
+NESTED_PLUGIN = textwrap.dedent(
+    """
+    cae:
+      fea:
+        path: solve.py
+        extension: vtu
+    """
+)
+
+
+@pytest.fixture
+def nested(tmp_path):
+    """A part one package down, naming a plugin one package further down."""
+    (tmp_path / "partcad.yaml").write_text(NESTED_ROOT)
+    pkg = tmp_path / "pkg"
+    plugin = pkg / "plugin"
+    plugin.mkdir(parents=True)
+    (pkg / "partcad.yaml").write_text(NESTED_PACKAGE)
+    (pkg / "bracket.step").write_text("")
+    (plugin / "partcad.yaml").write_text(NESTED_PLUGIN)
+    (plugin / "solve.py").write_text("def process(path, request):\n    return {'success': True}\n")
+
+    ctx = pc.Context(str(tmp_path))
+    # The premise, asserted rather than assumed: the command is being run at the
+    # root, so nothing here resolves 'plugin' by accident.
+    assert ctx.get_current_project_path() == "//cae-test"
+    part = ctx.get_part("//cae-test/pkg:bracket")
+    assert part is not None
+    return ctx, part
+
+
+def test_a_relative_plugin_resolves_against_the_package_that_named_it(nested):
+    """'implementation: plugin:fea' means the 'plugin' *that package* imported.
+
+    Resolving it against the current package instead makes the same declaration
+    mean different things depending on which directory the command was run from,
+    and means nothing at all under 'pc test -r' over a tree -- which runs with
+    the tree's root current and every part one or more packages below it.
+    """
+    ctx, part = nested
+    project, format_name = part._analysis_implementation(
+        ctx, cae.FEA, declared=cae.config_of(part, cae.FEA).implementation
+    )
+    assert project.name == "//cae-test/pkg/plugin"
+    assert format_name == "fea"
+
+
+def test_the_check_resolves_a_relative_plugin_from_a_tree_root(nested, monkeypatch):
+    """The same thing through 'pc test', which is where it was found.
+
+    A plugin that does not resolve is a failure now, so this is the difference
+    between 'Examples (PartCAD)' green and 'Examples (PartCAD)' red.
+    """
+    import asyncio
+
+    ctx, part = nested
+    _analysis(part, monkeypatch, result={"findings": []})
+    assert asyncio.run(CaeTest(cae.FEA).test([], ctx, part)) is CaeTest.TEST_PASSED
+
+
+ROOT_ONLY_PACKAGE = textwrap.dedent(
+    """
+    dependencies:
+      plugin:
+        type: local
+        path: plugin
+    parts:
+      bracket:
+        type: step
+        path: bracket.step
+        fea:
+          implementation: plugin:fea
+          fix:
+            - m3-screw
+          load:
+            hook: 5 kg
+    """
+)
+
+
+def test_a_relative_plugin_resolves_from_an_unnamed_root_package(tmp_path):
+    """The root package declares no name of its own, so it is called '//'.
+
+    Every package 'pc init' creates is this package, which makes it the shape a
+    first relative 'implementation:' is most likely written in -- and the one
+    where the name is built by joining onto something that already ends in the
+    separator.
+    """
+    (tmp_path / "partcad.yaml").write_text(ROOT_ONLY_PACKAGE)
+    (tmp_path / "bracket.step").write_text("")
+    plugin = tmp_path / "plugin"
+    plugin.mkdir()
+    (plugin / "partcad.yaml").write_text(NESTED_PLUGIN)
+    (plugin / "solve.py").write_text("def process(path, request):\n    return {'success': True}\n")
+
+    ctx = pc.Context(str(tmp_path))
+    assert ctx.name == "//"
+    part = ctx.get_part(":bracket")
+    assert part is not None and part.project_name == "//"
+
+    project, _format_name = part._analysis_implementation(
+        ctx, cae.FEA, declared=cae.config_of(part, cae.FEA).implementation
+    )
+    assert project.name == "//plugin"
+
+
+def test_a_relative_name_on_the_command_line_is_still_the_user_s(nested):
+    """'-i plugin:fea' is a name the user typed, so it means what they can see.
+
+    Falling back to the part's package would be convenient exactly once and
+    wrong afterwards: 'pc cae fea -i x:fea' would name a different 'x' for every
+    part in the run, and the one the user meant for none of them.
+    """
+    ctx, part = nested
+    with pytest.raises(Exception, match="//cae-test/plugin"):
+        part._analysis_implementation(
+            ctx, cae.FEA, "plugin:fea", declared=cae.config_of(part, cae.FEA).implementation
+        )
 
 
 def test_the_cache_key_follows_the_plugin_the_part_names(package, monkeypatch):

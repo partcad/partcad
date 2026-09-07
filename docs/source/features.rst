@@ -131,6 +131,15 @@ then the user configuration. It is how a package ships an analysis that works
 for whoever opens it, without every reader first pointing their own
 configuration at the right place.
 
+A **relative** package name here -- ``calculix:fea`` rather than
+``//pub/feature/cae/calculix:fea`` -- means the package this one imported under
+that name, and is resolved from the package the declaration is written in. That
+is not where a name a *user* types is resolved from: ``pc cae fea -i
+calculix:fea`` means the ``calculix`` beside the user, like every other name a
+command line carries. The difference matters under ``pc test -r`` over a tree of
+packages, which runs with the tree's root current while every part in it sits one
+or more packages below.
+
 What comes back is two things: the model, written to
 ``<part>.<analysis>.<extension>`` in whichever format the implementation chose,
 and the **findings** -- a JSON array of what the analysis has to say about the
