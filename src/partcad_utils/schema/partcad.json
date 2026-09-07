@@ -17,6 +17,11 @@
       "description": "The boundary conditions one analysis is run under. 'fix:' names what is held still, 'load:' what is pulled on; both name interface types this object implements, and 'load' values are a force (or a mass, which is the default reading of a bare number - in kilograms)",
       "properties": {
         "desc": { "type": "string", "maxLength": 1000 },
+        "implementation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Who runs this analysis, as '<package>:<file type>'. Overrides the 'caeFeaImplementation'/'caeCfdImplementation' user configuration for this object; '-i' on the command line overrides both. A part that names one is saying which solver it was written against"
+        },
         "fix": {
           "oneOf": [
             { "type": "string", "minLength": 1 },

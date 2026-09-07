@@ -26,11 +26,24 @@ Both need a solver installed. For the default implementation that means `ccx` on
 `conda install -c conda-forge calculix`. Without one the analysis does not run,
 and `pc test` says so and moves on rather than failing the part.
 
-> **Before either will run:** `//pub/feature/cae/calculix` is registered on the
-> public index's `devel` branch and has not yet reached `main`, which is what
-> `examples/partcad.yaml` pins. Until an index release carries it over, the
-> package cannot be resolved and `pc cae fea` reports
-> `The package implementing 'fea' is not found`.
+> **A temporary arrangement, and why it is here.** `//pub/feature/cae/calculix`
+> is registered on the public index's `devel` branch and has not reached `main`,
+> which is what `examples/partcad.yaml` and every `pc init` project pin — so the
+> default `caeFeaImplementation` resolves to nothing. Rather than repin the whole
+> examples tree at the index's `devel`, which would drag in unrelated changes,
+> this package depends on
+> [`partcad-cae-calculix`](https://github.com/partcad/partcad-cae-calculix)
+> directly and each part names it:
+>
+> ```yaml
+> fea:
+>   implementation: calculix:fea
+> ```
+>
+> `implementation:` is a general thing — a part saying which solver it was
+> written against, outranked only by `-i` — but the `dependencies:` entry and
+> these two lines exist for this reason and go away once the index carries
+> `feature/cae`. `partcad.yaml` says so where they are.
 
 ## 1. Cantilever beam — `cantilever`
 
@@ -169,8 +182,8 @@ own neighbourhood.
 pc cae fea :cantilever
 pc cae cfd :pipe
 
-# a particular implementation, this run only
-pc cae fea -i //pub/feature/cae/calculix:fea :cantilever
+# a particular implementation, this run only (outranks the part's own)
+pc cae fea -i calculix:fea :cantilever
 
 # both, as a check that fails on any finding
 pc test -f fea

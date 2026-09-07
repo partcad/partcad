@@ -93,7 +93,12 @@ class CaeTest(Test):
 
         parts = [json.dumps(config.to_data(), sort_keys=True)]
         try:
-            options_project, format_name = shape._analysis_implementation(ctx, self.analysis, None)
+            # The part's own 'implementation:' if it declared one, exactly as
+            # 'test()' resolves it -- otherwise the key describes the run the
+            # user configuration would have produced rather than the run that
+            # happens, and re-pointing a part at another solver would be
+            # answered from the cache of the first.
+            options_project, format_name = shape._analysis_implementation(ctx, self.analysis, config.implementation)
             parts.append("%s:%s" % (options_project.name, format_name))
             opts, _output_dir = shape._output_getopts(
                 ctx, format_name, output.CAE, ctx.get_project(shape.project_name), options_project
@@ -114,16 +119,24 @@ class CaeTest(Test):
         wrongly, or the analysis ran and reported something. Both are verdicts on
         the package that a user has to act on.
 
-        A third outcome is not a failure: the analysis did not run at all. There
-        is no solver on this machine, or the implementing package could not be
-        fetched. PartCAD ships no solver -- `caeFeaImplementation` names a third
-        party package that needs a native binary -- so failing here would mean
-        that the moment any part in a shared repository declares `fea:`,
-        `pc test` fails for every contributor and every CI system that has not
-        installed CalculiX. That makes declaring `fea:` a liability rather than a
-        check, which is the opposite of the point. It is reported as a warning
-        and passed over, the way `cam` passes a part that is `manufacturable:
-        false`: the check does not apply on this machine.
+        A **missing or misconfigured plugin is the third way to fail**, and it is
+        not the same as the fourth outcome below. The implementation is named by
+        the part or by the user configuration as `<package>:<file type>`; if that
+        package is not a dependency, did not load, or declares no such file type,
+        then what is wrong is the configuration, and it is wrong on every machine
+        rather than on this one. Nothing about installing a solver would fix it.
+        It fails, with the sentence saying which name did not resolve.
+
+        A fourth outcome is not a failure: the plugin resolved and the analysis
+        still did not run. There is no solver binary on this machine. PartCAD
+        ships none -- the implementing package needs a native program that pip
+        cannot install -- so failing here would mean that the moment any part in
+        a shared repository declares `fea:`, `pc test` fails for every
+        contributor and every CI system that has not installed CalculiX. That
+        makes declaring `fea:` a liability rather than a check, which is the
+        opposite of the point. It is reported as a warning and passed over, the
+        way `cam` passes a part that is `manufacturable: false`: the check does
+        not apply on this machine.
 
         The cost is real and worth stating: `pc test` cannot tell a solver that
         is *absent* from one that *crashed*, so a crashing solver is a warning
@@ -149,6 +162,31 @@ class CaeTest(Test):
         if config is None:
             self.debug(shape, "Not applicable")
             return self.TEST_PASSED
+
+        try:
+            # Resolved here, and separately, so that failing to resolve it is
+            # distinguishable from failing to run it. 'analyze_async' does the
+            # same again a moment later; the duplication is what buys the
+            # difference between "this configuration names nothing" and "this
+            # machine cannot run what it names", which this check reports as a
+            # failure and a skip respectively.
+            #
+            # Both halves are asked, because both are the configuration's fault:
+            # whether the package resolves at all, and whether it declares the
+            # file type with the 'extension:' an analysis needs. Neither becomes
+            # true or false depending on what is installed here.
+            options_project, format_name = shape._analysis_implementation(ctx, self.analysis, config.implementation)
+            shape.analysis_getopts(
+                ctx,
+                self.analysis,
+                format_name,
+                ctx.get_project(shape.project_name),
+                None,
+                options_project,
+                None,
+            )
+        except Exception as e:
+            return self.failed(shape, "the '%s' implementation could not be resolved: %s", self.analysis, e)
 
         try:
             result = await shape.analyze_async(ctx, self.analysis)

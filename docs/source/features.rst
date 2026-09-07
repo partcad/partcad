@@ -117,14 +117,31 @@ default, which are `CalculiX <https://www.calculix.de/>`_ (see
 what it needs installed and what every parameter means). ``pc cae fea --implementation`` overrides it for one run, and so does
 the field over the model in the IDE's FEA tab.
 
+A part may also name its own, which is what it was written against:
+
+.. code-block:: yaml
+
+    fea:
+      implementation: //pub/feature/cae/calculix:fea
+      fix: [m3-screw]
+      load: {hook: 5 kg}
+
+That sits between the other two: ``-i`` on the command line wins, then the part,
+then the user configuration. It is how a package ships an analysis that works
+for whoever opens it, without every reader first pointing their own
+configuration at the right place.
+
 What comes back is two things: the model, written to
 ``<part>.<analysis>.<extension>`` in whichever format the implementation chose,
 and the **findings** -- a JSON array of what the analysis has to say about the
 part. ``pc test`` gains an ``fea`` and a ``cfd`` check that fail a part whose
 analysis produced any finding, and they apply only to a part that declares the
-matching section, so a package of bolts pays nothing for them. Where no solver is
-installed they report that they did not run, and pass: the absence is a property
-of the machine rather than of the part.
+matching section, so a package of bolts pays nothing for them. A plugin that
+cannot be resolved -- not a dependency, misspelt, or declaring no such file type
+-- **fails** those checks: the configuration is wrong, and it is wrong wherever
+the package is opened. Where the plugin resolves and no *solver* is installed
+they report that they did not run, and pass: that absence is a property of the
+machine rather than of the part.
 
 ``examples/feature_cae`` is the pair of cases to check an implementation against
 — a cantilever and a pipe, each with a closed-form answer to compare the solver

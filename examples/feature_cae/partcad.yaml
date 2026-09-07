@@ -1,5 +1,22 @@
 desc: Two analyses whose answer is known before the solver runs.
 
+# TEMPORARY, until the public index carries `feature/cae`. The CalculiX package
+# is registered on the index's `devel` branch and has not reached `main`, which
+# is what `examples/partcad.yaml` and every `pc init` project pin -- so
+# `//pub/feature/cae/calculix`, which `caeFeaImplementation` names by default,
+# resolves to nothing and both commands below answer "the package implementing
+# 'fea' is not found". Depending on it directly makes this example run today
+# without repinning the whole examples tree at the index's `devel`, which would
+# also drag in changes that have nothing to do with this.
+#
+# Delete this and the two `implementation:` lines below once the index has it,
+# and the parts fall back to the user configuration like any other.
+dependencies:
+  calculix:
+    desc: Finite element and fluid dynamics analysis, by CalculiX.
+    type: git
+    url: https://github.com/partcad/partcad-cae-calculix.git
+
 docs:
   intro: |
     PartCAD ships no solver, so `pc cae fea` is only ever as right as whoever
@@ -17,7 +34,7 @@ docs:
     pc cae cfd :pipe
 
     # A particular one, for this run only
-    pc cae fea -i //pub/feature/cae/calculix:fea :cantilever
+    pc cae fea -i calculix:fea :cantilever
 
     # Where the boundary conditions actually landed
     pc render -t svg --with-ports cantilever
@@ -96,6 +113,11 @@ parts:
       beam-root: [[-50, 0, 0], [0, 0, 1], 0]
       beam-tip: [[50, 0, 0], [0, 0, 1], 0]
     fea:
+      # Temporary, with the `calculix` dependency at the top of this file: the
+      # public index does not carry `feature/cae` yet, so the default
+      # `caeFeaImplementation` resolves to nothing. Delete both and this falls
+      # back to the user configuration like any other part.
+      implementation: calculix:fea
       fix:
         - beam-root
       load:
@@ -110,6 +132,7 @@ parts:
       pipe-inlet: [[0, 0, -50], [0, 0, 1], 0]
       pipe-wall:
     cfd:
+      implementation: calculix:cfd
       fix:
         - pipe-wall
       load:
@@ -121,7 +144,7 @@ parts:
 # textbook cantilever does not have.
 cae:
   fea:
-    package: //pub/feature/cae/calculix
+    package: calculix
     path: fea_calculix.py
     youngs_modulus: 2.0e+11   # 200 GPa
     poissons_ratio: 0.30
@@ -136,7 +159,7 @@ cae:
     port_radius: 0.075
 
   cfd:
-    package: //pub/feature/cae/calculix
+    package: calculix
     path: cfd_calculix.py
     density: 900              # a light oil, kg/m^3
     viscosity: 0.1            # Pa*s

@@ -100,19 +100,29 @@ PACKAGE = textwrap.dedent(
       plot:
         path: solve.py
         extension: png
+      nothing:
+        # Declared without an 'extension:', which an analysis has no default for:
+        # a misconfigured plugin, as opposed to a missing one.
+        path: solve.py
     """
 )
 
 
 @pytest.fixture
-def package(tmp_path):
+def package(tmp_path, monkeypatch):
     """A package that implements 'fea' itself, so nothing has to be fetched."""
     (tmp_path / "partcad.yaml").write_text(PACKAGE)
     (tmp_path / "solve.py").write_text("def process(path, request):\n    return {'success': True}\n")
     # Not read by anything here: a part is resolved from its declaration, and
     # the geometry is only built when something asks for it.
     (tmp_path / "bracket.step").write_text("")
-    return pc.Context(str(tmp_path))
+    ctx = pc.Context(str(tmp_path))
+    # Pointed at the package's own implementation, because `CaeTest` now fails a
+    # part whose plugin does not resolve -- and the shipped default names the
+    # public CalculiX package, which is not here. A test that is about
+    # resolution overrides this again.
+    monkeypatch.setattr(ctx.user_config, "cae_fea_implementation", "//cae-test:fea")
+    return ctx
 
 
 def _bracket(package):
@@ -399,6 +409,88 @@ def test_a_real_verdict_is_remembered(package, monkeypatch):
     found = {}
     assert asyncio.run(CaeTest(cae.FEA).test([], package, part, found)) is CaeTest.TEST_FAILED
     assert CaeTest.NOT_CACHEABLE not in found
+
+
+def test_a_plugin_that_does_not_resolve_fails_the_check(package, monkeypatch, caplog):
+    """A named implementation that is not there is wrong everywhere, not here.
+
+    This is the line between the two ways `pc test` can decline to analyse a
+    part. A solver binary that is not installed is a fact about this machine and
+    is skipped; a *plugin* that cannot be resolved -- not a dependency, misspelt,
+    or a package that did not load -- is a fact about the configuration, true on
+    every machine, and no amount of installing fixes it. It fails, and says which
+    name did not resolve.
+    """
+    import asyncio
+
+    part = _bracket(package)
+    monkeypatch.setattr(package.user_config, "cae_fea_implementation", "//nowhere:fea")
+
+    async def never(*args, **kwargs):
+        raise AssertionError("the analysis must not be started when its plugin is missing")
+
+    monkeypatch.setattr(part, "analyze_async", never)
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_FAILED
+    assert "could not be resolved" in caplog.text
+    assert "//nowhere" in caplog.text
+
+
+def test_a_plugin_that_says_nothing_about_its_output_fails_the_check(package, monkeypatch, caplog):
+    """A misconfigured plugin is the other half of it, and fails for the same reason.
+
+    The package resolves, and declares a file type that does not say what file it
+    writes. An analysis has no default extension to fall back on -- 3D field or
+    2D plot is the implementation's decision -- so this is a bug in that package,
+    which is not something the machine running `pc test` can mend.
+    """
+    import asyncio
+
+    part = _bracket(package)
+    # 'nothing' is declared with no 'extension:'; see PACKAGE above.
+    monkeypatch.setattr(package.user_config, "cae_fea_implementation", "//cae-test:nothing")
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_FAILED
+    assert "could not be resolved" in caplog.text
+
+
+def test_a_part_may_name_the_plugin_it_was_written_against(package, monkeypatch):
+    """`implementation:` on the part outranks the user configuration.
+
+    A part that declares one is saying which solver its numbers were produced
+    with, which is a property of the part. It is how a package can ship a working
+    analysis without every reader first pointing `caeFeaImplementation`
+    somewhere.
+    """
+    part = _bracket(package)
+    monkeypatch.setattr(package.user_config, "cae_fea_implementation", "//nowhere:fea")
+    monkeypatch.setitem(part.config["fea"], "implementation", "//cae-test:fea")
+
+    project, format_name = part._analysis_implementation(package, cae.FEA, cae.config_of(part, cae.FEA).implementation)
+    assert project.name == "//cae-test"
+    assert format_name == cae.FEA
+
+
+def test_the_command_line_still_outranks_the_part(package, monkeypatch):
+    """'-i' is about this run, so it wins over what the part was written with."""
+    part = _bracket(package)
+    monkeypatch.setitem(part.config["fea"], "implementation", "//nowhere:fea")
+    project, format_name = part._analysis_implementation(package, cae.FEA, "//cae-test:plot")
+    assert project.name == "//cae-test"
+    assert format_name == "plot"
+
+
+def test_the_cache_key_follows_the_plugin_the_part_names(package, monkeypatch):
+    """Re-pointing a part at another solver is a different question.
+
+    The key is built from what the run *is*, and 'implementation:' is part of
+    that: two solvers are two answers, and the verdict on one must not be handed
+    back for the other.
+    """
+    part = _bracket(package)
+    before = CaeTest(cae.FEA).cache_key_suffix(package, part)
+    monkeypatch.setitem(part.config["fea"], "implementation", "//cae-test:plot")
+    assert CaeTest(cae.FEA).cache_key_suffix(package, part) != before
 
 
 def test_a_configuration_error_from_the_analysis_reads_as_one(package, monkeypatch, caplog):

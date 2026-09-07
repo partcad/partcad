@@ -193,6 +193,12 @@ class AnalysisConfig:
             instance of it.
         loads: interface type -> instance -> newtons. The instance `"*"` is every
             instance of that interface.
+        implementation: who runs this analysis, as `<package>:<file type>`, or
+            None to leave it to the user configuration. A part that names one is
+            saying "this is the solver I was written against", which is a
+            property of the part rather than of the machine -- and it is what
+            lets a package ship a working analysis without every user first
+            pointing `caeFeaImplementation` at the right place.
     """
 
     def __init__(self, analysis: str, config: Optional[dict]) -> None:
@@ -208,23 +214,43 @@ class AnalysisConfig:
         self.analysis = analysis
         self.fixtures: dict[str, list[str]] = {}
         self.loads: dict[str, dict[str, float]] = {}
+        self.implementation: Optional[str] = None
 
         if config is None:
             raise CaeConfigError("'%s:' is empty" % analysis)
         if not isinstance(config, dict):
             raise CaeConfigError("'%s:' is not a section: %r" % (analysis, config))
 
-        unknown = [key for key in config if key not in ("fix", "load", "desc")]
+        unknown = [key for key in config if key not in ("fix", "load", "desc", "implementation")]
         if unknown:
             raise CaeConfigError(
-                "'%s:' does not take %s; it takes 'fix:' and 'load:'" % (analysis, ", ".join(sorted(unknown)))
+                "'%s:' does not take %s; it takes 'fix:', 'load:' and 'implementation:'"
+                % (analysis, ", ".join(sorted(unknown)))
             )
 
+        self._parse_implementation(config.get("implementation"))
         self._parse_fix(config.get("fix"))
         self._parse_load(config.get("load"))
 
         if not self.fixtures and not self.loads:
             raise CaeConfigError("'%s:' declares neither 'fix:' nor 'load:'" % analysis)
+
+    def _parse_implementation(self, implementation) -> None:
+        """Read `implementation:`, which names who runs this analysis.
+
+        Checked only for being a non-empty name here. Whether the package exists
+        and declares that file type is `Shape._analysis_implementation()`'s
+        question, asked where the packages are: this class deliberately imports
+        nothing from `partcad`, which is what lets it be tested without a
+        sandbox.
+        """
+        if implementation is None:
+            return
+        if not isinstance(implementation, str) or not implementation.strip():
+            raise CaeConfigError(
+                "'%s: implementation:' is not a '<package>:<file type>' name: %r" % (self.analysis, implementation)
+            )
+        self.implementation = implementation.strip()
 
     def _parse_fix(self, fix) -> None:
         """Read `fix:`, which comes in three shapes that mean two things.
@@ -286,11 +312,17 @@ class AnalysisConfig:
 
     def to_data(self) -> dict:
         """This configuration as the plain data an implementation is handed."""
-        return {
+        data = {
             "analysis": self.analysis,
             "fix": {name: list(instances) for name, instances in self.fixtures.items()},
             "load": {name: dict(values) for name, values in self.loads.items()},
         }
+        if self.implementation is not None:
+            # Carried so that `pc test`'s cache key changes when the part is
+            # re-pointed at another solver: two solvers are two answers, and the
+            # verdict on one must not be handed back for the other.
+            data["implementation"] = self.implementation
+        return data
 
     def __repr__(self) -> str:
         """The parsed conditions, with the loads as the newtons they became."""

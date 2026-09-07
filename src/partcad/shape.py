@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import asyncio
 import base64
+import contextlib
 import os
 import sys
 import tempfile
@@ -270,6 +271,53 @@ class Shape(ShapeConfiguration):
             self.tls.async_shape_locks[self_id] = (asyncio.Lock(), loop_id)
         return self.tls.async_shape_locks[self_id][0]
 
+    @contextlib.asynccontextmanager
+    async def locked(self):
+        """Hold this shape still: nobody else instantiates it or writes its files.
+
+        One lock for both, because they are the same question asked twice. A
+        shape's files are not private to whoever asked for them: the path an
+        output goes to is derived from the shape and the file type, so two
+        concurrent runs over the same shape resolve to the *same* path, and
+        without this the second one's work lands in the middle of the first
+        one's -- deleting a model between the moment its owner wrote it and the
+        moment its owner reads it back, or handing one caller the other's file.
+        Instantiation has always been serialized this way; producing files was
+        the half that was not.
+
+        **Re-entrant**, and it has to be. The operations nest: 'analyze_async'
+        holds this across the whole remove-run-verify sequence, and inside that
+        calls 'get_wrapped' and '_run_implementation_async', each of which takes
+        it in its own right. 'threading.RLock' already allows that; an
+        'asyncio.Lock' does not, and a second acquisition from the task that
+        already holds it waits for a release that only it can perform. So the
+        owning task is remembered and passes straight through.
+
+        The cost is real and worth stating: two *different* outputs of one shape
+        no longer run at the same time, even though they write different paths.
+        That is the price of one rule with no exceptions, and PartCAD's
+        parallelism is across shapes rather than within one.
+        """
+        if not hasattr(self.tls, "async_shape_lock_owners"):
+            self.tls.async_shape_lock_owners = {}
+        owners = self.tls.async_shape_lock_owners
+        self_id = id(self)
+        # 'current_task()' is None outside a task; two such callers on one loop
+        # cannot interleave at an await point anyway, so None is never treated
+        # as re-entry.
+        task = asyncio.current_task()
+        if task is not None and owners.get(self_id) is task:
+            yield
+            return
+
+        with self.lock:
+            async with self.get_async_lock():
+                owners[self_id] = task
+                try:
+                    yield
+                finally:
+                    owners.pop(self_id, None)
+
     async def get_components(self, ctx):
         if len(self.components) == 0:
             # Maybe it's empty, maybe it's not generated yet
@@ -370,93 +418,92 @@ class Shape(ShapeConfiguration):
         self.hash.add_dict(transform)
 
     async def get_wrapped(self, ctx):
-        with self.lock:
-            async with self.get_async_lock():
-                if self._wrapped is not None:
-                    return self._wrapped
+        async with self.locked():
+            if self._wrapped is not None:
+                return self._wrapped
 
-                # Before the cache key means anything: the files this shape is
-                # built from have to be on disk to be hashed, and a reference
-                # has to have resolved what it points at to have a key at all
-                # (see 'take_cache_key_from'). Costs one flag test once it has
-                # happened.
-                await self.prepare_async()
+            # Before the cache key means anything: the files this shape is
+            # built from have to be on disk to be hashed, and a reference
+            # has to have resolved what it points at to have a key at all
+            # (see 'take_cache_key_from'). Costs one flag test once it has
+            # happened.
+            await self.prepare_async()
 
-                is_cacheable = self.get_cacheable() and ctx
-                if is_cacheable:
-                    cache_hash = self.hash
-                    if cache_hash:
-                        keys_to_read = [self.kind, "cmps"]
-                        cached, to_cache_in_memory = await ctx.cache_shapes.read_async(
-                            cache_hash, keys_to_read, self.get_cache_metadata()
-                        )
-                        if to_cache_in_memory.get(self.kind, False):
-                            self._wrapped = cached[self.kind]
-                        if to_cache_in_memory.get("cmps", False):
-                            self.components = cached["cmps"]
-                        if self.kind in cached and cached[self.kind] is not None:
-                            return cached[self.kind]
-                    else:
-                        if self.cache:
-                            pc_logging.warning(f"No cache hash for shape: {self.name}")
-                else:
-                    cache_hash = None
-
-                shape = await self.get_shape(ctx)
-
-                # Normalize whatever the factory produced into a BREP envelope so
-                # the rest of the core - caching, offset/scale, the return value -
-                # only ever handles opaque envelopes, never live OCP objects. A
-                # factory that still builds a live shape in-process is encoded
-                # here, at the single choke point; factories that delegate to a
-                # wrapper already return an envelope and pass straight through.
-                shape = self._to_envelope(shape)
-                if self.components:
-                    self.components = [self._component_to_envelope(c) for c in self.components]
-
-                # TODO(clairbee): apply 'offset' and 'scale' during instantiation and
-                #                 apply to both 'wrapped' and 'components'
-                # 'offset'/'scale' are applied in a sandbox (see transform.py) so
-                # the core does not have to run build123d in-process to do it.
-                if shape is not None and ("offset" in self.config or "scale" in self.config):
-                    from . import transform
-
-                    if "offset" in self.config:
-                        shape = await transform.offset(ctx, shape, self.config["offset"])
-                    if "scale" in self.config:
-                        shape = await transform.scale(ctx, shape, self.config["scale"])
-
-                # Whatever produced the envelope - a factory, a wrapper, a
-                # transform - the outer layer around it is this shape's own. It
-                # is stamped here rather than left to whoever built the payload,
-                # so that a shape built now and the same shape materialized from
-                # the cache later carry exactly the same name and label.
-                shape = shape_envelope.apply_metadata(shape, self.get_cache_metadata())
-
+            is_cacheable = self.get_cacheable() and ctx
+            if is_cacheable:
+                cache_hash = self.hash
                 if cache_hash:
-                    if is_cacheable and self.owns_cache_entry:
-                        to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
-                        if self.components and len(self.components) > 0:
-                            to_cache["cmps"] = self.components
-                        properties = self._shape_properties()
-                        if properties:
-                            # Both entries are filled here and nowhere else:
-                            # this is the one path that has actually
-                            # instantiated the shape, and so the one that knows
-                            # what came out of it. They are materialized apart
-                            # (see 'get_cached_properties_async()'), and a shape
-                            # that reports nothing leaves no entry to read.
-                            to_cache[properties_key(self.kind)] = properties
-                        to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
-                        do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
-                    else:
-                        do_cache_in_memory = True
-                    if do_cache_in_memory:
-                        self._wrapped = shape
+                    keys_to_read = [self.kind, "cmps"]
+                    cached, to_cache_in_memory = await ctx.cache_shapes.read_async(
+                        cache_hash, keys_to_read, self.get_cache_metadata()
+                    )
+                    if to_cache_in_memory.get(self.kind, False):
+                        self._wrapped = cached[self.kind]
+                    if to_cache_in_memory.get("cmps", False):
+                        self.components = cached["cmps"]
+                    if self.kind in cached and cached[self.kind] is not None:
+                        return cached[self.kind]
                 else:
-                    # Let the file cache tell us if we need to cache this in memory
+                    if self.cache:
+                        pc_logging.warning(f"No cache hash for shape: {self.name}")
+            else:
+                cache_hash = None
+
+            shape = await self.get_shape(ctx)
+
+            # Normalize whatever the factory produced into a BREP envelope so
+            # the rest of the core - caching, offset/scale, the return value -
+            # only ever handles opaque envelopes, never live OCP objects. A
+            # factory that still builds a live shape in-process is encoded
+            # here, at the single choke point; factories that delegate to a
+            # wrapper already return an envelope and pass straight through.
+            shape = self._to_envelope(shape)
+            if self.components:
+                self.components = [self._component_to_envelope(c) for c in self.components]
+
+            # TODO(clairbee): apply 'offset' and 'scale' during instantiation and
+            #                 apply to both 'wrapped' and 'components'
+            # 'offset'/'scale' are applied in a sandbox (see transform.py) so
+            # the core does not have to run build123d in-process to do it.
+            if shape is not None and ("offset" in self.config or "scale" in self.config):
+                from . import transform
+
+                if "offset" in self.config:
+                    shape = await transform.offset(ctx, shape, self.config["offset"])
+                if "scale" in self.config:
+                    shape = await transform.scale(ctx, shape, self.config["scale"])
+
+            # Whatever produced the envelope - a factory, a wrapper, a
+            # transform - the outer layer around it is this shape's own. It
+            # is stamped here rather than left to whoever built the payload,
+            # so that a shape built now and the same shape materialized from
+            # the cache later carry exactly the same name and label.
+            shape = shape_envelope.apply_metadata(shape, self.get_cache_metadata())
+
+            if cache_hash:
+                if is_cacheable and self.owns_cache_entry:
+                    to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
+                    if self.components and len(self.components) > 0:
+                        to_cache["cmps"] = self.components
+                    properties = self._shape_properties()
+                    if properties:
+                        # Both entries are filled here and nowhere else:
+                        # this is the one path that has actually
+                        # instantiated the shape, and so the one that knows
+                        # what came out of it. They are materialized apart
+                        # (see 'get_cached_properties_async()'), and a shape
+                        # that reports nothing leaves no entry to read.
+                        to_cache[properties_key(self.kind)] = properties
+                    to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
+                    do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
+                else:
+                    do_cache_in_memory = True
+                if do_cache_in_memory:
                     self._wrapped = shape
-                return shape
+            else:
+                # Let the file cache tell us if we need to cache this in memory
+                self._wrapped = shape
+            return shape
 
     def _shape_properties(self):
         """What this shape reports about itself, or None if it reports nothing.
@@ -1059,7 +1106,19 @@ class Shape(ShapeConfiguration):
 
         Returns the implementation's result dict, or None when it said nothing
         that could be read - which has already been reported by then.
+
+        Held under 'locked()' throughout: this is the single place a shape's
+        output file is written, whichever section asked for it, so it is the
+        single place the rule belongs. Callers that need a wider critical
+        section -- 'analyze_async' clears the path first and verifies it
+        afterwards -- take the same lock around the whole of it, which nests
+        because the lock is re-entrant.
         """
+        async with self.locked():
+            return await self._run_implementation_locked(ctx, impl, script, request, final_filepath)
+
+    async def _run_implementation_locked(self, ctx, impl, script, request, final_filepath):
+        """The body of '_run_implementation_async', with the shape held still."""
         request[output.SCRIPT_KEY] = os.path.abspath(script)
         # Whether the sandbox rebuilds the envelopes into live geometry before
         # the implementation sees them. Off for an implementation that needs what
@@ -1434,48 +1493,68 @@ class Shape(ShapeConfiguration):
 
         if project is None:
             project = ctx.get_project(self.project_name)
-        options_project, format_name = self._analysis_implementation(ctx, analysis, implementation)
+        # '-i' first, then what the part declared, then the user configuration.
+        # The part's own answer sits in the middle because it is a statement
+        # about the part -- the solver it was written against -- and the two
+        # things that outrank it are the two that are about this run and this
+        # machine.
+        options_project, format_name = self._analysis_implementation(
+            ctx, analysis, implementation or config.implementation
+        )
 
         with pc_logging.Action(analysis.upper(), self.project_name, self.name):
             impl, final_filepath = self.analysis_getopts(
                 ctx, analysis, format_name, project, filepath, options_project, output_dir
             )
             final_filepath = os.path.abspath(final_filepath)
-            ctx.ensure_dirs_for_file(final_filepath)
-            # A model is the answer to *this* run, and the path it goes to is
-            # stable -- '<part>.<analysis>.<extension>', beside the package. So
-            # one an earlier run left there would satisfy the check below and be
-            # handed back as the new result: last week's stresses under today's
-            # load, with nothing to say they are not today's. Removed before the
-            # implementation is asked, which makes the file's existence
-            # afterwards mean what it is read as meaning.
-            if os.path.exists(final_filepath):
-                os.remove(final_filepath)
 
-            obj = await self.get_wrapped(ctx)
-            if obj is None:
-                raise Exception("Cannot analyse '%s': shape is empty" % self.name)
+            # Clearing the path, writing it and reading the answer back are one
+            # operation on one file, and the path is derived from the shape --
+            # so a second run over the same shape resolves to the same path and
+            # would otherwise interleave with this one: its 'os.remove' landing
+            # between this run's write and this run's check, or its model being
+            # the one handed back here. Held for all three, and the nested
+            # 'get_wrapped' and '_run_implementation_async' take the same lock
+            # again without waiting for it.
+            async with self.locked():
+                ctx.ensure_dirs_for_file(final_filepath)
+                # A model is the answer to *this* run, and the path it goes to
+                # is stable -- '<part>.<analysis>.<extension>', beside the
+                # package. So one an earlier run left there would satisfy the
+                # check below and be handed back as the new result: last week's
+                # stresses under today's load, with nothing to say they are not
+                # today's. Removed before the implementation is asked, which
+                # makes the file's existence afterwards mean what it is read as
+                # meaning.
+                if os.path.exists(final_filepath):
+                    os.remove(final_filepath)
 
-            boundary = await self._analysis_boundary_async(ctx, config)
-            script = await self._materialize_output_script(ctx, impl)
+                obj = await self.get_wrapped(ctx)
+                if obj is None:
+                    raise Exception("Cannot analyse '%s': shape is empty" % self.name)
 
-            request = await self._output_request(obj, impl, kwargs)
-            request.update(config.to_data())
-            # The ports each condition landed on, in the shape's own coordinate
-            # system. 'fix' and 'load' above say what the user wrote; this says
-            # where it goes, which is what a solver needs.
-            request["boundary"] = boundary
+                boundary = await self._analysis_boundary_async(ctx, config)
+                script = await self._materialize_output_script(ctx, impl)
 
-            result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+                request = await self._output_request(obj, impl, kwargs)
+                request.update(config.to_data())
+                # The ports each condition landed on, in the shape's own
+                # coordinate system. 'fix' and 'load' above say what the user
+                # wrote; this says where it goes, which is what a solver needs.
+                request["boundary"] = boundary
 
-        if result is None:
-            raise Exception("The '%s' implementation reported nothing: %s" % (format_name, script))
-        if not result.get("success", False):
-            raise Exception(
-                "%s failed for %s:%s: %s"
-                % (analysis.upper(), self.project_name, self.name, result.get("exception", "Unknown error"))
-            )
-        if not os.path.exists(final_filepath):
+                result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+
+                if result is None:
+                    raise Exception("The '%s' implementation reported nothing: %s" % (format_name, script))
+                if not result.get("success", False):
+                    raise Exception(
+                        "%s failed for %s:%s: %s"
+                        % (analysis.upper(), self.project_name, self.name, result.get("exception", "Unknown error"))
+                    )
+                written = os.path.exists(final_filepath)
+
+        if not written:
             # The meta-wrapper reports what the script returned and does not look
             # at the path, so "success" alone is the script's word for it. This
             # result is handed to a caller that acts on 'filepath' -- the IDE
