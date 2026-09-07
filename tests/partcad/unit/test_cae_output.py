@@ -862,3 +862,90 @@ def test_an_export_implementation_never_reports_findings(wrapper_export, tmp_pat
     script = _script(tmp_path, "def process(path, request):\n    return {'success': True}\n")
     result = wrapper_export.process(script, str(tmp_path / "out.step"), {})
     assert set(result) == {"success", "exception"}
+
+
+# --------------------------------------------------------------------------- #
+# What a failure says, and who says it                                        #
+# --------------------------------------------------------------------------- #
+
+
+def _run_raises(part, monkeypatch, error):
+    """Make the part's analysis fail where the implementation would run.
+
+    Patched at `_analysis_run_async` rather than at `analyze_async`, because
+    `analyze_async` is the thing under test: it is where the failure is turned
+    into the report every caller prints.
+    """
+
+    async def run(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(part, "_analysis_run_async", run)
+
+
+def test_the_command_is_told_what_the_check_is_told(package, monkeypatch):
+    """One report, written where the implementation's name is known.
+
+    `pc test` used to compose this and `pc cae fea` did not, so a user who ran
+    the command instead of the check was told less about the same machine. It is
+    written once now, in `analyze_async`, and both of them print it.
+    """
+    import asyncio
+
+    part = _bracket(package)
+    _run_raises(part, monkeypatch, Exception("ccx: not found"))
+
+    with pytest.raises(cae.CaeFailed) as raised:
+        asyncio.run(part.analyze_async(package, cae.FEA))
+
+    report = str(raised.value)
+    # What it said,
+    assert "ccx: not found" in report
+    # which implementation was asked,
+    assert "//cae-test:fea" in report
+    # and which machine it did not work on.
+    assert "platform:" in report
+
+
+def test_the_check_prints_that_report_rather_than_writing_its_own(package, monkeypatch, caplog):
+    """`pc test` reports what `analyze_async` wrote, and does not wrap it twice."""
+    import asyncio
+
+    part = _bracket(package)
+    _run_raises(part, monkeypatch, Exception("ccx: not found"))
+
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_FAILED
+    assert "ccx: not found" in caplog.text
+    assert "platform:" in caplog.text
+    # Once. Two reports of one failure is what wrapping in both places gives.
+    assert caplog.text.count("could not be run by") == 1
+
+
+def test_no_container_runtime_is_not_dressed_up_as_a_failure(package, monkeypatch):
+    """The one skip has to reach the check as itself.
+
+    `CaeTest` tells "the implementation could not do it" from "the thing that
+    runs implementations is not here" by the exception's type, so wrapping this
+    one in a report would turn the only justified skip into a failure.
+    """
+    import asyncio
+
+    from partcad import runtime as pc_runtime
+
+    part = _bracket(package)
+    _run_raises(part, monkeypatch, pc_runtime.SandboxUnavailable("no container runtime is available here"))
+
+    with pytest.raises(pc_runtime.SandboxUnavailable):
+        asyncio.run(part.analyze_async(package, cae.FEA))
+
+
+def test_a_malformed_section_stays_a_configuration_error(package, monkeypatch):
+    """A part to be edited, not a machine to be equipped: a different answer."""
+    import asyncio
+
+    part = _bracket(package)
+    _run_raises(part, monkeypatch, cae.CaeConfigError("'load:' names no port"))
+
+    with pytest.raises(cae.CaeConfigError):
+        asyncio.run(part.analyze_async(package, cae.FEA))

@@ -30,6 +30,7 @@ from . import render_overlay
 from . import sandbox_versions
 from . import wrapper
 from . import cae as pc_cae
+from . import runtime as pc_runtime
 
 if TYPE_CHECKING:
     from partcad.context import Context
@@ -1603,6 +1604,51 @@ class Shape(ShapeConfiguration):
             ctx, analysis, implementation, declared=config.implementation
         )
 
+        try:
+            return await self._analysis_run_async(
+                ctx, analysis, config, project, options_project, format_name, filepath, output_dir, kwargs
+            )
+        except (pc_cae.CaeConfigError, pc_runtime.SandboxUnavailable):
+            # Neither is the implementation failing, and neither gets the
+            # report. The first is the part's own section being wrong, which is
+            # answered by editing it; the second is this machine having no
+            # container runtime, so nothing was ever asked and there is nothing
+            # to report about the implementation or the platform.
+            raise
+        except Exception as e:
+            # Everything else is "asked, and no answer", and every caller says
+            # so the same way. Written here rather than by each of them because
+            # this is where the implementation's name is known, and because a
+            # user who ran `pc cae fea` and then `pc test -f fea` must be told
+            # the same thing about the same machine both times.
+            raise pc_cae.CaeFailed(
+                pc_cae.dysfunction_report(
+                    "%s:%s" % (self.project_name, self.name),
+                    analysis,
+                    "%s:%s" % (options_project.name, format_name),
+                    e,
+                )
+            ) from e
+
+    async def _analysis_run_async(
+        self,
+        ctx: Context,
+        analysis: str,
+        config,
+        project: Project,
+        options_project: Project,
+        format_name: str,
+        filepath,
+        output_dir,
+        kwargs: dict,
+    ) -> dict:
+        """`analyze_async` once it knows what to run and who runs it.
+
+        Split out so that the caller can say what every failure in here means
+        without a ninety-line `try:` around the part that does the work. Every
+        exception that leaves this is the implementation failing to deliver -
+        see `analyze_async`.
+        """
         with pc_logging.Action(analysis.upper(), self.project_name, self.name):
             impl, final_filepath = self.analysis_getopts(
                 ctx, analysis, format_name, project, filepath, options_project, output_dir

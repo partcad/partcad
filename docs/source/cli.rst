@@ -311,6 +311,12 @@ Object commands
   export or a render implementation is declared in its own (see :ref:`output-files`), and installed as a
   dependency.
 
+  An analysis that produces no answer is reported the same way by ``pc cae`` and by ``pc test``: which
+  implementation was asked, what it said, and which platform it did not work on. The remedies differ — install a
+  solver, use another machine, fix the part — and only the implementation's own sentence says which, so it is
+  relayed as it stands rather than classified. The command and the check say it identically on purpose: a user
+  who ran one of them and then the other must not be told two different things about the same machine.
+
   ``pc test`` runs the same analyses. Its ``fea`` and ``cfd`` tests apply to a part that declares the matching
   section — and to nothing else, so a package of bolts pays nothing for them. **One thing passes: the analysis
   ran and reported no findings.** A malformed section fails; a plugin that cannot be resolved fails (the
@@ -320,10 +326,15 @@ Object commands
   declaring ``fea:`` has asked a question, and a plugin that answered nothing has failed. So declaring ``fea:``
   in a shared package does make ``pc test`` fail for everyone who has not installed what the implementation
   needs — that is what declaring it means, and a package unwilling to ask that of its readers should not
-  declare the section. The failure names the implementation, relays its own sentence, and states the platform,
-  because the remedies differ: install a solver, use another machine, or fix the part. It is the one verdict
-  ``pc test`` does not remember — installing a solver changes nothing a cache key is built from, so a
-  remembered one would go on failing a part that now analyses perfectly well.
+  declare the section. It is the one verdict ``pc test`` does not remember — installing a solver changes
+  nothing a cache key is built from, so a remembered one would go on failing a part that now analyses perfectly
+  well.
+
+  **One thing is reported as "not run" rather than as a failure**, and it is the only one: the implementation
+  declared a ``container:`` (see :doc:`configuration`) and this machine has no container runtime. Nothing was
+  asked, because the thing that asks could not start — so it says nothing about the implementation, which may
+  be perfectly good, and nothing about the part. It is the only remaining excuse precisely because an
+  implementation that brings a container brings everything else it needs inside it.
 
 ``pc convert``
   Convert parts, sketches, assemblies or scenes to another format and update their type in the package.

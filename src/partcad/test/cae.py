@@ -230,6 +230,15 @@ class CaeTest(Test):
             # that cannot be built, a crash -- because the part asked a question
             # and got no answer.
             #
+            # Reported as `analyze_async` wrote it, which is also what `pc cae`
+            # prints: which implementation was asked, what it said, and which
+            # machine it did not work on. `pc test` used to compose that here,
+            # and then a user who ran the command instead was told less about
+            # the same failure. Anything that arrives without a report already
+            # on it -- something raised outside the part `analyze_async` wraps
+            # -- gets one here, because the two things a bare sentence is
+            # missing are exactly the two this check knows.
+            #
             # Not remembered, though. This is the one verdict here that can be
             # about the machine rather than about the part, and the cache key
             # describes only the question: the boundary conditions, the
@@ -237,16 +246,17 @@ class CaeTest(Test):
             # them, so a cached failure would outlive the reason for it and go
             # on failing a part that now analyses perfectly well.
             test_ctx[self.NOT_CACHEABLE] = True
-            return self.failed(
-                shape,
-                "%s",
-                pc_cae.dysfunction_report(
+            report = (
+                str(e)
+                if isinstance(e, pc_cae.CaeFailed)
+                else pc_cae.dysfunction_report(
                     "%s:%s" % (shape.project_name, shape.name),
                     self.analysis,
                     "%s:%s" % (options_project.name, format_name),
                     e,
-                ),
+                )
             )
+            return self.failed(shape, "%s", report)
 
         findings = result.get("findings") or []
         if findings:

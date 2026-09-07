@@ -109,6 +109,24 @@ class CaeConfigError(ValueError):
     """
 
 
+class CaeFailed(Exception):
+    """An analysis that was asked and produced no answer.
+
+    Carries what `dysfunction_report()` writes, and is raised by
+    `Shape.analyze_async()` around every way an implementation can fail to
+    deliver -- no mesher, no solver, a sandbox that will not build, a crash. It
+    exists so that the sentence is written once, where the implementation's name
+    is known, rather than by each caller: `pc cae` prints it, `pc test` fails
+    the part with it, and the IDE's tab shows it, and a user who saw one of
+    those and then ran another must not be told two different things about the
+    same machine.
+
+    Not `CaeConfigError`, and the distinction is the action it asks for: that
+    one means the part's own section is wrong and is fixed by editing it, this
+    one means the part is fine and the machine or the plugin is not.
+    """
+
+
 def parse_force(value, what: str = "value") -> float:
     """One `load:` value, in newtons.
 
