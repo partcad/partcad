@@ -160,6 +160,21 @@ isort --check src/partcad tests/partcad
   which objects materialize parts of their own: PartCAD cannot list the types in a section whose whole point
   is that it does not know what is in it.
 
+  **`open:` is the fifth, and the only one whose implementation is not a script.** It declares the
+  third-party applications `pc open` launches, as data: binaries per OS, a container image, the arguments
+  each front end takes, and what the application can read. The logic is the same for every tool and stays in
+  `partcad_client.external`, which now *builds* its `Tool` table from those declarations instead of holding
+  five literals. Blender's argument builder was the one callable in that table and is now `fileArgs:`
+  templates (`{path}`, `{path_repr}`) plus `ownFormats:` — a package cannot ship a Python function into a
+  frozen client.
+
+  The subtlety is where the table is read. `pc open` deliberately needs **no package graph** (it is handed a
+  path; the window belongs to whoever ran the command; a daemon can be remote), so the built-in entries are
+  read straight off disk out of the wheel — `partcad_client` locates them with `importlib.util.find_spec`
+  without importing `partcad`, the same reason `object_types` holds its own copy of PartCAD's tables. Only a
+  tool a *package* declares needs the graph, and that is the `open.tools` method: the daemon says **which**
+  applications exist, and never opens one. Do not add a method that opens a file.
+
 - **A material is a fact a simulation reads** (`material.py`): `mu` sits beside `density`, and
   `PHYSICS_FROM_MATERIAL` is what makes it reach an exporter. A shape names its material by a *reference*
   (`:aluminium`), and resolving one needs the package graph — which the core has and a sandbox does not. So

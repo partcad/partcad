@@ -110,6 +110,40 @@
       },
       "additionalProperties": true
     },
+    "open-section": {
+      "type": ["object", "null"],
+      "description": "The third-party applications 'pc open' can launch. An entry is data and nothing else - where the application is on each operating system, what to run it as, which container to fall back to, and what it can read; the logic that finds and launches it is the same for every tool and lives in 'partcad_client.external'",
+      "patternProperties": {
+        "^[a-zA-Z0-9_.-]+$": { "$ref": "#/definitions/open-tool" }
+      },
+      "additionalProperties": false
+    },
+    "open-tool": {
+      "type": ["object", "null"],
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "displayName": { "type": "string", "minLength": 1, "description": "What the application is called in a message" },
+        "image": { "type": "string", "minLength": 1, "description": "The container it runs in when the machine has no local copy. '{version}' is substituted with the running PartCAD's version" },
+        "binaries": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Executables to look for, on PATH and in the container, in order; the first found wins" },
+        "args": { "type": "array", "items": { "type": "string" }, "description": "Arguments that go before the file name" },
+        "binaryArgs": {
+          "type": "object",
+          "description": "The same, for one executable in particular, for an application with more than one front end",
+          "additionalProperties": { "type": "array", "items": { "type": "string" } }
+        },
+        "macosApps": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Bundles to look for under /Applications and ~/Applications" },
+        "macosExecutable": { "type": "string", "minLength": 1, "description": "The executable inside the bundle, for an application handed arguments rather than a document" },
+        "windowsGlobs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Install locations as globs, so a versioned directory still matches" },
+        "flatpakId": { "type": "string", "minLength": 1 },
+        "companions": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Extensions this application really opens, when the file it was handed is not one and one of these sits beside it" },
+        "fileArgs": { "type": "array", "items": { "type": "string" }, "description": "How the file reaches the application when being the last argument is not it. '{path}' is the file name, '{path_repr}' it quoted as a Python string" },
+        "ownFormats": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Extensions this application opens whatever they hold, because they are its own" },
+        "imports": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "The mesh formats it can read, for one that reads meshes" },
+        "meshVia": { "type": "string", "minLength": 1, "description": "What a file that is not a mesh is converted to first" },
+        "sceneType": { "type": "string", "minLength": 1, "description": "The PartCAD scene type it reads, for one that reads a description of an arrangement rather than geometry" }
+      },
+      "additionalProperties": true
+    },
     "simulate": {
       "type": ["object", "null"],
       "description": "The simulations this object declares: what it is supposed to do, or not do, once it is placed in a world and the world is run. 'pc sim' runs them",
@@ -664,6 +698,7 @@
     "export": { "$ref": "#/definitions/output-section" },
     "simulation": { "$ref": "#/definitions/simulation-section" },
     "import": { "$ref": "#/definitions/import-section" },
+    "open": { "$ref": "#/definitions/open-section" },
     "materials": { "$ref": "#/definitions/materials" },
     "dependencies": {
       "type": ["object", "null"],

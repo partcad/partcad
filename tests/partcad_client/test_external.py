@@ -206,7 +206,7 @@ def test_the_container_is_named_after_the_tool_not_the_image(part, docker):
     external.open_file(str(part), use_docker=True)
     created = docker.command("docker", "run")
     assert created[created.index("--name") + 1] == "partcad-freecad"
-    assert created[-3] == external.FREECAD.image
+    assert created[-3] == external.TOOLS["freecad"].image
 
 
 def test_a_custom_image_replaces_the_default_one(part, docker):
@@ -389,7 +389,9 @@ def test_the_result_says_how_the_file_was_opened(part, docker):
 
 
 def test_every_tool_can_be_named_and_has_a_container_of_its_own():
-    assert external.tool_names() == ["freecad", "gazebo", "kicad", "blender", "mujoco"]
+    # A set: the order is the order of the declarations, and two of these are
+    # about to move into the plugin package for their engine.
+    assert set(external.tool_names()) == {"freecad", "gazebo", "kicad", "blender", "mujoco"}
     names = {external.TOOLS[name].container_name for name in external.tool_names()}
     assert names == {
         "partcad-freecad",
@@ -736,7 +738,7 @@ def test_blender_runs_in_its_own_container_on_the_converted_mesh(part, docker, c
     assert result.method == "docker"
     created = docker.command("docker", "run")
     assert "partcad-blender" in created
-    assert external.BLENDER.image in created
+    assert external.TOOLS["blender"].image in created
     # The workspace that holds the *source* is what gets mounted: the mesh lives
     # under that workspace's state directory, which is mounted beside it, and a
     # workspace worked out from the mesh would have been the state directory.
@@ -774,11 +776,11 @@ def test_macos_runs_the_executable_inside_the_bundle(monkeypatch):
     monkeypatch.setattr(external.platform, "system", lambda: "Darwin")
     monkeypatch.setattr(external.shutil, "which", lambda _name: None)
     bundle = os.path.join("/Applications", "Blender.app")
-    executable = os.path.join(bundle, external.BLENDER.macos_executable)
+    executable = os.path.join(bundle, external.TOOLS["blender"].macos_executable)
     monkeypatch.setattr(external.os.path, "isdir", lambda path: path == bundle)
     monkeypatch.setattr(external.os.path, "isfile", lambda path: path == executable)
 
-    assert external.native_command(external.BLENDER) == [executable]
+    assert external.native_command(external.TOOLS["blender"]) == [executable]
 
 
 def test_macos_opens_the_bundle_for_an_application_that_takes_a_file(monkeypatch):
@@ -793,7 +795,7 @@ def test_macos_opens_the_bundle_for_an_application_that_takes_a_file(monkeypatch
     bundle = os.path.join("/Applications", "FreeCAD.app")
     monkeypatch.setattr(external.os.path, "isdir", lambda path: path == bundle)
 
-    assert external.native_command(external.FREECAD) == ["open", "-a", bundle]
+    assert external.native_command(external.TOOLS["freecad"]) == ["open", "-a", bundle]
 
 
 def test_a_bundle_without_the_executable_in_it_is_not_a_local_installation(monkeypatch):
@@ -809,7 +811,7 @@ def test_a_bundle_without_the_executable_in_it_is_not_a_local_installation(monke
     monkeypatch.setattr(external.os.path, "isdir", lambda path: path.endswith("Blender.app"))
     monkeypatch.setattr(external.os.path, "isfile", lambda _path: False)
 
-    assert external.native_command(external.BLENDER) is None
+    assert external.native_command(external.TOOLS["blender"]) is None
 
 
 def test_the_other_applications_are_still_handed_the_file_itself(monkeypatch, spawned, part):

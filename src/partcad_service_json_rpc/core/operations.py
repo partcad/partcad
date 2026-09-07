@@ -692,6 +692,48 @@ def info_object(session, params):
     return None
 
 
+def open_tools(session, params):
+    """The applications this workspace's packages declare, for `pc open`.
+
+    The one thing `pc open` needs the package graph for, and the reason it is
+    answered here: opening a file is deliberately client-side work -- the window
+    belongs to whoever ran the command, and a daemon can be remote -- but
+    *which* applications exist is a fact about the packages a workspace imports,
+    and only this side has those. So the client asks what is declared, and still
+    does the opening itself. There is no method for opening a file and there
+    must not be one.
+
+    Only what a package declares is returned. PartCAD's own applications ship in
+    the wheel the client is running out of, which reads them straight off disk
+    (see `partcad_client.external.builtin_tools`); sending them over the wire as
+    well would mean a client whose daemon is a different release quietly gets
+    that release's table.
+    """
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    builtin = pc.output.BUILTIN_PACKAGES[pc.output.OPEN]
+    declared = {}
+    # 'has_stuff=False': a plugin package declares implementations and no
+    # objects at all, so the default filter - which keeps only packages holding
+    # sketches, parts, assemblies or scenes - would drop precisely the ones this
+    # is looking for.
+    for package_name in ctx.get_all_packages(has_stuff=False):
+        name = package_name["name"] if isinstance(package_name, dict) else package_name
+        if name == builtin:
+            continue
+        project = ctx.get_project(name)
+        section = getattr(project, "config_obj", {}).get(pc.output.OPEN) if project else None
+        if not isinstance(section, dict):
+            continue
+        for tool_name, config in section.items():
+            if isinstance(config, dict):
+                declared[tool_name] = config
+    return {"tools": declared}
+
+
 def adhoc_convert(session, params):
     """Convert a CAD or sketch file between formats, ad-hoc (no package/context).
 

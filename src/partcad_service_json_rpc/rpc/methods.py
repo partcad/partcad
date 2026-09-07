@@ -48,6 +48,7 @@ _OPERATIONS = {
     "search.objects": operations.search_objects,
     "render.objects": operations.render_objects,
     "convert.object": operations.convert_object,
+    "open.tools": operations.open_tools,
     "adhoc.convert": operations.adhoc_convert,
     "adhoc.render": operations.adhoc_render,
     "test.run": operations.test_run,

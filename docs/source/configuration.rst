@@ -2264,6 +2264,56 @@ respectively, beside the exporter and the simulator that share their knowledge
 of the format: reading a format and writing it are one piece of knowledge, and
 this is what lets the pair travel together and be versioned together.
 
+.. _open-section:
+
+============
+Applications
+============
+
+``pc open`` launches a third-party application on the file it is given. Which
+applications it knows is an ``open:`` section -- one entry per application, and
+data all the way down: where the application is on each operating system, what
+to run it as, which container to fall back to when it is not installed, and what
+it can read. None of it is logic. Finding the binary, creating the container,
+forwarding the X display and converting a file the application cannot read is
+the same for every tool and happens once, in ``partcad_client.external``.
+
+.. code-block:: yaml
+
+  open:
+    democad:
+      displayName: DemoCAD
+      image: example/democad:latest      # when it is not installed here
+      binaries: [democad, democad-bin]   # on PATH and in the container
+      macosApps: [DemoCAD.app]
+      windowsGlobs: ["DemoCAD*/bin/democad.exe"]
+      flatpakId: org.example.DemoCAD
+      sceneType: demo                    # it reads this scene type and no other
+
+``pc open --with democad ./cell.demo`` then works, in a workspace whose packages
+import that one. PartCAD ships five of these in ``//builtin/open`` -- FreeCAD,
+KiCad, Blender, and (until the packages that own them are published) Gazebo and
+MuJoCo. A package's entry replaces a built-in of the same name, which is how the
+plugin for a simulation engine comes to own the application for it.
+
+Three fields are worth dwelling on, because they are how an application that
+cannot read what it was handed still gets to open something. ``companions:``
+names the extensions the application really opens, for a file that sits beside
+the one PartCAD was pointed at -- a ``kicad`` part *is* the STEP file KiCad's CLI
+writes, and the board is the project next to it. ``meshVia:`` says what a file
+that is not a mesh is converted to first, for an application that reads
+triangles and nothing else. ``sceneType:`` says which description language an
+application reads, for one that reads an arrangement rather than geometry: MuJoCo
+reads MJCF, so a Gazebo world it is pointed at is written out as MJCF first.
+
+``pc open`` is otherwise a **client-side** command and stays one: it is handed a
+path, the file is already on disk, and the window belongs to whoever ran the
+command -- a daemon can be remote. So the built-in entries are read straight out
+of the wheel the client is running from, with no context and no daemon, and only
+the applications a *package* declares are asked of the daemon (``open.tools``).
+It answers which applications exist; it never opens one, and there is no method
+for opening a file.
+
 .. _simulate:
 
 ===========

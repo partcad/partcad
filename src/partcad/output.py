@@ -119,6 +119,25 @@ SIMULATE = "simulation"
 # knowing they exist.
 IMPORT = "import"
 
+# The fifth, and the only one whose implementation is not a script: 'open:'
+# declares the third-party applications 'pc open' can launch. An entry is data
+# and nothing else -- where the application is on each operating system, what to
+# run it as, which container to fall back to, and what it can read -- because
+# the one thing that would be code is the same for every tool there is, and
+# lives once in 'partcad_client.external'.
+#
+# It is resolved the same way as the rest, and for the same reason: an
+# application belongs to whoever knows it. Gazebo and MuJoCo are declared by
+# their engine's plugin package, beside the exporter, the reader and the
+# simulator for that engine's own scene format; a package that wraps some other
+# tool adds it without PartCAD having heard of it.
+#
+# 'pc open' is a client-side command that deliberately needs no package graph
+# (see 'partcad_cli.click.commands.open'), so the built-in half of this table is
+# read straight off disk out of the wheel and needs no context at all. Only a
+# tool a *package* declares needs one, and that is the daemon's to answer.
+OPEN = "open"
+
 # Where the built-in packages live, both as package paths and on disk. They are
 # inside the 'partcad' Python package so that they ship with it and are always
 # present, wheel or frozen bundle alike.
@@ -127,6 +146,7 @@ BUILTIN_PACKAGES = {
     EXPORT: "//builtin/export",
     RENDER: "//builtin/render",
     IMPORT: "//builtin/import",
+    OPEN: "//builtin/open",
 }
 # The one built-in package that declares objects rather than implementations:
 # the scene a 'simulate:' that names no scene of its own is run in, whose
@@ -139,6 +159,7 @@ BUILTIN_PATHS = {
     BUILTIN_PACKAGES[EXPORT]: os.path.join(BUILTIN_ROOT_PATH, EXPORT),
     BUILTIN_PACKAGES[RENDER]: os.path.join(BUILTIN_ROOT_PATH, RENDER),
     BUILTIN_PACKAGES[IMPORT]: os.path.join(BUILTIN_ROOT_PATH, IMPORT),
+    BUILTIN_PACKAGES[OPEN]: os.path.join(BUILTIN_ROOT_PATH, OPEN),
     BUILTIN_SCENE_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "scene"),
 }
 
@@ -412,7 +433,7 @@ def config_sections(section: str) -> tuple:
     'export:' request never falls back to a 'render:' implementation for a
     format that 'render:' owns.
     """
-    if section in (SIMULATE, IMPORT):
+    if section in (SIMULATE, IMPORT, OPEN):
         return (section,)
     return (RENDER, EXPORT) if section == EXPORT else (EXPORT, RENDER)
 

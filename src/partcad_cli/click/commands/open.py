@@ -37,6 +37,15 @@ otherwise -- with `--use-docker` -- from a container PartCAD keeps for it. The
 finding, the container, the X forwarding and the rule about which types are
 meshes are `partcad_client.external` and `partcad_client.object_types`, so the
 extension and the CLI cannot drift apart.
+
+**Which applications exist is the one thing here that does need the package
+graph**, and it is the second thing asked of the daemon. An application is
+declared in an `open:` section -- PartCAD's own five in `//builtin/open`, read
+straight off disk out of this same wheel, and any others by the package that
+knows the tool. Only the latter need the graph, so `open.tools` fetches them and
+a daemon that is not running costs nothing but those. The window still opens
+here, from this process, on this machine's display: the daemon says *which*
+applications there are, never opens one.
 """
 
 import json
@@ -56,7 +65,8 @@ from ..service import run
     show_default=True,
     metavar="APPLICATION",
     help="Which application to open the file in: freecad, blender, gazebo (a scene's world file), "
-    "mujoco (a scene, converted to MJCF if it is not one already) or kicad (a board).",
+    "mujoco (a scene, converted to MJCF if it is not one already) or kicad (a board) -- plus "
+    "whatever the workspace's packages declare in their 'open:' sections.",
 )
 @click.option(
     "--type",
@@ -118,6 +128,20 @@ def cli(click_ctx, tool: str, object_type: str, use_docker: bool, docker_image: 
             },
             needs_context=False,
         )
+
+    # Which applications exist is the one thing here that needs the package
+    # graph, so it is the one thing asked of the daemon besides the conversion
+    # below. Best effort: PartCAD's own applications ship in this same wheel and
+    # are read off disk, so a daemon that is not running costs only the tools a
+    # *package* declares -- and a machine with no workspace has none.
+    try:
+        declared = run(click_ctx.obj, "open.tools", {}, needs_context=True)
+        external.use_tools((declared or {}).get("tools"))
+    except Exception as e:  # pylint: disable=broad-except
+        # Not a failure to open anything: the built-in table is still there, and
+        # the name the user asked for is most likely in it.
+        if not as_json:
+            click.echo("Could not ask the daemon which applications packages declare: %s" % e, err=True)
 
     try:
         result = external.open_file(

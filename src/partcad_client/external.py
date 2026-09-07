@@ -61,6 +61,7 @@ what to run, rather than a container that starts and silently never shows a wind
 """
 
 import contextlib
+import functools
 import glob
 import hashlib
 import os
@@ -79,9 +80,14 @@ __all__ = [
     "OpenResult",
     "Tool",
     "TOOLS",
+    "builtin_tools",
+    "merge_tools",
     "open_file",
+    "tool_from_declaration",
     "tool_names",
+    "tools_from_section",
     "transcode_path",
+    "use_tools",
 ]
 
 # How long to wait for the `docker` commands that only ask a question. Generous
@@ -111,7 +117,10 @@ class Tool:
     name: str
     display_name: str
     # The image a container is created from when the machine has no local copy.
-    image: str
+    # Empty for an application whose declaration names none: a package may know
+    # where a tool is installed without there being a container to fall back to,
+    # and `--use-docker` says so rather than trying to create one from nothing.
+    image: str = ""
     # Executable names to look for, both on this machine's PATH and inside the
     # container. Ordered: the first one found wins.
     binaries: Tuple[str, ...] = ()
@@ -143,8 +152,14 @@ class Tool:
     # How the file reaches the application, when being the last argument is not
     # it. Blender's command line takes a `.blend` to open and imports anything
     # else through a line of Python, which is a fact about Blender and lives
-    # with the rest of them.
-    file_args: Optional[Callable[[str], Tuple[str, ...]]] = None
+    # with the rest of them -- in its declaration, as templates: `{path}` is
+    # substituted with the file name and `{path_repr}` with it quoted as a
+    # Python string, for a template that embeds the name in code.
+    #
+    # Templates rather than a callable because this table is read out of
+    # `open:` declarations now, and a package that teaches PartCAD an
+    # application cannot ship a Python function into a frozen client.
+    file_args: Tuple[str, ...] = ()
     # The format a file that is not already a mesh is converted to before this
     # application sees it, for an application that reads meshes and nothing
     # else. None -- every other tool in the table -- means the file is handed
@@ -192,11 +207,16 @@ class Tool:
         """The arguments that name ``path`` to this application.
 
         The path itself for every application that takes a file name, which is
-        all of them but Blender; see `file_args`.
+        all of them but Blender; see `file_args`. An application's own file is
+        named that way too even when it declares templates: what those are for
+        is the *import* of something that is not one, and a `.blend` is opened
+        rather than imported.
         """
-        if self.file_args is None:
+        if not self.file_args:
             return (path,)
-        return tuple(self.file_args(path))
+        if os.path.splitext(path)[1].lower() in self.own_formats:
+            return (path,)
+        return tuple(template.replace("{path_repr}", repr(path)).replace("{path}", path) for template in self.file_args)
 
     def needs_mesh(self, path: str, object_type: Optional[str] = None) -> bool:
         """Whether ``path`` has to be converted before this application sees it.
@@ -252,165 +272,142 @@ class Tool:
         return path
 
 
-FREECAD = Tool(
-    name="freecad",
-    display_name="FreeCAD",
-    # `:latest`, not a pinned tag: a user asking for a container wants the
-    # current FreeCAD, and a pin here would quietly age into a version nobody
-    # chose. The image is a community one because the FreeCAD project publishes
-    # none -- the `freecad/freecad` repository on Docker Hub has never had an
-    # image pushed to it -- and it is this one because it carries a GUI FreeCAD
-    # on `PATH` and is still being rebuilt. `--docker-image` overrides it, which
-    # is also the answer for anyone who would rather run their own.
-    image="linuxserver/freecad:latest",
-    binaries=("freecad", "FreeCAD", "freecad-daily"),
-    macos_apps=("FreeCAD.app",),
-    windows_globs=("FreeCAD*/bin/FreeCAD.exe", "FreeCAD*/FreeCAD.exe"),
-    flatpak_id="org.freecad.FreeCAD",
-)
+# Where the built-in declarations live inside the wheel. Found without importing
+# `partcad`: this module is a client's and has to stay cheap to import, and the
+# file is data -- the same reason `object_types` holds a copy of PartCAD's tables
+# rather than reaching for them.
+BUILTIN_OPEN_PACKAGE = ("partcad", "builtin", "open", "partcad.yaml")
 
-GAZEBO = Tool(
-    name="gazebo",
-    display_name="Gazebo",
-    # The simulator's own image for the current Gazebo. `:latest`, for the
-    # reason FreeCAD's is: a user asking for a container wants the current
-    # Gazebo, and `--docker-image` is the answer for anyone who wants another
-    # one (`osrf/gazebo` for Gazebo Classic, say).
-    image="gazebosim/gz-harmonic:latest",
-    # Three generations of one program, newest first: `gz sim` today, `ign
-    # gazebo` in the Ignition years, and `gazebo` for Gazebo Classic. Whichever
-    # the machine has is the one used.
-    binaries=("gz", "ign", "gazebo"),
-    binary_args={"gz": ("sim",), "ign": ("gazebo",)},
-    macos_apps=("Gazebo.app",),
-    windows_globs=("Gazebo*/bin/gz.exe",),
-    flatpak_id="org.gazebosim.Gazebo",
-)
+# What a declaration calls each field of `Tool`. Spelled camelCase in YAML, like
+# every other declaration PartCAD reads, and snake_case here.
+DECLARATION_FIELDS = {
+    "displayName": "display_name",
+    "image": "image",
+    "binaries": "binaries",
+    "args": "args",
+    "binaryArgs": "binary_args",
+    "macosApps": "macos_apps",
+    "macosExecutable": "macos_executable",
+    "windowsGlobs": "windows_globs",
+    "flatpakId": "flatpak_id",
+    "companions": "companions",
+    "fileArgs": "file_args",
+    "ownFormats": "own_formats",
+    "imports": "imports",
+    "meshVia": "mesh_via",
+    "sceneType": "scene_type",
+}
 
-KICAD = Tool(
-    name="kicad",
-    display_name="KiCad",
-    # The image PartCAD already builds and uses for `kicad` parts (see
-    # 'partcad.part_factory_kicad'), pinned to this release the same way: it is
-    # `kicad/kicad` with PartCAD's own environment on top, so the GUI is in it
-    # and there is one KiCad container in the product rather than two. It is
-    # `linux/amd64` only, as KiCad's own images are; a machine that cannot run
-    # it almost certainly has KiCad installed, which is used first anyway.
-    image="ghcr.io/partcad/partcad-container-kicad:" + __version__,
-    binaries=("kicad",),
-    macos_apps=("KiCad/KiCad.app", "KiCad.app"),
-    windows_globs=("KiCad/*/bin/kicad.exe",),
-    flatpak_id="org.kicad.KiCad",
-    # What a `kicad` part points at is the STEP file KiCad's CLI generates from
-    # the board. The board is the project beside it, and that is what opening
-    # KiCad means.
-    companions=(".kicad_pro", ".kicad_pcb", ".kicad_sch"),
-)
-
-# The Python Blender is asked to run when it is handed geometry rather than one
-# of its own files. `blender <file>` *opens* a file, and the only thing Blender
-# opens is a `.blend`: everything else is an import, which is an operator call
-# and nothing else. Written as one expression on the command line rather than a
-# script file because it has to work identically in a container, where a script
-# file would be one more thing to make visible on both sides of the mount.
-#
-# Two names per format: Blender 4.x replaced the old Python importers with C++
-# ones under different operator names ('wm.stl_import' for what used to be
-# 'import_mesh.stl'), and both releases are in use. Whichever exists answers;
-# the loop tries them in turn, newest first, and says so if none does. Reading
-# a home file with no contents first is what leaves the imported object alone in
-# the scene instead of inside Blender's default cube.
-_BLENDER_IMPORT = """\
-import bpy, os
-path = {path!r}
-importers = {{
-    '.stl': ('wm.stl_import', 'import_mesh.stl'),
-    '.obj': ('wm.obj_import', 'import_scene.obj'),
-    '.ply': ('wm.ply_import', 'import_mesh.ply'),
-    '.gltf': ('import_scene.gltf',),
-    '.glb': ('import_scene.gltf',),
-    '.json': ('import_scene.gltf',),
-    '.fbx': ('import_scene.fbx',),
-    '.x3d': ('import_scene.x3d',),
-}}
-extension = os.path.splitext(path)[1].lower()
-bpy.ops.wm.read_homefile(use_empty=True)
-for name in importers.get(extension, ()):
-    category, _, operator = name.partition('.')
-    try:
-        getattr(getattr(bpy.ops, category), operator)(filepath=path)
-        break
-    except Exception as e:
-        print('PartCAD: bpy.ops.' + name + ' did not import ' + path + ': ' + str(e))
-else:
-    print('PartCAD: this Blender has no importer for ' + (extension or path))
-"""
-
-
-def _blender_arguments(path: str) -> Tuple[str, ...]:
-    """How Blender is told about ``path``: opened if it is a `.blend`, else imported."""
-    if os.path.splitext(path)[1].lower() == ".blend":
-        return (path,)
-    return ("--python-expr", _BLENDER_IMPORT.format(path=path))
-
-
-BLENDER = Tool(
-    name="blender",
-    display_name="Blender",
-    # `:latest`, for the reason FreeCAD's is: a user asking for a container
-    # wants the current Blender. The image is a community one because the
-    # Blender project publishes none, and it is this one because it carries a
-    # GUI Blender on `PATH` and is still being rebuilt. `--docker-image`
-    # overrides it, as it does for every other tool here.
-    image="linuxserver/blender:latest",
-    binaries=("blender",),
-    macos_apps=("Blender.app",),
-    # Not through `open -a`: the arguments below are the whole point of the
-    # launch, and `open -a` drops them on a Blender that is already running.
-    macos_executable="Contents/MacOS/Blender",
-    windows_globs=("Blender Foundation/Blender*/blender.exe", "Blender*/blender.exe"),
-    flatpak_id="org.blender.Blender",
-    file_args=_blender_arguments,
-    # What the expression above knows how to import. '.json' is deliberately
-    # absent: PartCAD writes both glTF and three.js to it, and only one of the
-    # two is a file Blender reads -- so a '.json' is converted rather than
-    # guessed at.
-    imports=(".stl", ".obj", ".ply", ".gltf", ".glb", ".fbx", ".x3d"),
-    # Blender reads triangles. Anything else -- a STEP file, a CadQuery script,
-    # a part PartCAD builds -- reaches it as the STL PartCAD makes out of it.
-    # STL rather than a richer mesh format because every part type converts to
-    # it, which is what makes this one rule rather than a table of exceptions.
-    mesh_via="stl",
-    # A `.blend` is Blender's own file: not a mesh, and not something to convert
-    # into one.
-    own_formats=(".blend",),
+# The fields that are a sequence, so a declaration's list becomes the tuple the
+# frozen dataclass wants.
+_TUPLE_FIELDS = frozenset(
+    {"binaries", "args", "macos_apps", "windows_globs", "companions", "file_args", "own_formats", "imports"}
 )
 
 
-MUJOCO = Tool(
-    name="mujoco",
-    display_name="MuJoCo",
-    # DeepMind's own image, `:latest` for the reason every other one here is:
-    # a user asking for a container wants the current MuJoCo, and
-    # `--docker-image` is the answer for anyone who wants another.
-    image="ghcr.io/google-deepmind/mujoco:latest",
-    # `simulate` is the viewer the MuJoCo release ships; `mujoco` is what a
-    # distribution package sometimes calls it. Whichever the machine has is the
-    # one used.
-    binaries=("simulate", "mujoco"),
-    macos_apps=("MuJoCo.app",),
-    macos_executable="Contents/MacOS/simulate",
-    windows_globs=("MuJoCo*/bin/simulate.exe", "mujoco*/bin/simulate.exe"),
-    # MuJoCo reads MJCF and no other model format. A scene given as anything
-    # else -- a Gazebo world, above all -- is written out as MJCF first, which
-    # is `pc export -t mjcf` and so is the daemon's work.
-    scene_type="mjcf",
-)
+def tool_from_declaration(name: str, config: dict) -> Tool:
+    """One `open:` entry as a `Tool`.
+
+    Unknown keys are ignored rather than refused. A declaration is read by
+    whatever PartCAD the user has installed, and a tool declared by a package
+    that knows about a field this release does not should still launch.
+    """
+    values = {"name": name, "display_name": name}
+    for declared, field_name in DECLARATION_FIELDS.items():
+        if declared not in config or config[declared] is None:
+            continue
+        value = config[declared]
+        if field_name in _TUPLE_FIELDS:
+            value = tuple(value) if isinstance(value, (list, tuple)) else (value,)
+        elif field_name == "binary_args":
+            value = {key: tuple(args) for key, args in (value or {}).items()}
+        elif field_name == "image":
+            # `{version}` pins an image PartCAD publishes to this release
+            # without the number being written down twice.
+            value = str(value).replace("{version}", __version__)
+        values[field_name] = value
+    return Tool(**values)
 
 
-# The tools `pc open --with` accepts. Each is a row here, not a branch anywhere
-# below.
-TOOLS: Dict[str, Tool] = {tool.name: tool for tool in (FREECAD, GAZEBO, KICAD, BLENDER, MUJOCO)}
+def tools_from_section(section: dict) -> Dict[str, Tool]:
+    """Every entry of one `open:` section, as tools."""
+    if not isinstance(section, dict):
+        return {}
+    return {name: tool_from_declaration(name, config) for name, config in section.items() if isinstance(config, dict)}
+
+
+def _builtin_declarations() -> dict:
+    """The `open:` section of the package that ships inside `partcad`.
+
+    Read off disk rather than through a context, because `pc open` has none and
+    is not going to acquire one: it is handed a path, the file is already there,
+    and needing the package graph to answer "where is FreeCAD" would make the
+    command depend on a workspace it has nothing to do with. A tool a *package*
+    declares is the case that does need the graph, and that one is answered by
+    the daemon -- see `merge_tools()`.
+    """
+    import importlib.util
+
+    spec = importlib.util.find_spec("partcad")
+    if spec is None or not spec.submodule_search_locations:
+        return {}
+    root = os.path.dirname(list(spec.submodule_search_locations)[0])
+    path = os.path.join(root, *BUILTIN_OPEN_PACKAGE)
+    if not os.path.isfile(path):
+        return {}
+    import yaml
+
+    with open(path, encoding="utf-8") as f:
+        return (yaml.safe_load(f) or {}).get("open") or {}
+
+
+@functools.lru_cache(maxsize=1)
+def builtin_tools() -> Dict[str, Tool]:
+    """The applications PartCAD itself declares.
+
+    Cached: the file is inside the installation and cannot change under a
+    running process, and `pc open` asks for it on a path where an editor's
+    context menu is waiting.
+    """
+    return tools_from_section(_builtin_declarations())
+
+
+def merge_tools(declared: Optional[dict] = None) -> Dict[str, Tool]:
+    """The built-in applications, plus whatever a workspace's packages declare.
+
+    `declared` is an `open:` section the caller obtained from somewhere that has
+    the package graph -- in practice the daemon, which is the only side that
+    does. A package's entry wins over a built-in of the same name, which is what
+    lets the plugin for an engine own the tool for it once it is published.
+    """
+    tools = dict(builtin_tools())
+    tools.update(tools_from_section(declared or {}))
+    return tools
+
+
+# What `pc open` opens a file in when the user names no application. A string
+# rather than a reference to one of the entries, because the entries are data
+# now and this is the one of them PartCAD treats as special.
+DEFAULT_TOOL = "freecad"
+
+# The tools `pc open --with` accepts. Each is a declaration, not a branch
+# anywhere below. Replaced wholesale by `use_tools()` when a caller has asked
+# the daemon what the workspace's packages declare.
+TOOLS: Dict[str, Tool] = merge_tools()
+
+
+def use_tools(declared: Optional[dict]) -> None:
+    """Add the applications a workspace's packages declare to this process.
+
+    Called by `pc open` once, before it looks a tool up, with whatever the
+    daemon reported. A no-op when nothing was declared or the daemon could not
+    be reached, which is what keeps the command working with no daemon at all --
+    for every tool PartCAD itself ships, which is the common case.
+    """
+    if not declared:
+        return
+    TOOLS.clear()
+    TOOLS.update(merge_tools(declared))
 
 
 def tool_names() -> List[str]:
@@ -448,7 +445,7 @@ class OpenResult:
 
 def open_file(
     path: str,
-    tool: str = FREECAD.name,
+    tool: str = DEFAULT_TOOL,
     use_docker: bool = False,
     image: Optional[str] = None,
     log: Optional[Callable[[str], None]] = None,
@@ -777,6 +774,12 @@ def _open_in_container(
     # point of the check.
     x11_env, x11_mounts, x11_advice = _x11_forwarding(spec)
     display = x11_env["DISPLAY"]
+
+    if not (image or spec.image):
+        raise ExternalToolError(
+            "%s is not installed here and declares no container image, so there is nothing to run it in.\n"
+            "Install it, or name an image with --docker-image." % spec.display_name
+        )
 
     state = _container_state(spec.container_name)
     if state is None:

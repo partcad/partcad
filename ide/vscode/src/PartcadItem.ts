@@ -193,7 +193,7 @@ export class PartcadItem extends vscode.TreeItem {
             }
             // As with a world scene above: a 'kicad' part is the one kind of
             // part KiCad can be pointed at, because the board it is generated
-            // from is a file beside it (see 'KICAD' in
+            // from is a file beside it (see the 'kicad' entry of 'builtin/open/partcad.yaml' and
             // 'partcad_client.external'). 'itemPath' stays undefined for it -
             // what the tree would open is the STEP KiCad writes, not source.
             this.contextValue =
