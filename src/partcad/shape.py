@@ -1516,6 +1516,15 @@ class Shape(ShapeConfiguration):
             # the one handed back here. Held for all three, and the nested
             # 'get_wrapped' and '_run_implementation_async' take the same lock
             # again without waiting for it.
+            #
+            # What this does not make it is a snapshot. The path below is the
+            # shape's model file, not this call's, and a later run of the same
+            # analysis on the same shape replaces it once this one has returned
+            # -- the same contract 'pc render' and 'pc export' have, and the
+            # reason the IDE and the CLI can both name the file without being
+            # told where it went. A caller that needs the bytes to outlive the
+            # next run copies them; giving each run its own path instead would
+            # take that name away from everyone who relies on it.
             async with self.locked():
                 ctx.ensure_dirs_for_file(final_filepath)
                 # A model is the answer to *this* run, and the path it goes to
