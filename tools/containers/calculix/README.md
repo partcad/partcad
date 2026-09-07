@@ -12,7 +12,12 @@ install. The CalculiX analyses need two things pip cannot supply everywhere:
   and win_amd64 — and **no linux aarch64 wheel and no source distribution**, in every release from 4.12 through
   4.15. On 64-bit ARM Linux there is nothing to install and nothing to build from.
 
-Debian builds both, for amd64 and arm64. So the plugin brings its own dependencies by bringing this image,
+Debian builds both, for amd64 and arm64 — confirmed by the first build of this image, which located
+`calculix-ccx` and `python3-gmsh` and failed only on `python3-trimesh`, which Debian does not package. trimesh
+and flask-jsonrpc therefore come from pip: both are pure Python, which is precisely why they *can*, and gmsh
+cannot.
+
+So the plugin brings its own dependencies by bringing this image,
 which is what makes "the analysis could not run" a failure of the implementation rather than a fact of life:
 once a plugin carries what it needs, the only thing left that can stop it is a machine with no container
 runtime at all.

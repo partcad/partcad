@@ -17,21 +17,26 @@ FROM debian:12-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
 # `ccx` is the solver; `python3-gmsh` is the mesher's Python API, which is a
-# separate package from the `gmsh` application. numpy and trimesh come from
-# Debian too rather than from pip: this image has no pip environment to manage,
-# and a distribution package is already built for both architectures.
+# separate package from the `gmsh` application. Both are what this image exists
+# for, and both are what pip cannot supply on 64-bit ARM Linux -- Debian builds
+# them for amd64 and arm64 alike.
+#
+# numpy comes from Debian for the same reason: it is compiled, so a
+# distribution package is one fewer thing built per architecture.
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends \
     calculix-ccx \
     python3 \
     python3-gmsh \
     python3-numpy \
-    python3-trimesh \
     python3-flask \
     python3-pip \
   && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir --break-system-packages flask-jsonrpc
+# trimesh and flask-jsonrpc are not Debian packages. Both are pure Python, so
+# pip installs them identically on either architecture -- which is exactly why
+# they are the ones that can come from pip while gmsh cannot.
+RUN pip install --no-cache-dir --break-system-packages trimesh flask-jsonrpc
 
 # Prove the image is what it claims before it is ever published. Every one of
 # these is a thing this image exists to provide, and a silent absence would
