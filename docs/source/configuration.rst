@@ -2813,6 +2813,52 @@ way -- so setting them on a file type whose implementation lives elsewhere is
 not an error. It simply describes nothing: the environment being described
 belongs to the package that wrote the script.
 
+Implementations that run in a container
+---------------------------------------
+
+A Python sandbox can bring whatever pip can install, which is not everything. A
+native executable is not a Python package at all, and some Python packages
+publish no wheel for some platforms -- gmsh publishes none for 64-bit ARM Linux
+and no source distribution either. An implementation that needs one of those
+declares a ``container:`` instead of ``pythonRequirements``, and PartCAD runs it
+in that image rather than in a sandbox:
+
+.. code-block:: yaml
+
+  cae:
+    fea:
+      path: solve_fea.py
+      extension: glb
+      container:
+        image: ghcr.io/example/solver:1a2b3c4d5e6f
+
+``image`` is the only required field. ``command`` names the interpreter to run
+inside it (default ``python``, resolved against the image's own allowlist), and
+``name`` the container to reuse across runs, which defaults to one derived from
+the image. A ``container:`` written as a plain string is the image:
+
+.. code-block:: yaml
+
+      container: ghcr.io/example/solver:1a2b3c4d5e6f
+
+It is read from the *implementing* package, exactly as ``pythonVersion`` and
+``pythonRequirements`` are, and for the same reason: which environment a script
+needs is known only to whoever wrote it.
+
+PartCAD sends the implementing package and the wrapper into the container as
+whole directories at run time, so the image carries a runtime and not the
+plugin's code -- a user who fetches a newer version of the package gets that
+version, not one baked into an image. Pin an **immutable** tag: an image that
+changes under a tag changes what an analysis answers, with nothing in the
+package to say so.
+
+What this costs is a container runtime. There is no fallback -- an
+implementation that declared a container is one that said a sandbox is not
+enough -- so on a machine with no Docker it cannot run at all, and that is the
+one thing ``pc test``'s analysis checks report as "not run" rather than as a
+failure (see ``pc test`` in :doc:`cli`). Everything else the implementation needs is
+inside the image, which is what makes that the *only* remaining excuse.
+
 Built-in implementations
 ------------------------
 

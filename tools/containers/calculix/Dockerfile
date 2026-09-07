@@ -23,6 +23,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 #
 # numpy comes from Debian for the same reason: it is compiled, so a
 # distribution package is one fewer thing built per architecture.
+#
+# The `lib*` names are what the OCP wheel installed below dlopen()s and does not
+# bundle: OpenCASCADE is a visualization toolkit as much as a modelling one, so
+# it links GL, X and fontconfig even where nothing is ever drawn. They are named
+# here rather than left to chance because the failure without them is an
+# ImportError deep in a sandbox, not a missing package a user could act on.
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends \
     calculix-ccx \
@@ -31,22 +37,46 @@ RUN apt-get update \
     python3-numpy \
     python3-flask \
     python3-pip \
+    libgl1 \
+    libglu1-mesa \
+    libgomp1 \
+    libfontconfig1 \
+    libfreetype6 \
+    libglib2.0-0 \
+    libice6 \
+    libsm6 \
+    libx11-6 \
+    libxext6 \
+    libxrender1 \
   && rm -rf /var/lib/apt/lists/*
 
-# trimesh and flask-jsonrpc are not Debian packages. Both are pure Python, so
-# pip installs them identically on either architecture -- which is exactly why
-# they are the ones that can come from pip while gmsh cannot.
-RUN pip install --no-cache-dir --break-system-packages trimesh flask-jsonrpc
+# What Debian does not have. All three are what the analysis is handed rather
+# than what it computes with:
+#
+#   * `cadquery-ocp` is OpenCASCADE's Python binding, and it is here because of
+#     how an implementation receives its shape. PartCAD sends geometry as a
+#     serialized BREP and the sandbox rebuilds it (`wrappers/ocp_serialize.py`),
+#     so a sandbox with no OCCT cannot read its own input -- the wrapper fails
+#     before the implementation's first line runs. Pinned to the version the
+#     repository pins in `pyproject.toml`, so that what a container decodes and
+#     what a Python sandbox decodes are the same OCCT.
+#   * trimesh writes the glTF the analysis answers with.
+#   * flask-jsonrpc is what serves this image (see `pc-container-json-rpc.py`).
+#
+# All three publish wheels for both architectures -- which is exactly why they
+# can come from pip while gmsh and `ccx` cannot.
+RUN pip install --no-cache-dir --break-system-packages \
+    cadquery-ocp==7.9.3.1.1 \
+    trimesh \
+    flask-jsonrpc
 
-# Prove the image is what it claims before it is ever published. Every one of
-# these is a thing this image exists to provide, and a silent absence would
-# surface much later as an analysis that "did not run" on a machine the user
-# had every reason to think was equipped. An image that cannot mesh or solve
-# should fail to build, not fail in front of a user.
-RUN python3 -c "import gmsh; gmsh.initialize(); gmsh.finalize(); print('gmsh ok')" \
-  && python3 -c "import numpy, trimesh; print('numpy', numpy.__version__, 'trimesh', trimesh.__version__)" \
-  && ( ccx -v || ccx --version || true ) \
-  && command -v ccx
+# Prove the image is what it claims before it is ever published -- that it can
+# decode a shape, mesh it and solve it. `verify.py` says what each check is for
+# and why the first one is not as redundant as it looks. It is run here and
+# removed in the same layer: it is a check on the build, not a part of the
+# image.
+COPY calculix/verify.py /tmp/verify.py
+RUN python3 /tmp/verify.py && rm /tmp/verify.py
 
 # What this image is for. The allowlist is the whole of the RPC server's
 # isolation, and it is per-image on purpose: a caller names a command and the
