@@ -255,12 +255,15 @@ add_metadata("partcad")
 # OpenSCAD is deliberately NOT declared here, even though the bundle ships it:
 # `build.sh` copies it into the bundle after this spec has been built.
 #
-# Declaring the unpacked AppImage in `datas` does not keep PyInstaller's hands
-# off it. Shared libraries found among data files are reclassified as binaries
-# and collected into the top level of the bundle, so OpenSCAD's Qt, ICU and
-# glib end up beside the ones Python needs -- on the frozen application's own
-# library search path, and duplicated, at ~100MB. Copying the tree in
-# afterwards keeps OpenSCAD's libraries where only OpenSCAD will find them.
+# Declaring the payload in `datas` does not keep PyInstaller's hands off it --
+# the unpacked AppImage on Linux, the portable build on Windows, the
+# `OpenSCAD.app` on macOS. Shared libraries found among data files are
+# reclassified as binaries and collected into the top level of the bundle, so
+# OpenSCAD's Qt, ICU and glib end up beside the ones Python needs -- on the
+# frozen application's own library search path, and duplicated, at ~100MB.
+# Copying the tree in afterwards keeps OpenSCAD's libraries where only OpenSCAD
+# will find them, which on macOS is what `@executable_path/../Frameworks` inside
+# the `.app` resolves to.
 
 ############################################  COLLECTED TESTS  ###############################################
 

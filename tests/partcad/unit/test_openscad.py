@@ -6,6 +6,7 @@
 
 import os
 import stat
+import sys
 
 import pytest
 
@@ -50,7 +51,7 @@ def test_bundled_executable_is_none_outside_a_bundle(tmp_path, monkeypatch):
 
 
 def test_bundled_executable_is_none_when_the_bundle_carries_no_payload(bundle):
-    """macOS bundles, and hand-made ones, are built without OpenSCAD."""
+    """Linux arm64 bundles, and hand-made ones, are built without OpenSCAD."""
     assert pc_openscad.find_bundled_executable() is None
 
 
@@ -186,3 +187,29 @@ def test_macos_still_installs_when_homebrew_is_present(homebrew):
     """The guard does not get in the way of the machines that can install."""
     assert pc_openscad.MacOpenSCADCheck().fix() is True
     assert [command for command, _ in homebrew] == [["brew", "install", "--cask", "openscad@snapshot"]]
+
+
+# Where each platform's payload sits inside the bundle. Every test above builds
+# its payload from BUNDLED_SUBPATH, so they would all agree with a wrong value;
+# what the layout *is* comes from an artifact none of them has, and on a platform
+# the test run is not on. So all three are pinned here, and `build.sh` stages and
+# asserts the same paths -- a change to one and not the other is a bundle whose
+# OpenSCAD PartCAD cannot find.
+
+
+@pytest.mark.parametrize(
+    "os_name, platform_name, expected",
+    [
+        ("nt", "win32", ("openscad", "openscad.exe")),
+        ("posix", "darwin", ("openscad", "OpenSCAD.app", "Contents", "MacOS", "OpenSCAD")),
+        ("posix", "linux", ("openscad", "AppRun")),
+    ],
+)
+def test_the_payload_layout_is_the_one_build_sh_stages(os_name, platform_name, expected):
+    """macOS keeps the whole '.app': the binary inside needs the bundle around it."""
+    assert pc_openscad.bundled_subpath(os_name, platform_name) == expected
+
+
+def test_the_layout_in_use_is_the_one_for_this_platform():
+    """The module-level constant is that function applied to this process."""
+    assert pc_openscad.BUNDLED_SUBPATH == pc_openscad.bundled_subpath(os.name, sys.platform)

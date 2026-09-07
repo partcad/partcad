@@ -183,8 +183,8 @@ That downloads the bundle for the current operating system and architecture from
 Nothing else on the system is touched, and no ``sudo`` is asked for. If ``~/.local/bin`` is not on your
 ``PATH``, the installer says so and prints the line to add.
 
-The bundle is around 200MB unpacked and 63MB to download on Linux x86_64, and about half that on macOS and
-on Linux arm64, which carry no bundled OpenSCAD. It carries no CAD kernel: PartCAD builds every shape in a
+Most of the bundle is the OpenSCAD it carries, so that is what its size follows: the Linux arm64 build, which
+carries none, is roughly half the size of the others. It carries no CAD kernel: PartCAD builds every shape in a
 sandbox it provisions itself -- and it carries the conda that provisions it, so nothing has to be installed
 first, and the ``conda`` sandbox is what you get rather than the ``venv`` fallback the wheels use when there
 is no conda (see :ref:`python-sandbox`). ``pc healthcheck`` reports what this machine is missing.
@@ -374,9 +374,9 @@ The exception is ``MAMBA_ROOT_PREFIX``: if you already have that set -- because 
 the bundled copy uses your prefix rather than making a second cache of its own, and then none of the sentence
 above applies to it. It is your cache, in your location, and PartCAD neither reports nor deletes it.
 
-On Linux x86_64 and on Windows it also carries **OpenSCAD**, which PartCAD runs as an external program to
+Every bundle but Linux arm64 also carries **OpenSCAD**, which PartCAD runs as an external program to
 build ``.scad`` parts. The bundled copy is used in preference to any OpenSCAD installed on the machine, so that the
-bundle behaves the same everywhere rather than depending on which version a given host happens to have. Two
+bundle behaves the same everywhere rather than depending on which version a given host happens to have. Three
 consequences worth knowing:
 
 * A newer OpenSCAD installed on the machine is *not* used by default. To use the host's OpenSCAD instead of
@@ -387,12 +387,15 @@ consequences worth knowing:
   installations have these; a stripped-down container or a minimal server may not, and there the bundled
   OpenSCAD will not start -- pass ``--ignore-bundled-openscad`` to fall back to a host OpenSCAD if you have
   one.
+* The bundled OpenSCAD is a development snapshot rather than the last release, and it is the *same*
+  snapshot on every platform, so a ``.scad`` part renders the same wherever you run ``pc``. The last
+  release, 2021.01, could not be that shared version: it predates Apple silicon and ships an Intel-only
+  build that would quietly require Rosetta 2, and Homebrew disabled it in September 2026 for failing the
+  macOS Gatekeeper check. It is a considerably newer OpenSCAD than 2021.01, so a part may render
+  differently than it did with a 2021.01 you had installed.
 
-The macOS bundles carry no OpenSCAD: the last OpenSCAD release predates Apple silicon and ships an
-Intel-only build, which would quietly require Rosetta 2. The Linux arm64 bundles carry none for the same
-reason -- upstream publishes that release for x86_64 only. The Intel macOS bundle carries none either, so
-that both macOS builds behave the same way. On all of them, install OpenSCAD yourself and PartCAD will use
-it.
+The Linux arm64 bundles carry no OpenSCAD: upstream builds no current arm64 snapshot. Install OpenSCAD
+yourself there and PartCAD will use it.
 
 One thing is deliberately not in the bundle, because PartCAD runs it as an external program rather than
 importing it, exactly as the wheels do: **git**, used for your git configuration when packages are fetched
@@ -595,8 +598,9 @@ What is inside
   Studio Code is built from, with its extensions coming from `Open VSX <https://open-vsx.org/>`_.
 * The PartCAD extension -- which carries the PartCAD Viewer itself -- and the extensions PartCAD works
   with: Python, YAML and the rest of the list in ``.vscode/extensions.json``.
-* The PartCAD command line tools, the same ones the standalone bundle installs, including OpenSCAD on
-  Linux and Windows.
+* The PartCAD command line tools, the same ones the standalone bundle installs, including the OpenSCAD they
+  bundle -- on every platform the IDE ships for, since the one build that carries none is Linux arm64 and
+  there is no Linux arm64 IDE.
 
 Pylance is not among them: it is proprietary and licensed for use only with Microsoft's products.
 Open-source type checking for Python is included in its place.
