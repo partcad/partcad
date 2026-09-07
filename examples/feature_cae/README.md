@@ -26,6 +26,15 @@ Both need a solver installed. For the default implementation that means `ccx` on
 `conda install -c conda-forge calculix`. Without one the analysis does not run,
 and `pc test` says so and moves on rather than failing the part.
 
+**Not on 64-bit ARM Linux.** The mesher the CalculiX implementation uses, `gmsh`,
+publishes no linux aarch64 wheel and no source distribution — in any release —
+so on an ARM Linux machine or CI runner there is nothing to install and nothing
+to build. These two parts are reported as not analysable there, the same way
+they are on a machine with no `ccx`. Apple silicon is fine: macOS reports
+`arm64`, which gmsh does publish. See "Platforms" in
+[`partcad-cae-calculix`](https://github.com/partcad/partcad-cae-calculix)'s
+README.
+
 > **A temporary arrangement, and why it is here.** `//pub/feature/cae/calculix`
 > is registered on the public index's `devel` branch and has not reached `main`,
 > which is what `examples/partcad.yaml` and every `pc init` project pin — so the
