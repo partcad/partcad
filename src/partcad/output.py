@@ -137,7 +137,7 @@ def is_document_format(format_name: str, section_obj) -> bool:
 # The first group picks the implementation, the second places the output file.
 # What is left over is what the implementation is handed, so adding a field here
 # hides it from every implementation - including the ones packages write.
-IMPLEMENTATION_KEYS = frozenset({"path", "package", "pythonRequirements", "pythonVersion", "decode"})
+IMPLEMENTATION_KEYS = frozenset({"path", "package", "pythonRequirements", "pythonVersion", "decode", "container"})
 OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
 RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 
@@ -230,6 +230,45 @@ class Implementation:
             or getattr(self.project, "python_version_declared", None)
             or sandbox_versions.DEFAULT_PYTHON_VERSION
         )
+
+    @property
+    def container(self) -> Optional[dict]:
+        """The container this implementation runs in, if it does not run in a sandbox.
+
+        A Python sandbox can only bring what pip can install, and some
+        implementations need more than that: a native solver, a mesher with no
+        wheel for this platform, a whole third-party application. Such an
+        implementation declares an image instead, and PartCAD runs it there --
+
+            cae:
+              fea:
+                path: fea_calculix.py
+                container:
+                  image: ghcr.io/partcad/partcad-container-calculix:0.8.55
+
+        which is how a plugin becomes responsible for its own dependencies
+        rather than asking every user to install them. `port` defaults to the
+        5000 that `tools/containers/_common/pc-container-json-rpc.py` listens
+        on; `name` defaults to one derived from the image, so that two packages
+        naming the same image share a container rather than starting two.
+
+        The implementing package's declaration and nobody else's, for the reason
+        `python_version()` gives at length: this describes what *that* package's
+        script needs to run, and a caller asking for an analysis has no opinion
+        about it worth reading.
+        """
+        declared = self._declared("container")
+        if not declared:
+            return None
+        if isinstance(declared, str):
+            # The short form: the image and nothing else.
+            declared = {"image": declared}
+        if not isinstance(declared, dict) or not declared.get("image"):
+            raise ValueError(
+                "The '%s' implementation declares a 'container:' that names no 'image:': %r"
+                % (self.format_name, declared)
+            )
+        return dict(declared)
 
     @property
     def python_requirements(self) -> list:

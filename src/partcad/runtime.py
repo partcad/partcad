@@ -77,6 +77,50 @@ async def wait_for_port(host, port, timeout=30):
                 await writer.wait_closed()
 
 
+class SandboxUnavailable(Exception):
+    """The sandbox mechanism an implementation asked for is not on this machine.
+
+    The one thing `pc test` may skip on, and the reason it is the only one: it
+    is not a statement about the implementation, which may be perfectly good,
+    nor about the part. It is the absence of a *runtime*, and PartCAD is the
+    only thing that can tell -- the implementation never gets to run, so it
+    cannot report it itself.
+
+    Everything else an implementation might fail on -- no solver, no mesher, a
+    package that will not install, a crash -- happens once the sandbox is there,
+    and is a failure. See `partcad.test.cae.CaeTest.test()`.
+    """
+
+
+def docker_available() -> bool:
+    """Whether a container sandbox can be started here.
+
+    Asked before an implementation that declares one is run, and again by
+    `pc test` to decide whether it is looking at an unavailable runtime or a
+    failing implementation. Cached: this shells out to the daemon, and a run
+    over a package tree would otherwise ask once per part.
+
+    Deliberately a real ping rather than "is the module importable" or "is
+    /var/run/docker.sock there": the `docker` package installs with PartCAD on
+    every platform, and a socket can exist with nothing behind it. The question
+    is whether a container can be started, and only the daemon answers that.
+    """
+    global _docker_available
+    if _docker_available is None:
+        try:
+            docker.from_env().ping()
+            _docker_available = True
+        except Exception as e:
+            pc_logging.debug("No container runtime on this machine: %s" % e)
+            _docker_available = False
+    return _docker_available
+
+
+# None until something asks. Not reset: a run that started without Docker and
+# would have finished with it is not worth the ping per part.
+_docker_available = None
+
+
 class Runtime:
     @staticmethod
     def get_internal_state_dir(internal_state_dir):
