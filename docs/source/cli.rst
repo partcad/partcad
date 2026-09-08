@@ -48,6 +48,11 @@ Host commands
     the local cache.
   - ``pc system reset`` — Reset all internal state maintained by PartCAD, for example to clear a corrupted
     cache.
+  - ``pc system prune`` — Remove the containers and images PartCAD created for the ``docker`` sandbox.
+    Only what carries PartCAD's labels (see ``tools/containers/README.md``), so an image somebody else put on
+    the machine is never touched — and neither is a third-party sandbox image whose author did not adopt the
+    convention, which has to be removed by hand. ``--stale`` narrows it to what is out of date: images built
+    for another PartCAD release, and containers nothing is using.
   - ``pc system set`` — Set system-wide settings, such as the telemetry type, environment, and Sentry DSN.
   - ``pc system telemetry`` — Inspect or clear locally stored telemetry data (``info``, ``clear``).
 
