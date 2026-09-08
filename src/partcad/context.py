@@ -162,6 +162,9 @@ class Context:
         # Python versions already reported as held down to MAX_PYTHON_VERSION_CAD,
         # so the warning is said once rather than once per part.
         self.python_versions_held = set()
+        # Whether the 'useDockerPython' deprecation has been said, so that a
+        # command over a tree of parts says it once rather than per part.
+        self.use_docker_python_warned = False
         self.runtimes_javascript = {}
         self.runtimes_javascript_lock = threading.Lock()
 
@@ -1224,6 +1227,46 @@ class Context:
         )
 
     # TODO(clairbee): convert it into: ctx.get_runtime("python", "conda", {"version": "3.11"})
+    def preferred_python_sandbox(self) -> str:
+        """Which sandbox to build Python environments in, when nobody has said.
+
+        'docker', where a container runtime answers. What conda provisions
+        depends on the host -- its channels, its package cache, its platform --
+        and what an image carries does not, so the container is the one whose
+        result is the same everywhere. Failing that, whatever the configuration
+        worked out at startup, which is conda where the host has it and a
+        virtual environment otherwise.
+
+        Asked here rather than when the configuration is read because asking
+        means talking to a container daemon, and a command that never builds a
+        sandbox -- 'pc list', 'pc info', anything answered from the cache --
+        should not pay for an answer it does not use. 'runtime.docker_available'
+        caches, so a command that does build one asks once.
+
+        A stated preference is obeyed. That is the whole point of tracking
+        whether there was one: a machine with Docker running is not thereby a
+        machine whose owner wants their parts rendered in it.
+        """
+        if self.user_config.python_sandbox_declared:
+            return self.user_config.python_sandbox
+
+        if getattr(self.user_config, "use_docker_python_declared", False):
+            # The option this replaced. It never had a consumer -- nothing read
+            # it but the tag of the same name -- so honouring it here is what it
+            # always claimed to do, and saying so is what stops two switches
+            # from disagreeing about one thing.
+            if not self.use_docker_python_warned:
+                self.use_docker_python_warned = True
+                pc_logging.warning(
+                    "'useDockerPython' is deprecated and is being read as 'pythonSandbox: docker'."
+                    " Set 'pythonSandbox' instead; the two are one setting now."
+                )
+            return "docker"
+
+        if self.user_config.use_docker and runtime.docker_available():
+            return "docker"
+        return self.user_config.python_sandbox
+
     def get_python_runtime(self, version=None, python_runtime=None):
         with self.runtimes_python_lock:
             if version is None:
@@ -1265,7 +1308,7 @@ class Context:
                 )
 
             if python_runtime is None:
-                python_runtime = self.user_config.python_sandbox
+                python_runtime = self.preferred_python_sandbox()
             runtime_name = python_runtime + "-" + version
             if not runtime_name in self.runtimes_python:
                 self.runtimes_python[runtime_name] = runtime_python_all.create(self, version, python_runtime)

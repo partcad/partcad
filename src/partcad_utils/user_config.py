@@ -357,6 +357,35 @@ DEFAULT_CAE_IMPLEMENTATIONS = {
 
 
 class UserConfig(vyper.Vyper):
+    # The sandbox before anything has been read. Both are replaced during
+    # '__init__'; they exist as class attributes so that the property below
+    # answers on a half-built object, which 'vyper.Vyper.__init__' can reach
+    # through '__setattr__' before ours has run.
+    _python_sandbox = None
+    _python_sandbox_declared = False
+
+    @property
+    def python_sandbox(self):
+        """Which sandbox to build Python environments in.
+
+        A property so that setting it counts as a decision. '--python-sandbox'
+        arrives this way -- the CLI assigns the attribute after the
+        configuration has been read -- and a decision, however it arrives, is
+        obeyed rather than second-guessed by the container-runtime check in
+        'Context.get_python_runtime'.
+        """
+        return self._python_sandbox
+
+    @python_sandbox.setter
+    def python_sandbox(self, value):
+        self._python_sandbox = value
+        self._python_sandbox_declared = True
+
+    @property
+    def python_sandbox_declared(self) -> bool:
+        """Whether the sandbox above was asked for rather than picked."""
+        return self._python_sandbox_declared
+
     def get_bool(self, key):
         """Read a boolean option, believing "0", "no" and "off".
 
@@ -518,6 +547,18 @@ class UserConfig(vyper.Vyper):
         self.set_default("cacheS3MaxEntrySize", 100 * 1024 * 1024)
         self.set_default("cacheS3MinEntrySize", 100)
         self.set_default("cacheDependenciesIgnore", False)
+
+        # Whether the *user* said which sandbox to use, as opposed to PartCAD
+        # picking one below. Captured before the default is set, because
+        # 'is_set()' cannot tell a default from a decision afterwards -- and the
+        # difference matters: an unstated preference is upgraded to the 'docker'
+        # sandbox where a container runtime answers (see
+        # 'Context.get_python_runtime'), and a stated one is obeyed.
+        #
+        # The environment is checked directly rather than waited for: the
+        # binding below happens after this point, and '--python-sandbox' arrives
+        # later still, through the property this sets up.
+        self._python_sandbox_declared = bool(self.is_set("pythonSandbox")) or bool(os.environ.get("PC_PYTHON_SANDBOX"))
 
         # conda first, because it is the only sandbox that can provision an
         # *interpreter*: a package asking for a Python the host does not have
@@ -752,10 +793,16 @@ class UserConfig(vyper.Vyper):
 
         # option: pythonSandbox
         # description: sandboxing environment for invoking python scripts
-        # values: [none | venv | pypy | conda]
-        # default: conda where the host has it, else venv
+        # values: [docker | none | venv | pypy | conda | remote]
+        # default: the best this machine can provide -- 'docker' where a
+        #          container runtime answers, else conda where the host has it,
+        #          else venv. Only the last two are decided here: asking whether
+        #          a container runtime answers means talking to a daemon, and a
+        #          command that never builds a sandbox should not pay for that.
+        #          'Context.get_python_runtime' asks, the first time a sandbox is
+        #          actually needed, and only when nothing was declared.
         self.bind_env("pythonSandbox", "PC_PYTHON_SANDBOX")
-        self.python_sandbox = self.get_string("pythonSandbox")
+        self._python_sandbox = self.get_string("pythonSandbox")
 
         # option: javascriptSandbox
         # description: sandboxing environment for invoking JavaScript scripts
