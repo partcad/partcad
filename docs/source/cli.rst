@@ -330,11 +330,11 @@ Object commands
   nothing a cache key is built from, so a remembered one would go on failing a part that now analyses perfectly
   well.
 
-  **One thing is reported as "not run" rather than as a failure**, and it is the only one: the implementation
-  declared a ``container:`` (see :doc:`configuration`) and this machine has no container runtime. Nothing was
-  asked, because the thing that asks could not start — so it says nothing about the implementation, which may
-  be perfectly good, and nothing about the part. It is the only remaining excuse precisely because an
-  implementation that brings a container brings everything else it needs inside it.
+  **A machine with no container runtime is not an excuse either.** An implementation naming a ``dockerImage``
+  (see :doc:`configuration`) still declares the requirements that let it run in a ``conda`` or ``venv``
+  sandbox, so a host that has the non-Python pieces installed natively runs it there. Where neither holds, the
+  failure says both remedies — start a container runtime, or install what the implementation named — because
+  either one fixes it and only the reader knows which is easier.
 
 ``pc convert``
   Convert parts, sketches, assemblies or scenes to another format and update their type in the package.

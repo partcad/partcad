@@ -2813,15 +2813,23 @@ way -- so setting them on a file type whose implementation lives elsewhere is
 not an error. It simply describes nothing: the environment being described
 belongs to the package that wrote the script.
 
-Implementations that run in a container
----------------------------------------
+Bringing dependencies pip cannot install
+----------------------------------------
 
 A Python sandbox can bring whatever pip can install, which is not everything. A
 native executable is not a Python package at all, and some Python packages
 publish no wheel for some platforms -- gmsh publishes none for 64-bit ARM Linux
-and no source distribution either. An implementation that needs one of those
-declares a ``container:`` instead of ``pythonRequirements``, and PartCAD runs it
-in that image rather than in a sandbox:
+and no source distribution either. A package that needs one of those names an
+image of its own, and PartCAD builds the ``docker`` sandbox from that image
+instead of from its own:
+
+.. code-block:: yaml
+
+  dockerImage: ghcr.io/example/solver:1a2b3c4d5e6f
+
+``dockerImage`` is read wherever ``pythonVersion`` is -- on the package, on a
+part or sketch that runs a script, on a provider, and on a file type in
+``export:``, ``render:``, ``cam:`` or ``cae:``:
 
 .. code-block:: yaml
 
@@ -2829,35 +2837,93 @@ in that image rather than in a sandbox:
     fea:
       path: solve_fea.py
       extension: glb
-      container:
-        image: ghcr.io/example/solver:1a2b3c4d5e6f
+      dockerImage: ghcr.io/example/solver:1a2b3c4d5e6f
 
-``image`` is the only required field. ``command`` names the interpreter to run
-inside it (default ``python``, resolved against the image's own allowlist), and
-``name`` the container to reuse across runs, which defaults to one derived from
-the image. A ``container:`` written as a plain string is the image:
+Like ``pythonVersion`` and ``pythonRequirements``, it is read from the
+*implementing* package and from nowhere else, for the same reason: which
+environment a script needs is known only to whoever wrote it.
 
-.. code-block:: yaml
+The image is a **runtime, not a delivery mechanism**. PartCAD mounts the package
+tree into it at run time, so a user who fetches a newer version of your package
+gets that version and not one baked into an image months ago. An image that
+carries the package's own code will be serving stale code the first time anybody
+updates.
 
-      container: ghcr.io/example/solver:1a2b3c4d5e6f
+**Declaring an image does not excuse declaring requirements.** A
+``dockerImage`` says where this runs *best*; it does not say where this runs at
+all. Every package that names one still declares the complete
+``pythonRequirements`` (or a ``requirements.txt``), so that the same package
+works in a ``conda`` or ``venv`` sandbox on a host that already has the
+non-Python pieces installed -- a workstation with ``ccx`` on its ``PATH``, a CI
+runner where the job installed them. What the image is for is everything pip
+cannot supply. What happens where neither is satisfied is an ordinary failure,
+reported with whatever the implementation said was missing.
 
-It is read from the *implementing* package, exactly as ``pythonVersion`` and
-``pythonRequirements`` are, and for the same reason: which environment a script
-needs is known only to whoever wrote it.
+.. _docker-image-architecture:
 
-PartCAD sends the implementing package and the wrapper into the container as
-whole directories at run time, so the image carries a runtime and not the
-plugin's code -- a user who fetches a newer version of the package gets that
-version, not one baked into an image. Pin an **immutable** tag: an image that
-changes under a tag changes what an analysis answers, with nothing in the
-package to say so.
+Architecture, and the name PartCAD actually pulls
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-What this costs is a container runtime. There is no fallback -- an
-implementation that declared a container is one that said a sandbox is not
-enough -- so on a machine with no Docker it cannot run at all, and that is the
-one thing ``pc test``'s analysis checks report as "not run" rather than as a
-failure (see ``pc test`` in :doc:`cli`). Everything else the implementation needs is
-inside the image, which is what makes that the *only* remaining excuse.
+PartCAD appends the architecture of the machine to the name before pulling it,
+so the name above is pulled as::
+
+    ghcr.io/example/solver:1a2b3c4d5e6f-arm64
+
+and falls back to the bare ``ghcr.io/example/solver:1a2b3c4d5e6f`` when there is
+no such tag. One line in ``partcad.yaml`` therefore covers every architecture
+your image is built for, and adding one later is a new tag rather than an edit
+to every package that uses it.
+
+Build the suffixed tags. The bare name exists so that a first experiment works
+before its author has heard of any of this, and a package that only has one is
+a package that works on the machine it was written on -- which is why the public
+index does not accept them.
+
+Pinning
+~~~~~~~
+
+Pin an **immutable** tag, whose content cannot change under it -- a digest, or a
+tag derived from a hash of what the image was built from. An image that changes
+under a fixed name changes what a part renders as, with nothing in the package
+to say so, and nothing checked into a repository can be trusted to still mean
+what it did.
+
+Test against a moving one as well. A package whose continuous integration also
+runs against, say, ``:latest`` finds out that a rebuilt base image broke it from
+its own test run, rather than from a user's bug report after it bumps the pin.
+The two uses do not conflict: what is pinned is what users get, what moves is
+what the maintainer watches. Anything whose output is compared byte for byte --
+the images checked in under ``examples/`` -- pins the immutable tag, or the
+comparison fails for changes nobody made.
+
+Building on PartCAD's images
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+PartCAD publishes a base image per supported Python version and architecture,
+carrying the interpreter and the service that runs scripts inside it. Build on
+one of those, add what pip cannot install, and the result is an image PartCAD
+knows how to talk to:
+
+.. code-block:: dockerfile
+
+  FROM ghcr.io/partcad/partcad-container-python:0.8.58-py3.11-arm64
+
+  RUN apt-get update \
+    && apt-get install --yes --no-install-recommends calculix-ccx \
+    && rm -rf /var/lib/apt/lists/*
+
+``tools/containers/README.md`` in the ``partcad`` repository states what the
+base image guarantees, what a derived image may change, and how to check that
+yours still conforms. Carry the ``partcad.*`` labels it documents: they are what
+``pc system prune`` recognises, and an image without them is one PartCAD will
+leave behind when it cleans up after itself.
+
+What it costs
+~~~~~~~~~~~~~
+
+A container runtime, and the size of the image. On a machine with neither a
+container runtime nor the dependencies installed natively, the package cannot
+run -- and says which of the two would fix it.
 
 Built-in implementations
 ------------------------
