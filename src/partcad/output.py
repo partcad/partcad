@@ -239,7 +239,7 @@ class Implementation:
               fea:
                 path: fea_calculix.py
                 container:
-                  image: ghcr.io/partcad/partcad-container-calculix:0.8.55
+                  image: ghcr.io/example/solver:1a2b3c4d5e6f
 
         which is how a plugin becomes responsible for its own dependencies
         rather than asking every user to install them. `port` defaults to the

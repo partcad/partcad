@@ -6,16 +6,15 @@ Two kinds of image live here, and they are not the same kind of thing.
   architecture. These are what the `docker` sandbox runs by default, and what a third-party package builds
   `FROM` when it needs something pip cannot install. Everything in the *Base image contract* below is a
   promise these make and that a derived image inherits.
-* **Application images** -- `partcad-container-kicad`, and the CalculiX runtime that lives in its own
-  repository now. A tool PartCAD drives rather than an interpreter it runs scripts in.
+* **Application images** -- `partcad-container-kicad`. A tool PartCAD drives rather than an interpreter it
+  runs scripts in.
+
+A plugin's runtime image belongs in the plugin's own repository, not here: an image built here would make a
+release of PartCAD carry a release of somebody else's runtime, and the two do not move together. The CalculiX
+runtime was built here and now is not — see `partcad/partcad-cae-calculix` for what that looks like.
 
 `_common/` holds what both share: `pc-container-json-rpc.py`, the service that accepts a command and runs
 it, and the requirements it needs.
-
-> **Status.** The base image contract below is what the `docker` sandbox is being built against. The image
-> matrix, the architecture suffixes and the labels are landing with it; `python/Dockerfile` today builds a
-> single 3.12 image on the dev container and predates all of this. Do not read this file as a description of
-> what is published right now.
 
 ## Base image contract
 
@@ -74,8 +73,8 @@ registry that supports it — the suffixes are the path that always works.
 
 `verify.py` beside a Dockerfile is run at build time and fails the build rather than publishing something
 broken. Write one that imports what your scripts import and exercises the tool you added —
-`calculix/verify.py`, in the CalculiX plugin's repository, builds a solid with OpenCASCADE, meshes it and
-solves a deck, which is the whole pipeline in twenty lines.
+`verify_image.py` in the CalculiX plugin's repository meshes a box and runs the solver, which is the whole
+pipeline in twenty lines.
 
 The base image ships a conformance check for the contract above; run it in your own build to find out that
 you broke the service before your users do.
