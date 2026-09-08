@@ -298,6 +298,77 @@ jobs:
             done
           done
 
+  # The one job that runs the "docker" sandbox rather than reasoning about it.
+  #
+  # Everything else about that sandbox is tested without a container, because
+  # its identity, its command line and its Windows mapping can all be decided
+  # without one. What cannot is whether the design works: that the mount lands
+  # where it is supposed to, that a virtual environment built by the image's
+  # interpreter is one the host can see, that pip writes into the mount rather
+  # than into the container, and that what a package installed survives the
+  # container being replaced. Until something runs that sequence, every one of
+  # them is an assumption -- and this job is also the only thing that builds
+  # `tools/containers/python/Dockerfile` on a change that does not touch the
+  # registry.
+  #
+  # The image is built here and never pushed. That way this tests the Dockerfile
+  # in *this* commit rather than whatever tag a previous run published, and it
+  # needs no registry credentials, so it works the same on a fork.
+  sandbox-docker:
+    name: "Sandbox (docker)"
+    needs: set-matrix
+    if: ${{ needs.set-matrix.outputs.pytest == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # A one-cell matrix because the setup actions read "matrix.os" and
+        # "matrix.python-version". One cell is the right size regardless: what
+        # is under test is the sandbox mechanism, which does not vary by
+        # interpreter, and the image matrix itself is built in
+        # "build-containers".
+        os: ["ubuntu-latest"]
+        python-version: ["3.11"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-all
+        with:
+          job: sandbox
+      - uses: ./.github/actions/setup-test
+        with:
+          job: sandbox
+
+      - name: Build the image the sandbox runs in
+        run: |
+          docker build \
+            --build-arg "PYTHON_VERSION=${{ matrix.python-version }}" \
+            --build-arg "PARTCAD_VERSION=${{ env.VERSION }}" \
+            --tag pc-sandbox-under-test:local \
+            --file tools/containers/python/Dockerfile \
+            tools/containers
+
+      # The image's own conformance check, run from outside the build as a
+      # third-party plugin author would run it. It is kept in the image for
+      # exactly this, so a failure here is the contract being broken rather than
+      # a test needing an update.
+      - name: The image keeps the base image contract
+        run: docker run --rm pc-sandbox-under-test:local python3 /pc/verify.py
+
+      - name: Run the sandbox
+        shell: bash -el {0}
+        env:
+          # Not a published tag, deliberately: a test that silently pulls a
+          # gigabyte from a registry is a test people learn to skip.
+          PC_TEST_SANDBOX_IMAGE: pc-sandbox-under-test:local
+        run: |
+          . ~/.bashrc
+          . ~/.bash_profile
+          mamba activate ${{ format('env-test-sandbox-{0}', matrix.python-version) }}
+
+          pytest tests/partcad/unit/test_docker_sandbox_live.py -v -p no:warnings
+
   set-matrix:
     name: "Set matrix"
     runs-on: ubuntu-latest
