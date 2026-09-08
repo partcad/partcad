@@ -276,8 +276,9 @@ That is what lets one package render against build123d 0.11 while another wants
                      the one with no Python.
 ``remote``           A container that does **not** share a filesystem with PartCAD: the
                      inputs are sent to it and the outputs are sent back. This is what a
-                     sandbox on another machine needs, and what ``docker`` degrades to where
-                     mounting is not possible. See :ref:`remote-sandbox` below.
+                     sandbox on another machine needs. **Not finished** -- the service that
+                     runs the containers is written and the client that talks to it is not,
+                     and asking for it says so. See :ref:`remote-sandbox` below.
 ``none``             No environment at all: scripts run on the host's own interpreter and
                      their dependencies are installed **into it**. Fast and shares whatever
                      is already there, at the price of writing the CAD stack into the Python
@@ -336,10 +337,22 @@ anywhere -- another machine, another architecture, a build farm.
 
 It is served by ``partcad-service-remote-docker``, which accepts those requests,
 starts and reuses a container per image, multiplexes callers onto it and retires
-it when nobody is using it. Today the transfer is a whole directory at a time;
-the intent is to replace that with a filesystem the container mounts and pulls
-files through one at a time, at which point ``remote`` becomes as cheap as
-``docker`` and stops being a trade.
+it when nobody is using it. That service exists; run it with ``--host`` and
+``--port`` to say where, and bind it to loopback unless the machines that may use
+it are the ones that can reach it, because it runs commands and has no
+authentication of its own.
+
+What is not written yet is the client half, and the reason is worth stating: a
+sandbox is a virtual environment on a disk, and for ``remote`` that disk cannot
+be the caller's. Where it lives instead -- a volume the service keeps per image,
+or the service running the ``docker`` sandbox on its own behalf -- decides how
+much of the provisioning logic moves across, and that is a decision rather than a
+detail.
+
+Today the transfer would be a whole directory at a time; the intent is to replace
+that with a filesystem the container mounts and pulls files through one at a
+time, at which point ``remote`` becomes as cheap as ``docker`` and stops being a
+trade.
 
 Containers PartCAD manages
 --------------------------

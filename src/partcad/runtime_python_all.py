@@ -29,5 +29,21 @@ def create(ctx, version, python_runtime=None, image=None):
         return runtime_python_pypy.PyPyPythonRuntime(ctx, version)
     elif python_runtime == "conda":
         return runtime_python_conda.CondaPythonRuntime(ctx, version)
+    elif python_runtime == "remote":
+        # Half of this exists. `partcad-service-remote-docker` runs the
+        # containers and forwards the requests; what is not written is the
+        # client that sends them, because where its virtual environment lives
+        # is a decision rather than a detail -- it cannot be on the caller's
+        # disk, which is the whole point of `remote`.
+        #
+        # Said plainly rather than left to "invalid python runtime type", which
+        # is what a documented value falling through to the else branch reads
+        # as: a user who has read the documentation being told they made the
+        # name up.
+        raise Exception(
+            "The 'remote' sandbox is not finished: 'partcad-service-remote-docker' serves the "
+            "containers, but the client that talks to it is still being written. Use 'docker' for "
+            "a container on this machine, or 'conda'."
+        )
     else:
         raise Exception("ERROR: invalid python runtime type (sandbox type) %s" % python_runtime)

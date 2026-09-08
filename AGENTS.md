@@ -264,7 +264,7 @@ Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.to
 
 ### Packaging
 
-Six artifacts ship from this repo: **one Python wheel** (`partcad`, carrying all six packages and all three entry
+Six artifacts ship from this repo: **one Python wheel** (`partcad`, carrying all six packages and all four entry
 points, with a `partcad-cli` shim published beside it from `dev-tools/shim/` so the older install instruction keeps
 working), the standalone PyInstaller bundles for users who have no Python, the PartCAD IDE, which carries those
 bundles inside it, the VS Code extension's `.vsix` (with the `ide/vscode-shim` `.vsix` published beside it, for the
