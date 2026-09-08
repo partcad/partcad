@@ -1342,9 +1342,10 @@ class Context:
         would otherwise pay it per part.
 
         Raises:
-            runtime.SandboxUnavailable: there is no container runtime here. The
-                one absence `pc test` may skip on, because the implementation
-                never gets to run and so cannot report it itself.
+            runtime.SandboxUnavailable: there is no container runtime here.
+                Reported by PartCAD rather than by the implementation, which
+                never gets to run -- and reported with both ways out, since a
+                package naming an image declares how to run without one too.
         """
         image = container["image"]
         port = int(container.get("port") or 5000)

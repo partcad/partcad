@@ -1138,8 +1138,9 @@ class Shape(ShapeConfiguration):
         input_dirs = []
 
         if container:
-            # Raises SandboxUnavailable when there is no container runtime,
-            # which is the one absence 'pc test' may skip on.
+            # Raises SandboxUnavailable when there is no container runtime.
+            # A failure like any other, and the type is what earns the reader
+            # both remedies rather than one (see 'partcad.test.cae').
             runtime = await ctx.get_container_runtime(container)
             # The wrapper and the implementing package both go in whole. Sending
             # only the files the command names would leave both unable to start:

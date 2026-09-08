@@ -80,8 +80,7 @@ def test_an_analysis_is_not_a_known_output_format(ctx):
 # Resolving an implementation                                                 #
 # --------------------------------------------------------------------------- #
 
-PACKAGE = textwrap.dedent(
-    """
+PACKAGE = textwrap.dedent("""
     name: //cae-test
     parts:
       bracket:
@@ -104,8 +103,7 @@ PACKAGE = textwrap.dedent(
         # Declared without an 'extension:', which an analysis has no default for:
         # a misconfigured plugin, as opposed to a missing one.
         path: solve.py
-    """
-)
+    """)
 
 
 @pytest.fixture
@@ -357,14 +355,19 @@ def test_an_analysis_that_could_not_run_fails(package, monkeypatch, caplog):
     assert "ccx: not found" in caplog.text
 
 
-def test_no_container_runtime_is_the_one_thing_that_skips(package, monkeypatch, caplog):
-    """The plugin declared a container and this machine cannot start one.
+def test_no_container_runtime_is_a_failure_that_names_both_remedies(package, monkeypatch, caplog):
+    """It used to be the one skip. It is not one any more.
 
-    The only remaining skip, and the only one that can be justified: nothing was
-    asked, because the thing that asks could not start. It says nothing about
-    the implementation, which may be perfectly good, and nothing about the part.
-    PartCAD is also the only party able to report it -- the implementation never
-    runs, so it cannot say so itself.
+    That skip was justified while a `container:` meant "a sandbox is not
+    enough": nothing was asked, so the verdict said nothing about the
+    implementation or the part. A `dockerImage` is a different claim -- it names
+    the better sandbox while the same package's requirements say how to run
+    without one -- so a machine with no container runtime is a machine that has
+    to supply the dependencies instead, and a part that asked and got no answer
+    has failed either way.
+
+    What the reader is owed is both ways out, because either fixes it and only
+    they know which is easier where they are.
     """
     import asyncio
 
@@ -374,21 +377,22 @@ def test_no_container_runtime_is_the_one_thing_that_skips(package, monkeypatch, 
     _analysis(part, monkeypatch, error=pc_runtime.SandboxUnavailable("no container runtime is available here"))
 
     test_ctx = {}
-    with caplog.at_level("WARNING"):
-        assert asyncio.run(CaeTest(cae.FEA).test([], package, part, test_ctx)) is CaeTest.TEST_PASSED
-    assert "was not run" in caplog.text
-    # Not an error: it is not a verdict on the part.
-    assert not [record for record in caplog.records if record.levelname == "ERROR"]
-    # And not remembered: starting Docker changes no cache key.
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part, test_ctx)) is CaeTest.TEST_FAILED
+
+    assert "no container runtime is available here" in caplog.text
+    assert "start a container runtime" in caplog.text
+    assert "install what this implementation needs" in caplog.text
+    # Still not remembered: starting a container runtime changes no cache key,
+    # so a remembered verdict would outlive its reason.
     assert test_ctx.get(CaeTest.NOT_CACHEABLE) is True
 
 
-def test_a_missing_solver_is_not_a_missing_runtime(package, monkeypatch, caplog):
-    """The distinction the whole design rests on, asserted rather than assumed.
+def test_a_missing_solver_fails_the_same_way(package, monkeypatch, caplog):
+    """The two used to be opposites; now they are one answer with two remedies.
 
-    Both leave the analysis unrun, and they are opposites. No container runtime
-    means the plugin never got to try; no solver means it tried and could not,
-    which is a plugin that did not bring what it needs.
+    Both leave the analysis unrun, and under the current contract that is what
+    decides it: the part asked a question and nothing answered.
     """
     import asyncio
 
@@ -398,8 +402,25 @@ def test_a_missing_solver_is_not_a_missing_runtime(package, monkeypatch, caplog)
         assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_FAILED
 
 
+def test_only_the_missing_runtime_carries_the_remedy(package, monkeypatch, caplog):
+    """A solver the implementation could not find is the implementation's to explain.
+
+    PartCAD adds the two-remedy line only where it knows both apply -- which is
+    where the implementation never ran and so said nothing at all. Adding it to
+    every failure would tell somebody whose mesher crashed to start Docker.
+    """
+    import asyncio
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, error=Exception("ccx: not found"))
+    with caplog.at_level("ERROR"):
+        asyncio.run(CaeTest(cae.FEA).test([], package, part))
+
+    assert "start a container runtime" not in caplog.text
+
+
 def test_the_failure_names_the_implementation_and_the_platform(package, monkeypatch, caplog):
-    """"Not installed" is a puzzle; the same sentence with a machine is an answer.
+    """ "Not installed" is a puzzle; the same sentence with a machine is an answer.
 
     The reasons an analysis does not run need different actions -- install a
     solver, use another machine, fix the package -- and only the implementation
@@ -546,18 +567,15 @@ def test_the_command_line_still_outranks_the_part(package, monkeypatch):
 # relatively has to resolve it from where it is rather than from where the
 # command was run.
 
-NESTED_ROOT = textwrap.dedent(
-    """
+NESTED_ROOT = textwrap.dedent("""
     name: //cae-test
     dependencies:
       pkg:
         type: local
         path: pkg
-    """
-)
+    """)
 
-NESTED_PACKAGE = textwrap.dedent(
-    """
+NESTED_PACKAGE = textwrap.dedent("""
     dependencies:
       plugin:
         type: local
@@ -572,17 +590,14 @@ NESTED_PACKAGE = textwrap.dedent(
             - m3-screw
           load:
             hook: 5 kg
-    """
-)
+    """)
 
-NESTED_PLUGIN = textwrap.dedent(
-    """
+NESTED_PLUGIN = textwrap.dedent("""
     cae:
       fea:
         path: solve.py
         extension: vtu
-    """
-)
+    """)
 
 
 @pytest.fixture
@@ -635,8 +650,7 @@ def test_the_check_resolves_a_relative_plugin_from_a_tree_root(nested, monkeypat
     assert asyncio.run(CaeTest(cae.FEA).test([], ctx, part)) is CaeTest.TEST_PASSED
 
 
-ROOT_ONLY_PACKAGE = textwrap.dedent(
-    """
+ROOT_ONLY_PACKAGE = textwrap.dedent("""
     dependencies:
       plugin:
         type: local
@@ -651,8 +665,7 @@ ROOT_ONLY_PACKAGE = textwrap.dedent(
             - m3-screw
           load:
             hook: 5 kg
-    """
-)
+    """)
 
 
 def test_a_relative_plugin_resolves_from_an_unnamed_root_package(tmp_path):
@@ -690,9 +703,7 @@ def test_a_relative_name_on_the_command_line_is_still_the_user_s(nested):
     """
     ctx, part = nested
     with pytest.raises(Exception, match="//cae-test/plugin"):
-        part._analysis_implementation(
-            ctx, cae.FEA, "plugin:fea", declared=cae.config_of(part, cae.FEA).implementation
-        )
+        part._analysis_implementation(ctx, cae.FEA, "plugin:fea", declared=cae.config_of(part, cae.FEA).implementation)
 
 
 def test_the_cache_key_follows_the_plugin_the_part_names(package, monkeypatch):
@@ -922,12 +933,13 @@ def test_the_check_prints_that_report_rather_than_writing_its_own(package, monke
     assert caplog.text.count("could not be run by") == 1
 
 
-def test_no_container_runtime_is_not_dressed_up_as_a_failure(package, monkeypatch):
-    """The one skip has to reach the check as itself.
+def test_no_container_runtime_reaches_the_check_as_itself(package, monkeypatch):
+    """The type is what the check reads, even though the verdict is now the same.
 
     `CaeTest` tells "the implementation could not do it" from "the thing that
-    runs implementations is not here" by the exception's type, so wrapping this
-    one in a report would turn the only justified skip into a failure.
+    runs implementations is not here" by the exception's type, and attaches the
+    two-remedy line to the second. Wrapping this one in a report on the way up
+    would lose that and leave the reader one way out of two.
     """
     import asyncio
 

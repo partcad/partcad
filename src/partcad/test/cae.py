@@ -138,13 +138,19 @@ class CaeTest(Test):
         CFD implementation that never converges, and a plugin that cannot be
         installed on this platform at all.
 
-        **One thing is still a skip**, and it is the only one: the implementation
-        declared a container and this machine has no container runtime. Nothing
-        was asked, because the thing that asks could not start. That is not the
-        implementation failing -- it may be perfectly good -- and PartCAD is the
-        only party that can report it, since the implementation never runs. A
-        plugin that brings its own dependencies is what makes this the only
-        remaining excuse: everything else it needs, it carries.
+        **Nothing is a skip any more**, including a machine with no container
+        runtime. That one was a skip while a `container:` meant "a sandbox is
+        not enough" -- nothing was asked, because the thing that asks could not
+        start, so the verdict said nothing about the implementation or the part.
+        A `dockerImage` is a different claim: it names the sandbox to prefer,
+        while the same package's requirements say how to run without one. So a
+        machine with no container runtime is a machine that has to supply the
+        dependencies itself, and a part that asked a question and got no answer
+        has failed either way.
+
+        What that absence still earns is a sentence PartCAD has to write, since
+        the implementation never ran to write one: both remedies, because either
+        fixes it and only the reader knows which is easier where they are.
 
         The consequence is real and is the point: declaring `fea:` in a shared
         package makes `pc test` fail for everyone who has not installed what the
@@ -209,21 +215,34 @@ class CaeTest(Test):
         except pc_cae.CaeConfigError as e:
             return self.failed(shape, "%s", e)
         except pc_runtime.SandboxUnavailable as e:
-            # The one skip. Not "the implementation could not do it" but "the
-            # thing that runs implementations is not here": the plugin declared
-            # a container and this machine has no container runtime, so nothing
-            # was ever asked and nothing can report on the part. Skipping is
-            # right precisely because it says nothing about the implementation
-            # or the part -- unlike every other way of not producing an answer,
-            # which is the implementation failing and fails the check.
+            # Not a skip, and this used to be one. It was justified while a
+            # `container:` meant "a sandbox is not enough": nothing was asked,
+            # because the thing that asks could not start, so the verdict said
+            # nothing about the implementation or about the part.
             #
-            # Uncacheable for the same reason the failures are: starting Docker
-            # changes no cache key.
+            # A `dockerImage` is not that. It says which sandbox is best, while
+            # the same package's requirements say how to run without one -- so a
+            # machine with no container runtime is a machine that has to supply
+            # the dependencies instead, and a part that asked a question and got
+            # no answer has failed either way. What is owed to the reader is not
+            # silence but both remedies, since either fixes it and only they
+            # know which is easier where they are.
+            #
+            # Still uncacheable, for the reason every failure here is: starting
+            # a container runtime changes no cache key, so a remembered verdict
+            # would outlive its reason.
             test_ctx[self.NOT_CACHEABLE] = True
-            pc_logging.warning(
-                "%s:%s: %s was not run: %s" % (shape.project_name, shape.name, self.analysis.upper(), e)
+            return self.failed(
+                shape,
+                "%s",
+                pc_cae.dysfunction_report(
+                    "%s:%s" % (shape.project_name, shape.name),
+                    self.analysis,
+                    "%s:%s" % (options_project.name, format_name),
+                    e,
+                    remedy=pc_cae.NO_RUNTIME_REMEDY,
+                ),
             )
-            return self.TEST_PASSED
         except Exception as e:
             # The implementation was asked and did not deliver. That is a
             # failure whatever the reason -- no solver, no mesher, a sandbox

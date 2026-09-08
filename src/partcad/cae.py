@@ -579,7 +579,20 @@ def normalize_findings(findings) -> list[dict]:
     return normalized
 
 
-def dysfunction_report(name: str, analysis: str, implementation: str, error: Exception) -> str:
+# What to do about an analysis that could not run because this machine has no
+# container runtime. Said by PartCAD rather than by the implementation, because
+# the implementation never ran and so cannot say anything at all -- and said as
+# two remedies rather than one, because either fixes it and only the reader
+# knows which is easier where they are.
+NO_RUNTIME_REMEDY = (
+    "Either start a container runtime, or install what this implementation needs on this machine: "
+    "an implementation that names a 'dockerImage' also declares the requirements to run without one."
+)
+
+
+def dysfunction_report(
+    name: str, analysis: str, implementation: str, error: Exception, remedy: Optional[str] = None
+) -> str:
     """Why an analysis produced no answer, as the failure a user has to act on.
 
     The reasons need different actions -- install a solver, use another machine,
@@ -593,14 +606,14 @@ def dysfunction_report(name: str, analysis: str, implementation: str, error: Exc
     work on. "gmsh is not installed" is a puzzle; the same sentence under
     `//pub/feature/cae/calculix:fea on Linux-aarch64` is an answer.
     """
-    return "\n".join(
-        [
-            "%s: %s could not be run by %s" % (name, analysis.upper(), implementation),
-            "\t%s" % str(error).replace("\n", "\n\t"),
-            "\tplatform: %s-%s, Python %s"
-            % (platform.system(), platform.machine(), platform.python_version()),
-        ]
-    )
+    lines = [
+        "%s: %s could not be run by %s" % (name, analysis.upper(), implementation),
+        "\t%s" % str(error).replace("\n", "\n\t"),
+        "\tplatform: %s-%s, Python %s" % (platform.system(), platform.machine(), platform.python_version()),
+    ]
+    if remedy:
+        lines.append("\t%s" % remedy)
+    return "\n".join(lines)
 
 
 def findings_report(name: str, analysis: str, findings: list) -> str:

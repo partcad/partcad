@@ -114,15 +114,19 @@ def pack_directory(path: str) -> str:
 class SandboxUnavailable(Exception):
     """The sandbox mechanism an implementation asked for is not on this machine.
 
-    The one thing `pc test` may skip on, and the reason it is the only one: it
-    is not a statement about the implementation, which may be perfectly good,
-    nor about the part. It is the absence of a *runtime*, and PartCAD is the
-    only thing that can tell -- the implementation never gets to run, so it
+    Not a statement about the implementation, which may be perfectly good, nor
+    about the part: it is the absence of a *runtime*, and PartCAD is the only
+    thing that can tell, since the implementation never gets to run and so
     cannot report it itself.
 
-    Everything else an implementation might fail on -- no solver, no mesher, a
-    package that will not install, a crash -- happens once the sandbox is there,
-    and is a failure. See `partcad.test.cae.CaeTest.test()`.
+    It is still a failure. `pc test` used to pass over this one, on the grounds
+    that nothing had been asked -- which held while an implementation naming a
+    container had said a sandbox was not enough. One naming a `dockerImage` has
+    not: it declares the requirements to run without one too, so a machine with
+    no container runtime is a machine that has to supply the dependencies
+    instead. What the type still buys is the message: `CaeTest` reads it to add
+    both remedies, which no other failure gets. See
+    `partcad.test.cae.CaeTest.test()`.
     """
 
 
