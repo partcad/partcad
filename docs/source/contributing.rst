@@ -432,6 +432,23 @@ not give you:
   of PartCAD's own and runs the CAD wrappers in it; it just cannot provision an *interpreter version*, so a package
   asking for a Python this host does not have renders on the host's instead and says so.
 
+.. important::
+
+  **Do not run the whole** ``behave`` **suite on such a machine — run the one feature your change touches.** Every
+  scenario takes a throwaway ``$HOME`` (the ``Given I have temporary $HOME`` in each feature's ``Background``), so a
+  scenario that renders anything builds a CAD sandbox of its own from nothing and deletes it again: roughly 2.7 GB
+  and minutes of ``pip`` each, across 166 scenarios, and several of those on disk at once under ``behavex``'s
+  parallel workers. That is hours and tens of gigabytes, and where the disk is a fixed allowance it ends in "no
+  space left on device" rather than in a result.
+
+  .. code-block:: bash
+
+    $ poetry run behave features/<name>.feature      # yes
+    $ poetry run behave                              # no, not here
+
+  A green whole-suite ``behave`` is not a prerequisite for opening a pull request from a machine like this: CI shards
+  that suite and runs it there. Say in the pull request which features you did run.
+
 .. warning::
 
   **Two wheels that install the same file can leave the checkout segfaulting, and nothing reports it.** Poetry

@@ -189,6 +189,21 @@ This is still a fallback and not a second supported environment. What it does no
   it just cannot provision an *interpreter version*, so a package asking for a Python this host does not have
   renders on the host's and says so. See `pythonSandbox` in `src/partcad_utils/user_config.py`.
 
+**Never run the whole `behave` suite here — run the one feature a change touches.** Every scenario takes a
+throwaway `$HOME` (the `Given I have temporary $HOME` in each feature's `Background`), so a scenario that
+renders anything builds a CAD sandbox of its own from nothing and deletes it afterwards: ~2.7 GB and minutes
+of `pip` each, across 166 scenarios, and several of them on disk at once under `behavex`'s parallel workers.
+That is hours and tens of GB, and on a machine with a fixed disk allowance it ends in "no space left on
+device" rather than in a result. So:
+
+```bash
+poetry run behave features/<name>.feature      # yes
+poetry run behave                              # no, not here
+```
+
+A green whole-suite `behave` is **not** a prerequisite for opening a pull request from such a machine; CI
+shards that suite and runs it there. Say in the pull request which features you did run.
+
 One failure mode is worth recognising on sight, because nothing about it names its cause: **two wheels that
 install the same file can leave the checkout segfaulting.** Poetry installs in parallel, so both workers can
 write that one path at once and what lands is a blend of the two — reported as success by both. An `import` of

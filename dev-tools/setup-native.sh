@@ -112,14 +112,21 @@ echo "    Python sandbox in use: $(poetry run python -c 'from partcad_utils.user
 
 cat <<'NOTE'
 
-Done. Run the suites with:
+Done. Run pytest with:
 
     poetry run pytest tests cad/freecad -x -p no:error-for-skips -p no:warnings --dist no
-    poetry run behave
 
 The first run that renders a scripted part is slow whatever the sandbox: it
 builds the CAD environment under ~/.partcad/sandbox and pip-installs the stack
 into it, which is minutes of work and several GB of disk, once.
+
+Do NOT run the whole `behave` suite here. Every scenario gets a throwaway $HOME,
+so each one that renders anything builds a CAD sandbox of its own from scratch
+and throws it away -- ~2.7 GB and minutes of pip, times 166 scenarios, and in
+parallel that is several of them on disk at once. Run the one feature a change
+touches instead:
+
+    poetry run behave features/<name>.feature
 
 `pre-commit` is not installed by any of this -- it comes from the dev container's
 image, and the hooks it runs (pytest, behave, shellcheck, hadolint) are the gates
