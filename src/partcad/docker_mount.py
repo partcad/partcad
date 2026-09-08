@@ -13,9 +13,13 @@ has to be translated on the way in or read back differently on the way out.
 
 That is worth more than it sounds. The sandbox directory itself lives under the
 internal state directory, so a virtual environment created inside the container
-has a ``pyvenv.cfg`` and shebang lines that are correct outside it too; a
-traceback names a file the user can open; and the whole class of bugs where a
-path is rewritten in one place and not another simply does not arise.
+is at the path the host knows it by: what is installed into it, what is cached
+about it and what locks it all agree without anyone translating. (Its
+``pyvenv.cfg`` still points at the image's interpreter, which the host does not
+have -- that environment is only ever run over there, which is the point of
+naming it after the image.) A traceback names a file the user can open, and the
+whole class of bug where a path is rewritten in one place and not another does
+not arise.
 
 Windows is the exception, and it has to be: ``C:\\Users\\you`` is not a path a
 Linux container can have. There a drive letter becomes a top-level directory the

@@ -44,6 +44,19 @@ def test_the_base_image_is_named_by_release_and_version():
     )
 
 
+def test_the_base_image_is_the_one_ci_publishes():
+    """Two places name it, and a name that drifts is a sandbox that pulls nothing.
+
+    The workflow builds `<registry>/<repository>-container-python` and tags it
+    `<release>-py<version>-<arch>`; `image_for()` asks for the same thing minus
+    the architecture, which `docker_image.candidates()` appends.
+    """
+    workflow = open(".github/workflows/test.yml").read()
+    assert "${{ github.repository }}-container-python" in workflow
+    assert runtime_python_docker.BASE_IMAGE == "ghcr.io/partcad/partcad-container-python"
+    assert "${PC_VERSION}-py${PY}-${ARCH}" in workflow
+
+
 def test_two_images_are_two_sandboxes(tmp_path):
     """What pip resolves depends on the native libraries under it.
 

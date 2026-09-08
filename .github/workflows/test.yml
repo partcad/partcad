@@ -282,6 +282,59 @@ jobs:
           cache-to: type=inline
           push: true
 
+      # The images the "docker" Python sandbox runs in, and the ones a
+      # third-party plugin builds "FROM". One per supported Python version,
+      # because the sandbox honours a package's "pythonVersion" and an image is
+      # what supplies the interpreter -- so a version PartCAD supports with no
+      # image behind it is a version the default sandbox cannot serve.
+      #
+      # A loop rather than a job matrix, because a matrix cannot be built from a
+      # workflow-level "env" without going through a job output, and this is one
+      # step in a job that already exists. "docker/build-push-action" is not used
+      # for the same reason: it is a step, and a step cannot repeat.
+      #
+      # Two tags each, and they are for different readers. The version tag is
+      # immutable and is what a package pins; the bare one moves and is what a
+      # plugin's own CI tests against, so that a rebuilt base which breaks a
+      # plugin shows up in that plugin's run rather than in a user's.
+      - name: Build the Python sandbox images
+        env:
+          PYTHONS: ${{ env.PYTHONS }}
+          DEEP: ${{ needs.set-matrix.outputs.deep }}
+          IMAGE: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-python
+          PC_VERSION: ${{ env.VERSION }}
+        run: |
+          # arm64 goes through QEMU and costs minutes per version, so a pull
+          # request builds amd64 alone and a deep run covers both. That is a real
+          # gap and not a rounding error -- an arm64 image is exactly what an
+          # Arm laptop pulls -- but the arm64 half is also what the nightly run
+          # and "#deepTest" exist for, and paying it on every push to every pull
+          # request would make this job the slowest thing in CI.
+          if [ "${DEEP}" = "true" ]; then
+            ARCHES="amd64 arm64"
+          else
+            ARCHES="amd64"
+          fi
+          echo "Architectures: ${ARCHES}"
+
+          for PY in $(echo "${PYTHONS}" | jq -r '.[]'); do
+            for ARCH in ${ARCHES}; do
+              echo "::group::python ${PY} (${ARCH})"
+              docker buildx build \
+                --platform "linux/${ARCH}" \
+                --build-arg "PYTHON_VERSION=${PY}" \
+                --build-arg "PARTCAD_VERSION=${PC_VERSION}" \
+                --tag "${IMAGE}:${PC_VERSION}-py${PY}-${ARCH}" \
+                --tag "${IMAGE}:py${PY}-${ARCH}" \
+                --cache-from "type=registry,ref=${IMAGE}:py${PY}-${ARCH}" \
+                --cache-to type=inline \
+                --push \
+                --file tools/containers/python/Dockerfile \
+                tools/containers
+              echo "::endgroup::"
+            done
+          done
+
   set-matrix:
     name: "Set matrix"
     runs-on: ubuntu-latest
