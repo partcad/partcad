@@ -89,7 +89,14 @@ def connectivity_probe():
             # before there was a proxy to consider. On a genuinely proxied
             # host the resolver is unreachable and the answer is "offline",
             # which is what a proxy nobody can address amounts to.
-            pc_logging.debug("Ignoring an unparseable HTTPS proxy setting: %s" % proxy)
+            #
+            # Without the value: a proxy URL carries credentials often enough
+            # that the parametrized test beside this one has a
+            # 'user:secret@host' among its cases, and "unparseable" is exactly
+            # the state in which nothing can be relied on to redact it. The
+            # variable's name is the actionable half anyway -- whoever set it
+            # can read it back.
+            pc_logging.debug("Ignoring an HTTPS proxy setting that could not be parsed")
     return "8.8.8.8", 53
 
 

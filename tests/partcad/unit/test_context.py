@@ -209,8 +209,15 @@ def test_an_unparseable_proxy_falls_back_rather_than_failing(monkeypatch, proxy)
 
 
 def test_an_unparseable_proxy_leaves_is_connected_answering(monkeypatch):
-    """And the caller gets an answer rather than a ValueError out of the probe."""
+    """And the caller gets an answer rather than a ValueError out of the probe.
+
+    The connection is mocked rather than made. What this asserts is about the
+    'ValueError' no longer escaping 'connectivity_probe()', and reaching that
+    over a real socket would put a three-second timeout and the runner's
+    network in the way of saying so.
+    """
     proxied(monkeypatch, "HTTPS_PROXY", "http://proxy.example:not-a-port")
     ctx = pc.Context("tests/partcad")
     ctx.connection_status = {}
-    assert ctx.is_connected() in (True, False)
+    with patch("partcad.context.socket.create_connection", side_effect=OSError):
+        assert ctx.is_connected() is False
