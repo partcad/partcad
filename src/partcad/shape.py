@@ -1147,7 +1147,7 @@ class Shape(ShapeConfiguration):
             # script (see runtime.pack_directory).
             input_dirs = [os.path.dirname(script_path), config_dir]
         else:
-            runtime = ctx.get_python_runtime(version=impl.python_version())
+            runtime = ctx.get_python_runtime(version=impl.python_version(), image=impl.docker_image)
             await runtime.prepare_for_package(impl.project)
             # Installed one at a time, not with asyncio.gather(): the order
             # matters, since build123d overwrites the OCP native module that

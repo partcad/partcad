@@ -13,11 +13,14 @@ from . import runtime_python_conda
 from . import runtime_python_venv
 
 
-def create(ctx, version, python_runtime=None):
+def create(ctx, version, python_runtime=None, image=None):
     if python_runtime is None:
         python_runtime = ctx.user_config.python_sandbox
     if python_runtime == "docker":
-        return runtime_python_docker.DockerPythonRuntime(ctx, version)
+        # 'image' is the one parameter only this sandbox can use: it is which
+        # image to build the environment in, and every other sandbox builds one
+        # out of what the host has.
+        return runtime_python_docker.DockerPythonRuntime(ctx, version, image=image)
     elif python_runtime == "none":
         return runtime_python_none.NonePythonRuntime(ctx, version)
     elif python_runtime == "venv":

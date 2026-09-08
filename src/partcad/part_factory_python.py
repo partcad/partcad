@@ -44,7 +44,7 @@ class PartFactoryPython(PartFactoryHomogen, PartFactoryFile):
         if python_version is None:
             # TODO(clairbee): stick to a default constant or configured version
             python_version = self.project.python_version
-        self.runtime = self.ctx.get_python_runtime(python_version)
+        self.runtime = self.ctx.get_python_runtime(python_version, image=self.project.docker_image_declared)
         self.session = self.runtime.get_session(source_project.name)
 
     def environment_cache_key(self) -> str | None:

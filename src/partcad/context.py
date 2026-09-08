@@ -1267,7 +1267,7 @@ class Context:
             return "docker"
         return self.user_config.python_sandbox
 
-    def get_python_runtime(self, version=None, python_runtime=None):
+    def get_python_runtime(self, version=None, python_runtime=None, image=None):
         with self.runtimes_python_lock:
             if version is None:
                 version = sandbox_versions.DEFAULT_PYTHON_VERSION
@@ -1309,9 +1309,21 @@ class Context:
 
             if python_runtime is None:
                 python_runtime = self.preferred_python_sandbox()
-            runtime_name = python_runtime + "-" + version
+
+            # The image is part of a sandbox's identity, not just of how it is
+            # reached: what pip resolves and what it compiles against depend on
+            # the native libraries beneath, and two images do not have the same
+            # ones. It is also only meaningful to the sandbox that runs in one,
+            # so a package naming an image is rendered in whatever sandbox this
+            # machine uses and the name is simply not consulted -- which is what
+            # makes 'dockerImage' a preference rather than a requirement.
+            if python_runtime != "docker":
+                image = None
+            runtime_name = python_runtime + "-" + version + ("@" + image if image else "")
             if not runtime_name in self.runtimes_python:
-                self.runtimes_python[runtime_name] = runtime_python_all.create(self, version, python_runtime)
+                self.runtimes_python[runtime_name] = runtime_python_all.create(
+                    self, version, python_runtime, image=image
+                )
             return self.runtimes_python[runtime_name]
 
     async def get_container_runtime(self, container: dict):
