@@ -128,10 +128,26 @@ def test_ctx_root_reports_the_loaded_package():
 # --------------------------------------------------------------------------- #
 
 
+def proxied(monkeypatch, variable=None, value=None):
+    """Put the environment in exactly one proxy state, clearing before setting.
+
+    The order is the whole point, and Windows is why. Environment variable names
+    are case-insensitive there and 'os.environ' upper-cases its keys, so
+    'HTTPS_PROXY' and 'https_proxy' are one variable rather than two -- and a
+    test that set one spelling and then cleared the other cleared the value it
+    had just set. It read as a proxy test on Linux and, on Windows, as a test
+    that no proxy is configured; asserting the proxy's address, it failed there
+    and only there.
+    """
+    for spelling in ("HTTPS_PROXY", "https_proxy"):
+        monkeypatch.delenv(spelling, raising=False)
+    if variable is not None:
+        monkeypatch.setenv(variable, value)
+
+
 def test_the_probe_is_a_public_resolver_when_nothing_is_proxied(monkeypatch):
     """The historical answer, and the right one on a host that dials out itself."""
-    monkeypatch.delenv("HTTPS_PROXY", raising=False)
-    monkeypatch.delenv("https_proxy", raising=False)
+    proxied(monkeypatch)
     assert pc.context.connectivity_probe() == ("8.8.8.8", 53)
 
 
@@ -156,15 +172,18 @@ def test_a_proxied_host_is_asked_about_its_proxy(monkeypatch, proxy, expected):
     PartCAD needs -- and 'is_connected()' gates the clone, so an import is then
     never attempted at all.
     """
-    monkeypatch.setenv("HTTPS_PROXY", proxy)
-    monkeypatch.delenv("https_proxy", raising=False)
+    proxied(monkeypatch, "HTTPS_PROXY", proxy)
     assert pc.context.connectivity_probe() == expected
 
 
 def test_the_lowercase_spelling_is_read_too(monkeypatch):
-    """'https_proxy' is what most tools set; both spellings are in the wild."""
-    monkeypatch.delenv("HTTPS_PROXY", raising=False)
-    monkeypatch.setenv("https_proxy", "http://proxy.example.com:3128")
+    """'https_proxy' is what most tools set; both spellings are in the wild.
+
+    On Windows this asserts something weaker than its name suggests, and
+    unavoidably so: there is only one variable there whatever its case. What it
+    still says on every platform is that the value is read.
+    """
+    proxied(monkeypatch, "https_proxy", "http://proxy.example.com:3128")
     assert pc.context.connectivity_probe() == ("proxy.example.com", 3128)
 
 
@@ -185,15 +204,13 @@ def test_the_lowercase_spelling_is_read_too(monkeypatch):
 )
 def test_an_unparseable_proxy_falls_back_rather_than_failing(monkeypatch, proxy):
     """A value PartCAD cannot read says nothing, so the resolver answers instead."""
-    monkeypatch.setenv("HTTPS_PROXY", proxy)
-    monkeypatch.delenv("https_proxy", raising=False)
+    proxied(monkeypatch, "HTTPS_PROXY", proxy)
     assert pc.context.connectivity_probe() == ("8.8.8.8", 53)
 
 
 def test_an_unparseable_proxy_leaves_is_connected_answering(monkeypatch):
     """And the caller gets an answer rather than a ValueError out of the probe."""
-    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:not-a-port")
-    monkeypatch.delenv("https_proxy", raising=False)
+    proxied(monkeypatch, "HTTPS_PROXY", "http://proxy.example:not-a-port")
     ctx = pc.Context("tests/partcad")
     ctx.connection_status = {}
     assert ctx.is_connected() in (True, False)
