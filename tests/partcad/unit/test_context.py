@@ -168,8 +168,32 @@ def test_the_lowercase_spelling_is_read_too(monkeypatch):
     assert pc.context.connectivity_probe() == ("proxy.example.com", 3128)
 
 
-def test_an_unparseable_proxy_falls_back_rather_than_failing(monkeypatch):
-    """A value with no host in it says nothing, so the resolver answers instead."""
-    monkeypatch.setenv("HTTPS_PROXY", "://")
+@pytest.mark.parametrize(
+    "proxy",
+    [
+        # No host in it at all.
+        "://",
+        # A port that is not a number. 'ParseResult.port' raises ValueError on
+        # this one, and it is raised from outside the 'except OSError' that
+        # '_check_connectivity' wraps the connection in -- so before this was
+        # caught, an environment carrying such a value did not fall back to
+        # offline, it made 'is_connected()' raise at whichever caller asked
+        # first.
+        "http://proxy.example:not-a-port",
+        "proxy.example:65536",
+    ],
+)
+def test_an_unparseable_proxy_falls_back_rather_than_failing(monkeypatch, proxy):
+    """A value PartCAD cannot read says nothing, so the resolver answers instead."""
+    monkeypatch.setenv("HTTPS_PROXY", proxy)
     monkeypatch.delenv("https_proxy", raising=False)
     assert pc.context.connectivity_probe() == ("8.8.8.8", 53)
+
+
+def test_an_unparseable_proxy_leaves_is_connected_answering(monkeypatch):
+    """And the caller gets an answer rather than a ValueError out of the probe."""
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:not-a-port")
+    monkeypatch.delenv("https_proxy", raising=False)
+    ctx = pc.Context("tests/partcad")
+    ctx.connection_status = {}
+    assert ctx.is_connected() in (True, False)

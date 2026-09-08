@@ -38,8 +38,13 @@ hashes is a file one of them overwrote, and the installed bytes must hash to one
 of the two. Matching neither is the blend above, and is the only thing this
 reports.
 
-    python3 dev-tools/check_installed_files.py           # report
-    python3 dev-tools/check_installed_files.py --fix     # report and reinstall
+    poetry run python dev-tools/check_installed_files.py         # report
+    poetry run python dev-tools/check_installed_files.py --fix   # report and reinstall
+
+Through `poetry run`, and not a bare `python3`: the environment this reads is
+whichever interpreter runs it, so a bare `python3` inspects and repairs the
+host's `site-packages` while leaving the project's `.venv` -- the one
+`poetry install` damaged -- exactly as it was.
 
 `--fix` reinstalls the distribution that has to win where `GUARD_INVALIDATED_BY`
 names one, rather than restating that here, and `--no-deps` so that repairing
@@ -130,6 +135,7 @@ def contested_paths(claims: dict[str, dict[str, str]]) -> dict[str, dict[str, st
 
 
 def site_packages_dir() -> pathlib.Path:
+    """Where the interpreter running this would import from."""
     return pathlib.Path(sysconfig.get_paths()["purelib"])
 
 
@@ -215,6 +221,7 @@ def repair(broken: list[tuple[str, dict[str, str]]], winners: set[str]) -> int:
 
 
 def main() -> int:
+    """Report, and with `--fix` repair, whatever the two checks above find."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--fix",

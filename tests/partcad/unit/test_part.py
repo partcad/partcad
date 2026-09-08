@@ -258,11 +258,16 @@ def test_part_example_kicad():
     # the outcome. Note the tags checked above cannot answer this: they report
     # whether the container was *asked for*, not whether one can be started
     # (see 'partcad.tags').
+    #
+    # Asked before the client is built, not inside the failure path: a host
+    # whose DOCKER_HOST points at something unreachable makes 'from_env().ping()'
+    # sit out the SDK's sixty-second API timeout, and waiting a minute to reach
+    # a skip that was already decided is a minute per run for nothing.
+    if not pc.user_config.use_docker:
+        pytest.skip("Docker is turned off here (useDocker), so there is nothing to run 'kicad-cli' in")
     try:
         docker.from_env().ping()
     except Exception as e:
-        if not pc.user_config.use_docker:
-            pytest.skip("Docker is turned off here (useDocker), so there is nothing to run 'kicad-cli' in")
         pytest.fail(
             "No Docker daemon to run 'kicad-cli' in: %s\n"
             "Nothing turned Docker off, so this is a machine that should have one. Start the daemon, or set"

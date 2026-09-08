@@ -68,12 +68,28 @@ def connectivity_probe():
     """
     proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
     if proxy:
-        # urlparse needs a scheme before it will look for a host, and
-        # 'proxy.example:3128' is a spelling people use: without one that
-        # parses as a path and the host comes back empty.
-        parsed = urllib.parse.urlparse(proxy if "://" in proxy else "http://" + proxy)
-        if parsed.hostname:
-            return parsed.hostname, parsed.port or 80
+        try:
+            # urlparse needs a scheme before it will look for a host, and
+            # 'proxy.example:3128' is a spelling people use: without one that
+            # parses as a path and the host comes back empty.
+            parsed = urllib.parse.urlparse(proxy if "://" in proxy else "http://" + proxy)
+            if parsed.hostname:
+                return parsed.hostname, parsed.port or 80
+        except ValueError:
+            # 'ParseResult.port' raises on a port that is not a number, and
+            # this is called from outside the 'except OSError' that
+            # '_check_connectivity' wraps the connection in -- so an
+            # unparseable variable would not have meant "offline", it would
+            # have meant 'is_connected()' raising ValueError at whichever
+            # caller asked first.
+            #
+            # Falling through is also the right answer rather than merely a
+            # safe one: a proxy setting nothing can parse says nothing about
+            # where this host's traffic goes, so ask the question this asked
+            # before there was a proxy to consider. On a genuinely proxied
+            # host the resolver is unreachable and the answer is "offline",
+            # which is what a proxy nobody can address amounts to.
+            pc_logging.debug("Ignoring an unparseable HTTPS proxy setting: %s" % proxy)
     return "8.8.8.8", 53
 
 

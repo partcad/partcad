@@ -461,8 +461,8 @@ not give you:
 
   .. code-block:: bash
 
-    $ python3 dev-tools/check_installed_files.py         # report
-    $ python3 dev-tools/check_installed_files.py --fix   # report and reinstall
+    $ poetry run python dev-tools/check_installed_files.py         # report
+    $ poetry run python dev-tools/check_installed_files.py --fix   # report and reinstall
 
   ``setup-native.sh`` runs the second of those. The dev container's image installs from
   ``.devcontainer/requirements.txt`` with pip, one wheel at a time, which is why this is not the container's problem.
