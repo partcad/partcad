@@ -177,6 +177,16 @@ Package commands
   Create a new PartCAD package (a ``partcad.yaml`` file) in the current directory. Use ``-i`` for interactive
   mode, and options such as ``--desc``, ``--url``, and ``--manufacturable`` to prefill package metadata.
 
+  It also sets up the repository the package is in: a **Render** command in ``.vscode/launch.json``, and the
+  AI agent skills that teach a coding agent to drive PartCAD -- the ``pc`` plugin in
+  ``.claude/skills/`` for Claude Code, and ``pc-``-prefixed skills in ``.cursor/skills/`` for Cursor. Both come
+  out of the installed PartCAD, so they state the version that wrote them. Neither is a reason for the command
+  to fail.
+
+  ``--no-skills`` skips the skills. ``--skills-only`` installs *just* them and touches no package at all, which
+  is how a repository that has a package already gets them, or gets a newer PartCAD's -- there is nothing to
+  create, so an existing ``partcad.yaml`` is neither read nor replaced.
+
 ``pc install``
   Download everything the current package needs to be built - the PartCAD counterpart of ``npm install``.
   It fetches all imported packages, then prepares every sketch, part and assembly by computing its cache key:

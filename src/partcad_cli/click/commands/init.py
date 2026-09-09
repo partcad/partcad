@@ -102,6 +102,21 @@ class DynamicPromptOption(click.Option):
     show_envvar=True,
 )
 @click.option(
+    "--skills/--no-skills",
+    "skills",
+    is_flag=True,
+    default=True,
+    show_envvar=True,
+    help="Install the PartCAD AI agent skills into this repository",
+)
+@click.option(
+    "--skills-only",
+    is_flag=True,
+    default=False,
+    show_envvar=True,
+    help="Install the AI agent skills only, leaving any package alone",
+)
+@click.option(
     "-p",
     "--private",
     is_flag=True,
@@ -125,6 +140,27 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
         else:
             dst_path = "partcad.yaml"
 
+        # None of these is part of the package configuration: "interactive"
+        # decided how the options above were collected, and the other two are
+        # about the repository around the package rather than the package.
+        install_skills = kwargs.pop("skills")
+        skills_only = kwargs.pop("skills_only")
+
+        if skills_only:
+            # The whole command, for a repository that has a package already --
+            # which is the common case for this, since the skills are installed
+            # by the "pc init" that created it. Nothing is written to
+            # "partcad.yaml", so an existing one is neither read nor replaced,
+            # and the package need not exist at all.
+            if not install_skills:
+                pc.logging.error("'--skills-only' and '--no-skills' ask for opposite things")
+                return
+            if not pc.install_agent_skills(os.path.dirname(os.path.abspath(dst_path))):
+                # An error here, unlike below: installing them is the whole of
+                # what was asked for, so there is nothing left that succeeded.
+                pc.logging.error("Failed installing the AI agent skills!")
+            return
+
         if kwargs.get("interactive"):
             pc.logging.info("Validating package configuration...")
             for key in kwargs:
@@ -144,6 +180,8 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
                 return
 
         pc.logging.info(f"Creating package configuration at '{dst_path}'...")
+        # "interactive" decided how the options above were collected; it is not
+        # part of the package configuration either.
         config_options = {key: value for key, value in kwargs.items() if key != "interactive"}
         if pc.create_package(dst_path, config_options):
             pc.logging.info(f"Successfully created package at '{dst_path}'")
@@ -151,6 +189,13 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
             # "Render" command, in the launch configuration of the repository
             # this was run in. It reports what it did, and a failure to add it
             # is not a failure to create the package.
-            pc.add_render_configuration(os.path.dirname(os.path.abspath(dst_path)))
+            package_dir = os.path.dirname(os.path.abspath(dst_path))
+            pc.add_render_configuration(package_dir)
+            # And what the agent in the editor needs to press it: the skills
+            # that teach it to drive PartCAD, for Claude Code and for Cursor.
+            # Reported the same way, and a failure to install them is not a
+            # failure to create the package either.
+            if install_skills:
+                pc.install_agent_skills(package_dir)
         else:
             pc.logging.error(f"Failed creating '{dst_path}'!")

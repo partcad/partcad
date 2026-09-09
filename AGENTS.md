@@ -157,6 +157,71 @@ npx --yes @devcontainers/cli exec --workspace-folder . <command>
 
 Everything below is written as the command to pass to `exec`.
 
+#### When there is no dev container to enter
+
+`devcontainer up` needs a Docker daemon, and some machines have none — a cloud agent session, a bare CI
+runner. There the container is not a thing to insist on; it is a thing that cannot happen, and the fallback is
+to install into the checkout and run everything directly:
+
+```bash
+./dev-tools/setup-native.sh          # poetry install, OpenSCAD, and what installing outside the container gets wrong
+```
+
+Then drop the `devcontainer exec` prefix from every command below and keep the `poetry run` one.
+
+That script installs **OpenSCAD** as part of setting up, because PartCAD treats it as part of the toolchain
+rather than as an optional extra — the standalone bundles carry one, `pc healthcheck` asks after it, and a
+`.scad` part fails without it rather than degrading. It stops if it cannot get one, rather than leaving that
+to be found by a test run half an hour later.
+
+This is still a fallback and not a second supported environment. What it does not give you:
+
+* **`pre-commit`.** It is installed by the container's image, not by `poetry install`, and `.git/hooks/` is
+  written by `pre-commit install` running *inside* the container. So on such a machine there is no hook to
+  fail and `git commit` silently runs no gate at all — which is worse than a hook that refuses, because
+  nothing tells you. Run what the hooks run (`pytest`, `behave`, and the linters) before committing, and read
+  their output; CI runs them either way.
+* **A Docker daemon.** Only the KiCad example needs one, and a machine without one has to *say* so:
+  `PC_USE_DOCKER=false` (or `useDocker: false`), which is what a container image built with no Docker in it
+  should carry. Say nothing and a missing daemon is a failure, deliberately — silence there would turn a
+  runner whose Docker died into a green run with one fewer test in it.
+* **conda.** Without it the Python sandbox falls back to `venv`, which is a real sandbox and passes the suite;
+  it just cannot provision an *interpreter version*, so a package asking for a Python this host does not have
+  renders on the host's and says so. See `pythonSandbox` in `src/partcad_utils/user_config.py`.
+
+**Never run the whole `behave` suite here — run the one feature a change touches.** Every scenario takes a
+throwaway `$HOME` (the `Given I have temporary $HOME` in each feature's `Background`), so a scenario that
+renders anything builds a CAD sandbox of its own from nothing and deletes it afterwards: ~2.7 GB and minutes
+of `pip` each, across 166 scenarios, and several of them on disk at once under `behavex`'s parallel workers.
+That is hours and tens of GB, and on a machine with a fixed disk allowance it ends in "no space left on
+device" rather than in a result. So:
+
+```bash
+poetry run behave features/<name>.feature      # yes
+poetry run behave                              # no, not here
+```
+
+A green whole-suite `behave` is **not** a prerequisite for opening a pull request from such a machine; CI
+shards that suite and runs it there. Say in the pull request which features you did run.
+
+One failure mode is worth recognising on sight, because nothing about it names its cause: **two wheels that
+install the same file can leave the checkout segfaulting.** Poetry installs in parallel, so both workers can
+write that one path at once and what lands is a blend of the two — reported as success by both. An `import` of
+a native module like that dies inside the dynamic loader, so pytest *collection* ends with `Fatal Python
+error: Segmentation fault` and no failing test to point at. `dev-tools/check_installed_files.py --fix` detects
+and repairs it, and `setup-native.sh` runs it. Do not go looking for a bug in the change under test.
+
+The pair that did this was `cadquery-ocp` and `cadquery-ocp-novtk`, both of which ship one 160 MB
+`OCP/OCP.cpython-*.so`. `cadquery-ocp` is no longer named in `pyproject.toml` — nothing here imports
+`cadquery` in process, and build123d pulls the novtk build in regardless — so one distribution owns the file
+and this cannot happen to *that* file any more. The checker stays because the next such pair will not
+announce itself either.
+
+It also catches the other half of it, which **an existing checkout hits exactly once**: an uninstall deletes
+the files its RECORD names, including the ones the wheel beside it also installed. So `poetry sync` removing
+`cadquery-ocp` takes `OCP/` away from `cadquery-ocp-novtk`, which stays installed, and `import OCP` stops
+working with nothing said about it anywhere. `check_installed_files.py --fix` reports and repairs that too.
+
 ### Environment setup
 
 Dependencies are already installed in the image. Only re-run this if you change `pyproject.toml`:
@@ -290,7 +355,15 @@ the same way, by `.github/workflows/plugin.yml`, and published two ways by `depl
 the release, and the `plugin-dist` branch, which is what `/plugin marketplace add partcad/partcad@plugin-dist`
 reads. It has no version of its own — `plugin.json` is in `dev-tools/bumpversion.toml` like everything else —
 and it must not get one back: it had one, and stayed at 0.1.0 for twenty-three releases because publishing it
-meant remembering a tag nobody pushed. See `ai-agents/README.md`. The snap carries whatever the bundle carries,
+meant remembering a tag nobody pushed. **The skills it is made of also ship in the wheel**, through two symlinks
+under `src/partcad/ai_agents` into `ai-agents/`, because `pc init` installs them into the repository it creates a
+package in and the wheel is what a user has: the plugin for Claude Code, `pc-`-prefixed copies for Cursor. The
+skills stay at the top of the repository where a visitor finds them, and there is one copy of each file.
+So `ai-agents/common` is *both* the plugin and the distribution, which is why `.github/actions/changed-scopes`
+classifies it into both buckets, why `pyproject.toml` and `dev-tools/pyinstaller/partcad.spec` both name it as
+data, and why a new file under a skill has to be covered by the `package-data` patterns or it is simply absent
+from what gets installed. See `ai-agents/README.md`. The snap
+carries whatever the bundle carries,
 so it needs nothing extra of its
 own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
 Its build tooling lives beside that README, but the recipe, `.snapcraft.yaml`, stays at the repository root and

@@ -217,8 +217,9 @@ def test_only_the_root_dependency_files_are_dependencies(tmp_path, path):
         (".claude/skills/steward/SKILL.md", "docs"),
         ("openspec/whatever.md", "docs"),
         # The Claude Code plugin, which is Markdown that ships.
-        ("ai-agents/common/skills/render/SKILL.md", "ai"),
         (".claude-plugin/marketplace.json", "ai"),
+        ("ai-agents/scripts/materialize.sh", "ai"),
+        ("ai-agents/README.md", "ai"),
         # The dev container.
         (".devcontainer/devcontainer.json", "devcontainer"),
         # The editor.
@@ -263,9 +264,27 @@ def test_documentation_alone_runs_only_the_documentation(tmp_path):
 
 
 def test_the_plugin_alone_runs_only_the_plugin(tmp_path):
-    subjects, _ = classify(tmp_path, ["ai-agents/common/skills/render/SKILL.md"])
+    subjects, _ = classify(tmp_path, ["ai-agents/scripts/materialize.sh"])
     assert subjects["plugin"]
     assert not any(v for k, v in subjects.items() if k != "plugin"), subjects
+
+
+def test_a_skill_is_the_plugin_and_the_wheel_both(tmp_path):
+    """The skills are shipped *in* the wheel, so they are source as well.
+
+    They are the one thing in this repository that two subjects are built out
+    of -- "src/partcad/ai_agents" symlinks into "ai-agents/common" -- and the
+    rule for them sits above the general "ai-agents/*" one for that reason:
+    matched there instead, a new skill would be validated as a plugin by a run
+    that never built it into a wheel.
+    """
+    _, buckets = classify(tmp_path, ["ai-agents/common/skills/render/SKILL.md"])
+    assert buckets == {"ai", "code"}
+
+    subjects, _ = classify(tmp_path, ["ai-agents/claude/.claude-plugin/plugin.json"])
+    assert subjects["plugin"]
+    assert subjects["wheel"]
+    assert subjects["pytest"]
 
 
 def test_the_dev_container_alone_runs_it_but_not_pytest_inside_it(tmp_path):
@@ -334,6 +353,10 @@ def test_every_top_level_entry_is_classified_deliberately(tmp_path):
         "CLAUDE.md": {"docs"},
         "LICENSE.txt": {"docs"},
         "README.md": {"docs"},
+        # Split: "ai-agents/common" and the plugin manifest are in the wheel
+        # too (see the test above); the rest of the directory is the plugin
+        # alone. "ai-agents/file.txt", which the loop below probes with, is the
+        # latter.
         "ai-agents": {"ai"},
         "apache20.svg": {"docs"},
         "behave.ini": {"code"},

@@ -13,6 +13,7 @@ import sys
 import time
 import socket
 import threading
+import urllib.parse
 from typing import Optional, Any
 
 from .cache import Cache
@@ -39,6 +40,66 @@ from .plugin_request_provider_quote import ProviderRequestQuote
 from .plugin_provider_data_cart import *
 from . import telemetry
 from .test.all import tests as all_tests
+
+
+def connectivity_probe():
+    """The one address to ask "is there a network out of here?".
+
+    A public DNS resolver, historically, and that is the right question on a
+    host whose packets go straight out. It is the wrong one on a host whose
+    traffic is confined to an HTTP proxy -- a corporate network, a container,
+    the sandbox a cloud coding agent runs in. There nothing but the proxy
+    answers: 53 to 8.8.8.8 goes nowhere, while git and every download go
+    through the proxy and work, so PartCAD calls itself offline in an
+    environment where it can fetch everything it needs.
+
+    What follows is silent, which is what makes it expensive. 'is_connected()'
+    gates the clone in 'project_factory_git', so an import is never even
+    attempted: it resolves to whatever is already on disk, and a package that
+    was never fetched is reported as a missing configuration file rather than
+    as a network problem.
+
+    So ask about the path this process's traffic actually takes. Where one is
+    configured that is the proxy and only the proxy -- reaching anything else
+    would prove nothing, and failing to reach it would be evidence of nothing.
+    Otherwise it stays the resolver it has always been.
+
+    Module level rather than a method: 'Context' is wrapped by
+    'telemetry.instrument()', which hands every callable in the class a 'self'.
+    One address either way, so this costs no more than it did.
+    """
+    proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+    if proxy:
+        try:
+            # urlparse needs a scheme before it will look for a host, and
+            # 'proxy.example:3128' is a spelling people use: without one that
+            # parses as a path and the host comes back empty.
+            parsed = urllib.parse.urlparse(proxy if "://" in proxy else "http://" + proxy)
+            if parsed.hostname:
+                return parsed.hostname, parsed.port or 80
+        except ValueError:
+            # 'ParseResult.port' raises on a port that is not a number, and
+            # this is called from outside the 'except OSError' that
+            # '_check_connectivity' wraps the connection in -- so an
+            # unparseable variable would not have meant "offline", it would
+            # have meant 'is_connected()' raising ValueError at whichever
+            # caller asked first.
+            #
+            # Falling through is also the right answer rather than merely a
+            # safe one: a proxy setting nothing can parse says nothing about
+            # where this host's traffic goes, so ask the question this asked
+            # before there was a proxy to consider. On a genuinely proxied
+            # host the resolver is unreachable and the answer is "offline",
+            # which is what a proxy nobody can address amounts to.
+            #
+            # Without the value: a proxy URL carries credentials often enough
+            # that the parametrized test beside this one has a
+            # 'user:secret@host' among its cases, and "unparseable" is exactly
+            # the state in which nothing can be relied on to redact it. The
+            # variable's name is the actionable half anyway -- whoever set it
+            # can read it back.
+            pc_logging.debug("Ignoring an HTTPS proxy setting that could not be parsed")
+    return "8.8.8.8", 53
 
 
 def param_getters(attr_name: str):
@@ -120,9 +181,12 @@ class Context:
             self.lock.release()
 
     def _check_connectivity(self):
+        host, port = connectivity_probe()
         try:
-            socket.create_connection(("8.8.8.8", 53), timeout=3.0)
-            return True
+            # Closed rather than left to the garbage collector: this runs every
+            # 60 seconds while online, from a long-lived process.
+            with socket.create_connection((host, port), timeout=3.0):
+                return True
         except OSError:
             pc_logging.warning("No internet connection. Running in offline mode")
             return False

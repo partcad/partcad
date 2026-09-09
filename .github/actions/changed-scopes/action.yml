@@ -19,6 +19,11 @@ description: >
   so a path outside them cannot change what they contain, and an unclassified
   path is by definition outside them.
 
+  The plugin's own directory is the one that is *also* something else: the
+  wheel ships the skills under it, through symlinks in "src/partcad/ai_agents",
+  so "ai-agents/common" and the plugin manifest are source as well and turn on
+  the tests and the wheel too.
+
   Adding a directory to the repository can therefore only ever run too much,
   never too little -- which is the direction a mistake here has to fall.
 
@@ -203,8 +208,17 @@ runs:
               add ci ;;
             .devcontainer/*)
               add devcontainer ;;
+            ai-agents/common/*|ai-agents/claude/.claude-plugin/*)
+              # The library itself: the skills, and the plugin manifest. Two
+              # buckets, because these are the files "src/partcad/ai_agents"
+              # symlinks into the wheel -- a change here changes the plugin
+              # *and* what the wheel and the frozen bundles contain. Named
+              # before the rule below, which would stop at "ai".
+              add ai; add code ;;
             ai-agents/*|.claude-plugin/*)
-              # The Claude Code plugin, which is Markdown and JSON and ships.
+              # The rest of the Claude Code plugin -- the catalog, the
+              # materialization script, the README. Markdown and JSON that ships
+              # as the plugin and nothing else.
               add ai ;;
             .claude/*|.cursor/*|openspec/*)
               # Agent scaffolding for people working in this repository. Nothing

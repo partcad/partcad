@@ -63,8 +63,9 @@ jobs:
       # warns that "skills" is a symlink, reads nothing through it, and passes.
       # What gets validated instead is the materialized copy below, whose files
       # are real -- and "tests/partcad_cli/unit/test_ai_agent_skills.py" checks
-      # the front matter of every "SKILL.md" in the pytest run, which is where
-      # a contributor sees it first.
+      # the front matter of every "SKILL.md", and that the two symlinks putting
+      # this library in the wheel still point at it, in the pytest run, which is
+      # where a contributor sees it first.
       - name: Validate the marketplace catalog
         run: claude plugin validate .
 

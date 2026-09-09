@@ -32,7 +32,7 @@
 
 [project]
 name = "partcad"
-version = "0.8.58"
+version = "0.8.60"
 description = "Package manager for CAD models and a modelling framework"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "sdf", "cad", "design", "openscad", "step", "stl"]
@@ -108,6 +108,24 @@ aws = {file = ["requirements-aws.txt"]}
 "partcad.builtin.export" = ["*.py", "*.yaml"]
 "partcad.builtin.render" = ["*.py", "*.yaml"]
 "partcad.template" = ["*.yaml"]
+# The AI agent skills and the Claude plugin manifest `pc init` installs into a
+# repository (see `src/partcad/ai_agents/__init__.py`). They are data rather
+# than code -- Markdown and JSON, read and copied -- and they have to be in the
+# wheel, because the wheel is what a user of PartCAD has.
+#
+# They are also the plugin Claude Code's marketplace publishes, and they stay at
+# the top of the repository where a visitor finds them: `ai-agents/`. What is
+# under `src/partcad/ai_agents/` is two symlinks into it -- `skills` and
+# `plugin.json` -- so there is one copy of each file and the wheel and the
+# plugin cannot ship different skills.
+#
+# The patterns below are matched with `glob`, which resolves a symlink that is a
+# path *component*: `skills/` is followed, and the directories inside it are
+# real, so `**` recurses through them normally. A `SKILL.md` and anything a
+# skill carries beside it are both picked up. `tests/partcad_cli/unit/
+# test_ai_agent_skills.py` checks that every file in the library matches one of
+# these, since a file that does not is simply absent from the install.
+"partcad.ai_agents" = ["skills/**/*", "plugin.json"]
 # The schemas `partcad_utils.assy_lint` validates against: the ASSY one and the
 # `partcad.yaml` one. Both live in `partcad_utils` because both ends check both
 # kinds of file -- the daemon over a package, every client over the one file
@@ -319,17 +337,32 @@ sphinx-autobuild = [
 ]
 
 [tool.poetry.group.partcad.dependencies]
-# cadquery-ocp, build123d and ocpsvg are NOT wheel runtime dependencies at all:
-# the published 'partcad' wheel declares no CAD dependency, because the core
-# builds/renders/exports every shape - and reads STEP assemblies, and converts
-# files - in sandboxed runtimes, and only needs a CAD library in-process for the
-# opt-in convert("build123d"/"cadquery")/show() live-object features (which warn
-# if it is missing). They stay in this dev group so the monorepo test suite,
-# which exercises those features, has them installed. In OCP 7.9 the native
-# library moved into 'cadquery-ocp-proxy'; 'cadquery-ocp' and the
-# 'cadquery-ocp-novtk' that build123d depends on are both thin wrappers over it,
-# so they coexist.
-cadquery-ocp = "7.9.3.1.1"
+# build123d and ocpsvg are NOT wheel runtime dependencies at all: the published
+# 'partcad' wheel declares no CAD dependency, because the core builds/renders/
+# exports every shape - and reads STEP assemblies, and converts files - in
+# sandboxed runtimes, and only needs a CAD library in-process for the opt-in
+# convert("build123d"/"cadquery")/show() live-object features (which warn if it
+# is missing). They stay in this dev group so the monorepo test suite, which
+# exercises those features, has them installed.
+#
+# 'cadquery-ocp' used to be named here beside them and no longer is, which is a
+# packaging fix rather than a change of what is installed. In OCP 7.9 the native
+# library moved into 'cadquery-ocp-proxy', leaving 'cadquery-ocp' and the
+# 'cadquery-ocp-novtk' that build123d depends on as two *distributions* that
+# install the very same 160 MB 'OCP/OCP.cpython-*.so'. Nothing here needed both:
+# nothing in this environment imports 'cadquery' in process (the sandboxes
+# install their own, ordered by sandbox_versions.GUARD_INVALIDATED_BY), so the
+# VTK-carrying build bought nothing, and build123d pulls the novtk one in
+# regardless.
+#
+# What it cost was real. 'poetry install' installs in parallel, so two workers
+# wrote that one path at once and what landed was a blend of the two wheels --
+# reported as success by both, and then 'import OCP' handing a corrupt ELF to
+# the dynamic loader and taking the interpreter down with SIGSEGV during pytest
+# *collection*, with no failing test to point at. One distribution owning the
+# file is what makes that unrepresentable; 'dev-tools/check_installed_files.py'
+# stays as the general guard, because this pair is not the only way two wheels
+# can come to own one path.
 ocpsvg = "0.6.0"
 build123d = "0.11.1"
 pyyaml = ">=6.0.1"
