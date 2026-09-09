@@ -115,23 +115,26 @@ def test_every_bumpversion_search_string_still_matches():
 # importable modules, and the self-pin scan reads requirements files. Nothing
 # imports a plugin manifest and nothing pins it, which is why it sat at the
 # 0.1.0 it was created with while twenty-three releases went out around it.
-CLAUDE_PLUGIN_MANIFEST = REPO_ROOT / "ai-agents" / "claude" / ".claude-plugin" / "plugin.json"
+# The wheel ships this same file, through `src/partcad/ai_agents/plugin.json`,
+# so that `pc init` can install the plugin out of an installed PartCAD -- which
+# means the version below is also the version of the plugin a user ends up with.
+CLAUDE_PLUGIN = "ai-agents/claude/.claude-plugin/plugin.json"
+CLAUDE_PLUGIN_MANIFEST = REPO_ROOT / CLAUDE_PLUGIN
 
 
 def test_the_claude_plugin_states_the_release_version():
     """The plugin is published by the release, so it states the release."""
     version = json.loads(CLAUDE_PLUGIN_MANIFEST.read_text(encoding="utf-8"))["version"]
     assert version == _bumpversion()["current_version"], (
-        "ai-agents/claude/.claude-plugin/plugin.json is out of step with the release. The plugin is "
-        "published by the same release as the wheel and states the same version."
+        "%s is out of step with the release. The plugin is published by the same release as the "
+        "wheel and states the same version." % CLAUDE_PLUGIN
     )
 
 
 def test_the_claude_plugin_is_declared_in_bumpversion():
     """Declared, so that it moves; the test above only says that it has."""
     filenames = {entry["filename"] for entry in _bumpversion()["files"]}
-    expected = "ai-agents/claude/.claude-plugin/plugin.json"
-    assert expected in filenames, "%s is not in dev-tools/bumpversion.toml" % expected
+    assert CLAUDE_PLUGIN in filenames, "%s is not in dev-tools/bumpversion.toml" % CLAUDE_PLUGIN
 
 
 # The two distributions this repository publishes. Scoped deliberately: an

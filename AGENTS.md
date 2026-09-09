@@ -355,7 +355,15 @@ the same way, by `.github/workflows/plugin.yml`, and published two ways by `depl
 the release, and the `plugin-dist` branch, which is what `/plugin marketplace add partcad/partcad@plugin-dist`
 reads. It has no version of its own — `plugin.json` is in `dev-tools/bumpversion.toml` like everything else —
 and it must not get one back: it had one, and stayed at 0.1.0 for twenty-three releases because publishing it
-meant remembering a tag nobody pushed. See `ai-agents/README.md`. The snap carries whatever the bundle carries,
+meant remembering a tag nobody pushed. **The skills it is made of also ship in the wheel**, through two symlinks
+under `src/partcad/ai_agents` into `ai-agents/`, because `pc init` installs them into the repository it creates a
+package in and the wheel is what a user has: the plugin for Claude Code, `pc-`-prefixed copies for Cursor. The
+skills stay at the top of the repository where a visitor finds them, and there is one copy of each file.
+So `ai-agents/common` is *both* the plugin and the distribution, which is why `.github/actions/changed-scopes`
+classifies it into both buckets, why `pyproject.toml` and `dev-tools/pyinstaller/partcad.spec` both name it as
+data, and why a new file under a skill has to be covered by the `package-data` patterns or it is simply absent
+from what gets installed. See `ai-agents/README.md`. The snap
+carries whatever the bundle carries,
 so it needs nothing extra of its
 own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
 Its build tooling lives beside that README, but the recipe, `.snapcraft.yaml`, stays at the repository root and

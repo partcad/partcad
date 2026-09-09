@@ -141,6 +141,12 @@ replace = "version\": \"{new_version}\""
 # at the 0.1.0 it was created with while everything around it moved, which is
 # exactly the failure the comment at the top of this file describes. It is one
 # artifact of one release now, and states that release.
+#
+# It ships twice over: this file is also what the wheel carries, through
+# `src/partcad/ai_agents/plugin.json`, so that `pc init` can install the plugin
+# out of an ordinary PartCAD installation. Named here at the path it really
+# lives at -- writing a version through a symlink is not something to depend on
+# a tool doing.
 [[tool.bumpversion.files]]
 filename = "ai-agents/claude/.claude-plugin/plugin.json"
 search = "\"version\": \"{current_version}\""

@@ -103,6 +103,24 @@ aws = {file = ["requirements-aws.txt"]}
 "partcad.builtin.export" = ["*.py", "*.yaml"]
 "partcad.builtin.render" = ["*.py", "*.yaml"]
 "partcad.template" = ["*.yaml"]
+# The AI agent skills and the Claude plugin manifest `pc init` installs into a
+# repository (see `src/partcad/ai_agents/__init__.py`). They are data rather
+# than code -- Markdown and JSON, read and copied -- and they have to be in the
+# wheel, because the wheel is what a user of PartCAD has.
+#
+# They are also the plugin Claude Code's marketplace publishes, and they stay at
+# the top of the repository where a visitor finds them: `ai-agents/`. What is
+# under `src/partcad/ai_agents/` is two symlinks into it -- `skills` and
+# `plugin.json` -- so there is one copy of each file and the wheel and the
+# plugin cannot ship different skills.
+#
+# The patterns below are matched with `glob`, which resolves a symlink that is a
+# path *component*: `skills/` is followed, and the directories inside it are
+# real, so `**` recurses through them normally. A `SKILL.md` and anything a
+# skill carries beside it are both picked up. `tests/partcad_cli/unit/
+# test_ai_agent_skills.py` checks that every file in the library matches one of
+# these, since a file that does not is simply absent from the install.
+"partcad.ai_agents" = ["skills/**/*", "plugin.json"]
 # The schemas `partcad_utils.assy_lint` validates against: the ASSY one and the
 # `partcad.yaml` one. Both live in `partcad_utils` because both ends check both
 # kinds of file -- the daemon over a package, every client over the one file

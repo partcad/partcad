@@ -879,6 +879,8 @@ and turns each subject on or off:
      - ``Documentation``
    * - ``ai-agents/``, ``.claude-plugin/``
      - ``Claude Code plugin``
+   * - ``ai-agents/common/``, ``ai-agents/claude/.claude-plugin/``
+     - ``Claude Code plugin``, **and** the tests and the wheel -- the wheel ships the skills too
    * - ``.devcontainer/``
      - the ``CI-Dev`` container, ``Run: behave`` and ``Run: pc`` -- but not ``Run: pytest``
    * - ``ide/vscode/``, ``ide/vscode-shim/``
@@ -901,8 +903,9 @@ one that matches a path wins**, and the two orders are not the same -- ``.github
 the first rule there. What matters is the shape of that list: every rule that names a *directory* comes before
 every rule that matches by *extension*.
 
-So a Markdown file belongs to whatever directory claims it first. ``ai-agents/skills/render/SKILL.md`` is the
-plugin rather than prose about it, and ``examples/feature_render/README.md`` is what ``pc render -r`` wrote and
+So a Markdown file belongs to whatever directory claims it first. ``ai-agents/common/skills/render/SKILL.md``
+is the plugin -- and, since ``src/partcad/ai_agents`` symlinks it into the wheel, the wheel -- rather than prose
+about either, and ``examples/feature_render/README.md`` is what ``pc render -r`` wrote and
 what the ``Examples (PartCAD)`` job compares against a fresh render; neither is documentation.
 
 ``AGENTS.md`` and ``CLAUDE.md`` are matched ahead of the *source* directories, which is why

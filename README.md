@@ -175,7 +175,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `SVG`
 - Tooling for AI agents doing mechanical design
   - [x] Agent Skills any `SKILL.md`-aware coding agent can load ([`ai-agents/`](./ai-agents/README.md)),
-        distributed as the `pc` plugin
+        installed by `pc init`, and distributed as the `pc` plugin
     - [x] Generate a part, an assembly or a 2D sketch (`/pc:gen`, `/pc:gen-part`, `/pc:gen-assembly`,
           `/pc:gen-sketch`) -- the agent authors the CAD script and validates it by rendering
     - [x] Describe an existing object (`/pc:describe`), search the catalog (`/pc:search`), add interfaces
@@ -245,7 +245,10 @@ symlinks, which on Windows means `git config core.symlinks true`), and every
 `claude --plugin-url <url>` loads for a single session, to try one version without installing it.
 
 The skills are plain [Agent Skills](https://code.claude.com/docs/en/skills), so any `SKILL.md`-aware agent can
-read them out of [`ai-agents/`](./ai-agents/README.md) without the plugin.
+read them out of [`ai-agents/`](./ai-agents/README.md) without the plugin. They also ship inside the `partcad`
+wheel, and `pc init` installs them into the repository it creates a package in: the plugin for Claude Code, and
+`pc-`-prefixed skills for Cursor. Pass `--no-skills` to skip it, or `--skills-only` to install them into a
+repository that has a package already.
 
 ### PartCAD IDE
 

@@ -46,6 +46,8 @@ The plugin is versioned with everything else in the release that publishes it, s
   The skills are plain `Agent Skills <https://code.claude.com/docs/en/skills>`_ -- a directory of
   ``SKILL.md`` files -- and the plugin is a thin wrapper that ships them to Claude Code. Any other agent
   that reads ``SKILL.md`` can use the same library, from ``ai-agents/common/skills`` in the repository.
+  It also ships inside the ``partcad`` wheel, and ``pc init`` installs it into the repository it
+  creates a package in -- so there is nothing to install here if you have PartCAD already.
 
 ==================
 Command line tools
