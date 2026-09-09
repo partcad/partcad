@@ -143,6 +143,21 @@ jobs:
       BIN_DIR: ${{ startsWith(matrix.os, 'windows') && 'Scripts' || 'bin' }}
 
     steps:
+      # Before the checkout, because this decides how the checkout writes the
+      # tree. Git for Windows leaves "core.symlinks" off, and the wheel ships
+      # the AI agent skills through two symlinks in "src/partcad/ai_agents" --
+      # so on Windows this tree would otherwise hold two text files where they
+      # are, and the wheel built below would have no skills in it. The build
+      # backend refuses to build that (see "dev-tools/build-backend"), which
+      # makes this the difference between a green Windows leg and a red one
+      # rather than the difference between a good wheel and a quietly empty one.
+      #
+      # The runners can create symlinks -- see the note in
+      # ".github/actions/setup-build", where "build" 1.6.0 started doing it.
+      - name: Check out with symlinks intact
+        if: runner.os == 'Windows'
+        run: git config --global core.symlinks true
+
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-all
         with:
@@ -177,6 +192,17 @@ jobs:
           # catches -- `packages.find` sees whatever is under `src/`.
           python -c "
           import partcad, partcad_cli, partcad_client, partcad_utils, partcad_service_json_rpc, partcad_ide_client
+          "
+          # And the data it ships, not only the code. `pc init` installs the AI
+          # agent skills out of the installation, so a wheel that packaged none
+          # of them is one that quietly stopped doing that -- which is what a
+          # checkout with the symlinks dropped produces. The build backend
+          # refuses to build such a tree; this is the same failure caught from
+          # the other end, on the artifact rather than on its source.
+          python -c "
+          import partcad.ai_agents as ai_agents
+          assert ai_agents.available_skills(), 'the wheel carries no AI agent skills'
+          assert ai_agents.plugin_manifest()['name'], 'the wheel carries no plugin manifest'
           "
           pc --no-ansi version
           partcad-json-rpc --help >/dev/null

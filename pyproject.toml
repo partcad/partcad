@@ -75,9 +75,16 @@ partcad-service-remote-docker = "partcad_service_json_rpc.remote_docker_service:
 Homepage = "https://github.com/partcad/partcad"
 Issues = "https://github.com/partcad/partcad/issues"
 
+# `setuptools.build_meta`, with one precondition in front of it: that the AI
+# agent skills the wheel ships -- symlinks from `src/partcad/ai_agents` into
+# `ai-agents/` -- are real files this build can package. A checkout that dropped
+# those symlinks (Git for Windows without `core.symlinks`, or a GitHub source
+# zip, on any platform) otherwise builds a wheel with no skills in it that
+# installs, imports and runs perfectly. See `dev-tools/build-backend/`.
 [build-system]
 requires = ["setuptools>=77"]
-build-backend = "setuptools.build_meta"
+build-backend = "partcad_build_backend"
+backend-path = ["dev-tools/build-backend"]
 
 # Explicit rather than left to auto-discovery: this distribution ships six
 # top-level packages, and that is not something to leave implicit.

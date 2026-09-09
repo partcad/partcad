@@ -308,11 +308,27 @@ itself.
 
 If local discovery or a build produces a `skills` file containing the text
 `../common/skills` instead of a directory, git did not materialize the symlink.
-The same goes for the two under `src/partcad/ai_agents`, and there it is a wheel
-built from that checkout that comes out short. (The frozen bundles do not care:
-`partcad.spec` names the files under `ai-agents/` directly.) Enable symlinks and
-re-checkout:
+Enable symlinks and re-checkout:
 
 ```bash
 git config core.symlinks true
+git checkout -- .
 ```
+
+The same goes for the two under `src/partcad/ai_agents`, and **there the build
+refuses rather than producing a short wheel**: `pyproject.toml` names an in-tree
+backend, [`dev-tools/build-backend`](../dev-tools/build-backend/), which checks
+before packaging that the skills are real files and stops with that `git config`
+if they are not. It has to, because nothing downstream would notice — a wheel
+built from such a checkout installs, imports, and runs `pc version`; it simply
+has no skills in it, and `pc init` then installs nothing on every machine it
+reaches. Not a Windows-only hole, either: a GitHub source *zip* drops symlinks
+on every platform, so `pip install <that zip>` went the same way.
+
+The frozen bundles do not care — `partcad.spec` names the files under
+`ai-agents/` directly — and neither does an editable install, which reads the
+working tree live and is deliberately left unguarded so that `poetry install`
+still works.
+
+CI turns `core.symlinks` on before the checkout of the job that builds the
+wheel, so the Windows leg of that matrix builds a complete one.
