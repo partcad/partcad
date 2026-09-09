@@ -9,6 +9,7 @@
 #
 
 import asyncio
+import docker
 import pytest
 import shutil
 import sys
@@ -240,6 +241,38 @@ def test_part_example_kicad():
     kicad_package = ctx.get_project("//produce_part_kicad")
     if kicad_package.skipped:
         pytest.skip("//produce_part_kicad is excluded here: tag '%s'" % kicad_package.skipped_by)
+    # A missing Docker daemon is two different situations, and only one of them
+    # is this test's business to pass over.
+    #
+    # An environment that has *said* it has no Docker -- 'PC_USE_DOCKER=false',
+    # or 'useDocker: false' in the user configuration -- is describing itself,
+    # and a container image built without a daemon (a cloud agent's sandbox, a
+    # runner with no socket) can say so once there instead of once per subject.
+    # There is nothing to run 'kicad-cli' in and nothing was promised, so skip.
+    #
+    # An environment that has said nothing is claiming a daemon it turns out not
+    # to have, and that is a broken machine rather than a machine without a
+    # feature. Silence there would turn a CI runner whose Docker died into a
+    # green run with one fewer test in it, which is the failure this must not
+    # hide -- so it fails, and says which of the two answers would have changed
+    # the outcome. Note the tags checked above cannot answer this: they report
+    # whether the container was *asked for*, not whether one can be started
+    # (see 'partcad.tags').
+    #
+    # Asked before the client is built, not inside the failure path: a host
+    # whose DOCKER_HOST points at something unreachable makes 'from_env().ping()'
+    # sit out the SDK's sixty-second API timeout, and waiting a minute to reach
+    # a skip that was already decided is a minute per run for nothing.
+    if not pc.user_config.use_docker:
+        pytest.skip("Docker is turned off here (useDocker), so there is nothing to run 'kicad-cli' in")
+    try:
+        docker.from_env().ping()
+    except Exception as e:
+        pytest.fail(
+            "No Docker daemon to run 'kicad-cli' in: %s\n"
+            "Nothing turned Docker off, so this is a machine that should have one. Start the daemon, or set"
+            " PC_USE_DOCKER=false (or 'useDocker: false') if this machine is meant to run without one." % e
+        )
     nano = ctx.get_part("//produce_part_kicad:Arduino_Nano")
     assert nano is not None
 

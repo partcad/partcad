@@ -309,6 +309,8 @@ OPTION_KEYS = (
     "useDocker",
     "useDockerPython",
     "useDockerKicad",
+    "caeFeaImplementation",
+    "caeCfdImplementation",
     "tags",
 )
 
@@ -341,6 +343,17 @@ SECTION_PATHS = (
     "parameters",
     "user",
 )
+
+
+# Which implementation each CAE analysis is run by when nothing says otherwise.
+# A package path and a file type in it, exactly as a user would write one, and
+# both live in the public PartCAD index. They are not built into 'partcad': a
+# solver is a large third-party program, and which one to run is the user's
+# decision (see the 'caeFeaImplementation' option below).
+DEFAULT_CAE_IMPLEMENTATIONS = {
+    "fea": "//pub/feature/cae/calculix:fea",
+    "cfd": "//pub/feature/cae/calculix:cfd",
+}
 
 
 class UserConfig(vyper.Vyper):
@@ -423,6 +436,13 @@ class UserConfig(vyper.Vyper):
         return cls(settings=data)
 
     def __init__(self, settings: dict = None):
+        """Resolve the configuration: the file, the `PC_*` environment, `settings`.
+
+        Each option below is read once and kept as an attribute, so that a
+        caller asks the object rather than the layers underneath it. `settings`
+        is what `from_dict` passes when a daemon is rebuilding a *caller's*
+        configuration rather than resolving its own.
+        """
         super().__init__()
         self.set_config_type("yaml")
 
@@ -885,6 +905,16 @@ class UserConfig(vyper.Vyper):
         #              per subject.
         # values: [True | False]
         # default: True
+        #
+        # Bound to the environment like every other option here, and it is the
+        # one in this family a machine most needs to be able to answer without
+        # writing a configuration file: an image built with no Docker in it -- a
+        # cloud agent's container, a CI runner with no socket -- can say so once
+        # in its environment, and everything that would otherwise fail against a
+        # daemon that was never there can tell "there is none" from "there is
+        # none and nobody said so", which are different situations and deserve
+        # different outcomes.
+        self.bind_env("useDocker", "PC_USE_DOCKER")
         self.use_docker = self.get_bool("useDocker")
 
         # option: useDockerPython
@@ -897,6 +927,7 @@ class UserConfig(vyper.Vyper):
         # the 'useDockerPython' tag reports, so that a package can tell "not
         # asked for" from "asked for but unavailable"), and the plain attribute
         # is what actually happens once 'useDocker' has had its say.
+        self.bind_env("useDockerPython", "PC_USE_DOCKER_PYTHON")
         self.use_docker_python_declared = self.get_bool("useDockerPython")
         self.use_docker_python = self.use_docker and self.use_docker_python_declared
 
@@ -904,6 +935,7 @@ class UserConfig(vyper.Vyper):
         # description: use a Docker container for KiCad
         # values: [True | False]
         # default: True
+        self.bind_env("useDockerKicad", "PC_USE_DOCKER_KICAD")
         self.use_docker_kicad_declared = self.get_bool("useDockerKicad")
         self.use_docker_kicad = self.use_docker and self.use_docker_kicad_declared
 
@@ -926,6 +958,53 @@ class UserConfig(vyper.Vyper):
         # daemon serving this caller honours the tags the caller declared.
         self.bind_env("tags", "PC_TAGS")
         self.tags = self.get("tags")
+
+        # option: caeFeaImplementation
+        # description: which implementation runs "pc cae fea", as
+        #              "<package>:<file type>"
+        # values: <string>
+        # default: //pub/feature/cae/calculix:fea
+        #
+        # option: caeCfdImplementation
+        # description: which implementation runs "pc cae cfd", as
+        #              "<package>:<file type>"
+        # values: <string>
+        # default: //pub/feature/cae/calculix:cfd
+        #
+        # PartCAD ships no solver, so unlike every export and render format
+        # there is no built-in implementation for these two to fall back on -
+        # the default is a package in the public index, and this is where it is
+        # named. It is user configuration rather than a constant because the
+        # answer is a property of the machine and the person: which solver is
+        # installed, which one is licensed, which one this shop trusts. A run
+        # overrides it with "pc cae fea --implementation", and the IDE's FEA tab
+        # with the field over the model.
+        #
+        # Defaulted here rather than only on the attribute, so that the resolved
+        # value travels to the daemon like every other option: a key missing
+        # from the copy is a key the daemon resolves from its own environment,
+        # which is exactly what sending the configuration is meant to stop.
+        self.set_default("caeFeaImplementation", DEFAULT_CAE_IMPLEMENTATIONS["fea"])
+        self.set_default("caeCfdImplementation", DEFAULT_CAE_IMPLEMENTATIONS["cfd"])
+        self.bind_env("caeFeaImplementation", "PC_CAE_FEA_IMPLEMENTATION")
+        self.bind_env("caeCfdImplementation", "PC_CAE_CFD_IMPLEMENTATION")
+        # The 'or' still stands: a configuration file may carry the key with
+        # nothing under it, and an analysis with no implementation at all is a
+        # worse answer than the default one.
+        self.cae_fea_implementation = self.get_string("caeFeaImplementation") or DEFAULT_CAE_IMPLEMENTATIONS["fea"]
+        self.cae_cfd_implementation = self.get_string("caeCfdImplementation") or DEFAULT_CAE_IMPLEMENTATIONS["cfd"]
+
+    def cae_implementation(self, analysis: str) -> str:
+        """Which implementation runs one analysis, by its name ("fea"/"cfd").
+
+        Looked up rather than branched on, so that adding a third analysis is an
+        entry in 'DEFAULT_CAE_IMPLEMENTATIONS' and an option key beside it, and
+        not a chain of ifs in whatever asks.
+        """
+        attribute = "cae_%s_implementation" % analysis
+        if not hasattr(self, attribute):
+            raise ValueError("PartCAD does not run a '%s' analysis" % analysis)
+        return getattr(self, attribute)
 
 
 user_config = UserConfig()

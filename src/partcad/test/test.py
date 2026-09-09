@@ -38,6 +38,19 @@ class Test(ABC):
     TEST_PASSED = True
     MAX_CONCURRENT_TESTS = None
 
+    # A key a test may set on its 'test_ctx' to say "this verdict is about the
+    # machine, not about the shape -- do not remember it".
+    #
+    # The cache key is built from what the *question* is: the shape's hash, and
+    # whatever 'cache_key_suffix()' adds. Nothing in it describes the machine the
+    # answer was reached on, and it could not: a test cannot know what its
+    # implementation needs installed. So a verdict that turned on something
+    # external -- a solver that is not here -- would otherwise be cached under a
+    # key that installing the solver does not change, and the pass would survive
+    # the reason for it going away. See 'CaeTest.test()', which is the one test
+    # that can reach that state.
+    NOT_CACHEABLE = "not_cacheable"
+
     def __init__(self, name: str) -> None:
         self.name = name
 
@@ -56,6 +69,10 @@ class Test(ABC):
 
     @semaphore_wrapper
     async def test_cached(self, tests_to_run: list["Test"], ctx, shape, test_ctx: dict = {}) -> bool:
+        # Copied, because 'test()' may set 'NOT_CACHEABLE' on it below and the
+        # default argument is a single dict shared by every call that omits one.
+        test_ctx = dict(test_ctx)
+
         is_cacheable = shape.get_cacheable()
         if is_cacheable:
             # The manufacturability tests depend on `manufacturable`, which is
@@ -78,7 +95,7 @@ class Test(ABC):
 
         result = await self.test(tests_to_run, ctx, shape, test_ctx)
 
-        if is_cacheable:
+        if is_cacheable and not test_ctx.get(self.NOT_CACHEABLE):
             # Only cache passed test results?
             # if result == self.TEST_PASSED:
             await ctx.cache_tests.write_data_async(shape.hash, {cache_key: bytes([result])})

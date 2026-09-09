@@ -124,6 +124,55 @@ isort --check src/partcad tests/partcad
   spec (see "Packaging" in the root [AGENTS.md](../../AGENTS.md)). The requirement strings there are the versions
   `sandbox_versions.py` pins, which `tests/partcad/unit/test_output.py` enforces.
 
+- **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae.py`):
+  `pc cae fea`/`pc cae cfd` are a third output section, `cae:`, resolved by the very code that resolves
+  `export:` and `render:` -- same `path`/`package`, same sandbox, same meta-wrapper (`wrapper_export.py`), and
+  `Shape._run_implementation_async()` is the body all three share. It is deliberately **not** in
+  `output.SECTIONS`: that tuple answers "which sections does a file type of `pc export`/`pc render` live in",
+  and a `fea` left in there would be offered to `pc render -t` and would fall back to a render implementation.
+  It also has no built-in package -- PartCAD ships no solver -- so `output.builtin_project()` answers `None`
+  for it and everything downstream has to cope with a missing bottom layer.
+
+  What is genuinely new is the two halves either side of the script. Going in, the *part* declares the
+  boundary conditions in a section named after the analysis, because they belong to the part and not to
+  whoever analyses it; `cae.py` parses `fix:`/`load:`, converts the units (a bare number is a mass in
+  kilograms, weighed into newtons at `GRAVITY`; everything is stored as force), and `assign_ports()` attaches
+  them to the ports `render_overlay.collect_async()` already knows how to find -- so `pc render --with-ports`
+  draws exactly what a solver was told. Coming back, the implementation reports **findings** beside the file
+  it wrote, a JSON array that `pc cae` prints, `pc test`'s `fea`/`cfd` checks fail on, and the IDE lists under
+  the model. `cae.py` imports nothing from `partcad`, which is what lets it be tested without a sandbox.
+
+  Both checks are gated on the part *declaring* the section, and that gate is the whole cost model: a
+  `pc test -r` over a package tree must not start a solver for every bolt in it, and a bolt with no `fea:` has
+  nothing to tell one. Declaring `fea:` is how a user asks for the check, which is why it needs no flag.
+
+  A **missing or misconfigured plugin fails**: the implementation is named `<package>:<file type>` by the
+  part's `implementation:` or by the user configuration, and if that package is not a dependency, did not
+  load, or declares no such file type, the configuration is wrong on every machine and no install mends it.
+  `CaeTest` resolves it separately from running it, so the two are told apart.
+
+  A second gate is the machine: an analysis whose plugin resolved and which still could not run -- no solver
+  binary installed -- is reported as skipped and passed, not failed. PartCAD ships no solver, so the other
+  way round would mean that one part declaring `fea:` breaks `pc test` for everyone without CalculiX, this
+  repository's own `examples/feature_cae` included. The cost is that a solver which *crashes* is skipped too,
+  because nothing here can tell that from one that is absent; `pc cae` is where that is an error.
+
+  That skip is the one verdict `pc test` does **not** cache, via `Test.NOT_CACHEABLE` on the `test_ctx`. A
+  cache key describes the question -- the shape's hash, the boundary conditions, the implementation and its
+  options -- and nothing in it describes the machine, because a test cannot know what its implementation needs
+  installed. Installing CalculiX therefore changes no key, and a remembered skip would answer in hundredths of
+  a second without going near the solver that is now there. `CaeTest` is the only test that reaches that state,
+  and the flag exists for it.
+
+- **One shape, one lock** (`Shape.locked()`): a shape is held still both while it is instantiated and while
+  any file derived from it is produced. They are one question because the output path is derived from the
+  shape -- `<part>.<format>` beside the package -- so two concurrent runs over one shape resolve to one path
+  and interleave there, one deleting a model between the moment its owner wrote it and the moment its owner
+  read it back. It is re-entrant because the operations nest (`analyze_async` holds it across
+  remove-run-verify and calls `get_wrapped` and `_run_implementation_async` inside that), which a bare
+  `asyncio.Lock` cannot do without waiting on itself for good. The cost is that two different outputs of one
+  shape no longer overlap; PartCAD's parallelism is across shapes.
+
 - **Drawing ports and interfaces** (`./src/partcad/render_overlay.py`, `./src/partcad/wrappers/stroke_text.py`):
   `pc render --with-ports`/`--with-interfaces` draws the connection metadata on top of a projection.
   `render_overlay.py` answers only *where* the ports are — a lookup for a part, a walk for an assembly (and so

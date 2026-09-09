@@ -45,6 +45,8 @@ _OPERATIONS = {
     "bom": operations.bom,
     "assembly.guide": operations.assembly_guide,
     "supply.quote": operations.supply_quote,
+    "cae.analyze": operations.cae_analyze,
+    "cae.defaults": operations.cae_defaults,
     "search.objects": operations.search_objects,
     "render.objects": operations.render_objects,
     "convert.object": operations.convert_object,

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import asyncio
 import base64
+import contextlib
 import os
 import sys
 import tempfile
@@ -28,6 +29,7 @@ from .sync_threads import threadpool_manager
 from . import render_overlay
 from . import sandbox_versions
 from . import wrapper
+from . import cae as pc_cae
 
 if TYPE_CHECKING:
     from partcad.context import Context
@@ -123,6 +125,56 @@ TEXT_PART_TYPES = frozenset({"step", "iges", "brep", "obj", "threejs", "svg", "d
 SUPPORTED_PART_TYPES = frozenset(LIVE_OBJECT_PART_TYPES | SERIALIZED_PART_TYPES)
 
 
+# What a shape's configuration says about the shape to a reader, rather than
+# what its geometry is made of. Everything else in the configuration is hashed
+# into the cache key.
+#
+# A deny-list rather than an allow-list, on purpose. An allow-list has to know
+# every key that can change a shape, and it cannot: a partType of kind
+# 'wrapper' is a package-supplied script that reads configuration keys of its
+# own invention. The ':ldraw' partType identifies its part with 'dat', which
+# the previous allow-list of 'parameters'/'offset'/'scale' did not name, so
+# every LDraw part hashed to the same key and whichever was meshed first was
+# handed back for all the others - four different parts exported byte-identical
+# geometry, and an assembly of bricks rendered as cones.
+#
+# The two mistakes are not symmetrical: hashing a key that turns out not to
+# matter costs a rebuild, while missing one that does matter serves the wrong
+# shape and says nothing. So a key this does not know about is hashed.
+_NON_GEOMETRIC_CONFIG_KEYS = frozenset(
+    {
+        "aliases",
+        "author",
+        "cache",
+        "cache_dependencies_ignore",
+        "category",
+        "desc",
+        "docs",
+        "example",
+        "images",
+        "label",
+        "license",
+        "manufacturable",
+        "manufacturing",
+        # A shape's own name is not what it is made of: two parts alike but for
+        # their names are one shape and share an entry. What a file-backed part
+        # is built from reaches the key as the file's content, not as its name.
+        "name",
+        "orig_name",
+        # Outputs, not inputs. A part that gains a material has not become a
+        # different shape (see test_shape_properties.py).
+        "properties",
+        "sku",
+        "summary",
+        "supplier",
+        "tags",
+        "title",
+        "url",
+        "vendor",
+    }
+)
+
+
 @telemetry.instrument(exclude=["locked"])
 class Shape(ShapeConfiguration):
     name: str
@@ -188,10 +240,9 @@ class Shape(ShapeConfiguration):
         self.owns_cache_entry = True
 
         if self.cacheable:
-            cad_config = {}
-            for key in ["parameters", "offset", "scale"]:
-                if key in self.config:
-                    cad_config[key] = self.config[key]
+            cad_config = {
+                key: value for key, value in self.config.items() if key not in _NON_GEOMETRIC_CONFIG_KEYS
+            }
             self.hash.add_dict(cad_config)
 
     def set_environment_cache_key(self, environment_cache_key: str) -> None:
@@ -268,6 +319,53 @@ class Shape(ShapeConfiguration):
         if self_id not in self.tls.async_shape_locks or self.tls.async_shape_locks[self_id][1] != loop_id:
             self.tls.async_shape_locks[self_id] = (asyncio.Lock(), loop_id)
         return self.tls.async_shape_locks[self_id][0]
+
+    @contextlib.asynccontextmanager
+    async def locked(self):
+        """Hold this shape still: nobody else instantiates it or writes its files.
+
+        One lock for both, because they are the same question asked twice. A
+        shape's files are not private to whoever asked for them: the path an
+        output goes to is derived from the shape and the file type, so two
+        concurrent runs over the same shape resolve to the *same* path, and
+        without this the second one's work lands in the middle of the first
+        one's -- deleting a model between the moment its owner wrote it and the
+        moment its owner reads it back, or handing one caller the other's file.
+        Instantiation has always been serialized this way; producing files was
+        the half that was not.
+
+        **Re-entrant**, and it has to be. The operations nest: 'analyze_async'
+        holds this across the whole remove-run-verify sequence, and inside that
+        calls 'get_wrapped' and '_run_implementation_async', each of which takes
+        it in its own right. 'threading.RLock' already allows that; an
+        'asyncio.Lock' does not, and a second acquisition from the task that
+        already holds it waits for a release that only it can perform. So the
+        owning task is remembered and passes straight through.
+
+        The cost is real and worth stating: two *different* outputs of one shape
+        no longer run at the same time, even though they write different paths.
+        That is the price of one rule with no exceptions, and PartCAD's
+        parallelism is across shapes rather than within one.
+        """
+        if not hasattr(self.tls, "async_shape_lock_owners"):
+            self.tls.async_shape_lock_owners = {}
+        owners = self.tls.async_shape_lock_owners
+        self_id = id(self)
+        # 'current_task()' is None outside a task; two such callers on one loop
+        # cannot interleave at an await point anyway, so None is never treated
+        # as re-entry.
+        task = asyncio.current_task()
+        if task is not None and owners.get(self_id) is task:
+            yield
+            return
+
+        with self.lock:
+            async with self.get_async_lock():
+                owners[self_id] = task
+                try:
+                    yield
+                finally:
+                    owners.pop(self_id, None)
 
     async def get_components(self, ctx):
         if len(self.components) == 0:
@@ -369,93 +467,92 @@ class Shape(ShapeConfiguration):
         self.hash.add_dict(transform)
 
     async def get_wrapped(self, ctx):
-        with self.lock:
-            async with self.get_async_lock():
-                if self._wrapped is not None:
-                    return self._wrapped
+        async with self.locked():
+            if self._wrapped is not None:
+                return self._wrapped
 
-                # Before the cache key means anything: the files this shape is
-                # built from have to be on disk to be hashed, and a reference
-                # has to have resolved what it points at to have a key at all
-                # (see 'take_cache_key_from'). Costs one flag test once it has
-                # happened.
-                await self.prepare_async()
+            # Before the cache key means anything: the files this shape is
+            # built from have to be on disk to be hashed, and a reference
+            # has to have resolved what it points at to have a key at all
+            # (see 'take_cache_key_from'). Costs one flag test once it has
+            # happened.
+            await self.prepare_async()
 
-                is_cacheable = self.get_cacheable() and ctx
-                if is_cacheable:
-                    cache_hash = self.hash
-                    if cache_hash:
-                        keys_to_read = [self.kind, "cmps"]
-                        cached, to_cache_in_memory = await ctx.cache_shapes.read_async(
-                            cache_hash, keys_to_read, self.get_cache_metadata()
-                        )
-                        if to_cache_in_memory.get(self.kind, False):
-                            self._wrapped = cached[self.kind]
-                        if to_cache_in_memory.get("cmps", False):
-                            self.components = cached["cmps"]
-                        if self.kind in cached and cached[self.kind] is not None:
-                            return cached[self.kind]
-                    else:
-                        if self.cache:
-                            pc_logging.warning(f"No cache hash for shape: {self.name}")
-                else:
-                    cache_hash = None
-
-                shape = await self.get_shape(ctx)
-
-                # Normalize whatever the factory produced into a BREP envelope so
-                # the rest of the core - caching, offset/scale, the return value -
-                # only ever handles opaque envelopes, never live OCP objects. A
-                # factory that still builds a live shape in-process is encoded
-                # here, at the single choke point; factories that delegate to a
-                # wrapper already return an envelope and pass straight through.
-                shape = self._to_envelope(shape)
-                if self.components:
-                    self.components = [self._component_to_envelope(c) for c in self.components]
-
-                # TODO(clairbee): apply 'offset' and 'scale' during instantiation and
-                #                 apply to both 'wrapped' and 'components'
-                # 'offset'/'scale' are applied in a sandbox (see transform.py) so
-                # the core does not have to run build123d in-process to do it.
-                if shape is not None and ("offset" in self.config or "scale" in self.config):
-                    from . import transform
-
-                    if "offset" in self.config:
-                        shape = await transform.offset(ctx, shape, self.config["offset"])
-                    if "scale" in self.config:
-                        shape = await transform.scale(ctx, shape, self.config["scale"])
-
-                # Whatever produced the envelope - a factory, a wrapper, a
-                # transform - the outer layer around it is this shape's own. It
-                # is stamped here rather than left to whoever built the payload,
-                # so that a shape built now and the same shape materialized from
-                # the cache later carry exactly the same name and label.
-                shape = shape_envelope.apply_metadata(shape, self.get_cache_metadata())
-
+            is_cacheable = self.get_cacheable() and ctx
+            if is_cacheable:
+                cache_hash = self.hash
                 if cache_hash:
-                    if is_cacheable and self.owns_cache_entry:
-                        to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
-                        if self.components and len(self.components) > 0:
-                            to_cache["cmps"] = self.components
-                        properties = self._shape_properties()
-                        if properties:
-                            # Both entries are filled here and nowhere else:
-                            # this is the one path that has actually
-                            # instantiated the shape, and so the one that knows
-                            # what came out of it. They are materialized apart
-                            # (see 'get_cached_properties_async()'), and a shape
-                            # that reports nothing leaves no entry to read.
-                            to_cache[properties_key(self.kind)] = properties
-                        to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
-                        do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
-                    else:
-                        do_cache_in_memory = True
-                    if do_cache_in_memory:
-                        self._wrapped = shape
+                    keys_to_read = [self.kind, "cmps"]
+                    cached, to_cache_in_memory = await ctx.cache_shapes.read_async(
+                        cache_hash, keys_to_read, self.get_cache_metadata()
+                    )
+                    if to_cache_in_memory.get(self.kind, False):
+                        self._wrapped = cached[self.kind]
+                    if to_cache_in_memory.get("cmps", False):
+                        self.components = cached["cmps"]
+                    if self.kind in cached and cached[self.kind] is not None:
+                        return cached[self.kind]
                 else:
-                    # Let the file cache tell us if we need to cache this in memory
+                    if self.cache:
+                        pc_logging.warning(f"No cache hash for shape: {self.name}")
+            else:
+                cache_hash = None
+
+            shape = await self.get_shape(ctx)
+
+            # Normalize whatever the factory produced into a BREP envelope so
+            # the rest of the core - caching, offset/scale, the return value -
+            # only ever handles opaque envelopes, never live OCP objects. A
+            # factory that still builds a live shape in-process is encoded
+            # here, at the single choke point; factories that delegate to a
+            # wrapper already return an envelope and pass straight through.
+            shape = self._to_envelope(shape)
+            if self.components:
+                self.components = [self._component_to_envelope(c) for c in self.components]
+
+            # TODO(clairbee): apply 'offset' and 'scale' during instantiation and
+            #                 apply to both 'wrapped' and 'components'
+            # 'offset'/'scale' are applied in a sandbox (see transform.py) so
+            # the core does not have to run build123d in-process to do it.
+            if shape is not None and ("offset" in self.config or "scale" in self.config):
+                from . import transform
+
+                if "offset" in self.config:
+                    shape = await transform.offset(ctx, shape, self.config["offset"])
+                if "scale" in self.config:
+                    shape = await transform.scale(ctx, shape, self.config["scale"])
+
+            # Whatever produced the envelope - a factory, a wrapper, a
+            # transform - the outer layer around it is this shape's own. It
+            # is stamped here rather than left to whoever built the payload,
+            # so that a shape built now and the same shape materialized from
+            # the cache later carry exactly the same name and label.
+            shape = shape_envelope.apply_metadata(shape, self.get_cache_metadata())
+
+            if cache_hash:
+                if is_cacheable and self.owns_cache_entry:
+                    to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
+                    if self.components and len(self.components) > 0:
+                        to_cache["cmps"] = self.components
+                    properties = self._shape_properties()
+                    if properties:
+                        # Both entries are filled here and nowhere else:
+                        # this is the one path that has actually
+                        # instantiated the shape, and so the one that knows
+                        # what came out of it. They are materialized apart
+                        # (see 'get_cached_properties_async()'), and a shape
+                        # that reports nothing leaves no entry to read.
+                        to_cache[properties_key(self.kind)] = properties
+                    to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
+                    do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
+                else:
+                    do_cache_in_memory = True
+                if do_cache_in_memory:
                     self._wrapped = shape
-                return shape
+            else:
+                # Let the file cache tell us if we need to cache this in memory
+                self._wrapped = shape
+            return shape
 
     def _shape_properties(self):
         """What this shape reports about itself, or None if it reports nothing.
@@ -850,13 +947,19 @@ class Shape(ShapeConfiguration):
                     opts = output.merge(opts, layer)
         return opts, output_dir
 
-    def _output_filepath(self, opts, output_dir, extension, project=None, filepath=None):
+    def _output_filepath(self, opts, output_dir, extension, project=None, filepath=None, stem_suffix=""):
         """Where a file of this type goes when the caller did not say.
 
         'prefix' names the directory the file goes in, relative to the output
         directory or, failing that, to the package. A prefix that carries an
         extension is taken to name the file itself, which is the one way to
         give an object's output a name of its own.
+
+        'stem_suffix' goes between the object's name and the extension, and is
+        what makes an analysis write 'bracket.fea.vtu' rather than
+        'bracket.vtu': the analysis is part of what the file is, and a part has
+        as many analysis results as it has analyses. Empty for everything else,
+        where the file type is already the extension.
         """
         if filepath is not None:
             return filepath
@@ -873,7 +976,7 @@ class Shape(ShapeConfiguration):
         # A directory that does not exist yet is still a directory: '--create-dirs'
         # is what creates it, and that happens once the name is known.
         if os.path.isdir(filepath) or not os.path.splitext(filepath)[1]:
-            filepath = os.path.join(filepath, self.name + extension)
+            filepath = os.path.join(filepath, self.name + stem_suffix + extension)
         return filepath
 
     def output_getopts(self, ctx, format_name, project=None, filepath=None, options_project=None, output_dir=None):
@@ -918,13 +1021,28 @@ class Shape(ShapeConfiguration):
         (like a file-backed object) and written into the package's cache
         directory, the same way a partType's wrapper script is.
         """
+        builtin_package = output.BUILTIN_PACKAGES.get(impl.section)
         if not impl.script:
+            if builtin_package is None:
+                # 'cae:' has no built-in package to fall back to, so an
+                # unresolved implementation means the configured one was not
+                # found rather than that somebody forgot a 'path'. Name both
+                # knobs and say which is which: the user configuration holds the
+                # default, and '--implementation' overrides one run.
+                raise Exception(
+                    "No implementation of '%s' is declared. Name one in a 'cae:' section, "
+                    "override it for one run with 'pc cae %s --implementation <package>:<type>', "
+                    "or set the default in the 'cae%sImplementation' user configuration option"
+                    % (impl.format_name, impl.format_name, impl.format_name.capitalize())
+                )
             raise Exception(
                 "No implementation of '%s' is declared: neither %s nor this package provides a 'path'"
-                % (impl.format_name, output.BUILTIN_PACKAGES[impl.section])
+                % (impl.format_name, builtin_package)
             )
 
-        package_name = impl.config.get("package") or output.BUILTIN_PACKAGES[impl.section]
+        package_name = impl.config.get("package") or builtin_package
+        if package_name is None:
+            raise Exception("The implementation of '%s' does not say which package it lives in" % impl.format_name)
         project = ctx.get_project(package_name)
         if project is None:
             raise Exception("The package implementing '%s' is not found: %s" % (impl.format_name, package_name))
@@ -1025,6 +1143,114 @@ class Shape(ShapeConfiguration):
         cache[overlay.interfaces] = records
         return records
 
+    async def _run_implementation_async(self, ctx, impl, script, request, final_filepath):
+        """Run one output implementation in a sandbox and read back its verdict.
+
+        Shared by every file PartCAD produces through a script: the export and
+        render formats, and the analyses of 'cae:'. What differs between them is
+        what goes into the request and what is made of the answer, both of which
+        belong to the caller; what is the same is the sandbox, the meta-wrapper
+        and the shape of the reply, and a second copy of those is a second thing
+        to keep correct.
+
+        Returns the implementation's result dict, or None when it said nothing
+        that could be read - which has already been reported by then.
+
+        Held under 'locked()' throughout: this is the single place a shape's
+        output file is written, whichever section asked for it, so it is the
+        single place the rule belongs. Callers that need a wider critical
+        section -- 'analyze_async' clears the path first and verifies it
+        afterwards -- take the same lock around the whole of it, which nests
+        because the lock is re-entrant.
+        """
+        async with self.locked():
+            return await self._run_implementation_locked(ctx, impl, script, request, final_filepath)
+
+    async def _run_implementation_locked(self, ctx, impl, script, request, final_filepath):
+        """The body of '_run_implementation_async', with the shape held still."""
+        # Whether the sandbox rebuilds the envelopes into live geometry before
+        # the implementation sees them. Off for an implementation that needs what
+        # the envelopes say about each node (the URDF exporter names every link
+        # and places every joint from that), none of which decoding carries over
+        # into the geometry it builds.
+        request[output.DECODE_KEY] = impl.decode
+        request_serialized = shape_envelope.serialize(request)
+
+        # Where this implementation runs. A container when it declared one --
+        # the only sandbox that can carry what pip cannot install -- and the
+        # Python sandbox otherwise, which is every implementation that ships
+        # with PartCAD and most of those that do not.
+        container = impl.container
+        script_path = wrapper.get("export.py")
+        config_dir = os.path.abspath(impl.project.config_dir)
+        input_dirs = []
+
+        if container:
+            # Raises SandboxUnavailable when there is no container runtime,
+            # which is the one absence 'pc test' may skip on.
+            runtime = await ctx.get_container_runtime(container)
+            # The wrapper and the implementing package both go in whole. Sending
+            # only the files the command names would leave both unable to start:
+            # the wrapper imports its siblings, and so does the implementation
+            # script (see runtime.pack_directory).
+            input_dirs = [os.path.dirname(script_path), config_dir]
+        else:
+            runtime = ctx.get_python_runtime(version=impl.python_version())
+            await runtime.prepare_for_package(impl.project)
+            # Installed one at a time, not with asyncio.gather(): the order
+            # matters, since build123d overwrites the OCP native module that
+            # cadquery-ocp installs (see sandbox_versions.GUARD_INVALIDATED_BY).
+            for dep in impl.python_requirements:
+                await runtime.ensure_async(dep)
+
+        with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
+            # The meta-wrapper, what to write, where to run, and what to run.
+            # The implementation script is an argument and not part of the
+            # request because a container rewrites arguments naming a directory
+            # it was sent and cannot rewrite the request, which reaches it as
+            # one opaque string on standard input -- see wrapper_export.py.
+            command = [
+                script_path,
+                final_filepath,
+                config_dir,
+                os.path.abspath(script),
+            ]
+            if container:
+                # The interpreter is named rather than pathed: the container's
+                # allowlist maps the name to the executable, which is what keeps
+                # a caller from naming one (see PC_CONTAINER_ALLOWED_COMMANDS in
+                # tools/containers/_common/pc-container-json-rpc.py).
+                command.insert(0, container.get("command") or "python")
+            # Only the container runtime is handed these. 'PythonRuntime' and
+            # 'JavaScriptRuntime' both override 'run_async' with a narrower
+            # signature -- (cmd, stdin, cwd, session, timeout) -- so the base
+            # class's parameters are not a contract they honour, and passing
+            # one down that path is a TypeError rather than an ignored argument.
+            extra = (
+                {"input_dirs": input_dirs, "output_files": [final_filepath]}
+                if container
+                else {}
+            )
+            exitcode, response_serialized, errors = await runtime.run_async(
+                command, request_serialized, **extra
+            )
+            if exitcode != 0 and len(errors) == 0:
+                errors = "Failed to execute command '%s' with exit code %s" % (" ".join(command), exitcode)
+            if errors:
+                pc_logging.error(errors)
+                raise Exception(errors)
+
+        response_lines = response_serialized.strip().splitlines()
+        if not response_lines:
+            self.error("Empty response from the '%s' implementation: %s" % (impl.format_name, script))
+            return None
+
+        try:
+            return shape_envelope.deserialize(response_lines[-1].strip())
+        except Exception as e:
+            self.error("Failed to deserialize response: %s" % e)
+            return None
+
     async def _render_one_async(
         self,
         ctx,
@@ -1058,45 +1284,8 @@ class Shape(ShapeConfiguration):
             )
 
         request = await self._output_request(obj, impl, kwargs, overlay=effective_overlay, ports=ports)
-        request[output.SCRIPT_KEY] = os.path.abspath(script)
-        # Whether the sandbox rebuilds the envelopes into live geometry before
-        # the implementation sees them. Off for an implementation that needs what
-        # the envelopes say about each node (the URDF exporter names every link
-        # and places every joint from that), none of which decoding carries over
-        # into the geometry it builds.
-        request[output.DECODE_KEY] = impl.decode
-        request_serialized = shape_envelope.serialize(request)
-
-        runtime = ctx.get_python_runtime(version=impl.python_version())
-        await runtime.prepare_for_package(impl.project)
-        # Installed one at a time, not with asyncio.gather(): the order
-        # matters, since build123d overwrites the OCP native module that
-        # cadquery-ocp installs (see sandbox_versions.GUARD_INVALIDATED_BY).
-        for dep in impl.python_requirements:
-            await runtime.ensure_async(dep)
-
-        with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
-            command = [
-                wrapper.get("export.py"),
-                final_filepath,
-                os.path.abspath(impl.project.config_dir),
-            ]
-            exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
-            if exitcode != 0 and len(errors) == 0:
-                errors = "Failed to execute command '%s' with exit code %s" % (" ".join(command), exitcode)
-            if errors:
-                pc_logging.error(errors)
-                raise Exception(errors)
-
-        response_lines = response_serialized.strip().splitlines()
-        if not response_lines:
-            self.error("Empty response from the '%s' implementation: %s" % (format_name, script))
-            return
-
-        try:
-            result = shape_envelope.deserialize(response_lines[-1].strip())
-        except Exception as e:
-            self.error("Failed to deserialize response: %s" % e)
+        result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+        if result is None:
             return
 
         if not result.get("success", False):
@@ -1208,6 +1397,360 @@ class Shape(ShapeConfiguration):
         asyncio.run(
             self.render_async(ctx, format_name, project, filepath, options_package, output_dir, overlay, **kwargs)
         )
+
+    # ------------------------------------------------------------------ #
+    #
+    # Computer-aided engineering: the third thing a script produces from a
+    # shape, beside a file another tool opens ('export:') and a picture of it
+    # ('render:'). It runs through exactly the same machinery - a file type
+    # declared in a section, an implementation named by 'path' and 'package',
+    # the same sandbox and the same meta-wrapper - and differs in two places
+    # only. What goes in carries the part's boundary conditions ('fea:'/'cfd:',
+    # see 'partcad.cae'), and what comes back carries findings beside the file.
+
+    def analysis_getopts(
+        self,
+        ctx,
+        analysis: str,
+        format_name: str,
+        project=None,
+        filepath=None,
+        options_project=None,
+        output_dir=None,
+    ):
+        """Resolve one analysis: its implementation, options and output path.
+
+        The counterpart of 'output_getopts' for the 'cae:' section, and different
+        from it in two ways that both follow from an analysis not being a file
+        type of the object:
+
+        * The file is named after the analysis as well as the object, because a
+          part has as many results as it has analyses: 'bracket.fea.vtu'.
+        * There is no default extension to fall back on. Which model format an
+          analysis writes is the implementation's decision - a 3D field, a 2D
+          plot - so the implementation has to state it, and an implementation
+          that does not is a bug in that package rather than something to guess
+          at on its behalf.
+        """
+        opts, configured_output_dir = self._output_getopts(ctx, format_name, output.CAE, project, options_project)
+        output_dir = output_dir or configured_output_dir
+
+        if filepath is not None and os.path.isdir(filepath):
+            # A directory was passed where a file was expected: it names where
+            # the file goes, not the file.
+            output_dir, filepath = filepath, None
+
+        impl = output.Implementation(output.CAE, format_name, opts)
+        extension = impl.extension(None)
+        if not extension:
+            raise Exception(
+                "The '%s' implementation does not say what file it writes: it needs an 'extension:'" % format_name
+            )
+        filepath = self._output_filepath(
+            opts, output_dir, "." + extension, project, filepath, stem_suffix="." + analysis
+        )
+        return impl, filepath
+
+    def _resolve_implementing_package(self, ctx, package: str, own: bool) -> str:
+        """Make a package name absolute, from the point of view of whoever said it.
+
+        'own' is what separates a name this object declared from one a user
+        typed. A user's is resolved against the current package, like every
+        other name a command line carries; this object's is resolved against the
+        package the object is in, because that is the package whose
+        'dependencies:' the name was written against.
+        """
+        if not own or not self.project_name:
+            return ctx.resolve_package_path(package or ".")
+        if not package or package == ".":
+            # The object's own package implements it, which is what a package
+            # shipping a solver alongside the parts it analyses would write.
+            return self.project_name
+        if package.startswith("/"):
+            # Already absolute; hand it over for the '/' -> '//' deprecation.
+            return ctx.resolve_package_path(package)
+        # The root package is named '//', so it already ends in the separator
+        # and joining on another one produces '///name'. That does still
+        # resolve -- 'get_project()' strips a fixed two characters and the
+        # extra one lands in the part it splits -- but it is not the spelling
+        # anything else uses, and a path built here is a path that can end up
+        # in a message. Build the canonical one.
+        base = self.project_name.rstrip("/")
+        return ctx.resolve_package_path((base + "/" if base else "//") + package)
+
+    def _analysis_implementation(
+        self,
+        ctx,
+        analysis: str,
+        implementation: Optional[str] = None,
+        declared: Optional[str] = None,
+    ):
+        """Who runs this analysis: the package and the file type in it.
+
+        An implementation is named as '<package>:<file type>' - the same spelling
+        every other PartCAD object uses - and can be said in three places, which
+        is why the precedence lives here rather than in each caller:
+
+        * 'implementation' is this *run's* answer: 'pc cae fea -i', the IDE's
+          field. It wins, because it is the most specific thing anybody said.
+        * 'declared' is the object's own, from 'implementation:' in its 'fea:' or
+          'cfd:' section - a statement about the part, naming the solver its
+          numbers were produced with.
+        * failing both, the user configuration
+          ('caeFeaImplementation'/'caeCfdImplementation'), which is what makes
+          'pc cae fea :bracket' work in a package that says nothing about
+          solvers.
+
+        A **relative** package name is resolved against whoever said it, and the
+        three do not agree about who that is. 'pc cae fea -i calculix:fea' means
+        the 'calculix' beside the user, so it resolves against the current
+        package the way every other name a user types does. 'implementation:' in
+        a package's own YAML means the 'calculix' that package imported, and has
+        to resolve against *that* package -- otherwise the same declaration
+        resolves differently depending on which directory the command was run
+        from, and 'pc test -r' over a tree of packages (which runs with the tree
+        root current, not each package) cannot resolve any of them.
+
+        The file type need not be called after the analysis. What decides the
+        analysis is the command that was run, because that is what says which
+        section of the part holds the boundary conditions; the file type only
+        says which declaration in the implementing package to read.
+        """
+        # 'declared' is the only one of the three that belongs to the object.
+        own = False
+        if not implementation:
+            if declared:
+                implementation, own = declared, True
+            else:
+                # The *context's* configuration, not the process-wide singleton.
+                # A daemon builds its context from the caller's configuration
+                # (see 'operations.context_create'), and its own is whatever the
+                # environment held when something first started it. Reading the
+                # singleton here would run the analysis under the daemon's
+                # default while 'cae.defaults' -- which the IDE pre-fills its
+                # field from -- reported the caller's.
+                implementation = ctx.user_config.cae_implementation(analysis)
+        implementation = str(implementation).strip()
+        if not implementation:
+            raise Exception("No '%s' implementation is configured" % analysis)
+
+        package, separator, format_name = implementation.rpartition(":")
+        if not separator:
+            # A package on its own: the file type is the analysis's own name,
+            # which is what a package publishing one implementation calls it.
+            package, format_name = implementation, analysis
+        format_name = format_name or analysis
+        package = self._resolve_implementing_package(ctx, package, own)
+
+        options_project = ctx.get_project(package)
+        if options_project is None:
+            raise Exception(
+                "The package implementing '%s' is not found: %s. "
+                "Add it to this package's 'dependencies:', or name another one." % (analysis, package)
+            )
+        if getattr(options_project, "broken", False):
+            # A package that failed to load answers every question about itself
+            # with nothing, so without this the next thing to go wrong is
+            # 'analysis_getopts' reporting that the implementation declared no
+            # 'extension:' -- which sends the reader to look at a file that was
+            # never read. Whatever went wrong is already in the log above; what
+            # is worth saying here is which package it was and that this is why
+            # the analysis is not running.
+            raise Exception(
+                "The package implementing '%s' did not load: %s. "
+                "The reason is reported above; a dependency that could not be fetched is the usual one."
+                % (analysis, options_project.name)
+            )
+        return options_project, format_name
+
+    async def _analysis_boundary_async(self, ctx, config):
+        """Where the boundary conditions this analysis was given actually are.
+
+        The part names interfaces; a solver needs coordinate frames. The lookup
+        is the very one 'pc render --with-ports' does, so a user who cannot work
+        out why a fixture did nothing can draw the same ports on a projection and
+        look at them.
+        """
+        from .render_overlay import Overlay, collect_async
+
+        try:
+            records = await collect_async(self, ctx, Overlay(ports=True))
+        except Exception as e:
+            raise pc_cae.CaeConfigError(
+                "Failed to locate the ports the '%s:' section names: %s" % (config.analysis, e)
+            ) from e
+
+        assigned, unmatched = pc_cae.assign_ports(config, records)
+        for name, reason in unmatched:
+            # A boundary condition that matched no port is silently doing
+            # nothing, and a solver told to hold nothing still answers with
+            # nonsense rather than with an error. The reason is carried rather
+            # than assumed: a misspelt *instance* name reads very differently
+            # from an interface the object never implements.
+            pc_logging.warning(
+                "%s:%s: '%s:' names the interface '%s', but %s"
+                % (self.project_name, self.name, config.analysis, name, reason)
+            )
+        if not assigned:
+            raise pc_cae.CaeConfigError(
+                "'%s:' names no port of this object: none of the interfaces it lists is implemented here"
+                % config.analysis
+            )
+        return assigned
+
+    async def analyze_async(
+        self,
+        ctx: Context,
+        analysis: str,
+        implementation: Optional[str] = None,
+        project: Optional[Project] = None,
+        filepath=None,
+        output_dir=None,
+        **kwargs,
+    ) -> dict:
+        """Run one CAE analysis on this shape and report what it found.
+
+        Args:
+            ctx: Execution context.
+            analysis: "fea" or "cfd" - which section of the object holds the
+                boundary conditions, and what the output file is named after.
+            implementation: '<package>:<file type>' naming who runs it,
+                overriding the user configuration's default for this run.
+            project: The package the object belongs to, whose 'cae:' section
+                re-tunes the implementation's parameters.
+            filepath: The file to write. None resolves it from the
+                configuration and the object's name.
+            output_dir: Where the file goes when 'filepath' does not say.
+            kwargs: Analysis parameters, overriding what the configuration says.
+
+        Returns:
+            The model file that was written and the findings, as plain data.
+
+        Raises:
+            partcad.cae.CaeConfigError: the object declares no boundary
+                conditions for this analysis, or declares them wrongly. Both are
+                answers to the user's question rather than failures, and both
+                are reported as the sentence they carry.
+        """
+        config = pc_cae.config_of(self, analysis)
+        if config is None:
+            raise pc_cae.CaeConfigError(
+                "%s:%s declares no '%s:' section, so there is nothing to analyse"
+                % (self.project_name, self.name, analysis)
+            )
+
+        if project is None:
+            project = ctx.get_project(self.project_name)
+        # '-i' first, then what the part declared, then the user configuration.
+        # The part's own answer sits in the middle because it is a statement
+        # about the part -- the solver it was written against -- and the two
+        # things that outrank it are the two that are about this run and this
+        # machine. Handed over separately rather than picked between here: the
+        # two are resolved against different packages when either names one
+        # relatively, and only the callee knows which it ended up using.
+        options_project, format_name = self._analysis_implementation(
+            ctx, analysis, implementation, declared=config.implementation
+        )
+
+        with pc_logging.Action(analysis.upper(), self.project_name, self.name):
+            impl, final_filepath = self.analysis_getopts(
+                ctx, analysis, format_name, project, filepath, options_project, output_dir
+            )
+            final_filepath = os.path.abspath(final_filepath)
+
+            # Clearing the path, writing it and reading the answer back are one
+            # operation on one file, and the path is derived from the shape --
+            # so a second run over the same shape resolves to the same path and
+            # would otherwise interleave with this one: its 'os.remove' landing
+            # between this run's write and this run's check, or its model being
+            # the one handed back here. Held for all three, and the nested
+            # 'get_wrapped' and '_run_implementation_async' take the same lock
+            # again without waiting for it.
+            #
+            # What this does not make it is a snapshot. The path below is the
+            # shape's model file, not this call's, and a later run of the same
+            # analysis on the same shape replaces it once this one has returned
+            # -- the same contract 'pc render' and 'pc export' have, and the
+            # reason the IDE and the CLI can both name the file without being
+            # told where it went. A caller that needs the bytes to outlive the
+            # next run copies them; giving each run its own path instead would
+            # take that name away from everyone who relies on it.
+            async with self.locked():
+                ctx.ensure_dirs_for_file(final_filepath)
+                # A model is the answer to *this* run, and the path it goes to
+                # is stable -- '<part>.<analysis>.<extension>', beside the
+                # package. So one an earlier run left there would satisfy the
+                # check below and be handed back as the new result: last week's
+                # stresses under today's load, with nothing to say they are not
+                # today's. Removed before the implementation is asked, which
+                # makes the file's existence afterwards mean what it is read as
+                # meaning.
+                if os.path.exists(final_filepath):
+                    os.remove(final_filepath)
+
+                obj = await self.get_wrapped(ctx)
+                if obj is None:
+                    raise Exception("Cannot analyse '%s': shape is empty" % self.name)
+
+                boundary = await self._analysis_boundary_async(ctx, config)
+                script = await self._materialize_output_script(ctx, impl)
+
+                request = await self._output_request(obj, impl, kwargs)
+                request.update(config.to_data())
+                # The ports each condition landed on, in the shape's own
+                # coordinate system. 'fix' and 'load' above say what the user
+                # wrote; this says where it goes, which is what a solver needs.
+                request["boundary"] = boundary
+
+                result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+
+                if result is None:
+                    raise Exception("The '%s' implementation reported nothing: %s" % (format_name, script))
+                if not result.get("success", False):
+                    raise Exception(
+                        "%s failed for %s:%s: %s"
+                        % (analysis.upper(), self.project_name, self.name, result.get("exception", "Unknown error"))
+                    )
+                written = os.path.exists(final_filepath)
+
+        if not written:
+            # The meta-wrapper reports what the script returned and does not look
+            # at the path, so "success" alone is the script's word for it. This
+            # result is handed to a caller that acts on 'filepath' -- the IDE
+            # reads the bytes back, the CLI prints where to find them -- so a
+            # path to nothing is worse than a refusal. The same check
+            # '_convert_to_serialized()' makes of an exporter, for the same
+            # reason. Sound only because the path was cleared above: otherwise
+            # this passes on a file the implementation never touched.
+            raise Exception(
+                "%s produced no model for %s:%s: %s was not written"
+                % (analysis.upper(), self.project_name, self.name, final_filepath)
+            )
+        for warning in result.get("warnings") or []:
+            pc_logging.warning("%s:%s: %s" % (self.project_name, self.name, warning))
+
+        return {
+            "object": "%s:%s" % (self.project_name, self.name),
+            "analysis": analysis,
+            "implementation": "%s:%s" % (options_project.name, format_name),
+            "filepath": final_filepath,
+            "extension": os.path.splitext(final_filepath)[1].lstrip("."),
+            "findings": pc_cae.normalize_findings(result.get("findings")),
+            "boundary": boundary,
+        }
+
+    def analyze(
+        self,
+        ctx: Context,
+        analysis: str,
+        implementation: Optional[str] = None,
+        project: Optional[Project] = None,
+        filepath=None,
+        output_dir=None,
+        **kwargs,
+    ) -> dict:
+        """`analyze_async` for a caller that has no event loop of its own."""
+        return asyncio.run(self.analyze_async(ctx, analysis, implementation, project, filepath, output_dir, **kwargs))
 
     async def render_svg_somewhere_async(
         self,

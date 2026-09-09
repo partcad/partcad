@@ -396,6 +396,89 @@ not ``~/.gnupg/``:
 
 .. _Dev Containers CLI: https://github.com/devcontainers/cli
 
+Without Docker: a native checkout
+---------------------------------
+
+Both routes above start a container, and a container needs a Docker daemon. Some machines have none and cannot be
+given one — the sandbox a cloud coding agent runs in, a CI runner with no privileged access. There the dev container
+is not a thing to insist on, so install into the checkout and run everything directly:
+
+.. code-block:: bash
+
+  $ ./dev-tools/setup-native.sh
+
+That runs ``poetry install``, installs OpenSCAD, checks for the one thing a parallel install can get wrong (below),
+and reports what else this machine has. Afterwards, every command in the rest of this page works with its
+``devcontainer exec`` prefix dropped and its ``poetry run`` kept.
+
+OpenSCAD is installed rather than merely reported because PartCAD treats it as part of the toolchain and not as an
+optional extra: the standalone bundles carry one, ``pc healthcheck`` asks after it, and a ``.scad`` part raises
+"OpenSCAD executable is not found" rather than degrading. The script uses ``apt-get`` or Homebrew, and stops if it has
+neither — an environment without OpenSCAD is not set up, and finding that out from a test run half an hour later is
+the outcome this avoids.
+
+This is still a fallback rather than a second supported environment, and it is worth being explicit about what it does
+not give you:
+
+* **The** ``pre-commit`` **hooks do not run.** ``pre-commit`` is installed by the dev container's image, not by
+  ``poetry install``, and ``.git/hooks/pre-commit`` is written by ``pre-commit install`` running inside the container.
+  So there is no hook to fail, and ``git commit`` runs no gate at all without saying so. Run ``pytest``, ``behave``
+  and the linters yourself before committing; CI runs them regardless.
+* **A Docker daemon**, which only the KiCad example needs. A machine without one has to say so — ``PC_USE_DOCKER=false``
+  in the environment, or ``useDocker: false`` in the user configuration — and then that example is skipped. Say
+  nothing and a missing daemon *fails*, on purpose: a machine that never mentioned Docker is claiming one, and
+  passing over the test in silence would turn a runner whose daemon died into a green run with one fewer test in it.
+* **conda**, without which the ``pythonSandbox`` option falls back to ``venv``. That builds a real virtual environment
+  of PartCAD's own and runs the CAD wrappers in it; it just cannot provision an *interpreter version*, so a package
+  asking for a Python this host does not have renders on the host's instead and says so.
+
+.. important::
+
+  **Do not run the whole** ``behave`` **suite on such a machine — run the one feature your change touches.** Every
+  scenario takes a throwaway ``$HOME`` (the ``Given I have temporary $HOME`` in each feature's ``Background``), so a
+  scenario that renders anything builds a CAD sandbox of its own from nothing and deletes it again: roughly 2.7 GB
+  and minutes of ``pip`` each, across 166 scenarios, and several of those on disk at once under ``behavex``'s
+  parallel workers. That is hours and tens of gigabytes, and where the disk is a fixed allowance it ends in "no
+  space left on device" rather than in a result.
+
+  .. code-block:: bash
+
+    $ poetry run behave features/<name>.feature      # yes
+    $ poetry run behave                              # no, not here
+
+  A green whole-suite ``behave`` is not a prerequisite for opening a pull request from a machine like this: CI shards
+  that suite and runs it there. Say in the pull request which features you did run.
+
+.. warning::
+
+  **Two wheels that install the same file can leave the checkout segfaulting, and nothing reports it.** Poetry
+  installs in parallel, so on a machine slow enough to lose that race both workers write that one path at once and
+  what lands is a blend of the two wheels. Both installs report success.
+
+  What you see is much later and somewhere else: an ``import`` of a native module like that hands a corrupt ELF to
+  the dynamic loader, and the interpreter dies with ``Fatal Python error: Segmentation fault`` — during pytest
+  *collection*, if a test module imports it at import time, so no test has failed and there is nothing to point at.
+
+  .. code-block:: bash
+
+    $ poetry run python dev-tools/check_installed_files.py         # report
+    $ poetry run python dev-tools/check_installed_files.py --fix   # report and reinstall
+
+  ``setup-native.sh`` runs the second of those. The dev container's image installs from
+  ``.devcontainer/requirements.txt`` with pip, one wheel at a time, which is why this is not the container's problem.
+
+  The pair that did this was ``cadquery-ocp`` and ``cadquery-ocp-novtk``, which both ship one 160 MB
+  ``OCP/OCP.cpython-*.so``. ``cadquery-ocp`` is no longer declared in ``pyproject.toml`` — nothing in this
+  environment imports ``cadquery`` in process, and build123d pulls the novtk build in regardless — so one
+  distribution owns that file and it can no longer be written twice. The checker stays for the next such pair, which
+  will not announce itself either.
+
+  It also stays for the other half of the same problem, which **an existing checkout will hit exactly once**:
+  uninstalling a distribution deletes the files its RECORD names, the ones a wheel beside it also installed
+  included. So ``poetry sync`` removing ``cadquery-ocp`` takes ``OCP/`` away from ``cadquery-ocp-novtk``, which
+  stays installed, and ``import OCP`` stops working with nothing in either command's output about it. The checker
+  reports a distribution whose recorded files are gone, and ``--fix`` puts them back.
+
 Install Dependencies
 --------------------
 
@@ -419,7 +502,7 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
 .. code-block::
 
-  Installing the current project: partcad (0.8.57)
+  Installing the current project: partcad (0.8.59)
 
 .. warning::
 

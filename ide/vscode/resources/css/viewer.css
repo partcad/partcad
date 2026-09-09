@@ -399,3 +399,178 @@ table.selectable tbody tr:focus-visible {
 a {
     color: var(--vscode-textLink-foreground);
 }
+
+/*
+ * The analysis panes: FEA and CFD.
+ *
+ * Three bands, and the middle one takes what is left. Which solver ran is on
+ * top, centred, because it is the one thing about an analysis a user changes
+ * without editing a file; the findings are the bottom fifth, and are not there
+ * at all when the analysis found nothing - a pass should hand the model the
+ * whole pane rather than a strip of white space saying "none".
+ */
+.pane.cae {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.cae-header {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.cae-header-label {
+    color: var(--vscode-descriptionForeground);
+}
+
+.cae-implementation {
+    width: min(32rem, 60%);
+    padding: 0.25em 0.5em;
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, transparent));
+    border-radius: 2px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: inherit;
+}
+
+.cae-implementation:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.cae-run {
+    padding: 0.25em 0.9em;
+    border: none;
+    border-radius: 2px;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+
+.cae-run:hover {
+    background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
+}
+
+.cae-body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.cae-model {
+    position: relative;
+    width: 100%;
+    /* Height is set by the pane itself: the whole of it, or all but the findings
+       band. A percentage rather than a flex ratio because the 20% is a promise
+       about the pane and not about whatever the findings happen to fill. */
+    height: 100%;
+    overflow: hidden;
+}
+
+/* The two model viewers both fill the band and never scroll: the picture is
+   moved with the pointer, not with a scrollbar. */
+.cae-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.cae-canvas canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.cae-image-host {
+    /* The pan is a transform on the image, so the band clips it and the pointer
+       belongs to the band rather than to whatever is under the pointer. */
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+}
+
+.cae-image-host:active {
+    cursor: grabbing;
+}
+
+.cae-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transform-origin: 0 0;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.cae-model .placeholder,
+.cae-model .error {
+    padding: 1rem;
+    white-space: pre-line;
+}
+
+.cae-findings {
+    overflow: auto;
+    border-top: 1px solid var(--vscode-panel-border, transparent);
+    padding: 0.4rem 1rem 0.6rem 1rem;
+}
+
+.cae-findings-heading {
+    margin-bottom: 0.3em;
+    color: var(--vscode-descriptionForeground);
+    font-weight: 600;
+}
+
+.cae-findings-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cae-finding {
+    display: flex;
+    gap: 0.6em;
+    align-items: baseline;
+    padding: 0.15em 0;
+}
+
+.cae-severity {
+    flex: 0 0 auto;
+    min-width: 5.5em;
+    text-transform: uppercase;
+    font-size: 0.8em;
+    letter-spacing: 0.03em;
+    color: var(--vscode-descriptionForeground);
+}
+
+.cae-severity-error,
+.cae-severity-critical {
+    color: var(--vscode-errorForeground, var(--vscode-foreground));
+}
+
+.cae-severity-warning {
+    color: var(--vscode-editorWarning-foreground, var(--vscode-foreground));
+}
+
+.cae-finding-message {
+    flex: 1 1 auto;
+    white-space: pre-wrap;
+}
+
+.cae-finding-where {
+    flex: 0 0 auto;
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-editor-font-family, monospace);
+}

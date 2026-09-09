@@ -357,6 +357,24 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.supplyQuote', (a) =>
             this.send('supply.quote', { package: a.pkg, object: a.name, qos: a.qos, recursive: a.recursive }),
         );
+        // The FEA and CFD tabs. One command for both analyses, as one operation
+        // backs both 'pc cae fea' and 'pc cae cfd': which one is asked for is an
+        // argument, not a method.
+        reg('partcad.cae', (a) =>
+            this.send('cae.analyze', {
+                package: a.pkg,
+                object: a.name,
+                analysis: a.analysis,
+                implementation: a.implementation,
+                // The panel has no file system in reach, so the model comes back
+                // as bytes rather than as a path on the daemon's machine.
+                inline: a.inline === true,
+                // The findings are drawn by the panel, so the daemon need not
+                // also print the table it prints for the CLI.
+                json: true,
+            }),
+        );
+        reg('partcad.caeDefaults', () => this.send('cae.defaults', {}));
         reg('partcad.exportPart', (type, path, pkg, name, params) =>
             this.send('export.part', { type, path, package: pkg, name, params }),
         );

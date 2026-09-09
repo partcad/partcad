@@ -121,3 +121,103 @@ def test_ctx_root_reports_the_loaded_package():
     # provisional '//' the Context starts out with.
     assert ctx.name != pc.consts.ROOT
     assert ctx.get_project(ctx.name) is ctx.root
+
+
+# --------------------------------------------------------------------------- #
+# What "offline" is decided by                                                 #
+# --------------------------------------------------------------------------- #
+
+
+def proxied(monkeypatch, variable=None, value=None):
+    """Put the environment in exactly one proxy state, clearing before setting.
+
+    The order is the whole point, and Windows is why. Environment variable names
+    are case-insensitive there and 'os.environ' upper-cases its keys, so
+    'HTTPS_PROXY' and 'https_proxy' are one variable rather than two -- and a
+    test that set one spelling and then cleared the other cleared the value it
+    had just set. It read as a proxy test on Linux and, on Windows, as a test
+    that no proxy is configured; asserting the proxy's address, it failed there
+    and only there.
+    """
+    for spelling in ("HTTPS_PROXY", "https_proxy"):
+        monkeypatch.delenv(spelling, raising=False)
+    if variable is not None:
+        monkeypatch.setenv(variable, value)
+
+
+def test_the_probe_is_a_public_resolver_when_nothing_is_proxied(monkeypatch):
+    """The historical answer, and the right one on a host that dials out itself."""
+    proxied(monkeypatch)
+    assert pc.context.connectivity_probe() == ("8.8.8.8", 53)
+
+
+@pytest.mark.parametrize(
+    "proxy, expected",
+    [
+        ("http://127.0.0.1:33893", ("127.0.0.1", 33893)),
+        ("http://proxy.example.com:3128", ("proxy.example.com", 3128)),
+        # No scheme is a spelling people use, and urlparse reads it as a path
+        # unless one is supplied.
+        ("proxy.example.com:3128", ("proxy.example.com", 3128)),
+        # No port either: an HTTP proxy's default.
+        ("http://proxy.example.com", ("proxy.example.com", 80)),
+        ("http://user:secret@proxy.example.com:8080", ("proxy.example.com", 8080)),
+    ],
+)
+def test_a_proxied_host_is_asked_about_its_proxy(monkeypatch, proxy, expected):
+    """Where every packet goes through a proxy, only the proxy can answer.
+
+    8.8.8.8 is unreachable in such an environment while git and every download
+    work, so probing it reports offline on a machine that can fetch everything
+    PartCAD needs -- and 'is_connected()' gates the clone, so an import is then
+    never attempted at all.
+    """
+    proxied(monkeypatch, "HTTPS_PROXY", proxy)
+    assert pc.context.connectivity_probe() == expected
+
+
+def test_the_lowercase_spelling_is_read_too(monkeypatch):
+    """'https_proxy' is what most tools set; both spellings are in the wild.
+
+    On Windows this asserts something weaker than its name suggests, and
+    unavoidably so: there is only one variable there whatever its case. What it
+    still says on every platform is that the value is read.
+    """
+    proxied(monkeypatch, "https_proxy", "http://proxy.example.com:3128")
+    assert pc.context.connectivity_probe() == ("proxy.example.com", 3128)
+
+
+@pytest.mark.parametrize(
+    "proxy",
+    [
+        # No host in it at all.
+        "://",
+        # A port that is not a number. 'ParseResult.port' raises ValueError on
+        # this one, and it is raised from outside the 'except OSError' that
+        # '_check_connectivity' wraps the connection in -- so before this was
+        # caught, an environment carrying such a value did not fall back to
+        # offline, it made 'is_connected()' raise at whichever caller asked
+        # first.
+        "http://proxy.example:not-a-port",
+        "proxy.example:65536",
+    ],
+)
+def test_an_unparseable_proxy_falls_back_rather_than_failing(monkeypatch, proxy):
+    """A value PartCAD cannot read says nothing, so the resolver answers instead."""
+    proxied(monkeypatch, "HTTPS_PROXY", proxy)
+    assert pc.context.connectivity_probe() == ("8.8.8.8", 53)
+
+
+def test_an_unparseable_proxy_leaves_is_connected_answering(monkeypatch):
+    """And the caller gets an answer rather than a ValueError out of the probe.
+
+    The connection is mocked rather than made. What this asserts is about the
+    'ValueError' no longer escaping 'connectivity_probe()', and reaching that
+    over a real socket would put a three-second timeout and the runner's
+    network in the way of saying so.
+    """
+    proxied(monkeypatch, "HTTPS_PROXY", "http://proxy.example:not-a-port")
+    ctx = pc.Context("tests/partcad")
+    ctx.connection_status = {}
+    with patch("partcad.context.socket.create_connection", side_effect=OSError):
+        assert ctx.is_connected() is False
