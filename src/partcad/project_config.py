@@ -154,6 +154,27 @@ class Configuration:
             self.python_version = sandbox_versions.DEFAULT_PYTHON_VERSION
             self.python_version_declared = None
 
+        # option: "dockerImage"
+        # description: the image this package's sandboxes are built from, for
+        #              whoever is using the "docker" sandbox
+        # values: string (e.g. "ghcr.io/example/solver:1a2b3c4d")
+        # default: None, meaning PartCAD's own base image for the Python version
+        #
+        # Declared by a package that needs something pip cannot install -- a
+        # native executable, a library with no wheel for some platform. It does
+        # NOT excuse the package from declaring its "pythonRequirements": an
+        # image says where the package runs best, not where it runs at all, and
+        # a host that has the native pieces installed runs it in a conda or venv
+        # sandbox like any other package.
+        #
+        # Kept apart from anything resolved, for the reason "pythonVersion" is:
+        # an output implementation runs in the image the package that *ships* it
+        # named, and a caller asking for a part has no opinion worth reading.
+        self.docker_image_declared = self.config_obj.get("dockerImage")
+        if self.docker_image_declared is not None and not isinstance(self.docker_image_declared, str):
+            pc_logging.warning('%s: "dockerImage" must be a string naming an image' % name)
+            self.docker_image_declared = str(self.docker_image_declared)
+
         # option: "javascriptVersion"
         # description: the major version of Node.js to use in sandboxed
         #              environments if any

@@ -151,18 +151,25 @@ isort --check src/partcad tests/partcad
   load, or declares no such file type, the configuration is wrong on every machine and no install mends it.
   `CaeTest` resolves it separately from running it, so the two are told apart.
 
-  A second gate is the machine: an analysis whose plugin resolved and which still could not run -- no solver
-  binary installed -- is reported as skipped and passed, not failed. PartCAD ships no solver, so the other
-  way round would mean that one part declaring `fea:` breaks `pc test` for everyone without CalculiX, this
-  repository's own `examples/feature_cae` included. The cost is that a solver which *crashes* is skipped too,
-  because nothing here can tell that from one that is absent; `pc cae` is where that is an error.
+  **An analysis that does not run also fails**, and this is deliberately not a skip. A skip says the question
+  does not apply here; a plugin that resolved, was asked, and produced no answer has failed -- no mesher, no
+  solver, a sandbox that will not build, a crash. `CaeTest` cannot tell those apart and does not try: it
+  relays whatever the implementation said, through `cae.dysfunction_report()`, which adds the two things the
+  sentence usually omits and the reader always needs -- which implementation was asked, and which machine it
+  did not work on.
 
-  That skip is the one verdict `pc test` does **not** cache, via `Test.NOT_CACHEABLE` on the `test_ctx`. A
+  This was the other way round until it was found to be hiding things worth failing over: a CFD implementation
+  that never converges, and a plugin that cannot be installed on a whole platform. The consequence is the
+  point -- declaring `fea:` in a shared package makes `pc test` fail for everyone who has not installed what
+  the implementation needs, which is what declaring it means. A package that does not want that should not
+  declare the section, the same gate that stops `pc test -r` starting a solver for every bolt in a tree.
+
+  That failure is the one verdict `pc test` does **not** cache, via `Test.NOT_CACHEABLE` on the `test_ctx`. A
   cache key describes the question -- the shape's hash, the boundary conditions, the implementation and its
   options -- and nothing in it describes the machine, because a test cannot know what its implementation needs
-  installed. Installing CalculiX therefore changes no key, and a remembered skip would answer in hundredths of
-  a second without going near the solver that is now there. `CaeTest` is the only test that reaches that state,
-  and the flag exists for it.
+  installed. Installing CalculiX therefore changes no key, and a remembered failure would go on failing a part
+  that now analyses perfectly well. `CaeTest` is the only test that reaches that state, and the flag exists
+  for it.
 
 - **One shape, one lock** (`Shape.locked()`): a shape is held still both while it is instantiated and while
   any file derived from it is produced. They are one question because the output path is derived from the

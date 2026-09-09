@@ -48,6 +48,11 @@ Host commands
     the local cache.
   - ``pc system reset`` — Reset all internal state maintained by PartCAD, for example to clear a corrupted
     cache.
+  - ``pc system prune`` — Remove the containers and images PartCAD created for the ``docker`` sandbox.
+    Only what carries PartCAD's labels (see ``tools/containers/README.md``), so an image somebody else put on
+    the machine is never touched — and neither is a third-party sandbox image whose author did not adopt the
+    convention, which has to be removed by hand. ``--stale`` narrows it to what is out of date: images built
+    for another PartCAD release, and containers nothing is using.
   - ``pc system set`` — Set system-wide settings, such as the telemetry type, environment, and Sentry DSN.
   - ``pc system telemetry`` — Inspect or clear locally stored telemetry data (``info``, ``clear``).
 
@@ -321,16 +326,34 @@ Object commands
   export or a render implementation is declared in its own (see :ref:`output-files`), and installed as a
   dependency.
 
+  An analysis that produces no answer is reported the same way by ``pc cae`` and by ``pc test``: which
+  implementation was asked, what it said, and which platform it did not work on. The remedies differ — install a
+  solver, use another machine, fix the part — and only the implementation's own sentence says which, so it is
+  relayed as it stands rather than classified. The command and the check say it identically on purpose: a user
+  who ran one of them and then the other must not be told two different things about the same machine.
+
   ``pc test`` runs the same analyses. Its ``fea`` and ``cfd`` tests apply to a part that declares the matching
-  section — and to nothing else, so a package of bolts pays nothing for them — and fail it when the analysis
-  produces any finding. A plugin that cannot be resolved -- the package is not a dependency, did not load, or
-  declares no such file type -- **fails**: that is the configuration being wrong, and it is wrong wherever the
-  package is opened. A machine with no *solver* installed is different and is not a failure: the check reports
-  that it did not run and passes, because PartCAD ships no solver and declaring ``fea:`` must not break
-  ``pc test`` for every contributor who has not installed one. ``pc cae`` is what reports a missing solver as
-  the error it is. That pass is not remembered, unlike every other verdict ``pc test`` reaches: it is a
-  statement about the machine, and installing a solver changes nothing a cache key is built from, so a
-  remembered one would outlive its reason.
+  section — and to nothing else, so a package of bolts pays nothing for them. **One thing passes: the analysis
+  ran and reported no findings.** A malformed section fails; a plugin that cannot be resolved fails (the
+  package is not a dependency, did not load, or declares no such file type — the configuration is wrong
+  wherever the package is opened); a plugin that resolves and cannot run fails too, whether what is missing is
+  the solver, the mesher, or a sandbox that will not build. That last one is not a skip on purpose: a part
+  declaring ``fea:`` has asked a question, and a plugin that answered nothing has failed. So declaring ``fea:``
+  in a shared package does make ``pc test`` fail for everyone who has not installed what the implementation
+  needs — that is what declaring it means, and a package unwilling to ask that of its readers should not
+  declare the section. It is the one verdict ``pc test`` does not remember — installing a solver changes
+  nothing a cache key is built from, so a remembered one would go on failing a part that now analyses perfectly
+  well.
+
+  **A machine with no container runtime is the one excuse.** An implementation naming a ``container:`` or a
+  ``dockerImage`` (see :doc:`configuration`) is saying that a container is how what pip cannot install
+  arrives; where there is no container runtime to run it in, nothing was ever asked, and the check skips with
+  a ``WARNING`` carrying the whole report. It still declares the requirements that let it run in a ``conda``
+  or ``venv`` sandbox, so a host with the non-Python pieces installed natively runs it there and a failure
+  there is a failure. An implementation that names no image gets no excuse at all, and a container runtime
+  that *is* here removes the excuse for one that does — an image that cannot be pulled or is missing the
+  solver is something somebody can fix. A Docker daemon running Windows containers is not one of these
+  runtimes: every image PartCAD uses is a Linux image.
 
 ``pc convert``
   Convert parts, sketches, assemblies or scenes to another format and update their type in the package.

@@ -114,15 +114,20 @@ def pack_directory(path: str) -> str:
 class SandboxUnavailable(Exception):
     """The sandbox mechanism an implementation asked for is not on this machine.
 
-    The one thing `pc test` may skip on, and the reason it is the only one: it
-    is not a statement about the implementation, which may be perfectly good,
-    nor about the part. It is the absence of a *runtime*, and PartCAD is the
-    only thing that can tell -- the implementation never gets to run, so it
+    Not a statement about the implementation, which may be perfectly good, nor
+    about the part: it is the absence of a *runtime*, and PartCAD is the only
+    thing that can tell, since the implementation never gets to run and so
     cannot report it itself.
 
-    Everything else an implementation might fail on -- no solver, no mesher, a
-    package that will not install, a crash -- happens once the sandbox is there,
-    and is a failure. See `partcad.test.cae.CaeTest.test()`.
+    What `pc test` makes of it is not decided here but by the implementation:
+    one that declares a `container:` or a `dockerImage` is saying that a
+    container is how its dependencies arrive, so a machine with no container
+    runtime is a machine that could never have run it, and the verdict is a
+    skip. One that declares neither said it runs in an ordinary sandbox, and a
+    machine with a working sandbox is a machine it was supposed to work on, so
+    the verdict is a failure. What the type buys either way is the message:
+    `CaeTest` reads it to add both remedies, which no other failure gets. See
+    `partcad.test.cae.CaeTest._verdict()`.
     """
 
 
@@ -138,12 +143,29 @@ def docker_available() -> bool:
     /var/run/docker.sock there": the `docker` package installs with PartCAD on
     every platform, and a socket can exist with nothing behind it. The question
     is whether a container can be started, and only the daemon answers that.
+
+    And not only that a container can be started -- that one of *ours* can.
+    Every image PartCAD builds, pulls or documents is a Linux image, and a
+    Docker daemon on Windows runs Windows containers unless it has been switched
+    to the WSL2 backend. Such a daemon answers a ping perfectly happily and then
+    fails every pull with "no matching manifest for windows/amd64", which is a
+    container runtime by the letter of the question and not by its point. So the
+    daemon is asked what it runs, once, in the same cached call.
     """
     global _docker_available
     if _docker_available is None:
         try:
-            docker.from_env().ping()
-            _docker_available = True
+            client = docker.from_env()
+            client.ping()
+            os_type = str(client.info().get("OSType", "")).lower()
+            if os_type and os_type != "linux":
+                pc_logging.debug(
+                    "The container runtime on this machine runs %s containers, and every image PartCAD"
+                    " uses is a Linux image." % os_type
+                )
+                _docker_available = False
+            else:
+                _docker_available = True
         except Exception as e:
             pc_logging.debug("No container runtime on this machine: %s" % e)
             _docker_available = False
@@ -350,6 +372,25 @@ class Runtime:
         """
         return 1, None, "The container serving '%s' returned no response" % name
 
+    def _spawn(self, cmd, cwd=None, env=None):
+        """What to actually launch: the argv, the directory, the environment.
+
+        The one seam a sandbox overrides when the process it wants is not the
+        process it was handed. The 'docker' sandbox turns the argv into a
+        'docker exec' of the same argv, and moves the working directory into a
+        '-w' flag, because that directory belongs to the container rather than
+        to whichever machine the 'docker' client runs on.
+
+        It has to be here, and applied at every launch point, because there are
+        two: this class runs a command with 'subprocess', and 'PythonRuntime'
+        runs one with its own 'subprocess' call after prepending an interpreter.
+        A sandbox that overrode a 'run' method instead would catch whichever of
+        the two its caller happened to use -- which is how the 'docker' sandbox
+        came to build its virtual environment with the host's interpreter while
+        a container sat beside it doing nothing.
+        """
+        return cmd, cwd, env
+
     def run(
         self,
         cmd: list[str],
@@ -374,24 +415,23 @@ class Runtime:
             input_dirs = []
 
         if self.rpc_client:
-            response = self.rpc_client.execute(
-                cmd, self._rpc_params(stdin, cwd, input_files, output_files, input_dirs)
-            )
+            response = self.rpc_client.execute(cmd, self._rpc_params(stdin, cwd, input_files, output_files, input_dirs))
             if not response:
                 return self._no_response(self.name)
             stdout, stderr, returncode = self._rpc_result(response, output_files)
         else:
+            argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
             with sandbox_lock.process_slots.slot():
                 p = subprocess.Popen(
-                    cmd,
+                    argv,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     shell=False,
                     encoding="utf-8",
                     # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                    cwd=cwd,
-                    env=env,
+                    cwd=spawn_cwd,
+                    env=spawn_env,
                 )
                 stdout, stderr = p.communicate(
                     input=stdin,
@@ -427,16 +467,17 @@ class Runtime:
                 return self._no_response(self.name)
             stdout, stderr, returncode = self._rpc_result(response, output_files)
         else:
+            argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
             async with sandbox_lock.process_slots.slot_async():
                 p = await asyncio.create_subprocess_exec(
-                    *cmd,
+                    *argv,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     shell=False,
                     # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                    cwd=cwd,
-                    env=env,
+                    cwd=spawn_cwd,
+                    env=spawn_env,
                 )
                 stdout, stderr = await communicate(p, stdin.encode(), timeout)
 

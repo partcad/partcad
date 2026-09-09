@@ -25,19 +25,42 @@ This module provides a JSON-RPC client for communicating with the RPC servers fo
 class RuntimeJsonRpcClient:
     """JSON-RPC client for PartCAD runtime communication."""
 
-    def __init__(self, host: str = "localhost", port: int = 5000):
+    def __init__(self, host: str = "localhost", port: int = 5000, token: str = None, scheme: str = "http"):
         """Initialize the JSON-RPC client with host and port.
 
         Args:
           host: Server hostname (default: localhost)
           port: Server port number (default: 5000)
+          token: The shared secret the server was started with, if any. Sent as
+            a bearer token on every request. A container PartCAD started on this
+            machine needs none -- nothing but this process can reach it -- and
+            'partcad-service-remote-docker' listening anywhere but loopback
+            refuses to start without one.
+          scheme: 'http' or 'https'. A container PartCAD started on this machine
+            speaks plain HTTP over a port only this machine can reach, and a
+            certificate between a process and its own container would secure
+            nothing. Anything off this machine is the caller's to secure -- see
+            'RemotePythonRuntime._client()', which refuses to send a request in
+            the clear to an address that is not loopback.
         """
         self.host = host
         self.port = port
+        self.token = token
+        self.scheme = scheme
         self.request_id = 0
 
         self.lock = threading.RLock()
         self.tls = threading.local()
+
+    def _headers(self) -> Dict[str, str]:
+        """What every request carries beyond its body.
+
+        Empty where there is no token, which is every container PartCAD starts
+        for itself: those listen on a port on this machine and are reachable by
+        nothing else, so a secret between a process and a container it started
+        would protect it from itself.
+        """
+        return {"Authorization": "Bearer %s" % self.token} if self.token else {}
 
     def get_async_lock(self):
         if not hasattr(self.tls, "async_rpc_locks"):
@@ -60,12 +83,16 @@ class RuntimeJsonRpcClient:
             async with self.get_async_lock():
                 return self.get_request_id_locked()
 
-    def execute(self, command: list[str], params: Dict[str, Any] = None) -> Union[Dict, None]:
+    def execute(self, command: list[str], params: Dict[str, Any] = None, timeout: float = None) -> Union[Dict, None]:
         """Execute a command on the server using JSON-RPC.
 
         Args:
           command: The CLI command to execute
           params: Optional parameters for the command
+          timeout: Seconds to wait for the server, or None to wait forever.
+            Passed straight to the HTTP request, so a caller that was given a
+            bound can hold this side to it; without one an unresponsive server
+            blocks whatever is rendering.
 
         Returns:
           The server's response as a dictionary, or None if there's an error
@@ -82,19 +109,27 @@ class RuntimeJsonRpcClient:
         pc_logging.debug(f"Sending request: {request_string}")
 
         try:
-            response = requests.post(f"http://{self.host}:{self.port}/jsonrpc", json=request)
+            response = requests.post(
+                f"{self.scheme}://{self.host}:{self.port}/jsonrpc",
+                json=request,
+                headers=self._headers(),
+                timeout=timeout,
+            )
             pc_logging.debug(f"Received response: {response.content}")
             return json.loads(response.content)
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
             pc_logging.error(f"Error during RPC call: {e}")
             return None
 
-    async def execute_async(self, command: str, params: Dict[str, Any] = None) -> Union[Dict, None]:
+    async def execute_async(
+        self, command: str, params: Dict[str, Any] = None, timeout: float = None
+    ) -> Union[Dict, None]:
         """Execute a command on the server using JSON-RPC.
 
         Args:
           command: The CLI command to execute
           params: Optional parameters for the command
+          timeout: Seconds to wait for the server, or None to wait forever.
 
         Returns:
           The server's response as a dictionary, or None if there's an error
@@ -111,7 +146,12 @@ class RuntimeJsonRpcClient:
         pc_logging.debug(f"Sending request: {request_string}")
 
         try:
-            response = requests.post(f"http://{self.host}:{self.port}/jsonrpc", json=request)
+            response = requests.post(
+                f"{self.scheme}://{self.host}:{self.port}/jsonrpc",
+                json=request,
+                headers=self._headers(),
+                timeout=timeout,
+            )
             pc_logging.debug(f"Received response: {response.content}")
             return json.loads(response.content)
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:

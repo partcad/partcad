@@ -137,7 +137,9 @@ def is_document_format(format_name: str, section_obj) -> bool:
 # The first group picks the implementation, the second places the output file.
 # What is left over is what the implementation is handed, so adding a field here
 # hides it from every implementation - including the ones packages write.
-IMPLEMENTATION_KEYS = frozenset({"path", "package", "pythonRequirements", "pythonVersion", "decode", "container"})
+IMPLEMENTATION_KEYS = frozenset(
+    {"path", "package", "pythonRequirements", "pythonVersion", "dockerImage", "decode", "container"}
+)
 OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
 RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 
@@ -237,7 +239,7 @@ class Implementation:
               fea:
                 path: fea_calculix.py
                 container:
-                  image: ghcr.io/partcad/partcad-container-calculix:0.8.55
+                  image: ghcr.io/example/solver:1a2b3c4d5e6f
 
         which is how a plugin becomes responsible for its own dependencies
         rather than asking every user to install them. `port` defaults to the
@@ -262,6 +264,31 @@ class Implementation:
                 % (self.format_name, declared)
             )
         return dict(declared)
+
+    @property
+    def docker_image(self) -> Optional[str]:
+        """The image this implementation's sandbox is built from, if it named one.
+
+        Read from the file type first and from the implementing package second,
+        exactly as `python_version()` is and for the same reason: what a script
+        needs to run is known to whoever wrote it, and a caller asking for a
+        part has no opinion about it worth reading. The package-level fallback
+        is what lets a plugin say it once rather than on every file type it
+        implements.
+
+        Unlike `container`, this does not say "instead of a sandbox". It says
+        which image the `docker` sandbox is built from, and a machine using
+        another sandbox ignores it and installs `python_requirements` -- which
+        is why a package that declares one still has to declare those.
+        """
+        declared = self._declared("dockerImage")
+        if declared:
+            return str(declared)
+        if self.project is not None:
+            fallback = getattr(self.project, "docker_image_declared", None)
+            if fallback:
+                return str(fallback)
+        return None
 
     @property
     def python_requirements(self) -> list:

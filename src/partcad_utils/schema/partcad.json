@@ -83,6 +83,7 @@
             "package": { "type": "string", "minLength": 1 },
             "pythonRequirements": { "type": "array", "items": { "type": "string" } },
             "pythonVersion": { "type": "string", "minLength": 1 },
+            "dockerImage": { "type": "string", "minLength": 1 },
             "decode": {
               "type": "boolean",
               "default": true,
@@ -549,6 +550,11 @@
       "type": "array",
       "items": { "type": "string", "minLength": 3 },
       "uniqueItems": true
+    },
+    "dockerImage": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The image this package's sandboxes are built from, for whoever is using the 'docker' sandbox. Declared by a package needing something pip cannot install. It does not replace 'pythonRequirements': an image says where a package runs best, not where it runs at all, and a host with the native pieces installed runs the same package in a conda or venv sandbox. PartCAD appends the machine's architecture to the tag before pulling and falls back to the bare name."
     },
     "javascriptVersion": {
       "type": ["string", "number"],

@@ -80,8 +80,7 @@ def test_an_analysis_is_not_a_known_output_format(ctx):
 # Resolving an implementation                                                 #
 # --------------------------------------------------------------------------- #
 
-PACKAGE = textwrap.dedent(
-    """
+PACKAGE = textwrap.dedent("""
     name: //cae-test
     parts:
       bracket:
@@ -104,8 +103,7 @@ PACKAGE = textwrap.dedent(
         # Declared without an 'extension:', which an analysis has no default for:
         # a misconfigured plugin, as opposed to a missing one.
         path: solve.py
-    """
-)
+    """)
 
 
 @pytest.fixture
@@ -291,6 +289,36 @@ def test_analysing_what_declares_nothing_says_so(package):
 # that returned or raised.
 
 
+@pytest.fixture(autouse=True)
+def a_container_runtime(monkeypatch):
+    """Every check below runs as if this machine had one, unless it says not to.
+
+    `CaeTest` has one excuse for not failing an analysis that produced no
+    answer, and it is the absence of a container runtime (see
+    `CaeTest._verdict`). Left to the real answer, every test here would assert
+    the strict contract on a machine with Docker and the lenient one on a
+    machine without -- which is the failure a contract test exists to catch,
+    applied to itself.
+    """
+    from partcad import runtime as pc_runtime
+
+    monkeypatch.setattr(pc_runtime, "docker_available", lambda: True)
+
+
+def _no_container_runtime(monkeypatch, ctx=None, sandbox="venv"):
+    """The one machine that is excused, for the tests that are about it.
+
+    The sandbox is pinned too, and not as a formality: `remote` runs the
+    implementation in a container on another machine, so it counts as a
+    container runtime however little Docker this host has.
+    """
+    from partcad import runtime as pc_runtime
+
+    monkeypatch.setattr(pc_runtime, "docker_available", lambda: False)
+    if ctx is not None:
+        monkeypatch.setattr(ctx.user_config, "python_sandbox", sandbox)
+
+
 def _analysis(part, monkeypatch, result=None, error=None):
     """Stand in for the solver: hand the check a result, or raise at it."""
 
@@ -339,46 +367,117 @@ def test_a_part_that_declares_nothing_is_not_checked(package, monkeypatch):
     assert asyncio.run(CaeTest(cae.CFD).test([], package, part)) is CaeTest.TEST_PASSED
 
 
-def test_an_analysis_that_could_not_run_is_skipped_loudly(package, monkeypatch, caplog):
-    """No solver on this machine is not a verdict on the part, so not a failure.
+def test_an_analysis_that_could_not_run_fails(package, monkeypatch, caplog):
+    """A plugin that was asked and did not deliver has failed.
 
-    PartCAD ships no solver and the default implementation needs a native binary,
-    so failing here would make declaring `fea:` break `pc test` for everyone who
-    has not installed CalculiX -- including this repository's own examples. The
-    check does not apply on such a machine, and says so.
+    Not a skip. A skip says the question does not apply here; this question
+    applies -- the part asked it by declaring `fea:` -- and went unanswered.
+    Calling that a pass reports a part as checked when nothing checked it, which
+    is how a CFD implementation that never converges stayed green.
     """
     import asyncio
 
     part = _bracket(package)
     _analysis(part, monkeypatch, error=Exception("ccx: not found"))
-    with caplog.at_level("WARNING"):
-        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_PASSED
-    # Loudly: a silent pass would read as "this part was analysed".
-    assert "was not run" in caplog.text
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_FAILED
+    assert "could not be run" in caplog.text
     assert "ccx: not found" in caplog.text
 
 
-def test_a_skipped_analysis_is_not_reported_as_an_error(package, monkeypatch, caplog):
-    """It is a property of the machine, so it must not read as a failed part."""
+def test_a_sandbox_that_would_not_start_fails_and_names_both_remedies(package, monkeypatch, caplog):
+    """`SandboxUnavailable` on a machine that has a container runtime.
+
+    An image that cannot be pulled, or one that will not start, reaches this
+    check as the same exception the absence of a runtime does -- and here a
+    runtime answers, so it is not that. Something is wrong that somebody can
+    fix, and the part asked a question and got no answer.
+
+    What the reader is owed is both ways out, because either fixes it and only
+    they know which is easier where they are. The machine with no runtime at all
+    is below, and is the one skip this check accepts.
+    """
+    import asyncio
+
+    from partcad import runtime as pc_runtime
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, error=pc_runtime.SandboxUnavailable("no container runtime is available here"))
+
+    test_ctx = {}
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part, test_ctx)) is CaeTest.TEST_FAILED
+
+    assert "no container runtime is available here" in caplog.text
+    assert "start a container runtime" in caplog.text
+    assert "install what this implementation needs" in caplog.text
+    # Still not remembered: starting a container runtime changes no cache key,
+    # so a remembered verdict would outlive its reason.
+    assert test_ctx.get(CaeTest.NOT_CACHEABLE) is True
+
+
+def test_a_missing_solver_fails_the_same_way(package, monkeypatch, caplog):
+    """The two used to be opposites; now they are one answer with two remedies.
+
+    Both leave the analysis unrun, and under the current contract that is what
+    decides it: the part asked a question and nothing answered.
+    """
     import asyncio
 
     part = _bracket(package)
     _analysis(part, monkeypatch, error=Exception("ccx: not found"))
-    with caplog.at_level("WARNING"):
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_FAILED
+
+
+def test_only_the_missing_runtime_carries_the_remedy(package, monkeypatch, caplog):
+    """A solver the implementation could not find is the implementation's to explain.
+
+    PartCAD adds the two-remedy line only where it knows both apply -- which is
+    where the implementation never ran and so said nothing at all. Adding it to
+    every failure would tell somebody whose mesher crashed to start Docker.
+    """
+    import asyncio
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, error=Exception("ccx: not found"))
+    with caplog.at_level("ERROR"):
         asyncio.run(CaeTest(cae.FEA).test([], package, part))
-    assert not [record for record in caplog.records if record.levelname == "ERROR"]
+
+    assert "start a container runtime" not in caplog.text
 
 
-def test_a_skip_is_not_remembered(package, monkeypatch):
-    """A pass that turned on the machine must not outlive the machine.
+def test_the_failure_names_the_implementation_and_the_platform(package, monkeypatch, caplog):
+    """ "Not installed" is a puzzle; the same sentence with a machine is an answer.
+
+    The reasons an analysis does not run need different actions -- install a
+    solver, use another machine, fix the package -- and only the implementation
+    knows which. So its sentence is relayed verbatim, and what PartCAD adds is
+    the two things it cannot know it is missing: who was asked, and where.
+    """
+    import asyncio
+    import platform
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, error=Exception("gmsh has no wheel for this platform"))
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_FAILED
+
+    assert "//cae-test:fea" in caplog.text
+    assert platform.machine() in caplog.text
+    assert platform.system() in caplog.text
+    assert "gmsh has no wheel for this platform" in caplog.text
+
+
+def test_a_failure_that_may_be_the_machine_is_not_remembered(package, monkeypatch):
+    """A verdict that turned on the machine must not outlive the machine.
 
     The cache key describes the *question* -- the shape, the boundary
     conditions, the implementation and its options -- and nothing in it
     describes whether a solver is installed, because a test cannot know what its
     implementation needs. So installing CalculiX changes no key, and a cached
-    skip would answer in hundredths of a second without ever going near the
-    solver that is now there. `pc test` would keep reporting a pass for a part
-    nobody has analysed.
+    failure would go on failing a part that now analyses perfectly well, in
+    hundredths of a second, without going near the solver that is now there.
     """
     import asyncio
 
@@ -386,12 +485,12 @@ def test_a_skip_is_not_remembered(package, monkeypatch):
     _analysis(part, monkeypatch, error=Exception("ccx: not found"))
 
     test_ctx = {}
-    assert asyncio.run(CaeTest(cae.FEA).test([], package, part, test_ctx)) is CaeTest.TEST_PASSED
+    assert asyncio.run(CaeTest(cae.FEA).test([], package, part, test_ctx)) is CaeTest.TEST_FAILED
     assert test_ctx.get(CaeTest.NOT_CACHEABLE) is True
 
 
 def test_a_real_verdict_is_remembered(package, monkeypatch):
-    """The opt-out is for the skip alone: an analysis that ran is cacheable.
+    """The opt-out is for the unrun analysis alone: one that ran is cacheable.
 
     Running a solver is the expensive thing `pc test`'s cache exists for, so a
     run that produced an answer -- pass or fail -- has to stay cacheable.
@@ -414,12 +513,12 @@ def test_a_real_verdict_is_remembered(package, monkeypatch):
 def test_a_plugin_that_does_not_resolve_fails_the_check(package, monkeypatch, caplog):
     """A named implementation that is not there is wrong everywhere, not here.
 
-    This is the line between the two ways `pc test` can decline to analyse a
-    part. A solver binary that is not installed is a fact about this machine and
-    is skipped; a *plugin* that cannot be resolved -- not a dependency, misspelt,
-    or a package that did not load -- is a fact about the configuration, true on
-    every machine, and no amount of installing fixes it. It fails, and says which
-    name did not resolve.
+    Both ways of not analysing a part fail now, but they are still different
+    failures and must read differently: a plugin that cannot be *resolved* --
+    not a dependency, misspelt, a package that did not load -- is a fact about
+    the configuration, true on every machine, and no amount of installing fixes
+    it. It must say which name did not resolve, and it must not start an
+    analysis to find out.
     """
     import asyncio
 
@@ -496,18 +595,15 @@ def test_the_command_line_still_outranks_the_part(package, monkeypatch):
 # relatively has to resolve it from where it is rather than from where the
 # command was run.
 
-NESTED_ROOT = textwrap.dedent(
-    """
+NESTED_ROOT = textwrap.dedent("""
     name: //cae-test
     dependencies:
       pkg:
         type: local
         path: pkg
-    """
-)
+    """)
 
-NESTED_PACKAGE = textwrap.dedent(
-    """
+NESTED_PACKAGE = textwrap.dedent("""
     dependencies:
       plugin:
         type: local
@@ -522,17 +618,14 @@ NESTED_PACKAGE = textwrap.dedent(
             - m3-screw
           load:
             hook: 5 kg
-    """
-)
+    """)
 
-NESTED_PLUGIN = textwrap.dedent(
-    """
+NESTED_PLUGIN = textwrap.dedent("""
     cae:
       fea:
         path: solve.py
         extension: vtu
-    """
-)
+    """)
 
 
 @pytest.fixture
@@ -585,8 +678,7 @@ def test_the_check_resolves_a_relative_plugin_from_a_tree_root(nested, monkeypat
     assert asyncio.run(CaeTest(cae.FEA).test([], ctx, part)) is CaeTest.TEST_PASSED
 
 
-ROOT_ONLY_PACKAGE = textwrap.dedent(
-    """
+ROOT_ONLY_PACKAGE = textwrap.dedent("""
     dependencies:
       plugin:
         type: local
@@ -601,8 +693,7 @@ ROOT_ONLY_PACKAGE = textwrap.dedent(
             - m3-screw
           load:
             hook: 5 kg
-    """
-)
+    """)
 
 
 def test_a_relative_plugin_resolves_from_an_unnamed_root_package(tmp_path):
@@ -640,9 +731,7 @@ def test_a_relative_name_on_the_command_line_is_still_the_user_s(nested):
     """
     ctx, part = nested
     with pytest.raises(Exception, match="//cae-test/plugin"):
-        part._analysis_implementation(
-            ctx, cae.FEA, "plugin:fea", declared=cae.config_of(part, cae.FEA).implementation
-        )
+        part._analysis_implementation(ctx, cae.FEA, "plugin:fea", declared=cae.config_of(part, cae.FEA).implementation)
 
 
 def test_the_cache_key_follows_the_plugin_the_part_names(package, monkeypatch):
@@ -812,3 +901,250 @@ def test_an_export_implementation_never_reports_findings(wrapper_export, tmp_pat
     script = _script(tmp_path, "def process(path, request):\n    return {'success': True}\n")
     result = wrapper_export.process(script, str(tmp_path / "out.step"), {})
     assert set(result) == {"success", "exception"}
+
+
+# --------------------------------------------------------------------------- #
+# What a failure says, and who says it                                        #
+# --------------------------------------------------------------------------- #
+
+
+def _run_raises(part, monkeypatch, error):
+    """Make the part's analysis fail where the implementation would run.
+
+    Patched at `_analysis_run_async` rather than at `analyze_async`, because
+    `analyze_async` is the thing under test: it is where the failure is turned
+    into the report every caller prints.
+    """
+
+    async def run(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(part, "_analysis_run_async", run)
+
+
+def test_the_command_is_told_what_the_check_is_told(package, monkeypatch):
+    """One report, written where the implementation's name is known.
+
+    `pc test` used to compose this and `pc cae fea` did not, so a user who ran
+    the command instead of the check was told less about the same machine. It is
+    written once now, in `analyze_async`, and both of them print it.
+    """
+    import asyncio
+
+    part = _bracket(package)
+    _run_raises(part, monkeypatch, Exception("ccx: not found"))
+
+    with pytest.raises(cae.CaeFailed) as raised:
+        asyncio.run(part.analyze_async(package, cae.FEA))
+
+    report = str(raised.value)
+    # What it said,
+    assert "ccx: not found" in report
+    # which implementation was asked,
+    assert "//cae-test:fea" in report
+    # and which machine it did not work on.
+    assert "platform:" in report
+
+
+def test_the_check_prints_that_report_rather_than_writing_its_own(package, monkeypatch, caplog):
+    """`pc test` reports what `analyze_async` wrote, and does not wrap it twice."""
+    import asyncio
+
+    part = _bracket(package)
+    _run_raises(part, monkeypatch, Exception("ccx: not found"))
+
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_FAILED
+    assert "ccx: not found" in caplog.text
+    assert "platform:" in caplog.text
+    # Once. Two reports of one failure is what wrapping in both places gives.
+    assert caplog.text.count("could not be run by") == 1
+
+
+def test_no_container_runtime_reaches_the_check_as_itself(package, monkeypatch):
+    """The type is what the check reads, even though the verdict is now the same.
+
+    `CaeTest` tells "the implementation could not do it" from "the thing that
+    runs implementations is not here" by the exception's type, and attaches the
+    two-remedy line to the second. Wrapping this one in a report on the way up
+    would lose that and leave the reader one way out of two.
+    """
+    import asyncio
+
+    from partcad import runtime as pc_runtime
+
+    part = _bracket(package)
+    _run_raises(part, monkeypatch, pc_runtime.SandboxUnavailable("no container runtime is available here"))
+
+    with pytest.raises(pc_runtime.SandboxUnavailable):
+        asyncio.run(part.analyze_async(package, cae.FEA))
+
+
+def test_a_malformed_section_stays_a_configuration_error(package, monkeypatch):
+    """A part to be edited, not a machine to be equipped: a different answer."""
+    import asyncio
+
+    part = _bracket(package)
+    _run_raises(part, monkeypatch, cae.CaeConfigError("'load:' names no port"))
+
+    with pytest.raises(cae.CaeConfigError):
+        asyncio.run(part.analyze_async(package, cae.FEA))
+
+
+# --------------------------------------------------------------------------- #
+# The one excuse: a machine with no container runtime                         #
+# --------------------------------------------------------------------------- #
+
+
+# Written as a replacement rather than a second literal so that the two packages
+# cannot drift: what this fixture is about is the one added line.
+CONTAINERISED = PACKAGE.replace(
+    "  fea:\n    path: solve.py\n",
+    "  fea:\n    path: solve.py\n    dockerImage: ghcr.io/example/solver:1\n",
+)
+assert "dockerImage" in CONTAINERISED, "the substitution above no longer matches PACKAGE"
+
+
+@pytest.fixture
+def containerised(tmp_path, monkeypatch):
+    """The same package, whose `fea:` names the image it runs best in."""
+    (tmp_path / "partcad.yaml").write_text(CONTAINERISED)
+    (tmp_path / "solve.py").write_text("def process(path, request):\n    return {'success': True}\n")
+    (tmp_path / "bracket.step").write_text("")
+    ctx = pc.Context(str(tmp_path))
+    monkeypatch.setattr(ctx.user_config, "cae_fea_implementation", "//cae-test:fea")
+    return ctx
+
+
+def test_the_declaration_reaches_the_implementation(containerised):
+    """The fixture is only worth anything if the image is actually read.
+
+    It is read before anything is materialized, too, which is the case that was
+    broken: `analysis_getopts` used to build the implementation without the
+    package that declares it, so every `dockerImage` read this early was `None`.
+    """
+    project = containerised.get_project("//cae-test")
+    impl, _ = _bracket(containerised).analysis_getopts(
+        containerised, cae.FEA, cae.FEA, project, options_project=project
+    )
+    assert impl.docker_image == "ghcr.io/example/solver:1"
+
+
+def test_no_container_runtime_is_a_skip(package, monkeypatch, caplog):
+    """Nothing here could have given the implementation what it needs.
+
+    A container is how an implementation brings what pip cannot install -- a
+    solver, a mesher, the shared libraries under them -- and nothing else
+    PartCAD has can. Where there is no container runtime, no arrangement would
+    have run this, so the question was never really put.
+
+    It is not silent. The warning carries the whole dysfunction report -- what
+    was asked, what it said, which platform -- because a skip that said less than
+    a failure would be a way of not finding out.
+    """
+    import asyncio
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, error=Exception("ccx: not found"))
+    _no_container_runtime(monkeypatch, package)
+
+    test_ctx = {}
+    with caplog.at_level("WARNING"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part, test_ctx)) is CaeTest.TEST_PASSED
+
+    assert "Test skipped" in caplog.text
+    assert "ccx: not found" in caplog.text
+    assert "no container runtime on this machine" in caplog.text
+    # Nothing about the machine belongs in the cache: starting a runtime changes
+    # no cache key, so a remembered skip would outlive its reason.
+    assert test_ctx.get(CaeTest.NOT_CACHEABLE) is True
+
+
+def test_a_skip_is_never_logged_as_an_error(package, monkeypatch, caplog):
+    """`pc test` exits non-zero on a logged error, and this run succeeded."""
+    import asyncio
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, error=Exception("ccx: not found"))
+    _no_container_runtime(monkeypatch, package)
+
+    with caplog.at_level("DEBUG"):
+        asyncio.run(CaeTest(cae.FEA).test([], package, part))
+
+    assert not [record for record in caplog.records if record.levelname == "ERROR"]
+
+
+def test_the_skip_names_the_image_when_the_implementation_named_one(containerised, monkeypatch, caplog):
+    """Which image would have carried it is the next thing the reader asks.
+
+    The declaration does not decide the verdict -- an implementation is free to
+    say nothing about containers and still need a solver -- but where there is
+    one it belongs in the message.
+    """
+    import asyncio
+
+    part = _bracket(containerised)
+    _analysis(part, monkeypatch, error=Exception("ccx: not found"))
+    _no_container_runtime(monkeypatch, containerised)
+
+    with caplog.at_level("WARNING"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], containerised, part)) is CaeTest.TEST_PASSED
+    assert "ghcr.io/example/solver:1" in caplog.text
+
+
+def test_a_container_runtime_that_is_here_leaves_no_excuse(containerised, monkeypatch, caplog):
+    """An image that will not pull, or a solver missing from it, is a failure.
+
+    This is the half that makes the skip narrow enough to be worth having, and
+    the half continuous integration sees: a runner has a container runtime, so
+    every one of these is a failure there. Once a runtime answers, what is left
+    is something somebody can fix -- and those are exactly the failures a
+    plugin's own CI exists to catch.
+    """
+    import asyncio
+
+    part = _bracket(containerised)
+    _analysis(part, monkeypatch, error=Exception("ccx: not found"))
+
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], containerised, part)) is CaeTest.TEST_FAILED
+    assert "ccx: not found" in caplog.text
+
+
+def test_a_missing_runtime_is_a_skip_for_the_sandbox_failure_too(package, monkeypatch, caplog):
+    """ "The sandbox would not start" and "the solver was missing from it".
+
+    Two ways of arriving at the same place, and they used to be answered in two
+    branches that could drift apart. Both go through `_verdict` now, so a machine
+    is either equipped or it is not, whichever symptom it showed.
+    """
+    import asyncio
+
+    from partcad import runtime as pc_runtime
+
+    part = _bracket(package)
+    _analysis(part, monkeypatch, error=pc_runtime.SandboxUnavailable("no container runtime is available here"))
+    _no_container_runtime(monkeypatch, package)
+
+    with caplog.at_level("WARNING"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_PASSED
+    assert "start a container runtime" in caplog.text
+
+
+def test_a_remote_sandbox_is_a_container_runtime(containerised, monkeypatch, caplog):
+    """`pythonSandbox: remote` needs no daemon here, and has one over there.
+
+    The implementation ran in a container; it just was not this machine's. So
+    the one excuse does not apply, and reading the local daemon -- which such a
+    host may perfectly well not have -- would have excused a real failure on
+    every part of every package it builds.
+    """
+    import asyncio
+
+    part = _bracket(containerised)
+    _analysis(part, monkeypatch, error=Exception("ccx: not found"))
+    _no_container_runtime(monkeypatch, containerised, sandbox="remote")
+
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], containerised, part)) is CaeTest.TEST_FAILED
+    assert "ccx: not found" in caplog.text

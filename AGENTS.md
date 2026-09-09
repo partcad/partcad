@@ -181,7 +181,10 @@ This is still a fallback and not a second supported environment. What it does no
   fail and `git commit` silently runs no gate at all — which is worse than a hook that refuses, because
   nothing tells you. Run what the hooks run (`pytest`, `behave`, and the linters) before committing, and read
   their output; CI runs them either way.
-* **A Docker daemon.** Only the KiCad example needs one, and a machine without one has to *say* so:
+* **A Docker daemon.** The KiCad example needs one, and so does the `docker` Python sandbox — which is now the
+  default wherever a daemon answers *and* PartCAD's base image can be had, so a machine with Docker running is
+  a machine that renders in it. (The `remote` sandbox needs no daemon here at all: it needs a reachable
+  `partcad-service-remote-docker`, which has one.) A machine without a daemon has to *say* so:
   `PC_USE_DOCKER=false` (or `useDocker: false`), which is what a container image built with no Docker in it
   should carry. Say nothing and a missing daemon is a failure, deliberately — silence there would turn a
   runner whose Docker died into a green run with one fewer test in it.
@@ -329,7 +332,7 @@ Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.to
 
 ### Packaging
 
-Six artifacts ship from this repo: **one Python wheel** (`partcad`, carrying all six packages and all three entry
+Six artifacts ship from this repo: **one Python wheel** (`partcad`, carrying all six packages and all four entry
 points, with a `partcad-cli` shim published beside it from `dev-tools/shim/` so the older install instruction keeps
 working), the standalone PyInstaller bundles for users who have no Python, the PartCAD IDE, which carries those
 bundles inside it, the VS Code extension's `.vsix` (with the `ide/vscode-shim` `.vsix` published beside it, for the

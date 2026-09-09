@@ -30,6 +30,7 @@ from . import render_overlay
 from . import sandbox_versions
 from . import wrapper
 from . import cae as pc_cae
+from . import runtime as pc_runtime
 
 if TYPE_CHECKING:
     from partcad.context import Context
@@ -1137,8 +1138,9 @@ class Shape(ShapeConfiguration):
         input_dirs = []
 
         if container:
-            # Raises SandboxUnavailable when there is no container runtime,
-            # which is the one absence 'pc test' may skip on.
+            # Raises SandboxUnavailable when there is no container runtime.
+            # A failure like any other, and the type is what earns the reader
+            # both remedies rather than one (see 'partcad.test.cae').
             runtime = await ctx.get_container_runtime(container)
             # The wrapper and the implementing package both go in whole. Sending
             # only the files the command names would leave both unable to start:
@@ -1146,7 +1148,7 @@ class Shape(ShapeConfiguration):
             # script (see runtime.pack_directory).
             input_dirs = [os.path.dirname(script_path), config_dir]
         else:
-            runtime = ctx.get_python_runtime(version=impl.python_version())
+            runtime = ctx.get_python_runtime(version=impl.python_version(), image=impl.docker_image)
             await runtime.prepare_for_package(impl.project)
             # Installed one at a time, not with asyncio.gather(): the order
             # matters, since build123d overwrites the OCP native module that
@@ -1177,11 +1179,17 @@ class Shape(ShapeConfiguration):
             # signature -- (cmd, stdin, cwd, session, timeout) -- so the base
             # class's parameters are not a contract they honour, and passing
             # one down that path is a TypeError rather than an ignored argument.
-            extra = (
-                {"input_dirs": input_dirs, "output_files": [final_filepath]}
-                if container
-                else {}
-            )
+            # What a command writes is not in the command, so a sandbox that
+            # exchanges files rather than sharing them has to be told. The
+            # container path knows its input directories too; the 'remote'
+            # sandbox works those out from the command itself, and only the
+            # output is beyond inference.
+            if container:
+                extra = {"input_dirs": input_dirs, "output_files": [final_filepath]}
+            elif getattr(runtime, "EXCHANGES_FILES", False):
+                extra = {"output_files": [final_filepath]}
+            else:
+                extra = {}
             exitcode, response_serialized, errors = await runtime.run_async(
                 command, request_serialized, **extra
             )
@@ -1391,7 +1399,15 @@ class Shape(ShapeConfiguration):
             # the file goes, not the file.
             output_dir, filepath = filepath, None
 
-        impl = output.Implementation(output.CAE, format_name, opts)
+        # With the implementing package, which the export path fills in later
+        # (in '_materialize_output_script') because that is the first moment it
+        # needs one. Here it is known already -- the caller resolved it to get
+        # 'options_project' -- and something asks earlier: 'pc test' reads
+        # 'container'/'dockerImage' off this to tell a machine that cannot run
+        # the implementation from an implementation that does not work. Without
+        # a project those read as "declared nothing", which is the same answer a
+        # package that really declares nothing gives.
+        impl = output.Implementation(output.CAE, format_name, opts, project=options_project)
         extension = impl.extension(None)
         if not extension:
             raise Exception(
@@ -1603,6 +1619,51 @@ class Shape(ShapeConfiguration):
             ctx, analysis, implementation, declared=config.implementation
         )
 
+        try:
+            return await self._analysis_run_async(
+                ctx, analysis, config, project, options_project, format_name, filepath, output_dir, kwargs
+            )
+        except (pc_cae.CaeConfigError, pc_runtime.SandboxUnavailable):
+            # Neither is the implementation failing, and neither gets the
+            # report. The first is the part's own section being wrong, which is
+            # answered by editing it; the second is this machine having no
+            # container runtime, so nothing was ever asked and there is nothing
+            # to report about the implementation or the platform.
+            raise
+        except Exception as e:
+            # Everything else is "asked, and no answer", and every caller says
+            # so the same way. Written here rather than by each of them because
+            # this is where the implementation's name is known, and because a
+            # user who ran `pc cae fea` and then `pc test -f fea` must be told
+            # the same thing about the same machine both times.
+            raise pc_cae.CaeFailed(
+                pc_cae.dysfunction_report(
+                    "%s:%s" % (self.project_name, self.name),
+                    analysis,
+                    "%s:%s" % (options_project.name, format_name),
+                    e,
+                )
+            ) from e
+
+    async def _analysis_run_async(
+        self,
+        ctx: Context,
+        analysis: str,
+        config,
+        project: Project,
+        options_project: Project,
+        format_name: str,
+        filepath,
+        output_dir,
+        kwargs: dict,
+    ) -> dict:
+        """`analyze_async` once it knows what to run and who runs it.
+
+        Split out so that the caller can say what every failure in here means
+        without a ninety-line `try:` around the part that does the work. Every
+        exception that leaves this is the implementation failing to deliver -
+        see `analyze_async`.
+        """
         with pc_logging.Action(analysis.upper(), self.project_name, self.name):
             impl, final_filepath = self.analysis_getopts(
                 ctx, analysis, format_name, project, filepath, options_project, output_dir

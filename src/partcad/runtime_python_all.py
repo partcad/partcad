@@ -6,16 +6,23 @@
 #
 # Licensed under Apache License, Version 2.0.
 
+from . import runtime_python_docker
 from . import runtime_python_none
 from . import runtime_python_pypy
+from . import runtime_python_remote
 from . import runtime_python_conda
 from . import runtime_python_venv
 
 
-def create(ctx, version, python_runtime=None):
+def create(ctx, version, python_runtime=None, image=None):
     if python_runtime is None:
         python_runtime = ctx.user_config.python_sandbox
-    if python_runtime == "none":
+    if python_runtime == "docker":
+        # 'image' is the one parameter only this sandbox can use: it is which
+        # image to build the environment in, and every other sandbox builds one
+        # out of what the host has.
+        return runtime_python_docker.DockerPythonRuntime(ctx, version, image=image)
+    elif python_runtime == "none":
         return runtime_python_none.NonePythonRuntime(ctx, version)
     elif python_runtime == "venv":
         return runtime_python_venv.VenvPythonRuntime(ctx, version)
@@ -23,5 +30,7 @@ def create(ctx, version, python_runtime=None):
         return runtime_python_pypy.PyPyPythonRuntime(ctx, version)
     elif python_runtime == "conda":
         return runtime_python_conda.CondaPythonRuntime(ctx, version)
+    elif python_runtime == "remote":
+        return runtime_python_remote.RemotePythonRuntime(ctx, version, image=image)
     else:
         raise Exception("ERROR: invalid python runtime type (sandbox type) %s" % python_runtime)

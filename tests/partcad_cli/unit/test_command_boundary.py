@@ -75,6 +75,11 @@ IN_PROCESS = {
     # daemon's own equivalent state is reached through `pc daemon reset`.
     "system/reset.py": "resets the client's internal state dir; `pc daemon reset` does the daemon's",
     "system/status.py": "reports the client's internal state dir and its sizes",
+    # Same split, one level down: the containers and images are on the machine
+    # whose Docker this is. A daemon owns the sandbox containers it starts, but
+    # a daemon can be remote -- so this removes what is here, and the daemon's
+    # own would be `pc daemon prune`.
+    "system/prune.py": "removes the containers and images on the client's own machine",
     "system/set/telemetry/type.py": "writes the client's own user configuration",
     "system/set/telemetry/env.py": "writes the client's own user configuration",
     "system/set/telemetry/sentryDsn.py": "writes the client's own user configuration",

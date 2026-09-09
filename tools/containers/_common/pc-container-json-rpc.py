@@ -55,6 +55,50 @@ for _name, _path in json.loads(os.environ.get("PC_CONTAINER_ALLOWED_COMMANDS", "
     ALLOWED_COMMANDS[str(_name)] = str(_path)
 logging.info("Allowed commands: %s", ", ".join(sorted(ALLOWED_COMMANDS)))
 
+# Where a `remote` sandbox keeps its virtual environments, when this container
+# is serving one. `partcad-service-remote-docker` mounts a volume there and says
+# so, because where those environments live is its decision and not the image's;
+# the default is the same path, for a container somebody started by hand.
+SANDBOX_ROOT = os.environ.get("PC_CONTAINER_SANDBOX_ROOT", "/pc-sandbox")
+
+
+def _sandbox_interpreter(name):
+    """`name`, if it is the interpreter of an environment under the sandbox root.
+
+    The allowlist names the commands an image was *built* to run, and an
+    environment built at run time cannot be in it: its path carries a Python
+    version nobody told the image about. So this is the second way in, and a
+    narrow one -- the file has to be called `python` or `python3`, has to sit in
+    a `bin` directory under the sandbox root, and has to already be there.
+
+    It is not a widening of what a caller can do. The allowlist is what stops a
+    caller running binaries the image was not built for; in an image whose
+    allowlist already holds an interpreter, a caller can run whatever Python it
+    likes through that, and everything under the sandbox root was put there by
+    this service running exactly that interpreter.
+    """
+    # Absolute, and `os.path.isabs` rather than a leading "/": this service runs
+    # inside a Linux image, where the two are the same thing, but the test suite
+    # runs it in process on whichever machine the suite is running on -- and on
+    # Windows every path it builds begins with a drive letter, so a leading "/"
+    # refused every one of them and three of the tests below passed for the
+    # wrong reason.
+    if not isinstance(name, str) or not os.path.isabs(name):
+        return None
+    root = os.path.normpath(SANDBOX_ROOT)
+    path = os.path.normpath(name)
+    if not path.startswith(root + os.sep):
+        return None
+    if os.path.basename(path) not in ("python", "python3"):
+        return None
+    if os.path.basename(os.path.dirname(path)) != "bin":
+        return None
+    # The shape is not enough: a path that looks right and is not there would be
+    # reported as a command that failed rather than as one that never ran.
+    if not os.path.isfile(path) or not os.access(path, os.X_OK):
+        return None
+    return path
+
 
 def _within(path, prefix):
     """The parts of `path` below `prefix`, or None if it is not below it.
@@ -166,16 +210,16 @@ def handle_execute_command(
             temp_output_files[command[i]] = exchanged(i, command[i])
             command[i] = temp_output_files[command[i]]
 
-    # Check if command is in allowlist
-    if command[0] not in ALLOWED_COMMANDS:
+    # Check if command is in allowlist, or is an environment's own interpreter
+    command_path = ALLOWED_COMMANDS.get(command[0]) or _sandbox_interpreter(command[0])
+    if command_path is None:
         raise PartcadJsonRpcException(
-            -32602, f"Command '{command[0]}' is not allowed. Allowed commands: {', '.join(ALLOWED_COMMANDS.keys())}"
+            -32602,
+            f"Command '{command[0]}' is not allowed. Allowed commands: {', '.join(ALLOWED_COMMANDS.keys())}"
+            f", and the interpreter of an environment under {SANDBOX_ROOT}",
         )
 
     try:
-        # Use full path from allowlist
-        command_path = ALLOWED_COMMANDS[command[0]]
-
         # Decode base64 input if provided
         stdin_bytes = base64.b64decode(stdin) if stdin else None
 

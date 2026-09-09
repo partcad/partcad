@@ -76,7 +76,11 @@ def connectivity_probe():
             # parses as a path and the host comes back empty.
             parsed = urllib.parse.urlparse(proxy if "://" in proxy else "http://" + proxy)
             if parsed.hostname:
-                return parsed.hostname, parsed.port or 80
+                # The scheme's own default when the variable names no port. An
+                # 'https://' proxy listens on 443, and probing 80 there fails --
+                # which PartCAD would read as "no network" and enter offline
+                # mode, on a machine whose downloads work perfectly.
+                return parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)
         except ValueError:
             # 'ParseResult.port' raises on a port that is not a number, and
             # this is called from outside the 'except OSError' that
@@ -226,6 +230,16 @@ class Context:
         # Python versions already reported as held down to MAX_PYTHON_VERSION_CAD,
         # so the warning is said once rather than once per part.
         self.python_versions_held = set()
+        # Whether the 'useDockerPython' deprecation has been said, so that a
+        # command over a tree of parts says it once rather than per part.
+        self.use_docker_python_warned = False
+        # Which images this machine turned out to be able to get, and what has
+        # already been said about the ones it could not. Both are per context so
+        # that a command over a tree of parts asks the registry once and says it
+        # once.
+        self.docker_images_available = {}
+        self.docker_sandbox_fallback_warned = False
+        self.docker_image_fallback_warned = set()
         self.runtimes_javascript = {}
         self.runtimes_javascript_lock = threading.Lock()
 
@@ -1288,7 +1302,101 @@ class Context:
         )
 
     # TODO(clairbee): convert it into: ctx.get_runtime("python", "conda", {"version": "3.11"})
-    def get_python_runtime(self, version=None, python_runtime=None):
+    def preferred_python_sandbox(self) -> str:
+        """Which sandbox to build Python environments in, when nobody has said.
+
+        'docker', where a container runtime answers. What conda provisions
+        depends on the host -- its channels, its package cache, its platform --
+        and what an image carries does not, so the container is the one whose
+        result is the same everywhere. Failing that, whatever the configuration
+        worked out at startup, which is conda where the host has it and a
+        virtual environment otherwise.
+
+        Asked here rather than when the configuration is read because asking
+        means talking to a container daemon, and a command that never builds a
+        sandbox -- 'pc list', 'pc info', anything answered from the cache --
+        should not pay for an answer it does not use. 'runtime.docker_available'
+        caches, so a command that does build one asks once.
+
+        A stated preference is obeyed. That is the whole point of tracking
+        whether there was one: a machine with Docker running is not thereby a
+        machine whose owner wants their parts rendered in it.
+        """
+        if self.user_config.python_sandbox_declared:
+            return self.user_config.python_sandbox
+
+        if getattr(self.user_config, "use_docker_python_declared", False):
+            # The option this replaced. It never had a consumer -- nothing read
+            # it but the tag of the same name -- so honouring it here is what it
+            # always claimed to do, and saying so is what stops two switches
+            # from disagreeing about one thing.
+            if not self.use_docker_python_warned:
+                self.use_docker_python_warned = True
+                pc_logging.warning(
+                    "'useDockerPython' is deprecated and is being read as 'pythonSandbox: docker'."
+                    " Set 'pythonSandbox' instead; the two are one setting now."
+                )
+            return "docker"
+
+        if self.user_config.use_docker and runtime.docker_available():
+            return "docker"
+        return self.user_config.python_sandbox
+
+    def _sandbox_was_declared(self) -> bool:
+        """Whether the sandbox is somebody's decision rather than PartCAD's."""
+        return bool(
+            self.user_config.python_sandbox_declared or getattr(self.user_config, "use_docker_python_declared", False)
+        )
+
+    def _image_available(self, image: str, version: str) -> bool:
+        """Whether this machine can get that image, asked once per image.
+
+        Imported here rather than at the top: it brings the Docker SDK with it,
+        and a command that never builds a sandbox should not pay for that.
+        """
+        from . import runtime_python_docker
+
+        if image not in self.docker_images_available:
+            self.docker_images_available[image] = runtime_python_docker.image_available(image, version)
+        return self.docker_images_available[image]
+
+    def _docker_or_next_best(self, version: str) -> str:
+        """'docker' if this machine can actually get an image to run in.
+
+        A container runtime answering says a container could be started; it says
+        nothing about whether the image to start it from is reachable. Choosing
+        docker on a machine that cannot pull would mean every part failing on a
+        registry the user never asked to talk to, with the sandbox that was
+        working a moment ago sitting right there.
+
+        Only when PartCAD chose. A stated 'pythonSandbox: docker' is obeyed and
+        its failure is a failure: being unable to do what was asked is not a
+        reason to quietly do something else.
+        """
+        from . import runtime_python_docker
+
+        if self._image_available(runtime_python_docker.image_for(version), version):
+            return "docker"
+        if not self.docker_sandbox_fallback_warned:
+            self.docker_sandbox_fallback_warned = True
+            # Debug, not a warning. Nothing is wrong: PartCAD is choosing
+            # between two sandboxes that both work, and the user asked for
+            # neither -- so there is nothing here to act on, and a line on every
+            # command about a decision nobody has to take is noise. It is noise
+            # on a great many machines, too: any host with Docker running and no
+            # reachable image, which is every offline machine and every CI run
+            # before the image is published.
+            #
+            # Loud is still available and is the user's to ask for: a stated
+            # 'pythonSandbox: docker' is obeyed and fails, with the reason.
+            pc_logging.debug(
+                "A container runtime is running here but PartCAD's image for Python %s cannot be pulled,"
+                " so the '%s' sandbox is being used instead. Set 'pythonSandbox: docker' to make this a"
+                " failure rather than a fallback." % (version, self.user_config.python_sandbox)
+            )
+        return self.user_config.python_sandbox
+
+    def get_python_runtime(self, version=None, python_runtime=None, image=None):
         with self.runtimes_python_lock:
             if version is None:
                 version = sandbox_versions.DEFAULT_PYTHON_VERSION
@@ -1329,10 +1437,40 @@ class Context:
                 )
 
             if python_runtime is None:
-                python_runtime = self.user_config.python_sandbox
-            runtime_name = python_runtime + "-" + version
+                python_runtime = self.preferred_python_sandbox()
+                if python_runtime == "docker" and not self._sandbox_was_declared():
+                    python_runtime = self._docker_or_next_best(version)
+
+            # A package's own image is a preference and not a requirement (see
+            # 'dockerImage' in the documentation), so an image this machine
+            # cannot get is a reason to use PartCAD's own rather than to fail:
+            # what the package asked for is where its parts run *best*.
+            #
+            # Only for 'docker'. The 'remote' sandbox's images are the service's
+            # to obtain, on a machine that is not necessarily this one.
+            if python_runtime == "docker" and image and not self._image_available(image, version):
+                if image not in self.docker_image_fallback_warned:
+                    self.docker_image_fallback_warned.add(image)
+                    pc_logging.warning(
+                        "'%s' cannot be pulled here, so PartCAD's own image is being used instead."
+                        " Anything the package needs that image for has to be in its requirements too." % image
+                    )
+                image = None
+
+            # The image is part of a sandbox's identity, not just of how it is
+            # reached: what pip resolves and what it compiles against depend on
+            # the native libraries beneath, and two images do not have the same
+            # ones. It is also only meaningful to the sandbox that runs in one,
+            # so a package naming an image is rendered in whatever sandbox this
+            # machine uses and the name is simply not consulted -- which is what
+            # makes 'dockerImage' a preference rather than a requirement.
+            if python_runtime not in ("docker", "remote"):
+                image = None
+            runtime_name = python_runtime + "-" + version + ("@" + image if image else "")
             if not runtime_name in self.runtimes_python:
-                self.runtimes_python[runtime_name] = runtime_python_all.create(self, version, python_runtime)
+                self.runtimes_python[runtime_name] = runtime_python_all.create(
+                    self, version, python_runtime, image=image
+                )
             return self.runtimes_python[runtime_name]
 
     async def get_container_runtime(self, container: dict):
@@ -1351,9 +1489,10 @@ class Context:
         would otherwise pay it per part.
 
         Raises:
-            runtime.SandboxUnavailable: there is no container runtime here. The
-                one absence `pc test` may skip on, because the implementation
-                never gets to run and so cannot report it itself.
+            runtime.SandboxUnavailable: there is no container runtime here.
+                Reported by PartCAD rather than by the implementation, which
+                never gets to run -- and reported with both ways out, since a
+                package naming an image declares how to run without one too.
         """
         image = container["image"]
         port = int(container.get("port") or 5000)

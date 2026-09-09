@@ -18,22 +18,37 @@ numbers below are from after that.
 
 ```shell
 pc cae fea :cantilever
-pc cae cfd :pipe
 ```
 
-Both need a solver installed. For the default implementation that means `ccx` on
-`PATH` — `apt install calculix-ccx`, `brew install calculix-ccx`, or
-`conda install -c conda-forge calculix`. Without one the analysis does not run,
-and `pc test` says so and moves on rather than failing the part.
+**One of the two is a live check.** The cantilever declares `fea:` and is
+analysed; the pipe is here with its ports and its arithmetic but declares no
+`cfd:`, because CalculiX's CFD solver diverges on it. Section 2 is that
+measurement, and the declaration to paste back in once a solver converges is in
+`partcad.yaml` beside the part.
 
-**Not on 64-bit ARM Linux.** The mesher the CalculiX implementation uses, `gmsh`,
-publishes no linux aarch64 wheel and no source distribution — in any release —
-so on an ARM Linux machine or CI runner there is nothing to install and nothing
-to build. These two parts are reported as not analysable there, the same way
-they are on a machine with no `ccx`. Apple silicon is fine: macOS reports
-`arm64`, which gmsh does publish. See "Platforms" in
+What the analysis needs is a **container runtime**, and nothing else. The
+default implementation declares an image that carries `ccx`, the mesher and
+everything else it imports, so there is no solver to install and no platform
+where the mesher cannot be had — including 64-bit ARM Linux, where pip alone
+cannot get it. A machine with no container runtime runs no analysis, and `pc test`
+**skips** the part there rather than failing it: a container is the only way
+PartCAD has of supplying what pip cannot install, so on such a machine the
+question was never really put. The skip is a `WARNING` carrying the whole report
+— what was asked, what it said, which platform — and it is not cached, because
+it is about the machine rather than the part. That is the only excuse. Where a
+container runtime *is* running, everything that stops the analysis is the
+implementation failing and fails the part, including an image that cannot be
+pulled. A Docker daemon in Windows-container mode does not count as one: every
+image PartCAD uses is a Linux image. See "What it needs" in
 [`partcad-cae-calculix`](https://github.com/partcad/partcad-cae-calculix)'s
 README.
+
+> **Not on 64-bit ARM Linux yet.** The cantilever carries `unless: [aarch64]`,
+> so on such a machine the part is not declared at all and there is nothing to
+> analyse. gmsh publishes no wheel for that platform and no source distribution,
+> so the implementation cannot be installed in a Python sandbox there — and the
+> image that carries it, which *is* built for arm64, is not published yet. The
+> line comes out when it is.
 
 > **A temporary arrangement, and why it is here.** `//pub/feature/cae/calculix`
 > is registered on the public index's `devel` branch and has not reached `main`,
@@ -42,7 +57,8 @@ README.
 > examples tree at the index's `devel`, which would drag in unrelated changes,
 > this package depends on
 > [`partcad-cae-calculix`](https://github.com/partcad/partcad-cae-calculix)
-> directly and each part names it:
+> directly and the cantilever names it (the block written out beside the pipe
+> names it too, for whoever pastes it back):
 >
 > ```yaml
 > fea:
@@ -158,14 +174,23 @@ The regime is checked, not assumed: `Re = ρu_mean·d/μ` = **1.79**, far below 
 things were wrong with it, two of them since fixed, and the third is the one
 that matters.
 
+That third one is why the part above declares no `cfd:` section. A part that
+declares one has asked the question, and `pc test` reads an analysis that cannot
+answer as a failure — correctly. Shipping the declaration anyway would ship a
+check that is red in every run of this repository and that nothing in this
+repository can turn green, which is a check people learn to scroll past. The
+four lines are written out in `partcad.yaml` beside the part instead, so that
+restoring them is a paste rather than a reconstruction. Everything below was
+measured with them in place.
+
 **1. No outlet — fixed.** An incompressible flow is posed by *differences* in
 pressure, and `cfd:` could name only walls (`fix:`) and an inlet (`load:`). With
 nothing saying where the flow goes, the problem has no downstream reference and
 CalculiX answers with a field that never moves: peak speed of order 1e-16 m/s
 against an expected 0.03979 m/s, and a "pressure drop" that is just the
-reference level. `cfd:` now takes an `outlet:`, which this part uses, and a
-`cfd:` without one is refused with a sentence saying why rather than solved into
-a dead field.
+reference level. `cfd:` now takes an `outlet:` — the block in `partcad.yaml`
+names one — and a `cfd:` without one is refused with a sentence saying why rather
+than solved into a dead field.
 
 **2. No temperature anywhere — fixed.** An isothermal run still solves the
 energy equation, and that equation had no Dirichlet condition on it: the
@@ -199,8 +224,9 @@ of sound collapses to 6.7e-9 s within one iteration.
 
 So this is a property of CalculiX's `*CFD` solver as driven here, not of the
 mesh, the boundary model or the schema. Fixing it is solver work — a different
-formulation, or a different solver — and until it is done `pc cae cfd` on this
-part reports that it did not converge, which is the honest answer.
+formulation, or a different solver — and until it is done, pasting the block back
+in gets `pc cae cfd :pipe` as far as reporting that it did not converge, which is
+the honest answer and not a useful check.
 
 **The neighbourhood model is a separate problem, and it is also real.** At the
 configured `mesh_size` the bore meshes to 178 nodes — about 2 elements across —
@@ -227,20 +253,21 @@ own neighbourhood.
 ```shell
 # whatever the user configuration names
 pc cae fea :cantilever
-pc cae cfd :pipe
 
 # a particular implementation, this run only (outranks the part's own)
 pc cae fea -i calculix:fea :cantilever
 
-# both, as a check that fails on any finding
+# as a check that fails on any finding
 pc test -f fea
-pc test -f cfd
 
 # where the boundary conditions actually landed, which is the first thing
 # to look at when a number is wrong
 pc render -t svg --with-ports cantilever
 pc render -t svg --with-ports pipe
 ```
+
+`pc cae cfd :pipe` and `pc test -f cfd` need the block from `partcad.yaml` pasted
+back in first, and then report divergence — see section 2.
 
 The measurements land in the log, as a warning naming the peak stress and the
 peak displacement. `--json` prints the **findings** — the things the
@@ -251,9 +278,9 @@ numbers:
 pc --no-ansi cae fea --json :cantilever   # [] when the part is fine
 ```
 
-The model itself is written beside the package as `cantilever.fea.glb` and
-`pipe.cfd.glb`, and the PartCAD Viewer's FEA and CFD tabs show the same thing
-with the findings under it.
+The model itself is written beside the package as `cantilever.fea.glb` — and as
+`pipe.cfd.glb` for whoever restores the `cfd:` block — and the PartCAD Viewer's
+FEA and CFD tabs show the same thing with the findings under it.
 
 ### Two things that will waste your time
 

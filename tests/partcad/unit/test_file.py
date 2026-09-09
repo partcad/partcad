@@ -43,11 +43,18 @@ def test_file_url_part_1():
     assert os.path.exists(bolt.path) is False
 
     bolt.cacheable = False
-    wrapped = asyncio.run(bolt.get_wrapped(ctx))
-    assert wrapped is not None
-
-    assert os.path.exists(bolt.path) is True
-    os.unlink(bolt.path)
+    try:
+        wrapped = asyncio.run(bolt.get_wrapped(ctx))
+        assert wrapped is not None
+        assert os.path.exists(bolt.path) is True
+    finally:
+        # Removed however this ended, not only when it worked. The download
+        # lands in 'examples', which is a checked-in tree that CI compares
+        # against what 'pc render -r' produces -- so a file left behind here by
+        # a failure fails a different job than the one that failed, in a run
+        # nobody would think to connect to this test.
+        if os.path.exists(bolt.path):
+            os.unlink(bolt.path)
 
 
 def test_file_url_assembly_1(tmp_path):

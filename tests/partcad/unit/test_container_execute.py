@@ -70,7 +70,7 @@ HELPER = "MODEL = 'a model, as bytes would be'\n"
 
 
 @pytest.fixture
-def server(monkeypatch):
+def server(monkeypatch, tmp_path):
     """The container's RPC server, imported without Flask and without a container."""
 
     def _module(name, **attributes):
@@ -100,6 +100,10 @@ def server(monkeypatch):
     # the image, read once at start-up -- so it is set before the import, the
     # way a Dockerfile sets it.
     monkeypatch.setenv("PC_CONTAINER_ALLOWED_COMMANDS", json.dumps({"python": sys.executable}))
+    # Where a `remote` sandbox's environments are mounted, told to the server
+    # the way `partcad-service-remote-docker` tells it, and read at start-up for
+    # the same reason the allowlist is.
+    monkeypatch.setenv("PC_CONTAINER_SANDBOX_ROOT", str(tmp_path / "pc-sandbox"))
 
     spec = importlib.util.spec_from_file_location("pc_container_json_rpc", SERVER)
     module = importlib.util.module_from_spec(spec)
@@ -394,3 +398,74 @@ def test_a_failed_implementation_reports_no_output_file(server, package, tmp_pat
     assert result["exit_code"] == 0
     assert result["output_files"] == {}
     assert _deserialize(base64.b64decode(result["stdout"]).decode("utf-8"))["success"] is False
+
+
+# --------------------------------------------------------------------------- #
+# The interpreter of an environment the image was not built with               #
+# --------------------------------------------------------------------------- #
+#
+# A `remote` sandbox builds its virtual environment inside the container at run
+# time, so the interpreter it then wants to run cannot be in an allowlist that
+# was written when the image was built: its path carries a Python version
+# nobody knew about. The server recognises it by where it is instead.
+
+
+# What the fake interpreter is a link to, and what to ask it to print.
+#
+# Not Python, and that is the point: this exercises the server's decision to run
+# a file it found under the sandbox root, not the file's ability to be an
+# interpreter. `sys.executable` was the obvious choice and is the wrong one on
+# Windows -- a CPython launched through a link somewhere else cannot find its
+# own installation and exits 1 before running anything, which read as "the
+# server refused it". A shell is a shell wherever it is.
+#
+# The name is still `python`, because that is what the server matches on, and
+# the path shape is still the POSIX one the `remote` sandbox builds
+# (`<root>/v-env-<version>/bin/python`) -- the service only ever runs inside a
+# Linux image, so that shape is what it has to accept.
+_SHELL = os.environ.get("COMSPEC", "C:\\Windows\\System32\\cmd.exe") if os.name == "nt" else "/bin/sh"
+_SAY = ["/c", "echo over here"] if os.name == "nt" else ["-c", "echo over here"]
+
+
+def _environment(server, version="3.11"):
+    """A virtual environment's interpreter, where the sandbox root would put it."""
+    interpreter = os.path.join(server.SANDBOX_ROOT, "v-env-%s" % version, "bin", "python")
+    os.makedirs(os.path.dirname(interpreter))
+    os.symlink(_SHELL, interpreter)
+    return interpreter
+
+
+def test_an_environments_interpreter_may_run(server):
+    """Which is the whole of what the 'remote' sandbox asks a container to do."""
+    interpreter = _environment(server)
+
+    result = server.handle_execute_command([interpreter] + _SAY)
+
+    assert result["exit_code"] == 0
+    assert base64.b64decode(result["stdout"]).decode().strip() == "over here"
+
+
+def test_something_else_in_that_directory_may_not(server):
+    """A wheel can drop any console script into an environment's 'bin'."""
+    _environment(server)
+    intruder = os.path.join(server.SANDBOX_ROOT, "v-env-3.11", "bin", "curl")
+    os.symlink(_SHELL, intruder)
+
+    with pytest.raises(Exception, match="not allowed"):
+        server.handle_execute_command([intruder, "-c", "pass"])
+
+
+def test_an_interpreter_outside_the_sandbox_root_may_not(server, tmp_path):
+    elsewhere = tmp_path / "elsewhere" / "bin"
+    elsewhere.mkdir(parents=True)
+    intruder = str(elsewhere / "python")
+    os.symlink(_SHELL, intruder)
+
+    with pytest.raises(Exception, match="not allowed"):
+        server.handle_execute_command([intruder, "-c", "pass"])
+
+
+def test_a_path_that_is_not_there_is_refused_rather_than_run(server):
+    """The shape is not the permission: it has to be an environment that exists."""
+    with pytest.raises(Exception, match="not allowed"):
+        server.handle_execute_command([os.path.join(server.SANDBOX_ROOT, "v-env-3.11", "bin", "python"), "-c", "pass"])

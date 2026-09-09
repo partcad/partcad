@@ -14,6 +14,7 @@ with no Python traceback at all (see runtime_python.PIP_CONSTRAINTS).
 """
 
 import re
+from typing import Optional
 
 # 'cadquery-ocp' and the 'cadquery-ocp-novtk' that build123d 0.11 depends on
 # are NOT alternatives pip knows about: they are separate distributions that
@@ -506,7 +507,7 @@ def node_major_version(version: str) -> str:
 #
 
 
-def environment_cache_key(interpreter: str, version: str, requirements) -> str:
+def environment_cache_key(interpreter: str, version: str, requirements, image: Optional[str] = None) -> str:
     """The identity of a sandbox, as the string a shape is cached under.
 
     '(interpreter, version)' is what runs the script - "python" and "3.11", or
@@ -517,7 +518,24 @@ def environment_cache_key(interpreter: str, version: str, requirements) -> str:
     entries are dropped: a package that declares no dependencies of its own has
     to key the same as one that declares an empty list.
 
+    'image' is the container image the sandbox was built in, where there is one.
+    It belongs here for the same reason the requirements do, and more so: an
+    image is named precisely when a package needs something pip cannot install,
+    so two images carrying the same interpreter and the same wheels are still
+    two different native stacks -- a different OpenCASCADE, a different solver
+    -- and a shape built in one is not the shape the other builds. Without it a
+    package that changed its 'dockerImage' would be handed back the model the
+    previous image produced.
+
+    Appended only when there is an image, so a sandbox that has none keys
+    exactly as it did before there was such a thing as an image. A key that
+    changed shape for everybody would invalidate every cached shape on every
+    machine, to record something that is not true of any of them.
+
     See Shape.set_environment_cache_key() for what this is for.
     """
     unique = sorted({requirement.strip() for requirement in requirements if requirement and requirement.strip()})
-    return "%s==%s;%s" % (interpreter, version, ";".join(unique))
+    key = "%s==%s;%s" % (interpreter, version, ";".join(unique))
+    if image:
+        key += ";image=%s" % image
+    return key

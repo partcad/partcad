@@ -235,18 +235,9 @@ jobs:
           configFile: tools/containers/devcontainer-kicad.json
           push: always
 
-      # The CalculiX runtime, and the one image here that has to be built for
-      # more than one architecture. gmsh publishes no wheel for 64-bit ARM Linux
-      # and no sdist, so an ARM machine can get a mesher only from a
-      # distribution package inside a container -- and an amd64-only image would
-      # be a plugin that has not brought its dependencies on half the machines
-      # it claims to support, which `pc test` reads as the implementation
-      # failing. Which it would be.
-      #
-      # 'devcontainers/ci' above builds for the runner's architecture alone, so
-      # this one goes through buildx with QEMU instead. That is slower, and the
-      # cost buys the arm64 half of the matrix an analysis it otherwise cannot
-      # run at all.
+      # QEMU and buildx are what the Python base images below are built with:
+      # they fan out over architectures, and "devcontainers/ci" above builds for
+      # the runner's alone.
       - name: Set up QEMU
         uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3.6.0
         with:
@@ -254,33 +245,139 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435  # v3.11.1
 
-      # Tagged by what is in it rather than by PartCAD's version, unlike every
-      # other image here. The plugin that pulls it lives in its own repository
-      # and cannot name a version of PartCAD, and a content tag is immutable --
-      # so a plugin's pin keeps working, a branch that edits the image publishes
-      # a new tag instead of replacing the one everything else uses, and the
-      # merge of that branch builds the same tag it did. The script says all of
-      # this, and is what to run to find out what to pin.
-      - name: Tag for the CalculiX runtime
-        id: calculix
-        run: echo "TAG=$(tools/containers/calculix/image-tag.sh)" >> $GITHUB_OUTPUT
+      # The images the "docker" Python sandbox runs in, and the ones a
+      # third-party plugin builds "FROM". One per supported Python version,
+      # because the sandbox honours a package's "pythonVersion" and an image is
+      # what supplies the interpreter -- so a version PartCAD supports with no
+      # image behind it is a version the default sandbox cannot serve.
+      #
+      # A loop rather than a job matrix, because a matrix cannot be built from a
+      # workflow-level "env" without going through a job output, and this is one
+      # step in a job that already exists. "docker/build-push-action" is not used
+      # for the same reason: it is a step, and a step cannot repeat.
+      #
+      # Two tags each, and they are for different readers. The version tag is
+      # immutable and is what a package pins; the bare one moves and is what a
+      # plugin's own CI tests against, so that a rebuilt base which breaks a
+      # plugin shows up in that plugin's run rather than in a user's.
+      #
+      # A pull request builds them and does not publish them. Both tags are read
+      # by somebody who is not this run -- the version tag by a package that
+      # pinned it, the moving one by every plugin whose own CI builds "FROM" it
+      # -- so pushing from a pull request would hand unreviewed images to both,
+      # and would let any branch overwrite the tag called immutable just above.
+      # Nothing here consumes the published image either: the
+      # "Sandbox (docker)" job below builds its own. So the build is the test,
+      # and publishing waits for the commit to land.
+      - name: Build the Python sandbox images
+        env:
+          PYTHONS: ${{ env.PYTHONS }}
+          DEEP: ${{ needs.set-matrix.outputs.deep }}
+          IMAGE: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-python
+          PC_VERSION: ${{ env.VERSION }}
+          PUSH: ${{ (github.event_name != 'pull_request' && github.event_name != 'merge_group') && 'true' || 'false' }}
+        run: |
+          # arm64 goes through QEMU and costs minutes per version, so a pull
+          # request builds amd64 alone and a deep run covers both. That is a real
+          # gap and not a rounding error -- an arm64 image is exactly what an
+          # Arm laptop pulls -- but the arm64 half is also what the nightly run
+          # and "#deepTest" exist for, and paying it on every push to every pull
+          # request would make this job the slowest thing in CI.
+          if [ "${DEEP}" = "true" ]; then
+            ARCHES="amd64 arm64"
+          else
+            ARCHES="amd64"
+          fi
+          echo "Architectures: ${ARCHES}"
 
-      - name: Build Container for CalculiX
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83  # v6.18.0
+          for PY in $(echo "${PYTHONS}" | jq -r '.[]'); do
+            for ARCH in ${ARCHES}; do
+              echo "::group::python ${PY} (${ARCH})"
+              docker buildx build \
+                --platform "linux/${ARCH}" \
+                --build-arg "PYTHON_VERSION=${PY}" \
+                --build-arg "PARTCAD_VERSION=${PC_VERSION}" \
+                --tag "${IMAGE}:${PC_VERSION}-py${PY}-${ARCH}" \
+                --tag "${IMAGE}:py${PY}-${ARCH}" \
+                --cache-from "type=registry,ref=${IMAGE}:py${PY}-${ARCH}" \
+                --cache-to type=inline \
+                --output "type=image,push=${PUSH}" \
+                --file tools/containers/python/Dockerfile \
+                tools/containers
+              echo "::endgroup::"
+            done
+          done
+
+  # The one job that runs the "docker" sandbox rather than reasoning about it.
+  #
+  # Everything else about that sandbox is tested without a container, because
+  # its identity, its command line and its Windows mapping can all be decided
+  # without one. What cannot is whether the design works: that the mount lands
+  # where it is supposed to, that a virtual environment built by the image's
+  # interpreter is one the host can see, that pip writes into the mount rather
+  # than into the container, and that what a package installed survives the
+  # container being replaced. Until something runs that sequence, every one of
+  # them is an assumption -- and this job is also the only thing that builds
+  # `tools/containers/python/Dockerfile` on a change that does not touch the
+  # registry.
+  #
+  # The image is built here and never pushed. That way this tests the Dockerfile
+  # in *this* commit rather than whatever tag a previous run published, and it
+  # needs no registry credentials, so it works the same on a fork.
+  sandbox-docker:
+    name: "Sandbox (docker)"
+    needs: set-matrix
+    if: ${{ needs.set-matrix.outputs.pytest == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # A one-cell matrix because the setup actions read "matrix.os" and
+        # "matrix.python-version". One cell is the right size regardless: what
+        # is under test is the sandbox mechanism, which does not vary by
+        # interpreter, and the image matrix itself is built in
+        # "build-containers".
+        os: ["ubuntu-latest"]
+        python-version: ["3.11"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-all
         with:
-          context: tools/containers
-          file: tools/containers/calculix/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          # Both: the content tag is what is pinned and pulled, and the
-          # version/branch tag is what makes this image findable beside the
-          # others when looking at what a given build produced.
-          tags: |
-            ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-calculix:${{ steps.calculix.outputs.TAG }}
-            ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-calculix:${{ steps.setup.outputs.IMAGE_TAG }}
-          cache-from:
-            "type=registry,ref=${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-calculix:${{ steps.calculix.outputs.TAG }}"
-          cache-to: type=inline
-          push: true
+          job: sandbox
+      - uses: ./.github/actions/setup-test
+        with:
+          job: sandbox
+
+      - name: Build the image the sandbox runs in
+        run: |
+          docker build \
+            --build-arg "PYTHON_VERSION=${{ matrix.python-version }}" \
+            --build-arg "PARTCAD_VERSION=${{ env.VERSION }}" \
+            --tag pc-sandbox-under-test:local \
+            --file tools/containers/python/Dockerfile \
+            tools/containers
+
+      # The image's own conformance check, run from outside the build as a
+      # third-party plugin author would run it. It is kept in the image for
+      # exactly this, so a failure here is the contract being broken rather than
+      # a test needing an update.
+      - name: The image keeps the base image contract
+        run: docker run --rm pc-sandbox-under-test:local python3 /pc/verify.py
+
+      - name: Run the sandbox
+        shell: bash -el {0}
+        env:
+          # Not a published tag, deliberately: a test that silently pulls a
+          # gigabyte from a registry is a test people learn to skip.
+          PC_TEST_SANDBOX_IMAGE: pc-sandbox-under-test:local
+        run: |
+          . ~/.bashrc
+          . ~/.bash_profile
+          mamba activate ${{ format('env-test-sandbox-{0}', matrix.python-version) }}
+
+          pytest tests/partcad/unit/test_docker_sandbox_live.py -v -p no:warnings
 
   set-matrix:
     name: "Set matrix"
@@ -669,6 +766,32 @@ jobs:
       - uses: ./.github/actions/setup-test
         with:
           job: examples-partcad
+
+      # What `examples/feature_cae` needs and pip cannot install. The analyses
+      # there are run by a plugin, and a plugin that is asked and cannot answer
+      # is a failure -- deliberately, since a silent skip is how an example
+      # stops being an example. So the job brings the solver and the mesher
+      # rather than hoping for them.
+      #
+      # Two ways exist to have them and this is the second: the plugin also
+      # names a `dockerImage` carrying both, which is what a machine with a
+      # container runtime uses. A runner has apt, so it uses apt, and the
+      # example is then exercised on a host installation as well -- which is the
+      # arrangement `dockerImage` is documented to keep working.
+      #
+      # Linux only. macOS would need the BrewSci tap, which builds the solver
+      # from source, and Windows has no package at all. On those the image is
+      # the answer, and neither runner has a container runtime that can run a
+      # Linux one -- Windows ships a daemon in Windows-container mode, which is
+      # not the same thing. So `pc test` skips those analyses there rather than
+      # failing them, and says so; see `CaeTest._verdict()` for why that is the
+      # one excuse it accepts.
+      - name: The CAE example's native dependencies
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends calculix-ccx python3-gmsh
+          ccx -version || true
 
       - name: Basic integration test for CLI (PartCAD examples)
         shell: bash -el {0}

@@ -36,6 +36,15 @@ INVALID_CONFIG = -32001
 # The CLI turns this into click.UsageError (exit code 2), matching the old
 # in-process commands.
 USAGE_ERROR = -32002
+# An analysis that was asked and produced no answer: the implementation could
+# not run here (no solver, no mesher, an unbuildable sandbox, a crash). The
+# message is the report `partcad.cae.dysfunction_report()` wrote, and it is the
+# answer to the user's question -- so it carries a code of its own rather than
+# INTERNAL_ERROR, which would log a traceback on the daemon for something that
+# is not a fault of the machinery. The CLI has no special case for it, which is
+# what is wanted: an unrecognised code becomes a click.ClickException carrying
+# the message, printed as it stands and exiting 1.
+ANALYSIS_FAILED = -32003
 
 
 def _ctx(session, params):
@@ -1968,6 +1977,34 @@ def cae_analyze(session, params):
             # "This part says nothing about FEA" and "what it says does not
             # parse" are both answers, and both are what the tab prints.
             raise JsonRpcError(USAGE_ERROR, str(e)) from e
+        except pc.runtime.SandboxUnavailable as e:
+            # No sandbox to run the analysis in is the same answer as an
+            # implementation that was asked and could not run: the part has no
+            # result, and the machine is why. Left to the dispatcher it came
+            # back as an internal error with a traceback -- a bug report about
+            # PartCAD rather than the two remedies the user needs. Reported the
+            # way 'pc test' reports it, so the command, the check and the IDE's
+            # tab say the same thing about the same machine.
+            raise JsonRpcError(
+                ANALYSIS_FAILED,
+                pc.cae.dysfunction_report(
+                    path,
+                    analysis,
+                    params.get("implementation") or "the configured implementation",
+                    e,
+                    remedy=pc.cae.NO_RUNTIME_REMEDY,
+                ),
+            ) from e
+        except pc.cae.CaeFailed as e:
+            # The implementation was asked and did not deliver. Reported as
+            # `Shape.analyze_async()` wrote it -- which implementation was
+            # asked, what it said, and which machine it did not work on -- so
+            # that `pc cae fea`, `pc test -f fea` and the IDE's FEA tab all say
+            # the same thing about the same machine. It is deliberately as loud
+            # as the check's failure: a user who ran the command and got one
+            # line, then ran the check and got the platform it failed on, was
+            # being told less by the command that exists to be asked.
+            raise JsonRpcError(ANALYSIS_FAILED, str(e)) from e
 
     if params.get("inline"):
         import base64

@@ -49,6 +49,7 @@ runs in a sandbox like every other one.
 
 from __future__ import annotations
 
+import platform
 import re
 from typing import Optional
 
@@ -105,6 +106,24 @@ class CaeConfigError(ValueError):
     it: `pc cae` prints it, `pc test` fails the part with it, and the IDE's FEA
     tab shows it where the results would have been. "It is malformed" is the
     answer the user asked for in each case, so it has to survive as a sentence.
+    """
+
+
+class CaeFailed(Exception):
+    """An analysis that was asked and produced no answer.
+
+    Carries what `dysfunction_report()` writes, and is raised by
+    `Shape.analyze_async()` around every way an implementation can fail to
+    deliver -- no mesher, no solver, a sandbox that will not build, a crash. It
+    exists so that the sentence is written once, where the implementation's name
+    is known, rather than by each caller: `pc cae` prints it, `pc test` fails
+    the part with it, and the IDE's tab shows it, and a user who saw one of
+    those and then ran another must not be told two different things about the
+    same machine.
+
+    Not `CaeConfigError`, and the distinction is the action it asks for: that
+    one means the part's own section is wrong and is fixed by editing it, this
+    one means the part is fine and the machine or the plugin is not.
     """
 
 
@@ -558,6 +577,43 @@ def normalize_findings(findings) -> list[dict]:
         else:
             normalized.append({"message": str(finding)})
     return normalized
+
+
+# What to do about an analysis that could not run because this machine has no
+# container runtime. Said by PartCAD rather than by the implementation, because
+# the implementation never ran and so cannot say anything at all -- and said as
+# two remedies rather than one, because either fixes it and only the reader
+# knows which is easier where they are.
+NO_RUNTIME_REMEDY = (
+    "Either start a container runtime, or install what this implementation needs on this machine: "
+    "an implementation that names a 'dockerImage' also declares the requirements to run without one."
+)
+
+
+def dysfunction_report(
+    name: str, analysis: str, implementation: str, error: Exception, remedy: Optional[str] = None
+) -> str:
+    """Why an analysis produced no answer, as the failure a user has to act on.
+
+    The reasons need different actions -- install a solver, use another machine,
+    fix the package -- and only the implementation knows which one this is. So
+    what it said is reported verbatim rather than classified here: PartCAD does
+    not know what `ccx` is, and a rule here that recognised it would be wrong for
+    the next implementation.
+
+    What this adds is the two things the sentence usually omits and the reader
+    always needs: which implementation was asked, and which machine it did not
+    work on. "gmsh is not installed" is a puzzle; the same sentence under
+    `//pub/feature/cae/calculix:fea on Linux-aarch64` is an answer.
+    """
+    lines = [
+        "%s: %s could not be run by %s" % (name, analysis.upper(), implementation),
+        "\t%s" % str(error).replace("\n", "\n\t"),
+        "\tplatform: %s-%s, Python %s" % (platform.system(), platform.machine(), platform.python_version()),
+    ]
+    if remedy:
+        lines.append("\t%s" % remedy)
+    return "\n".join(lines)
 
 
 def findings_report(name: str, analysis: str, findings: list) -> str:

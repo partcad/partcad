@@ -65,6 +65,11 @@ classifiers = [
 pc = "partcad_cli.click.command:cli"
 partcad = "partcad_cli.click.command:cli"
 partcad-json-rpc = "partcad_service_json_rpc.__main__:main"
+# A second service from the same package, and a separate executable because it
+# is a separate thing to run: this one holds no PartCAD context and serves
+# containers to clients that are not on this machine. See
+# "src/partcad_service_json_rpc/remote_docker_service.py".
+partcad-service-remote-docker = "partcad_service_json_rpc.remote_docker_service:main"
 
 [project.urls]
 Homepage = "https://github.com/partcad/partcad"

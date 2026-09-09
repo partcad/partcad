@@ -114,7 +114,9 @@ declared in its own (see :ref:`cae-section`), and named by the
 ``//pub/feature/cae/calculix:fea`` and ``//pub/feature/cae/calculix:cfd`` by
 default, which are `CalculiX <https://www.calculix.de/>`_ (see
 `partcad-cae-calculix <https://github.com/partcad/partcad-cae-calculix>`_ for
-what it needs installed and what every parameter means). ``pc cae fea --implementation`` overrides it for one run, and so does
+what it needs and what every parameter means -- it names a ``dockerImage``
+carrying its solver and mesher, so a container runtime is all it asks of a host
+that has neither installed). ``pc cae fea --implementation`` overrides it for one run, and so does
 the field over the model in the IDE's FEA tab.
 
 A part may also name its own, which is what it was written against:
@@ -145,18 +147,49 @@ What comes back is two things: the model, written to
 and the **findings** -- a JSON array of what the analysis has to say about the
 part. ``pc test`` gains an ``fea`` and a ``cfd`` check that fail a part whose
 analysis produced any finding, and they apply only to a part that declares the
-matching section, so a package of bolts pays nothing for them. A plugin that
-cannot be resolved -- not a dependency, misspelt, or declaring no such file type
--- **fails** those checks: the configuration is wrong, and it is wrong wherever
-the package is opened. Where the plugin resolves and no *solver* is installed
-they report that they did not run, and pass: that absence is a property of the
-machine rather than of the part.
+matching section, so a package of bolts pays nothing for them. There is one way to pass -- the
+analysis ran and reported nothing -- and everything else **fails**: a malformed
+section, a plugin that cannot be resolved (not a dependency, misspelt, declaring
+no such file type), a plugin that resolves and cannot run (no mesher, no solver,
+a sandbox that will not build, a crash), and an analysis that ran and found
+something.
+
+Not running is deliberately not a skip. A skip says the question does not apply
+here; a part that declares ``fea:`` has asked, and a plugin that was asked and
+delivered nothing has failed. The consequence is the point: declaring ``fea:``
+in a shared package makes ``pc test`` fail for everyone who has not installed
+what that implementation needs. A package that does not want that should not
+declare the section. What the failure carries is *why* -- the implementation's
+own sentence, plus which implementation was asked and which machine it did not
+work on, because "gmsh is not installed" is a puzzle and the same sentence under
+``//pub/feature/cae/calculix:fea on Linux-aarch64`` is an answer.
+
+There is **one** excuse, and it is the case where the implementation was never
+given the environment it says it needs. An implementation naming a ``container:``
+or a ``dockerImage`` is stating that a container is how what pip cannot install
+arrives; on a machine with no container runtime that statement has nowhere to
+land, nothing was ever asked, and the check skips with a ``WARNING`` carrying the
+whole report rather than failing. It is narrow in both directions. An
+implementation that names no image gets no excuse at all -- it said it runs in an
+ordinary sandbox, and a machine with a working sandbox is a machine it was
+supposed to work on. And a container runtime that *is* here removes the excuse
+entirely: a registry that cannot be reached, an image that will not start, a
+solver missing from the image are all things somebody can fix, and calling them
+"unavailable" would hide exactly the failures a plugin's own CI exists to catch.
+
+A Docker daemon running **Windows** containers does not count as a container
+runtime for this, or for choosing a sandbox. Every image PartCAD builds, pulls or
+documents is a Linux image, and such a daemon answers a ping and then fails every
+pull with ``no matching manifest for windows/amd64``.
 
 ``examples/feature_cae`` is the pair of cases to check an implementation against
 — a cantilever and a pipe, each with a closed-form answer to compare the solver
 with. Against CalculiX the cantilever reads 0.1655 mm where the model predicts
-0.16-0.18 mm; the pipe does not converge yet, and that package's ``README.md``
-says why.
+0.16-0.18 mm. The pipe declares no ``cfd:`` section: CalculiX's CFD solver
+diverges on it, a part that declares a section has asked a question, and an
+example that ships a check nothing can turn green is one readers learn to scroll
+past. The declaration is written out beside the part, and that example's
+``README.md`` has the measurement.
 
 See :ref:`pc cae <cae>` for the command and the units it accepts.
 
@@ -234,18 +267,33 @@ That is what lets one package render against build123d 0.11 while another wants
 ``pythonSandbox`` chooses how that sandbox is built:
 
 ==================== =========================================================================
-``conda``            An environment conda provisions, **interpreter included**. The only one
-                     that can give a package the Python version it asks for, so it is the
-                     default wherever conda or mamba is installed -- and in the
-                     :ref:`standalone tools <standalone-cli>`, the :ref:`snap <snap-package>`
-                     and the :ref:`PartCAD IDE <partcad-ide>`, which carry a conda of their
-                     own and use yours in preference to it when you have one.
+``docker``           A container, with your files mounted into it. The default wherever a
+                     container runtime answers, because it is the only one whose result does
+                     not depend on what the host happens to have: the interpreter, the
+                     compilers and the native libraries all come from an image somebody
+                     built once and published. It is also the only sandbox a package can
+                     bring **non-Python** dependencies to, by naming its own image -- see
+                     :ref:`docker-sandbox` below.
+``conda``            An environment conda provisions, **interpreter included**. The default
+                     where there is no container runtime and conda or mamba is installed --
+                     and in the :ref:`standalone tools <standalone-cli>`, the
+                     :ref:`snap <snap-package>` and the :ref:`PartCAD IDE <partcad-ide>`,
+                     which carry a conda of their own and use yours in preference to it when
+                     you have one. What it provisions depends on your channels, your package
+                     cache and your platform, which is why it is no longer the first choice
+                     where a container is available.
 ``venv``             A plain virtual environment of PartCAD's own, one per interpreter
-                     version, under the internal state directory. The default when conda is
-                     not installed. Built from whichever Python the host has, so a package
-                     asking for a version the host does not have is rendered on the host's
-                     and told so -- and so not something the standalone tools can fall back
-                     to, since the machine they exist for is the one with no Python.
+                     version, under the internal state directory. The default when neither a
+                     container runtime nor conda is installed. Built from whichever Python
+                     the host has, so a package asking for a version the host does not have
+                     is rendered on the host's and told so -- and so not something the
+                     standalone tools can fall back to, since the machine they exist for is
+                     the one with no Python.
+``remote``           A container that does **not** share a filesystem with PartCAD: the
+                     inputs are sent to it and the outputs are sent back. This is what a
+                     sandbox on another machine needs. Chosen rather than fallen back to,
+                     and it needs ``remoteSandbox`` to say where the service is. See
+                     :ref:`remote-sandbox` below.
 ``none``             No environment at all: scripts run on the host's own interpreter and
                      their dependencies are installed **into it**. Fast and shares whatever
                      is already there, at the price of writing the CAD stack into the Python
@@ -260,6 +308,120 @@ That is what lets one package render against build123d 0.11 while another wants
 
 The equivalents everywhere else are ``PC_PYTHON_SANDBOX`` in the environment and
 ``--python-sandbox`` on the command line, in the usual order of precedence.
+
+Which one is chosen for you, when you have said nothing, is the first of
+``docker``, ``conda`` and ``venv`` that this machine can actually provide. A
+continuous integration runner with no container runtime therefore keeps
+provisioning with conda exactly as before, and needs no configuration to say so.
+
+"Can actually provide" includes the image. A container runtime answering says a
+container could be started; it says nothing about whether the image to start it
+from can be pulled, and on a machine that is offline, behind a firewall, or
+simply not permitted to reach the registry those are different answers. So
+PartCAD checks, once, and falls through to ``conda`` or ``venv`` with a warning
+rather than failing every part against a registry you never asked it to talk to.
+
+That fallback is only ever for a choice PartCAD made. Say ``pythonSandbox:
+docker`` yourself and it is obeyed: an image that cannot be had is then a
+failure, because being unable to do what was asked is not a reason to quietly do
+something else.
+
+.. _docker-sandbox:
+
+The ``docker`` sandbox
+----------------------
+
+The container is a place to run the interpreter, not a place to keep your work.
+PartCAD mounts two directories into it:
+
+* the **context root** -- the package tree the command is working on;
+* **the internal state directory** (``~/.partcad`` by default), which is where
+  the sandbox environments, the caches and the fetched dependencies live.
+
+Both are mounted **at the same paths they have outside**, so a path in a log, in
+an error, in a cached artifact or in a ``.frd`` a solver wrote means the same
+thing on both sides and nothing has to be rewritten. The one exception is
+Windows, where a path like ``C:\Users\you\.partcad`` cannot exist inside a
+Linux container: there, and only there, drive letters are mapped the way Docker
+Desktop maps them (``C:\Users\you`` becomes ``/c/Users/you``).
+
+Because the state directory is mounted rather than copied, ``pip`` installs
+persist across container restarts and the environment locking, the install
+guards and the cache all work unchanged. Sandbox environments are named after
+the image that built them, so a package rendered against one image never reuses
+what another installed -- what ``pip`` resolves and compiles depends on the
+native libraries underneath it, and two images do not have the same ones.
+
+.. _remote-sandbox:
+
+The ``remote`` sandbox
+----------------------
+
+``remote`` makes no assumption that the container can see your disk. The
+directories a command needs are packed up and sent to it, and the files it wrote
+are sent back. That costs a copy per run, and it buys a sandbox that can be
+anywhere -- another machine, another architecture, a build farm.
+
+It is served by ``partcad-service-remote-docker``, which accepts those requests,
+starts and reuses a container per image, multiplexes callers onto it and retires
+it when nobody is using it. That service exists; run it with ``--host`` and
+``--port`` to say where.
+
+**It runs commands, so who may reach it matters.** A request names the image,
+the requirements and the command, and the sandbox interpreter runs whatever
+Python it is handed -- on a reachable address that is a shell for anybody who
+can reach the port. So it binds loopback by default, and it **refuses to start**
+on any other address without ``--token`` (or ``PC_REMOTE_SANDBOX_TOKEN``), which
+every request must then carry as ``Authorization: Bearer <token>``. Refused at
+start-up rather than warned about: somebody who passed ``--host 0.0.0.0`` is not
+going to read the log of a service that came up and appeared to work. Prefer the
+environment variable to the flag, since process arguments are readable by anyone
+on the machine.
+
+The service owns the environment, and that is the arrangement worth knowing. A
+sandbox is a virtual environment on a disk, and for ``remote`` that disk cannot
+be the caller's -- so the service builds it in a Docker volume, installs into it,
+and prepends its interpreter to whatever was asked for. The client never learns
+where it is. Guards saying "numpy is installed" belong on the same disk as the
+numpy they describe.
+
+Which directories a command needs are worked out from the command: any argument
+naming a file on this machine contributes the directory it is in, because a
+script needs the siblings it imports. What a command *writes* cannot be inferred
+that way, so a caller producing a file names it, exactly as it does for a
+container.
+
+Point a client at it with ``remoteSandbox`` (or ``PC_REMOTE_SANDBOX``), as
+``host:port``, and give it the service's token with ``remoteSandboxToken`` (or
+``PC_REMOTE_SANDBOX_TOKEN``) where the service was started with one. There is no
+default for either: guessing at a service that runs commands is not something to
+do on somebody's behalf.
+
+**Off this machine, that has to be encrypted.** Every request carries the token
+and the package's own source, so PartCAD refuses to send one to an address that
+is not loopback over plain HTTP. Two ways to satisfy it: put the service behind
+a TLS-terminating proxy and write ``https://host:port``, or reach it through a
+tunnel -- SSH, WireGuard, whatever the network already has -- and point
+``remoteSandbox`` at the near end, which is loopback and stays plain. A
+container PartCAD starts on this machine is loopback too, and a certificate
+between a process and its own container would secure nothing.
+
+Today the transfer is a whole directory at a time; the intent is to replace that
+with a filesystem the container mounts and pulls files through one at a time, at
+which point ``remote`` becomes as cheap as ``docker`` and stops being a trade.
+
+Containers PartCAD manages
+--------------------------
+
+Every image PartCAD builds is labelled as its own, and ``pc system prune``
+removes the images and containers carrying those labels -- never anything else
+on the machine. ``pc system prune --stale`` removes only what is out of date:
+images from PartCAD releases other than this one, and containers nothing is
+using.
+
+Third-party images are asked, by convention, to carry the same labels. An image
+that does not is still usable; it simply cannot be told apart from the rest of
+what you have installed, so ``pc system prune`` leaves it alone.
 
 .. _caching:
 
