@@ -10,6 +10,11 @@
 # empty plugin. This script dereferences the symlink into real files so the
 # published artifact contains no symlinks at all.
 #
+# The same library is in the "partcad" wheel, which "pc init" installs it out
+# of: "src/partcad/ai_agents" symlinks into this directory. Nothing here needs
+# to know about that -- setuptools resolves those symlinks itself -- but it is
+# why a skill added here also changes the wheel.
+#
 # Requires no credentials. `claude plugin validate` runs fully offline.
 #
 # Usage:
@@ -99,6 +104,9 @@ claude plugin validate "$OUT_DIR"
 # directories are not read through symlinks, and "skills" there is one -- so it
 # warns and passes over a "SKILL.md" with no front matter. Here the files are
 # real, so this is the first time anything looks at them.
+#
+# (`pytest tests/partcad_cli/unit/test_ai_agent_skills.py` reads them for real
+# too, on every commit, which is where a contributor sees it first.)
 echo "==> Validating materialized plugin"
 claude plugin validate "$OUT_DIR/$PLUGIN_NAME"
 

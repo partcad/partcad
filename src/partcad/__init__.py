@@ -99,6 +99,7 @@ from . import plugin  # noqa: F401
 # anyway because 'shape' imports it, and that is exactly the dependency the
 # 'plugin' line above exists not to have.
 from . import cae  # noqa: F401
+from .ai_agents import install_agent_skills
 from .assembly import Assembly
 from .assembly_connect import ConnectHold, ConnectHow
 from .consts import *
@@ -190,6 +191,7 @@ __all__ = [
     "get_scene_build123d",
     "healthcheck",
     "init",
+    "install_agent_skills",
     "logging",
     "part",
     "shape",

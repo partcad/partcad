@@ -5,6 +5,14 @@ are vendor-neutral [Agent Skills](https://code.claude.com/docs/en/skills)
 (`SKILL.md` folders) so any `SKILL.md`-aware agent can consume them; the Claude
 plugin is a thin wrapper that ships the same files to Claude Code.
 
+**These files are also in the `partcad` wheel**, through two symlinks under
+[`src/partcad/ai_agents`](../src/partcad/ai_agents/). The wheel is what a user of
+PartCAD has, and `pc init` installs the skills out of it into the repository it
+just created a package in — so the agent already open in the editor knows how to
+drive PartCAD without anyone first finding this repository, a marketplace, or an
+install command. See *Installed by `pc init`* below. This directory stays the
+one place the skills are edited; nothing is copied.
+
 ## Install
 
 ```text
@@ -39,13 +47,69 @@ ai-agents/
     └── materialize.sh              # publish-time: deref the symlink into real files
 ```
 
-Two more files outside this directory tie it together:
+And, so that the same files reach a user through the wheel:
+
+```
+src/partcad/ai_agents/
+├── __init__.py                                              # what `pc init` calls
+├── skills      -> ../../../ai-agents/common/skills          # symlink
+└── plugin.json -> ../../../ai-agents/claude/.claude-plugin/plugin.json
+```
+
+Two symlinks and no copies. `setuptools` resolves a symlink that is a path
+*component* and stores what it finds as an ordinary file, so the wheel and the
+sdist carry real files and contain no symlinks at all —
+`[tool.setuptools.package-data]` in `pyproject.toml` says which patterns, and
+`dev-tools/pyinstaller/partcad.spec` names the same files again (from
+`ai-agents/`, since a frozen bundle does not read `package-data` and should not
+depend on a symlink having been materialized). The manifest lands flat, as
+`plugin.json`, so that the wheel carries no dot-directory; `pc init` writes it
+back into a `.claude-plugin/` when it installs.
+
+What this buys is that the plugin and the wheel cannot ship different skills,
+and that a skill is edited in exactly one place: here.
+
+Two more files outside these directories tie it together:
 
 - `../.claude-plugin/marketplace.json` — top-level catalog (for discoverability),
   lists `pc` with `source: ./ai-agents/claude`.
 - `../.claude/skills/pc -> ../../ai-agents/claude` — makes Claude auto-discover
   the plugin as `pc@skills-dir` when this repo is opened as the workspace, so
   `/pc:init` is available with no install step.
+
+## Installed by `pc init`
+
+`pc init` creates a package and then installs these skills into the repository
+holding it — the same root it writes `.vscode/launch.json` into, because that is
+what an editor opens as its workspace. `pc init --no-skills` skips it, and
+`pc init --skills-only` does this and nothing else, which is how a repository
+that already has a package gets them (or gets a newer PartCAD's).
+`src/partcad/ai_agents/__init__.py` is the whole of it, and it reads the files
+out of the *installed* PartCAD, not out of a checkout. The two agents do **not**
+get the same thing:
+
+- **Claude Code** gets the *plugin*: `.claude/skills/pc/`, a manifest plus every
+  skill under it. A directory there holding a `.claude-plugin/plugin.json` is
+  loaded as a plugin, which is what puts the skills in one namespace —
+  `/pc:init`, not `/init` — and it is the same `pc` a marketplace install
+  produces, so a project with both does not end up with two spellings of one
+  skill. The `SKILL.md` files are copied byte for byte.
+- **Cursor** gets loose skills, because it has no plugin to namespace anything:
+  `.cursor/skills/pc-init/`, `pc-gen/`, `pc-render/` and so on. Shipped as they
+  are, PartCAD would be claiming `init`, `gen`, `render`, `search` and `export`
+  in a user's skills directory. So the prefix is applied to the directory *and*
+  to the `name` in the front matter (which has to match it), and the
+  `pc:<skill>` cross-references in the text are rewritten to match — a skill
+  that tells the agent to run `/pc:setup` where that resolves to nothing is
+  worse than one that says nothing. Only names that are actually shipped are
+  rewritten, so the `pc render` and `pc adhoc convert` command lines these files
+  are full of are left alone.
+
+Neither destination is written through a symlink, and this repository is why:
+`.claude/skills/pc` here points at `ai-agents/claude`, so following it would
+have `pc init` overwrite the working tree with a copy of the installed PartCAD.
+Everything installed is namespaced, so a re-run updates PartCAD's own skills and
+touches nothing else in those directories.
 
 The plugin folder is named `claude`, but the command namespace comes from
 `plugin.json`'s `name` field (`pc`), so skills invoke as `/pc:<skill>`.
@@ -232,11 +296,22 @@ front matter, or with a `name` that does not match its directory, would get as
 far as whoever installed the plugin. The pytest run reads every one of them for
 real, on commit.
 
+It also covers the half no plugin tooling can see: that the symlinks under
+`src/partcad/ai_agents` still point here, and that every file in the library
+matches a `package-data` pattern. A pattern that misses one produces a wheel
+where `pc init` installs a skill that is not there — and nothing else would
+notice, since a test run from a checkout finds every file on disk whether it was
+packaged or not. `tests/partcad/unit/test_ai_agents.py` covers the installation
+itself.
+
 ## Windows contributors
 
 If local discovery or a build produces a `skills` file containing the text
 `../common/skills` instead of a directory, git did not materialize the symlink.
-Enable symlinks and re-checkout:
+The same goes for the two under `src/partcad/ai_agents`, and there it is a wheel
+built from that checkout that comes out short. (The frozen bundles do not care:
+`partcad.spec` names the files under `ai-agents/` directly.) Enable symlinks and
+re-checkout:
 
 ```bash
 git config core.symlinks true
