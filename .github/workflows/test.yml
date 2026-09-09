@@ -260,12 +260,22 @@ jobs:
       # immutable and is what a package pins; the bare one moves and is what a
       # plugin's own CI tests against, so that a rebuilt base which breaks a
       # plugin shows up in that plugin's run rather than in a user's.
+      #
+      # A pull request builds them and does not publish them. Both tags are read
+      # by somebody who is not this run -- the version tag by a package that
+      # pinned it, the moving one by every plugin whose own CI builds "FROM" it
+      # -- so pushing from a pull request would hand unreviewed images to both,
+      # and would let any branch overwrite the tag called immutable just above.
+      # Nothing here consumes the published image either: the
+      # "Sandbox (docker)" job below builds its own. So the build is the test,
+      # and publishing waits for the commit to land.
       - name: Build the Python sandbox images
         env:
           PYTHONS: ${{ env.PYTHONS }}
           DEEP: ${{ needs.set-matrix.outputs.deep }}
           IMAGE: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-python
           PC_VERSION: ${{ env.VERSION }}
+          PUSH: ${{ (github.event_name != 'pull_request' && github.event_name != 'merge_group') && 'true' || 'false' }}
         run: |
           # arm64 goes through QEMU and costs minutes per version, so a pull
           # request builds amd64 alone and a deep run covers both. That is a real
@@ -291,7 +301,7 @@ jobs:
                 --tag "${IMAGE}:py${PY}-${ARCH}" \
                 --cache-from "type=registry,ref=${IMAGE}:py${PY}-${ARCH}" \
                 --cache-to type=inline \
-                --push \
+                --output "type=image,push=${PUSH}" \
                 --file tools/containers/python/Dockerfile \
                 tools/containers
               echo "::endgroup::"
