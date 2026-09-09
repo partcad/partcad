@@ -29,8 +29,8 @@ measurement, and the declaration to paste back in once a solver converges is in
 What the analysis needs is a **container runtime**, and nothing else. The
 default implementation declares an image that carries `ccx`, the mesher and
 everything else it imports, so there is no solver to install and no platform
-where the mesher cannot be had — including 64-bit ARM Linux, where it once could
-not be. A machine with no container runtime runs no analysis, and `pc test`
+where the mesher cannot be had — including 64-bit ARM Linux, where pip alone
+cannot get it. A machine with no container runtime runs no analysis, and `pc test`
 **skips** the part there rather than failing it: a container is the only way
 PartCAD has of supplying what pip cannot install, so on such a machine the
 question was never really put. The skip is a `WARNING` carrying the whole report
@@ -42,6 +42,13 @@ pulled. A Docker daemon in Windows-container mode does not count as one: every
 image PartCAD uses is a Linux image. See "What it needs" in
 [`partcad-cae-calculix`](https://github.com/partcad/partcad-cae-calculix)'s
 README.
+
+> **Not on 64-bit ARM Linux yet.** The cantilever carries `unless: [aarch64]`,
+> so on such a machine the part is not declared at all and there is nothing to
+> analyse. gmsh publishes no wheel for that platform and no source distribution,
+> so the implementation cannot be installed in a Python sandbox there — and the
+> image that carries it, which *is* built for arm64, is not published yet. The
+> line comes out when it is.
 
 > **A temporary arrangement, and why it is here.** `//pub/feature/cae/calculix`
 > is registered on the public index's `devel` branch and has not reached `main`,

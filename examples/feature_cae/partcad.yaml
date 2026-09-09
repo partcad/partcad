@@ -121,6 +121,18 @@ parts:
     desc: |
       A 100x10x10 mm steel bar, clamped at one end and pulled down by 100 N at
       the other. Tip deflection and peak bending stress are both closed forms.
+    # Not on 64-bit ARM Linux, where the analysis below cannot run at all: gmsh
+    # publishes no wheel for that platform and no source distribution, so the
+    # implementation cannot be installed in a Python sandbox there. It runs
+    # perfectly well in the image the plugin names -- that image is built for
+    # arm64 too -- and this line comes out the moment that image is published.
+    #
+    # The exclusion is on the part rather than on its `fea:` section because
+    # `unless` selects declarations, and a part that declares an analysis
+    # nothing can run is a part whose check fails: `pc test` does not excuse an
+    # implementation that was asked and did not answer where a container runtime
+    # is running, which on a 64-bit ARM Linux machine it usually is.
+    unless: [aarch64]
     implements:
       beam-root: [[-50, 0, 0], [0, 0, 1], 0]
       beam-tip: [[50, 0, 0], [0, 0, 1], 0]
