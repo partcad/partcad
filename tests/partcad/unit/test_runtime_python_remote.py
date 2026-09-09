@@ -103,6 +103,19 @@ def test_a_system_path_is_never_sent():
     assert runtime_python_remote.input_dirs_for(["/usr", "/etc", "/"]) == []
 
 
+def test_a_filesystem_root_is_never_sent():
+    """The same guard, asked in a way that is true on every platform.
+
+    The names in `NEVER_SEND` are POSIX, so on Windows the test above only
+    passes by accident -- `/usr` and `/etc` resolve to directories that do not
+    exist and are dropped for that reason. `/` is the one that does resolve:
+    to `D:\\` on a runner, a root the set does not name. That is how a whole
+    drive became eligible to be packed and sent, and this is the case that
+    says so wherever it runs.
+    """
+    assert runtime_python_remote.input_dirs_for([os.path.abspath(os.sep)]) == []
+
+
 # --------------------------------------------------------------------------- #
 # What is sent                                                                 #
 # --------------------------------------------------------------------------- #

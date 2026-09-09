@@ -47,6 +47,23 @@ from .runtime_json_rpc import RuntimeJsonRpcClient
 NEVER_SEND = {"/", "/usr", "/bin", "/etc", "/var", "/tmp", "/home", os.path.expanduser("~")}
 
 
+def _is_root(path: str) -> bool:
+    """Whether a path is a filesystem root, on whichever platform this is.
+
+    `NEVER_SEND` above is spelled in POSIX, and that is not enough: on Windows
+    `os.path.abspath("/")` comes back as the *current drive's* root -- `D:\\` on
+    a GitHub runner -- which the set does not name and `rstrip(os.sep)` does not
+    reduce to anything in it. So the whole drive was eligible to be packed and
+    sent, which is the exact failure the set exists to prevent, and the worst
+    case of it.
+
+    Asked structurally rather than by name, because the names differ per
+    platform and per drive: a root is the only path that is its own parent.
+    That covers `/`, `C:\\`, and a UNC share root alike.
+    """
+    return os.path.dirname(path) == path
+
+
 def _short(image: str) -> str:
     import hashlib
 
@@ -76,7 +93,7 @@ def input_dirs_for(command, cwd: Optional[str] = None) -> list:
             candidate = os.path.dirname(path)
         else:
             continue
-        if candidate.rstrip(os.sep) in {p.rstrip(os.sep) for p in NEVER_SEND}:
+        if _is_root(candidate) or candidate.rstrip(os.sep) in {p.rstrip(os.sep) for p in NEVER_SEND}:
             # A file sitting directly in one of these is a system file, and the
             # directory around it is not a package to send.
             continue
