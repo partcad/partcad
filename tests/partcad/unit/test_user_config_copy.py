@@ -31,6 +31,7 @@ develIndex: true
 offline: true
 threadsMax: 3
 pythonSandbox: pypy
+remoteSandbox: client.example:5050
 cacheFiles: false
 logLevel: error
 git:
@@ -59,6 +60,7 @@ develIndex: false
 offline: false
 threadsMax: 9
 pythonSandbox: none
+remoteSandbox: daemon.example:5050
 cacheFiles: true
 logLevel: debug
 git:
@@ -150,6 +152,10 @@ def test_an_unset_option_is_left_out_rather_than_sent_as_null(tmp_path, monkeypa
         ("offline", True),
         ("threads_max", 3),
         ("python_sandbox", "pypy"),
+        # The one option with no default at all: unset it resolves to nothing
+        # and is left out of the copy, so the only way the daemon can learn
+        # where the caller's remote sandbox service is, is from the caller.
+        ("remote_sandbox", "client.example:5050"),
         ("cache", False),
         ("log_level", "error"),
         ("git_clone_timeout", 42),
