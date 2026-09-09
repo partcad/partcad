@@ -1379,7 +1379,17 @@ class Context:
             return "docker"
         if not self.docker_sandbox_fallback_warned:
             self.docker_sandbox_fallback_warned = True
-            pc_logging.warning(
+            # Debug, not a warning. Nothing is wrong: PartCAD is choosing
+            # between two sandboxes that both work, and the user asked for
+            # neither -- so there is nothing here to act on, and a line on every
+            # command about a decision nobody has to take is noise. It is noise
+            # on a great many machines, too: any host with Docker running and no
+            # reachable image, which is every offline machine and every CI run
+            # before the image is published.
+            #
+            # Loud is still available and is the user's to ask for: a stated
+            # 'pythonSandbox: docker' is obeyed and fails, with the reason.
+            pc_logging.debug(
                 "A container runtime is running here but PartCAD's image for Python %s cannot be pulled,"
                 " so the '%s' sandbox is being used instead. Set 'pythonSandbox: docker' to make this a"
                 " failure rather than a fallback." % (version, self.user_config.python_sandbox)

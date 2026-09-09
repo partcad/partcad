@@ -177,6 +177,24 @@ def test_an_image_that_can_be_had_is(monkeypatch):
     assert _chooser(monkeypatch, available=True)._docker_or_next_best("3.11") == "docker"
 
 
+def test_falling_back_is_not_a_warning(monkeypatch, caplog):
+    """Nothing is wrong: two sandboxes work and PartCAD picked the other one.
+
+    A warning is for something the reader should act on, and there is nothing
+    here to act on -- while the condition holds on every offline machine with
+    Docker running, so a `WARN:` here is a line on every command those machines
+    ever run. `features/enrich.feature` caught it by asserting that a package
+    with nothing wrong with it says nothing.
+    """
+    made = _chooser(monkeypatch, available=False)
+
+    with caplog.at_level("DEBUG"):
+        made._docker_or_next_best("3.11")
+
+    assert not [record for record in caplog.records if record.levelname in ("WARNING", "ERROR")]
+    assert "cannot be pulled" in caplog.text
+
+
 def test_the_registry_is_asked_once(monkeypatch):
     """A command over a tree of parts must not ask per part."""
     monkeypatch.setattr(runtime, "docker_available", lambda: True)
