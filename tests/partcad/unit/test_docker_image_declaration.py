@@ -13,7 +13,7 @@ one still has to declare those.
 
 import types
 
-from partcad import output
+from partcad import output, runtime_python
 
 
 def _impl(section, format_name, config, project=None):
@@ -93,3 +93,30 @@ def test_declaring_an_image_does_not_remove_the_requirements():
     made = _impl(output.CAE, "fea", {}, project)
     assert made.docker_image == "ghcr.io/x/solver:abc"
     assert made.python_requirements == ["numpy==2.4.1"]
+
+
+# --------------------------------------------------------------------------- #
+# A shape's own image, and its package's                                       #
+# --------------------------------------------------------------------------- #
+#
+# The file types above are how an *implementation* names an image. A part, a
+# sketch or a plugin names one directly, in its own configuration, and the
+# factories that build them read that -- which they did not, so a part naming an
+# image was rendered without it, in an environment that could be missing exactly
+# the native library the part named it for.
+
+
+def test_a_shape_names_its_own_image():
+    project = types.SimpleNamespace(docker_image_declared="ghcr.io/x/package:abc")
+    assert runtime_python.shape_docker_image({"dockerImage": "ghcr.io/x/part:def"}, project) == "ghcr.io/x/part:def"
+
+
+def test_a_shape_that_names_none_gets_its_package_s():
+    project = types.SimpleNamespace(docker_image_declared="ghcr.io/x/package:abc")
+    assert runtime_python.shape_docker_image({}, project) == "ghcr.io/x/package:abc"
+    assert runtime_python.shape_docker_image(None, project) == "ghcr.io/x/package:abc"
+
+
+def test_no_image_anywhere_is_no_image():
+    """Which is what makes PartCAD use its own."""
+    assert runtime_python.shape_docker_image({}, types.SimpleNamespace()) is None

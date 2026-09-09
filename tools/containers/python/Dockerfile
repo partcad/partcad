@@ -72,7 +72,12 @@ RUN apt-get update \
 # as the host's own uid, which needs a home directory that is not `/root`.
 RUN useradd --create-home --uid 1000 --shell /bin/bash pc
 
-RUN mkdir -p /dot-partcad && chown pc:pc /dot-partcad
+# Writable by whichever uid ends up running here, not only by `pc`. PartCAD
+# runs the container as the *host's* uid on Linux, and that is 1000 on one
+# laptop and 501 on the next; a state directory only `pc` can write is a
+# sandbox that fails for everybody else. Sticky, so one uid cannot remove
+# another's files.
+RUN mkdir -p /dot-partcad && chown pc:pc /dot-partcad && chmod 1777 /dot-partcad
 ENV PC_INTERNAL_STATE_DIR=/dot-partcad
 
 WORKDIR /pc

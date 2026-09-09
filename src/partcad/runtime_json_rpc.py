@@ -60,12 +60,16 @@ class RuntimeJsonRpcClient:
             async with self.get_async_lock():
                 return self.get_request_id_locked()
 
-    def execute(self, command: list[str], params: Dict[str, Any] = None) -> Union[Dict, None]:
+    def execute(self, command: list[str], params: Dict[str, Any] = None, timeout: float = None) -> Union[Dict, None]:
         """Execute a command on the server using JSON-RPC.
 
         Args:
           command: The CLI command to execute
           params: Optional parameters for the command
+          timeout: Seconds to wait for the server, or None to wait forever.
+            Passed straight to the HTTP request, so a caller that was given a
+            bound can hold this side to it; without one an unresponsive server
+            blocks whatever is rendering.
 
         Returns:
           The server's response as a dictionary, or None if there's an error
@@ -82,19 +86,22 @@ class RuntimeJsonRpcClient:
         pc_logging.debug(f"Sending request: {request_string}")
 
         try:
-            response = requests.post(f"http://{self.host}:{self.port}/jsonrpc", json=request)
+            response = requests.post(f"http://{self.host}:{self.port}/jsonrpc", json=request, timeout=timeout)
             pc_logging.debug(f"Received response: {response.content}")
             return json.loads(response.content)
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
             pc_logging.error(f"Error during RPC call: {e}")
             return None
 
-    async def execute_async(self, command: str, params: Dict[str, Any] = None) -> Union[Dict, None]:
+    async def execute_async(
+        self, command: str, params: Dict[str, Any] = None, timeout: float = None
+    ) -> Union[Dict, None]:
         """Execute a command on the server using JSON-RPC.
 
         Args:
           command: The CLI command to execute
           params: Optional parameters for the command
+          timeout: Seconds to wait for the server, or None to wait forever.
 
         Returns:
           The server's response as a dictionary, or None if there's an error
@@ -111,7 +118,7 @@ class RuntimeJsonRpcClient:
         pc_logging.debug(f"Sending request: {request_string}")
 
         try:
-            response = requests.post(f"http://{self.host}:{self.port}/jsonrpc", json=request)
+            response = requests.post(f"http://{self.host}:{self.port}/jsonrpc", json=request, timeout=timeout)
             pc_logging.debug(f"Received response: {response.content}")
             return json.loads(response.content)
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:

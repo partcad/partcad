@@ -10,7 +10,7 @@
 import os
 
 from .sketch_factory_file import SketchFactoryFile
-from .runtime_python import PythonRuntime, environment_requirements
+from .runtime_python import PythonRuntime, environment_requirements, shape_docker_image
 from . import sandbox_versions
 from . import telemetry
 
@@ -45,7 +45,9 @@ class SketchFactoryPython(SketchFactoryFile):
         if python_version is None:
             # TODO(clairbee): stick to a default constant or configured version
             python_version = self.project.python_version
-        self.runtime = self.ctx.get_python_runtime(python_version, image=self.project.docker_image_declared)
+        self.runtime = self.ctx.get_python_runtime(
+            python_version, image=shape_docker_image(self.config, self.project)
+        )
         self.session = self.runtime.get_session(source_project.name)
 
     def environment_cache_key(self) -> str | None:

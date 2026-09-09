@@ -59,7 +59,10 @@ def managed_containers(client, stale_only: bool = False) -> list:
     for container in client.containers.list(all=True):
         if LABEL_CONTAINER not in _labels(container):
             continue
-        if stale_only and getattr(container, "status", "") == "running":
+        # Terminal states only. Skipping just "running" left "paused" and
+        # "restarting" to be removed with force -- and those are somebody's work
+        # in progress as much as a running one is.
+        if stale_only and getattr(container, "status", "") not in ("exited", "dead"):
             continue
         found.append(container)
     return found

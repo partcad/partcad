@@ -132,6 +132,21 @@ class Environments:
                 % (version, image, (stderr or "").strip() or "exit code %s" % exitcode)
             )
 
+        # What was built, not what was asked for. The version picks the
+        # directory; the interpreter comes from the image, and an image a
+        # package named is under no obligation to carry the version the package
+        # also asked for. Without this the mismatch is silent until something
+        # imports a wheel built for the other one.
+        exitcode, stdout, stderr = self._run(
+            image, [interpreter_path(version), "-c", "import sys; print('%d.%d' % sys.version_info[:2])"]
+        )
+        built = (stdout or "").strip()
+        if exitcode != 0 or built != version:
+            raise RuntimeError(
+                "The remote environment for Python %s in %s is Python %s: that image carries a different "
+                "interpreter than the version asked for." % (version, image, built or "unknown")
+            )
+
     def _install(self, image: str, version: str, requirement: str) -> None:
         exitcode, _, stderr = self._run(
             image,

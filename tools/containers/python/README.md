@@ -5,7 +5,7 @@ that needs something pip cannot install builds `FROM`.
 
 One image per supported Python version and architecture:
 
-```
+```text
 ghcr.io/partcad/partcad-container-python:<release>-py<version>-<arch>    # immutable, pin this
 ghcr.io/partcad/partcad-container-python:py<version>-<arch>              # moving, test against this
 ```

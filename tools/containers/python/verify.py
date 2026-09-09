@@ -20,6 +20,7 @@ only says "assertion failed" leaves the reader to guess what the contract was.
 
 import json
 import os
+import shutil
 import sys
 
 
@@ -35,7 +36,11 @@ def check(what: str, condition: bool, consequence: str) -> None:
 def main() -> int:
     check(
         "an interpreter is on PATH as python3",
-        os.path.isfile("/usr/local/bin/python3") or bool(sys.executable),
+        # Resolved on PATH, which is what the sentence below is about. The old
+        # spelling fell back to 'sys.executable', which is set in every normal
+        # CPython run -- so the check could not fail, and an image that had
+        # moved 'python3' off PATH passed it.
+        shutil.which("python3") is not None,
         "the 'docker' sandbox reaches the interpreter by name through 'docker exec', so a name it "
         "cannot resolve means no sandbox at all",
     )

@@ -42,8 +42,18 @@ def pool():
 
 @pytest.fixture
 def environments():
-    """Environments that believe everything is already provisioned."""
-    return remote_sandbox.Environments(lambda image, command: (0, "", ""))
+    """Environments that believe everything is already provisioned.
+
+    The version probe is answered, because creating one checks that the image
+    carries the version that was asked for.
+    """
+
+    def run(image, command):
+        if "sys.version_info" in " ".join(command):
+            return 0, command[0].split("v-env-")[1].split("/")[0], ""
+        return 0, "", ""
+
+    return remote_sandbox.Environments(run)
 
 
 @pytest.fixture

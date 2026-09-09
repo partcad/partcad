@@ -458,6 +458,10 @@ class UserConfig(vyper.Vyper):
             value = self.get(path)
             if value:
                 data[path] = value
+        # Whether the sandbox was somebody's decision, which the value cannot
+        # say: every process resolves one, so the receiving end would read the
+        # startup default as a statement. See '__init__'.
+        data["pythonSandboxDeclared"] = self._python_sandbox_declared
         return data
 
     @classmethod
@@ -559,7 +563,18 @@ class UserConfig(vyper.Vyper):
         # The environment is checked directly rather than waited for: the
         # binding below happens after this point, and '--python-sandbox' arrives
         # later still, through the property this sets up.
-        self._python_sandbox_declared = bool(self.is_set("pythonSandbox")) or bool(os.environ.get("PC_PYTHON_SANDBOX"))
+        # A configuration handed over by another process says so itself. It
+        # cannot be worked out from the value: 'to_dict' copies the startup
+        # default along with everything else, and applying that copy is a vyper
+        # override, which 'is_set' cannot tell from a decision. So every daemon
+        # saw a declared 'conda' or 'venv', obeyed it, and never upgraded to the
+        # 'docker' sandbox that the same command run in-process would choose.
+        if settings is not None and "pythonSandboxDeclared" in settings:
+            self._python_sandbox_declared = bool(settings["pythonSandboxDeclared"])
+        else:
+            self._python_sandbox_declared = bool(self.is_set("pythonSandbox")) or bool(
+                os.environ.get("PC_PYTHON_SANDBOX")
+            )
 
         # conda first, because it is the only sandbox that can provision an
         # *interpreter*: a package asking for a Python the host does not have

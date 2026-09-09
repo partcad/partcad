@@ -13,6 +13,7 @@ the job of the integration legs in CI, which have a Docker daemon.
 """
 
 import os
+import pathlib
 import types
 
 import pytest
@@ -51,7 +52,7 @@ def test_the_base_image_is_the_one_ci_publishes():
     `<release>-py<version>-<arch>`; `image_for()` asks for the same thing minus
     the architecture, which `docker_image.candidates()` appends.
     """
-    workflow = open(".github/workflows/test.yml").read()
+    workflow = (pathlib.Path(__file__).resolve().parents[3] / ".github" / "workflows" / "test.yml").read_text()
     assert "${{ github.repository }}-container-python" in workflow
     assert runtime_python_docker.BASE_IMAGE == "ghcr.io/partcad/partcad-container-python"
     assert "${PC_VERSION}-py${PY}-${ARCH}" in workflow
@@ -237,3 +238,80 @@ def test_the_environment_is_built_over_there(tmp_path, monkeypatch):
 
     assert argv[:2] == ["docker", "exec"]
     assert "venv" in argv
+
+
+# --------------------------------------------------------------------------- #
+# Reusing a container                                                          #
+# --------------------------------------------------------------------------- #
+
+
+class _Container:
+    """A container that was started with some set of mounts."""
+
+    def __init__(self, sources, status="running"):
+        self.attrs = {"Mounts": [{"Source": source} for source in sources]}
+        self.status = status
+        self.removed = False
+        self.started = False
+
+    def start(self):
+        self.started = True
+
+    def remove(self, force=False):
+        self.removed = True
+
+
+class _Client:
+    def __init__(self, existing=None):
+        self.existing = existing
+        self.made = None
+        self.images = types.SimpleNamespace(get=lambda name: name, pull=lambda name: name)
+        self.containers = types.SimpleNamespace(get=self._get, run=self._run)
+
+    def _get(self, name):
+        import docker
+
+        if self.existing is None:
+            raise docker.errors.NotFound(name)
+        return self.existing
+
+    def _run(self, image, **kwargs):
+        self.made = kwargs
+        return _Container(kwargs.get("volumes") or {})
+
+
+def _started(tmp_path, monkeypatch, existing):
+    made = _runtime(tmp_path)
+    client = _Client(existing)
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr("docker.from_env", lambda: client)
+    return made, client, made._start()
+
+
+def test_a_container_that_can_see_this_context_is_reused(tmp_path, monkeypatch):
+    made = _runtime(tmp_path)
+    wanted = docker_mount.mounts(made._mounted)
+    existing = _Container(wanted, status="exited")
+
+    _made, client, got = _started(tmp_path, monkeypatch, existing)
+
+    assert got is existing
+    assert existing.started is True
+    assert client.made is None
+
+
+def test_a_container_that_cannot_is_replaced(tmp_path, monkeypatch):
+    """The name says which image and nothing about what is mounted.
+
+    The context root is mounted too, and that is per package -- so a container
+    started while working on one package cannot serve another, and reusing it
+    made every command naming a file under the second root fail on a path that
+    is not there.
+    """
+    existing = _Container(["/somewhere/else"])
+
+    _made, client, got = _started(tmp_path, monkeypatch, existing)
+
+    assert got is not existing
+    assert existing.removed is True
+    assert client.made is not None

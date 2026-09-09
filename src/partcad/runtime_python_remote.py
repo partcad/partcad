@@ -156,7 +156,10 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
 
     def _client(self) -> RuntimeJsonRpcClient:
         host, _, port = str(self.endpoint).rpartition(":")
-        if not host:
+        # The port as well as the host: 'remoteSandbox' is something a person
+        # typed, and 'host:' or 'host:abc' would otherwise reach int() and come
+        # back as a traceback rather than as the sentence below.
+        if not host or not port.isdigit():
             raise runtime.SandboxUnavailable(
                 "'%s' does not name a host and a port for the remote sandbox service." % self.endpoint
             )
@@ -176,6 +179,10 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
             return self._no_response(self.name)
         if response.get("error"):
             return 1, "", str(response["error"].get("message") or response["error"])
+        if "result" not in response:
+            # Neither an answer nor an error is still a failure, and saying so
+            # is better than the KeyError that reading it blind produced.
+            return 1, "", "The remote sandbox service answered without a result: %s" % response
         # The service answers with the container's payload rather than its
         # envelope, and '_rpc_result' reads an envelope -- so it is given one.
         stdout, stderr, returncode = self._rpc_result({"result": response["result"]}, output_files or [])
@@ -197,4 +204,7 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
         input_dirs=None,
     ):
         params = self._params(cmd, stdin, cwd, input_files, output_files, input_dirs)
-        return self._answer(cmd, await self._client().execute_async(list(cmd), params), output_files)
+        # The bound the caller was given, honoured. Dropped, it meant an
+        # unresponsive service held the render open with nothing to wait for.
+        answer = await self._client().execute_async(list(cmd), params, timeout=timeout)
+        return self._answer(cmd, answer, output_files)

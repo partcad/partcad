@@ -41,6 +41,19 @@ class _Ctx:
         return self
 
 
+@pytest.fixture(autouse=True)
+def _a_machine_that_has_said_nothing(monkeypatch, tmp_path):
+    """Whatever this machine says.
+
+    'UserConfig' resolves a real '~/.partcad/config.yaml' and the real 'PC_*'
+    environment, and every test here is about what happens when nobody has
+    declared a sandbox -- so a contributor who has declared one would see these
+    fail for a reason that is not in the code under test.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("PC_PYTHON_SANDBOX", raising=False)
+
+
 def _config(**overrides):
     made = UserConfig()
     made.use_docker = overrides.pop("use_docker", True)

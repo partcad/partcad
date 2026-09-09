@@ -47,8 +47,17 @@ def cli(cli_ctx, stale: bool) -> None:
                     try:
                         container.remove(force=True)
                         pc.logging.info("Removed container: %s" % name)
+                    except docker.errors.NotFound:
+                        # Somebody else removed it between the listing and here,
+                        # which is the outcome this asked for.
+                        pc.logging.info("Already gone: %s" % name)
                     except Exception as e:
-                        pc.logging.warning("Could not remove container %s: %s" % (name, e))
+                        # Anything else left the machine holding what the user
+                        # asked to be rid of. 'error' rather than 'warning'
+                        # because that is what makes 'pc' exit non-zero; the
+                        # loop goes on, so one stuck container does not keep the
+                        # rest.
+                        pc.logging.error("Could not remove container %s: %s" % (name, e))
 
             images = docker_prune.managed_images(client, stale_only=stale, version=pc.__version__)
             for image in images:
@@ -57,12 +66,18 @@ def cli(cli_ctx, stale: bool) -> None:
                     try:
                         client.images.remove(image.id, force=False)
                         pc.logging.info("Removed image: %s" % name)
-                    except Exception as e:
-                        # Most often "still in use", which is a container this
-                        # run did not choose -- a running one under `--stale`.
-                        # Not a failure: the user asked for what is safe to
-                        # remove, and this is the answer to that.
+                    except docker.errors.ImageNotFound:
+                        pc.logging.info("Already gone: %s" % name)
+                    except docker.errors.APIError as e:
+                        # "still in use", by a container this run did not choose
+                        # -- a running one under `--stale`. Not a failure: the
+                        # user asked for what is safe to remove, and this is the
+                        # answer to that.
                         pc.logging.warning("Kept image %s: %s" % (name, e))
+                    except Exception as e:
+                        # Not the registry saying no, then. Something else went
+                        # wrong, and the command should say so on the way out.
+                        pc.logging.error("Could not remove image %s: %s" % (name, e))
 
             if not containers and not images:
                 pc.logging.info("Nothing to remove%s." % (" that is out of date" if stale else " that PartCAD created"))

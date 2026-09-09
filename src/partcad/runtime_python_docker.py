@@ -215,17 +215,26 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             )
 
         client = docker.from_env()
+        mounts = docker_mount.mounts(self._mounted)
         try:
             existing = client.containers.get(self.container_name)
-            if existing.status != "running":
-                existing.start()
-            self._container = existing
-            return existing
+            # The name says which image, and nothing about what is mounted --
+            # but the context root is mounted too, and that is per package. A
+            # container started while working on one package cannot see another,
+            # so reusing it by name alone made every command that named a file
+            # under the second package's root fail on a path that is not there.
+            visible = {mount.get("Source") for mount in (existing.attrs.get("Mounts") or [])}
+            if set(mounts).issubset(visible):
+                if existing.status != "running":
+                    existing.start()
+                self._container = existing
+                return existing
+            pc_logging.debug("Replacing %s: it cannot see %s" % (self.container_name, sorted(set(mounts) - visible)))
+            existing.remove(force=True)
         except docker.errors.NotFound:
             pass
 
         image = self._resolve_image(client)
-        mounts = docker_mount.mounts(self._mounted)
         for host, spec in mounts.items():
             os.makedirs(host, exist_ok=True)
             pc_logging.debug("Sandbox mount: %s -> %s" % (host, spec["bind"]))

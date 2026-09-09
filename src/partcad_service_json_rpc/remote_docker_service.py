@@ -115,7 +115,13 @@ def _docker_start(image: str) -> remote_docker.Lease:
         bindings = (container.attrs.get("NetworkSettings") or {}).get("Ports") or {}
         published = bindings.get("%d/tcp" % CONTAINER_PORT)
         if published:
-            endpoint = "%s:%s" % (published[0]["HostIp"] or "127.0.0.1", published[0]["HostPort"])
+            # A wildcard bind address is where the port is *listening*, not
+            # somewhere to connect to: '0.0.0.0' is not a routable destination
+            # on every platform, and this endpoint is dialled straight after.
+            published_host = published[0]["HostIp"]
+            if published_host in ("", "0.0.0.0", "::", "[::]"):
+                published_host = "127.0.0.1"
+            endpoint = "%s:%s" % (published_host, published[0]["HostPort"])
             break
         time.sleep(0.5)
     if endpoint is None:
@@ -352,7 +358,12 @@ def main(argv=None) -> int:
     server.pool = pool
     server.environments = environments
 
-    sweeper = threading.Thread(target=_sweep, args=(pool, environments, min(60.0, args.idle_timeout)), daemon=True)
+    # A floor as well as a ceiling: '--idle-timeout 0' made the sweep a
+    # 'time.sleep(0)' loop that took the pool lock as fast as it could, which is
+    # one core for as long as the service runs.
+    sweeper = threading.Thread(
+        target=_sweep, args=(pool, environments, max(1.0, min(60.0, args.idle_timeout))), daemon=True
+    )
     sweeper.start()
 
     pc_logging.info("Serving containers on %s:%d" % (args.host, args.port))

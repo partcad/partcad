@@ -101,19 +101,28 @@ def mounts(host_paths, windows: Optional[bool] = None) -> dict:
     """
     kept = []
     for path in sorted({_tidy(p) for p in host_paths}, key=len):
-        if not any(_contains(outer, path) for outer in kept):
+        if not any(_contains(outer, path, windows) for outer in kept):
             kept.append(path)
 
     return {path: {"bind": translate(path, windows), "mode": "rw"} for path in kept}
 
 
-def _contains(outer: str, inner: str) -> bool:
+def _contains(outer: str, inner: str, windows: Optional[bool] = None) -> bool:
     """Whether ``inner`` is ``outer`` or sits under it.
 
     Both separators count, whichever platform this is running on: a Windows
     path may be written with either, and the answer must not depend on where
     the question is asked.
+
+    And on Windows, neither does the case. 'rewrite' already matches
+    case-insensitively; comparing case-sensitively here meant 'C:\\Users\\you'
+    and 'c:\\users\\you\\.partcad' were not seen as a parent and a child, so both
+    were mounted -- the two views of one directory 'mounts' exists to prevent.
     """
+    if windows is None:
+        windows = os.name == "nt"
+    if windows:
+        outer, inner = outer.lower(), inner.lower()
     if outer == inner:
         return True
     return inner.startswith(outer + "/") or inner.startswith(outer + "\\")

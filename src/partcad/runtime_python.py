@@ -199,6 +199,21 @@ def package_requirements(project) -> list[str]:
     return [dep for dep in dependencies if dep]
 
 
+def shape_docker_image(config, project):
+    """The image one shape's sandbox is built from.
+
+    The shape's own declaration, then the package's. Same order as
+    'pythonVersion' and 'pythonRequirements', and for the same reason: what a
+    shape needs is nearer to it than what its package needs, and a package-wide
+    image is the fallback rather than the answer. Reading only the package's
+    meant a part naming an image was rendered without it -- in an environment
+    that could be missing exactly the native library the part named it for.
+
+    Module-level for the same reason 'shape_requirements' is.
+    """
+    return (config or {}).get("dockerImage") or getattr(project, "docker_image_declared", None)
+
+
 def shape_requirements(config) -> list[str]:
     """What one shape declares its Python sandbox needs.
 

@@ -42,7 +42,7 @@ and an image without it serves no sandbox at all.
 
 Every image PartCAD builds carries:
 
-```
+```text
 partcad.image=1                  # this is a PartCAD-managed image
 partcad.version=<release>        # the PartCAD release it was built for, if any
 ```
@@ -59,7 +59,7 @@ that accumulates until somebody notices the disk is full. An unlabelled image st
 
 PartCAD appends the machine's architecture before pulling, and falls back to the bare name:
 
-```
+```text
 ghcr.io/example/solver:1a2b3c4d5e6f-arm64      # tried first
 ghcr.io/example/solver:1a2b3c4d5e6f            # used if that does not exist
 ```

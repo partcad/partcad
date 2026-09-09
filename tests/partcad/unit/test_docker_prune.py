@@ -17,6 +17,8 @@ client rather than making one.
 
 import types
 
+import pytest
+
 from partcad import docker_prune
 
 
@@ -97,6 +99,22 @@ def test_stale_leaves_a_running_container_alone():
 
     assert docker_prune.managed_containers(client, stale_only=True) == [stopped]
     assert docker_prune.managed_containers(client) == [running, stopped]
+
+
+@pytest.mark.parametrize("status", ["paused", "restarting", "created"])
+def test_stale_leaves_anything_not_finished_alone(status):
+    """'--stale' removes with force, and only "running" was being skipped.
+
+    A paused container is somebody's work in progress as much as a running one
+    is, and a restarting one is on its way to being running.
+    """
+    busy = _container(name="pc-sandbox-busy", labels={"partcad.container": "1"}, status=status)
+    stopped = _container(name="pc-sandbox-idle", labels={"partcad.container": "1"}, status="exited")
+    client = _Client(containers=[busy, stopped])
+
+    assert docker_prune.managed_containers(client, stale_only=True) == [stopped]
+    # Without '--stale' the user asked for all of them, and gets all of them.
+    assert docker_prune.managed_containers(client) == [busy, stopped]
 
 
 # --------------------------------------------------------------------------- #

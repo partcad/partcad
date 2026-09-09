@@ -2868,7 +2868,7 @@ exactly the case the paragraph above is about.
 .. _docker-image-architecture:
 
 Architecture, and the name PartCAD actually pulls
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 PartCAD appends the architecture of the machine to the name before pulling it,
 so the name above is pulled as::
@@ -2886,7 +2886,7 @@ a package that works on the machine it was written on -- which is why the public
 index does not accept them.
 
 Pinning
-~~~~~~~
+^^^^^^^
 
 Pin an **immutable** tag, whose content cannot change under it -- a digest, or a
 tag derived from a hash of what the image was built from. An image that changes
@@ -2903,7 +2903,7 @@ the images checked in under ``examples/`` -- pins the immutable tag, or the
 comparison fails for changes nobody made.
 
 Building on PartCAD's images
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 PartCAD publishes a base image per supported Python version and architecture,
 carrying the interpreter and the service that runs scripts inside it. Build on
@@ -2925,7 +2925,7 @@ yours still conforms. Carry the ``partcad.*`` labels it documents: they are what
 leave behind when it cleans up after itself.
 
 What it costs
-~~~~~~~~~~~~~
+^^^^^^^^^^^^^
 
 A container runtime, and the size of the image. On a machine with neither a
 container runtime nor the dependencies installed natively, the package cannot

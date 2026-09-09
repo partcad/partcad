@@ -191,6 +191,20 @@ def test_an_error_from_the_service_is_reported_rather_than_swallowed(tmp_path, m
     assert "no such image" in stderr
 
 
+def test_an_answer_with_neither_result_nor_error_is_a_failure(tmp_path, monkeypatch):
+    """Reading 'result' blind turned that into a KeyError several layers away."""
+
+    class _Odd(_Service):
+        def execute(self, command, params):
+            return {"jsonrpc": "2.0", "id": 1}
+
+    monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", _Odd())
+
+    exitcode, _, stderr = _runtime(tmp_path).run(["-c", "pass"])
+    assert exitcode != 0
+    assert "without a result" in stderr
+
+
 def test_no_answer_at_all_is_a_failure_that_says_so(tmp_path, monkeypatch):
     class _Silent(_Service):
         def execute(self, command, params):
@@ -212,6 +226,18 @@ def test_without_a_service_the_sandbox_says_which_knob_is_missing(tmp_path):
     """There is no default: guessing at a service that runs commands is not on."""
     with pytest.raises(runtime.SandboxUnavailable, match="remoteSandbox"):
         runtime_python_remote.RemotePythonRuntime(_ctx(tmp_path, endpoint=None), "3.11", image=IMAGE)
+
+
+@pytest.mark.parametrize("endpoint", ["127.0.0.1:", "127.0.0.1:nonsense", "5050"])
+def test_an_endpoint_that_is_not_a_host_and_a_port_says_so(tmp_path, endpoint):
+    """It is something a person typed, so it reaches here malformed.
+
+    Without checking the port, that arrived as a ValueError traceback rather
+    than as the sentence this method already has for it.
+    """
+    made = runtime_python_remote.RemotePythonRuntime(_ctx(tmp_path, endpoint=endpoint), "3.11", image=IMAGE)
+    with pytest.raises(runtime.SandboxUnavailable, match="does not name a host and a port"):
+        made._client()
 
 
 def test_two_images_are_two_sandboxes(tmp_path):
