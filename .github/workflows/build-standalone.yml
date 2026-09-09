@@ -986,6 +986,29 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends ${{ env.OPENSCAD_HOST_LIBRARIES }}
 
+      # What `examples/feature_cae` needs and pip cannot install, the same as the
+      # `Examples (PartCAD)` job in `test.yml` -- this job runs the same examples
+      # through the bundle, so it meets the same analysis and needs the same
+      # things on the host.
+      #
+      # `libglu1-mesa` is not a mistake for `python3-gmsh`. The sandbox installs
+      # gmsh from PyPI (there is a wheel for x86_64), and that wheel dlopen()s
+      # libGLU without bundling it -- which is what this leg failed on:
+      # "libGLU.so.1: cannot open shared object file". `test.yml` never saw it
+      # because `python3-gmsh` drags libGLU in as a dependency there. The base
+      # image carries the same library for the same reason; see the comment
+      # beside it in `tools/containers/python/Dockerfile`.
+      #
+      # x86_64 only. On 64-bit ARM Linux gmsh publishes no wheel at all, so the
+      # cantilever excludes itself there with `unless: [aarch64]` and there is no
+      # analysis to equip -- see `examples/feature_cae/partcad.yaml`.
+      - name: The CAE example's native dependencies (Linux x86_64)
+        if: matrix.platform == 'ubuntu-24.04-x86_64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends calculix-ccx libglu1-mesa
+          ccx -version || true
+
       # Linux arm64 is the one bundle that carries no OpenSCAD -- upstream builds
       # no current arm64 snapshot (see build.sh) -- so it falls back to a host
       # one, exactly as the wheels do.
