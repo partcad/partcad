@@ -24,9 +24,10 @@ base image in the same run and passes it here; a contributor can point it at a
 local build. Deliberately not defaulted to a published tag: a test that silently
 pulls a gigabyte from a registry is a test people learn to skip.
 
-Nothing here installs a CAD stack. What is under test is the sandbox, and a
-sandbox that can install and import a pure-Python package is one that can
-install and import OCP -- only slower.
+One sandbox serves the whole file, and that is not tidiness. Provisioning a
+sandbox installs PartCAD's CAD stack into it -- OCP is most of a gigabyte --
+so a sandbox per test is that download per test, and the disk to hold five
+copies of it. What is under test is the same sandbox at each step anyway.
 """
 
 import os
@@ -47,15 +48,20 @@ pytestmark = [
 ]
 
 
-@pytest.fixture
-def made(tmp_path):
-    """A sandbox on this machine, and the container it started, removed after."""
+@pytest.fixture(scope="module")
+def made(tmp_path_factory):
+    """A sandbox on this machine, and the container it started, removed after.
+
+    One for the module: see the note at the top. A test that wants the
+    container gone asks for that itself.
+    """
     if not runtime.docker_available():
         pytest.skip("no container runtime is answering here")
 
+    root = tmp_path_factory.mktemp("sandbox")
     ctx = types.SimpleNamespace(
-        user_config=types.SimpleNamespace(internal_state_dir=str(tmp_path / "state")),
-        root_path=str(tmp_path / "pkg"),
+        user_config=types.SimpleNamespace(internal_state_dir=str(root / "state")),
+        root_path=str(root / "pkg"),
     )
     os.makedirs(ctx.root_path, exist_ok=True)
 
@@ -124,6 +130,9 @@ def test_the_environment_outlives_the_container(made):
 
     A container is cattle -- it is removed by `pc system prune`, by a reboot, by
     a `docker rm` somebody typed. What a package installed must not go with it.
+
+    It takes the container away from the sandbox the rest of the file shares,
+    which is fine and is the point: the next command starts another one.
     """
     import asyncio
 
