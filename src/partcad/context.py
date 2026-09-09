@@ -76,7 +76,11 @@ def connectivity_probe():
             # parses as a path and the host comes back empty.
             parsed = urllib.parse.urlparse(proxy if "://" in proxy else "http://" + proxy)
             if parsed.hostname:
-                return parsed.hostname, parsed.port or 80
+                # The scheme's own default when the variable names no port. An
+                # 'https://' proxy listens on 443, and probing 80 there fails --
+                # which PartCAD would read as "no network" and enter offline
+                # mode, on a machine whose downloads work perfectly.
+                return parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)
         except ValueError:
             # 'ParseResult.port' raises on a port that is not a number, and
             # this is called from outside the 'except OSError' that

@@ -1977,6 +1977,24 @@ def cae_analyze(session, params):
             # "This part says nothing about FEA" and "what it says does not
             # parse" are both answers, and both are what the tab prints.
             raise JsonRpcError(USAGE_ERROR, str(e)) from e
+        except pc.runtime.SandboxUnavailable as e:
+            # No sandbox to run the analysis in is the same answer as an
+            # implementation that was asked and could not run: the part has no
+            # result, and the machine is why. Left to the dispatcher it came
+            # back as an internal error with a traceback -- a bug report about
+            # PartCAD rather than the two remedies the user needs. Reported the
+            # way 'pc test' reports it, so the command, the check and the IDE's
+            # tab say the same thing about the same machine.
+            raise JsonRpcError(
+                ANALYSIS_FAILED,
+                pc.cae.dysfunction_report(
+                    path,
+                    analysis,
+                    params.get("implementation") or "the configured implementation",
+                    e,
+                    remedy=pc.cae.NO_RUNTIME_REMEDY,
+                ),
+            ) from e
         except pc.cae.CaeFailed as e:
             # The implementation was asked and did not deliver. Reported as
             # `Shape.analyze_async()` wrote it -- which implementation was
