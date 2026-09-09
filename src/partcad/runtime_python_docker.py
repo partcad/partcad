@@ -238,25 +238,21 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         argv += [docker_mount.rewrite(str(a), self._mounted) for a in cmd]
         return argv
 
-    def run(self, cmd, stdin="", cwd=None, input_files=None, output_files=None, env=None, input_dirs=None):
-        # 'cwd' becomes '-w' inside the container and must not also be applied
-        # to the 'docker' process itself, which runs wherever PartCAD is. 'env'
-        # is dropped for the same reason: it would put variables on the client
-        # rather than on the interpreter, which is the opposite of the intent.
-        return runtime.Runtime.run(self, self._exec(cmd, cwd), stdin=stdin)
+    def _spawn(self, cmd, cwd=None, env=None):
+        """The same command, run in this sandbox's container.
 
-    async def run_async(
-        self,
-        cmd,
-        stdin="",
-        cwd=None,
-        input_files=None,
-        output_files=None,
-        env=None,
-        timeout=None,
-        input_dirs=None,
-    ):
-        return await runtime.Runtime.run_async(self, self._exec(cmd, cwd), stdin=stdin, timeout=timeout)
+        Overriding the launch rather than a 'run' method is what makes the rest
+        of 'PythonRuntime' apply unchanged: the session v-envs, the dependency
+        installs and their guards, the environment lock, the flags, and the
+        diagnostics for an interpreter that died without saying anything all go
+        on working, and every one of them now happens over there.
+
+        'cwd' becomes '-w' inside the container and must not also be applied to
+        the 'docker' process itself, which runs wherever PartCAD does. 'env' is
+        dropped for the same reason: it would put variables on the client rather
+        than on the interpreter, which is the opposite of the intent.
+        """
+        return self._exec(cmd, cwd), None, None
 
     # -------------------------------------------------------- provisioning --
 

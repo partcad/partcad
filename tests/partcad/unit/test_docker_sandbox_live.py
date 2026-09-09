@@ -80,6 +80,20 @@ def test_a_command_runs_in_the_container(made):
     assert not stdout.strip().startswith(os.path.dirname(os.__file__)), stdout
 
 
+def test_a_wrapper_is_handed_its_request_and_answers(made):
+    """The shape every part factory uses: a request on stdin, an answer on stdout.
+
+    'session=' is part of that shape, and a sandbox that did not take it refused
+    the call before a container was involved -- so this checks the call as it is
+    made, not only that something runs.
+    """
+    exitcode, stdout, stderr = made.run(
+        ["-c", "import sys; print(sys.stdin.read().upper())"], "a request", session=None
+    )
+    assert exitcode == 0, stderr
+    assert "A REQUEST" in stdout
+
+
 def test_the_environment_is_created_where_the_host_can_see_it(made):
     """The mount claim, checked from the outside.
 

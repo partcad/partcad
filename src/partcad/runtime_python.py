@@ -588,16 +588,22 @@ class PythonRuntime(runtime.Runtime):
                 sanitized_cmd = copy.copy(cmd)
                 sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
                 span.set_attribute("cmd", " ".join(sanitized_cmd))
+                argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, self._subprocess_env())
+                # Bytes rather than text, like 'run_async_onced' beside it: the
+                # output is decoded by 'process_output.decode', which replaces a
+                # byte it cannot read instead of raising on it. Asking Popen for
+                # 'encoding="utf-8"' would decode strictly, before that ever ran
+                # -- and it also made 'communicate' reject the encoded stdin two
+                # lines below, so this path raised on the way in as well as out.
                 p = subprocess.Popen(
-                    cmd,
+                    argv,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     shell=False,
-                    encoding="utf-8",
-                    env=self._subprocess_env(),
+                    env=spawn_env,
                     # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                    cwd=cwd,
+                    cwd=spawn_cwd,
                 )
                 stdout, stderr = p.communicate(
                     input=stdin.encode(),
@@ -747,15 +753,16 @@ class PythonRuntime(runtime.Runtime):
                     sanitized_cmd = copy.copy(cmd)
                     sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
                     span.set_attribute("cmd", " ".join(sanitized_cmd))
+                    argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, self._subprocess_env())
                     p = await asyncio.create_subprocess_exec(
-                        *cmd,
+                        *argv,
                         stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         shell=False,
-                        env=self._subprocess_env(),
+                        env=spawn_env,
                         # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                        cwd=cwd,
+                        cwd=spawn_cwd,
                     )
                     stdout, stderr = await runtime.communicate(p, stdin.encode(), timeout)
 

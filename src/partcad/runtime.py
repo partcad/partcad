@@ -354,6 +354,25 @@ class Runtime:
         """
         return 1, None, "The container serving '%s' returned no response" % name
 
+    def _spawn(self, cmd, cwd=None, env=None):
+        """What to actually launch: the argv, the directory, the environment.
+
+        The one seam a sandbox overrides when the process it wants is not the
+        process it was handed. The 'docker' sandbox turns the argv into a
+        'docker exec' of the same argv, and moves the working directory into a
+        '-w' flag, because that directory belongs to the container rather than
+        to whichever machine the 'docker' client runs on.
+
+        It has to be here, and applied at every launch point, because there are
+        two: this class runs a command with 'subprocess', and 'PythonRuntime'
+        runs one with its own 'subprocess' call after prepending an interpreter.
+        A sandbox that overrode a 'run' method instead would catch whichever of
+        the two its caller happened to use -- which is how the 'docker' sandbox
+        came to build its virtual environment with the host's interpreter while
+        a container sat beside it doing nothing.
+        """
+        return cmd, cwd, env
+
     def run(
         self,
         cmd: list[str],
@@ -385,17 +404,18 @@ class Runtime:
                 return self._no_response(self.name)
             stdout, stderr, returncode = self._rpc_result(response, output_files)
         else:
+            argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
             with sandbox_lock.process_slots.slot():
                 p = subprocess.Popen(
-                    cmd,
+                    argv,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     shell=False,
                     encoding="utf-8",
                     # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                    cwd=cwd,
-                    env=env,
+                    cwd=spawn_cwd,
+                    env=spawn_env,
                 )
                 stdout, stderr = p.communicate(
                     input=stdin,
@@ -431,16 +451,17 @@ class Runtime:
                 return self._no_response(self.name)
             stdout, stderr, returncode = self._rpc_result(response, output_files)
         else:
+            argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
             async with sandbox_lock.process_slots.slot_async():
                 p = await asyncio.create_subprocess_exec(
-                    *cmd,
+                    *argv,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     shell=False,
                     # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                    cwd=cwd,
-                    env=env,
+                    cwd=spawn_cwd,
+                    env=spawn_env,
                 )
                 stdout, stderr = await communicate(p, stdin.encode(), timeout)
 

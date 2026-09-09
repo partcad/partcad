@@ -164,3 +164,76 @@ def test_no_container_runtime_is_reported_as_the_sandbox_being_unavailable(tmp_p
 
     with pytest.raises(runtime.SandboxUnavailable, match="pythonSandbox"):
         made._start()
+
+
+# --------------------------------------------------------------------------- #
+# Which seam the container is behind                                           #
+# --------------------------------------------------------------------------- #
+
+
+def test_the_launch_is_what_is_wrapped(tmp_path, monkeypatch):
+    """Not a 'run' method, because there is more than one launch point.
+
+    'PythonRuntime' launches an interpreter from two places -- once directly
+    and once through 'Runtime.run' -- and a sandbox that replaced one of them
+    ran the other on the host: the environment this sandbox is supposed to
+    build inside the container was built by whichever interpreter PartCAD
+    itself was running under.
+    """
+    made = _runtime(tmp_path)
+    monkeypatch.setattr(made, "_start", lambda: None)
+
+    argv, cwd, env = made._spawn(["/some/python", "-c", "pass"], cwd="/work", env={"PATH": "/nowhere"})
+
+    assert argv[:3] == ["docker", "exec", "-i"]
+    assert argv[-3:] == ["/some/python", "-c", "pass"]
+    # The directory belongs to the container, so it becomes a flag of 'docker'
+    # rather than the directory 'docker' itself is run in; the environment
+    # belongs to the interpreter, and putting it on the client would be the
+    # opposite of the intent.
+    assert "-w" in argv
+    assert cwd is None
+    assert env is None
+
+
+def test_the_way_a_part_is_run_is_a_call_this_sandbox_accepts(tmp_path, monkeypatch):
+    """'part_factory_wrapper' calls 'run_async(cmd, stdin, session=...)'.
+
+    A sandbox with methods of its own shape refused that call before any
+    container was involved -- so the sandbox could not render a single part,
+    while every test about it passed. Made as the call rather than as a look at
+    the signature, because the signature is a telemetry wrapper's.
+    """
+    import asyncio
+    import sys
+
+    made = _runtime(tmp_path)
+    made.provisioned = True
+    made.exec_path = sys.executable
+    monkeypatch.setattr(
+        made, "_spawn", lambda cmd, cwd=None, env=None: ([sys.executable, "-c", "print('ran')"], None, None)
+    )
+
+    exitcode, stdout, stderr = made.run(["-c", "pass"], "", session=None)
+    assert exitcode == 0, stderr
+    assert "ran" in stdout
+
+    exitcode, stdout, stderr = asyncio.run(made.run_async(["-c", "pass"], "", session=None))
+    assert exitcode == 0, stderr
+    assert "ran" in stdout
+
+
+def test_the_environment_is_built_over_there(tmp_path, monkeypatch):
+    """'-m venv' is the first thing this sandbox runs, and the easiest to lose.
+
+    It leaves a directory that looks exactly like a working sandbox whichever
+    machine built it, so nothing downstream notices that the interpreter inside
+    it is the host's.
+    """
+    made = _runtime(tmp_path)
+    monkeypatch.setattr(made, "_start", lambda: None)
+
+    argv, _, _ = made._spawn(["/some/python"] + made._create_locked())
+
+    assert argv[:2] == ["docker", "exec"]
+    assert "venv" in argv
