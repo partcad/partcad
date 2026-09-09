@@ -77,7 +77,13 @@ def _sandbox_interpreter(name):
     likes through that, and everything under the sandbox root was put there by
     this service running exactly that interpreter.
     """
-    if not isinstance(name, str) or not name.startswith("/"):
+    # Absolute, and `os.path.isabs` rather than a leading "/": this service runs
+    # inside a Linux image, where the two are the same thing, but the test suite
+    # runs it in process on whichever machine the suite is running on -- and on
+    # Windows every path it builds begins with a drive letter, so a leading "/"
+    # refused every one of them and three of the tests below passed for the
+    # wrong reason.
+    if not isinstance(name, str) or not os.path.isabs(name):
         return None
     root = os.path.normpath(SANDBOX_ROOT)
     path = os.path.normpath(name)
