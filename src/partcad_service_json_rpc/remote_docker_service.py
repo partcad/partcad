@@ -32,7 +32,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from partcad import remote_docker
+from partcad import remote_docker, remote_sandbox
 from partcad.runtime_json_rpc import RuntimeJsonRpcClient
 from partcad_utils import logging as pc_logging
 
@@ -89,6 +89,13 @@ def _docker_start(image: str) -> remote_docker.Lease:
         detach=True,
         # A port of the host's choosing, so two images can be served at once.
         ports={"%d/tcp" % CONTAINER_PORT: None},
+        # The environment, in a volume rather than in the container. A container
+        # here is cattle -- retired when idle, removed by `pc system prune`, lost
+        # on a restart -- and an environment that went with it would be rebuilt,
+        # and re-downloaded, several times a day.
+        volumes={
+            remote_sandbox.volume_name(image): {"bind": remote_sandbox.SANDBOX_ROOT, "mode": "rw"},
+        },
         labels=dict(remote_docker.LABELS),
         auto_remove=False,
     )
@@ -111,12 +118,36 @@ def _docker_start(image: str) -> remote_docker.Lease:
     return remote_docker.Lease(image, container, endpoint)
 
 
-def execute(pool, params: dict) -> dict:
-    """Run one command in the container for the image the request names.
+def _forward(pool, image: str, command: list, params: dict = None) -> tuple:
+    """Run one command in the container for ``image``, as (exit code, out, err).
 
-    Every parameter but ``image`` is passed through untouched: this speaks the
-    same protocol the service inside the container does, because a proxy that
-    reshaped the request would be a second place for the protocol to be wrong.
+    What ``Environments`` is given to provision with, and what a forwarded
+    request goes through, so both reach a container the same way.
+    """
+    lease = pool.acquire(image)
+    try:
+        host, port = lease.endpoint.rsplit(":", 1)
+        answer = RuntimeJsonRpcClient(host, int(port)).execute(command, params or {})
+        if not answer:
+            return 1, "", "The container serving '%s' returned no response" % image
+        return int(answer.get("exit_code") or 0), answer.get("stdout") or "", answer.get("stderr") or ""
+    finally:
+        pool.release(lease)
+
+
+def execute(pool, environments, params: dict) -> dict:
+    """Run one command in the environment this service keeps for ``image``.
+
+    The caller sends what it wants run and never learns where the environment
+    is: this makes sure it exists, installs what the request says it needs, and
+    prepends its interpreter. That is the whole difference from the ``docker``
+    sandbox, where the client owns the environment because it can see the disk
+    it is on.
+
+    Everything about files is passed through untouched. The service inside the
+    container already unpacks directories, rewrites the command's paths and
+    packs the outputs back -- it does that for every container PartCAD runs --
+    and a second implementation here would be a second place for it to be wrong.
     """
     image = params.get("image")
     if not image:
@@ -125,12 +156,18 @@ def execute(pool, params: dict) -> dict:
     if not command:
         raise ValueError("'command' is required")
 
+    version = params.get("python_version")
+    if not version:
+        raise ValueError("'python_version' is required: it says which environment to run in")
+
+    interpreter = environments.ensure(image, version, params.get("requirements") or [])
+
     lease = pool.acquire(image)
     try:
         host, port = lease.endpoint.rsplit(":", 1)
         rpc = RuntimeJsonRpcClient(host, int(port))
         return rpc.execute(
-            command,
+            [interpreter] + list(command),
             {
                 "stdin": params.get("stdin"),
                 "cwd": params.get("cwd"),
@@ -146,8 +183,9 @@ def execute(pool, params: dict) -> dict:
 class Handler(BaseHTTPRequestHandler):
     """One JSON-RPC method, over POST, at any path.
 
-    ``pool`` is set on the server rather than reached through a module global,
-    so that the handler is testable against a pool that starts nothing.
+    ``pool`` and ``environments`` are set on the server rather than reached
+    through module globals, so that the handler is testable against a pool that
+    starts nothing.
     """
 
     protocol_version = "HTTP/1.1"
@@ -160,7 +198,7 @@ class Handler(BaseHTTPRequestHandler):
             request_id = request.get("id")
             if request.get("method") != "execute":
                 raise ValueError("Unknown method: %r. This service serves 'execute'." % request.get("method"))
-            result = execute(self.server.pool, request.get("params") or {})
+            result = execute(self.server.pool, self.server.environments, request.get("params") or {})
             self._reply({"jsonrpc": "2.0", "id": request_id, "result": result})
         except Exception as e:
             pc_logging.warning("Request failed: %s" % e)
@@ -182,12 +220,15 @@ class Handler(BaseHTTPRequestHandler):
         pc_logging.debug("%s - %s" % (self.address_string(), fmt % args))
 
 
-def _sweep(pool, every: float) -> None:
+def _sweep(pool, environments, every: float) -> None:
     """Retire what nothing is using, forever, in the background."""
     while True:
         time.sleep(every)
         try:
             for lease in pool.retire():
+                # The volume stays; what is forgotten is only what this process
+                # believed was installed in it, so the next request re-checks.
+                environments.forget(lease.image)
                 pc_logging.info("Retired the idle container for %s" % lease.image)
         except Exception as e:
             pc_logging.warning("Could not retire containers: %s" % e)
@@ -214,12 +255,16 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     pool = remote_docker.ContainerPool(_docker_start, idle_seconds=args.idle_timeout)
-
-    sweeper = threading.Thread(target=_sweep, args=(pool, min(60.0, args.idle_timeout)), daemon=True)
-    sweeper.start()
+    # Provisioning reaches a container the same way a forwarded request does,
+    # so there is one path to a container and not two.
+    environments = remote_sandbox.Environments(lambda image, command: _forward(pool, image, command))
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     server.pool = pool
+    server.environments = environments
+
+    sweeper = threading.Thread(target=_sweep, args=(pool, environments, min(60.0, args.idle_timeout)), daemon=True)
+    sweeper.start()
 
     pc_logging.info("Serving containers on %s:%d" % (args.host, args.port))
     try:

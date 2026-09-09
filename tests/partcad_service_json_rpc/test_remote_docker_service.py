@@ -20,7 +20,7 @@ from http.server import ThreadingHTTPServer
 
 import pytest
 
-from partcad import remote_docker
+from partcad import remote_docker, remote_sandbox
 from partcad_service_json_rpc import remote_docker_service as service
 
 
@@ -38,6 +38,12 @@ def pool():
     made = remote_docker.ContainerPool(start)
     made.started = started
     return made
+
+
+@pytest.fixture
+def environments():
+    """Environments that believe everything is already provisioned."""
+    return remote_sandbox.Environments(lambda image, command: (0, "", ""))
 
 
 @pytest.fixture
@@ -63,12 +69,14 @@ def upstream(monkeypatch):
 # --------------------------------------------------------------------------- #
 
 
-def test_the_request_reaches_the_container_unchanged(pool, upstream):
+def test_the_request_reaches_the_container_unchanged(pool, environments, upstream):
     """A proxy that reshaped the request would be a second place to get it wrong."""
     result = service.execute(
         pool,
+        environments,
         {
             "image": "ghcr.io/x/solver:abc",
+            "python_version": "3.11",
             "command": ["python", "-c", "pass"],
             "stdin": "hello",
             "cwd": "/work",
@@ -78,7 +86,9 @@ def test_the_request_reaches_the_container_unchanged(pool, upstream):
     )
 
     assert result == {"stdout": "ok", "stderr": "", "exit_code": 0}
-    assert upstream["command"] == ["python", "-c", "pass"]
+    # The caller sent no interpreter and never learns where the environment is;
+    # the service puts its own in front.
+    assert upstream["command"] == [remote_sandbox.interpreter_path("3.11"), "python", "-c", "pass"]
     assert upstream["params"]["stdin"] == "hello"
     assert upstream["params"]["cwd"] == "/work"
     assert upstream["params"]["input_dirs"] == {"/work": "<tar>"}
@@ -88,20 +98,22 @@ def test_the_request_reaches_the_container_unchanged(pool, upstream):
     assert "image" not in upstream["params"]
 
 
-def test_the_image_decides_which_container(pool, upstream):
-    service.execute(pool, {"image": "ghcr.io/x/a:1", "command": ["python"]})
-    service.execute(pool, {"image": "ghcr.io/x/b:1", "command": ["python"]})
-    service.execute(pool, {"image": "ghcr.io/x/a:1", "command": ["python"]})
+def test_the_image_decides_which_container(pool, environments, upstream):
+    service.execute(pool, environments, {"image": "ghcr.io/x/a:1", "python_version": "3.11", "command": ["python"]})
+    service.execute(pool, environments, {"image": "ghcr.io/x/b:1", "python_version": "3.11", "command": ["python"]})
+    service.execute(pool, environments, {"image": "ghcr.io/x/a:1", "python_version": "3.11", "command": ["python"]})
 
     assert pool.started == ["ghcr.io/x/a:1", "ghcr.io/x/b:1"]
 
 
-def test_the_container_is_released_when_the_request_ends(pool, upstream):
-    service.execute(pool, {"image": "ghcr.io/x/solver:abc", "command": ["python"]})
+def test_the_container_is_released_when_the_request_ends(pool, environments, upstream):
+    service.execute(
+        pool, environments, {"image": "ghcr.io/x/solver:abc", "python_version": "3.11", "command": ["python"]}
+    )
     assert [lease.in_flight for lease in pool.leases()] == [0]
 
 
-def test_the_container_is_released_even_when_the_request_fails(pool, monkeypatch):
+def test_the_container_is_released_even_when_the_request_fails(pool, environments, monkeypatch):
     """Or a container that failed once would never be retired again."""
 
     class _Angry:
@@ -114,7 +126,9 @@ def test_the_container_is_released_even_when_the_request_fails(pool, monkeypatch
     monkeypatch.setattr(service, "RuntimeJsonRpcClient", _Angry)
 
     with pytest.raises(RuntimeError, match="said no"):
-        service.execute(pool, {"image": "ghcr.io/x/solver:abc", "command": ["python"]})
+        service.execute(
+            pool, environments, {"image": "ghcr.io/x/solver:abc", "python_version": "3.11", "command": ["python"]}
+        )
     assert [lease.in_flight for lease in pool.leases()] == [0]
 
 
@@ -123,14 +137,14 @@ def test_the_container_is_released_even_when_the_request_fails(pool, monkeypatch
 # --------------------------------------------------------------------------- #
 
 
-def test_a_request_naming_no_image_says_what_is_missing(pool):
+def test_a_request_naming_no_image_says_what_is_missing(pool, environments):
     with pytest.raises(ValueError, match="image"):
-        service.execute(pool, {"command": ["python"]})
+        service.execute(pool, environments, {"command": ["python"]})
 
 
-def test_a_request_with_no_command_says_so(pool):
+def test_a_request_with_no_command_says_so(pool, environments):
     with pytest.raises(ValueError, match="command"):
-        service.execute(pool, {"image": "ghcr.io/x/solver:abc"})
+        service.execute(pool, environments, {"image": "ghcr.io/x/solver:abc", "python_version": "3.11"})
 
 
 # --------------------------------------------------------------------------- #
@@ -139,10 +153,11 @@ def test_a_request_with_no_command_says_so(pool):
 
 
 @pytest.fixture
-def served(pool):
+def served(pool, environments):
     """The service, actually listening, on a port the OS chose."""
     server = ThreadingHTTPServer(("127.0.0.1", 0), service.Handler)
     server.pool = pool
+    server.environments = environments
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -167,13 +182,18 @@ def _post(url, payload):
 def test_a_call_over_http_reaches_the_container(served, upstream):
     status, answer = _post(
         served,
-        {"jsonrpc": "2.0", "id": 7, "method": "execute", "params": {"image": "ghcr.io/x/a:1", "command": ["python"]}},
+        {
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "execute",
+            "params": {"image": "ghcr.io/x/a:1", "python_version": "3.11", "command": ["python"]},
+        },
     )
 
     assert status == 200
     assert answer["id"] == 7
     assert answer["result"]["exit_code"] == 0
-    assert upstream["command"] == ["python"]
+    assert upstream["command"] == [remote_sandbox.interpreter_path("3.11"), "python"]
 
 
 def test_an_unknown_method_is_an_error_the_caller_can_read(served):
