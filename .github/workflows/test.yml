@@ -527,12 +527,21 @@ jobs:
     # The suite is sharded BEHAVE_SHARDS ways, so a single shard is a fraction
     # of the old whole-suite runtime (which used to hit the 120m cap on
     # Windows). The shards are balanced by measured runtime
-    # (dev-tools/behave_durations.json), which puts every one of them at ~33
-    # minutes of features plus ~6 minutes of job setup on the slowest image.
-    # 60m is roughly a third of margin over that. Before the split was measured
-    # rather than counted, shard 4 took 55 minutes of features on
-    # windows-latest and was cancelled here.
-    timeout-minutes: 60
+    # (dev-tools/behave_durations.json), which puts every one of them at ~41
+    # minutes of features plus 6-9 minutes of job setup on the slowest image.
+    #
+    # So a balanced shard needs about 50 minutes, and the margin is what the
+    # extra 15m buys. A measured split is only as good as its measurements, and
+    # those decay in two ways that the prediction cannot see: the suite grows
+    # (139 -> 164 minutes of features between the last two measurements), and a
+    # single feature grows (features/render.feature went 12.8 -> 31.0 minutes,
+    # most of one shard's budget on its own). Neither shows up in the summary
+    # this job prints -- it went on reporting four balanced 34.7 minute shards
+    # while one of them really took 53 -- so the first symptom is a cancelled
+    # job, on whichever shard the drift happened to land. 60m left ten minutes
+    # for all of that and was not enough; the last re-measure was 25 minutes of
+    # growth ago.
+    timeout-minutes: 75
 
     steps:
       - uses: actions/checkout@v7
