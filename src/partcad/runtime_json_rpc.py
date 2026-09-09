@@ -25,19 +25,35 @@ This module provides a JSON-RPC client for communicating with the RPC servers fo
 class RuntimeJsonRpcClient:
     """JSON-RPC client for PartCAD runtime communication."""
 
-    def __init__(self, host: str = "localhost", port: int = 5000):
+    def __init__(self, host: str = "localhost", port: int = 5000, token: str = None):
         """Initialize the JSON-RPC client with host and port.
 
         Args:
           host: Server hostname (default: localhost)
           port: Server port number (default: 5000)
+          token: The shared secret the server was started with, if any. Sent as
+            a bearer token on every request. A container PartCAD started on this
+            machine needs none -- nothing but this process can reach it -- and
+            'partcad-service-remote-docker' listening anywhere but loopback
+            refuses to start without one.
         """
         self.host = host
         self.port = port
+        self.token = token
         self.request_id = 0
 
         self.lock = threading.RLock()
         self.tls = threading.local()
+
+    def _headers(self) -> Dict[str, str]:
+        """What every request carries beyond its body.
+
+        Empty where there is no token, which is every container PartCAD starts
+        for itself: those listen on a port on this machine and are reachable by
+        nothing else, so a secret between a process and a container it started
+        would protect it from itself.
+        """
+        return {"Authorization": "Bearer %s" % self.token} if self.token else {}
 
     def get_async_lock(self):
         if not hasattr(self.tls, "async_rpc_locks"):
@@ -86,7 +102,9 @@ class RuntimeJsonRpcClient:
         pc_logging.debug(f"Sending request: {request_string}")
 
         try:
-            response = requests.post(f"http://{self.host}:{self.port}/jsonrpc", json=request, timeout=timeout)
+            response = requests.post(
+                f"http://{self.host}:{self.port}/jsonrpc", json=request, headers=self._headers(), timeout=timeout
+            )
             pc_logging.debug(f"Received response: {response.content}")
             return json.loads(response.content)
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
@@ -118,7 +136,9 @@ class RuntimeJsonRpcClient:
         pc_logging.debug(f"Sending request: {request_string}")
 
         try:
-            response = requests.post(f"http://{self.host}:{self.port}/jsonrpc", json=request, timeout=timeout)
+            response = requests.post(
+                f"http://{self.host}:{self.port}/jsonrpc", json=request, headers=self._headers(), timeout=timeout
+            )
             pc_logging.debug(f"Received response: {response.content}")
             return json.loads(response.content)
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:

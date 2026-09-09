@@ -115,7 +115,21 @@ class CaeTest(Test):
             parts.append("unresolved:%s" % e)
         return "." + self.analysis + "=" + hashlib.md5("\n".join(parts).encode()).hexdigest()
 
-    def _verdict(self, shape, impl, report: str) -> bool:
+    def _a_container_was_available(self, ctx) -> bool:
+        """Whether a container was available to run this implementation in.
+
+        Two ways for that to be true, and only one of them is on this machine.
+        A local daemon is the obvious one. The other is `pythonSandbox: remote`,
+        which sends the command to a service that starts the container over
+        there -- so the host needs no daemon of its own, and asking its daemon
+        would report "no container runtime" on a machine whose every part is
+        already being built in one.
+        """
+        if getattr(ctx.user_config, "python_sandbox", None) == "remote":
+            return True
+        return pc_runtime.docker_available()
+
+    def _verdict(self, ctx, shape, impl, report: str) -> bool:
         """What an analysis that produced no answer costs: a failure, or a skip.
 
         A failure by default, and that default is the whole contract of this
@@ -148,12 +162,19 @@ class CaeTest(Test):
         having, and it is why continuous integration, which has a container
         runtime, sees every one of these as a failure.
 
+        "Answers" is not "answers *here*", though, and the `remote` sandbox is
+        the case that makes the difference: it runs the implementation in a
+        container on somebody else's machine and needs no daemon on this one. A
+        host configured that way has a container runtime in every sense that
+        matters to this question -- one carried the analysis -- so a failure
+        there is a failure, and reading the local daemon would have excused it.
+
         Either way the reader gets the same sentence, which is the point of
         `dysfunction_report()`: what was asked, what it said, and which platform
         it did not work on. A skip that said less than a failure would be a way
         of not finding out.
         """
-        if pc_runtime.docker_available():
+        if self._a_container_was_available(ctx):
             return self.failed(shape, "%s", report)
 
         try:
@@ -291,6 +312,7 @@ class CaeTest(Test):
             # cache key, so a remembered verdict would outlive its reason.
             test_ctx[self.NOT_CACHEABLE] = True
             return self._verdict(
+                ctx,
                 shape,
                 impl,
                 pc_cae.dysfunction_report(
@@ -333,7 +355,7 @@ class CaeTest(Test):
                     e,
                 )
             )
-            return self._verdict(shape, impl, report)
+            return self._verdict(ctx, shape, impl, report)
 
         findings = result.get("findings") or []
         if findings:

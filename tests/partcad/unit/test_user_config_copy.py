@@ -32,6 +32,7 @@ offline: true
 threadsMax: 3
 pythonSandbox: pypy
 remoteSandbox: client.example:5050
+remoteSandboxToken: client-secret
 cacheFiles: false
 logLevel: error
 git:
@@ -61,6 +62,7 @@ offline: false
 threadsMax: 9
 pythonSandbox: none
 remoteSandbox: daemon.example:5050
+remoteSandboxToken: daemon-secret
 cacheFiles: true
 logLevel: debug
 git:

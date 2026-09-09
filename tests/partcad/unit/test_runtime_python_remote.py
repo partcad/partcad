@@ -41,10 +41,12 @@ class _Service:
     def __init__(self, result=None):
         self.command = None
         self.params = None
+        self.token = None
         self.result = result or {"stdout": None, "stderr": None, "exit_code": 0, "output_files": {}}
 
-    def __call__(self, host, port):
+    def __call__(self, host, port, token=None):
         self.endpoint = "%s:%d" % (host, port)
+        self.token = token
         return self
 
     def execute(self, command, params):
@@ -250,3 +252,30 @@ def test_it_asks_to_be_told_what_a_command_writes(tmp_path):
     """Inference covers what a command reads; nothing can infer what it writes."""
     assert _runtime(tmp_path).EXCHANGES_FILES is True
     assert os.path.basename(_runtime(tmp_path).path).startswith("pc-py-remote-")
+
+
+# --------------------------------------------------------------------------- #
+# The shared secret                                                            #
+# --------------------------------------------------------------------------- #
+
+
+def test_the_configured_token_reaches_the_client(tmp_path, monkeypatch):
+    """The service refuses a reachable bind without one, so it has to travel."""
+    service = _Service()
+    monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
+
+    made = _runtime(tmp_path)
+    made.ctx.user_config.remote_sandbox_token = "s3cret"
+    made.run(["-c", "pass"])
+
+    assert service.token == "s3cret"
+
+
+def test_no_token_configured_sends_none(tmp_path, monkeypatch):
+    """The loopback case, and the one nothing has to be set up for."""
+    service = _Service()
+    monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
+
+    _runtime(tmp_path).run(["-c", "pass"])
+
+    assert service.token is None

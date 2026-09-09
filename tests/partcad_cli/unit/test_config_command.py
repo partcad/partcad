@@ -50,3 +50,26 @@ def test_each_option_is_reported_once(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     names = [key for key, _value in _resolved(UserConfig())]
     assert len(names) == len(set(names))
+
+
+def test_a_secret_is_reported_as_set_and_never_printed(monkeypatch, tmp_path):
+    """This output is what people paste into bug reports.
+
+    A shared secret that runs commands on another machine is not a thing to put
+    in one, and "is it configured?" is the whole of what a reader of `pc config`
+    needs from it.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("PC_REMOTE_SANDBOX_TOKEN", "s3cret")
+
+    printed = _printed()
+
+    assert printed["remote_sandbox_token"] == "<set>"
+    assert "s3cret" not in str(printed)
+
+
+def test_an_unset_secret_says_so(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("PC_REMOTE_SANDBOX_TOKEN", raising=False)
+
+    assert _printed()["remote_sandbox_token"] == "<not set>"

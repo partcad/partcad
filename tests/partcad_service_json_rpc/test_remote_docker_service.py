@@ -255,9 +255,11 @@ def served(pool, environments):
         thread.join(timeout=5)
 
 
-def _post(url, payload):
+def _post(url, payload, headers=None):
     request = urllib.request.Request(
-        url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}
+        url,
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json", **(headers or {})},
     )
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
@@ -319,3 +321,110 @@ def test_a_service_that_answers_is_what_is_waited_for(served):
 def test_nothing_listening_is_not_an_answer():
     # Port 1 on loopback: privileged, and nothing this test could have started.
     assert service._answering("127.0.0.1:1") is False
+
+
+# --------------------------------------------------------------------------- #
+# Who may ask                                                                  #
+# --------------------------------------------------------------------------- #
+#
+# A request names the image, the requirements and the command, and the sandbox
+# interpreter runs whatever Python it is handed. On a reachable address that is
+# a shell for anybody who can reach the port, so the service binds loopback by
+# default and refuses anything wider without a shared secret.
+
+
+@pytest.fixture
+def guarded(pool, environments):
+    """The same service, started with a token."""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), service.Handler)
+    server.pool = pool
+    server.environments = environments
+    server.token = "s3cret"
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield "http://127.0.0.1:%d/jsonrpc" % server.server_address[1]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def _execute(id=1):
+    return {
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "execute",
+        "params": {"image": "ghcr.io/x/a:1", "python_version": "3.11", "command": ["python"]},
+    }
+
+
+def test_a_request_without_the_token_is_refused(guarded, upstream):
+    status, answer = _post(guarded, _execute())
+
+    assert status == 401
+    assert "Authentication" in answer["error"]["message"]
+    # And nothing ran: a refusal that had already started a container would be
+    # the resource exhaustion the token exists to prevent. The fixture records a
+    # command only when one reached it, so its absence is the assertion.
+    assert "command" not in upstream
+
+
+def test_a_request_with_the_token_is_served(guarded, upstream):
+    status, answer = _post(guarded, _execute(7), headers={"Authorization": "Bearer s3cret"})
+
+    assert status == 200
+    assert answer["id"] == 7
+    assert upstream["command"] == [remote_sandbox.interpreter_path("3.11"), "python"]
+
+
+def test_the_wrong_token_is_refused(guarded, upstream):
+    status, _ = _post(guarded, _execute(), headers={"Authorization": "Bearer s3cre"})
+    assert status == 401
+    assert "command" not in upstream
+
+
+def test_another_scheme_is_not_a_token(guarded, upstream):
+    status, _ = _post(guarded, _execute(), headers={"Authorization": "Basic s3cret"})
+    assert status == 401
+    assert "command" not in upstream
+
+
+def test_a_refused_request_leaves_the_connection_usable(guarded, upstream):
+    """The body has to be read even when it is not acted on.
+
+    HTTP/1.1 keeps the connection alive, so a body left in the socket is the
+    start of the next request as far as the parser is concerned -- and the
+    client is then answering questions nobody asked.
+    """
+    assert _post(guarded, _execute())[0] == 401
+    assert _post(guarded, _execute(2), headers={"Authorization": "Bearer s3cret"})[0] == 200
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "127.0.0.5", "::1", "localhost", "LOCALHOST"])
+def test_a_loopback_address_needs_no_token(host):
+    """The whole of 127.0.0.0/8, both families, and the name a person types."""
+    assert service._loopback(host) is True
+
+
+@pytest.mark.parametrize("host", ["0.0.0.0", "::", "", "192.168.1.4", "example.com"])
+def test_anything_reachable_is_not_loopback(host):
+    """Including the empty host, which means every interface."""
+    assert service._loopback(host) is False
+
+
+def test_serving_a_reachable_address_without_a_token_is_refused(monkeypatch, caplog):
+    """Refused at start-up, not warned about.
+
+    Somebody who passed '--host 0.0.0.0' is not going to read the log of a
+    service that came up and appeared to work.
+    """
+    started = []
+    monkeypatch.setattr(service, "ThreadingHTTPServer", lambda *a, **k: started.append(a) or None)
+    monkeypatch.delenv("PC_REMOTE_SANDBOX_TOKEN", raising=False)
+
+    with caplog.at_level("ERROR"):
+        assert service.main(["--host", "0.0.0.0"]) == 1
+
+    assert not started
+    assert "--token" in caplog.text

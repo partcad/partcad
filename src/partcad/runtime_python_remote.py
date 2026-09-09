@@ -154,6 +154,15 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
 
     # --------------------------------------------------------------- running --
 
+    def _token(self):
+        """The shared secret the service was started with, if the user set one.
+
+        Read at request time rather than kept from construction, so that a
+        `pc --python-sandbox remote` run and a long-lived daemon both see what
+        the configuration says now.
+        """
+        return getattr(self.ctx.user_config, "remote_sandbox_token", None)
+
     def _client(self) -> RuntimeJsonRpcClient:
         host, _, port = str(self.endpoint).rpartition(":")
         # The port as well as the host: 'remoteSandbox' is something a person
@@ -163,7 +172,7 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
             raise runtime.SandboxUnavailable(
                 "'%s' does not name a host and a port for the remote sandbox service." % self.endpoint
             )
-        return RuntimeJsonRpcClient(host, int(port))
+        return RuntimeJsonRpcClient(host, int(port), token=self._token())
 
     def _params(self, cmd, stdin, cwd, input_files, output_files, input_dirs) -> dict:
         if input_dirs is None:

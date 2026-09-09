@@ -56,7 +56,15 @@ class PartFactoryWrapper(PartFactory):
         key - no more than a partType changing its wrapper script does today.
         """
         return sandbox_versions.environment_cache_key(
-            "python", self.runtime.version, environment_requirements(self.project, self.config)
+            "python",
+            self.runtime.version,
+            environment_requirements(self.project, self.config),
+            # What the sandbox was actually built in, not what was asked for: a
+            # 'dockerImage' that could not be pulled falls back to PartCAD's own
+            # (see 'Context.get_python_runtime'), and the shape then belongs to
+            # the image it was really built in. 'getattr' because only the
+            # container-backed runtimes have one.
+            image=getattr(self.runtime, "image", None),
         )
 
     async def _materialize_wrapper_script(self, pt_project, script_rel):

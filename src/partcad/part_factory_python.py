@@ -44,9 +44,7 @@ class PartFactoryPython(PartFactoryHomogen, PartFactoryFile):
         if python_version is None:
             # TODO(clairbee): stick to a default constant or configured version
             python_version = self.project.python_version
-        self.runtime = self.ctx.get_python_runtime(
-            python_version, image=shape_docker_image(self.config, self.project)
-        )
+        self.runtime = self.ctx.get_python_runtime(python_version, image=shape_docker_image(self.config, self.project))
         self.session = self.runtime.get_session(source_project.name)
 
     def environment_cache_key(self) -> str | None:
@@ -57,7 +55,15 @@ class PartFactoryPython(PartFactoryHomogen, PartFactoryFile):
         declare, so the base class's constant cannot express it.
         """
         return sandbox_versions.environment_cache_key(
-            "python", self.runtime.version, environment_requirements(self.project, self.config)
+            "python",
+            self.runtime.version,
+            environment_requirements(self.project, self.config),
+            # What the sandbox was actually built in, not what was asked for: a
+            # 'dockerImage' that could not be pulled falls back to PartCAD's own
+            # (see 'Context.get_python_runtime'), and the shape then belongs to
+            # the image it was really built in. 'getattr' because only the
+            # container-backed runtimes have one.
+            image=getattr(self.runtime, "image", None),
         )
 
     def post_create(self) -> None:

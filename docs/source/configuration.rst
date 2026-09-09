@@ -2865,6 +2865,15 @@ falls back to its own base image, because "runs best here" is not "runs only
 here"; the package's requirements are then the whole of what it gets, which is
 exactly the case the paragraph above is about.
 
+**The image is part of what a shape is cached under.** An image is named
+precisely for what pip cannot install, so two images carrying the same
+interpreter and the same wheels are still two different native stacks. Changing
+``dockerImage`` therefore rebuilds the shapes that were produced in the old one
+rather than handing back what it built -- as does falling back to PartCAD's own
+image, since that is the image the shape was really produced in. A sandbox with
+no image keys exactly as it did before there was such a thing as an image, so
+nothing else is invalidated.
+
 .. _docker-image-architecture:
 
 Architecture, and the name PartCAD actually pulls

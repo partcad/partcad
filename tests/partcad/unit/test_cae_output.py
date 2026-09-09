@@ -305,11 +305,18 @@ def a_container_runtime(monkeypatch):
     monkeypatch.setattr(pc_runtime, "docker_available", lambda: True)
 
 
-def _no_container_runtime(monkeypatch):
-    """The one machine that is excused, for the tests that are about it."""
+def _no_container_runtime(monkeypatch, ctx=None, sandbox="venv"):
+    """The one machine that is excused, for the tests that are about it.
+
+    The sandbox is pinned too, and not as a formality: `remote` runs the
+    implementation in a container on another machine, so it counts as a
+    container runtime however little Docker this host has.
+    """
     from partcad import runtime as pc_runtime
 
     monkeypatch.setattr(pc_runtime, "docker_available", lambda: False)
+    if ctx is not None:
+        monkeypatch.setattr(ctx.user_config, "python_sandbox", sandbox)
 
 
 def _analysis(part, monkeypatch, result=None, error=None):
@@ -1039,7 +1046,7 @@ def test_no_container_runtime_is_a_skip(package, monkeypatch, caplog):
 
     part = _bracket(package)
     _analysis(part, monkeypatch, error=Exception("ccx: not found"))
-    _no_container_runtime(monkeypatch)
+    _no_container_runtime(monkeypatch, package)
 
     test_ctx = {}
     with caplog.at_level("WARNING"):
@@ -1059,7 +1066,7 @@ def test_a_skip_is_never_logged_as_an_error(package, monkeypatch, caplog):
 
     part = _bracket(package)
     _analysis(part, monkeypatch, error=Exception("ccx: not found"))
-    _no_container_runtime(monkeypatch)
+    _no_container_runtime(monkeypatch, package)
 
     with caplog.at_level("DEBUG"):
         asyncio.run(CaeTest(cae.FEA).test([], package, part))
@@ -1078,7 +1085,7 @@ def test_the_skip_names_the_image_when_the_implementation_named_one(containerise
 
     part = _bracket(containerised)
     _analysis(part, monkeypatch, error=Exception("ccx: not found"))
-    _no_container_runtime(monkeypatch)
+    _no_container_runtime(monkeypatch, containerised)
 
     with caplog.at_level("WARNING"):
         assert asyncio.run(CaeTest(cae.FEA).test([], containerised, part)) is CaeTest.TEST_PASSED
@@ -1105,7 +1112,7 @@ def test_a_container_runtime_that_is_here_leaves_no_excuse(containerised, monkey
 
 
 def test_a_missing_runtime_is_a_skip_for_the_sandbox_failure_too(package, monkeypatch, caplog):
-    """"The sandbox would not start" and "the solver was missing from it".
+    """ "The sandbox would not start" and "the solver was missing from it".
 
     Two ways of arriving at the same place, and they used to be answered in two
     branches that could drift apart. Both go through `_verdict` now, so a machine
@@ -1117,8 +1124,27 @@ def test_a_missing_runtime_is_a_skip_for_the_sandbox_failure_too(package, monkey
 
     part = _bracket(package)
     _analysis(part, monkeypatch, error=pc_runtime.SandboxUnavailable("no container runtime is available here"))
-    _no_container_runtime(monkeypatch)
+    _no_container_runtime(monkeypatch, package)
 
     with caplog.at_level("WARNING"):
         assert asyncio.run(CaeTest(cae.FEA).test([], package, part)) is CaeTest.TEST_PASSED
     assert "start a container runtime" in caplog.text
+
+
+def test_a_remote_sandbox_is_a_container_runtime(containerised, monkeypatch, caplog):
+    """`pythonSandbox: remote` needs no daemon here, and has one over there.
+
+    The implementation ran in a container; it just was not this machine's. So
+    the one excuse does not apply, and reading the local daemon -- which such a
+    host may perfectly well not have -- would have excused a real failure on
+    every part of every package it builds.
+    """
+    import asyncio
+
+    part = _bracket(containerised)
+    _analysis(part, monkeypatch, error=Exception("ccx: not found"))
+    _no_container_runtime(monkeypatch, containerised, sandbox="remote")
+
+    with caplog.at_level("ERROR"):
+        assert asyncio.run(CaeTest(cae.FEA).test([], containerised, part)) is CaeTest.TEST_FAILED
+    assert "ccx: not found" in caplog.text

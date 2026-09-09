@@ -297,6 +297,7 @@ OPTION_KEYS = (
     "cacheDependenciesIgnore",
     "pythonSandbox",
     "remoteSandbox",
+    "remoteSandboxToken",
     "ignoreBundledOpenscad",
     "internalStateDir",
     "logLevel",
@@ -830,6 +831,19 @@ class UserConfig(vyper.Vyper):
         # default: none
         self.bind_env("remoteSandbox", "PC_REMOTE_SANDBOX")
         self.remote_sandbox = self.get_string("remoteSandbox") if self.is_set("remoteSandbox") else None
+
+        # option: remoteSandboxToken
+        # description: the shared secret 'partcad-service-remote-docker' was
+        #              started with, sent as a bearer token on every request.
+        #              Needed only where that service listens on an address
+        #              other than loopback -- it refuses to start on one
+        #              without a token, because a service that runs commands
+        #              and asks nothing of its callers is a remote shell for
+        #              whoever can reach the port.
+        # values: <string>
+        # default: none
+        self.bind_env("remoteSandboxToken", "PC_REMOTE_SANDBOX_TOKEN")
+        self.remote_sandbox_token = self.get_string("remoteSandboxToken") if self.is_set("remoteSandboxToken") else None
 
         # option: javascriptSandbox
         # description: sandboxing environment for invoking JavaScript scripts

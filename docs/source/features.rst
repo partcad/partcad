@@ -365,9 +365,18 @@ anywhere -- another machine, another architecture, a build farm.
 It is served by ``partcad-service-remote-docker``, which accepts those requests,
 starts and reuses a container per image, multiplexes callers onto it and retires
 it when nobody is using it. That service exists; run it with ``--host`` and
-``--port`` to say where, and bind it to loopback unless the machines that may use
-it are the ones that can reach it, because it runs commands and has no
-authentication of its own.
+``--port`` to say where.
+
+**It runs commands, so who may reach it matters.** A request names the image,
+the requirements and the command, and the sandbox interpreter runs whatever
+Python it is handed -- on a reachable address that is a shell for anybody who
+can reach the port. So it binds loopback by default, and it **refuses to start**
+on any other address without ``--token`` (or ``PC_REMOTE_SANDBOX_TOKEN``), which
+every request must then carry as ``Authorization: Bearer <token>``. Refused at
+start-up rather than warned about: somebody who passed ``--host 0.0.0.0`` is not
+going to read the log of a service that came up and appeared to work. Prefer the
+environment variable to the flag, since process arguments are readable by anyone
+on the machine.
 
 The service owns the environment, and that is the arrangement worth knowing. A
 sandbox is a virtual environment on a disk, and for ``remote`` that disk cannot
@@ -383,8 +392,10 @@ that way, so a caller producing a file names it, exactly as it does for a
 container.
 
 Point a client at it with ``remoteSandbox`` (or ``PC_REMOTE_SANDBOX``), as
-``host:port``. There is no default: guessing at a service that runs commands is
-not something to do on somebody's behalf.
+``host:port``, and give it the service's token with ``remoteSandboxToken`` (or
+``PC_REMOTE_SANDBOX_TOKEN``) where the service was started with one. There is no
+default for either: guessing at a service that runs commands is not something to
+do on somebody's behalf.
 
 Today the transfer is a whole directory at a time; the intent is to replace that
 with a filesystem the container mounts and pulls files through one at a time, at
