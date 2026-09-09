@@ -115,6 +115,65 @@ class CaeTest(Test):
             parts.append("unresolved:%s" % e)
         return "." + self.analysis + "=" + hashlib.md5("\n".join(parts).encode()).hexdigest()
 
+    def _verdict(self, shape, impl, report: str) -> bool:
+        """What an analysis that produced no answer costs: a failure, or a skip.
+
+        A failure by default, and that default is the whole contract of this
+        check: a part asked a question, the implementation was asked it, and
+        nothing came back. Whatever the reason -- no solver, no mesher, a crash
+        -- the part has no answer, and a check that passed anyway would make
+        `fea:` decoration.
+
+        The exception is a machine with **no container runtime**, and it is the
+        only one. A container is how an implementation brings what pip cannot
+        install: an image can carry a solver, a mesher and the shared libraries
+        under them, and nothing else PartCAD has can. On a machine with no
+        container runtime there is no arrangement under which such an
+        implementation could have been given what it needs, so the question was
+        never really put -- and the honest verdict for a question nobody could
+        ask is a skip.
+
+        That the implementation declares an image or not does not change it, and
+        deliberately: an implementation is free to say nothing about containers
+        and still need a solver, and reading the declaration would make the
+        verdict depend on how well its author documented themselves rather than
+        on what this machine can do. What the declaration is good for is the
+        *message*, which names the image when there is one.
+
+        Once a runtime answers, the excuse is gone entirely -- a registry that
+        cannot be reached, an image that will not start, a solver missing from
+        the image are all things somebody can fix, and calling them
+        "unavailable" would hide exactly the failures a plugin's own CI exists
+        to catch. That is the half that keeps this narrow enough to be worth
+        having, and it is why continuous integration, which has a container
+        runtime, sees every one of these as a failure.
+
+        Either way the reader gets the same sentence, which is the point of
+        `dysfunction_report()`: what was asked, what it said, and which platform
+        it did not work on. A skip that said less than a failure would be a way
+        of not finding out.
+        """
+        if pc_runtime.docker_available():
+            return self.failed(shape, "%s", report)
+
+        try:
+            image = impl.docker_image or (impl.container or {}).get("image")
+        except Exception:
+            # `container` raises on a `container:` that names no `image:`. That
+            # is its own failure, reported where the declaration is read; here
+            # it only means there is no image name to put in this sentence, and
+            # raising out of an error path would replace a report the user needs
+            # with a traceback about a different mistake.
+            image = None
+        return self.skipped(
+            shape,
+            "%s\n\t%s",
+            report,
+            "There is no container runtime on this machine, so there is no way to give this implementation"
+            " what pip cannot install%s. Start one, or install what the message above names, to have this"
+            " analysis run here." % (" -- it runs in '%s'" % image if image else ""),
+        )
+
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = None) -> bool:
         """Run the analysis, and pass the shape only if it found nothing.
 
@@ -198,7 +257,7 @@ class CaeTest(Test):
             options_project, format_name = shape._analysis_implementation(
                 ctx, self.analysis, declared=config.implementation
             )
-            shape.analysis_getopts(
+            impl, _ = shape.analysis_getopts(
                 ctx,
                 self.analysis,
                 format_name,
@@ -215,26 +274,25 @@ class CaeTest(Test):
         except pc_cae.CaeConfigError as e:
             return self.failed(shape, "%s", e)
         except pc_runtime.SandboxUnavailable as e:
-            # Not a skip, and this used to be one. It was justified while a
-            # `container:` meant "a sandbox is not enough": nothing was asked,
-            # because the thing that asks could not start, so the verdict said
-            # nothing about the implementation or about the part.
+            # The one failure PartCAD writes rather than the implementation:
+            # the implementation never started, so it has nothing to say. What
+            # it earns is both remedies rather than one -- start a runtime, or
+            # install what the implementation needs here -- because either fixes
+            # it and only the reader knows which is easier where they are.
             #
-            # A `dockerImage` is not that. It says which sandbox is best, while
-            # the same package's requirements say how to run without one -- so a
-            # machine with no container runtime is a machine that has to supply
-            # the dependencies instead, and a part that asked a question and got
-            # no answer has failed either way. What is owed to the reader is not
-            # silence but both remedies, since either fixes it and only they
-            # know which is easier where they are.
+            # Whether it is a failure at all is `_verdict`'s to decide, and the
+            # answer is the same one it gives the branch below: no container
+            # runtime is a skip, and everything else is a failure. Deciding it
+            # in one place is what keeps "the sandbox would not start" and "the
+            # solver was missing from it" from being answered differently, which
+            # they were while this branch answered for itself.
             #
-            # Still uncacheable, for the reason every failure here is: starting
-            # a container runtime changes no cache key, so a remembered verdict
-            # would outlive its reason.
+            # Uncacheable either way: starting a container runtime changes no
+            # cache key, so a remembered verdict would outlive its reason.
             test_ctx[self.NOT_CACHEABLE] = True
-            return self.failed(
+            return self._verdict(
                 shape,
-                "%s",
+                impl,
                 pc_cae.dysfunction_report(
                     "%s:%s" % (shape.project_name, shape.name),
                     self.analysis,
@@ -275,7 +333,7 @@ class CaeTest(Test):
                     e,
                 )
             )
-            return self.failed(shape, "%s", report)
+            return self._verdict(shape, impl, report)
 
         findings = result.get("findings") or []
         if findings:

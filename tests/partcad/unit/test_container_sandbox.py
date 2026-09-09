@@ -188,20 +188,52 @@ def test_the_message_names_the_image_that_could_not_be_started(monkeypatch):
         asyncio.run(ctx.get_container_runtime({"image": "ghcr.io/partcad/nothing:1"}))
 
 
+class _Daemon:
+    """A daemon that answers both of the questions `docker_available` asks."""
+
+    def __init__(self, os_type="linux", calls=None):
+        self.os_type = os_type
+        self.calls = calls if calls is not None else []
+
+    def ping(self):
+        self.calls.append("ping")
+        return True
+
+    def info(self):
+        self.calls.append("info")
+        return {"OSType": self.os_type}
+
+
 def test_docker_availability_is_asked_once(monkeypatch):
     """A run over a package tree must not ping the daemon per part."""
     calls = []
 
-    class _Client:
-        def ping(self):
-            calls.append(1)
-            return True
-
     monkeypatch.setattr(runtime, "_docker_available", None)
-    monkeypatch.setattr(runtime.docker, "from_env", lambda: _Client())
+    monkeypatch.setattr(runtime.docker, "from_env", lambda: _Daemon(calls=calls))
     assert runtime.docker_available() is True
     assert runtime.docker_available() is True
-    assert len(calls) == 1
+    assert calls.count("ping") == 1
+
+
+def test_a_daemon_running_windows_containers_is_not_available(monkeypatch):
+    """It answers a ping and then cannot pull a single image PartCAD uses.
+
+    Docker on Windows runs Windows containers unless it has been switched to the
+    WSL2 backend, and every image PartCAD builds or documents is a Linux image.
+    A runtime that is "available" and then fails every pull with "no matching
+    manifest for windows/amd64" is worse than no runtime at all: the sandbox
+    that would have worked is passed over for it.
+    """
+    monkeypatch.setattr(runtime, "_docker_available", None)
+    monkeypatch.setattr(runtime.docker, "from_env", lambda: _Daemon(os_type="windows"))
+    assert runtime.docker_available() is False
+
+
+def test_a_daemon_that_does_not_say_what_it_runs_is_taken_at_its_word(monkeypatch):
+    """Podman, colima, a mock -- an empty answer is not a Windows daemon."""
+    monkeypatch.setattr(runtime, "_docker_available", None)
+    monkeypatch.setattr(runtime.docker, "from_env", lambda: _Daemon(os_type=""))
+    assert runtime.docker_available() is True
 
 
 def test_a_daemon_that_does_not_answer_is_not_available(monkeypatch):

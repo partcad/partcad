@@ -1399,7 +1399,15 @@ class Shape(ShapeConfiguration):
             # the file goes, not the file.
             output_dir, filepath = filepath, None
 
-        impl = output.Implementation(output.CAE, format_name, opts)
+        # With the implementing package, which the export path fills in later
+        # (in '_materialize_output_script') because that is the first moment it
+        # needs one. Here it is known already -- the caller resolved it to get
+        # 'options_project' -- and something asks earlier: 'pc test' reads
+        # 'container'/'dockerImage' off this to tell a machine that cannot run
+        # the implementation from an implementation that does not work. Without
+        # a project those read as "declared nothing", which is the same answer a
+        # package that really declares nothing gives.
+        impl = output.Implementation(output.CAE, format_name, opts, project=options_project)
         extension = impl.extension(None)
         if not extension:
             raise Exception(

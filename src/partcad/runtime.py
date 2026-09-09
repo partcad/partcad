@@ -119,14 +119,15 @@ class SandboxUnavailable(Exception):
     thing that can tell, since the implementation never gets to run and so
     cannot report it itself.
 
-    It is still a failure. `pc test` used to pass over this one, on the grounds
-    that nothing had been asked -- which held while an implementation naming a
-    container had said a sandbox was not enough. One naming a `dockerImage` has
-    not: it declares the requirements to run without one too, so a machine with
-    no container runtime is a machine that has to supply the dependencies
-    instead. What the type still buys is the message: `CaeTest` reads it to add
-    both remedies, which no other failure gets. See
-    `partcad.test.cae.CaeTest.test()`.
+    What `pc test` makes of it is not decided here but by the implementation:
+    one that declares a `container:` or a `dockerImage` is saying that a
+    container is how its dependencies arrive, so a machine with no container
+    runtime is a machine that could never have run it, and the verdict is a
+    skip. One that declares neither said it runs in an ordinary sandbox, and a
+    machine with a working sandbox is a machine it was supposed to work on, so
+    the verdict is a failure. What the type buys either way is the message:
+    `CaeTest` reads it to add both remedies, which no other failure gets. See
+    `partcad.test.cae.CaeTest._verdict()`.
     """
 
 
@@ -142,12 +143,29 @@ def docker_available() -> bool:
     /var/run/docker.sock there": the `docker` package installs with PartCAD on
     every platform, and a socket can exist with nothing behind it. The question
     is whether a container can be started, and only the daemon answers that.
+
+    And not only that a container can be started -- that one of *ours* can.
+    Every image PartCAD builds, pulls or documents is a Linux image, and a
+    Docker daemon on Windows runs Windows containers unless it has been switched
+    to the WSL2 backend. Such a daemon answers a ping perfectly happily and then
+    fails every pull with "no matching manifest for windows/amd64", which is a
+    container runtime by the letter of the question and not by its point. So the
+    daemon is asked what it runs, once, in the same cached call.
     """
     global _docker_available
     if _docker_available is None:
         try:
-            docker.from_env().ping()
-            _docker_available = True
+            client = docker.from_env()
+            client.ping()
+            os_type = str(client.info().get("OSType", "")).lower()
+            if os_type and os_type != "linux":
+                pc_logging.debug(
+                    "The container runtime on this machine runs %s containers, and every image PartCAD"
+                    " uses is a Linux image." % os_type
+                )
+                _docker_available = False
+            else:
+                _docker_available = True
         except Exception as e:
             pc_logging.debug("No container runtime on this machine: %s" % e)
             _docker_available = False
@@ -397,9 +415,7 @@ class Runtime:
             input_dirs = []
 
         if self.rpc_client:
-            response = self.rpc_client.execute(
-                cmd, self._rpc_params(stdin, cwd, input_files, output_files, input_dirs)
-            )
+            response = self.rpc_client.execute(cmd, self._rpc_params(stdin, cwd, input_files, output_files, input_dirs))
             if not response:
                 return self._no_response(self.name)
             stdout, stderr, returncode = self._rpc_result(response, output_files)

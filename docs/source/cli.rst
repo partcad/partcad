@@ -345,11 +345,15 @@ Object commands
   nothing a cache key is built from, so a remembered one would go on failing a part that now analyses perfectly
   well.
 
-  **A machine with no container runtime is not an excuse either.** An implementation naming a ``dockerImage``
-  (see :doc:`configuration`) still declares the requirements that let it run in a ``conda`` or ``venv``
-  sandbox, so a host that has the non-Python pieces installed natively runs it there. Where neither holds, the
-  failure says both remedies — start a container runtime, or install what the implementation named — because
-  either one fixes it and only the reader knows which is easier.
+  **A machine with no container runtime is the one excuse.** An implementation naming a ``container:`` or a
+  ``dockerImage`` (see :doc:`configuration`) is saying that a container is how what pip cannot install
+  arrives; where there is no container runtime to run it in, nothing was ever asked, and the check skips with
+  a ``WARNING`` carrying the whole report. It still declares the requirements that let it run in a ``conda``
+  or ``venv`` sandbox, so a host with the non-Python pieces installed natively runs it there and a failure
+  there is a failure. An implementation that names no image gets no excuse at all, and a container runtime
+  that *is* here removes the excuse for one that does — an image that cannot be pulled or is missing the
+  solver is something somebody can fix. A Docker daemon running Windows containers is not one of these
+  runtimes: every image PartCAD uses is a Linux image.
 
 ``pc convert``
   Convert parts, sketches, assemblies or scenes to another format and update their type in the package.

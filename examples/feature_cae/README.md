@@ -31,11 +31,15 @@ default implementation declares an image that carries `ccx`, the mesher and
 everything else it imports, so there is no solver to install and no platform
 where the mesher cannot be had — including 64-bit ARM Linux, where it once could
 not be. A machine with no container runtime runs no analysis, and `pc test`
-fails the part for it — naming both ways out, since either starting a container
-runtime or installing what the implementation needs fixes it, and the verdict is
-not cached because it is about the machine rather than the part. Anything else
-that stops the analysis is the implementation failing, and is reported the same
-way. See "What it needs" in
+**skips** the part there rather than failing it: a container is the only way
+PartCAD has of supplying what pip cannot install, so on such a machine the
+question was never really put. The skip is a `WARNING` carrying the whole report
+— what was asked, what it said, which platform — and it is not cached, because
+it is about the machine rather than the part. That is the only excuse. Where a
+container runtime *is* running, everything that stops the analysis is the
+implementation failing and fails the part, including an image that cannot be
+pulled. A Docker daemon in Windows-container mode does not count as one: every
+image PartCAD uses is a Linux image. See "What it needs" in
 [`partcad-cae-calculix`](https://github.com/partcad/partcad-cae-calculix)'s
 README.
 

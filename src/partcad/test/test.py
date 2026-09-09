@@ -140,3 +140,26 @@ class Test(ABC):
         message = self._log_message_prepare(*args)
         pc_logging.debug(f"Test passed: {shape.project_name}:{shape.name}: {self.name}{message}")
         return self.TEST_PASSED
+
+    def skipped(self, shape, *args) -> bool:
+        """Not asked here, and saying so out loud.
+
+        There is no third verdict to return -- see the TODO above -- so this is
+        a pass, and the whole of what distinguishes it is the line it writes.
+        That line is a `WARNING` rather than an `INFO` on purpose: a skip is a
+        question nobody answered, and the run it happens in reports success. A
+        reader scrolling past `INFO` would be told a package passed on a machine
+        where a third of it never ran.
+
+        It is not an `ERROR`, though, and the difference is whether anything
+        could have been asked. A `WARNING` says the machine is not equipped;
+        `failed()` says the implementation was equipped and did not deliver. Only
+        the second is a bug in something, and only the second stops the command.
+
+        The caller sets `NOT_CACHEABLE` alongside this for the same reason it
+        does around a failure: what makes it a skip is a property of the machine,
+        and nothing that changes it changes the cache key.
+        """
+        message = self._log_message_prepare(*args)
+        pc_logging.warning(f"Test skipped: {shape.project_name}:{shape.name}: {self.name}{message}")
+        return self.TEST_PASSED

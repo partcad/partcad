@@ -779,9 +779,13 @@ jobs:
       # example is then exercised on a host installation as well -- which is the
       # arrangement `dockerImage` is documented to keep working.
       #
-      # Linux only. macOS would need the BrewSci tap and Windows has no package
-      # at all; on those the image is the answer, and until it is published
-      # `feature_cae` is expected to fail there. Neither runs on a pull request.
+      # Linux only. macOS would need the BrewSci tap, which builds the solver
+      # from source, and Windows has no package at all. On those the image is
+      # the answer, and neither runner has a container runtime that can run a
+      # Linux one -- Windows ships a daemon in Windows-container mode, which is
+      # not the same thing. So `pc test` skips those analyses there rather than
+      # failing them, and says so; see `CaeTest._verdict()` for why that is the
+      # one excuse it accepts.
       - name: The CAE example's native dependencies
         if: ${{ startsWith(matrix.os, 'ubuntu') }}
         run: |

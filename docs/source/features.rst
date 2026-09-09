@@ -154,18 +154,33 @@ no such file type), a plugin that resolves and cannot run (no mesher, no solver,
 a sandbox that will not build, a crash), and an analysis that ran and found
 something.
 
-Not running is deliberately not a skip, and there is no longer an exception for
-a machine with no container runtime: an implementation naming a ``dockerImage``
-declares the requirements to run without one too, so what a missing container
-runtime means is that the host must supply the dependencies instead. A skip says
-the question does not apply here; a part that declares ``fea:`` has asked, and a
-plugin that was asked and delivered nothing has failed. The consequence is the point: declaring ``fea:``
+Not running is deliberately not a skip. A skip says the question does not apply
+here; a part that declares ``fea:`` has asked, and a plugin that was asked and
+delivered nothing has failed. The consequence is the point: declaring ``fea:``
 in a shared package makes ``pc test`` fail for everyone who has not installed
 what that implementation needs. A package that does not want that should not
 declare the section. What the failure carries is *why* -- the implementation's
 own sentence, plus which implementation was asked and which machine it did not
 work on, because "gmsh is not installed" is a puzzle and the same sentence under
 ``//pub/feature/cae/calculix:fea on Linux-aarch64`` is an answer.
+
+There is **one** excuse, and it is the case where the implementation was never
+given the environment it says it needs. An implementation naming a ``container:``
+or a ``dockerImage`` is stating that a container is how what pip cannot install
+arrives; on a machine with no container runtime that statement has nowhere to
+land, nothing was ever asked, and the check skips with a ``WARNING`` carrying the
+whole report rather than failing. It is narrow in both directions. An
+implementation that names no image gets no excuse at all -- it said it runs in an
+ordinary sandbox, and a machine with a working sandbox is a machine it was
+supposed to work on. And a container runtime that *is* here removes the excuse
+entirely: a registry that cannot be reached, an image that will not start, a
+solver missing from the image are all things somebody can fix, and calling them
+"unavailable" would hide exactly the failures a plugin's own CI exists to catch.
+
+A Docker daemon running **Windows** containers does not count as a container
+runtime for this, or for choosing a sandbox. Every image PartCAD builds, pulls or
+documents is a Linux image, and such a daemon answers a ping and then fails every
+pull with ``no matching manifest for windows/amd64``.
 
 ``examples/feature_cae`` is the pair of cases to check an implementation against
 — a cantilever and a pipe, each with a closed-form answer to compare the solver
