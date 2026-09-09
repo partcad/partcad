@@ -2859,6 +2859,12 @@ runner where the job installed them. What the image is for is everything pip
 cannot supply. What happens where neither is satisfied is an ordinary failure,
 reported with whatever the implementation said was missing.
 
+The same holds where the image simply cannot be pulled -- an offline machine, a
+firewall, a registry that has not been logged in to. PartCAD says so once and
+falls back to its own base image, because "runs best here" is not "runs only
+here"; the package's requirements are then the whole of what it gets, which is
+exactly the case the paragraph above is about.
+
 .. _docker-image-architecture:
 
 Architecture, and the name PartCAD actually pulls

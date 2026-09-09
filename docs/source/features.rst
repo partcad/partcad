@@ -299,6 +299,18 @@ Which one is chosen for you, when you have said nothing, is the first of
 continuous integration runner with no container runtime therefore keeps
 provisioning with conda exactly as before, and needs no configuration to say so.
 
+"Can actually provide" includes the image. A container runtime answering says a
+container could be started; it says nothing about whether the image to start it
+from can be pulled, and on a machine that is offline, behind a firewall, or
+simply not permitted to reach the registry those are different answers. So
+PartCAD checks, once, and falls through to ``conda`` or ``venv`` with a warning
+rather than failing every part against a registry you never asked it to talk to.
+
+That fallback is only ever for a choice PartCAD made. Say ``pythonSandbox:
+docker`` yourself and it is obeyed: an image that cannot be had is then a
+failure, because being unable to do what was asked is not a reason to quietly do
+something else.
+
 .. _docker-sandbox:
 
 The ``docker`` sandbox

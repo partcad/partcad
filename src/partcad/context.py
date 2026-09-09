@@ -165,6 +165,13 @@ class Context:
         # Whether the 'useDockerPython' deprecation has been said, so that a
         # command over a tree of parts says it once rather than per part.
         self.use_docker_python_warned = False
+        # Which images this machine turned out to be able to get, and what has
+        # already been said about the ones it could not. Both are per context so
+        # that a command over a tree of parts asks the registry once and says it
+        # once.
+        self.docker_images_available = {}
+        self.docker_sandbox_fallback_warned = False
+        self.docker_image_fallback_warned = set()
         self.runtimes_javascript = {}
         self.runtimes_javascript_lock = threading.Lock()
 
@@ -1267,6 +1274,50 @@ class Context:
             return "docker"
         return self.user_config.python_sandbox
 
+    def _sandbox_was_declared(self) -> bool:
+        """Whether the sandbox is somebody's decision rather than PartCAD's."""
+        return bool(
+            self.user_config.python_sandbox_declared or getattr(self.user_config, "use_docker_python_declared", False)
+        )
+
+    def _image_available(self, image: str, version: str) -> bool:
+        """Whether this machine can get that image, asked once per image.
+
+        Imported here rather than at the top: it brings the Docker SDK with it,
+        and a command that never builds a sandbox should not pay for that.
+        """
+        from . import runtime_python_docker
+
+        if image not in self.docker_images_available:
+            self.docker_images_available[image] = runtime_python_docker.image_available(image, version)
+        return self.docker_images_available[image]
+
+    def _docker_or_next_best(self, version: str) -> str:
+        """'docker' if this machine can actually get an image to run in.
+
+        A container runtime answering says a container could be started; it says
+        nothing about whether the image to start it from is reachable. Choosing
+        docker on a machine that cannot pull would mean every part failing on a
+        registry the user never asked to talk to, with the sandbox that was
+        working a moment ago sitting right there.
+
+        Only when PartCAD chose. A stated 'pythonSandbox: docker' is obeyed and
+        its failure is a failure: being unable to do what was asked is not a
+        reason to quietly do something else.
+        """
+        from . import runtime_python_docker
+
+        if self._image_available(runtime_python_docker.image_for(version), version):
+            return "docker"
+        if not self.docker_sandbox_fallback_warned:
+            self.docker_sandbox_fallback_warned = True
+            pc_logging.warning(
+                "A container runtime is running here but PartCAD's image for Python %s cannot be pulled,"
+                " so the '%s' sandbox is being used instead. Set 'pythonSandbox: docker' to make this a"
+                " failure rather than a fallback." % (version, self.user_config.python_sandbox)
+            )
+        return self.user_config.python_sandbox
+
     def get_python_runtime(self, version=None, python_runtime=None, image=None):
         with self.runtimes_python_lock:
             if version is None:
@@ -1309,6 +1360,24 @@ class Context:
 
             if python_runtime is None:
                 python_runtime = self.preferred_python_sandbox()
+                if python_runtime == "docker" and not self._sandbox_was_declared():
+                    python_runtime = self._docker_or_next_best(version)
+
+            # A package's own image is a preference and not a requirement (see
+            # 'dockerImage' in the documentation), so an image this machine
+            # cannot get is a reason to use PartCAD's own rather than to fail:
+            # what the package asked for is where its parts run *best*.
+            #
+            # Only for 'docker'. The 'remote' sandbox's images are the service's
+            # to obtain, on a machine that is not necessarily this one.
+            if python_runtime == "docker" and image and not self._image_available(image, version):
+                if image not in self.docker_image_fallback_warned:
+                    self.docker_image_fallback_warned.add(image)
+                    pc_logging.warning(
+                        "'%s' cannot be pulled here, so PartCAD's own image is being used instead."
+                        " Anything the package needs that image for has to be in its requirements too." % image
+                    )
+                image = None
 
             # The image is part of a sandbox's identity, not just of how it is
             # reached: what pip resolves and what it compiles against depend on

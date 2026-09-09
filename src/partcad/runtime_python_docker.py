@@ -81,6 +81,60 @@ def _short(image: str) -> str:
     return hashlib.sha256(image.encode()).hexdigest()[:12]
 
 
+def resolve_image(client, image: str, version: str = "") -> str:
+    """The image to run, pulled if this machine does not have it yet.
+
+    Architecture first, bare name second (see 'docker_image.candidates'). A name
+    that is present locally is used without asking a registry, so an image
+    somebody built by hand for testing is picked up the way a pulled one is.
+    """
+    names = docker_image.candidates(image)
+    for name in names:
+        try:
+            client.images.get(name)
+            return name
+        except docker.errors.ImageNotFound:
+            pass
+    errors = []
+    for name in names:
+        try:
+            with pc_logging.Action("Pull", version or "sandbox", name):
+                client.images.pull(name)
+            return name
+        except Exception as e:
+            errors.append("%s: %s" % (name, e))
+    raise runtime.SandboxUnavailable(
+        "None of the images this sandbox could run in are available: %s. "
+        "Publish an architecture-suffixed tag, or check that the name is right and that this "
+        "machine may pull from that registry." % "; ".join(errors)
+    )
+
+
+def image_available(image: str, version: str = "") -> bool:
+    """Whether this machine can get an image to run that sandbox in.
+
+    Local first, then a pull, exactly as starting the sandbox would -- so a
+    False here is a failure that would have happened later, asked early enough
+    that something can be done about it.
+
+    A container runtime answering says a container *could* be started. It says
+    nothing about whether the image to start is reachable, and those are
+    different questions on a machine that is offline, behind a firewall, or
+    simply not permitted to pull from the registry PartCAD publishes to.
+    """
+    if not runtime.docker_available():
+        return False
+    try:
+        client = docker.from_env()
+    except Exception:
+        return False
+    try:
+        resolve_image(client, image, version)
+        return True
+    except Exception:
+        return False
+
+
 @telemetry.instrument()
 class DockerPythonRuntime(runtime_python.PythonRuntime):
     def __init__(self, ctx, version=None, image=None):
@@ -141,33 +195,8 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
     # ------------------------------------------------------------ container --
 
     def _resolve_image(self, client) -> str:
-        """The image to run, pulled if this machine does not have it yet.
-
-        Architecture first, bare name second (see 'docker_image.candidates'). A
-        name that is present locally is used without asking a registry, so an
-        image somebody built by hand for testing is picked up the way a pulled
-        one is.
-        """
-        names = docker_image.candidates(self.image)
-        for name in names:
-            try:
-                client.images.get(name)
-                return name
-            except docker.errors.ImageNotFound:
-                pass
-        errors = []
-        for name in names:
-            try:
-                with pc_logging.Action("Pull", self.version, name):
-                    client.images.pull(name)
-                return name
-            except Exception as e:
-                errors.append("%s: %s" % (name, e))
-        raise runtime.SandboxUnavailable(
-            "None of the images this sandbox could run in are available: %s. "
-            "Publish an architecture-suffixed tag, or check that the name is right and that this "
-            "machine may pull from that registry." % "; ".join(errors)
-        )
+        """The image to run, pulled if this machine does not have it yet."""
+        return resolve_image(client, self.image, self.version)
 
     def _start(self):
         """The container for this sandbox, started or reused.
