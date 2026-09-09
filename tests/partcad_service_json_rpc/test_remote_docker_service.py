@@ -133,6 +133,83 @@ def test_the_container_is_released_even_when_the_request_fails(pool, environment
 
 
 # --------------------------------------------------------------------------- #
+# Reading what the container said                                              #
+# --------------------------------------------------------------------------- #
+
+
+def _answers(monkeypatch, payload):
+    """A container that replies with exactly ``payload``."""
+
+    class _Client:
+        def __init__(self, host, port):
+            pass
+
+        def execute(self, command, params):
+            return payload
+
+    monkeypatch.setattr(service, "RuntimeJsonRpcClient", _Client)
+
+
+def test_what_a_command_wrote_is_decoded(pool, monkeypatch):
+    """The container sends base64 inside a JSON-RPC envelope.
+
+    Read off the envelope instead of out of it, 'exit_code' was never there --
+    so every command, a pip install included, was reported as having succeeded
+    with nothing to say, and 'Environments' recorded packages it had not
+    installed.
+    """
+    import base64
+
+    _answers(
+        monkeypatch,
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "exit_code": 2,
+                "stdout": base64.b64encode(b"what it printed").decode(),
+                "stderr": base64.b64encode(b"what went wrong").decode(),
+            },
+        },
+    )
+
+    exitcode, stdout, stderr = service._forward(pool, "ghcr.io/x/a:1", ["python"])
+
+    assert exitcode == 2
+    assert stdout == "what it printed"
+    assert stderr == "what went wrong"
+
+
+def test_a_container_that_refused_the_command_is_a_failure(pool, monkeypatch):
+    """And says why: it is the sentence somebody has to read to fix it."""
+    _answers(
+        monkeypatch,
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "error": {"code": -32000, "message": "Server error", "data": {"message": "'python3' is not allowed"}},
+        },
+    )
+
+    exitcode, _, stderr = service._forward(pool, "ghcr.io/x/a:1", ["python3"])
+
+    assert exitcode != 0
+    assert "not allowed" in stderr
+
+
+def test_an_error_from_the_container_is_not_returned_as_a_result(pool, environments, monkeypatch):
+    """The client unwraps a result and reads 'stdout' out of it.
+
+    Handing it an error object under that name turned a command the container
+    refused into a malformed answer, several layers from the refusal.
+    """
+    _answers(monkeypatch, {"jsonrpc": "2.0", "id": 1, "error": {"code": -32000, "message": "no such interpreter"}})
+
+    with pytest.raises(RuntimeError, match="no such interpreter"):
+        service.execute(pool, environments, {"image": "ghcr.io/x/a:1", "python_version": "3.11", "command": ["python"]})
+
+
+# --------------------------------------------------------------------------- #
 # Bad requests                                                                 #
 # --------------------------------------------------------------------------- #
 
@@ -211,3 +288,24 @@ def test_a_failure_keeps_the_request_id(served):
     assert status == 500
     assert answer["id"] == 42
     assert "image" in answer["error"]["message"]
+
+
+# --------------------------------------------------------------------------- #
+# Waiting for a container to be ready                                          #
+# --------------------------------------------------------------------------- #
+
+
+def test_a_service_that_answers_is_what_is_waited_for(served):
+    """Any JSON counts, an error included.
+
+    A published port is not an answer: Docker publishes it the moment the
+    container starts and the service behind it binds seconds later, so the
+    first request used to land in the gap and come back as "the container
+    returned no response".
+    """
+    assert service._answering(served.split("//")[1].split("/")[0]) is True
+
+
+def test_nothing_listening_is_not_an_answer():
+    # Port 1 on loopback: privileged, and nothing this test could have started.
+    assert service._answering("127.0.0.1:1") is False

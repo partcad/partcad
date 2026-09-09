@@ -26,11 +26,14 @@ unless the machines that may use it are the ones that can route to it.
 """
 
 import argparse
+import base64
 import json
 import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import requests
 
 from partcad import remote_docker, remote_sandbox
 from partcad.runtime_json_rpc import RuntimeJsonRpcClient
@@ -97,6 +100,11 @@ def _docker_start(image: str) -> remote_docker.Lease:
             remote_sandbox.volume_name(image): {"bind": remote_sandbox.SANDBOX_ROOT, "mode": "rw"},
         },
         labels=dict(remote_docker.LABELS),
+        # Where the volume above was mounted, told to the container rather than
+        # assumed by it: the service inside has to recognise the interpreter of
+        # an environment it is asked to run, and where those environments live
+        # is this service's decision, not the image's.
+        environment={"PC_CONTAINER_SANDBOX_ROOT": remote_sandbox.SANDBOX_ROOT},
         auto_remove=False,
     )
 
@@ -114,8 +122,69 @@ def _docker_start(image: str) -> remote_docker.Lease:
         container.remove(force=True)
         raise RuntimeError("The container for '%s' never published a port" % image)
 
+    # And then the service behind it, which is not the same thing. Docker
+    # publishes the port when the container starts; the service inside takes
+    # seconds more to bind it. A request that landed in that gap came back as
+    # "the container returned no response", which reads like a broken image
+    # rather than a container that was not ready yet.
+    for _ in range(120):
+        if _answering(endpoint):
+            break
+        time.sleep(0.5)
+    else:
+        logs = ""
+        try:
+            logs = container.logs(tail=20).decode("utf-8", errors="replace")
+        except Exception:
+            pass
+        container.remove(force=True)
+        raise RuntimeError(
+            "The service inside the container for '%s' never answered on %s.%s"
+            % (image, endpoint, ("\n" + logs) if logs else "")
+        )
+
     pc_logging.info("Serving %s from %s at %s" % (image, container.short_id, endpoint))
     return remote_docker.Lease(image, container, endpoint)
+
+
+def _answering(endpoint: str) -> bool:
+    """Whether the service inside a container has started answering.
+
+    Any JSON it returns counts, an error included: what is being waited for is
+    that something is there to answer, not that it likes the question. So the
+    probe is a command no image allows, which is the cheapest thing the service
+    has an answer for.
+    """
+    host, port = endpoint.rsplit(":", 1)
+    try:
+        response = requests.post(
+            "http://%s:%s/jsonrpc" % (host, port),
+            json={"jsonrpc": "2.0", "id": 0, "method": "execute", "params": {"command": ["pc-probe"]}},
+            timeout=2,
+        )
+        return isinstance(response.json(), dict)
+    except Exception:
+        return False
+
+
+def _decoded(value) -> str:
+    """What a command wrote, which the container sends base64-encoded."""
+    return base64.b64decode(value).decode("utf-8", errors="replace") if value else ""
+
+
+def _message(error) -> str:
+    """The sentence out of a JSON-RPC error object, wherever it was nested.
+
+    flask_jsonrpc wraps an exception the view raised: the useful sentence is
+    under 'data', and 'message' at the top is "Server error".
+    """
+    if isinstance(error, dict):
+        data = error.get("data")
+        if isinstance(data, dict) and data.get("message"):
+            return str(data["message"])
+        if error.get("message"):
+            return str(error["message"])
+    return str(error)
 
 
 def _forward(pool, image: str, command: list, params: dict = None) -> tuple:
@@ -130,7 +199,15 @@ def _forward(pool, image: str, command: list, params: dict = None) -> tuple:
         answer = RuntimeJsonRpcClient(host, int(port)).execute(command, params or {})
         if not answer:
             return 1, "", "The container serving '%s' returned no response" % image
-        return int(answer.get("exit_code") or 0), answer.get("stdout") or "", answer.get("stderr") or ""
+        # The envelope, not the payload: the client returns what the container
+        # replied with, and what is in it is base64. Reading 'exit_code' off the
+        # envelope found nothing, so every command -- a provisioning command
+        # included -- was reported as having succeeded silently, and a container
+        # that refused one was recorded as having run it.
+        if answer.get("error"):
+            return 1, "", _message(answer["error"])
+        result = answer.get("result") or {}
+        return int(result.get("exit_code") or 0), _decoded(result.get("stdout")), _decoded(result.get("stderr"))
     finally:
         pool.release(lease)
 
@@ -178,6 +255,11 @@ def execute(pool, environments, params: dict) -> dict:
         )
         if not answer:
             raise RuntimeError("The container serving '%s' returned no response" % image)
+        if answer.get("error"):
+            # Returned as this call's *result*, an error left the client
+            # unwrapping a payload with no 'stdout' in it, so a command the
+            # container refused arrived as a malformed answer.
+            raise RuntimeError("%s: %s" % (image, _message(answer["error"])))
         # The container's payload, not its envelope. Two JSON-RPC layers are
         # already one more than the caller asked for; nesting a second envelope
         # inside the first would make the client unwrap twice to reach a field

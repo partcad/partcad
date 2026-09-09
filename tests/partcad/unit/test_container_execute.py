@@ -70,7 +70,7 @@ HELPER = "MODEL = 'a model, as bytes would be'\n"
 
 
 @pytest.fixture
-def server(monkeypatch):
+def server(monkeypatch, tmp_path):
     """The container's RPC server, imported without Flask and without a container."""
 
     def _module(name, **attributes):
@@ -100,6 +100,10 @@ def server(monkeypatch):
     # the image, read once at start-up -- so it is set before the import, the
     # way a Dockerfile sets it.
     monkeypatch.setenv("PC_CONTAINER_ALLOWED_COMMANDS", json.dumps({"python": sys.executable}))
+    # Where a `remote` sandbox's environments are mounted, told to the server
+    # the way `partcad-service-remote-docker` tells it, and read at start-up for
+    # the same reason the allowlist is.
+    monkeypatch.setenv("PC_CONTAINER_SANDBOX_ROOT", str(tmp_path / "pc-sandbox"))
 
     spec = importlib.util.spec_from_file_location("pc_container_json_rpc", SERVER)
     module = importlib.util.module_from_spec(spec)
@@ -394,3 +398,57 @@ def test_a_failed_implementation_reports_no_output_file(server, package, tmp_pat
     assert result["exit_code"] == 0
     assert result["output_files"] == {}
     assert _deserialize(base64.b64decode(result["stdout"]).decode("utf-8"))["success"] is False
+
+
+# --------------------------------------------------------------------------- #
+# The interpreter of an environment the image was not built with               #
+# --------------------------------------------------------------------------- #
+#
+# A `remote` sandbox builds its virtual environment inside the container at run
+# time, so the interpreter it then wants to run cannot be in an allowlist that
+# was written when the image was built: its path carries a Python version
+# nobody knew about. The server recognises it by where it is instead.
+
+
+def _environment(server, version="3.11"):
+    """A virtual environment's interpreter, where the sandbox root would put it."""
+    interpreter = os.path.join(server.SANDBOX_ROOT, "v-env-%s" % version, "bin", "python")
+    os.makedirs(os.path.dirname(interpreter))
+    os.symlink(sys.executable, interpreter)
+    return interpreter
+
+
+def test_an_environments_interpreter_may_run(server):
+    """Which is the whole of what the 'remote' sandbox asks a container to do."""
+    interpreter = _environment(server)
+
+    result = server.handle_execute_command([interpreter, "-c", "print('over here')"])
+
+    assert result["exit_code"] == 0
+    assert base64.b64decode(result["stdout"]).decode().strip() == "over here"
+
+
+def test_something_else_in_that_directory_may_not(server):
+    """A wheel can drop any console script into an environment's 'bin'."""
+    _environment(server)
+    intruder = os.path.join(server.SANDBOX_ROOT, "v-env-3.11", "bin", "curl")
+    os.symlink(sys.executable, intruder)
+
+    with pytest.raises(Exception, match="not allowed"):
+        server.handle_execute_command([intruder, "-c", "pass"])
+
+
+def test_an_interpreter_outside_the_sandbox_root_may_not(server, tmp_path):
+    elsewhere = tmp_path / "elsewhere" / "bin"
+    elsewhere.mkdir(parents=True)
+    intruder = str(elsewhere / "python")
+    os.symlink(sys.executable, intruder)
+
+    with pytest.raises(Exception, match="not allowed"):
+        server.handle_execute_command([intruder, "-c", "pass"])
+
+
+def test_a_path_that_is_not_there_is_refused_rather_than_run(server):
+    """The shape is not the permission: it has to be an environment that exists."""
+    with pytest.raises(Exception, match="not allowed"):
+        server.handle_execute_command([os.path.join(server.SANDBOX_ROOT, "v-env-3.11", "bin", "python"), "-c", "pass"])

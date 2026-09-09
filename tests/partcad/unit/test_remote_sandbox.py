@@ -64,7 +64,13 @@ def test_the_environment_is_created_and_the_interpreter_returned():
     interpreter = remote_sandbox.Environments(run).ensure("ghcr.io/x/a:1", "3.11")
 
     assert interpreter == remote_sandbox.interpreter_path("3.11")
-    assert run.commands() == [["python3", "-m", "venv", "--upgrade-deps", remote_sandbox.environment_path("3.11")]]
+    # By the name the image's allowlist gives its interpreter, not by the name
+    # of the file: a command the service does not recognise is refused before
+    # anything runs.
+    assert run.commands() == [
+        [remote_sandbox.IMAGE_PYTHON, "-m", "venv", "--upgrade-deps", remote_sandbox.environment_path("3.11")]
+    ]
+    assert remote_sandbox.IMAGE_PYTHON == "python"
 
 
 def test_it_is_created_once_however_many_times_it_is_asked_for():

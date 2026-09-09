@@ -35,6 +35,14 @@ from typing import Callable, Optional
 # container.
 SANDBOX_ROOT = "/pc-sandbox"
 
+# What the image's own interpreter is called *to the service inside it*. That
+# service takes a command by the name its allowlist gives it, and the base image
+# allows "python" (see `tools/containers/README.md`); "python3" is what the file
+# is called, which is a different thing and is not allowed. The environment's
+# own interpreter is a path rather than a name -- it did not exist when the
+# image was built -- and the service recognises it by where it is.
+IMAGE_PYTHON = "python"
+
 
 def volume_name(image: str) -> str:
     """The volume holding the environments for one image.
@@ -115,7 +123,9 @@ class Environments:
         bundled pip is as old as the image, and the first thing anybody does
         with this is install something.
         """
-        exitcode, _, stderr = self._run(image, ["python3", "-m", "venv", "--upgrade-deps", environment_path(version)])
+        exitcode, _, stderr = self._run(
+            image, [IMAGE_PYTHON, "-m", "venv", "--upgrade-deps", environment_path(version)]
+        )
         if exitcode != 0:
             raise RuntimeError(
                 "Could not create the remote environment for Python %s in %s: %s"
