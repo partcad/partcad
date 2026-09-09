@@ -16,6 +16,7 @@ import os
 import pathlib
 import types
 
+import docker
 import pytest
 
 from partcad import docker_mount, runtime, runtime_python_docker
@@ -347,3 +348,159 @@ def test_a_dangling_interpreter_symlink_still_counts_as_built(tmp_path):
 
 def test_no_environment_is_not_built(tmp_path):
     assert _runtime(tmp_path)._environment_built is False
+
+
+# --------------------------------------------------------------------------- #
+# Getting hold of the image                                                    #
+# --------------------------------------------------------------------------- #
+#
+# 'resolve_image' is the one place that talks to a registry, and the whole of
+# its job is to try the architecture-suffixed name before the bare one and to
+# say something useful when neither can be had. None of that needs a daemon --
+# it needs a client that answers -- so it is pinned here rather than left to the
+# integration legs.
+
+
+class _Registry:
+    """A docker client that holds some images and can be asked to pull others."""
+
+    def __init__(self, local=(), pullable=()):
+        self.local = set(local)
+        self.pullable = set(pullable)
+        self.pulled = []
+
+        def get(name):
+            if name not in self.local:
+                raise docker.errors.ImageNotFound(name)
+            return types.SimpleNamespace(tags=[name])
+
+        def pull(name):
+            if name not in self.pullable:
+                raise docker.errors.NotFound("no such image: %s" % name)
+            self.pulled.append(name)
+            self.local.add(name)
+            return types.SimpleNamespace(tags=[name])
+
+        self.images = types.SimpleNamespace(get=get, pull=pull)
+
+
+def test_an_image_already_here_is_not_pulled():
+    """Which is what lets somebody test with an image they built by hand."""
+    wanted = "ghcr.io/x/solver:1"
+    client = _Registry(local=runtime_python_docker.docker_image.candidates(wanted)[:1])
+
+    resolved = runtime_python_docker.resolve_image(client, wanted)
+
+    assert resolved == runtime_python_docker.docker_image.candidates(wanted)[0]
+    assert client.pulled == []
+
+
+def test_the_architecture_suffixed_name_is_preferred_over_the_bare_one():
+    wanted = "ghcr.io/x/solver:1"
+    suffixed, bare = runtime_python_docker.docker_image.candidates(wanted)[:2]
+    client = _Registry(local=[suffixed, bare])
+
+    assert runtime_python_docker.resolve_image(client, wanted) == suffixed
+
+
+def test_an_image_that_is_not_here_is_pulled():
+    wanted = "ghcr.io/x/solver:1"
+    suffixed = runtime_python_docker.docker_image.candidates(wanted)[0]
+    client = _Registry(pullable=[suffixed])
+
+    assert runtime_python_docker.resolve_image(client, wanted) == suffixed
+    assert client.pulled == [suffixed]
+
+
+def test_the_bare_name_is_pulled_when_no_architecture_tag_is_published():
+    """The common case for a third-party image built for one architecture."""
+    wanted = "ghcr.io/x/solver:1"
+    candidates = runtime_python_docker.docker_image.candidates(wanted)
+    bare = candidates[-1]
+    client = _Registry(pullable=[bare])
+
+    assert runtime_python_docker.resolve_image(client, wanted) == bare
+
+
+def test_an_image_nobody_can_get_names_every_name_it_tried():
+    """The error is the only thing the user has to work out what to publish."""
+    wanted = "ghcr.io/x/solver:1"
+    client = _Registry()
+
+    with pytest.raises(runtime.SandboxUnavailable) as raised:
+        runtime_python_docker.resolve_image(client, wanted)
+
+    for name in runtime_python_docker.docker_image.candidates(wanted):
+        assert name in str(raised.value)
+
+
+# --------------------------------------------------------------------------- #
+# Asking early whether it would work                                           #
+# --------------------------------------------------------------------------- #
+#
+# A daemon answering says a container could be started; it says nothing about
+# whether the image to start it from can be reached. 'image_available' is what
+# turns that into one question 'pc test' can ask before it commits to a sandbox.
+
+
+def test_an_image_is_unavailable_without_a_container_runtime(monkeypatch):
+    monkeypatch.setattr(runtime_python_docker.runtime, "docker_available", lambda: False)
+    monkeypatch.setattr(
+        runtime_python_docker.docker, "from_env", lambda *a, **k: pytest.fail("asked the daemon after finding none")
+    )
+
+    assert runtime_python_docker.image_available("ghcr.io/x/solver:1") is False
+
+
+def test_an_image_is_unavailable_when_the_client_cannot_be_made(monkeypatch):
+    """'docker_available' passed and connecting still failed -- it can happen
+    between the two, and a raised exception here is not this caller's answer."""
+    monkeypatch.setattr(runtime_python_docker.runtime, "docker_available", lambda: True)
+
+    def refuse(*a, **k):
+        raise RuntimeError("daemon went away")
+
+    monkeypatch.setattr(runtime_python_docker.docker, "from_env", refuse)
+
+    assert runtime_python_docker.image_available("ghcr.io/x/solver:1") is False
+
+
+def test_an_image_that_resolves_is_available(monkeypatch):
+    wanted = "ghcr.io/x/solver:1"
+    client = _Registry(local=runtime_python_docker.docker_image.candidates(wanted)[:1])
+    monkeypatch.setattr(runtime_python_docker.runtime, "docker_available", lambda: True)
+    monkeypatch.setattr(runtime_python_docker.docker, "from_env", lambda *a, **k: client)
+
+    assert runtime_python_docker.image_available(wanted) is True
+
+
+def test_an_image_that_cannot_be_reached_is_unavailable(monkeypatch):
+    """A failure asked for early, rather than found halfway through a render."""
+    monkeypatch.setattr(runtime_python_docker.runtime, "docker_available", lambda: True)
+    monkeypatch.setattr(runtime_python_docker.docker, "from_env", lambda *a, **k: _Registry())
+
+    assert runtime_python_docker.image_available("ghcr.io/x/solver:1") is False
+
+
+# --------------------------------------------------------------------------- #
+# A sandbox that did not get built                                             #
+# --------------------------------------------------------------------------- #
+
+
+def test_a_failed_environment_says_what_went_wrong(tmp_path):
+    """'run_*_locked' reports an exit code rather than raising.
+
+    Without this the first thing anybody saw was pip failing on a missing file,
+    several steps after the thing that actually broke.
+    """
+    made = _runtime(tmp_path)
+
+    with pytest.raises(Exception, match="no space left on device"):
+        made._created(1, "no space left on device")
+
+
+def test_a_failed_environment_with_nothing_on_stderr_still_says_the_exit_code(tmp_path):
+    made = _runtime(tmp_path)
+
+    with pytest.raises(Exception, match="exited with 3"):
+        made._created(3, "")

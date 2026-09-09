@@ -442,3 +442,182 @@ def test_a_token_that_is_not_ascii_is_refused_rather_than_raised(guarded, upstre
     assert status == 401
     assert "Authentication" in answer["error"]["message"]
     assert "command" not in upstream
+
+
+# --------------------------------------------------------------------------- #
+# Starting the container a request needs                                       #
+# --------------------------------------------------------------------------- #
+#
+# '_docker_start' is the half of this service that does need Docker, so it is
+# pinned against a client that answers rather than against a daemon. What is
+# worth having is the waiting: a container publishes its port before the service
+# inside it binds one, and both of those gaps used to surface as "the container
+# returned no response", which reads like a broken image.
+
+
+class _Container:
+    def __init__(self, ports=None, logs=b""):
+        self._ports = ports
+        self._logs = logs
+        self.short_id = "c0ffee"
+        self.removed = False
+        self.attrs = {"NetworkSettings": {"Ports": {}}}
+
+    def reload(self):
+        if self._ports is not None:
+            self.attrs = {"NetworkSettings": {"Ports": self._ports}}
+
+    def logs(self, tail=20):
+        return self._logs
+
+    def remove(self, force=False):
+        self.removed = True
+
+
+class _Docker:
+    def __init__(self, local=(), pullable=(), container=None):
+        import docker as docker_sdk
+
+        self.local = set(local)
+        self.pullable = set(pullable)
+        self.pulled = []
+        self.ran = []
+        self.container = container or _Container()
+
+        def get(name):
+            if name not in self.local:
+                raise docker_sdk.errors.ImageNotFound(name)
+            return types.SimpleNamespace(tags=[name])
+
+        def pull(name):
+            if name not in self.pullable:
+                raise docker_sdk.errors.NotFound("no such image: %s" % name)
+            self.pulled.append(name)
+            self.local.add(name)
+
+        def run(image, **kwargs):
+            self.ran.append(image)
+            return self.container
+
+        self.images = types.SimpleNamespace(get=get, pull=pull)
+        self.containers = types.SimpleNamespace(run=run)
+
+
+def _published(host="127.0.0.1", port="49154"):
+    return {"%d/tcp" % service.CONTAINER_PORT: [{"HostIp": host, "HostPort": port}]}
+
+
+@pytest.fixture
+def docker_daemon(monkeypatch):
+    """A container runtime that answers, with the waiting taken out."""
+    import docker as docker_sdk
+
+    monkeypatch.setattr(service.time, "sleep", lambda _seconds: None)
+
+    def install(answering=True, **kwargs):
+        made = _Docker(**kwargs)
+        monkeypatch.setattr(docker_sdk, "from_env", lambda *a, **k: made)
+        monkeypatch.setattr(service, "_answering", lambda _endpoint: answering)
+        return made
+
+    return install
+
+
+def test_a_container_is_started_and_leased(docker_daemon):
+    from partcad import docker_image
+
+    image = "ghcr.io/x/solver:1"
+    here = docker_image.candidates(image)[0]
+    made = docker_daemon(local=[here], container=_Container(ports=_published()))
+
+    lease = service._docker_start(image)
+
+    assert made.ran == [here]
+    assert lease.endpoint == "127.0.0.1:49154"
+    assert made.pulled == []
+
+
+def test_a_wildcard_bind_address_is_not_dialled(docker_daemon):
+    """'0.0.0.0' is where the port listens, not a routable destination."""
+    from partcad import docker_image
+
+    image = "ghcr.io/x/solver:1"
+    here = docker_image.candidates(image)[0]
+    docker_daemon(local=[here], container=_Container(ports=_published(host="0.0.0.0")))
+
+    assert service._docker_start(image).endpoint == "127.0.0.1:49154"
+
+
+def test_an_image_missing_here_is_pulled(docker_daemon):
+    from partcad import docker_image
+
+    image = "ghcr.io/x/solver:1"
+    here = docker_image.candidates(image)[0]
+    made = docker_daemon(pullable=[here], container=_Container(ports=_published()))
+
+    service._docker_start(image)
+
+    assert made.pulled == [here]
+
+
+def test_an_image_nobody_can_get_says_what_it_tried(docker_daemon):
+    """Naming every candidate is the only clue to what needs publishing."""
+    from partcad import docker_image
+
+    image = "ghcr.io/x/solver:1"
+    docker_daemon()
+
+    with pytest.raises(RuntimeError, match="Cannot get an image") as raised:
+        service._docker_start(image)
+
+    for candidate in docker_image.candidates(image):
+        assert candidate in str(raised.value)
+
+
+def test_a_container_that_never_publishes_a_port_is_removed(docker_daemon):
+    """Otherwise it is left running on the machine with nothing pointing at it."""
+    from partcad import docker_image
+
+    image = "ghcr.io/x/solver:1"
+    here = docker_image.candidates(image)[0]
+    container = _Container(ports={})
+    docker_daemon(local=[here], container=container)
+
+    with pytest.raises(RuntimeError, match="never published a port"):
+        service._docker_start(image)
+    assert container.removed is True
+
+
+def test_a_service_that_never_answers_is_removed_and_reports_the_log(docker_daemon):
+    """The container's own last words are the only clue to why it did not bind."""
+    from partcad import docker_image
+
+    image = "ghcr.io/x/solver:1"
+    here = docker_image.candidates(image)[0]
+    container = _Container(ports=_published(), logs=b"ModuleNotFoundError: flask")
+    docker_daemon(answering=False, local=[here], container=container)
+
+    with pytest.raises(RuntimeError, match="never answered") as raised:
+        service._docker_start(image)
+
+    assert container.removed is True
+    assert "ModuleNotFoundError: flask" in str(raised.value)
+
+
+def test_a_container_whose_log_cannot_be_read_still_reports_the_failure(docker_daemon):
+    """A best-effort extra must not replace the error it was decorating."""
+    from partcad import docker_image
+
+    image = "ghcr.io/x/solver:1"
+    here = docker_image.candidates(image)[0]
+
+    class _Mute(_Container):
+        def logs(self, tail=20):
+            raise RuntimeError("no log driver")
+
+    container = _Mute(ports=_published())
+    docker_daemon(answering=False, local=[here], container=container)
+
+    with pytest.raises(RuntimeError, match="never answered"):
+        service._docker_start(image)
+    assert container.removed is True
