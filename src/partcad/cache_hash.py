@@ -24,7 +24,12 @@ from . import logging as pc_logging
 #   2: the shape cache stores the payload alone - the outer layer (name, label,
 #      placement) is stripped on write and wrapped back on read (see
 #      cache_shape.py), and a lone shape is stored as raw BREP bytes.
-VERSION = 2
+#   3: a shape's key covers its whole configuration bar the keys that only
+#      describe it, instead of 'parameters'/'offset'/'scale' alone (see
+#      _NON_GEOMETRIC_CONFIG_KEYS in shape.py). Entries written under 2 were
+#      keyed on too little - parts that differ only in a key the allow-list did
+#      not name shared one - so none of them may be read back.
+VERSION = 3
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.

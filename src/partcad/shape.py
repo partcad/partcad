@@ -126,6 +126,56 @@ TEXT_PART_TYPES = frozenset({"step", "iges", "brep", "obj", "threejs", "svg", "d
 SUPPORTED_PART_TYPES = frozenset(LIVE_OBJECT_PART_TYPES | SERIALIZED_PART_TYPES)
 
 
+# What a shape's configuration says about the shape to a reader, rather than
+# what its geometry is made of. Everything else in the configuration is hashed
+# into the cache key.
+#
+# A deny-list rather than an allow-list, on purpose. An allow-list has to know
+# every key that can change a shape, and it cannot: a partType of kind
+# 'wrapper' is a package-supplied script that reads configuration keys of its
+# own invention. The ':ldraw' partType identifies its part with 'dat', which
+# the previous allow-list of 'parameters'/'offset'/'scale' did not name, so
+# every LDraw part hashed to the same key and whichever was meshed first was
+# handed back for all the others - four different parts exported byte-identical
+# geometry, and an assembly of bricks rendered as cones.
+#
+# The two mistakes are not symmetrical: hashing a key that turns out not to
+# matter costs a rebuild, while missing one that does matter serves the wrong
+# shape and says nothing. So a key this does not know about is hashed.
+_NON_GEOMETRIC_CONFIG_KEYS = frozenset(
+    {
+        "aliases",
+        "author",
+        "cache",
+        "cache_dependencies_ignore",
+        "category",
+        "desc",
+        "docs",
+        "example",
+        "images",
+        "label",
+        "license",
+        "manufacturable",
+        "manufacturing",
+        # A shape's own name is not what it is made of: two parts alike but for
+        # their names are one shape and share an entry. What a file-backed part
+        # is built from reaches the key as the file's content, not as its name.
+        "name",
+        "orig_name",
+        # Outputs, not inputs. A part that gains a material has not become a
+        # different shape (see test_shape_properties.py).
+        "properties",
+        "sku",
+        "summary",
+        "supplier",
+        "tags",
+        "title",
+        "url",
+        "vendor",
+    }
+)
+
+
 @telemetry.instrument(exclude=["locked"])
 class Shape(ShapeConfiguration):
     name: str
@@ -191,10 +241,9 @@ class Shape(ShapeConfiguration):
         self.owns_cache_entry = True
 
         if self.cacheable:
-            cad_config = {}
-            for key in ["parameters", "offset", "scale"]:
-                if key in self.config:
-                    cad_config[key] = self.config[key]
+            cad_config = {
+                key: value for key, value in self.config.items() if key not in _NON_GEOMETRIC_CONFIG_KEYS
+            }
             self.hash.add_dict(cad_config)
 
     def set_environment_cache_key(self, environment_cache_key: str) -> None:
