@@ -1317,7 +1317,7 @@ class Context:
             # so a package naming an image is rendered in whatever sandbox this
             # machine uses and the name is simply not consulted -- which is what
             # makes 'dockerImage' a preference rather than a requirement.
-            if python_runtime != "docker":
+            if python_runtime not in ("docker", "remote"):
                 image = None
             runtime_name = python_runtime + "-" + version + ("@" + image if image else "")
             if not runtime_name in self.runtimes_python:

@@ -1179,11 +1179,17 @@ class Shape(ShapeConfiguration):
             # signature -- (cmd, stdin, cwd, session, timeout) -- so the base
             # class's parameters are not a contract they honour, and passing
             # one down that path is a TypeError rather than an ignored argument.
-            extra = (
-                {"input_dirs": input_dirs, "output_files": [final_filepath]}
-                if container
-                else {}
-            )
+            # What a command writes is not in the command, so a sandbox that
+            # exchanges files rather than sharing them has to be told. The
+            # container path knows its input directories too; the 'remote'
+            # sandbox works those out from the command itself, and only the
+            # output is beyond inference.
+            if container:
+                extra = {"input_dirs": input_dirs, "output_files": [final_filepath]}
+            elif getattr(runtime, "EXCHANGES_FILES", False):
+                extra = {"output_files": [final_filepath]}
+            else:
+                extra = {}
             exitcode, response_serialized, errors = await runtime.run_async(
                 command, request_serialized, **extra
             )

@@ -58,7 +58,7 @@ def upstream(monkeypatch):
         def execute(self, command, params):
             seen["command"] = command
             seen["params"] = params
-            return {"stdout": "ok", "stderr": "", "exit_code": 0}
+            return {"jsonrpc": "2.0", "id": 1, "result": {"stdout": "ok", "stderr": "", "exit_code": 0}}
 
     monkeypatch.setattr(service, "RuntimeJsonRpcClient", _Client)
     return seen

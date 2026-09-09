@@ -166,7 +166,7 @@ def execute(pool, environments, params: dict) -> dict:
     try:
         host, port = lease.endpoint.rsplit(":", 1)
         rpc = RuntimeJsonRpcClient(host, int(port))
-        return rpc.execute(
+        answer = rpc.execute(
             [interpreter] + list(command),
             {
                 "stdin": params.get("stdin"),
@@ -176,6 +176,13 @@ def execute(pool, environments, params: dict) -> dict:
                 "input_dirs": params.get("input_dirs") or {},
             },
         )
+        if not answer:
+            raise RuntimeError("The container serving '%s' returned no response" % image)
+        # The container's payload, not its envelope. Two JSON-RPC layers are
+        # already one more than the caller asked for; nesting a second envelope
+        # inside the first would make the client unwrap twice to reach a field
+        # it reads the same way it reads a local container's.
+        return answer.get("result", answer)
     finally:
         pool.release(lease)
 

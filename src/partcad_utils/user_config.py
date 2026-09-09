@@ -296,6 +296,7 @@ OPTION_KEYS = (
     "cacheS3MinEntrySize",
     "cacheDependenciesIgnore",
     "pythonSandbox",
+    "remoteSandbox",
     "ignoreBundledOpenscad",
     "internalStateDir",
     "logLevel",
@@ -803,6 +804,17 @@ class UserConfig(vyper.Vyper):
         #          actually needed, and only when nothing was declared.
         self.bind_env("pythonSandbox", "PC_PYTHON_SANDBOX")
         self._python_sandbox = self.get_string("pythonSandbox")
+
+        # option: remoteSandbox
+        # description: where 'partcad-service-remote-docker' is listening, as
+        #              host:port. Only the 'remote' sandbox reads it, and that
+        #              sandbox cannot work without it -- there is no default,
+        #              because guessing at a service that runs commands is not
+        #              a thing to do on somebody's behalf.
+        # values: <host>:<port>
+        # default: none
+        self.bind_env("remoteSandbox", "PC_REMOTE_SANDBOX")
+        self.remote_sandbox = self.get_string("remoteSandbox") if self.is_set("remoteSandbox") else None
 
         # option: javascriptSandbox
         # description: sandboxing environment for invoking JavaScript scripts

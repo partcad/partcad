@@ -276,9 +276,9 @@ That is what lets one package render against build123d 0.11 while another wants
                      the one with no Python.
 ``remote``           A container that does **not** share a filesystem with PartCAD: the
                      inputs are sent to it and the outputs are sent back. This is what a
-                     sandbox on another machine needs. **Not finished** -- the service that
-                     runs the containers is written and the client that talks to it is not,
-                     and asking for it says so. See :ref:`remote-sandbox` below.
+                     sandbox on another machine needs. Chosen rather than fallen back to,
+                     and it needs ``remoteSandbox`` to say where the service is. See
+                     :ref:`remote-sandbox` below.
 ``none``             No environment at all: scripts run on the host's own interpreter and
                      their dependencies are installed **into it**. Fast and shares whatever
                      is already there, at the price of writing the CAD stack into the Python
@@ -342,17 +342,26 @@ it when nobody is using it. That service exists; run it with ``--host`` and
 it are the ones that can reach it, because it runs commands and has no
 authentication of its own.
 
-What is not written yet is the client half, and the reason is worth stating: a
+The service owns the environment, and that is the arrangement worth knowing. A
 sandbox is a virtual environment on a disk, and for ``remote`` that disk cannot
-be the caller's. Where it lives instead -- a volume the service keeps per image,
-or the service running the ``docker`` sandbox on its own behalf -- decides how
-much of the provisioning logic moves across, and that is a decision rather than a
-detail.
+be the caller's -- so the service builds it in a Docker volume, installs into it,
+and prepends its interpreter to whatever was asked for. The client never learns
+where it is. Guards saying "numpy is installed" belong on the same disk as the
+numpy they describe.
 
-Today the transfer would be a whole directory at a time; the intent is to replace
-that with a filesystem the container mounts and pulls files through one at a
-time, at which point ``remote`` becomes as cheap as ``docker`` and stops being a
-trade.
+Which directories a command needs are worked out from the command: any argument
+naming a file on this machine contributes the directory it is in, because a
+script needs the siblings it imports. What a command *writes* cannot be inferred
+that way, so a caller producing a file names it, exactly as it does for a
+container.
+
+Point a client at it with ``remoteSandbox`` (or ``PC_REMOTE_SANDBOX``), as
+``host:port``. There is no default: guessing at a service that runs commands is
+not something to do on somebody's behalf.
+
+Today the transfer is a whole directory at a time; the intent is to replace that
+with a filesystem the container mounts and pulls files through one at a time, at
+which point ``remote`` becomes as cheap as ``docker`` and stops being a trade.
 
 Containers PartCAD manages
 --------------------------
