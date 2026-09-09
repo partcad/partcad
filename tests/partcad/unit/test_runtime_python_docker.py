@@ -315,3 +315,35 @@ def test_a_container_that_cannot_is_replaced(tmp_path, monkeypatch):
     assert got is not existing
     assert existing.removed is True
     assert client.made is not None
+
+
+# --------------------------------------------------------------------------- #
+# Knowing the environment is there                                             #
+# --------------------------------------------------------------------------- #
+
+
+def test_a_dangling_interpreter_symlink_still_counts_as_built(tmp_path):
+    """Which is what a virtual environment built in a container looks like here.
+
+    'bin/python' points at the interpreter that built it -- the image's, at a
+    path this machine has no file for. Following the symlink asks whether the
+    host can *run* it, and the answer is no and always will be; the question is
+    whether the environment is there.
+    """
+    made = _runtime(tmp_path)
+    os.makedirs(os.path.dirname(made._host_venv_python))
+    # Standing in for the image's own interpreter -- '/usr/local/bin/python3' in
+    # a `python:*-slim`. Named under 'tmp_path' rather than there because a
+    # machine that happens to have that file (this dev container does; a GitHub
+    # runner does not) would not be testing anything.
+    os.symlink(str(tmp_path / "only-inside-the-image" / "python3"), made._host_venv_python)
+
+    assert os.path.exists(made._host_venv_python) is False, "the premise: the target is not here"
+    assert made._environment_built is True
+    # And so it is not built again, which is what turned a good build into a
+    # failure every time.
+    assert made._create_locked() == []
+
+
+def test_no_environment_is_not_built(tmp_path):
+    assert _runtime(tmp_path)._environment_built is False

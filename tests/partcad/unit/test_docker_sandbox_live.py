@@ -38,7 +38,6 @@ import pytest
 
 from partcad import runtime, runtime_python_docker
 
-
 IMAGE = os.environ.get("PC_TEST_SANDBOX_IMAGE")
 
 pytestmark = [
@@ -108,7 +107,11 @@ def test_the_environment_is_created_where_the_host_can_see_it(made):
     container's own filesystem, this is where it shows.
     """
     made.once()
-    assert os.path.isfile(made._host_venv_python), os.listdir(os.path.dirname(made.path))
+    # 'lexists', because 'bin/python' is a symlink to the *image's* interpreter
+    # and the host has no file at that path -- which is the arrangement, not a
+    # fault: the environment is the host's to see and the interpreter is the
+    # container's to run.
+    assert os.path.lexists(made._host_venv_python), os.listdir(os.path.dirname(made.path))
 
 
 def test_a_package_installed_over_there_imports_over_there(made):

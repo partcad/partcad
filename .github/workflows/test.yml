@@ -758,6 +758,28 @@ jobs:
         with:
           job: examples-partcad
 
+      # What `examples/feature_cae` needs and pip cannot install. The analyses
+      # there are run by a plugin, and a plugin that is asked and cannot answer
+      # is a failure -- deliberately, since a silent skip is how an example
+      # stops being an example. So the job brings the solver and the mesher
+      # rather than hoping for them.
+      #
+      # Two ways exist to have them and this is the second: the plugin also
+      # names a `dockerImage` carrying both, which is what a machine with a
+      # container runtime uses. A runner has apt, so it uses apt, and the
+      # example is then exercised on a host installation as well -- which is the
+      # arrangement `dockerImage` is documented to keep working.
+      #
+      # Linux only. macOS would need the BrewSci tap and Windows has no package
+      # at all; on those the image is the answer, and until it is published
+      # `feature_cae` is expected to fail there. Neither runs on a pull request.
+      - name: The CAE example's native dependencies
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends calculix-ccx python3-gmsh
+          ccx -version || true
+
       - name: Basic integration test for CLI (PartCAD examples)
         shell: bash -el {0}
         run: |

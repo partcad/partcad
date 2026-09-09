@@ -301,7 +301,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         environment is built once and used by every command afterwards. What
         differs is only where it is built.
         """
-        if os.path.exists(self._host_venv_python):
+        if self._environment_built:
             return []
         os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
         return ["-m", "venv", "--upgrade-deps", docker_mount.rewrite(self.path, self._mounted)]
@@ -316,6 +316,24 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         """
         return os.path.join(self.path, "bin", "python")
 
+    @property
+    def _environment_built(self) -> bool:
+        """Whether the environment is there, asked in a way the host can answer.
+
+        'lexists', not 'exists'. A virtual environment's 'bin/python' is a
+        symlink to the interpreter that built it, and that interpreter is the
+        *image's* -- '/usr/local/bin/python3' in a `python:*-slim`. The host is
+        under no obligation to have a file at that path, so the symlink dangles
+        here and 'os.path.exists' follows it and says no.
+
+        Which is the whole trick this sandbox turns: the environment is one the
+        host can see and pip can install into, and its interpreter is one only
+        the container can run. Asking whether the host can run it was asking the
+        wrong question, and the answer was to build the environment again, every
+        time, and then call a successful build a failure.
+        """
+        return os.path.lexists(self._host_venv_python)
+
     def _created(self, exitcode, stderr) -> None:
         """Accept the environment, or fail with what actually went wrong.
 
@@ -323,7 +341,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         that failed would otherwise be stepped straight past and the first thing
         anybody saw would be pip failing on a missing file.
         """
-        if exitcode != 0 or not os.path.exists(self._host_venv_python):
+        if exitcode != 0 or not self._environment_built:
             raise Exception(
                 "Failed to create the '%s' sandbox at %s in %s: %s"
                 % (
@@ -344,7 +362,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                 with pc_logging.Action("Docker", self.version, self.path):
                     exitcode, _, stderr = self.run_onced_locked(command)
                 self._created(exitcode, stderr)
-            elif os.path.exists(self._host_venv_python):
+            elif self._environment_built:
                 self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)
         super().once()
 
@@ -357,6 +375,6 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                 with pc_logging.Action("Docker", self.version, self.path):
                     exitcode, _, stderr = await self.run_async_onced_locked(command)
                 self._created(exitcode, stderr)
-            elif os.path.exists(self._host_venv_python):
+            elif self._environment_built:
                 self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)
         await super().once_async()
