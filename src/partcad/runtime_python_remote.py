@@ -90,6 +90,25 @@ def input_dirs_for(command, cwd: Optional[str] = None) -> list:
 
 
 @telemetry.instrument()
+def _loopback(host: str) -> bool:
+    """Whether an address reaches this machine and nothing else.
+
+    The whole of 127.0.0.0/8, "::1" with or without the brackets a URL puts
+    around it, and the name a person actually types. Anything this cannot read
+    as loopback is treated as reachable, which is the safe way round: the
+    question it answers is whether a request may go out unencrypted.
+    """
+    import ipaddress
+
+    if not host:
+        return False
+    candidate = host.strip("[]")
+    try:
+        return ipaddress.ip_address(candidate).is_loopback
+    except ValueError:
+        return candidate.lower() in ("localhost", "localhost.localdomain")
+
+
 class RemotePythonRuntime(runtime_python.PythonRuntime):
     # What tells a caller that this sandbox wants to be told what a command
     # writes. Read rather than isinstance-checked, so that a caller says "if it
@@ -164,7 +183,21 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
         return getattr(self.ctx.user_config, "remote_sandbox_token", None)
 
     def _client(self) -> RuntimeJsonRpcClient:
-        host, _, port = str(self.endpoint).rpartition(":")
+        """Who to talk to, and whether it may be talked to in the clear.
+
+        'remoteSandbox' is 'host:port', optionally with a scheme in front of it.
+        The scheme is what a deployment behind a TLS-terminating proxy needs, and
+        the absence of one means plain HTTP -- which is what a container on this
+        machine speaks and what a tunnel's near end speaks.
+        """
+        endpoint = str(self.endpoint)
+        scheme = "http"
+        for prefix in ("https://", "http://"):
+            if endpoint.lower().startswith(prefix):
+                scheme = prefix[:-3]
+                endpoint = endpoint[len(prefix) :]
+                break
+        host, _, port = endpoint.rpartition(":")
         # The port as well as the host: 'remoteSandbox' is something a person
         # typed, and 'host:' or 'host:abc' would otherwise reach int() and come
         # back as a traceback rather than as the sentence below.
@@ -172,7 +205,19 @@ class RemotePythonRuntime(runtime_python.PythonRuntime):
             raise runtime.SandboxUnavailable(
                 "'%s' does not name a host and a port for the remote sandbox service." % self.endpoint
             )
-        return RuntimeJsonRpcClient(host, int(port), token=self._token())
+        # Every request carries the shared secret and the package's own source,
+        # and plain HTTP carries both in the clear. Loopback is nobody else's
+        # business -- it is a container on this machine, or the near end of a
+        # tunnel, which is how a remote service is reached securely. Anything
+        # else has to say 'https://', and a deployment that has not got that far
+        # is told so rather than quietly shipping its token across a network.
+        if scheme == "http" and not _loopback(host):
+            raise runtime.SandboxUnavailable(
+                "'%s' would send this machine's requests -- the shared secret among them -- to another "
+                "machine in the clear. Put the service behind TLS and say 'https://%s', or reach it "
+                "through a tunnel and point 'remoteSandbox' at the near end of that." % (self.endpoint, endpoint)
+            )
+        return RuntimeJsonRpcClient(host, int(port), token=self._token(), scheme=scheme)
 
     def _params(self, cmd, stdin, cwd, input_files, output_files, input_dirs) -> dict:
         if input_dirs is None:

@@ -397,6 +397,15 @@ Point a client at it with ``remoteSandbox`` (or ``PC_REMOTE_SANDBOX``), as
 default for either: guessing at a service that runs commands is not something to
 do on somebody's behalf.
 
+**Off this machine, that has to be encrypted.** Every request carries the token
+and the package's own source, so PartCAD refuses to send one to an address that
+is not loopback over plain HTTP. Two ways to satisfy it: put the service behind
+a TLS-terminating proxy and write ``https://host:port``, or reach it through a
+tunnel -- SSH, WireGuard, whatever the network already has -- and point
+``remoteSandbox`` at the near end, which is loopback and stays plain. A
+container PartCAD starts on this machine is loopback too, and a certificate
+between a process and its own container would secure nothing.
+
 Today the transfer is a whole directory at a time; the intent is to replace that
 with a filesystem the container mounts and pulls files through one at a time, at
 which point ``remote`` becomes as cheap as ``docker`` and stops being a trade.

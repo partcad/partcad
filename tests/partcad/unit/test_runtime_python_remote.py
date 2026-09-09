@@ -42,11 +42,13 @@ class _Service:
         self.command = None
         self.params = None
         self.token = None
+        self.scheme = None
         self.result = result or {"stdout": None, "stderr": None, "exit_code": 0, "output_files": {}}
 
-    def __call__(self, host, port, token=None):
+    def __call__(self, host, port, token=None, scheme="http"):
         self.endpoint = "%s:%d" % (host, port)
         self.token = token
+        self.scheme = scheme
         return self
 
     def execute(self, command, params):
@@ -279,3 +281,48 @@ def test_no_token_configured_sends_none(tmp_path, monkeypatch):
     _runtime(tmp_path).run(["-c", "pass"])
 
     assert service.token is None
+
+
+# --------------------------------------------------------------------------- #
+# What may cross a network                                                     #
+# --------------------------------------------------------------------------- #
+
+
+def test_a_remote_host_may_not_be_reached_in_the_clear(tmp_path, monkeypatch):
+    """Every request carries the shared secret and the package's own source.
+
+    Plain HTTP carries both where anybody on the path can read them, so a
+    deployment that has not got as far as TLS is told so rather than having its
+    token shipped across a network on its behalf.
+    """
+    service = _Service()
+    monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
+
+    made = _runtime(tmp_path, endpoint="build-farm.example:5050")
+    with pytest.raises(runtime.SandboxUnavailable, match="in the clear"):
+        made.run(["-c", "pass"])
+
+
+def test_a_remote_host_over_https_is_allowed(tmp_path, monkeypatch):
+    """Which is the deployment behind a TLS-terminating proxy."""
+    service = _Service()
+    monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
+
+    _runtime(tmp_path, endpoint="https://build-farm.example:5050").run(["-c", "pass"])
+
+    assert service.endpoint == "build-farm.example:5050"
+    assert service.scheme == "https"
+
+
+def test_loopback_stays_plain(tmp_path, monkeypatch):
+    """A container on this machine, or the near end of a tunnel.
+
+    Neither is anybody else's business, and a certificate between a process and
+    its own container would secure nothing.
+    """
+    service = _Service()
+    monkeypatch.setattr(runtime_python_remote, "RuntimeJsonRpcClient", service)
+
+    _runtime(tmp_path).run(["-c", "pass"])
+
+    assert service.scheme == "http"

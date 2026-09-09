@@ -315,7 +315,13 @@ class Handler(BaseHTTPRequestHandler):
             return True
         offered = self.headers.get("Authorization") or ""
         scheme, _, value = offered.partition(" ")
-        return scheme.lower() == "bearer" and hmac.compare_digest(value.strip(), token)
+        if scheme.lower() != "bearer":
+            return False
+        # Bytes, not text: `compare_digest` refuses two `str` operands unless
+        # both are ASCII, and what arrives in a header is whatever the caller
+        # sent. This runs before the handler's `try`, so a `TypeError` here is
+        # not a 401 -- it is the connection closing with nothing said.
+        return hmac.compare_digest(value.strip().encode("utf-8", "replace"), token.encode("utf-8"))
 
     def do_POST(self):  # noqa: N802 - the name BaseHTTPRequestHandler dispatches to
         length = int(self.headers.get("Content-Length") or 0)

@@ -428,3 +428,17 @@ def test_serving_a_reachable_address_without_a_token_is_refused(monkeypatch, cap
 
     assert not started
     assert "--token" in caplog.text
+
+
+def test_a_token_that_is_not_ascii_is_refused_rather_than_raised(guarded, upstream):
+    """`compare_digest` refuses two `str` operands that are not both ASCII.
+
+    The check runs before the handler's `try`, so a `TypeError` there is not a
+    401 -- it is the connection closing with nothing said, which a caller reads
+    as the service being broken rather than as being turned away.
+    """
+    status, answer = _post(guarded, _execute(), headers={"Authorization": "Bearer s3crét"})
+
+    assert status == 401
+    assert "Authentication" in answer["error"]["message"]
+    assert "command" not in upstream

@@ -25,7 +25,7 @@ This module provides a JSON-RPC client for communicating with the RPC servers fo
 class RuntimeJsonRpcClient:
     """JSON-RPC client for PartCAD runtime communication."""
 
-    def __init__(self, host: str = "localhost", port: int = 5000, token: str = None):
+    def __init__(self, host: str = "localhost", port: int = 5000, token: str = None, scheme: str = "http"):
         """Initialize the JSON-RPC client with host and port.
 
         Args:
@@ -36,10 +36,17 @@ class RuntimeJsonRpcClient:
             machine needs none -- nothing but this process can reach it -- and
             'partcad-service-remote-docker' listening anywhere but loopback
             refuses to start without one.
+          scheme: 'http' or 'https'. A container PartCAD started on this machine
+            speaks plain HTTP over a port only this machine can reach, and a
+            certificate between a process and its own container would secure
+            nothing. Anything off this machine is the caller's to secure -- see
+            'RemotePythonRuntime._client()', which refuses to send a request in
+            the clear to an address that is not loopback.
         """
         self.host = host
         self.port = port
         self.token = token
+        self.scheme = scheme
         self.request_id = 0
 
         self.lock = threading.RLock()
@@ -103,7 +110,10 @@ class RuntimeJsonRpcClient:
 
         try:
             response = requests.post(
-                f"http://{self.host}:{self.port}/jsonrpc", json=request, headers=self._headers(), timeout=timeout
+                f"{self.scheme}://{self.host}:{self.port}/jsonrpc",
+                json=request,
+                headers=self._headers(),
+                timeout=timeout,
             )
             pc_logging.debug(f"Received response: {response.content}")
             return json.loads(response.content)
@@ -137,7 +147,10 @@ class RuntimeJsonRpcClient:
 
         try:
             response = requests.post(
-                f"http://{self.host}:{self.port}/jsonrpc", json=request, headers=self._headers(), timeout=timeout
+                f"{self.scheme}://{self.host}:{self.port}/jsonrpc",
+                json=request,
+                headers=self._headers(),
+                timeout=timeout,
             )
             pc_logging.debug(f"Received response: {response.content}")
             return json.loads(response.content)
