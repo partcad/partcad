@@ -61,6 +61,21 @@ CONTAINER_PYTHON = "python3"
 # with something that does nothing and stays running to be 'docker exec'd into.
 KEEPALIVE = ["sleep", "infinity"]
 
+# Where PartCAD's own files are, on the host. The sandbox interpreter is handed
+# the wrappers by path -- 'wrapper.get()' -- and the packages PartCAD ships
+# inside itself the same way ('output.BUILTIN_ROOT_PATH'), and both resolve
+# under this one directory, so the container has to be able to open it.
+#
+# Neither of the other two mounts covers it. A checkout whose virtual
+# environment sits inside the package being worked on gets it for free, under
+# the context root, which is what hid this for as long as it was hidden; an
+# installation anywhere else is outside both, and the frozen bundle -- whose
+# files are next to the executable and nowhere near either -- is outside both
+# always. That is what CI caught: a bundle rendering through the 'docker'
+# sandbox died on "can't open file
+# '.../_internal/partcad/wrappers/wrapper_plugin.py'".
+INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
+
 
 def image_for(version: str, release: Optional[str] = None) -> str:
     """PartCAD's own base image for this Python version."""
@@ -164,16 +179,35 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
     def _mounted(self) -> list:
         """The host directories the container needs to see.
 
-        The internal state directory, which holds this sandbox and the caches,
-        and the context root, which holds the package being worked on. Nothing
-        else: a sandbox that mounted the whole filesystem would be a sandbox in
-        name only.
+        The internal state directory, which holds this sandbox and the caches;
+        the context root, which holds the package being worked on; and PartCAD's
+        own installation, which holds the scripts the interpreter over there is
+        told to run. Nothing else: a sandbox that mounted the whole filesystem
+        would be a sandbox in name only.
         """
-        paths = [self.ctx.user_config.internal_state_dir]
+        paths = [self.ctx.user_config.internal_state_dir, INSTALL_DIR]
         root = getattr(self.ctx, "root_path", None)
         if root:
             paths.append(root)
         return paths
+
+    @property
+    def _mounted_read_only(self) -> list:
+        """The ones the sandbox reads and must not write.
+
+        PartCAD's installation is code the host runs, and handing a sandbox
+        write access to it would mean the thing being sandboxed can edit what
+        sandboxes it. Nothing over there needs to write into it: a wrapper is
+        read and executed, and what it produces goes back over its own protocol
+        or into the cache, which is under the state directory and writable in
+        its own right.
+
+        The one thing that does try is CPython caching the bytecode of a wrapper
+        beside its source, and a read-only directory is a case the import
+        machinery already handles -- it notes the failure and moves on, which
+        costs a recompile per run and nothing else.
+        """
+        return [INSTALL_DIR]
 
     def get_venv_python_path(self, session=None, path=None):
         """Where an environment's interpreter is, as the container sees it.
@@ -215,7 +249,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             )
 
         client = docker.from_env()
-        mounts = docker_mount.mounts(self._mounted)
+        mounts = docker_mount.mounts(self._mounted, read_only=self._mounted_read_only)
         try:
             existing = client.containers.get(self.container_name)
             # The name says which image, and nothing about what is mounted --

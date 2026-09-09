@@ -92,6 +92,35 @@ def test_a_prefix_that_is_not_a_parent_is_not_swallowed():
     assert len(docker_mount.mounts(["/srv/pkg", "/srv/pkg-other"], windows=False)) == 2
 
 
+def test_a_read_only_directory_is_mounted_read_only():
+    """PartCAD's own installation: the sandbox runs the wrappers out of it."""
+    assert docker_mount.mounts(["/opt/partcad", "/srv/pkg"], windows=False, read_only=["/opt/partcad"]) == {
+        "/opt/partcad": {"bind": "/opt/partcad", "mode": "ro"},
+        "/srv/pkg": {"bind": "/srv/pkg", "mode": "rw"},
+    }
+
+
+def test_a_trailing_separator_does_not_hide_a_read_only_mount():
+    assert docker_mount.mounts(["/opt/partcad"], windows=False, read_only=["/opt/partcad/"]) == {
+        "/opt/partcad": {"bind": "/opt/partcad", "mode": "ro"},
+    }
+
+
+def test_a_read_only_directory_inside_a_writable_one_is_reached_through_it():
+    """A checkout with its virtual environment inside the package it is working on.
+
+    The installation is then under the context root, which is mounted writable
+    by intent. Narrowing the outer mount to protect the inner one would take
+    write access away from the package being worked on, which is worse than what
+    it would prevent -- and dropping the outer one is not on the table either.
+    """
+    assert docker_mount.mounts(
+        ["/srv/pkg", "/srv/pkg/.venv/lib/python3.11/site-packages/partcad"],
+        windows=False,
+        read_only=["/srv/pkg/.venv/lib/python3.11/site-packages/partcad"],
+    ) == {"/srv/pkg": {"bind": "/srv/pkg", "mode": "rw"}}
+
+
 # --------------------------------------------------------------------------- #
 # Rewriting a command line                                                     #
 # --------------------------------------------------------------------------- #

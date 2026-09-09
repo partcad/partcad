@@ -36,7 +36,7 @@ import types
 
 import pytest
 
-from partcad import runtime, runtime_python_docker
+from partcad import runtime, runtime_python_docker, wrapper
 
 IMAGE = os.environ.get("PC_TEST_SANDBOX_IMAGE")
 
@@ -97,6 +97,38 @@ def test_a_wrapper_is_handed_its_request_and_answers(made):
     )
     assert exitcode == 0, stderr
     assert "A REQUEST" in stdout
+
+
+def test_a_wrapper_file_can_be_opened_by_the_interpreter_over_there(made):
+    """PartCAD's own installation is a mount too, and this is why.
+
+    Every wrapper is run by path, and that path is in neither of the other two
+    mounts unless the installation happens to be inside one -- which a checkout
+    with an in-project virtual environment is and the frozen bundle is not. So
+    the bundle rendered nothing through this sandbox: "can't open file
+    '.../_internal/partcad/wrappers/wrapper_plugin.py'". The fixture's state
+    directory and context root are both under a temporary directory, so the
+    installation here is outside both, exactly as it is in a bundle.
+
+    Read rather than executed: a wrapper expects a request on stdin and the CAD
+    stack around it, and neither is what is in question. Whether the container
+    can see the file is.
+    """
+    path = wrapper.get("plugin.py")
+    exitcode, stdout, stderr = made.run(["-c", "import sys; print(open(sys.argv[1]).readline())", path])
+
+    assert exitcode == 0, stderr
+    assert stdout.strip(), stdout
+
+
+def test_the_installation_is_not_writable_over_there(made):
+    """What is sandboxed must not be able to edit what sandboxes it."""
+    path = os.path.join(os.path.dirname(wrapper.get("plugin.py")), "pc-test-write")
+    exitcode, _stdout, stderr = made.run(["-c", "import sys; open(sys.argv[1], 'w').write('x')", path])
+
+    assert exitcode != 0, "the sandbox wrote into PartCAD's installation"
+    assert not os.path.exists(path)
+    assert "Read-only file system" in stderr or "Permission denied" in stderr, stderr
 
 
 def test_the_environment_is_created_where_the_host_can_see_it(made):

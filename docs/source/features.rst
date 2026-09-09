@@ -332,15 +332,17 @@ The ``docker`` sandbox
 ----------------------
 
 The container is a place to run the interpreter, not a place to keep your work.
-PartCAD mounts two directories into it:
+PartCAD mounts three directories into it:
 
 * the **context root** -- the package tree the command is working on;
 * **the internal state directory** (``~/.partcad`` by default), which is where
-  the sandbox environments, the caches and the fetched dependencies live.
+  the sandbox environments, the caches and the fetched dependencies live;
+* **PartCAD's own installation**, read-only, because the interpreter over there
+  is handed PartCAD's scripts by path and has to be able to open them.
 
-Both are mounted **at the same paths they have outside**, so a path in a log, in
-an error, in a cached artifact or in a ``.frd`` a solver wrote means the same
-thing on both sides and nothing has to be rewritten. The one exception is
+All three are mounted **at the same paths they have outside**, so a path in a
+log, in an error, in a cached artifact or in a ``.frd`` a solver wrote means the
+same thing on both sides and nothing has to be rewritten. The one exception is
 Windows, where a path like ``C:\Users\you\.partcad`` cannot exist inside a
 Linux container: there, and only there, drive letters are mapped the way Docker
 Desktop maps them (``C:\Users\you`` becomes ``/c/Users/you``).

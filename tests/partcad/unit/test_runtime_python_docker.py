@@ -19,7 +19,7 @@ import types
 import docker
 import pytest
 
-from partcad import docker_mount, runtime, runtime_python_docker
+from partcad import docker_mount, output, runtime, runtime_python_docker, wrapper
 
 
 def _ctx(tmp_path):
@@ -84,6 +84,70 @@ def test_the_sandbox_directory_says_which_sandbox_it_is(tmp_path):
     made = _runtime(tmp_path)
     assert os.path.basename(made.path).startswith("pc-py-docker-")
     assert made.path.endswith("-3.11")
+
+
+# --------------------------------------------------------------------------- #
+# What the container can see                                                   #
+# --------------------------------------------------------------------------- #
+
+
+def _reachable(made, path) -> bool:
+    """Whether the container could open ``path``: it is under one of the mounts."""
+    return any(docker_mount._contains(mount, path, windows=False) for mount in docker_mount.mounts(made._mounted))
+
+
+def test_a_wrapper_is_reachable_from_inside_the_container(tmp_path):
+    """The sandbox interpreter is handed the wrappers by path and has to open them.
+
+    A checkout with its virtual environment inside the package it is working on
+    got this for free, which is what hid it; the frozen bundle, whose files sit
+    next to the executable, never did, and rendering through this sandbox died
+    on "can't open file '.../_internal/partcad/wrappers/wrapper_plugin.py'".
+
+    Asserted of the path the rest of PartCAD actually builds, rather than of the
+    mount, so that a wrapper moving out from under it is this test failing.
+    """
+    made = _runtime(tmp_path)
+    assert _reachable(made, wrapper.get("plugin.py"))
+
+
+def test_a_builtin_package_is_reachable_from_inside_the_container(tmp_path):
+    """The other thing PartCAD ships inside itself and executes by path.
+
+    It sits beside the wrappers, which is why one mount covers both -- but
+    "beside" is a fact about the tree rather than a rule, so ask directly.
+    """
+    made = _runtime(tmp_path)
+    assert _reachable(made, output.BUILTIN_ROOT_PATH)
+
+
+def test_the_installation_is_mounted_read_only(tmp_path):
+    """What is sandboxed must not be able to edit what sandboxes it."""
+    made = _runtime(tmp_path)
+    mounts = docker_mount.mounts(made._mounted, read_only=made._mounted_read_only)
+    assert mounts[runtime_python_docker.INSTALL_DIR]["mode"] == "ro"
+    assert mounts[made.ctx.user_config.internal_state_dir]["mode"] == "rw"
+    assert mounts[made.ctx.root_path]["mode"] == "rw"
+
+
+def test_a_wrapper_path_is_rewritten_on_a_windows_host(tmp_path, monkeypatch):
+    """Which the installation being one of the mounts is what makes possible.
+
+    'rewrite' only knows the mounts it is handed, so on Windows an installation
+    that is not one of them is not merely unreachable -- it is handed to the
+    container spelled 'C:\\...', which is not a path over there at all.
+    """
+    install = "C:\\Program Files\\PartCAD\\_internal\\partcad"
+    monkeypatch.setattr(runtime_python_docker, "INSTALL_DIR", install)
+    made = _runtime(tmp_path)
+
+    # What '_exec' does to every argument, with 'windows' stated rather than
+    # taken from 'os.name': patching that globally is what the two tests below
+    # have to do, and it leaves pytest formatting a Linux path the Windows way
+    # if anything in the test fails.
+    rewritten = docker_mount.rewrite(install + "\\wrappers\\wrapper_plugin.py", made._mounted, windows=True)
+
+    assert rewritten == "/c/Program Files/PartCAD/_internal/partcad/wrappers/wrapper_plugin.py"
 
 
 # --------------------------------------------------------------------------- #

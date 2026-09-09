@@ -5,11 +5,12 @@
 #
 """Where the host's directories appear inside the ``docker`` sandbox.
 
-The rule is that they appear where they already are. The context root and the
-internal state directory are bind-mounted at the paths they have outside, so a
-path in a log line, in an exception, in a cached artifact or in a file a solver
-wrote means the same thing on both sides of the container boundary, and nothing
-has to be translated on the way in or read back differently on the way out.
+The rule is that they appear where they already are. The context root, the
+internal state directory and PartCAD's own installation are bind-mounted at the
+paths they have outside, so a path in a log line, in an exception, in a cached
+artifact or in a file a solver wrote means the same thing on both sides of the
+container boundary, and nothing has to be translated on the way in or read back
+differently on the way out.
 
 That is worth more than it sounds. The sandbox directory itself lives under the
 internal state directory, so a virtual environment created inside the container
@@ -91,20 +92,32 @@ def _tidy(path: str) -> str:
     return stripped if stripped else path[:1]
 
 
-def mounts(host_paths, windows: Optional[bool] = None) -> dict:
+def mounts(host_paths, windows: Optional[bool] = None, read_only=()) -> dict:
     """The bind mounts for these host directories, as the docker SDK wants them.
 
     Deduplicated and with nested paths dropped: mounting both a directory and
     something inside it gives the container two views of the same files, and
     which one a write lands in is then up to the order Docker happened to apply
     them in. The outermost wins, which is the one that contains the other.
+
+    A path named in ``read_only`` is mounted 'ro'. That is for a directory the
+    sandbox has to *read* and has no business writing -- PartCAD's own
+    installation, which it runs the wrappers out of. Only a mount that survives
+    deduplication in its own right can be read-only: a path swallowed by an
+    outer mount is reached through that one, on that one's terms, which is the
+    conservative answer rather than a surprising one -- the outer mount is the
+    state directory or the package being worked on, both of which are writable
+    by intent, and silently making either of them read-only because something
+    read-only sits inside it would break the sandbox rather than protect it.
     """
+    read_only = {_tidy(p) for p in read_only}
+
     kept = []
     for path in sorted({_tidy(p) for p in host_paths}, key=len):
         if not any(_contains(outer, path, windows) for outer in kept):
             kept.append(path)
 
-    return {path: {"bind": translate(path, windows), "mode": "rw"} for path in kept}
+    return {path: {"bind": translate(path, windows), "mode": "ro" if path in read_only else "rw"} for path in kept}
 
 
 def _contains(outer: str, inner: str, windows: Optional[bool] = None) -> bool:
