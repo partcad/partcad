@@ -305,8 +305,11 @@ click.rich_click.COMMAND_GROUPS = {
     "--python-sandbox",
     default=None,
     show_envvar=True,
-    type=click.Choice(["none", "venv", "pypy", "conda"]),
-    help="Sandboxing environment for invoking python scripts (defaults to conda, else venv)",
+    # Every sandbox 'runtime_python_all.create' knows. A choice list missing one
+    # is a documented value the command line refuses, which is how '--python-sandbox
+    # docker' was rejected on a machine running Docker.
+    type=click.Choice(["docker", "conda", "venv", "remote", "none", "pypy"]),
+    help="Sandboxing environment for invoking python scripts (defaults to docker where one answers, else conda, else venv)",
 )
 @click.option(
     "--javascript-sandbox",
