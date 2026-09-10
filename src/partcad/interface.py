@@ -307,6 +307,16 @@ class Interface:
         # thread rather than matching one. Both are inherited from the parent
         # interfaces when this one does not declare them, so a thread only has
         # to be spelled out once, on the interface that introduces it.
+        # option: "multiConnect"
+        # description: whether more than one item may be connected to the same
+        #              instance of this interface. False for a joint that is
+        #              made once - a bolt in a hole, a stud under a brick -
+        #              and true for one that is not, such as a shaft carrying
+        #              several parts along its length, or a rail.
+        # values: boolean
+        # default: false
+        self.multi_connect = bool(config.get("multiConnect", False))
+
         self.thread_step = config.get("threadStep", None)
         if self.thread_step is not None:
             if isinstance(self.thread_step, bool) or not isinstance(self.thread_step, (int, float)):
@@ -396,6 +406,18 @@ class Interface:
     def get_self_screw(self):
         """Whether this interface cuts its own thread, its own setting or inherited."""
         return bool(self._inherited("self_screw"))
+
+    def get_multi_connect(self):
+        """Whether one instance of this interface may take more than one item.
+
+        A stud takes one brick and a bolt hole takes one bolt, so two items
+        connected to the same port is a mistake worth reporting. A shaft is the
+        counter-example - several parts sit along it, all mated to the same
+        interface - and says so with 'multiConnect: true'. Inherited, so that
+        declaring it once on the interface a family derives from covers the
+        family.
+        """
+        return bool(self._inherited("multi_connect"))
 
     def _inherited(self, attribute, seen=None):
         """The attribute as declared here, or the first one found among the parents."""

@@ -710,6 +710,7 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
       path: <(optional) the source file path, "{interface name}.{ext}" otherwise>
       threadStep: <(optional) axial distance per full turn of a connection made through this interface, in mm>
       selfScrew: <(optional) whether this interface cuts its own thread instead of matching one>
+      multiConnect: <(optional) whether one instance of this interface may take more than one object>
       inherits: # (optional) the list of other interfaces to inherit from
         <parent interface name>: <instance name>
         <other interface name>: # instance name is implied to be empty ("")
@@ -1004,7 +1005,20 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
 Depending on the type of the part, the configuration may have different options.
 
-The ``threadStep`` and ``selfScrew`` fields of an interface are inherited by the
+``multiConnect`` says whether one instance of an interface may take more than
+one object. It is ``false`` by default, because most joints are made once: a
+stud takes one brick, a bolt hole takes one bolt, and two objects connected to
+the same instance is a mistake ``pc test`` reports. Set it on the joints that
+are not made once - a shaft carrying several parts along its length, a rail, a
+bus bar:
+
+.. code-block:: yaml
+
+  interfaces:
+    shaft:
+      multiConnect: true
+
+The ``threadStep``, ``selfScrew`` and ``multiConnect`` fields of an interface are inherited by the
 interfaces that inherit it, and by the connections made through it. Two
 interfaces that are connected have to agree on their thread unless one of them
 cuts its own. See :doc:`assy`.
