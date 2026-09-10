@@ -267,7 +267,7 @@ def test_a_command_runs_through_docker_exec(tmp_path, monkeypatch):
         "exec",
         "-i",
         "-e",
-        "HOME=" + made._container_home,
+        "HOME=" + docker_mount.rewrite(made._container_home, made._mounted),
         made.container_name,
         "/some/python",
         "-m",
@@ -291,10 +291,42 @@ def test_the_container_is_given_a_home_it_can_write_to(tmp_path, monkeypatch):
     argv = made._exec(["/some/python"])
     home = argv[argv.index("-e") + 1]
 
-    assert home == "HOME=" + made._container_home
+    # The container's view of it, not the host's. Identical on a POSIX host,
+    # which is why writing the host path here passed everywhere except Windows
+    # -- and there it asserted that PartCAD hands the container a path the
+    # container has no such name for.
+    assert home == "HOME=" + docker_mount.rewrite(made._container_home, made._mounted)
     # Under the state directory, which is mounted, writable, and outlives the
     # container -- a cache written there is one the next run still has.
     assert made._container_home.startswith(made.ctx.user_config.internal_state_dir)
+
+
+def test_the_home_it_is_given_is_the_container_s_path(tmp_path, monkeypatch):
+    """Stated on Windows, where the two differ, and not left to the platform.
+
+    'HOME' is handed to a Linux process inside the container, so it has to be
+    the mapped path. On a POSIX host 'rewrite' is the identity, so a test that
+    built the expected value out of the host path agreed with a correct
+    implementation and with a broken one alike -- and said so only on the
+    platform CI is slowest to hear from.
+    """
+    made = _runtime(tmp_path)
+    monkeypatch.setattr(made, "_start", lambda: None)
+    monkeypatch.setattr(
+        made.__class__,
+        "_container_home",
+        property(lambda self: "C:\\Users\\you\\.partcad\\container-home"),
+    )
+    monkeypatch.setattr(made.__class__, "_mounted", property(lambda self: ["C:\\Users\\you\\.partcad"]))
+    # Only what 'docker_mount' reads, and only inside it. Setting 'os.name'
+    # globally makes 'pathlib' hand out 'WindowsPath' objects it cannot
+    # instantiate here, and the suite dies in pytest's own cleanup rather than
+    # in this assertion.
+    monkeypatch.setattr(docker_mount, "os", types.SimpleNamespace(name="nt"))
+
+    argv = made._exec(["/some/python"])
+
+    assert argv[argv.index("-e") + 1] == "HOME=/c/Users/you/.partcad/container-home"
 
 
 def test_a_working_directory_becomes_an_argument_of_docker(tmp_path, monkeypatch):
