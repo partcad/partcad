@@ -136,14 +136,16 @@ def write_output_file(
         # may include a sibling, and the output's directory has to be writable
         # for the export to land in it.
         #
-        # Only the output's. The input is read and never written, and it is a
-        # directory of the user's own -- often the one they happened to be
-        # standing in -- so a script running in the sandbox has no business
-        # being able to rewrite the file it was handed, or anything beside it.
-        # When the two are the same directory it is writable, which is what
-        # converting a file in place has to mean.
-        ctx.sandbox_paths = [str(Path(output_filename).resolve().parent)]
-        ctx.sandbox_paths_read_only = [str(input_path.parent)]
+        # Both, and both writable. Mounting the input read-only was tried and
+        # taken back out: it is one more way two containers of one image can
+        # differ, on a mount contract that is a stopgap rather than the
+        # isolation boundary -- the container is that. Either directory is
+        # usually under the home directory anyway, in which case naming it costs
+        # no mount at all.
+        ctx.sandbox_paths = [
+            str(Path(output_filename).resolve().parent),
+            str(input_path.parent),
+        ]
         with pc_logging.Process(verb, "adhoc" if kind == "part" else "adhoc-sketch"):
             project = ctx.get_project("//")
             obj = project.get_part(object_name) if kind == "part" else project.get_sketch(object_name)

@@ -198,6 +198,12 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         super().__init__(ctx, "docker-" + _short(image), version)
 
         self.image = image
+        # One container per image, and nothing else in the name. It outlives
+        # the process that started it, so the next 'pc' command finds it warm
+        # rather than paying for a start; only a new version or image tag makes
+        # it a different container. Naming it after the mounts as well was
+        # tried, and traded that reuse for a container per context.
+        self.container_name = "pc-sandbox-" + _short(image)
         self._container = None
 
         # The interpreter inside the container, always POSIX. 'exec_name' is
@@ -213,14 +219,32 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
     def _mounted(self) -> list:
         """The host directories the container needs to see.
 
-        The internal state directory, which holds this sandbox and the caches;
-        the context root, which holds the package being worked on; PartCAD's own
-        installation, which holds the scripts the interpreter over there is told
-        to run; and whatever the context named on top of those. Nothing else: a
-        sandbox that mounted the whole filesystem would be a sandbox in name
-        only.
+        Deliberately few, and as often as possible one. The home directory
+        leads because on an ordinary machine it already contains the other
+        three -- the state directory holding this sandbox and the caches
+        ('~/.partcad'), the package being worked on, and the installation
+        holding the scripts the interpreter over there is told to run -- so
+        'mounts' drops them as nested and the container has a single bind. That
+        is what lets one container serve every context: a mount set that does
+        not vary is a container that never has to be replaced.
+
+        The others are still named because they are not always under it: a
+        package on another volume, a system-wide installation, a file an ad-hoc
+        command was pointed at somewhere else. Each of those is one more mount
+        and one more reason this container is not the last one's.
+
+        All writable, and the home directory is a lot to hand over. That is the
+        trade this makes on purpose: the isolation worth having is the
+        container, and the mounts are a stopgap for the paths a wrapper is
+        handed. See 'docker_mount.mounts'.
         """
-        paths = [self.ctx.user_config.internal_state_dir, INSTALL_DIR]
+        paths = []
+        home = os.path.expanduser("~")
+        # Not the filesystem root, which is what a broken or absent '~' expands
+        # to and is not a thing to bind-mount.
+        if home and os.path.isdir(home) and home.rstrip("/\\"):
+            paths.append(home)
+        paths += [self.ctx.user_config.internal_state_dir, INSTALL_DIR]
         root = getattr(self.ctx, "root_path", None)
         if root:
             paths.append(root)
@@ -228,52 +252,12 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         # pointed at, which lives wherever the user keeps it rather than inside
         # the generated package. See 'Context.sandbox_paths'.
         paths += [p for p in getattr(self.ctx, "sandbox_paths", ()) or () if p]
-        paths += [p for p in getattr(self.ctx, "sandbox_paths_read_only", ()) or () if p]
         return paths
 
     @property
     def _container_home(self) -> str:
         """Where '~' points inside the container. See '_exec'."""
         return os.path.join(self.ctx.user_config.internal_state_dir, "container-home")
-
-    @property
-    def _mounted_read_only(self) -> list:
-        """The ones the sandbox reads and must not write.
-
-        PartCAD's installation is code the host runs, and handing a sandbox
-        write access to it would mean the thing being sandboxed can edit what
-        sandboxes it. Nothing over there needs to write into it: a wrapper is
-        read and executed, and what it produces goes back over its own protocol
-        or into the cache, which is under the state directory and writable in
-        its own right.
-
-        The one thing that does try is CPython caching the bytecode of a wrapper
-        beside its source, and a read-only directory is a case the import
-        machinery already handles -- it notes the failure and moves on, which
-        costs a recompile per run and nothing else.
-
-        Plus whatever the context said it only reads -- an ad-hoc command's
-        input file lives in a directory of the user's own. A path it also
-        asked to be able to write is not one of these: the demand for write
-        access is the specific claim, and an input that is also the output's
-        directory is an ordinary way to run a conversion.
-
-        Which holds for a writable path *under* one asked read-only too, and
-        that is not a refinement -- it is the difference between
-        'pc convert thing.step -o out/thing.stl' working and not. The output
-        directory is inside the input's, so 'mounts' keeps only the outer one,
-        and marking that read-only leaves the export with nowhere to land.
-        Write access wins over the whole subtree it was asked for, because a
-        mount that cannot be written is not a weaker version of what was
-        requested; it is a failure.
-        """
-        writable = [p for p in getattr(self.ctx, "sandbox_paths", ()) or () if p]
-        read_only = [
-            p
-            for p in getattr(self.ctx, "sandbox_paths_read_only", ()) or ()
-            if p and not any(docker_mount.contains(p, w) for w in writable)
-        ]
-        return [INSTALL_DIR] + read_only
 
     def get_venv_python_path(self, session=None, path=None):
         """Where an environment's interpreter is, as the container sees it.
@@ -294,40 +278,6 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
 
     # ------------------------------------------------------------ container --
 
-    @property
-    def _mount_identity(self) -> str:
-        """This sandbox's mounts as one string, in an order that does not vary."""
-        mounts = docker_mount.mounts(self._mounted, read_only=self._mounted_read_only)
-        return "\n".join("%s=%s:%s" % (host, spec["bind"], spec["mode"]) for host, spec in sorted(mounts.items()))
-
-    @property
-    def container_name(self) -> str:
-        """The container for this image *and* this set of mounts.
-
-        The image alone used to name it, and what was mounted was then compared
-        against whatever the container turned out to have. That made one name
-        the property of every context wanting that image, and they fought over
-        it: each replaced the other's container, and each then ran commands in
-        one that could not see its own package. Concurrently it was worse than
-        useless -- two threads both finding the container wrong both removed
-        it, and Docker answers the second removal with a 409.
-
-        Naming it after the mounts settles that by construction rather than by
-        arbitration. A container whose name matches is a container whose mounts
-        match, so there is nothing to replace and nothing to race for; two
-        contexts wanting different directories get two containers and leave
-        each other alone.
-
-        A property and not a field, because the mounts are not all known when
-        the sandbox is built: an ad-hoc command names its input and output
-        directories on the context after that, and a name fixed in '__init__'
-        would be the name of a container mounting neither.
-
-        They carry PartCAD's labels, so 'pc system prune' clears out the ones a
-        machine has stopped needing.
-        """
-        return "pc-sandbox-%s-%s" % (_short(self.image), _short(self._mount_identity))
-
     def _resolve_image(self, client) -> str:
         """The image to run, pulled if this machine does not have it yet."""
         return resolve_image(client, self.image, self.version)
@@ -335,9 +285,15 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
     def _start(self):
         """The container for this sandbox, started or reused.
 
-        One per image and mount set, shared by every sandbox that named them
-        and reused across runs: what a container costs is in the starting, and
-        a command over a tree of parts would otherwise pay it per part.
+        One per image, shared by every sandbox that named it and reused across
+        runs: what a container costs is in the starting, and a command over a
+        tree of parts would otherwise pay it per part -- and the next 'pc'
+        command finds it still running rather than paying again.
+
+        It is replaced only when what it has mounted is not what this context
+        needs, which on an ordinary machine is never: the home directory covers
+        everything and the mount set does not vary. A package on another volume
+        or an ad-hoc file elsewhere is what makes it vary.
 
         Under a lock, because the body can remove a container and create
         another with the same name, and two threads doing that at once leave
@@ -359,7 +315,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                 return self._container
 
             client = docker.from_env()
-            mounts = docker_mount.mounts(self._mounted, read_only=self._mounted_read_only)
+            mounts = docker_mount.mounts(self._mounted)
             for attempt in range(_START_ATTEMPTS):
                 container = self._start_once(client, mounts)
                 if container is not None:

@@ -29,7 +29,6 @@ def _ctx(tmp_path):
         user_config=types.SimpleNamespace(internal_state_dir=str(tmp_path / "state")),
         root_path=str(tmp_path / "pkg"),
         sandbox_paths=[],
-        sandbox_paths_read_only=[],
     )
 
 
@@ -82,44 +81,27 @@ def test_the_same_image_is_the_same_sandbox(tmp_path):
     assert one.container_name == two.container_name
 
 
-def test_two_sets_of_mounts_are_two_containers(tmp_path):
-    """Because one name shared by two contexts is a name they fight over.
+def test_one_container_serves_every_context(tmp_path):
+    """The name says which image and nothing else, so it outlives the process.
 
-    Each found the other's container mounted wrong and replaced it, and each
-    then ran commands in a container that could not see its own package. The
-    name carries the mounts so that a container answering to it is the right
-    one, rather than one to arbitrate over.
+    It was briefly named after the mounts too, which made a container that no
+    other context could reuse -- and reuse across contexts and across runs is
+    the whole reason to keep one warm. Contexts differing in what they mount
+    share it; whichever of them starts it, the next one finds it running.
     """
     one = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
     two = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
     two.ctx.sandbox_paths = [str(tmp_path / "somebody-elses-files")]
 
-    assert one.container_name != two.container_name
-    # Still one sandbox directory: the environment is per image and lives under
-    # the state directory, which both of them mount.
-    assert one.path == two.path
-
-
-def test_the_same_mounts_are_the_same_container(tmp_path):
-    one = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
-    two = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
-    one.ctx.sandbox_paths = [str(tmp_path / "shared")]
-    two.ctx.sandbox_paths = [str(tmp_path / "shared")]
-
     assert one.container_name == two.container_name
 
 
-def test_the_name_follows_a_directory_named_after_the_sandbox_was_built(tmp_path):
-    """An ad-hoc command names its directories on the context, and that is later.
+def test_a_new_image_tag_is_a_new_container(tmp_path):
+    """Which is the one thing that should make it a different container."""
+    one = _runtime(tmp_path, image="ghcr.io/x/solver:0.8.61")
+    two = _runtime(tmp_path, image="ghcr.io/x/solver:0.8.62")
 
-    So the name cannot be decided in '__init__' -- it would be the name of a
-    container mounting neither the input nor the output.
-    """
-    made = _runtime(tmp_path)
-    before = made.container_name
-    made.ctx.sandbox_paths = [str(tmp_path / "output")]
-
-    assert made.container_name != before
+    assert one.container_name != two.container_name
 
 
 def test_the_sandbox_directory_says_which_sandbox_it_is(tmp_path):
@@ -180,12 +162,19 @@ def test_a_path_the_context_named_is_mounted_too(tmp_path):
     assert _reachable(made, str(tmp_path / "elsewhere" / "cube.stl"))
 
 
-def test_a_context_that_names_none_mounts_the_usual_three(tmp_path):
-    """Which is every context but an ad-hoc one."""
+def test_a_context_names_the_home_directory_and_the_usual_three(tmp_path):
+    """Which is every context but an ad-hoc one.
+
+    The home directory leads because on an ordinary machine it contains the
+    other three, and 'mounts' then drops them -- see the test below. Here they
+    are under 'tmp_path' instead, so all four survive and the list is the whole
+    set this asks for.
+    """
     made = _runtime(tmp_path)
 
     assert sorted(made._mounted) == sorted(
         [
+            os.path.expanduser("~"),
             made.ctx.user_config.internal_state_dir,
             runtime_python_docker.INSTALL_DIR,
             made.ctx.root_path,
@@ -193,13 +182,32 @@ def test_a_context_that_names_none_mounts_the_usual_three(tmp_path):
     )
 
 
-def test_the_installation_is_mounted_read_only(tmp_path):
-    """What is sandboxed must not be able to edit what sandboxes it."""
+def test_everything_under_one_home_directory_is_one_mount(tmp_path, monkeypatch):
+    """The case worth having, and the reason the home directory is named at all.
+
+    On an ordinary machine '~/.partcad', the package and the installation are
+    all under '~', so the container gets a single bind -- and a mount set that
+    does not vary between contexts is a container that never has to be
+    replaced.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
     made = _runtime(tmp_path)
-    mounts = docker_mount.mounts(made._mounted, read_only=made._mounted_read_only)
-    assert mounts[runtime_python_docker.INSTALL_DIR]["mode"] == "ro"
-    assert mounts[made.ctx.user_config.internal_state_dir]["mode"] == "rw"
-    assert mounts[made.ctx.root_path]["mode"] == "rw"
+    monkeypatch.setattr(runtime_python_docker, "INSTALL_DIR", str(tmp_path / "lib" / "partcad"))
+    made.ctx.sandbox_paths = [str(tmp_path / "models")]
+
+    assert docker_mount.mounts(made._mounted) == {str(tmp_path): {"bind": str(tmp_path), "mode": "rw"}}
+
+
+def test_everything_is_writable(tmp_path):
+    """Mounting the installation read-only was tried and taken back out.
+
+    It is one more thing that can differ between two containers of one image,
+    on a contract that is a stopgap for the paths a wrapper is handed rather
+    than the isolation boundary. The container is that.
+    """
+    made = _runtime(tmp_path)
+
+    assert {spec["mode"] for spec in docker_mount.mounts(made._mounted).values()} == {"rw"}
 
 
 def test_a_wrapper_path_is_rewritten_on_a_windows_host(tmp_path, monkeypatch):
@@ -478,7 +486,7 @@ def _started(tmp_path, monkeypatch, existing):
 
 
 def _wanted_binds(made):
-    mounts = docker_mount.mounts(made._mounted, read_only=made._mounted_read_only)
+    mounts = docker_mount.mounts(made._mounted)
     return {host: spec["mode"] != "ro" for host, spec in mounts.items()}
 
 
@@ -529,23 +537,6 @@ def test_a_container_holding_more_than_was_asked_for_is_replaced(tmp_path, monke
     assert got is not existing
     assert existing.removed is True
     assert client.made is not None
-
-
-def test_a_container_that_mounts_it_writable_is_replaced(tmp_path, monkeypatch):
-    """The mode is half of the contract.
-
-    A directory one context was allowed to write is not one a later context
-    that asked for it read-only may write.
-    """
-    made = _runtime(tmp_path)
-    binds = dict(_wanted_binds(made))
-    binds[runtime_python_docker.INSTALL_DIR] = True
-    existing = _Container(binds)
-
-    _made, client, got = _started(tmp_path, monkeypatch, existing)
-
-    assert got is not existing
-    assert existing.removed is True
 
 
 def test_a_container_mounting_it_somewhere_else_is_replaced(tmp_path, monkeypatch):
@@ -753,71 +744,6 @@ def test_a_refusal_that_is_not_a_race_is_raised(tmp_path, monkeypatch):
 
     with pytest.raises(docker.errors.APIError, match="no space left"):
         made._start()
-
-
-# --------------------------------------------------------------------------- #
-# What may be written                                                          #
-# --------------------------------------------------------------------------- #
-
-
-def test_a_path_the_context_only_reads_is_mounted_read_only(tmp_path):
-    """An ad-hoc conversion's input is the user's own file, and it is only read."""
-    made = _runtime(tmp_path)
-    made.ctx.sandbox_paths_read_only = [str(tmp_path / "inputs")]
-
-    mounts = docker_mount.mounts(made._mounted, read_only=made._mounted_read_only)
-
-    # Visible -- it is the file being converted -- and not writable.
-    assert mounts[str(tmp_path / "inputs")]["mode"] == "ro"
-
-
-def test_a_path_that_is_also_written_stays_writable(tmp_path):
-    """Converting a file into the directory it came from is an ordinary thing to do.
-
-    The demand for write access is the specific claim, so it wins over the
-    input's "I only read this".
-    """
-    made = _runtime(tmp_path)
-    both = str(tmp_path / "models")
-    made.ctx.sandbox_paths = [both]
-    made.ctx.sandbox_paths_read_only = [both]
-
-    mounts = docker_mount.mounts(made._mounted, read_only=made._mounted_read_only)
-
-    assert mounts[both]["mode"] == "rw"
-
-
-def test_a_writable_path_under_a_read_only_one_keeps_the_whole_mount_writable(tmp_path):
-    """'pc convert thing.step -o out/thing.stl', which used to be unable to write.
-
-    The output directory is inside the input's, so 'mounts' keeps only the
-    outer one -- and marking that read-only leaves the export with nowhere to
-    land. Write access wins over the subtree it was asked for, the same way it
-    wins when the two directories are one: a mount that cannot be written is
-    not a weaker version of what was requested, it is a failure.
-    """
-    made = _runtime(tmp_path)
-    inputs = str(tmp_path / "models")
-    made.ctx.sandbox_paths = [os.path.join(inputs, "out")]
-    made.ctx.sandbox_paths_read_only = [inputs]
-
-    mounts = docker_mount.mounts(made._mounted, read_only=made._mounted_read_only)
-
-    assert mounts[inputs]["mode"] == "rw"
-    # And it is the only mount covering the output, which is the reason.
-    assert os.path.join(inputs, "out") not in mounts
-
-
-def test_a_read_only_path_beside_a_writable_one_stays_read_only(tmp_path):
-    """Neither contains the other, so the claim about one says nothing about it."""
-    made = _runtime(tmp_path)
-    made.ctx.sandbox_paths = [str(tmp_path / "out")]
-    made.ctx.sandbox_paths_read_only = [str(tmp_path / "inputs")]
-
-    mounts = docker_mount.mounts(made._mounted, read_only=made._mounted_read_only)
-
-    assert mounts[str(tmp_path / "inputs")]["mode"] == "ro"
-    assert mounts[str(tmp_path / "out")]["mode"] == "rw"
 
 
 # --------------------------------------------------------------------------- #

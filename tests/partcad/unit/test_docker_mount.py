@@ -92,41 +92,17 @@ def test_a_prefix_that_is_not_a_parent_is_not_swallowed():
     assert len(docker_mount.mounts(["/srv/pkg", "/srv/pkg-other"], windows=False)) == 2
 
 
-def test_a_read_only_directory_is_mounted_read_only():
-    """PartCAD's own installation: the sandbox runs the wrappers out of it."""
-    assert docker_mount.mounts(["/opt/partcad", "/srv/pkg"], windows=False, read_only=["/opt/partcad"]) == {
-        "/opt/partcad": {"bind": "/opt/partcad", "mode": "ro"},
+def test_everything_is_mounted_writable():
+    """The installation was briefly mounted 'ro' and is not any more.
+
+    It bought little -- a wrapper is read and executed, and what it writes goes
+    to the cache or back over its own protocol -- and cost a second thing that
+    could differ between two containers of one image. The isolation worth
+    having is the container.
+    """
+    assert docker_mount.mounts(["/opt/partcad", "/srv/pkg"], windows=False) == {
+        "/opt/partcad": {"bind": "/opt/partcad", "mode": "rw"},
         "/srv/pkg": {"bind": "/srv/pkg", "mode": "rw"},
-    }
-
-
-def test_a_trailing_separator_does_not_hide_a_read_only_mount():
-    assert docker_mount.mounts(["/opt/partcad"], windows=False, read_only=["/opt/partcad/"]) == {
-        "/opt/partcad": {"bind": "/opt/partcad", "mode": "ro"},
-    }
-
-
-def test_a_read_only_directory_is_matched_whatever_its_case_on_windows():
-    """'C:\\PartCAD' and 'c:\\partcad' are one directory, and it was asked for read-only.
-
-    Everything else here folds case on Windows -- 'rewrite' does, 'contains'
-    does -- and this has to as well, because the direction it fails in is the
-    bad one: a mount the caller said must not be written coming back writable.
-    """
-    assert docker_mount.mounts(["C:\\PartCAD"], windows=True, read_only=["c:\\partcad"]) == {
-        "C:\\PartCAD": {"bind": "/c/PartCAD", "mode": "ro"},
-    }
-
-
-def test_a_read_only_directory_is_matched_whichever_separator_it_is_written_with():
-    """Windows takes both, so 'C:\\PartCAD' and 'C:/PartCAD' are one directory.
-
-    Comparing them literally brought the mount back 'rw' -- the one direction
-    this must not fail in, which is why the separator is folded wherever the
-    case is.
-    """
-    assert docker_mount.mounts(["C:\\PartCAD"], windows=True, read_only=["C:/PartCAD"]) == {
-        "C:\\PartCAD": {"bind": "/c/PartCAD", "mode": "ro"},
     }
 
 
@@ -141,32 +117,21 @@ def test_a_nested_directory_is_seen_whichever_separator_it_is_written_with():
     }
 
 
-def test_a_backslash_is_a_file_name_character_off_windows():
-    """So folding it there would merge two directories that are two."""
-    assert docker_mount.contains("/srv/work", "/srv/work\\pkg", windows=False) is True
-    assert docker_mount.contains("/srv/work", "/srv/work-other", windows=False) is False
+def test_a_nested_directory_is_seen_whatever_its_case_on_windows():
+    """'C:\\Users\\you' and 'c:/users/you/.partcad' are a parent and a child."""
+    assert docker_mount.contains("C:\\Users\\you", "c:/users/you/.partcad", windows=True) is True
 
 
 def test_case_still_decides_off_windows():
     """Two directories differing in case are two directories on a POSIX host."""
-    assert docker_mount.mounts(["/srv/PartCAD"], windows=False, read_only=["/srv/partcad"]) == {
-        "/srv/PartCAD": {"bind": "/srv/PartCAD", "mode": "rw"},
-    }
+    assert docker_mount.contains("/srv/partcad", "/srv/PartCAD", windows=False) is False
+    assert len(docker_mount.mounts(["/srv/PartCAD", "/srv/partcad"], windows=False)) == 2
 
 
-def test_a_read_only_directory_inside_a_writable_one_is_reached_through_it():
-    """A checkout with its virtual environment inside the package it is working on.
-
-    The installation is then under the context root, which is mounted writable
-    by intent. Narrowing the outer mount to protect the inner one would take
-    write access away from the package being worked on, which is worse than what
-    it would prevent -- and dropping the outer one is not on the table either.
-    """
-    assert docker_mount.mounts(
-        ["/srv/pkg", "/srv/pkg/.venv/lib/python3.11/site-packages/partcad"],
-        windows=False,
-        read_only=["/srv/pkg/.venv/lib/python3.11/site-packages/partcad"],
-    ) == {"/srv/pkg": {"bind": "/srv/pkg", "mode": "rw"}}
+def test_a_backslash_is_a_file_name_character_off_windows():
+    """So folding it there would merge two directories that are two."""
+    assert docker_mount.contains("/srv/work", "/srv/work\\pkg", windows=False) is True
+    assert docker_mount.contains("/srv/work", "/srv/work-other", windows=False) is False
 
 
 # --------------------------------------------------------------------------- #

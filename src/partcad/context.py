@@ -226,26 +226,19 @@ class Context:
         # open, as absolute host paths.
         #
         # Normally there are none: everything a package refers to is inside it,
-        # and the 'docker' sandbox mounts the context root for exactly that
-        # reason. An ad-hoc command is the exception -- its package is generated
-        # in a temporary directory and points at the user's file wherever that
-        # is -- and a sandbox that cannot see the file renders nothing, with an
-        # error about the file rather than about the mount.
+        # and the 'docker' sandbox mounts the home directory and the context
+        # root for exactly that reason. An ad-hoc command is the exception --
+        # its package is generated in a temporary directory and points at the
+        # user's file wherever that is -- and a sandbox that cannot see the file
+        # renders nothing, with an error about the file rather than the mount.
+        #
+        # A path already under the home directory costs nothing to name: the
+        # mount covering it is there either way, and 'docker_mount.mounts' drops
+        # it as nested.
         #
         # Only the container sandboxes read this. The others run on the host,
         # where every path is already reachable and nothing has to be declared.
         self.sandbox_paths = []
-        # The same, for directories the sandbox only ever *reads*. Kept apart
-        # rather than inferred: a directory of the user's own that a conversion
-        # reads its input from should not be one a script in the sandbox can
-        # rewrite, while the one the output lands in has to be.
-        #
-        # The two lists are what each caller needs, so a path in both is a path
-        # something needs to write -- and writable wins, because that is the
-        # specific claim. Converting a file into the directory it came from is
-        # an ordinary way to run a conversion, and it must not turn the output
-        # directory read-only.
-        self.sandbox_paths_read_only = []
         # Files a factory produced with a native tool and then handed on to a
         # wrapper, by object name ('//package:part') -> absolute path.
         #

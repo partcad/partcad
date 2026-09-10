@@ -332,29 +332,36 @@ The ``docker`` sandbox
 ----------------------
 
 The container is a place to run the interpreter, not a place to keep your work.
-PartCAD mounts three directories into it:
+What it can see is whatever PartCAD bind-mounts into it, and that list is kept
+as short as it can be -- on an ordinary machine, one directory:
 
+* your **home directory**, which already contains the other three;
 * the **context root** -- the package tree the command is working on;
 * **the internal state directory** (``~/.partcad`` by default), which is where
   the sandbox environments, the caches and the fetched dependencies live;
 * **PartCAD's own installation**, because the interpreter over there is handed
-  PartCAD's scripts by path and has to be able to open them. Read-only: what is
-  sandboxed has no business editing what sandboxes it.
+  PartCAD's scripts by path and has to be able to open them.
 
 Nested directories are mounted once, by the outermost of them, since two views
-of one directory leave it undecided which a write lands in. So an installation
-that happens to sit *inside* the context root -- a checkout with its virtual
-environment in the package it is working on -- is reached through that mount
-instead, on that mount's writable terms. Narrowing the context root to protect
-it would take write access away from the package being worked on, which is worse
-than what it would prevent.
+of one directory leave it undecided which a write lands in. So when the package,
+``~/.partcad`` and the installation are all under your home directory -- which
+is the usual arrangement -- the container gets a **single** bind mount. The
+others are still named because they are not always under it: a package on
+another volume, a system-wide installation, a file an ad-hoc command was pointed
+at somewhere else.
 
-The same precedence settles the other direction, where an ad-hoc command names
-directories of its own: a command that reads a file and writes its output into a
-subdirectory of the one it read from gets one mount covering both, and that mount
-is writable. Write access is the specific claim, and a mount that cannot be
-written is not a weaker version of what was asked for -- it is the export having
-nowhere to land.
+That is not tidiness. A mount set that does not vary from one context to the
+next is a container that never has to be replaced, which is what lets one
+container serve every package you work on and keep serving it after ``pc``
+exits.
+
+Everything is mounted **writable**, your home directory included. Mounting the
+installation read-only was tried and taken back out: it bought little -- a
+wrapper is read and executed, and what it writes goes to the cache or back over
+its own protocol -- and cost one more thing that could differ between two
+containers of one image. The isolation worth having here is the container; the
+mounts exist so that a path a wrapper is handed means something on the other
+side, and that is a stopgap rather than a security boundary.
 
 All of them are mounted **at the same paths they have outside**, so a path in a
 log, in an error, in a cached artifact or in a ``.frd`` a solver wrote means the
@@ -363,12 +370,11 @@ Windows, where a path like ``C:\Users\you\.partcad`` cannot exist inside a
 Linux container: there, and only there, drive letters are mapped the way Docker
 Desktop maps them (``C:\Users\you`` becomes ``/c/Users/you``).
 
-The container is named after the image **and** the set of mounts, so a container
-that answers to a name is one whose mounts are already right. Two contexts
-working on different packages therefore get two containers rather than taking
-turns replacing one, and PartCAD does not have to arbitrate between them while
-several parts are being rendered at once. They carry PartCAD's labels, so
-``pc system prune`` clears out the ones a machine has stopped needing.
+The container is named after the **image** and nothing else, so it outlives the
+process that started it: the next ``pc`` command finds it warm rather than
+paying to start one, and only a new version or image tag makes it a different
+container. It carries PartCAD's labels, so ``pc system prune`` clears out the
+ones a machine has stopped needing.
 
 Because the state directory is mounted rather than copied, ``pip`` installs
 persist across container restarts and the environment locking, the install

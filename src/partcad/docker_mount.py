@@ -86,11 +86,11 @@ def _comparable(path: str, windows: bool) -> str:
     Windows accepts both separators and ignores case, so ``C:\\Work``,
     ``C:/work`` and ``c:\\WORK`` are one directory and have to compare as one.
     Everything that decides something about a *pair* of paths goes through
-    here -- whether one contains another, whether one was asked for read-only,
-    whether an argument sits under a mount -- because a rule applied in two of
-    those three places is a rule with a hole in it, and the holes all failed
-    the same way: a directory mounted twice because neither was seen to contain
-    the other, or mounted writable after the caller said it must not be.
+    here -- whether one contains another, whether an argument sits under a
+    mount -- because a rule applied in one of those places and not the other is
+    a rule with a hole in it, and both holes failed the same way: a directory
+    mounted twice because neither was seen to contain the other, or a path
+    reaching the container unrewritten.
 
     Off Windows a path is compared as it is written. Case is significant there,
     and a backslash is a legal character in a file name rather than a
@@ -111,7 +111,7 @@ def _tidy(path: str) -> str:
     return stripped if stripped else path[:1]
 
 
-def mounts(host_paths, windows: Optional[bool] = None, read_only=()) -> dict:
+def mounts(host_paths, windows: Optional[bool] = None) -> dict:
     """The bind mounts for these host directories, as the docker SDK wants them.
 
     Deduplicated and with nested paths dropped: mounting both a directory and
@@ -119,37 +119,21 @@ def mounts(host_paths, windows: Optional[bool] = None, read_only=()) -> dict:
     which one a write lands in is then up to the order Docker happened to apply
     them in. The outermost wins, which is the one that contains the other.
 
-    A path named in ``read_only`` is mounted 'ro'. That is for a directory the
-    sandbox has to *read* and has no business writing -- PartCAD's own
-    installation, which it runs the wrappers out of. Only a mount that survives
-    deduplication in its own right can be read-only: a path swallowed by an
-    outer mount is reached through that one, on that one's terms, which is the
-    conservative answer rather than a surprising one -- the outer mount is the
-    state directory or the package being worked on, both of which are writable
-    by intent, and silently making either of them read-only because something
-    read-only sits inside it would break the sandbox rather than protect it.
+    All writable. Mounting the installation read-only was tried and taken back
+    out: it bought little -- a wrapper is read and executed, and what it writes
+    goes to the cache or back over its own protocol -- and cost a second thing
+    that could differ between two containers of one image, on a mount contract
+    that is a stopgap rather than a boundary. The boundary is the container.
     """
     if windows is None:
         windows = os.name == "nt"
-
-    # Compared the way 'contains' and 'rewrite' compare -- see '_comparable'.
-    # Spelling a path differently in 'read_only' than in 'host_paths' used to
-    # bring it back 'rw': a sandbox given write access to something the caller
-    # said it must not write, which is the one direction this must not fail in.
-    read_only = {_comparable(_tidy(p), windows) for p in read_only}
 
     kept = []
     for path in sorted({_tidy(p) for p in host_paths}, key=len):
         if not any(contains(outer, path, windows) for outer in kept):
             kept.append(path)
 
-    return {
-        path: {
-            "bind": translate(path, windows),
-            "mode": "ro" if _comparable(path, windows) in read_only else "rw",
-        }
-        for path in kept
-    }
+    return {path: {"bind": translate(path, windows), "mode": "rw"} for path in kept}
 
 
 def contains(outer: str, inner: str, windows: Optional[bool] = None) -> bool:
