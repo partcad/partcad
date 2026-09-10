@@ -30,6 +30,7 @@ so a sandbox per test is that download per test, and the disk to hold five
 copies of it. What is under test is the same sandbox at each step anyway.
 """
 
+import contextlib
 import os
 import shutil
 import types
@@ -122,13 +123,26 @@ def test_a_wrapper_file_can_be_opened_by_the_interpreter_over_there(made):
 
 
 def test_the_installation_is_not_writable_over_there(made):
-    """What is sandboxed must not be able to edit what sandboxes it."""
-    path = os.path.join(os.path.dirname(wrapper.get("plugin.py")), "pc-test-write")
-    exitcode, _stdout, stderr = made.run(["-c", "import sys; open(sys.argv[1], 'w').write('x')", path])
+    """What is sandboxed must not be able to edit what sandboxes it.
 
-    assert exitcode != 0, "the sandbox wrote into PartCAD's installation"
-    assert not os.path.exists(path)
-    assert "Read-only file system" in stderr or "Permission denied" in stderr, stderr
+    The probe is removed in a 'finally', and named so that two runs cannot
+    collide. A test for "this write fails" leaves a file behind exactly when it
+    fails to fail, and that file would be in the developer's own installation --
+    which is the thing the mount is read-only to protect.
+    """
+    path = os.path.join(
+        os.path.dirname(wrapper.get("plugin.py")),
+        "pc-test-write-%d" % os.getpid(),
+    )
+    try:
+        exitcode, _stdout, stderr = made.run(["-c", "import sys; open(sys.argv[1], 'w').write('x')", path])
+
+        assert exitcode != 0, "the sandbox wrote into PartCAD's installation"
+        assert not os.path.exists(path)
+        assert "Read-only file system" in stderr or "Permission denied" in stderr, stderr
+    finally:
+        with contextlib.suppress(OSError):
+            os.remove(path)
 
 
 def test_the_environment_is_created_where_the_host_can_see_it(made):

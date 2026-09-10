@@ -337,10 +337,19 @@ PartCAD mounts three directories into it:
 * the **context root** -- the package tree the command is working on;
 * **the internal state directory** (``~/.partcad`` by default), which is where
   the sandbox environments, the caches and the fetched dependencies live;
-* **PartCAD's own installation**, read-only, because the interpreter over there
-  is handed PartCAD's scripts by path and has to be able to open them.
+* **PartCAD's own installation**, because the interpreter over there is handed
+  PartCAD's scripts by path and has to be able to open them. Read-only: what is
+  sandboxed has no business editing what sandboxes it.
 
-All three are mounted **at the same paths they have outside**, so a path in a
+Nested directories are mounted once, by the outermost of them, since two views
+of one directory leave it undecided which a write lands in. So an installation
+that happens to sit *inside* the context root -- a checkout with its virtual
+environment in the package it is working on -- is reached through that mount
+instead, on that mount's writable terms. Narrowing the context root to protect
+it would take write access away from the package being worked on, which is worse
+than what it would prevent.
+
+All of them are mounted **at the same paths they have outside**, so a path in a
 log, in an error, in a cached artifact or in a ``.frd`` a solver wrote means the
 same thing on both sides and nothing has to be rewritten. The one exception is
 Windows, where a path like ``C:\Users\you\.partcad`` cannot exist inside a

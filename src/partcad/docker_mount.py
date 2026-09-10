@@ -110,14 +110,28 @@ def mounts(host_paths, windows: Optional[bool] = None, read_only=()) -> dict:
     by intent, and silently making either of them read-only because something
     read-only sits inside it would break the sandbox rather than protect it.
     """
-    read_only = {_tidy(p) for p in read_only}
+    if windows is None:
+        windows = os.name == "nt"
+
+    # Compared the way '_contains' and 'rewrite' compare: case-insensitively on
+    # Windows, where 'C:\PartCAD' and 'c:\partcad' are one directory. Matching
+    # case-sensitively here would mean a path asked for read-only and spelled
+    # differently came back 'rw' -- a sandbox given write access to something
+    # the caller said it must not write, which is the one direction this must
+    # not fail in.
+    def _key(path: str) -> str:
+        return path.lower() if windows else path
+
+    read_only = {_key(_tidy(p)) for p in read_only}
 
     kept = []
     for path in sorted({_tidy(p) for p in host_paths}, key=len):
         if not any(_contains(outer, path, windows) for outer in kept):
             kept.append(path)
 
-    return {path: {"bind": translate(path, windows), "mode": "ro" if path in read_only else "rw"} for path in kept}
+    return {
+        path: {"bind": translate(path, windows), "mode": "ro" if _key(path) in read_only else "rw"} for path in kept
+    }
 
 
 def _contains(outer: str, inner: str, windows: Optional[bool] = None) -> bool:

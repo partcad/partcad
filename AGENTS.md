@@ -184,10 +184,11 @@ This is still a fallback and not a second supported environment. What it does no
 * **A Docker daemon.** The KiCad example needs one, and so does the `docker` Python sandbox — which is now the
   default wherever a daemon answers *and* PartCAD's base image can be had, so a machine with Docker running is
   a machine that renders in it. (The `remote` sandbox needs no daemon here at all: it needs a reachable
-  `partcad-service-remote-docker`, which has one.) A machine without a daemon has to *say* so:
-  `PC_USE_DOCKER=false` (or `useDocker: false`), which is what a container image built with no Docker in it
-  should carry — but the KiCad test skips either way, on a daemon that is turned off and on one that simply
-  does not answer. It skips on *that* and nothing else: an image it cannot pull, a `kicad-cli` that errors, a
+  `partcad-service-remote-docker`, which has one.) Nothing has to be declared for a machine that simply has
+  no daemon: the KiCad test skips on one that is unreachable exactly as it does on one that was turned off.
+  `PC_USE_DOCKER=false` (or `useDocker: false`) is the explicit opt-out — for a machine that *has* a daemon
+  and should not use it, and for a container image built without one, which can then say so once rather than
+  discovering it per subject. It skips on *that* and nothing else: an image it cannot pull, a `kicad-cli` that errors, a
   part that comes back empty are all still failures, because those are the subject being broken rather than
   the machine not having a container runtime.
 * **conda.** Without it the Python sandbox falls back to `venv`, which is a real sandbox and passes the suite;

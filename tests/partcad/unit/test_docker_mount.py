@@ -106,6 +106,25 @@ def test_a_trailing_separator_does_not_hide_a_read_only_mount():
     }
 
 
+def test_a_read_only_directory_is_matched_whatever_its_case_on_windows():
+    """'C:\\PartCAD' and 'c:\\partcad' are one directory, and it was asked for read-only.
+
+    Everything else here folds case on Windows -- 'rewrite' does, '_contains'
+    does -- and this has to as well, because the direction it fails in is the
+    bad one: a mount the caller said must not be written coming back writable.
+    """
+    assert docker_mount.mounts(["C:\\PartCAD"], windows=True, read_only=["c:\\partcad"]) == {
+        "C:\\PartCAD": {"bind": "/c/PartCAD", "mode": "ro"},
+    }
+
+
+def test_case_still_decides_off_windows():
+    """Two directories differing in case are two directories on a POSIX host."""
+    assert docker_mount.mounts(["/srv/PartCAD"], windows=False, read_only=["/srv/partcad"]) == {
+        "/srv/PartCAD": {"bind": "/srv/PartCAD", "mode": "rw"},
+    }
+
+
 def test_a_read_only_directory_inside_a_writable_one_is_reached_through_it():
     """A checkout with its virtual environment inside the package it is working on.
 
