@@ -625,16 +625,7 @@ You also can run ``pytest`` without activating environment via Poetry, for examp
 
 .. code-block:: bash
 
-    $ poetry run python dev-tools/run_pytest.py
-
-**Why that and not** ``poetry run pytest``\ **.** ``run_pytest.py`` layers an empty ``.venv-pytest`` over the
-environment PartCAD is installed in: nothing is in it, everything resolves through to the real environment, and
-anything installed while the suite runs lands in it instead. Some tests exercise the ``none`` sandbox, which is
-defined as the interpreter already running -- so provisioning one pip-installs PartCAD's CAD stack into your own
-environment, which is how ``cadquery`` and the VTK-carrying ``cadquery-ocp`` used to end up in ``.venv`` over the
-``cadquery-ocp-novtk`` that ``poetry install`` put there. ``.venv-pytest`` is disposable and gitignored: delete it
-whenever you like and the next run builds another. Plain ``poetry run pytest`` still works, and still passes; it
-just writes those installs where they used to go.
+    $ poetry run pytest
 
 The tests for the core module are located in the ``./tests/partcad`` directory.
 The tests for the CLI module are located in the ``./tests/partcad_cli`` directory.
@@ -660,7 +651,7 @@ how), so the hook is the outermost wrapper and reads ``session.exitstatus`` rath
 handed. Both gates do this -- the ``pytest`` ``pre-commit`` hook and the ``Pytest`` job in CI -- and both fail
 unless they read ``success``, so a run that never reaches the hook at all (a crash mid-suite, a runner that
 goes away) writes no marker and fails too. Nothing is written unless that variable is set, so an ordinary
-run is unaffected.
+``poetry run pytest`` is unaffected.
 
 Behave
 ^^^^^^

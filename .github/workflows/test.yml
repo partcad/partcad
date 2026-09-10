@@ -569,15 +569,8 @@ jobs:
           # to Codecov, so the JUnit report was written and then thrown away and
           # Codecov said "JUnit XML file not found" on every run. Point it at the
           # directory the upload step below actually reads.
-          # Through 'run_pytest.py', which is how the pre-commit gate runs the
-          # suite too. It layers an empty '.venv-pytest' over this conda
-          # environment, so a test rendering through the 'none' sandbox -- the
-          # one that installs into whichever interpreter is running -- cannot
-          # rewrite the environment the rest of the job depends on. The runner
-          # is disposable and would survive it; running the same command
-          # developers do is the point.
           rc=0
-          python dev-tools/run_pytest.py \
+          pytest \
             tests cad/freecad \
             --junitxml=pytest-test-results/junit.xml \
             -x -p no:error-for-skips -p no:warnings --dist no || rc=$?
