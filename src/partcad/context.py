@@ -246,6 +246,16 @@ class Context:
         # an ordinary way to run a conversion, and it must not turn the output
         # directory read-only.
         self.sandbox_paths_read_only = []
+        # Files a factory produced with a native tool and then handed on to a
+        # wrapper, by object name ('//package:part') -> absolute path.
+        #
+        # A native tool runs here rather than in a sandbox -- OpenSCAD is the
+        # one that does -- so what it writes has to end up somewhere the sandbox
+        # can also open. That is the package's own directory; this records which
+        # file belongs to which object, so the path handed to a wrapper is one
+        # the context knows about rather than a temporary name invented for one
+        # call and forgotten.
+        self.generated_files = {}
         self.runtimes_python = {}
         # Container sandboxes, keyed by container name (derived from the image).
         self.runtimes_container = {}
