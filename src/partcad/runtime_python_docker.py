@@ -180,10 +180,124 @@ def image_available(image: str, version: str = "") -> bool:
     except Exception:
         return False
     try:
-        resolve_image(client, image, version)
-        return True
+        resolved = resolve_image(client, image, version)
     except Exception:
         return False
+    # An image is only half of it. The other half is whether the daemon that
+    # would run it can see the directories PartCAD is going to bind -- see
+    # 'mounts_are_shared'. A machine that fails this is one where every part
+    # would fail later, in a way that names nothing.
+    return mounts_are_shared(client, resolved)
+
+
+# Whether a directory this process creates is the one the daemon binds, keyed by
+# the daemon it was asked of and the image it was asked in. Once per process:
+# the answer is a property of how this machine reaches Docker, and that does not
+# change while a command runs.
+_MOUNTS_SHARED = {}
+_MOUNTS_SHARED_GUARD = threading.Lock()
+
+# What the probe writes and looks for. The name is only ever seen in a container
+# that is about to be thrown away.
+_PROBE_FILE = "partcad-mount-probe"
+
+
+def mounts_are_shared(client, image: str) -> bool:
+    """Whether the daemon binds *these* directories, or ones of the same name.
+
+    Every part of this sandbox rests on that. PartCAD hands the daemon its own
+    paths and expects the container to open its own files there -- the wrappers,
+    the package, the environment it just built. A daemon that is not on this
+    filesystem resolves those paths against a different one and Docker creates
+    whatever is missing, empty and owned by root. Nothing fails at that point:
+    the container starts, with directories that are not the ones PartCAD meant,
+    and the first thing to go wrong is ``-m venv`` reporting
+
+        Error: [Errno 13] Permission denied: '/home/vscode/.partcad'
+
+    which names neither the daemon nor the mount and sends the reader looking
+    for a permissions problem that is not there.
+
+    Two arrangements do this and neither is unusual. A dev container with the
+    host's ``/var/run/docker.sock`` bound into it -- "Docker outside of Docker",
+    which this repository's own dev container uses -- is the common one, and
+    ``DOCKER_HOST`` pointing at another machine is the other. A daemon *inside*
+    this container is fine, and so is an ordinary host; which is why this is a
+    probe and not a guess about the environment. The question is not "am I in a
+    container" but "does that daemon see this directory", and one container that
+    looks for a file answers it.
+
+    A ``False`` makes the sandbox unavailable rather than degraded. There is no
+    halfway: PartCAD would be handing a wrapper paths that mean something else
+    over there, which is the whole class of bug binding directories onto
+    themselves exists to prevent.
+    """
+    key = (getattr(getattr(client, "api", None), "base_url", None), image)
+    with _MOUNTS_SHARED_GUARD:
+        if key in _MOUNTS_SHARED:
+            return _MOUNTS_SHARED[key]
+
+    shared = _probe_mounts(client, image)
+    if not shared:
+        pc_logging.debug(
+            "The Docker daemon at %s does not share this filesystem, so the 'docker' sandbox cannot "
+            "bind PartCAD's directories into a container." % (key[0],)
+        )
+    with _MOUNTS_SHARED_GUARD:
+        _MOUNTS_SHARED[key] = shared
+    return shared
+
+
+def _probe_mounts(client, image: str) -> bool:
+    """One throwaway container, asked whether it can see a file made here."""
+    with tempfile.TemporaryDirectory() as probe:
+        marker = os.path.join(probe, _PROBE_FILE)
+        with open(marker, "w") as written:
+            written.write("partcad")
+        # Readable by anyone, because the question is where the daemon looks and
+        # not who may read what it finds. A temporary directory is 0700, and on
+        # a platform where the container cannot be told to run as this user --
+        # Docker Desktop maps ownership itself, so it is not -- that would make
+        # a daemon on this very filesystem answer "somewhere else". The real
+        # sandbox's mounts keep the permissions they have; only this one file,
+        # made to be read once and deleted, is opened up.
+        os.chmod(probe, 0o755)
+        os.chmod(marker, 0o644)
+        try:
+            client.containers.run(
+                image,
+                # 'python3' rather than 'test': the base image contract promises
+                # an interpreter under that name and promises nothing about a
+                # shell, and a derived image is free to have dropped one.
+                command=[
+                    CONTAINER_PYTHON,
+                    "-c",
+                    "import os,sys; sys.exit(0 if os.path.isfile(%r) else 1)" % docker_mount.translate(marker),
+                ],
+                entrypoint=[],
+                volumes=docker_mount.mounts([probe]),
+                # The same user the sandbox's own container runs as, for the
+                # same reason and with the same platform rule -- see
+                # '_start_once'. Not decoration: a temporary directory is the
+                # host user's and readable by nobody else, so a probe running
+                # as the image's user would fail to read its own marker on any
+                # machine whose uid is not the image's, report a daemon that is
+                # right here as somewhere else, and turn this sandbox off for
+                # everybody. Every GitHub runner is such a machine.
+                user=("%d:%d" % (os.getuid(), os.getgid())) if platform.system() == "Linux" else None,
+                remove=True,
+            )
+            return True
+        except docker.errors.ContainerError:
+            # It ran and did not find the file: the directory it was given is
+            # not the one made above. This is the answer, not an error.
+            return False
+        except Exception as e:
+            # Anything else -- the image will not run, the daemon refused the
+            # mount, a path that cannot be bound at all -- is a sandbox that
+            # will not work either, and the caller's fallback is the same.
+            pc_logging.debug("The 'docker' sandbox mount probe did not complete: %s" % e)
+            return False
 
 
 @telemetry.instrument()
@@ -326,6 +440,21 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                 return self._container
 
             client = docker.from_env()
+            # Asked before anything is created. A daemon that is not on this
+            # filesystem hands the container directories that are not these
+            # ones, and every failure after that names something else -- see
+            # 'mounts_are_shared'. Only a *declared* 'pythonSandbox: docker'
+            # reaches this: where PartCAD chooses, 'image_available' asked the
+            # same question first and chose another sandbox.
+            if not mounts_are_shared(client, resolve_image(client, self.image, self.version)):
+                raise runtime.SandboxUnavailable(
+                    "the 'docker' sandbox needs a container runtime that can see this machine's files, "
+                    "and this one cannot: a directory created here is not the directory it binds. That "
+                    "is what a dev container with the host's Docker socket, or a 'DOCKER_HOST' on "
+                    "another machine, gives you. Run PartCAD where that daemon is, or choose a sandbox "
+                    "that stays here with 'pythonSandbox' -- 'conda' and 'venv' both work."
+                )
+
             mounts = docker_mount.mounts(self._mounted)
             for attempt in range(_START_ATTEMPTS):
                 container = self._start_once(client, mounts)

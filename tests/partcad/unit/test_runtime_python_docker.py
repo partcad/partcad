@@ -14,6 +14,7 @@ the job of the integration legs in CI, which have a Docker daemon.
 
 import os
 import pathlib
+import platform
 import tempfile
 import time
 import types
@@ -398,6 +399,177 @@ def test_the_interpreter_name_has_no_exe_suffix(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# Saying so when the daemon is not on this filesystem                          #
+# --------------------------------------------------------------------------- #
+
+
+class _ProbeClient:
+    """A daemon that answers the mount probe one way or the other.
+
+    'sees' says whether the container it runs finds the file the probe wrote,
+    which is the whole question: a daemon outside this filesystem binds a
+    directory of the same name from somewhere else, and Docker creates it empty.
+    """
+
+    def __init__(self, sees=True, base_url="http+docker://localhost"):
+        self.sees = sees
+        self.runs = []
+        self.api = types.SimpleNamespace(base_url=base_url)
+        self.images = types.SimpleNamespace(get=lambda name: name, pull=lambda name: name)
+        self.containers = types.SimpleNamespace(get=self._get, run=self._run)
+
+    def _get(self, name):
+        raise docker.errors.NotFound(name)
+
+    def _run(self, image, **kwargs):
+        self.runs.append((image, kwargs))
+        if self.sees:
+            return b""
+        raise docker.errors.ContainerError(
+            container="probe", exit_status=1, command=kwargs.get("command"), image=image, stderr=b""
+        )
+
+
+@pytest.fixture(autouse=True)
+def _forget_the_probe():
+    """Its answer is cached for the process, which two tests must not share."""
+    runtime_python_docker._MOUNTS_SHARED.clear()
+    yield
+    runtime_python_docker._MOUNTS_SHARED.clear()
+
+
+def test_a_daemon_that_sees_this_filesystem_can_run_the_sandbox(tmp_path):
+    """The ordinary case: the probe file is written here and read over there."""
+    client = _ProbeClient(sees=True)
+
+    assert runtime_python_docker.mounts_are_shared(client, "some/image:tag") is True
+
+
+def test_a_daemon_somewhere_else_cannot(tmp_path):
+    """Docker outside of Docker, or a 'DOCKER_HOST' on another machine.
+
+    The container starts and the mount is made; it is simply a mount of a
+    different directory, which nothing about the run says. So the probe writes a
+    file and asks whether it is there.
+    """
+    client = _ProbeClient(sees=False)
+
+    assert runtime_python_docker.mounts_are_shared(client, "some/image:tag") is False
+
+
+def test_the_probe_looks_for_the_file_it_wrote_in_the_directory_it_mounted(tmp_path):
+    """And mounts exactly one directory: the temporary one it just made.
+
+    Asserted because a probe that mounted something else, or looked somewhere
+    else, would answer for a directory nobody is going to use -- and would say
+    "shared" on a machine where nothing is.
+    """
+    client = _ProbeClient(sees=True)
+
+    runtime_python_docker.mounts_are_shared(client, "some/image:tag")
+
+    _image, kwargs = client.runs[0]
+    (mounted,) = kwargs["volumes"]
+    assert runtime_python_docker._PROBE_FILE in kwargs["command"][-1]
+    assert docker_mount.translate(mounted) in kwargs["command"][-1]
+    # Thrown away with the answer. A probe that left containers behind would be
+    # one per process on every machine PartCAD runs on.
+    assert kwargs["remove"] is True
+    # And run as the user who made the file, on the platform where that is what
+    # decides whether it can be read back. A temporary directory belongs to the
+    # host user and to nobody else, so a probe running as the image's user reads
+    # nothing, calls a daemon that is right here "somewhere else", and turns the
+    # sandbox off on every machine whose uid is not the image's -- which is every
+    # GitHub runner.
+    if platform.system() == "Linux":
+        assert kwargs["user"] == "%d:%d" % (os.getuid(), os.getgid())
+    else:
+        assert kwargs["user"] is None
+
+
+def test_the_daemon_is_asked_once(tmp_path):
+    """It is a property of how this machine reaches Docker, not of the moment.
+
+    A container per part -- which is what asking per sandbox would be -- is a
+    cost on every machine to answer a question whose answer never changes.
+    """
+    client = _ProbeClient(sees=True)
+
+    runtime_python_docker.mounts_are_shared(client, "some/image:tag")
+    runtime_python_docker.mounts_are_shared(client, "some/image:tag")
+
+    assert len(client.runs) == 1
+
+
+def test_two_daemons_are_two_answers(tmp_path):
+    """The cache is keyed by the daemon, because that is what the answer is about.
+
+    One shell talking to a remote 'DOCKER_HOST' and one talking to the machine's
+    own daemon are two different answers, and a cache that held one would give
+    it to the other.
+    """
+    here, there = _ProbeClient(sees=True), _ProbeClient(sees=False, base_url="tcp://elsewhere:2375")
+
+    assert runtime_python_docker.mounts_are_shared(here, "some/image:tag") is True
+    assert runtime_python_docker.mounts_are_shared(there, "some/image:tag") is False
+
+
+def test_an_image_the_daemon_cannot_bind_for_is_not_available(tmp_path, monkeypatch):
+    """Which is what keeps PartCAD from *choosing* this sandbox there.
+
+    'image_available' is the question the context asks before it decides, so a
+    machine that would fail on every part answers "no" here and gets conda or a
+    virtual environment instead -- rather than a container per part, each one
+    failing on a path.
+    """
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr("docker.from_env", lambda: _ProbeClient(sees=False))
+
+    assert runtime_python_docker.image_available("some/image:tag", "3.11") is False
+
+
+def test_an_image_whose_daemon_is_here_is_available(tmp_path, monkeypatch):
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr("docker.from_env", lambda: _ProbeClient(sees=True))
+
+    assert runtime_python_docker.image_available("some/image:tag", "3.11") is True
+
+
+def test_a_declared_docker_sandbox_says_why_it_cannot_run(tmp_path, monkeypatch):
+    """A stated 'pythonSandbox: docker' is obeyed, so it reaches '_start'.
+
+    What it used to reach was 'containers.run' succeeding, and then '-m venv'
+    failing with "Permission denied" on a directory the user can write to
+    perfectly well -- which names neither the daemon nor the mount. The sandbox
+    is unavailable, and the sentence says which knob moves it.
+    """
+    made = _runtime(tmp_path)
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr("docker.from_env", lambda: _ProbeClient(sees=False))
+
+    with pytest.raises(runtime.SandboxUnavailable, match="cannot see this machine's files|pythonSandbox"):
+        made._start()
+
+
+def test_nothing_is_created_when_the_daemon_is_somewhere_else(tmp_path, monkeypatch):
+    """Asked before the container, not after: half a sandbox is worse than none.
+
+    A container started against directories that are not these ones is one the
+    next run finds and reuses.
+    """
+    client = _ProbeClient(sees=False)
+    made = _runtime(tmp_path)
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr("docker.from_env", lambda: client)
+
+    with pytest.raises(runtime.SandboxUnavailable):
+        made._start()
+
+    # The probe's own container, and nothing else.
+    assert [kwargs.get("name") for _image, kwargs in client.runs] == [None]
+
+
+# --------------------------------------------------------------------------- #
 # Saying so when there is no container runtime                                 #
 # --------------------------------------------------------------------------- #
 
@@ -549,9 +721,20 @@ class _Container:
 
 
 class _Client:
+    """A daemon on this filesystem, holding at most one sandbox container.
+
+    Two kinds of run reach it. The named one is the sandbox's own container;
+    the unnamed one is the mount probe, which every '_start' now makes first,
+    and which this stub answers the way a daemon that shares this filesystem
+    does. Keeping them apart here rather than in each test is what stops the
+    probe from counting as "a container was created".
+    """
+
     def __init__(self, existing=None):
         self.existing = existing
         self.made = None
+        self.probes = []
+        self.api = types.SimpleNamespace(base_url="http+docker://localhost")
         self.images = types.SimpleNamespace(get=lambda name: name, pull=lambda name: name)
         self.containers = types.SimpleNamespace(get=self._get, run=self._run)
 
@@ -563,6 +746,9 @@ class _Client:
         return self.existing
 
     def _run(self, image, **kwargs):
+        if kwargs.get("name") is None:
+            self.probes.append(kwargs)
+            return b""
         self.made = kwargs
         # What is created answers to the name afterwards, the way Docker's does,
         # and carries the modes it was asked for. A stub that kept returning the
@@ -570,6 +756,24 @@ class _Client:
         # caller replace a container that is in fact the one it wanted.
         self.existing = _Container({host: spec["mode"] != "ro" for host, spec in (kwargs.get("volumes") or {}).items()})
         return self.existing
+
+
+def _except_the_probe(client, replacement):
+    """Replace 'containers.run' for the *sandbox* container only.
+
+    The mount probe keeps the stub's own answer. A test about a name taken
+    between the look-up and the create, or about a refusal that is not a race,
+    is not a test about whether the daemon shares this filesystem -- and saying
+    so in each of them would be three copies of one fact.
+    """
+    original = client._run
+
+    def run(image, **kwargs):
+        if kwargs.get("name") is None:
+            return original(image, **kwargs)
+        return replacement(image, **kwargs)
+
+    client.containers.run = run
 
 
 def _started(tmp_path, monkeypatch, existing):
@@ -809,7 +1013,7 @@ def test_a_name_taken_between_the_lookup_and_the_create_is_retried(tmp_path, mon
         client.existing = theirs
         raise _conflict('Conflict. The container name "%s" is already in use' % kwargs["name"])
 
-    client.containers.run = _run
+    _except_the_probe(client, _run)
 
     got = made._start()
 
@@ -835,7 +1039,7 @@ def test_a_refusal_that_is_not_a_race_is_raised(tmp_path, monkeypatch):
             "no space left on device", response=response, explanation="no space left on device"
         )
 
-    client.containers.run = _run
+    _except_the_probe(client, _run)
 
     with pytest.raises(docker.errors.APIError, match="no space left"):
         made._start()
@@ -924,12 +1128,19 @@ def test_no_environment_is_not_built(tmp_path):
 
 
 class _Registry:
-    """A docker client that holds some images and can be asked to pull others."""
+    """A docker client that holds some images and can be asked to pull others.
+
+    On this machine's filesystem, so the mount probe 'image_available' makes
+    passes: what these tests are about is which names are tried and in what
+    order, and a daemon somewhere else has its own tests above.
+    """
 
     def __init__(self, local=(), pullable=()):
         self.local = set(local)
         self.pullable = set(pullable)
         self.pulled = []
+        self.api = types.SimpleNamespace(base_url="http+docker://localhost/%d" % id(self))
+        self.containers = types.SimpleNamespace(run=lambda image, **kwargs: b"")
 
         def get(name):
             if name not in self.local:

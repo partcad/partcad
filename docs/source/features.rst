@@ -321,10 +321,25 @@ simply not permitted to reach the registry those are different answers. So
 PartCAD checks, once, and falls through to ``conda`` or ``venv`` with a warning
 rather than failing every part against a registry you never asked it to talk to.
 
+"Can actually provide" also includes the **filesystem**. The container gets your
+directories bind-mounted into it, and that only means anything if the daemon
+being asked is on the same filesystem as PartCAD. Two ordinary arrangements
+where it is not: a dev container with the host's ``/var/run/docker.sock`` bound
+into it, and ``DOCKER_HOST`` pointing at another machine. There the daemon
+resolves your paths against a filesystem of its own, Docker creates whatever is
+missing -- empty, and owned by root -- and the container starts perfectly well
+with directories that are not yours. Nothing announces that; the first symptom
+is a permission error on a directory you can write to. So PartCAD asks the
+daemon directly, once: it writes a file and has a throwaway container look for
+it. A daemon that cannot see it is one this sandbox cannot use, and PartCAD says
+so and uses conda or a virtual environment, both of which stay on this machine.
+A daemon *inside* this container -- Docker in Docker -- shares the filesystem
+and is fine.
+
 That fallback is only ever for a choice PartCAD made. Say ``pythonSandbox:
-docker`` yourself and it is obeyed: an image that cannot be had is then a
-failure, because being unable to do what was asked is not a reason to quietly do
-something else.
+docker`` yourself and it is obeyed: an image that cannot be had, or a daemon
+that cannot see your files, is then a failure, because being unable to do what
+was asked is not a reason to quietly do something else.
 
 .. _docker-sandbox:
 

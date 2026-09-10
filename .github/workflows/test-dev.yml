@@ -221,14 +221,24 @@ jobs:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
           configFile: .devcontainer/.devcontainer.json
           push: never
+          # "runCmd" is handed to a shell as one script, so the step's result is
+          # the *last* command's unless the script says otherwise. This one used
+          # to end with "echo DONE", which meant a failing pytest was reported as
+          # a passing job -- and it was: on 7cb384e this job was green while its
+          # own JUnit upload carried a failed test, which is how the dev
+          # container's "docker" sandbox went on being broken without anybody
+          # seeing it. "set -e" is what makes each line count, here and in the
+          # two jobs below, where a trailing "coverage xml" hid the same way (it
+          # succeeds after a failing run, because coverage writes its data
+          # whatever the program exited with).
           runCmd: |
+            set -e
             (cd ide/vscode && npm ci && npm run vsce-package)
 
             # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
             mkdir -pv pytest-results
             poetry --no-ansi --no-interaction show --tree
             poetry --no-ansi --no-interaction run python -m pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --ignore-glob="ide/vscode/bundled" --dist no --verbose --color=no
-            echo DONE
 
       - name: Upload test results & coverage reports to github and codecov
         if: always()
@@ -375,13 +385,20 @@ jobs:
             # TODO-25: Workaround for "Host key verification failed."
             GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
+          # The suite's status is kept and reported, and the coverage report is
+          # written either way. Ending on "coverage xml" reported *its* status,
+          # which is success after a failing run -- see the note on the pytest
+          # job above.
           runCmd: |
+            set -e
             # TODO-26: PC-186: Allow to configure git clone protocol in settings
             git config --global url."git@github.com:".insteadOf "https://github.com/"
             git config --global protocol.version 2
             mkdir -pv behave-results
-            poetry --no-ansi --no-interaction run coverage run $(poetry run which behave)
+            status=0
+            poetry --no-ansi --no-interaction run coverage run $(poetry run which behave) || status=$?
             poetry --no-ansi --no-interaction run coverage xml --data-file=./.coverage -o behave-results/coverage.xml
+            exit $status
 
       - name: Upload test results & coverage reports to github and codecov
         if: always()
@@ -549,14 +566,22 @@ jobs:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
           configFile: .devcontainer/.devcontainer.json
           push: never
+          # Same shape as the two jobs above: every "pc" counts, and the report
+          # is still written when one of them fails. This job was the only one of
+          # the three that ever went red, and only by accident -- the "pc"
+          # commands failed early enough to leave no coverage data, so the
+          # "coverage xml" it ended on failed too.
           runCmd: |
+            set -e
             mkdir -pv pc-test-results
             poetry --no-ansi --no-interaction show --tree
+            status=0
             # TODO: Use similar 'coverage run' in behave steps when calling pc
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r //pub/examples)"
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi test -r --package //pub/examples)"
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi render -r --package //pub/examples)"
-            poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o pc-test-results/coverage.xml
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r //pub/examples)" || status=$?
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi test -r --package //pub/examples)" || status=$?
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi render -r --package //pub/examples)" || status=$?
+            poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o pc-test-results/coverage.xml || true
+            exit $status
 
       - name: Upload test results & coverage reports to github and codecov
         if: always()

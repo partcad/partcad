@@ -76,6 +76,27 @@ def made(tmp_path_factory):
             pass
 
 
+def test_this_daemon_shares_this_filesystem(made):
+    """The check that decides whether this sandbox is offered at all, run for real.
+
+    'mounts_are_shared' writes a file and asks a container whether it is there.
+    A wrong "no" is the expensive direction: it does not fail anything, it turns
+    the 'docker' sandbox off on a machine where it works, quietly, and the only
+    symptom is that conda is doing the rendering. That is exactly the kind of
+    thing a stub cannot catch -- the file's ownership, the uid the container
+    runs as, whether the temporary directory can be bound at all -- so it is
+    asked here, against a daemon that is really answering.
+
+    An ordinary CI runner is on the same filesystem as its daemon, so the answer
+    is yes. Where it is no -- a dev container holding the host's socket, a
+    'DOCKER_HOST' elsewhere -- this file does not run: 'docker_available' has
+    already skipped it or the image is not there.
+    """
+    import docker
+
+    assert runtime_python_docker.mounts_are_shared(docker.from_env(), IMAGE) is True
+
+
 def test_a_command_runs_in_the_container(made):
     """The first thing, and the one everything else is built on."""
     exitcode, stdout, stderr = made.run(["-c", "import sys; print(sys.executable)"])
