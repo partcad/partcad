@@ -22,6 +22,7 @@ import tempfile
 
 from .. import logging as pc_logging
 from ..context import Context
+from ..user_config import user_config
 
 # What a shape of each kind is called inside the throwaway package, and which
 # section of its 'partcad.yaml' declares it. The names are not arbitrary: they
@@ -120,17 +121,32 @@ def write_output_file(
     """
     _, object_name = KINDS[kind]
     input_path = Path(input_filename).resolve()
-    temp_dir = Path(tempfile.mkdtemp())
+
+    # Under the internal state directory rather than in the system temporary
+    # one, and that is not tidiness. This directory is the context root, so a
+    # container sandbox has to mount it -- and the system temporary directory
+    # is somewhere the home directory mount does not reach, so every ad-hoc
+    # command would ask for a mount no previous one had. A mount set that
+    # differs is a container that gets replaced, so 'pc convert' would have
+    # thrown away the warm container and started another every single time.
+    # Here it is inside '~/.partcad', which is already mounted, and the mount
+    # set does not move.
+    #
+    # Still made fresh and still deleted below: what changes is where it lives,
+    # not how long.
+    adhoc_root = Path(user_config.internal_state_dir) / "adhoc"
+    adhoc_root.mkdir(parents=True, exist_ok=True)
+    temp_dir = Path(tempfile.mkdtemp(dir=str(adhoc_root)))
 
     try:
         generate_partcad_config(temp_dir, input_type, input_path, kind=kind)
 
         ctx = Context(root_path=temp_dir, search_root=False)
-        # The generated package is in 'temp_dir' and points at the user's file
-        # wherever it is, so neither the input nor the output is under the
-        # context root. A sandbox that runs on the host does not care; one that
-        # runs in a container sees only what is mounted, and without this it
-        # reports that it cannot read a file the user can see perfectly well.
+        # The generated package points at the user's file wherever it is, so
+        # neither the input nor the output is under the context root. A sandbox
+        # that runs on the host does not care; one that runs in a container sees
+        # only what is mounted, and without this it reports that it cannot read
+        # a file the user can see perfectly well.
         #
         # The directories rather than the files: an OpenSCAD or a CadQuery input
         # may include a sibling, and the output's directory has to be writable
