@@ -608,3 +608,186 @@ jobs:
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             plugin-dist
           echo "Published the 'pc' plugin ${version} to the 'plugin-dist' branch."
+
+  # The VS Code extension, to the galleries people install it from. Last and
+  # only on "main", for the same reason the plugin branch above is: this makes a
+  # version available to everyone who has the extension installed, and it should
+  # point at a release that exists. A run that dies before this leaves them on
+  # the previous version, which is a complete one.
+  #
+  # The packages are the ones the release carries -- the same artifact, not a
+  # rebuild -- so what the galleries serve and what is attached to the GitHub
+  # release are the same bytes.
+  #
+  # Nothing here names an extension id. `vsce publish --packagePath` and `ovsx
+  # publish` read the identity out of the package, so this job stays correct
+  # across a change of publisher or of name; the order below is the only thing
+  # it has to know, and that is expressed in which file goes first.
+  publish-vscode-extension:
+    name: Publish the VS Code extension
+    needs: publish-to-pypi
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    # Where the gallery credentials live, as "pypi" is for the wheel. Publishing
+    # is the one thing in this workflow that hands a token to a third party.
+    environment:
+      name: vscode-marketplace
+
+    # Serialized across runs, like "publish-plugin-dist": two releases going out
+    # close together must not interleave their uploads, and cancelling a publish
+    # midway is the thing to avoid. Job-level, so that the builds and the PyPI
+    # upload are not queued behind it.
+    concurrency:
+      group: publish-vscode-extension
+      cancel-in-progress: false
+
+    steps:
+      # No checkout: the packages are the whole of what this job needs.
+      - name: Download the packages
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-vsix
+          path: vsix
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Publish to the galleries
+        env:
+          # The Visual Studio Marketplace, and Open VSX for VSCodium -- which is
+          # not pointed at the Marketplace, whose terms restrict it to
+          # Microsoft's own products. Each is skipped, loudly, when its token is
+          # unset: a release that cannot publish should still be a release, and
+          # the alternative is every release going red until the secrets exist.
+          #
+          # The "_SHIM" pair is for the case where the transition shim's
+          # publisher is a separate account with a token of its own. Left unset,
+          # the shim is published with the same token as the extension, which is
+          # right when one account owns both publishers.
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          VSCE_PAT_SHIM: ${{ secrets.VSCE_PAT_SHIM }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+          OVSX_PAT_SHIM: ${{ secrets.OVSX_PAT_SHIM }}
+        run: |
+          set -euo pipefail
+
+          # Found by shape rather than by version: this job has no version of
+          # its own, and the artifact holds exactly these two. Both are checked
+          # for, because a release that publishes half of itself is worse than
+          # one that publishes none -- and the half that would go missing
+          # quietly is the shim, which is what every existing installation
+          # actually receives.
+          extension="$(find vsix -maxdepth 1 -type f -name 'partcad-*.vsix' \
+            ! -name 'partcad-shim-*.vsix')"
+          shim="$(find vsix -maxdepth 1 -type f -name 'partcad-shim-*.vsix')"
+          exactly_one() {
+            if [ -z "$2" ]; then
+              echo "::error::no $1 package in the artifact"
+              ls -l vsix
+              exit 1
+            fi
+            if [ "$(printf '%s\n' "$2" | wc -l)" -ne 1 ]; then
+              echo "::error::more than one $1 package; this artifact holds two builds"
+              ls -l vsix
+              exit 1
+            fi
+          }
+          exactly_one extension "${extension}"
+          exactly_one shim "${shim}"
+          echo "Extension: ${extension}"
+          echo "Shim:      ${shim}"
+
+          # Publishes one package to one gallery. Three outcomes, because the
+          # caller has to tell them apart: 0 the gallery has this version now
+          # (published, or already there), 1 it does not and that is an error,
+          # 2 it does not because there is no token for it. Treating "already
+          # there" as done is what makes a re-run of a release a no-op. Matched on the message because neither tool
+          # gives that its own exit code; should the wording ever move, this job
+          # fails loudly instead of skipping quietly, which is the safe
+          # direction for such a match to break in.
+          publish() {
+            gallery="$1"
+            token="$2"
+            package="$3"
+            name="${package##*/}"
+            if [ -z "${token}" ]; then
+              echo "::warning::no token for ${gallery}; ${name} was not published"
+              echo "- ${gallery}: skipped, no token -- ${name}" >> "${GITHUB_STEP_SUMMARY}"
+              return 2
+            fi
+            case "${gallery}" in
+            marketplace)
+              set -- npx --yes @vscode/vsce@3.9.2 publish --pat "${token}" --packagePath "${package}"
+              ;;
+            open-vsx)
+              set -- npx --yes ovsx@1.1.1 publish "${package}" --pat "${token}"
+              ;;
+            esac
+            if output="$("$@" 2>&1)"; then
+              echo "${output}"
+              echo "- ${gallery}: published ${name}" >> "${GITHUB_STEP_SUMMARY}"
+              return 0
+            fi
+            echo "${output}"
+            case "${output}" in
+            *"already exists"* | *"already published"* | *"same version"*)
+              echo "::notice::${name} is already in ${gallery}; nothing to do"
+              echo "- ${gallery}: already published -- ${name}" >> "${GITHUB_STEP_SUMMARY}"
+              return 0
+              ;;
+            esac
+            echo "::error::publishing ${name} to ${gallery} failed"
+            return 1
+          }
+
+          echo "## VS Code extension" >> "${GITHUB_STEP_SUMMARY}"
+
+          # The extension before the shim, and -- the part that is easy to get
+          # wrong -- per gallery rather than overall. The shim's only content is
+          # an `extensionDependencies` on the extension, and an editor fails an
+          # install whose dependency it cannot resolve, so a shim in a gallery
+          # the extension is not in is a package nobody can install. That is
+          # worse than no shim at all: it is what every installation of the old
+          # entry receives. "ide/vscode-shim/AGENTS.md" states the rule; this is
+          # the only place that has to obey it.
+          #
+          # Hence a status per gallery, not one flag for both. The two are
+          # published with tokens that need not be the same -- the shim's
+          # publisher may be a separate account -- so "the extension went to the
+          # Marketplace" says nothing about Open VSX, and a token present for one
+          # package but not the other is exactly how a shim could otherwise
+          # overtake the extension it depends on.
+          marketplace_extension=0
+          publish marketplace "${VSCE_PAT}" "${extension}" || marketplace_extension=$?
+          open_vsx_extension=0
+          publish open-vsx "${OVSX_PAT}" "${extension}" || open_vsx_extension=$?
+          if [ "${marketplace_extension}" -eq 1 ] || [ "${open_vsx_extension}" -eq 1 ]; then
+            echo "::error::the extension did not publish; not publishing the shim after it"
+            exit 1
+          fi
+
+          # Into a gallery that has the extension, and no other. A gallery the
+          # extension was skipped for gets no shim either, and says so.
+          shim_into() {
+            into_gallery="$1"
+            into_extension="$2"
+            into_token="$3"
+            if [ "${into_extension}" -ne 0 ]; then
+              echo "::warning::${into_gallery} did not get the extension; the shim was not published there either"
+              echo "- ${into_gallery}: shim skipped, the extension is not there" >> "${GITHUB_STEP_SUMMARY}"
+              return 0
+            fi
+            into_status=0
+            publish "${into_gallery}" "${into_token}" "${shim}" || into_status=$?
+            if [ "${into_status}" -eq 1 ]; then
+              return 1
+            fi
+            return 0
+          }
+
+          failed=0
+          shim_into marketplace "${marketplace_extension}" "${VSCE_PAT_SHIM:-${VSCE_PAT}}" || failed=1
+          shim_into open-vsx "${open_vsx_extension}" "${OVSX_PAT_SHIM:-${OVSX_PAT}}" || failed=1
+          exit "${failed}"
