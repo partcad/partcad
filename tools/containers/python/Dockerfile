@@ -9,6 +9,11 @@
 # image that carried the stack would also have to be rebuilt for every change to
 # it, and would be a gigabyte before anybody added anything.
 #
+# Neither are PartCAD's own wrapper scripts, for a different reason: an image is
+# built once and used for releases afterwards, so a wrapper baked in here would
+# be run against a later release's protocol. They are mounted instead -- see
+# "Why the wrappers are mounted and not baked in" in the README.
+#
 # What that leaves here is the floor under every derived image, which is why it
 # is `python:*-slim` and not a dev container: the `docker` sandbox is the default
 # where a container runtime answers, and a default that costs more to provision

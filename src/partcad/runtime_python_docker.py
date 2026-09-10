@@ -74,6 +74,11 @@ KEEPALIVE = ["sleep", "infinity"]
 # always. That is what CI caught: a bundle rendering through the 'docker'
 # sandbox died on "can't open file
 # '.../_internal/partcad/wrappers/wrapper_plugin.py'".
+#
+# Mounted rather than baked into the images PartCAD publishes, which would cost
+# nothing to reach and would be wrong for a reason that is not about PartCAD's
+# own images at all -- see "Why the wrappers are mounted and not baked in" in
+# 'tools/containers/README.md'.
 INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
 
 

@@ -103,7 +103,7 @@ report() {
 }
 
 report "a Docker daemon" "docker info" \
-  "the KiCad example needs one; export PC_USE_DOCKER=false to say this machine has none, or it counts as broken"
+  "the KiCad example is skipped without one, and the 'docker' Python sandbox falls back"
 report "conda" "command -v conda || command -v mamba" \
   "the Python sandbox falls back to 'venv', which cannot provision an interpreter version but is otherwise fine"
 

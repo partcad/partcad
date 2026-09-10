@@ -29,7 +29,7 @@ entitled to assume. Change any of it and PartCAD cannot run scripts in your imag
 | **Commands** | `PC_CONTAINER_ALLOWED_COMMANDS` maps a name to an absolute executable path. A caller names `python`; the image decides what that is. A name the image does not list cannot be run — this is the whole of the service's isolation. |
 | **Sandbox root** | `PC_CONTAINER_SANDBOX_ROOT` (default `/pc-sandbox`) is where the `remote` sandbox's environments are mounted. The service also accepts a command that *is* the `bin/python` of an environment under it, because an environment built at run time carries a Python version the allowlist could not have named. Nothing else there may be run, and the file has to exist. |
 | **User** | Not `root`. The mounted directories are the user's own files, and files the sandbox creates have to stay usable outside it. |
-| **Mounts** | The context root and the internal state directory are mounted at the paths they have on the host (drive-letter-mapped on Windows). Nothing may occupy those paths in the image. |
+| **Mounts** | The context root, the internal state directory and PartCAD's own installation (read-only) are mounted at the paths they have on the host (drive-letter-mapped on Windows). Nothing may occupy those paths in the image. |
 | **Interpreter** | The `python` entry in the allowlist is a real CPython of the version the tag names, with `pip` available. PartCAD installs a package's requirements into a mounted environment, so the interpreter must be able to install and import from a directory that did not exist when the image was built. |
 
 What a derived image is expected to change: the packages installed in it, and nothing else. Add your apt
@@ -37,6 +37,22 @@ packages, add wheels that need compiling, leave the service, the port, the worki
 the allowlist alone. Adding an entry to the allowlist is fine and is how a package exposes a native tool to
 its own scripts; removing `python` is not — it is the name the `remote` sandbox builds its environment with,
 and an image without it serves no sandbox at all.
+
+## Why the wrappers are mounted and not baked in
+
+PartCAD hands the interpreter in your image its wrapper scripts by path, out of the installation mounted above.
+An obvious-looking alternative is to bake them into the base image, where they would cost nothing to reach --
+and the reason not to is that **your** image is the one that would carry them.
+
+A derived image is built `FROM` some base, once, at whatever PartCAD release its author built against, and is
+then pinned by the packages that use it for as long as it works. Baked-in wrappers would make that image carry
+that release's wrappers for ever, and PartCAD would run them against today's wrapper protocol -- a silently
+wrong answer where a mount can only ever produce a missing file. It would also mean that editing a wrapper in a
+checkout changed nothing until an image was rebuilt, in the sandbox that is the default.
+
+So the wrappers a container runs are always the running PartCAD's own, and an image is only ever asked for an
+interpreter. Nothing about this is a burden on a derived image: the mount is PartCAD's to make, and all your
+image has to do is leave those paths alone, as the contract above already says.
 
 ## Labels
 

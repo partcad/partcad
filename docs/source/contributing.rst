@@ -424,10 +424,11 @@ not give you:
   ``poetry install``, and ``.git/hooks/pre-commit`` is written by ``pre-commit install`` running inside the container.
   So there is no hook to fail, and ``git commit`` runs no gate at all without saying so. Run ``pytest``, ``behave``
   and the linters yourself before committing; CI runs them regardless.
-* **A Docker daemon**, which only the KiCad example needs. A machine without one has to say so — ``PC_USE_DOCKER=false``
-  in the environment, or ``useDocker: false`` in the user configuration — and then that example is skipped. Say
-  nothing and a missing daemon *fails*, on purpose: a machine that never mentioned Docker is claiming one, and
-  passing over the test in silence would turn a runner whose daemon died into a green run with one fewer test in it.
+* **A Docker daemon**, which only the KiCad example needs. Without one that example is skipped, whether the machine
+  said so in advance — ``PC_USE_DOCKER=false`` in the environment, or ``useDocker: false`` in the user configuration —
+  or the daemon simply is not answering. Having no container runtime is the one thing that test passes over: an image
+  it cannot pull, a ``kicad-cli`` that errors and a part that comes back empty all still fail it, because those are the
+  KiCad path being broken rather than the machine lacking a feature.
 * **conda**, without which the ``pythonSandbox`` option falls back to ``venv``. That builds a real virtual environment
   of PartCAD's own and runs the CAD wrappers in it; it just cannot provision an *interpreter version*, so a package
   asking for a Python this host does not have renders on the host's instead and says so.
