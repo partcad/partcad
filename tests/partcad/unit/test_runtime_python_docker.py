@@ -163,6 +163,8 @@ def test_a_command_runs_through_docker_exec(tmp_path, monkeypatch):
         "docker",
         "exec",
         "-i",
+        "-e",
+        "HOME=" + made._container_home,
         made.container_name,
         "/some/python",
         "-m",
@@ -172,13 +174,37 @@ def test_a_command_runs_through_docker_exec(tmp_path, monkeypatch):
     ]
 
 
+def test_the_container_is_given_a_home_it_can_write_to(tmp_path, monkeypatch):
+    """Docker sets 'HOME=/' for a uid with no passwd entry, and '/' is root's.
+
+    PartCAD runs the container as the host's own uid on Linux, so that is every
+    Linux host. Everything that caches under '~/.cache' then fails to make one,
+    and 'ezdxf' says so on stderr -- which PartCAD reports as the wrapper having
+    failed, so every render in a container came back as an error.
+    """
+    made = _runtime(tmp_path)
+    monkeypatch.setattr(made, "_start", lambda: None)
+
+    argv = made._exec(["/some/python"])
+    home = argv[argv.index("-e") + 1]
+
+    assert home == "HOME=" + made._container_home
+    # Under the state directory, which is mounted, writable, and outlives the
+    # container -- a cache written there is one the next run still has.
+    assert made._container_home.startswith(made.ctx.user_config.internal_state_dir)
+
+
 def test_a_working_directory_becomes_an_argument_of_docker(tmp_path, monkeypatch):
     """Not of the 'docker' process itself, which runs wherever PartCAD is."""
     made = _runtime(tmp_path)
     monkeypatch.setattr(made, "_start", lambda: None)
 
     argv = made._exec(["/some/python"], cwd="/work/pkg")
-    assert argv[:5] == ["docker", "exec", "-i", "-w", "/work/pkg"]
+    assert argv[:3] == ["docker", "exec", "-i"]
+    assert argv[argv.index("-w") + 1] == "/work/pkg"
+    # Before the container name, which is where 'docker exec' stops taking
+    # options -- anything after it belongs to the command being run.
+    assert argv.index("-w") < argv.index(made.container_name)
 
 
 def test_stdin_reaches_the_interpreter(tmp_path, monkeypatch):

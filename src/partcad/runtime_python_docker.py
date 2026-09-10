@@ -197,6 +197,11 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         return paths
 
     @property
+    def _container_home(self) -> str:
+        """Where '~' points inside the container. See '_exec'."""
+        return os.path.join(self.ctx.user_config.internal_state_dir, "container-home")
+
+    @property
     def _mounted_read_only(self) -> list:
         """The ones the sandbox reads and must not write.
 
@@ -274,6 +279,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             pass
 
         image = self._resolve_image(client)
+        os.makedirs(self._container_home, exist_ok=True)
         for host, spec in mounts.items():
             os.makedirs(host, exist_ok=True)
             pc_logging.debug("Sandbox mount: %s -> %s" % (host, spec["bind"]))
@@ -309,6 +315,18 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         """
         self._start()
         argv = ["docker", "exec", "-i"]
+        # A home directory the process can write to. PartCAD runs the container
+        # as the *host's* uid on Linux, and that uid has no entry in the image's
+        # '/etc/passwd' -- so Docker sets 'HOME=/', which is root-owned, and
+        # every library that keeps a cache under '~/.cache' fails to make one.
+        # 'ezdxf' says so on stderr, and a wrapper that writes to stderr is a
+        # wrapper PartCAD reports as having failed: every SVG and PNG render in
+        # a container came back as an error over a cache nobody needed.
+        #
+        # Under the internal state directory because that is mounted, writable,
+        # and outlives the container -- so a cache written there is a cache the
+        # next run still has, which is what a cache is for.
+        argv += ["-e", "HOME=" + docker_mount.rewrite(self._container_home, self._mounted)]
         if cwd:
             argv += ["-w", docker_mount.rewrite(cwd, self._mounted)]
         argv.append(self.container_name)
