@@ -37,6 +37,27 @@ def _runtime(tmp_path, image="ghcr.io/x/solver:abc", version="3.11"):
     return runtime_python_docker.DockerPythonRuntime(_ctx(tmp_path), version, image=image)
 
 
+class _WindowsOs:
+    """The real 'os', except that it says 'nt'.
+
+    'os.name' cannot be set for one module: every module that imported 'os'
+    imported the same object, so setting it there sets it for 'pathlib' too --
+    which then hands out 'WindowsPath' objects it cannot instantiate on this
+    host. What that looks like is not an assertion failing: it is the suite
+    dying inside pytest's own path handling while it formats the report, with
+    nothing naming the test that did it.
+
+    So a module that has to believe it is on Windows is given one of these
+    instead of the module, and everything it reads from 'os' other than the
+    name is the real thing.
+    """
+
+    name = "nt"
+
+    def __getattr__(self, attribute):
+        return getattr(os, attribute)
+
+
 # --------------------------------------------------------------------------- #
 # What the sandbox is                                                          #
 # --------------------------------------------------------------------------- #
@@ -119,7 +140,7 @@ def test_the_sandbox_directory_says_which_sandbox_it_is(tmp_path):
 
 def _reachable(made, path) -> bool:
     """Whether the container could open ``path``: it is under one of the mounts."""
-    return any(docker_mount.contains(mount, path, windows=False) for mount in docker_mount.mounts(made._mounted))
+    return any(docker_mount.contains(mount, path) for mount in docker_mount.mounts(made._mounted))
 
 
 def test_a_wrapper_is_reachable_from_inside_the_container(tmp_path):
@@ -244,10 +265,9 @@ def test_a_wrapper_path_is_rewritten_on_a_windows_host(tmp_path, monkeypatch):
     monkeypatch.setattr(runtime_python_docker, "INSTALL_DIR", install)
     made = _runtime(tmp_path)
 
-    # What '_exec' does to every argument, with 'windows' stated rather than
-    # taken from 'os.name': patching that globally is what the two tests below
-    # have to do, and it leaves pytest formatting a Linux path the Windows way
-    # if anything in the test fails.
+    # What '_exec' does to every argument, with 'windows' stated outright.
+    # The parameter exists for this: nothing has to be made to believe it is on
+    # Windows, so nothing has to be put back afterwards.
     rewritten = docker_mount.rewrite(install + "\\wrappers\\wrapper_plugin.py", made._mounted, windows=True)
 
     assert rewritten == "/c/Program Files/PartCAD/_internal/partcad/wrappers/wrapper_plugin.py"
@@ -322,7 +342,7 @@ def test_the_home_it_is_given_is_the_container_s_path(tmp_path, monkeypatch):
     # globally makes 'pathlib' hand out 'WindowsPath' objects it cannot
     # instantiate here, and the suite dies in pytest's own cleanup rather than
     # in this assertion.
-    monkeypatch.setattr(docker_mount, "os", types.SimpleNamespace(name="nt"))
+    monkeypatch.setattr(docker_mount, "os", _WindowsOs())
 
     argv = made._exec(["/some/python"])
 
@@ -362,8 +382,11 @@ def test_the_environment_interpreter_is_a_posix_path_on_a_windows_host(tmp_path,
     wrong one for this.
     """
     made = _runtime(tmp_path)
-    monkeypatch.setattr(os, "name", "nt")
-    monkeypatch.setattr(docker_mount.os, "name", "nt")
+    # Both modules that read the name, and neither of them globally: see
+    # '_WindowsOs'. This test used to set 'os.name' itself, which is the same
+    # object 'pathlib' reads.
+    monkeypatch.setattr(runtime_python_docker, "os", _WindowsOs())
+    monkeypatch.setattr(docker_mount, "os", _WindowsOs())
 
     session = {"dirty": True, "path": r"C:\Users\you\.partcad\sandbox\v-env-abc", "name": "abc"}
     assert made.get_venv_python_path(session) == "/c/Users/you/.partcad/sandbox/v-env-abc/bin/python"
@@ -471,6 +494,17 @@ def test_the_environment_is_built_over_there(tmp_path, monkeypatch):
 # --------------------------------------------------------------------------- #
 
 
+def _elsewhere(name="somewhere-else") -> str:
+    """An absolute directory this context did not ask for, spelled for this host.
+
+    A literal '/somewhere/else' is not one on Windows: it has no drive letter,
+    so 'translate' refuses it outright rather than mapping it, and the stub
+    below could not even be constructed there. The mount PartCAD is being told
+    about is a *host* path, so it has to look like one here.
+    """
+    return os.path.join(os.path.abspath(os.sep), name)
+
+
 class _Container:
     """A container that was started with some set of mounts.
 
@@ -491,7 +525,13 @@ class _Container:
                 {
                     "Type": "bind",
                     "Source": source,
-                    "Destination": docker_mount.translate(source, windows=False),
+                    # The platform's own mapping, not a hardcoded POSIX one.
+                    # Pinning 'windows=False' made this stub disagree with
+                    # '_start' on Windows -- its 'Destination' stayed 'C:\\...'
+                    # while the real one is '/c/...' -- so every container
+                    # looked wrong and the reuse tests failed there and only
+                    # there.
+                    "Destination": docker_mount.translate(source),
                     "RW": rw,
                 }
                 for source, rw in sources.items()
@@ -564,7 +604,7 @@ def test_a_container_that_cannot_is_replaced(tmp_path, monkeypatch):
     made every command naming a file under the second root fail on a path that
     is not there.
     """
-    existing = _Container(["/somewhere/else"])
+    existing = _Container([_elsewhere()])
 
     _made, client, got = _started(tmp_path, monkeypatch, existing)
 
@@ -641,7 +681,7 @@ class _StaleContainer(_Container):
     """
 
     def __init__(self, removals, error=None, status="running", client=None):
-        super().__init__(["/somewhere/else"], status=status)
+        super().__init__([_elsewhere()], status=status)
         self.removals = removals
         self.error = error
         self.client = client
@@ -856,7 +896,10 @@ def test_a_dangling_interpreter_symlink_still_counts_as_built(tmp_path):
     # a `python:*-slim`. Named under 'tmp_path' rather than there because a
     # machine that happens to have that file (this dev container does; a GitHub
     # runner does not) would not be testing anything.
-    os.symlink(str(tmp_path / "only-inside-the-image" / "python3"), made._host_venv_python)
+    try:
+        os.symlink(str(tmp_path / "only-inside-the-image" / "python3"), made._host_venv_python)
+    except (OSError, NotImplementedError):  # pragma: no cover - Windows without privilege
+        pytest.skip("this platform will not create a symlink here")
 
     assert os.path.exists(made._host_venv_python) is False, "the premise: the target is not here"
     assert made._environment_built is True
