@@ -47,7 +47,12 @@ rm -f "$MARKER"
 # message tells the user to execute cannot drift apart.
 PYTEST_ARGS=(tests/partcad -n "$WORKERS" -m "not slow" --timeout "$TIMEOUT")
 
-poetry run pytest "${PYTEST_ARGS[@]}"
+# Through 'run_pytest.py' rather than straight at pytest: it layers an empty
+# '.venv-pytest' over the real environment, so that a test which renders through
+# the 'none' sandbox -- the one whose packages go into whichever interpreter is
+# running -- installs into that instead of into the checkout's '.venv'. See the
+# module docstring there.
+poetry run python dev-tools/run_pytest.py "${PYTEST_ARGS[@]}"
 rc=$?
 
 result=$(cat "$MARKER" 2>/dev/null)
@@ -62,7 +67,7 @@ Use the command below to run the same tests locally:"
     # '%q' per element rather than "${PYTEST_ARGS[*]}": the marker expression is
     # one argument here ('not slow'), and joining the array unquoted prints it as
     # two words, so what the message offers to be copied is not what was run.
-    printf '    poetry run pytest'
+    printf '    poetry run python dev-tools/run_pytest.py'
     printf ' %q' "${PYTEST_ARGS[@]}"
     printf '\n'
     echo "

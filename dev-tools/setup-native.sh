@@ -114,7 +114,7 @@ cat <<'NOTE'
 
 Done. Run pytest with:
 
-    poetry run pytest tests cad/freecad -x -p no:error-for-skips -p no:warnings --dist no
+    poetry run python dev-tools/run_pytest.py tests cad/freecad -x -p no:error-for-skips -p no:warnings --dist no
 
 The first run that renders a scripted part is slow whatever the sandbox: it
 builds the CAD environment under ~/.partcad/sandbox and pip-installs the stack

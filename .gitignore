@@ -9,6 +9,7 @@ __pycache__
 .pytest_cache
 .tox
 .venv
+.venv-pytest
 .vs/
 *.egg-info
 *.prof

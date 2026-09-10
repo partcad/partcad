@@ -46,6 +46,20 @@ def config_for():
     return _config_for
 
 
+# The four below are why the suite is run through 'dev-tools/run_pytest.py'.
+#
+# 'run_async' provisions before it runs, and the 'none' sandbox is defined as
+# the interpreter already running -- so asking one for "--version" pip-installs
+# PartCAD's whole CAD stack into the environment the tests are running in. That
+# is the sandbox behaving exactly as specified, and it is worth testing that it
+# does; what it must not do is land in the checkout's '.venv', where it puts
+# 'cadquery-ocp' over the 'cadquery-ocp-novtk' that 'poetry install' put there.
+# The empty '.venv-pytest' that 'run_pytest.py' layers on top is where it goes
+# instead.
+#
+# So do not "fix" these by having them skip provisioning: provisioning and then
+# running with the same interpreter is the property under test, and the bug it
+# was written for was the two disagreeing.
 def test_runtime_python_version_3_9_none(config_for):
     if sys.version_info[0] != 3 or sys.version_info[1] != 9:
         pytest.skip("Make no assumptions about availability of other Python versions, other than the current one")

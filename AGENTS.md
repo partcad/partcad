@@ -264,10 +264,18 @@ so this never affects a commit.
 From the repo root, inside the environment:
 
 ```bash
-poetry run pytest tests cad/freecad \
+poetry run python dev-tools/run_pytest.py tests cad/freecad \
   -x -p no:error-for-skips -p no:warnings --dist no                                        # unit tests (matches CI)
 poetry run behave                                                                        # integration tests (./features)
 ```
+
+**Through `run_pytest.py`, not straight at `pytest`.** It layers an empty `.venv-pytest` over the environment
+PartCAD is installed in -- nothing in it, everything resolving through to the real one, and anything installed
+during a run landing in it. That matters because a test that renders through the `none` sandbox installs into
+*whichever interpreter is running*, which is how `cadquery` and the VTK-carrying `cadquery-ocp` used to arrive
+in `.venv` on top of the `cadquery-ocp-novtk` that `poetry install` put there -- the pair the warning above is
+about. `.venv-pytest` is disposable: delete it and the next run builds another. Plain `poetry run pytest` still
+works and still passes; it just writes those installs where they used to go.
 
 CI fans these out over operating systems, and how much of that fan-out a run gets is decided in two places,
 which answer two different questions.
