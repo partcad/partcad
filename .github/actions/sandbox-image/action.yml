@@ -1,0 +1,90 @@
+name: "Sandbox base image"
+description: >-
+  Build the `docker` Python sandbox's base image from this commit and leave it
+  in the runner's image store under the name PartCAD resolves.
+
+# Why a job that only *renders* has to build an image.
+#
+# The `docker` sandbox is the default wherever a container runtime answers, so
+# every Linux job here renders through it -- and `resolve_image` pulls
+# `ghcr.io/partcad/partcad-container-python:<release>-py<X>-<arch>`, which is
+# published by `build-containers` and never by a pull request. That leaves those
+# jobs testing an image somebody published *before* this commit, and it cost a
+# fortnight of red: `tools/containers/python/Dockerfile` gained the `pycairo`
+# wheel that `reportlab`'s renderPM needs, and every PNG in every rendering job
+# went on failing with "cannot import desired renderPM backend rlPyCairo",
+# because the fix was in the repository and not in the tag.
+#
+# Nothing about that is specific to `pycairo`. A base image that CI consumes but
+# never builds is one where a Dockerfile change cannot be proven and a Dockerfile
+# regression cannot be caught, and where "green" means the last publish was good.
+# So the image these jobs run in is built here, from the tree under test.
+#
+# `resolve_image` is what makes this work with no code change: "a name that is
+# present locally is used without asking a registry, so an image somebody built
+# by hand for testing is picked up the way a pulled one is". This is that,
+# automated.
+
+inputs:
+  python-version:
+    description: >-
+      The interpreter the image carries. This is PartCAD's own default -- what a
+      package that names no `pythonVersion` gets, `sandbox_versions
+      .DEFAULT_PYTHON_VERSION` -- and not the version the job itself runs on.
+      A suite whose packages ask for another interpreter needs that one too.
+    required: false
+    default: "3.11"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build the sandbox base image from this commit
+      shell: bash
+      # Through the environment rather than interpolated into the script
+      # (zizmor template-injection), like every other matrix value here.
+      env:
+        PYTHON_VERSION: ${{ inputs.python-version }}
+      run: |
+        set -euo pipefail
+
+        # Both read out of the source rather than restated here. The name and
+        # the release are what `image_for()` builds the tag from, so a copy in
+        # this file is a copy that can be wrong -- and would be wrong silently,
+        # by building an image nothing then looks for and leaving the job to
+        # pull the published one after all.
+        image=$(sed -n 's/^BASE_IMAGE = "\(.*\)"$/\1/p' src/partcad/runtime_python_docker.py)
+        release=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' src/partcad/__init__.py)
+        if [ -z "${image}" ] || [ -z "${release}" ]; then
+          echo "::error::could not read BASE_IMAGE or __version__ out of the sources"
+          exit 1
+        fi
+
+        # The suffix `docker_image.candidates()` tries first, spelled Docker's
+        # way -- see `ARCH_ALIASES`. Only the two architectures CI runs on are
+        # named: anything else is a runner nobody has, and guessing a suffix
+        # would build an image under a tag that is never looked for.
+        case "$(uname -m)" in
+          x86_64) arch=amd64 ;;
+          aarch64 | arm64) arch=arm64 ;;
+          *)
+            echo "::error::no sandbox image tag is defined for $(uname -m)"
+            exit 1
+            ;;
+        esac
+
+        tag="${image}:${release}-py${PYTHON_VERSION}-${arch}"
+        echo "::group::building ${tag}"
+        docker build \
+          --build-arg "PYTHON_VERSION=${PYTHON_VERSION}" \
+          --build-arg "PARTCAD_VERSION=${release}" \
+          --tag "${tag}" \
+          --file tools/containers/python/Dockerfile \
+          tools/containers
+        echo "::endgroup::"
+
+        # Asserted, because the whole point is that the sandbox finds it. A
+        # build that produced some other name would leave every rendering step
+        # pulling the published image and reporting whatever that image does,
+        # which is the failure this action exists to end.
+        docker image inspect "${tag}" >/dev/null
+        echo "the sandbox will run in ${tag}, built from this commit"

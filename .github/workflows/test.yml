@@ -266,9 +266,15 @@ jobs:
       # pinned it, the moving one by every plugin whose own CI builds "FROM" it
       # -- so pushing from a pull request would hand unreviewed images to both,
       # and would let any branch overwrite the tag called immutable just above.
-      # Nothing here consumes the published image either: the
-      # "Sandbox (docker)" job below builds its own. So the build is the test,
-      # and publishing waits for the commit to land.
+      # Nothing in this repository's CI consumes the published image either.
+      # "Sandbox (docker)" below builds its own, and every job that merely
+      # *renders* -- which on Linux means rendering in a container, since that
+      # sandbox is the default where a runtime answers -- builds one through
+      # ".github/actions/sandbox-image". That is deliberate and was not always
+      # so: while those jobs pulled the tag, a Dockerfile fix could not be
+      # proven by CI and a Dockerfile regression could not be caught by it, and
+      # "green" meant the last publish was good. So the build is the test, and
+      # publishing waits for the commit to land.
       - name: Build the Python sandbox images
         env:
           PYTHONS: ${{ env.PYTHONS }}
@@ -649,6 +655,12 @@ jobs:
         with:
           job: behave
 
+      # The image the `docker` sandbox renders in, built from this commit rather
+      # than pulled from the tag a previous run published. See the action.
+      - name: The sandbox base image
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/sandbox-image
+
       # For Windows only, use PowerShell to set the SSH agent service in the manual launch mode
       - name: Set SSH Agent Service to Manual
         if: runner.os == 'Windows'
@@ -766,6 +778,12 @@ jobs:
       - uses: ./.github/actions/setup-test
         with:
           job: examples-partcad
+
+      # The image the `docker` sandbox renders in, built from this commit rather
+      # than pulled from the tag a previous run published. See the action.
+      - name: The sandbox base image
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/sandbox-image
 
       # What `examples/feature_cae` needs and pip cannot install. The analyses
       # there are run by a plugin, and a plugin that is asked and cannot answer
@@ -946,6 +964,12 @@ jobs:
       - uses: ./.github/actions/setup-test
         with:
           job: examples-all
+
+      # The image the `docker` sandbox renders in, built from this commit rather
+      # than pulled from the tag a previous run published. See the action.
+      - name: The sandbox base image
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/sandbox-image
 
       # This exercises the whole public index (//pub/examples), most of which
       # lives in the separate 'openvmp/partcad-index' repository. Several of

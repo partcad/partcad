@@ -103,3 +103,20 @@ The base image is the floor under every derived image, and it is the reason the 
 default rather than an option — a sandbox that costs more to provision than conda does is one people turn
 off. Keep additions to what is actually imported at run time, drop apt lists in the same layer that creates
 them, and prefer a wheel to a toolchain.
+
+## How a change here is tested, and where it is published
+
+Two different things, and the gap between them cost a fortnight of red CI.
+
+Every CI job that renders on Linux **builds this image from the tree under test** and leaves it in the
+runner's image store under the tag PartCAD resolves, through
+`.github/actions/sandbox-image`. That is what makes a change here provable: `resolve_image` uses a name that
+is already present locally without asking a registry, so the sandbox runs in the image this commit
+describes. Before that, those jobs pulled the published tag — so a fix here could not be shown to work and a
+regression here could not be caught, and "green" meant the last publish had been good.
+
+Publishing is separate and waits for the commit to land: `build-containers` in `.github/workflows/test.yml`
+pushes only when the event is neither a pull request nor a merge queue run. Note that a plain push to `devel`
+does not run the matrix at all unless it is a version bump, so in practice the tags move on the nightly run
+or a `workflow_dispatch`. A change here therefore reaches users' machines *later* than it reaches CI, and
+that is the intended order — not something to work around by publishing from a branch.

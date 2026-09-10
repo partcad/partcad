@@ -938,6 +938,18 @@ jobs:
       # `command -v` actually resolves is removed, and only from a hosted runner
       # that is discarded when the job ends. `$CONDA` is untouched, so a job that
       # wants the runner's conda still has it.
+      # The image the `docker` sandbox renders in, built from this commit rather
+      # than pulled from the tag a previous run published. This job's comments
+      # below describe a conda sandbox, and that is now only half true: the
+      # `docker` sandbox is the default wherever a container runtime answers, so
+      # a Linux runner renders in a container and the bundled conda is what the
+      # rest of the machine falls back to. Both are worth testing and both are;
+      # what this step ends is the container half testing an old image. See the
+      # action.
+      - name: The sandbox base image
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/sandbox-image
+
       - name: Take the runner's conda out of the way
         shell: bash
         run: |
