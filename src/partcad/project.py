@@ -326,6 +326,12 @@ class Project(project_config.Configuration):
         # nothing but a line in a log leaves the user staring at an empty
         # package with no way to tell an empty one from a broken one.
         self.broken_objects: dict[str, dict[str, str]] = {kind: {} for kind in OBJECT_KINDS}
+        # Of those, the ones that are broken because *PartCAD* retired their
+        # type. Kept apart because the two call for opposite things: a broken
+        # object is a failure to report, and a retired one is a declaration
+        # nobody can now make work, which every command that merely walks the
+        # package has to be able to walk past. See 'record_broken_object'.
+        self.retired_objects: dict[str, set] = {kind: set() for kind in OBJECT_KINDS}
 
         # Objects this package declares but which do not apply here, as
         # {kind: {name: clause}} - the 'unless' clause of theirs that excluded
@@ -1027,6 +1033,7 @@ class Project(project_config.Configuration):
 
         self.broken_objects.setdefault(kind, {})[name] = reason
         if retired:
+            self.retired_objects.setdefault(kind, set()).add(name)
             pc_logging.warning("Skipping the %s '%s:%s': %s" % (kind, self.name, name, reason))
         else:
             pc_logging.error("Failed to create the %s '%s:%s': %s" % (kind, self.name, name, reason))
@@ -1034,6 +1041,15 @@ class Project(project_config.Configuration):
     def get_broken_object_reason(self, kind: str, name: str):
         """Why an object could not be created, or None if it was not one of them."""
         return self.broken_objects.get(kind, {}).get(name)
+
+    def is_retired_object(self, kind: str, name: str) -> bool:
+        """Whether that object is absent because PartCAD retired its type.
+
+        The one reason for an object to be missing that is nobody's to fix, and
+        therefore the one a command walking the package has to pass over rather
+        than fail on.
+        """
+        return name in self.retired_objects.get(kind, set())
 
     def objects(self, kind: str) -> dict:
         """The instantiated objects of one kind, as {name: object}.
@@ -2256,14 +2272,31 @@ class Project(project_config.Configuration):
             scenes = get_keys("scenes", "scene")
 
         shapes = []
-        for name in sketches or []:
-            shapes.append(self.get_sketch(name))
-        for name in parts or []:
-            shapes.append(self.get_part(name))
-        for name in assemblies or []:
-            shapes.append(self.get_assembly(name))
-        for name in scenes or []:
-            shapes.append(self.get_scene(name))
+        for kind, names, get in (
+            ("sketch", sketches, self.get_sketch),
+            ("part", parts, self.get_part),
+            ("assembly", assemblies, self.get_assembly),
+            ("scene", scenes, self.get_scene),
+        ):
+            for name in names or []:
+                shape = get(name)
+                # An object whose type PartCAD retired is not one that failed to
+                # build. 'RetiredTypeException' is softened precisely so that a
+                # command which merely walks such a package does not exit
+                # non-zero -- "nothing the user of that package can do would
+                # make it work". It still comes back None, and a None here used
+                # to fail the entire package's render with an
+                # 'EmptyShapesError': the whole render of the public index
+                # ended, in a quarter of a second, on six generative-AI parts
+                # retired in 0.7.153 that a reader of the message ("No shapes
+                # found to render") would never connect to it.
+                #
+                # Every other None still raises. A part that would not build is
+                # a failure worth having, and telling the two apart is the only
+                # thing this loop does that the four it replaced did not.
+                if shape is None and self.is_retired_object(kind, name):
+                    continue
+                shapes.append(shape)
         # TODO(clairbee): interfaces are not yet renderable.
         # for name in interfaces: shapes.append(self.get_interface(name))
 
