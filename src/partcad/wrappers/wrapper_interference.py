@@ -23,7 +23,6 @@ import pyexpat  # noqa: F401
 
 from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
 from OCP.BRepBndLib import BRepBndLib
-from OCP.BRepCheck import BRepCheck_Analyzer
 from OCP.BRepGProp import BRepGProp
 from OCP.Bnd import Bnd_Box
 from OCP.GProp import GProp_GProps
@@ -80,14 +79,20 @@ def _is_solid_enough_to_intersect(shape):
     It is not a formality. A shape whose faces are inconsistently oriented is
     inside out, which OCCT reports as a negative volume, and a boolean common
     against it returns a number with no relation to any shared space: two LDraw
-    bricks meshed from triangles and placed 100 mm apart come back sharing
+    bricks meshed from triangles and placed 100 mm apart came back sharing
     2282 mm^3. Reporting that as interference would be worse than not checking
-    at all, so a shape that is not a valid solid of positive volume is left out
-    and counted instead.
+    at all, so a shape whose volume is not positive is left out and counted.
+
+    The test is the volume's sign and not BRepCheck_Analyzer, deliberately.
+    Plenty of usable geometry is not a valid solid in OCCT's sense and
+    intersects perfectly well regardless: an LDraw brick is an open mesh - a
+    stud is a cylinder and a top disc with no bottom, resting on a face the
+    parent never cuts - so it has hundreds of free boundary edges and fails
+    IsValid, while two copies of it 100 mm apart correctly share nothing.
+    Gating on validity would refuse to check any assembly built from such
+    parts, forever, which is most of what this test exists for.
     """
     try:
-        if not BRepCheck_Analyzer(shape).IsValid():
-            return False
         return _volume(shape) > 0.0
     except Exception:
         return False

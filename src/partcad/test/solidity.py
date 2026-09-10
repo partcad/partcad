@@ -26,6 +26,10 @@ class SolidityTest(Test):
     wrong on such a part: interference, CAM, FEA, the volume in a bill of
     materials.
 
+    What this does not fail is a solid that is merely not *valid*. Plenty of
+    usable geometry is not, and intersects perfectly well regardless; failing
+    it would condemn an entire library that works. That is reported and passed.
+
     A shape holding no solid at all - a sketch, a shell, a wire - is not inside
     out and is passed over. A part that is genuinely built as a void, if such a
     thing is wanted, says so:
@@ -75,11 +79,19 @@ class SolidityTest(Test):
                 "correctly and every boolean against it will be wrong." % volume,
             )
 
+        # Not a failure. Plenty of usable geometry is not a valid solid in
+        # OCCT's sense and behaves perfectly well: an LDraw brick is an open
+        # mesh - a stud is a cylinder and a top disc with no bottom, resting on
+        # a face the parent never cuts - so it has hundreds of free boundary
+        # edges and fails IsValid, while two copies of it 100 mm apart
+        # correctly share no volume at all. Failing on validity would condemn
+        # every part of a whole library that works. It is said, once, because
+        # it does narrow what can be relied on.
         if result.get("valid") is False:
-            return self.failed(
+            self.info(
                 shape,
-                "The shape is not a valid solid, so booleans against it - "
-                "interference, CAM, FEA - cannot be relied on.",
+                "The shape is a solid the right way out, but not a valid one: "
+                "expect open edges, and check any boolean result against it.",
             )
 
         return self.passed(shape)

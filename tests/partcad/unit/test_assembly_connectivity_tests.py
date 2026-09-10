@@ -84,8 +84,17 @@ def test_a_solid_that_is_inside_out_fails():
     assert not _run(SolidityTest(), _Shape(solidity={"solids": 1, "volume": -1939.6, "valid": False}))
 
 
-def test_a_solid_that_is_the_right_way_out_but_still_invalid_fails():
-    assert not _run(SolidityTest(), _Shape(solidity={"solids": 1, "volume": 12.0, "valid": False}))
+def test_a_solid_that_is_the_right_way_out_but_not_valid_is_reported_not_failed(caplog):
+    """An LDraw brick is an open mesh - a stud is a cylinder and a top disc
+    with no bottom - so it fails IsValid while two copies 100 mm apart
+    correctly share nothing. Failing on validity would condemn a whole library
+    that works."""
+    import logging
+
+    shape = _Shape(solidity={"solids": 1, "volume": 2626.2, "valid": False})
+    with caplog.at_level(logging.INFO):
+        assert _run(SolidityTest(), shape)
+    assert "not a valid one" in caplog.text
 
 
 def test_something_with_no_solid_in_it_is_not_inside_out():
