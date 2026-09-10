@@ -174,7 +174,19 @@ class PartFactoryScad(PartFactoryFile):
             if scad_path is None:
                 raise Exception("OpenSCAD executable is not found. Please, install OpenSCAD first.")
 
-            fd, stl_path = tempfile.mkstemp(suffix=".stl")
+            # Under the internal state directory rather than in the system
+            # temporary one, because this file is handed to a sandbox next.
+            #
+            # OpenSCAD runs here, on the host -- it is a native tool PartCAD
+            # drives, not a script it runs in a sandbox -- and writes an STL
+            # that a wrapper then reads to build the shape. A '/tmp' path is one
+            # the host can see and a container cannot: the state directory is
+            # mounted into the 'docker' sandbox, and the system temporary
+            # directory is not, so a '.scad' part rendered there failed with the
+            # output file simply never appearing.
+            tmp_dir = os.path.join(self.ctx.user_config.internal_state_dir, "tmp")
+            os.makedirs(tmp_dir, exist_ok=True)
+            fd, stl_path = tempfile.mkstemp(suffix=".stl", dir=tmp_dir)
             os.close(fd)  # OpenSCAD writes to the path itself via '-o'
             try:
                 with telemetry.start_as_current_span(
