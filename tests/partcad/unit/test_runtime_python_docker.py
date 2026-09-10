@@ -14,6 +14,7 @@ the job of the integration legs in CI, which have a Docker daemon.
 
 import os
 import pathlib
+import time
 import types
 
 import docker
@@ -79,6 +80,46 @@ def test_the_same_image_is_the_same_sandbox(tmp_path):
     two = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
     assert one.path == two.path
     assert one.container_name == two.container_name
+
+
+def test_two_sets_of_mounts_are_two_containers(tmp_path):
+    """Because one name shared by two contexts is a name they fight over.
+
+    Each found the other's container mounted wrong and replaced it, and each
+    then ran commands in a container that could not see its own package. The
+    name carries the mounts so that a container answering to it is the right
+    one, rather than one to arbitrate over.
+    """
+    one = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
+    two = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
+    two.ctx.sandbox_paths = [str(tmp_path / "somebody-elses-files")]
+
+    assert one.container_name != two.container_name
+    # Still one sandbox directory: the environment is per image and lives under
+    # the state directory, which both of them mount.
+    assert one.path == two.path
+
+
+def test_the_same_mounts_are_the_same_container(tmp_path):
+    one = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
+    two = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
+    one.ctx.sandbox_paths = [str(tmp_path / "shared")]
+    two.ctx.sandbox_paths = [str(tmp_path / "shared")]
+
+    assert one.container_name == two.container_name
+
+
+def test_the_name_follows_a_directory_named_after_the_sandbox_was_built(tmp_path):
+    """An ad-hoc command names its directories on the context, and that is later.
+
+    So the name cannot be decided in '__init__' -- it would be the name of a
+    container mounting neither the input nor the output.
+    """
+    made = _runtime(tmp_path)
+    before = made.container_name
+    made.ctx.sandbox_paths = [str(tmp_path / "output")]
+
+    assert made.container_name != before
 
 
 def test_the_sandbox_directory_says_which_sandbox_it_is(tmp_path):
@@ -420,7 +461,12 @@ class _Client:
 
     def _run(self, image, **kwargs):
         self.made = kwargs
-        return _Container(kwargs.get("volumes") or {})
+        # What is created answers to the name afterwards, the way Docker's does,
+        # and carries the modes it was asked for. A stub that kept returning the
+        # removed one, or that made everything writable, would have the second
+        # caller replace a container that is in fact the one it wanted.
+        self.existing = _Container({host: spec["mode"] != "ro" for host, spec in (kwargs.get("volumes") or {}).items()})
+        return self.existing
 
 
 def _started(tmp_path, monkeypatch, existing):
@@ -534,6 +580,179 @@ def test_a_volume_the_image_declared_is_not_compared(tmp_path, monkeypatch):
 
     assert got is existing
     assert client.made is None
+
+
+# --------------------------------------------------------------------------- #
+# Two of them starting at once                                                 #
+# --------------------------------------------------------------------------- #
+
+
+class _StaleContainer(_Container):
+    """One carrying this name with the wrong mounts, so '_start' replaces it.
+
+    Which is the only path that removes anything, and therefore the only one
+    where two callers can collide.
+    """
+
+    def __init__(self, removals, error=None, status="running", client=None):
+        super().__init__(["/somewhere/else"], status=status)
+        self.removals = removals
+        self.error = error
+        self.client = client
+
+    def remove(self, force=False):
+        self.removals.append(force)
+        if self.error is not None:
+            raise self.error
+        if self.client is not None:
+            self.client.existing = None
+
+
+def _conflict(message):
+    """What Docker answers with when two callers want one name at one moment."""
+    import docker
+
+    response = types.SimpleNamespace(status_code=409, reason="Conflict", url="http+docker://localhost/containers/x")
+    return docker.errors.APIError(message, response=response, explanation=message)
+
+
+def test_two_threads_starting_one_container_remove_it_once(tmp_path, monkeypatch):
+    """The 409 that CI caught: two threads both replacing one container.
+
+    PartCAD instantiates parts concurrently, so two sandboxes reach '_start'
+    together. Both found the container wrong, both called 'remove(force=True)',
+    and Docker answers the second with "removal of container ... is already in
+    progress" -- which arrived as a failed render, not as a retry.
+    """
+    import threading
+
+    removals = []
+    client = _Client(None)
+    client.existing = _StaleContainer(removals, client=client)
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr("docker.from_env", lambda: client)
+
+    # Two sandboxes, one name: what two part factories in one context are.
+    sandboxes = [_runtime(tmp_path) for _ in range(2)]
+    assert sandboxes[0].container_name == sandboxes[1].container_name
+
+    # Slow enough that both threads are inside the look-up together when
+    # nothing serializes them -- which is the interleaving that happened in CI
+    # and which a test running them back to back would never produce.
+    inner = client.containers.get
+
+    def _slow_get(name):
+        found = inner(name)
+        time.sleep(0.05)
+        return found
+
+    client.containers.get = _slow_get
+
+    started = threading.Barrier(len(sandboxes))
+    errors = []
+
+    def start(sandbox):
+        started.wait()
+        try:
+            sandbox._start()
+        except Exception as e:  # noqa: BLE001 - the point is that there are none
+            errors.append(e)
+
+    threads = [threading.Thread(target=start, args=(s,)) for s in sandboxes]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    # The second caller finds the container the first one made, under the name
+    # it looked up, and it is the one it wanted -- so it never reaches the
+    # removal at all. Unserialized, both find the stale one and both remove it,
+    # and Docker answers the second with a 409.
+    assert len(removals) == 1
+
+
+def test_a_removal_already_in_progress_is_waited_out(tmp_path, monkeypatch):
+    """Another *process* removing it is not something a lock here can prevent.
+
+    It is also not a failure: gone is what this wanted. The attempt gives up
+    its turn rather than trying to create the replacement while the name is
+    still taken.
+    """
+    monkeypatch.setattr(runtime_python_docker, "_START_RETRY_DELAY", 0)
+    made = _runtime(tmp_path)
+    existing = _StaleContainer([], error=_conflict("removal of container abc is already in progress"))
+    client = _Client(existing)
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr("docker.from_env", lambda: client)
+
+    # It goes: the second turn finds nothing under the name and creates one.
+    client.existing = existing
+
+    def _get(name):
+        import docker
+
+        if client.existing is None:
+            raise docker.errors.NotFound(name)
+        found, client.existing = client.existing, None
+        return found
+
+    client.containers.get = _get
+
+    got = made._start()
+
+    assert got is not None
+    assert client.made is not None
+
+
+def test_a_name_taken_between_the_lookup_and_the_create_is_retried(tmp_path, monkeypatch):
+    """Another process created it first, and it is named after these mounts.
+
+    So it is very likely exactly the container this one was about to make --
+    which is what going round and inspecting it establishes.
+    """
+    monkeypatch.setattr(runtime_python_docker, "_START_RETRY_DELAY", 0)
+    made = _runtime(tmp_path)
+    client = _Client(None)
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr("docker.from_env", lambda: client)
+
+    theirs = _Container(_wanted_binds(made))
+
+    def _run(image, **kwargs):
+        client.existing = theirs
+        raise _conflict('Conflict. The container name "%s" is already in use' % kwargs["name"])
+
+    client.containers.run = _run
+
+    got = made._start()
+
+    assert got is theirs
+
+
+def test_a_refusal_that_is_not_a_race_is_raised(tmp_path, monkeypatch):
+    """A sandbox that cannot start is a thing to report, not to retry."""
+    import docker
+
+    monkeypatch.setattr(runtime_python_docker, "_START_RETRY_DELAY", 0)
+    made = _runtime(tmp_path)
+    client = _Client(None)
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr("docker.from_env", lambda: client)
+
+    response = types.SimpleNamespace(
+        status_code=500, reason="Server Error", url="http+docker://localhost/containers/create"
+    )
+
+    def _run(image, **kwargs):
+        raise docker.errors.APIError(
+            "no space left on device", response=response, explanation="no space left on device"
+        )
+
+    client.containers.run = _run
+
+    with pytest.raises(docker.errors.APIError, match="no space left"):
+        made._start()
 
 
 # --------------------------------------------------------------------------- #

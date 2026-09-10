@@ -36,6 +36,8 @@ writes and PartCAD checks.
 import hashlib
 import os
 import platform
+import threading
+import time
 from typing import Optional
 
 import docker
@@ -60,6 +62,34 @@ CONTAINER_PYTHON = "python3"
 # serves the RPC service, which this sandbox has no use for, so it is replaced
 # with something that does nothing and stays running to be 'docker exec'd into.
 KEEPALIVE = ["sleep", "infinity"]
+
+# One thread at a time may decide what the container of a given name should be,
+# because that decision can end in removing it and creating another under the
+# same name. Two threads reaching it together is one of them removing the
+# container the other just made -- and, since Docker answers the second removal
+# of one container with a 409, a command that fails with "removal of container
+# ... is already in progress" rather than running.
+#
+# Per name, not one lock for everything: two sandboxes for two different images
+# have nothing to say to each other and should not wait on each other's pulls.
+_START_LOCKS = {}
+_START_LOCKS_GUARD = threading.Lock()
+
+# How many times '_start' will go round when another *process* on this machine
+# is doing the same thing at the same instant -- which the lock above cannot
+# help with. Each turn is one lost race: a container removed from under the
+# create, or created under the name between the look-up and the create. A
+# machine losing three in a row has something wrong with it that a fourth turn
+# would not fix.
+_START_ATTEMPTS = 3
+_START_RETRY_DELAY = 0.5
+
+
+def _start_lock(name: str) -> threading.Lock:
+    """The lock guarding the container called ``name``."""
+    with _START_LOCKS_GUARD:
+        return _START_LOCKS.setdefault(name, threading.Lock())
+
 
 # Where PartCAD's own files are, on the host. The sandbox interpreter is handed
 # the wrappers by path -- 'wrapper.get()' -- and the packages PartCAD ships
@@ -168,7 +198,6 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         super().__init__(ctx, "docker-" + _short(image), version)
 
         self.image = image
-        self.container_name = "pc-sandbox-" + _short(image)
         self._container = None
 
         # The interpreter inside the container, always POSIX. 'exec_name' is
@@ -265,6 +294,40 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
 
     # ------------------------------------------------------------ container --
 
+    @property
+    def _mount_identity(self) -> str:
+        """This sandbox's mounts as one string, in an order that does not vary."""
+        mounts = docker_mount.mounts(self._mounted, read_only=self._mounted_read_only)
+        return "\n".join("%s=%s:%s" % (host, spec["bind"], spec["mode"]) for host, spec in sorted(mounts.items()))
+
+    @property
+    def container_name(self) -> str:
+        """The container for this image *and* this set of mounts.
+
+        The image alone used to name it, and what was mounted was then compared
+        against whatever the container turned out to have. That made one name
+        the property of every context wanting that image, and they fought over
+        it: each replaced the other's container, and each then ran commands in
+        one that could not see its own package. Concurrently it was worse than
+        useless -- two threads both finding the container wrong both removed
+        it, and Docker answers the second removal with a 409.
+
+        Naming it after the mounts settles that by construction rather than by
+        arbitration. A container whose name matches is a container whose mounts
+        match, so there is nothing to replace and nothing to race for; two
+        contexts wanting different directories get two containers and leave
+        each other alone.
+
+        A property and not a field, because the mounts are not all known when
+        the sandbox is built: an ad-hoc command names its input and output
+        directories on the context after that, and a name fixed in '__init__'
+        would be the name of a container mounting neither.
+
+        They carry PartCAD's labels, so 'pc system prune' clears out the ones a
+        machine has stopped needing.
+        """
+        return "pc-sandbox-%s-%s" % (_short(self.image), _short(self._mount_identity))
+
     def _resolve_image(self, client) -> str:
         """The image to run, pulled if this machine does not have it yet."""
         return resolve_image(client, self.image, self.version)
@@ -272,9 +335,13 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
     def _start(self):
         """The container for this sandbox, started or reused.
 
-        One per image, shared by every sandbox that named it and reused across
-        runs: what a container costs is in the starting, and a command over a
-        tree of parts would otherwise pay it per part.
+        One per image and mount set, shared by every sandbox that named them
+        and reused across runs: what a container costs is in the starting, and
+        a command over a tree of parts would otherwise pay it per part.
+
+        Under a lock, because the body can remove a container and create
+        another with the same name, and two threads doing that at once leave
+        one of them holding a container the other has already destroyed.
         """
         if self._container is not None:
             return self._container
@@ -285,26 +352,49 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                 "Start Docker, or choose another sandbox with 'pythonSandbox'."
             )
 
-        client = docker.from_env()
-        mounts = docker_mount.mounts(self._mounted, read_only=self._mounted_read_only)
+        name = self.container_name
+        with _start_lock(name):
+            # Another thread may have done this while this one waited.
+            if self._container is not None:
+                return self._container
+
+            client = docker.from_env()
+            mounts = docker_mount.mounts(self._mounted, read_only=self._mounted_read_only)
+            for attempt in range(_START_ATTEMPTS):
+                container = self._start_once(client, mounts)
+                if container is not None:
+                    self._container = container
+                    return container
+                # Lost to another process on this machine. Give its removal or
+                # its creation a moment to finish rather than spinning against
+                # a name that is briefly neither there nor free.
+                time.sleep(_START_RETRY_DELAY * (attempt + 1))
+
+            raise Exception(
+                "Could not get the '%s' container for the '%s' sandbox: something else on this "
+                "machine kept creating and removing it. Check for another PartCAD run, or for a "
+                "container of that name being managed by hand." % (name, self.sandbox)
+            )
+
+    def _start_once(self, client, mounts):
+        """One attempt at having the container this sandbox wants.
+
+        Returns it, or ``None`` to say the attempt lost a race with another
+        process and is worth making again. Only that: anything else Docker
+        refuses is raised, because a sandbox that cannot start is a thing to
+        report rather than to retry.
+        """
         try:
             existing = client.containers.get(self.container_name)
-            # The name says which image, and nothing about what is mounted --
-            # but the context root is mounted too, and that is per package. A
-            # container started while working on one package cannot see another,
-            # so reusing it by name alone made every command that named a file
-            # under the second package's root fail on a path that is not there.
-            #
-            # The comparison is for equality, and it was once for coverage: a
-            # container holding *more* than was asked for was reused. That was
-            # nearly harmless while the set was the state directory and the
-            # context root, and stopped being so when a context could name a
-            # directory of the user's own -- the container an ad-hoc conversion
-            # started still has that directory mounted, and the next context to
-            # want this image would have inherited it without ever asking. The
-            # mode is compared too, so a directory that was writable for one
-            # context is not silently writable for a later one that asked for it
-            # read-only.
+        except docker.errors.NotFound:
+            existing = None
+
+        if existing is not None:
+            # The name now says which image *and* which mounts, so a container
+            # that answers to it should already be the right one. This is the
+            # case where it is not: a container left by a PartCAD that derived
+            # either of those differently, still on the machine under a name
+            # this one also uses.
             #
             # Bind mounts only. An image may declare a VOLUME of its own, which
             # Docker adds as a mount PartCAD never asked for and cannot match --
@@ -312,11 +402,8 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             # every single command.
             #
             # Where each one lands is compared as well as whether it may be
-            # written. A destination is derived from its source, so the two
-            # agree for as long as that derivation does -- and the run where it
-            # does not is a PartCAD that changed it, whose containers from
-            # before the change are still on the machine, mounting the right
-            # directories in the wrong places.
+            # written, since a destination is derived from its source and the
+            # run where they disagree is exactly the stale container above.
             existing_binds = {
                 mount.get("Source"): (mount.get("Destination"), bool(mount.get("RW", True)))
                 for mount in (existing.attrs.get("Mounts") or [])
@@ -325,16 +412,27 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             wanted_binds = {host: (spec["bind"], spec["mode"] != "ro") for host, spec in mounts.items()}
             if existing_binds == wanted_binds:
                 if existing.status != "running":
-                    existing.start()
-                self._container = existing
+                    try:
+                        existing.start()
+                    except docker.errors.NotFound:
+                        return None  # removed between the look-up and the start
                 return existing
+
             pc_logging.debug(
                 "Replacing %s: it is mounted %s rather than %s"
                 % (self.container_name, sorted(existing_binds.items()), sorted(wanted_binds.items()))
             )
-            existing.remove(force=True)
-        except docker.errors.NotFound:
-            pass
+            try:
+                existing.remove(force=True)
+            except docker.errors.NotFound:
+                pass  # somebody else removed it, which is the outcome asked for
+            except docker.errors.APIError as e:
+                if e.status_code != 409:
+                    raise
+                # "removal of container ... is already in progress": another
+                # process wants it gone too. Let it finish rather than trying to
+                # create the replacement while the name is still taken.
+                return None
 
         image = self._resolve_image(client)
         os.makedirs(self._container_home, exist_ok=True)
@@ -343,23 +441,31 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             pc_logging.debug("Sandbox mount: %s -> %s" % (host, spec["bind"]))
 
         with pc_logging.Action("Container", self.version, self.container_name):
-            self._container = client.containers.run(
-                image,
-                command=KEEPALIVE,
-                entrypoint=[],
-                name=self.container_name,
-                detach=True,
-                volumes=mounts,
-                # So that what the sandbox writes is owned by whoever is running
-                # PartCAD. Linux only: there a bind mount passes uids straight
-                # through and files would otherwise come back owned by the
-                # image's user, while Docker Desktop maps ownership itself and
-                # naming a uid that does not exist in the image breaks it.
-                user=("%d:%d" % (os.getuid(), os.getgid())) if platform.system() == "Linux" else None,
-                labels={"partcad.container": "1", "partcad.image": "1"},
-                auto_remove=False,
-            )
-        return self._container
+            try:
+                return client.containers.run(
+                    image,
+                    command=KEEPALIVE,
+                    entrypoint=[],
+                    name=self.container_name,
+                    detach=True,
+                    volumes=mounts,
+                    # So that what the sandbox writes is owned by whoever is running
+                    # PartCAD. Linux only: there a bind mount passes uids straight
+                    # through and files would otherwise come back owned by the
+                    # image's user, while Docker Desktop maps ownership itself and
+                    # naming a uid that does not exist in the image breaks it.
+                    user=("%d:%d" % (os.getuid(), os.getgid())) if platform.system() == "Linux" else None,
+                    labels={"partcad.container": "1", "partcad.image": "1"},
+                    auto_remove=False,
+                )
+            except docker.errors.APIError as e:
+                if e.status_code != 409:
+                    raise
+                # The name is taken: another process created it between the
+                # look-up above and here. Go round and inspect *that* container
+                # -- it is named after these mounts, so it is very likely the
+                # one this sandbox was about to make.
+                return None
 
     # ----------------------------------------------------------- execution --
 

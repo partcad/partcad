@@ -363,6 +363,13 @@ Windows, where a path like ``C:\Users\you\.partcad`` cannot exist inside a
 Linux container: there, and only there, drive letters are mapped the way Docker
 Desktop maps them (``C:\Users\you`` becomes ``/c/Users/you``).
 
+The container is named after the image **and** the set of mounts, so a container
+that answers to a name is one whose mounts are already right. Two contexts
+working on different packages therefore get two containers rather than taking
+turns replacing one, and PartCAD does not have to arbitrate between them while
+several parts are being rendered at once. They carry PartCAD's labels, so
+``pc system prune`` clears out the ones a machine has stopped needing.
+
 Because the state directory is mounted rather than copied, ``pip`` installs
 persist across container restarts and the environment locking, the install
 guards and the cache all work unchanged. Sandbox environments are named after
