@@ -126,6 +126,16 @@ def write_output_file(
         generate_partcad_config(temp_dir, input_type, input_path, kind=kind)
 
         ctx = Context(root_path=temp_dir, search_root=False)
+        # The generated package is in 'temp_dir' and points at the user's file
+        # wherever it is, so neither the input nor the output is under the
+        # context root. A sandbox that runs on the host does not care; one that
+        # runs in a container sees only what is mounted, and without this it
+        # reports that it cannot read a file the user can see perfectly well.
+        #
+        # The directories rather than the files: an OpenSCAD or a CadQuery input
+        # may include a sibling, and the output's directory has to be writable
+        # for the export to land in it.
+        ctx.sandbox_paths = [str(input_path.parent), str(Path(output_filename).resolve().parent)]
         with pc_logging.Process(verb, "adhoc" if kind == "part" else "adhoc-sketch"):
             project = ctx.get_project("//")
             obj = project.get_part(object_name) if kind == "part" else project.get_sketch(object_name)

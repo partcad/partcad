@@ -222,6 +222,19 @@ class Context:
         self.lock = threading.RLock()
 
         self.option_create_dirs = False
+        # Directories outside the package that a sandbox still has to be able to
+        # open, as absolute host paths.
+        #
+        # Normally there are none: everything a package refers to is inside it,
+        # and the 'docker' sandbox mounts the context root for exactly that
+        # reason. An ad-hoc command is the exception -- its package is generated
+        # in a temporary directory and points at the user's file wherever that
+        # is -- and a sandbox that cannot see the file renders nothing, with an
+        # error about the file rather than about the mount.
+        #
+        # Only the container sandboxes read this. The others run on the host,
+        # where every path is already reachable and nothing has to be declared.
+        self.sandbox_paths = []
         self.runtimes_python = {}
         # Container sandboxes, keyed by container name (derived from the image).
         self.runtimes_container = {}

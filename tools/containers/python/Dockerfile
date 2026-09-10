@@ -22,6 +22,34 @@
 # See `tools/containers/README.md` for the contract this promises and a derived
 # image inherits.
 ARG PYTHON_VERSION=3.11
+
+# A wheel for `pycairo`, built here and thrown away with this stage.
+#
+# PNG and JPEG renders go through reportlab's `renderPM`, whose only backend now
+# is `rlPyCairo` -> `pycairo` -> cairo. `rlPyCairo` is pure Python; `pycairo` is
+# a C extension that publishes **no Linux wheel**, so pip has to compile it
+# against a system cairo -- and a sandbox provisioned in the final image would
+# find neither the headers nor a compiler, and every PNG in a container failed
+# with "cannot import desired renderPM backend rlPyCairo".
+#
+# The conda sandbox has the same problem and solves it by taking `pycairo` from
+# conda-forge, which ships cairo with it (see `runtime_python_conda.py`). The
+# equivalent here is to build the wheel once, in a stage that keeps the
+# toolchain, and carry only the wheel into the image -- which is what the README
+# asks for: "prefer a wheel to a toolchain". The toolchain is ~200 MB and this
+# image is the floor under every derived one.
+FROM python:${PYTHON_VERSION}-slim AS pycairo-wheel
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends build-essential libcairo2-dev pkg-config \
+  && rm -rf /var/lib/apt/lists/*
+# Deliberately unpinned: what has to match is whatever `rlPyCairo` asks for at
+# sandbox-provision time, and a version fixed here that stopped satisfying it
+# would be a wheel pip ignores -- back to compiling, in an image with no
+# compiler. `--no-deps` keeps it to the one extension that needs building.
+# hadolint ignore=DL3013
+RUN pip wheel --no-deps --wheel-dir /wheels pycairo
+
+
 FROM python:${PYTHON_VERSION}-slim
 
 # Repeated because an ARG before FROM is out of scope after it.
@@ -44,6 +72,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 # than left to chance because the failure without them is an ImportError deep
 # inside a sandbox rather than a missing package a user could act on -- and
 # every CAD sandbox PartCAD builds installs OCP, so this is not a niche case.
+#
+# `libcairo2` is what the `pycairo` wheel built in the stage above links against
+# at run time. The `-dev` package it was compiled with stayed in that stage;
+# this is the library itself, about a megabyte.
 #
 # `git` is here because a package may name a dependency by repository, and pip
 # shells out to it.
@@ -68,6 +100,7 @@ RUN apt-get update \
     libx11-6 \
     libxext6 \
     libxrender1 \
+    libcairo2 \
   && (apt-get install --yes --no-install-recommends libglib2.0-0t64 \
       || apt-get install --yes --no-install-recommends libglib2.0-0) \
   && rm -rf /var/lib/apt/lists/*
@@ -84,6 +117,13 @@ RUN useradd --create-home --uid 1000 --shell /bin/bash pc
 # another's files.
 RUN mkdir -p /dot-partcad && chown pc:pc /dot-partcad && chmod 1777 /dot-partcad
 ENV PC_INTERNAL_STATE_DIR=/dot-partcad
+
+# Where pip looks before it goes to an index. It only *adds* a source, so
+# nothing else resolves differently -- but a sandbox asking for `rlPyCairo`
+# finds the `pycairo` it needs already built for this image's interpreter and
+# architecture, instead of trying to compile it and failing.
+COPY --from=pycairo-wheel /wheels /opt/pc-wheels
+ENV PIP_FIND_LINKS=/opt/pc-wheels
 
 WORKDIR /pc
 COPY _common/requirements.txt ./

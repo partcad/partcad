@@ -27,6 +27,7 @@ def _ctx(tmp_path):
     return types.SimpleNamespace(
         user_config=types.SimpleNamespace(internal_state_dir=str(tmp_path / "state")),
         root_path=str(tmp_path / "pkg"),
+        sandbox_paths=[],
     )
 
 
@@ -119,6 +120,35 @@ def test_a_builtin_package_is_reachable_from_inside_the_container(tmp_path):
     """
     made = _runtime(tmp_path)
     assert _reachable(made, output.BUILTIN_ROOT_PATH)
+
+
+def test_a_path_the_context_named_is_mounted_too(tmp_path):
+    """An ad-hoc command's input and output, which are nowhere near its package.
+
+    'pc adhoc convert' generates its package in one temporary directory and
+    points it at the user's file wherever that is, so neither the input nor the
+    output is under the context root. A sandbox on the host does not care; this
+    one sees only what is mounted, and without this the wrapper reported that it
+    could not read a file the user can see perfectly well
+    ("Failed to read the STL file").
+    """
+    made = _runtime(tmp_path)
+    made.ctx.sandbox_paths = [str(tmp_path / "elsewhere")]
+
+    assert _reachable(made, str(tmp_path / "elsewhere" / "cube.stl"))
+
+
+def test_a_context_that_names_none_mounts_the_usual_three(tmp_path):
+    """Which is every context but an ad-hoc one."""
+    made = _runtime(tmp_path)
+
+    assert sorted(made._mounted) == sorted(
+        [
+            made.ctx.user_config.internal_state_dir,
+            runtime_python_docker.INSTALL_DIR,
+            made.ctx.root_path,
+        ]
+    )
 
 
 def test_the_installation_is_mounted_read_only(tmp_path):

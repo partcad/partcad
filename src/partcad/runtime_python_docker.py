@@ -185,15 +185,20 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         """The host directories the container needs to see.
 
         The internal state directory, which holds this sandbox and the caches;
-        the context root, which holds the package being worked on; and PartCAD's
-        own installation, which holds the scripts the interpreter over there is
-        told to run. Nothing else: a sandbox that mounted the whole filesystem
-        would be a sandbox in name only.
+        the context root, which holds the package being worked on; PartCAD's own
+        installation, which holds the scripts the interpreter over there is told
+        to run; and whatever the context named on top of those. Nothing else: a
+        sandbox that mounted the whole filesystem would be a sandbox in name
+        only.
         """
         paths = [self.ctx.user_config.internal_state_dir, INSTALL_DIR]
         root = getattr(self.ctx, "root_path", None)
         if root:
             paths.append(root)
+        # What the context asked for on top: a file an ad-hoc command was
+        # pointed at, which lives wherever the user keeps it rather than inside
+        # the generated package. See 'Context.sandbox_paths'.
+        paths += [p for p in getattr(self.ctx, "sandbox_paths", ()) or () if p]
         return paths
 
     @property
