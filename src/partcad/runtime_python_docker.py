@@ -199,6 +199,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         # pointed at, which lives wherever the user keeps it rather than inside
         # the generated package. See 'Context.sandbox_paths'.
         paths += [p for p in getattr(self.ctx, "sandbox_paths", ()) or () if p]
+        paths += [p for p in getattr(self.ctx, "sandbox_paths_read_only", ()) or () if p]
         return paths
 
     @property
@@ -221,8 +222,16 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         beside its source, and a read-only directory is a case the import
         machinery already handles -- it notes the failure and moves on, which
         costs a recompile per run and nothing else.
+
+        Plus whatever the context said it only reads -- an ad-hoc command's
+        input file lives in a directory of the user's own. A path it also
+        asked to be able to write is not one of these: the demand for write
+        access is the specific claim, and an input that is also the output's
+        directory is an ordinary way to run a conversion.
         """
-        return [INSTALL_DIR]
+        writable = {p for p in getattr(self.ctx, "sandbox_paths", ()) or () if p}
+        read_only = [p for p in getattr(self.ctx, "sandbox_paths_read_only", ()) or () if p and p not in writable]
+        return [INSTALL_DIR] + read_only
 
     def get_venv_python_path(self, session=None, path=None):
         """Where an environment's interpreter is, as the container sees it.
@@ -272,13 +281,37 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             # container started while working on one package cannot see another,
             # so reusing it by name alone made every command that named a file
             # under the second package's root fail on a path that is not there.
-            visible = {mount.get("Source") for mount in (existing.attrs.get("Mounts") or [])}
-            if set(mounts).issubset(visible):
+            #
+            # The comparison is for equality, and it was once for coverage: a
+            # container holding *more* than was asked for was reused. That was
+            # nearly harmless while the set was the state directory and the
+            # context root, and stopped being so when a context could name a
+            # directory of the user's own -- the container an ad-hoc conversion
+            # started still has that directory mounted, and the next context to
+            # want this image would have inherited it without ever asking. The
+            # mode is compared too, so a directory that was writable for one
+            # context is not silently writable for a later one that asked for it
+            # read-only.
+            #
+            # Bind mounts only. An image may declare a VOLUME of its own, which
+            # Docker adds as a mount PartCAD never asked for and cannot match --
+            # comparing those in would replace such an image's container before
+            # every single command.
+            existing_binds = {
+                mount.get("Source"): bool(mount.get("RW", True))
+                for mount in (existing.attrs.get("Mounts") or [])
+                if mount.get("Type") == "bind"
+            }
+            wanted_binds = {host: spec["mode"] != "ro" for host, spec in mounts.items()}
+            if existing_binds == wanted_binds:
                 if existing.status != "running":
                     existing.start()
                 self._container = existing
                 return existing
-            pc_logging.debug("Replacing %s: it cannot see %s" % (self.container_name, sorted(set(mounts) - visible)))
+            pc_logging.debug(
+                "Replacing %s: it is mounted %s rather than %s"
+                % (self.container_name, sorted(existing_binds.items()), sorted(wanted_binds.items()))
+            )
             existing.remove(force=True)
         except docker.errors.NotFound:
             pass

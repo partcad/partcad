@@ -28,6 +28,7 @@ def _ctx(tmp_path):
         user_config=types.SimpleNamespace(internal_state_dir=str(tmp_path / "state")),
         root_path=str(tmp_path / "pkg"),
         sandbox_paths=[],
+        sandbox_paths_read_only=[],
     )
 
 
@@ -367,10 +368,17 @@ def test_the_environment_is_built_over_there(tmp_path, monkeypatch):
 
 
 class _Container:
-    """A container that was started with some set of mounts."""
+    """A container that was started with some set of mounts.
+
+    'sources' is either the paths, all writable, or a mapping of path to
+    whether it is writable. 'Type' is what tells a bind mount from a volume an
+    image declared itself, which PartCAD never asked for and does not compare.
+    """
 
     def __init__(self, sources, status="running"):
-        self.attrs = {"Mounts": [{"Source": source} for source in sources]}
+        if not isinstance(sources, dict):
+            sources = {source: True for source in sources}
+        self.attrs = {"Mounts": [{"Type": "bind", "Source": source, "RW": rw} for source, rw in sources.items()]}
         self.status = status
         self.removed = False
         self.started = False
@@ -409,10 +417,14 @@ def _started(tmp_path, monkeypatch, existing):
     return made, client, made._start()
 
 
+def _wanted_binds(made):
+    mounts = docker_mount.mounts(made._mounted, read_only=made._mounted_read_only)
+    return {host: spec["mode"] != "ro" for host, spec in mounts.items()}
+
+
 def test_a_container_that_can_see_this_context_is_reused(tmp_path, monkeypatch):
     made = _runtime(tmp_path)
-    wanted = docker_mount.mounts(made._mounted)
-    existing = _Container(wanted, status="exited")
+    existing = _Container(_wanted_binds(made), status="exited")
 
     _made, client, got = _started(tmp_path, monkeypatch, existing)
 
@@ -436,6 +448,91 @@ def test_a_container_that_cannot_is_replaced(tmp_path, monkeypatch):
     assert got is not existing
     assert existing.removed is True
     assert client.made is not None
+
+
+def test_a_container_holding_more_than_was_asked_for_is_replaced(tmp_path, monkeypatch):
+    """It used to be reused, and that leaked one context's directory into another.
+
+    The check was for coverage: a container with *more* mounts than the request
+    satisfied it. Nearly harmless while the set was the state directory and the
+    context root; not once a context can name a directory of the user's own, as
+    an ad-hoc conversion does -- the container it started still has that
+    directory mounted, and the next context wanting this image would have
+    inherited it without ever asking.
+    """
+    binds = _wanted_binds(_runtime(tmp_path))
+    binds[str(tmp_path / "somebody-elses-files")] = True
+    existing = _Container(binds)
+
+    _made, client, got = _started(tmp_path, monkeypatch, existing)
+
+    assert got is not existing
+    assert existing.removed is True
+    assert client.made is not None
+
+
+def test_a_container_that_mounts_it_writable_is_replaced(tmp_path, monkeypatch):
+    """The mode is half of the contract.
+
+    A directory one context was allowed to write is not one a later context
+    that asked for it read-only may write.
+    """
+    made = _runtime(tmp_path)
+    binds = dict(_wanted_binds(made))
+    binds[runtime_python_docker.INSTALL_DIR] = True
+    existing = _Container(binds)
+
+    _made, client, got = _started(tmp_path, monkeypatch, existing)
+
+    assert got is not existing
+    assert existing.removed is True
+
+
+def test_a_volume_the_image_declared_is_not_compared(tmp_path, monkeypatch):
+    """PartCAD never asked for it and cannot match it.
+
+    Comparing it in would replace such an image's container before every command.
+    """
+    made = _runtime(tmp_path)
+    existing = _Container(_wanted_binds(made))
+    existing.attrs["Mounts"].append({"Type": "volume", "Source": "some-volume", "RW": True})
+
+    _made, client, got = _started(tmp_path, monkeypatch, existing)
+
+    assert got is existing
+    assert client.made is None
+
+
+# --------------------------------------------------------------------------- #
+# What may be written                                                          #
+# --------------------------------------------------------------------------- #
+
+
+def test_a_path_the_context_only_reads_is_mounted_read_only(tmp_path):
+    """An ad-hoc conversion's input is the user's own file, and it is only read."""
+    made = _runtime(tmp_path)
+    made.ctx.sandbox_paths_read_only = [str(tmp_path / "inputs")]
+
+    mounts = docker_mount.mounts(made._mounted, read_only=made._mounted_read_only)
+
+    # Visible -- it is the file being converted -- and not writable.
+    assert mounts[str(tmp_path / "inputs")]["mode"] == "ro"
+
+
+def test_a_path_that_is_also_written_stays_writable(tmp_path):
+    """Converting a file into the directory it came from is an ordinary thing to do.
+
+    The demand for write access is the specific claim, so it wins over the
+    input's "I only read this".
+    """
+    made = _runtime(tmp_path)
+    both = str(tmp_path / "models")
+    made.ctx.sandbox_paths = [both]
+    made.ctx.sandbox_paths_read_only = [both]
+
+    mounts = docker_mount.mounts(made._mounted, read_only=made._mounted_read_only)
+
+    assert mounts[both]["mode"] == "rw"
 
 
 # --------------------------------------------------------------------------- #

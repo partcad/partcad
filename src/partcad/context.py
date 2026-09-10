@@ -235,6 +235,17 @@ class Context:
         # Only the container sandboxes read this. The others run on the host,
         # where every path is already reachable and nothing has to be declared.
         self.sandbox_paths = []
+        # The same, for directories the sandbox only ever *reads*. Kept apart
+        # rather than inferred: a directory of the user's own that a conversion
+        # reads its input from should not be one a script in the sandbox can
+        # rewrite, while the one the output lands in has to be.
+        #
+        # The two lists are what each caller needs, so a path in both is a path
+        # something needs to write -- and writable wins, because that is the
+        # specific claim. Converting a file into the directory it came from is
+        # an ordinary way to run a conversion, and it must not turn the output
+        # directory read-only.
+        self.sandbox_paths_read_only = []
         self.runtimes_python = {}
         # Container sandboxes, keyed by container name (derived from the image).
         self.runtimes_container = {}

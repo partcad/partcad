@@ -135,7 +135,15 @@ def write_output_file(
         # The directories rather than the files: an OpenSCAD or a CadQuery input
         # may include a sibling, and the output's directory has to be writable
         # for the export to land in it.
-        ctx.sandbox_paths = [str(input_path.parent), str(Path(output_filename).resolve().parent)]
+        #
+        # Only the output's. The input is read and never written, and it is a
+        # directory of the user's own -- often the one they happened to be
+        # standing in -- so a script running in the sandbox has no business
+        # being able to rewrite the file it was handed, or anything beside it.
+        # When the two are the same directory it is writable, which is what
+        # converting a file in place has to mean.
+        ctx.sandbox_paths = [str(Path(output_filename).resolve().parent)]
+        ctx.sandbox_paths_read_only = [str(input_path.parent)]
         with pc_logging.Process(verb, "adhoc" if kind == "part" else "adhoc-sketch"):
             project = ctx.get_project("//")
             obj = project.get_part(object_name) if kind == "part" else project.get_sketch(object_name)
