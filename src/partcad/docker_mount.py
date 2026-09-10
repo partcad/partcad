@@ -22,11 +22,16 @@ naming it after the image.) A traceback names a file the user can open, and the
 whole class of bug where a path is rewritten in one place and not another does
 not arise.
 
-Windows is the exception, and it has to be: ``C:\\Users\\you`` is not a path a
-Linux container can have. There a drive letter becomes a top-level directory the
-way Docker Desktop mounts it -- ``C:\\Users\\you`` as ``/c/Users/you`` -- which
-is the one place PartCAD translates, and the reason ``translate()`` exists at
-all rather than being an identity nobody would write down.
+Windows cannot have that, and never could: ``C:\\Users\\you`` is not a path a
+Linux container can hold. There a drive letter becomes a top-level directory the
+way Docker Desktop mounts it -- ``C:\\Users\\you`` as ``/c/Users/you`` -- and
+``rewrite()`` fixes up the command line to match.
+
+So "the same path on both sides" is what a POSIX host gets, not a rule the
+design keeps everywhere; on Windows the translation already happens, and
+``translate()`` is not an identity nobody would write down. Anything that
+proposes mounting somewhere else is trading away a POSIX convenience, not
+breaking an invariant.
 """
 
 import os

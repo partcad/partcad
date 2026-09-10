@@ -335,7 +335,10 @@ The container is a place to run the interpreter, not a place to keep your work.
 What it can see is whatever PartCAD bind-mounts into it, and that list is kept
 as short as it can be -- on an ordinary machine, one directory:
 
-* your **home directory**, which already contains the other three;
+* your **home directory**, which already contains most of the rest;
+* the **temporary directory**, because things land there without asking to be
+  mounted -- an ad-hoc command's generated package, a factory's intermediate --
+  and one fixed mount is simpler than arranging for nothing to be temporary;
 * the **context root** -- the package tree the command is working on;
 * **the internal state directory** (``~/.partcad`` by default), which is where
   the sandbox environments, the caches and the fetched dependencies live;
@@ -363,12 +366,19 @@ containers of one image. The isolation worth having here is the container; the
 mounts exist so that a path a wrapper is handed means something on the other
 side, and that is a stopgap rather than a security boundary.
 
-All of them are mounted **at the same paths they have outside**, so a path in a
-log, in an error, in a cached artifact or in a ``.frd`` a solver wrote means the
-same thing on both sides and nothing has to be rewritten. The one exception is
-Windows, where a path like ``C:\Users\you\.partcad`` cannot exist inside a
-Linux container: there, and only there, drive letters are mapped the way Docker
-Desktop maps them (``C:\Users\you`` becomes ``/c/Users/you``).
+On a POSIX host all of them are mounted **at the same paths they have
+outside**, so a path in a log, in an error, in a cached artifact or in a
+``.frd`` a solver wrote means the same thing on both sides and nothing has to
+be rewritten.
+
+That is not available on Windows and never was: ``C:\Users\you\.partcad``
+is not a path a Linux container can have, so a drive letter is mapped the way
+Docker Desktop maps it (``C:\Users\you`` becomes ``/c/Users/you``) and
+PartCAD rewrites the command line on the way in. So identical paths are a
+property of POSIX hosts rather than of the design, and translating them is
+machinery PartCAD already has rather than a line it will not cross -- worth
+knowing before treating "the paths must match" as a constraint on some future
+change to how the mounts are chosen.
 
 The container is named after the **image** and nothing else, so it outlives the
 process that started it: the next ``pc`` command finds it warm rather than

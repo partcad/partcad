@@ -36,7 +36,7 @@ import types
 
 import pytest
 
-from partcad import runtime, runtime_python_docker, wrapper
+from partcad import runtime, runtime_python_docker, sandbox_versions, wrapper
 
 IMAGE = os.environ.get("PC_TEST_SANDBOX_IMAGE")
 
@@ -148,6 +148,51 @@ def test_a_package_installed_over_there_imports_over_there(made):
     exitcode, stdout, stderr = made.run(["-c", "import six; print(six.__version__)"])
     assert exitcode == 0, stderr
     assert stdout.strip(), "six imported but reported no version"
+
+
+def test_the_raster_render_stack_installs_over_there(made):
+    """The one thing in the image that is not just an interpreter, checked.
+
+    'rlPyCairo' pulls 'pycairo', which is a C extension publishing **no Linux
+    wheel** -- so pip compiles it, and a slim image has neither the cairo
+    headers nor a compiler. Every PNG and JPEG render in a container failed on
+    "cannot import desired renderPM backend rlPyCairo", and the whole
+    'Examples (PartCAD)' family was red on it.
+
+    The image answers that by building the wheel in a stage it throws away and
+    leaving 'PIP_FIND_LINKS' pointing at it. Nothing else here would notice if
+    that stopped working: the sandbox tests above install 'six', which needs no
+    compiler and no library, so an image that had lost cairo would pass every
+    one of them and fail only where a user renders a picture.
+
+    This is the test that would have caught it, and it runs against the image
+    built in this run rather than the last published one -- which is the only
+    place on a pull request where that image is exercised at all.
+
+    A four-point rectangle is actually rasterized rather than the module merely
+    imported: renderPM resolves its backend when it draws, which is where the
+    error came from and the only place it can be provoked.
+    """
+    import asyncio
+
+    for requirement in (sandbox_versions.REPORTLAB, sandbox_versions.RLPYCAIRO):
+        asyncio.run(made.ensure_async(requirement))
+
+    exitcode, stdout, stderr = made.run(
+        [
+            "-c",
+            "from reportlab.graphics.shapes import Drawing, Rect\n"
+            "from reportlab.graphics import renderPM\n"
+            "d = Drawing(4, 4)\n"
+            "d.add(Rect(0, 0, 4, 4))\n"
+            "print(len(renderPM.drawToString(d, fmt='PNG')))\n",
+        ]
+    )
+
+    assert exitcode == 0, stderr
+    # The message the whole 'Examples (PartCAD)' family died on.
+    assert "renderPM backend" not in stderr, stderr
+    assert int(stdout.strip()) > 0, stdout
 
 
 def test_the_environment_outlives_the_container(made):

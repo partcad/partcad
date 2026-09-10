@@ -36,6 +36,7 @@ writes and PartCAD checks.
 import hashlib
 import os
 import platform
+import tempfile
 import threading
 import time
 from typing import Optional
@@ -244,6 +245,14 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         # to and is not a thing to bind-mount.
         if home and os.path.isdir(home) and home.rstrip("/\\"):
             paths.append(home)
+        # The temporary directory, because a fixed mount is simpler than
+        # arranging for nothing to be temporary. Plenty of things land there
+        # without asking -- an ad-hoc command's generated package, a factory's
+        # intermediate, a caller's own 'mkstemp' -- and each one that a
+        # container cannot open is the same bug found again somewhere new. One
+        # mount ends the category. It is under the home directory on Windows,
+        # where 'mounts' drops it as nested and this costs nothing.
+        paths.append(tempfile.gettempdir())
         paths += [self.ctx.user_config.internal_state_dir, INSTALL_DIR]
         root = getattr(self.ctx, "root_path", None)
         if root:

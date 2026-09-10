@@ -14,6 +14,7 @@ the job of the integration legs in CI, which have a Docker daemon.
 
 import os
 import pathlib
+import tempfile
 import time
 import types
 
@@ -175,6 +176,7 @@ def test_a_context_names_the_home_directory_and_the_usual_three(tmp_path):
     assert sorted(made._mounted) == sorted(
         [
             os.path.expanduser("~"),
+            tempfile.gettempdir(),
             made.ctx.user_config.internal_state_dir,
             runtime_python_docker.INSTALL_DIR,
             made.ctx.root_path,
@@ -182,20 +184,31 @@ def test_a_context_names_the_home_directory_and_the_usual_three(tmp_path):
     )
 
 
-def test_everything_under_one_home_directory_is_one_mount(tmp_path, monkeypatch):
+def test_everything_under_one_directory_is_one_mount(tmp_path, monkeypatch):
     """The case worth having, and the reason the home directory is named at all.
 
     On an ordinary machine '~/.partcad', the package and the installation are
     all under '~', so the container gets a single bind -- and a mount set that
     does not vary between contexts is a container that never has to be
     replaced.
+
+    Asserted as "one mount that covers them all" rather than by naming it,
+    because pytest's 'tmp_path' is itself under the temporary directory, so on
+    this machine the one mount is that rather than the home directory. Which of
+    them swallows the others is the platform's business; that one of them does
+    is the property.
     """
     monkeypatch.setenv("HOME", str(tmp_path))
     made = _runtime(tmp_path)
     monkeypatch.setattr(runtime_python_docker, "INSTALL_DIR", str(tmp_path / "lib" / "partcad"))
     made.ctx.sandbox_paths = [str(tmp_path / "models")]
 
-    assert docker_mount.mounts(made._mounted) == {str(tmp_path): {"bind": str(tmp_path), "mode": "rw"}}
+    mounts = docker_mount.mounts(made._mounted)
+
+    assert len(mounts) == 1, mounts
+    outer = next(iter(mounts))
+    for path in made._mounted:
+        assert docker_mount.contains(outer, path), "%s is not under %s" % (path, outer)
 
 
 def test_everything_is_writable(tmp_path):
@@ -744,6 +757,42 @@ def test_a_refusal_that_is_not_a_race_is_raised(tmp_path, monkeypatch):
 
     with pytest.raises(docker.errors.APIError, match="no space left"):
         made._start()
+
+
+def test_the_temporary_directory_is_mounted(tmp_path):
+    """Because plenty of things land there without asking to be mounted.
+
+    An ad-hoc command's generated package, a factory's intermediate, a
+    caller's own 'mkstemp' -- each one a container could not open was the same
+    bug found somewhere new, and each was fixed by moving the file. One fixed
+    mount ends the category instead.
+    """
+    made = _runtime(tmp_path)
+
+    assert tempfile.gettempdir() in made._mounted
+
+
+def test_two_ad_hoc_runs_ask_for_the_same_mounts(tmp_path, monkeypatch):
+    """Which is what keeps the warm container, and what a temp path would lose.
+
+    An ad-hoc command's context root is a fresh 'mkdtemp' every time. Unmounted,
+    each run named a directory no previous run had -- a mount set that differs
+    is a container that gets replaced, so 'pc convert' threw the container away
+    and started another every single time. Two runs, one mount set.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(runtime_python_docker, "INSTALL_DIR", str(tmp_path / "lib" / "partcad"))
+
+    def one_run():
+        made = _runtime(tmp_path)
+        made.ctx.root_path = tempfile.mkdtemp()
+        return sorted(docker_mount.mounts(made._mounted)), made.container_name
+
+    first, first_name = one_run()
+    second, second_name = one_run()
+
+    assert first == second, (first, second)
+    assert first_name == second_name
 
 
 # --------------------------------------------------------------------------- #
