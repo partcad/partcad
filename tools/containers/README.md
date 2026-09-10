@@ -104,19 +104,32 @@ default rather than an option — a sandbox that costs more to provision than co
 off. Keep additions to what is actually imported at run time, drop apt lists in the same layer that creates
 them, and prefer a wheel to a toolchain.
 
-## How a change here is tested, and where it is published
+## How a change here is tested, published, and released
 
-Two different things, and the gap between them cost a fortnight of red CI.
+Three different moments, and the gap between the first two cost a fortnight of red CI.
 
-Every CI job that renders on Linux **builds this image from the tree under test** and leaves it in the
-runner's image store under the tag PartCAD resolves, through
-`.github/actions/sandbox-image`. That is what makes a change here provable: `resolve_image` uses a name that
-is already present locally without asking a registry, so the sandbox runs in the image this commit
-describes. Before that, those jobs pulled the published tag — so a fix here could not be shown to work and a
-regression here could not be caught, and "green" meant the last publish had been good.
+**Tested — every run.** Every CI job that renders on Linux gets this image under the tag PartCAD resolves,
+through `.github/actions/sandbox-image`, and outside a push to `devel` or `main` it gets it by **building
+this tree**. That is what makes a change here provable: `resolve_image` uses a name already present locally
+without asking a registry, so the sandbox runs in the image this commit describes. Before that, those jobs
+pulled the published tag — so a fix here could not be shown to work and a regression here could not be
+caught, and "green" meant the last publish had been good.
 
-Publishing is separate and waits for the commit to land: `build-containers` in `.github/workflows/test.yml`
-pushes only when the event is neither a pull request nor a merge queue run. Note that a plain push to `devel`
-does not run the matrix at all unless it is a version bump, so in practice the tags move on the nightly run
-or a `workflow_dispatch`. A change here therefore reaches users' machines *later* than it reaches CI, and
-that is the intended order — not something to work around by publishing from a branch.
+**Published — the version bump on `devel`.** `build-containers` pushes `<release>-py<X>-<arch>`, once, from
+the run whose head commit is `Version updated from … to …`. That is what makes the version tag the immutable
+thing a package's pin can mean. It used to be re-pushed by every nightly, which is to say the tag documented
+as immutable was rewritten daily with whatever `devel` held. A `workflow_dispatch` publishes too, as the
+recovery path for a bump whose push failed — it publishes whatever tree it runs on, so dispatch it at the
+bump commit and nowhere else.
+
+**Released — the same version reaching `main`.** The moving tag `py<X>-<arch>`, which is what a third-party
+plugin builds `FROM` and what that plugin's CI tests against, is pointed at the version tag by
+`docker buildx imagetools create`. No rebuild: the Dockerfile would be the same but `apt-get` and `pip`
+resolve against the day they run, so a rebuild would hand plugin authors an image nothing had tested. The
+retag copies the manifest, so the two tags name the same bytes. This too used to happen nightly, which
+pointed every plugin's CI at an unreleased `devel` build.
+
+On a push to `devel` or `main` the rendering jobs **pull** the published tag instead of building, because
+there the published image is the subject rather than a stand-in for it — and fall back to building if it is
+not there yet, which is the ordinary case on the bump run itself, where the publish and the jobs that would
+pull it are in the same run.

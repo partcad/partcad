@@ -84,6 +84,72 @@ def test_the_base_image_is_the_one_ci_publishes():
     assert "${PC_VERSION}-py${PY}-${ARCH}" in workflow
 
 
+def _build_containers_steps():
+    """The steps of the job that builds and publishes the base images."""
+    import yaml
+
+    workflow = pathlib.Path(__file__).resolve().parents[3] / ".github" / "workflows" / "test.yml"
+    return yaml.safe_load(workflow.read_text())["jobs"]["build-containers"]["steps"]
+
+
+def _step(name):
+    for step in _build_containers_steps():
+        if step.get("name") == name:
+            return step
+    raise AssertionError("no step named %r in 'build-containers'" % name)
+
+
+def test_the_version_tag_is_published_once_by_the_version_bump():
+    """Which is the whole of what makes it a tag a package may pin.
+
+    It used to be pushed by every event that was not a pull request or a merge
+    queue run -- so the nightly rewrote it, daily, with whatever 'devel' held at
+    the time. A pin that moves under the package that took it is not a pin, and
+    the comment beside it had called it immutable throughout.
+    """
+    push = _step("Build the Python sandbox images")["env"]["PUSH"]
+
+    assert "refs/heads/devel" in push
+    assert "Version updated" in push
+    # The recovery path for a bump whose push failed, and the only other way in.
+    assert "workflow_dispatch" in push
+    assert "refs/heads/main" not in push
+
+
+def test_the_moving_tag_is_not_written_by_a_build():
+    """A plugin builds 'FROM' it, so what it names has to be what was tested.
+
+    The Dockerfile does not change between the bump and the release; 'apt-get'
+    and 'pip' do, because they resolve against the day they run. So the release
+    below retags rather than rebuilds, and the build here must not write this
+    tag at all -- it appears only as a cache source.
+    """
+    run = _step("Build the Python sandbox images")["run"]
+
+    assert '--tag "${IMAGE}:py${PY}-${ARCH}"' not in run
+    assert '--cache-from "type=registry,ref=${IMAGE}:py${PY}-${ARCH}"' in run
+
+
+def test_the_release_advances_the_moving_tag_without_rebuilding():
+    """'main' is where a published version becomes the released one.
+
+    A rebuild would produce an image nothing had tested and hand it to every
+    plugin author; 'imagetools create' copies the manifest, so the moving tag
+    and the version tag name the same bytes.
+    """
+    step = _step("Release the Python sandbox images")
+
+    assert "refs/heads/main" in step["if"]
+    assert "Version updated" in step["if"]
+    assert "imagetools create" in step["run"]
+    # The trailing space is what keeps this from matching the "docker buildx"
+    # of "imagetools create" itself.
+    assert "docker build " not in step["run"]
+    assert "buildx build" not in step["run"]
+    # Pointed at the version this run carries, which is what "devel" published.
+    assert '"${IMAGE}:${PC_VERSION}-py${PY}-${ARCH}"' in step["run"]
+
+
 def test_two_images_are_two_sandboxes(tmp_path):
     """What pip resolves depends on the native libraries under it.
 

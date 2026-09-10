@@ -256,32 +256,53 @@ jobs:
       # step in a job that already exists. "docker/build-push-action" is not used
       # for the same reason: it is a step, and a step cannot repeat.
       #
-      # Two tags each, and they are for different readers. The version tag is
-      # immutable and is what a package pins; the bare one moves and is what a
-      # plugin's own CI tests against, so that a rebuilt base which breaks a
-      # plugin shows up in that plugin's run rather than in a user's.
+      # Two tags each, and they are two different promises to two different
+      # readers, made at two different moments.
       #
-      # A pull request builds them and does not publish them. Both tags are read
-      # by somebody who is not this run -- the version tag by a package that
-      # pinned it, the moving one by every plugin whose own CI builds "FROM" it
-      # -- so pushing from a pull request would hand unreviewed images to both,
-      # and would let any branch overwrite the tag called immutable just above.
-      # Nothing in this repository's CI consumes the published image either.
-      # "Sandbox (docker)" below builds its own, and every job that merely
-      # *renders* -- which on Linux means rendering in a container, since that
-      # sandbox is the default where a runtime answers -- builds one through
-      # ".github/actions/sandbox-image". That is deliberate and was not always
-      # so: while those jobs pulled the tag, a Dockerfile fix could not be
-      # proven by CI and a Dockerfile regression could not be caught by it, and
-      # "green" meant the last publish was good. So the build is the test, and
-      # publishing waits for the commit to land.
+      # The **version tag**, "<release>-py<X>-<arch>", is what a package pins and
+      # what "image_for()" resolves. It is written once, by the run that bumps
+      # the version on "devel", and never again: that is what makes it the
+      # immutable thing a pin can mean. It used to be re-pushed by every nightly,
+      # which is to say the tag documented as immutable was rewritten daily with
+      # whatever "devel" happened to hold -- a pin that moved under the package
+      # that took it.
+      #
+      # The **moving tag**, "py<X>-<arch>", is what a third-party plugin builds
+      # "FROM" and what that plugin's own CI tests against. It advances when a
+      # version reaches "main", which is the moment PartCAD calls that version
+      # released -- by retagging the image "devel" already published, so what
+      # plugin authors get is byte-identical to what was tested, rather than a
+      # rebuild of the same Dockerfile against a later apt and a later pip. It
+      # used to advance nightly too, which pointed every plugin's CI at an
+      # unreleased "devel" build.
+      #
+      # So: build always, publish on a version bump, release on "main". Every
+      # other event -- a pull request, the merge queue, the nightly, a manual
+      # dispatch -- builds and publishes nothing, because the build is the test.
+      # Both tags are read by somebody who is not this run, and neither is a
+      # thing an unreviewed branch may hand them.
+      #
+      # What consumes the published images is stated in
+      # ".github/actions/sandbox-image": a push to "devel" or "main" pulls them,
+      # because there the published image is the subject; everything else builds
+      # the tree under test, because there the published image is somebody
+      # else's build made before this commit existed.
       - name: Build the Python sandbox images
         env:
           PYTHONS: ${{ env.PYTHONS }}
           DEEP: ${{ needs.set-matrix.outputs.deep }}
           IMAGE: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-python
           PC_VERSION: ${{ env.VERSION }}
-          PUSH: ${{ (github.event_name != 'pull_request' && github.event_name != 'merge_group') && 'true' || 'false' }}
+          # The version bump on "devel", and nothing else. "workflow_dispatch"
+          # is the recovery path for a publish that failed -- it publishes
+          # whatever tree it is dispatched at, so it has to be dispatched at the
+          # bump commit and nowhere else.
+          PUSH: >-
+            ${{ ((github.event_name == 'push'
+            && github.ref == 'refs/heads/devel'
+            && startsWith(github.event.head_commit.message, 'Version updated'))
+            || github.event_name == 'workflow_dispatch')
+            && 'true' || 'false' }}
         run: |
           # arm64 goes through QEMU and costs minutes per version, so a pull
           # request builds amd64 alone and a deep run covers both. That is a real
@@ -304,12 +325,49 @@ jobs:
                 --build-arg "PYTHON_VERSION=${PY}" \
                 --build-arg "PARTCAD_VERSION=${PC_VERSION}" \
                 --tag "${IMAGE}:${PC_VERSION}-py${PY}-${ARCH}" \
-                --tag "${IMAGE}:py${PY}-${ARCH}" \
                 --cache-from "type=registry,ref=${IMAGE}:py${PY}-${ARCH}" \
                 --cache-to type=inline \
                 --output "type=image,push=${PUSH}" \
                 --file tools/containers/python/Dockerfile \
                 tools/containers
+              echo "::endgroup::"
+            done
+          done
+
+
+      # Releasing what "devel" published: the moving tag is pointed at the
+      # version tag, in the registry, without pulling or rebuilding anything.
+      #
+      # A rebuild here would be a different image. The Dockerfile is the same,
+      # but "apt-get install" and "pip install" resolve against the day they run
+      # -- so the thing plugin authors build "FROM" would be one nothing had
+      # tested, differing from the tested one by however much the world moved
+      # between the bump and the release. "imagetools create" copies the
+      # manifest, so the two tags name the same bytes.
+      #
+      # It fails loudly if the version tag is not there. That means the bump on
+      # "devel" did not publish, and a release with no image behind it is worth
+      # a red job rather than a moving tag left pointing at the version before.
+      - name: Release the Python sandbox images
+        if: >-
+          ${{ github.event_name == 'push'
+          && github.ref == 'refs/heads/main'
+          && startsWith(github.event.head_commit.message, 'Version updated') }}
+        env:
+          PYTHONS: ${{ env.PYTHONS }}
+          IMAGE: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-python
+          PC_VERSION: ${{ env.VERSION }}
+        run: |
+          set -euo pipefail
+          # Both architectures, always: what reaches "main" was published by a
+          # push to "devel", and a push is a deep run, so both exist. Asking for
+          # one that does not is the failure described above.
+          for PY in $(echo "${PYTHONS}" | jq -r '.[]'); do
+            for ARCH in amd64 arm64; do
+              echo "::group::python ${PY} (${ARCH}): ${PC_VERSION} -> latest"
+              docker buildx imagetools create \
+                --tag "${IMAGE}:py${PY}-${ARCH}" \
+                "${IMAGE}:${PC_VERSION}-py${PY}-${ARCH}"
               echo "::endgroup::"
             done
           done
