@@ -1,0 +1,121 @@
+name: "Sandbox base image"
+description: >-
+  Make the `docker` Python sandbox's base image available to this job, under the
+  name PartCAD resolves: the published one where a published one is the subject,
+  and a build of this tree everywhere else.
+
+# Which of the two, and why it is the branch that decides rather than the
+# registry.
+#
+# The `docker` sandbox is the default wherever a container runtime answers, so
+# every Linux job here renders in a container, and `resolve_image` pulls
+# `ghcr.io/partcad/partcad-container-python:<release>-py<X>-<arch>`.
+#
+# On a **push to `devel` or `main`** that tag is the subject: it is what a user
+# who installs this release will pull, and a job that quietly built its own copy
+# would be testing something nobody has. So those jobs pull it.
+#
+# On a **pull request** -- and in the merge queue, and on the nightly, and on a
+# manual dispatch -- the published tag is somebody else's build, made before this
+# commit existed. Pulling it there is how `tools/containers/python/Dockerfile`
+# gained the `pycairo` wheel that reportlab's renderPM needs while every PNG in
+# every rendering job went on failing with "cannot import desired renderPM
+# backend rlPyCairo": the fix was in the repository and not in the tag, and no
+# run could tell. Those jobs build the image from the tree under test.
+#
+# Nothing about that was specific to `pycairo`. A base image CI consumes and
+# never builds is one where a Dockerfile fix cannot be proven and a Dockerfile
+# regression cannot be caught, and where "green" means the last publish was good.
+#
+# A pull that fails falls back to building. That is not a fallback for a broken
+# registry so much as for the ordinary case of a version bump: the run that
+# publishes `<release>` is the same run these jobs are in, and a job that reaches
+# this step before the publish finishes finds nothing to pull. Building is then
+# the right answer and the honest one -- it is this tree either way.
+#
+# `resolve_image` is what makes both paths work with no code change: "a name that
+# is present locally is used without asking a registry, so an image somebody
+# built by hand for testing is picked up the way a pulled one is". This is that,
+# automated.
+
+inputs:
+  python-version:
+    description: >-
+      The interpreter the image carries. This is PartCAD's own default -- what a
+      package that names no `pythonVersion` gets, `sandbox_versions
+      .DEFAULT_PYTHON_VERSION` -- and not the version the job itself runs on.
+      A suite whose packages ask for another interpreter needs that one too.
+    required: false
+    default: "3.11"
+
+runs:
+  using: "composite"
+  steps:
+    - name: The sandbox base image
+      shell: bash
+      # Through the environment rather than interpolated into the script
+      # (zizmor template-injection), like every other matrix value here.
+      env:
+        PYTHON_VERSION: ${{ inputs.python-version }}
+        # A push to one of the two branches whose published images are the
+        # subject. Everything else builds; see the note above.
+        PREFER_PUBLISHED: >-
+          ${{ (github.event_name == 'push'
+          && (github.ref == 'refs/heads/devel' || github.ref == 'refs/heads/main'))
+          && 'true' || 'false' }}
+      run: |
+        set -euo pipefail
+
+        # Both read out of the source rather than restated here. The name and
+        # the release are what `image_for()` builds the tag from, so a copy in
+        # this file is a copy that can be wrong -- and would be wrong silently,
+        # by building an image nothing then looks for and leaving the job to
+        # pull the published one after all.
+        image=$(sed -n 's/^BASE_IMAGE = "\(.*\)"$/\1/p' src/partcad/runtime_python_docker.py)
+        release=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' src/partcad/__init__.py)
+        if [ -z "${image}" ] || [ -z "${release}" ]; then
+          echo "::error::could not read BASE_IMAGE or __version__ out of the sources"
+          exit 1
+        fi
+
+        # The suffix `docker_image.candidates()` tries first, spelled Docker's
+        # way -- see `ARCH_ALIASES`. Only the two architectures CI runs on are
+        # named: anything else is a runner nobody has, and guessing a suffix
+        # would build an image under a tag that is never looked for.
+        case "$(uname -m)" in
+          x86_64) arch=amd64 ;;
+          aarch64 | arm64) arch=arm64 ;;
+          *)
+            echo "::error::no sandbox image tag is defined for $(uname -m)"
+            exit 1
+            ;;
+        esac
+
+        tag="${image}:${release}-py${PYTHON_VERSION}-${arch}"
+
+        if [ "${PREFER_PUBLISHED}" = "true" ]; then
+          echo "::group::pulling ${tag}"
+          if docker pull "${tag}"; then
+            echo "::endgroup::"
+            echo "the sandbox will run in ${tag}, as published"
+            exit 0
+          fi
+          echo "::endgroup::"
+          echo "::notice::${tag} is not published yet; building it from this commit"
+        fi
+
+        echo "::group::building ${tag}"
+        docker build \
+          --build-arg "PYTHON_VERSION=${PYTHON_VERSION}" \
+          --build-arg "PARTCAD_VERSION=${release}" \
+          --tag "${tag}" \
+          --file tools/containers/python/Dockerfile \
+          tools/containers
+        echo "::endgroup::"
+
+        # Asserted, because the whole point is that the sandbox finds it. A
+        # build that produced some other name would leave every rendering step
+        # pulling the published image and reporting whatever that image does,
+        # which is the failure this action exists to end.
+        docker image inspect "${tag}" >/dev/null
+        echo "the sandbox will run in ${tag}, built from this commit"

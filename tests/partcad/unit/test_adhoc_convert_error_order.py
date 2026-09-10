@@ -20,6 +20,8 @@ throwaway package (`partcad.adhoc.adhoc`), so a shape that will not load fails
 identically for either, and what differs is only the verb in the message.
 """
 
+import pathlib
+
 import pytest
 
 from partcad.adhoc import adhoc as adhoc_base

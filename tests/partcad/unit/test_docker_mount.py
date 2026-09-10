@@ -92,6 +92,48 @@ def test_a_prefix_that_is_not_a_parent_is_not_swallowed():
     assert len(docker_mount.mounts(["/srv/pkg", "/srv/pkg-other"], windows=False)) == 2
 
 
+def test_everything_is_mounted_writable():
+    """The installation was briefly mounted 'ro' and is not any more.
+
+    It bought little -- a wrapper is read and executed, and what it writes goes
+    to the cache or back over its own protocol -- and cost a second thing that
+    could differ between two containers of one image. The isolation worth
+    having is the container.
+    """
+    assert docker_mount.mounts(["/opt/partcad", "/srv/pkg"], windows=False) == {
+        "/opt/partcad": {"bind": "/opt/partcad", "mode": "rw"},
+        "/srv/pkg": {"bind": "/srv/pkg", "mode": "rw"},
+    }
+
+
+def test_a_nested_directory_is_seen_whichever_separator_it_is_written_with():
+    """Otherwise neither is seen to contain the other and both are mounted.
+
+    Which is the two views of one directory this function exists to prevent.
+    """
+    assert docker_mount.contains("C:/work", "C:\\work\\pkg", windows=True) is True
+    assert docker_mount.mounts(["C:/work", "C:\\work\\pkg"], windows=True) == {
+        "C:/work": {"bind": "/c/work", "mode": "rw"},
+    }
+
+
+def test_a_nested_directory_is_seen_whatever_its_case_on_windows():
+    """'C:\\Users\\you' and 'c:/users/you/.partcad' are a parent and a child."""
+    assert docker_mount.contains("C:\\Users\\you", "c:/users/you/.partcad", windows=True) is True
+
+
+def test_case_still_decides_off_windows():
+    """Two directories differing in case are two directories on a POSIX host."""
+    assert docker_mount.contains("/srv/partcad", "/srv/PartCAD", windows=False) is False
+    assert len(docker_mount.mounts(["/srv/PartCAD", "/srv/partcad"], windows=False)) == 2
+
+
+def test_a_backslash_is_a_file_name_character_off_windows():
+    """So folding it there would merge two directories that are two."""
+    assert docker_mount.contains("/srv/work", "/srv/work\\pkg", windows=False) is True
+    assert docker_mount.contains("/srv/work", "/srv/work-other", windows=False) is False
+
+
 # --------------------------------------------------------------------------- #
 # Rewriting a command line                                                     #
 # --------------------------------------------------------------------------- #
@@ -133,3 +175,13 @@ def test_the_longest_mount_wins():
 def test_a_drive_letter_is_matched_whatever_its_case():
     """Windows says 'C:' and 'c:' for the same drive; both have to match."""
     assert docker_mount.rewrite(r"c:\work\pkg\part.py", [r"C:\work"], windows=True) == "/c/work/pkg/part.py"
+
+
+def test_an_argument_is_matched_whichever_separator_it_is_written_with():
+    """An argument built with one and a mount recorded with the other.
+
+    Left alone, it reached the container as a host path -- a file the
+    interpreter over there has no such name for.
+    """
+    assert docker_mount.rewrite("C:/work/pkg/part.py", [r"C:\work"], windows=True) == "/c/work/pkg/part.py"
+    assert docker_mount.rewrite(r"C:\work\pkg\part.py", ["C:/work"], windows=True) == "/c/work/pkg/part.py"

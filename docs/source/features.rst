@@ -321,10 +321,25 @@ simply not permitted to reach the registry those are different answers. So
 PartCAD checks, once, and falls through to ``conda`` or ``venv`` with a warning
 rather than failing every part against a registry you never asked it to talk to.
 
+"Can actually provide" also includes the **filesystem**. The container gets your
+directories bind-mounted into it, and that only means anything if the daemon
+being asked is on the same filesystem as PartCAD. Two ordinary arrangements
+where it is not: a dev container with the host's ``/var/run/docker.sock`` bound
+into it, and ``DOCKER_HOST`` pointing at another machine. There the daemon
+resolves your paths against a filesystem of its own, Docker creates whatever is
+missing -- empty, and owned by root -- and the container starts perfectly well
+with directories that are not yours. Nothing announces that; the first symptom
+is a permission error on a directory you can write to. So PartCAD asks the
+daemon directly, once: it writes a file and has a throwaway container look for
+it. A daemon that cannot see it is one this sandbox cannot use, and PartCAD says
+so and uses conda or a virtual environment, both of which stay on this machine.
+A daemon *inside* this container -- Docker in Docker -- shares the filesystem
+and is fine.
+
 That fallback is only ever for a choice PartCAD made. Say ``pythonSandbox:
-docker`` yourself and it is obeyed: an image that cannot be had is then a
-failure, because being unable to do what was asked is not a reason to quietly do
-something else.
+docker`` yourself and it is obeyed: an image that cannot be had, or a daemon
+that cannot see your files, is then a failure, because being unable to do what
+was asked is not a reason to quietly do something else.
 
 .. _docker-sandbox:
 
@@ -332,18 +347,61 @@ The ``docker`` sandbox
 ----------------------
 
 The container is a place to run the interpreter, not a place to keep your work.
-PartCAD mounts two directories into it:
+What it can see is whatever PartCAD bind-mounts into it, and that list is kept
+as short as it can be -- on an ordinary machine, two directories:
 
+* your **home directory**, which already contains most of the rest;
+* the **temporary directory**, because things land there without asking to be
+  mounted -- an ad-hoc command's generated package, a factory's intermediate --
+  and one fixed mount is simpler than arranging for nothing to be temporary;
 * the **context root** -- the package tree the command is working on;
 * **the internal state directory** (``~/.partcad`` by default), which is where
-  the sandbox environments, the caches and the fetched dependencies live.
+  the sandbox environments, the caches and the fetched dependencies live;
+* **PartCAD's own installation**, because the interpreter over there is handed
+  PartCAD's scripts by path and has to be able to open them.
 
-Both are mounted **at the same paths they have outside**, so a path in a log, in
-an error, in a cached artifact or in a ``.frd`` a solver wrote means the same
-thing on both sides and nothing has to be rewritten. The one exception is
-Windows, where a path like ``C:\Users\you\.partcad`` cannot exist inside a
-Linux container: there, and only there, drive letters are mapped the way Docker
-Desktop maps them (``C:\Users\you`` becomes ``/c/Users/you``).
+Nested directories are mounted once, by the outermost of them, since two views
+of one directory leave it undecided which a write lands in. So when the package,
+``~/.partcad`` and the installation are all under your home directory -- which
+is the usual arrangement -- those three collapse into it, leaving the home
+directory and the temporary one. On Windows even that is a single mount, since
+the temporary directory lives inside the user profile; on Linux and macOS it
+does not, so there are two. The rest are still named because they are not
+always under either: a package on another volume, a system-wide installation, a
+file an ad-hoc command was pointed at somewhere else.
+
+That is not tidiness. A mount set that does not vary from one context to the
+next is a container that never has to be replaced, which is what lets one
+container serve every package you work on and keep serving it after ``pc``
+exits.
+
+Everything is mounted **writable**, your home directory included. Mounting the
+installation read-only was tried and taken back out: it bought little -- a
+wrapper is read and executed, and what it writes goes to the cache or back over
+its own protocol -- and cost one more thing that could differ between two
+containers of one image. The isolation worth having here is the container; the
+mounts exist so that a path a wrapper is handed means something on the other
+side, and that is a stopgap rather than a security boundary.
+
+On a POSIX host all of them are mounted **at the same paths they have
+outside**, so a path in a log, in an error, in a cached artifact or in a
+``.frd`` a solver wrote means the same thing on both sides and nothing has to
+be rewritten.
+
+That is not available on Windows and never was: ``C:\Users\you\.partcad``
+is not a path a Linux container can have, so a drive letter is mapped the way
+Docker Desktop maps it (``C:\Users\you`` becomes ``/c/Users/you``) and
+PartCAD rewrites the command line on the way in. So identical paths are a
+property of POSIX hosts rather than of the design, and translating them is
+machinery PartCAD already has rather than a line it will not cross -- worth
+knowing before treating "the paths must match" as a constraint on some future
+change to how the mounts are chosen.
+
+The container is named after the **image** and nothing else, so it outlives the
+process that started it: the next ``pc`` command finds it warm rather than
+paying to start one, and only a new version or image tag makes it a different
+container. It carries PartCAD's labels, so ``pc system prune`` clears out the
+ones a machine has stopped needing.
 
 Because the state directory is mounted rather than copied, ``pip`` installs
 persist across container restarts and the environment locking, the install

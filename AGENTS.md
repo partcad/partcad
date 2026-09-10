@@ -184,10 +184,13 @@ This is still a fallback and not a second supported environment. What it does no
 * **A Docker daemon.** The KiCad example needs one, and so does the `docker` Python sandbox — which is now the
   default wherever a daemon answers *and* PartCAD's base image can be had, so a machine with Docker running is
   a machine that renders in it. (The `remote` sandbox needs no daemon here at all: it needs a reachable
-  `partcad-service-remote-docker`, which has one.) A machine without a daemon has to *say* so:
-  `PC_USE_DOCKER=false` (or `useDocker: false`), which is what a container image built with no Docker in it
-  should carry. Say nothing and a missing daemon is a failure, deliberately — silence there would turn a
-  runner whose Docker died into a green run with one fewer test in it.
+  `partcad-service-remote-docker`, which has one.) Nothing has to be declared for a machine that simply has
+  no daemon: the KiCad test skips on one that is unreachable exactly as it does on one that was turned off.
+  `PC_USE_DOCKER=false` (or `useDocker: false`) is the explicit opt-out — for a machine that *has* a daemon
+  and should not use it, and for a container image built without one, which can then say so once rather than
+  discovering it per subject. It skips on *that* and nothing else: an image it cannot pull, a `kicad-cli` that errors, a
+  part that comes back empty are all still failures, because those are the subject being broken rather than
+  the machine not having a container runtime.
 * **conda.** Without it the Python sandbox falls back to `venv`, which is a real sandbox and passes the suite;
   it just cannot provision an *interpreter version*, so a package asking for a Python this host does not have
   renders on the host's and says so. See `pythonSandbox` in `src/partcad_utils/user_config.py`.
@@ -315,6 +318,21 @@ session pytest then failed. That hook belongs at the root and nowhere else: a co
 records nothing for a run that does not collect that directory, and a gate reading no marker fails — which is
 also what keeps a crash mid-suite from passing. Do not move it, do not make it a plain (non-wrapper) hook, and
 do not let anything read the exit code instead.
+
+The dev container's own jobs in `test-dev.yml` lost a run's result a second way, and it is worth recognising
+because it looks like nothing: a `devcontainers/ci` `runCmd` is one script, so the step's result is the **last**
+command's. `Run: pytest` ended with `echo DONE` and reported a passing job over a failed test — for as long as
+nobody compared the job's colour with the JUnit it had just uploaded. `Run: behave` and `Run: pc` ended with
+`coverage xml`, which succeeds after a failing run because coverage writes its data whatever the program exited
+with. Every one of those scripts now starts with `set -e`, and the two that have a report to write keep the
+status and `exit` it at the end. Do not end such a script with a command whose success is not the result.
+
+That dev container also cannot use the `docker` Python sandbox, and PartCAD now knows it: it holds the *host's*
+`/var/run/docker.sock`, so the daemon it talks to resolves bind mounts against the host's filesystem rather than
+the container's. `mounts_are_shared` in `runtime_python_docker.py` asks that question by writing a file and
+having a throwaway container look for it, so the sandbox is reported unavailable there and conda is used
+instead, rather than every part failing on a path. It is one probe per process; see the docstring for what a
+wrong answer costs in each direction.
 
 The packages under `examples/` are a third suite. The images and `README.md` files there are what
 `cd examples && pc render -r` produces, and they are checked in so that a change in how PartCAD renders is a

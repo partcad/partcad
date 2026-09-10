@@ -36,7 +36,7 @@ import types
 
 import pytest
 
-from partcad import runtime, runtime_python_docker
+from partcad import runtime, runtime_python_docker, sandbox_versions, wrapper
 
 IMAGE = os.environ.get("PC_TEST_SANDBOX_IMAGE")
 
@@ -76,6 +76,27 @@ def made(tmp_path_factory):
             pass
 
 
+def test_this_daemon_shares_this_filesystem(made):
+    """The check that decides whether this sandbox is offered at all, run for real.
+
+    'mounts_are_shared' writes a file and asks a container whether it is there.
+    A wrong "no" is the expensive direction: it does not fail anything, it turns
+    the 'docker' sandbox off on a machine where it works, quietly, and the only
+    symptom is that conda is doing the rendering. That is exactly the kind of
+    thing a stub cannot catch -- the file's ownership, the uid the container
+    runs as, whether the temporary directory can be bound at all -- so it is
+    asked here, against a daemon that is really answering.
+
+    An ordinary CI runner is on the same filesystem as its daemon, so the answer
+    is yes. Where it is no -- a dev container holding the host's socket, a
+    'DOCKER_HOST' elsewhere -- this file does not run: 'docker_available' has
+    already skipped it or the image is not there.
+    """
+    import docker
+
+    assert runtime_python_docker.mounts_are_shared(docker.from_env(), IMAGE) is True
+
+
 def test_a_command_runs_in_the_container(made):
     """The first thing, and the one everything else is built on."""
     exitcode, stdout, stderr = made.run(["-c", "import sys; print(sys.executable)"])
@@ -97,6 +118,28 @@ def test_a_wrapper_is_handed_its_request_and_answers(made):
     )
     assert exitcode == 0, stderr
     assert "A REQUEST" in stdout
+
+
+def test_a_wrapper_file_can_be_opened_by_the_interpreter_over_there(made):
+    """PartCAD's own installation is a mount too, and this is why.
+
+    Every wrapper is run by path, and that path is in neither of the other two
+    mounts unless the installation happens to be inside one -- which a checkout
+    with an in-project virtual environment is and the frozen bundle is not. So
+    the bundle rendered nothing through this sandbox: "can't open file
+    '.../_internal/partcad/wrappers/wrapper_plugin.py'". The fixture's state
+    directory and context root are both under a temporary directory, so the
+    installation here is outside both, exactly as it is in a bundle.
+
+    Read rather than executed: a wrapper expects a request on stdin and the CAD
+    stack around it, and neither is what is in question. Whether the container
+    can see the file is.
+    """
+    path = wrapper.get("plugin.py")
+    exitcode, stdout, stderr = made.run(["-c", "import sys; print(open(sys.argv[1]).readline())", path])
+
+    assert exitcode == 0, stderr
+    assert stdout.strip(), stdout
 
 
 def test_the_environment_is_created_where_the_host_can_see_it(made):
@@ -126,6 +169,51 @@ def test_a_package_installed_over_there_imports_over_there(made):
     exitcode, stdout, stderr = made.run(["-c", "import six; print(six.__version__)"])
     assert exitcode == 0, stderr
     assert stdout.strip(), "six imported but reported no version"
+
+
+def test_the_raster_render_stack_installs_over_there(made):
+    """The one thing in the image that is not just an interpreter, checked.
+
+    'rlPyCairo' pulls 'pycairo', which is a C extension publishing **no Linux
+    wheel** -- so pip compiles it, and a slim image has neither the cairo
+    headers nor a compiler. Every PNG and JPEG render in a container failed on
+    "cannot import desired renderPM backend rlPyCairo", and the whole
+    'Examples (PartCAD)' family was red on it.
+
+    The image answers that by building the wheel in a stage it throws away and
+    leaving 'PIP_FIND_LINKS' pointing at it. Nothing else here would notice if
+    that stopped working: the sandbox tests above install 'six', which needs no
+    compiler and no library, so an image that had lost cairo would pass every
+    one of them and fail only where a user renders a picture.
+
+    This is the test that would have caught it, and it runs against the image
+    built in this run rather than the last published one -- which is the only
+    place on a pull request where that image is exercised at all.
+
+    A four-point rectangle is actually rasterized rather than the module merely
+    imported: renderPM resolves its backend when it draws, which is where the
+    error came from and the only place it can be provoked.
+    """
+    import asyncio
+
+    for requirement in (sandbox_versions.REPORTLAB, sandbox_versions.RLPYCAIRO):
+        asyncio.run(made.ensure_async(requirement))
+
+    exitcode, stdout, stderr = made.run(
+        [
+            "-c",
+            "from reportlab.graphics.shapes import Drawing, Rect\n"
+            "from reportlab.graphics import renderPM\n"
+            "d = Drawing(4, 4)\n"
+            "d.add(Rect(0, 0, 4, 4))\n"
+            "print(len(renderPM.drawToString(d, fmt='PNG')))\n",
+        ]
+    )
+
+    assert exitcode == 0, stderr
+    # The message the whole 'Examples (PartCAD)' family died on.
+    assert "renderPM backend" not in stderr, stderr
+    assert int(stdout.strip()) > 0, stdout
 
 
 def test_the_environment_outlives_the_container(made):

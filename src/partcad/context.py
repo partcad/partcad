@@ -222,6 +222,33 @@ class Context:
         self.lock = threading.RLock()
 
         self.option_create_dirs = False
+        # Directories outside the package that a sandbox still has to be able to
+        # open, as absolute host paths.
+        #
+        # Normally there are none: everything a package refers to is inside it,
+        # and the 'docker' sandbox mounts the home directory and the context
+        # root for exactly that reason. An ad-hoc command is the exception --
+        # its package is generated in a temporary directory and points at the
+        # user's file wherever that is -- and a sandbox that cannot see the file
+        # renders nothing, with an error about the file rather than the mount.
+        #
+        # A path already under the home directory costs nothing to name: the
+        # mount covering it is there either way, and 'docker_mount.mounts' drops
+        # it as nested.
+        #
+        # Only the container sandboxes read this. The others run on the host,
+        # where every path is already reachable and nothing has to be declared.
+        self.sandbox_paths = []
+        # Files a factory produced with a native tool and then handed on to a
+        # wrapper, by object name ('//package:part') -> absolute path.
+        #
+        # A native tool runs here rather than in a sandbox -- OpenSCAD is the
+        # one that does -- so what it writes has to end up somewhere the sandbox
+        # can also open. That is the package's own directory; this records which
+        # file belongs to which object, so the path handed to a wrapper is one
+        # the context knows about rather than a temporary name invented for one
+        # call and forgotten.
+        self.generated_files = {}
         self.runtimes_python = {}
         # Container sandboxes, keyed by container name (derived from the image).
         self.runtimes_container = {}

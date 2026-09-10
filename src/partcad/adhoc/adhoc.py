@@ -120,12 +120,37 @@ def write_output_file(
     """
     _, object_name = KINDS[kind]
     input_path = Path(input_filename).resolve()
+
+    # An ordinary temporary directory. It is the context root, so a container
+    # sandbox has to mount it -- and it does: the temporary directory is one of
+    # the fixed mounts, precisely so that nothing here has to be careful about
+    # where it puts things.
     temp_dir = Path(tempfile.mkdtemp())
 
     try:
         generate_partcad_config(temp_dir, input_type, input_path, kind=kind)
 
         ctx = Context(root_path=temp_dir, search_root=False)
+        # The generated package points at the user's file wherever it is, so
+        # neither the input nor the output is under the context root. A sandbox
+        # that runs on the host does not care; one that runs in a container sees
+        # only what is mounted, and without this it reports that it cannot read
+        # a file the user can see perfectly well.
+        #
+        # The directories rather than the files: an OpenSCAD or a CadQuery input
+        # may include a sibling, and the output's directory has to be writable
+        # for the export to land in it.
+        #
+        # Both, and both writable. Mounting the input read-only was tried and
+        # taken back out: it is one more way two containers of one image can
+        # differ, on a mount contract that is a stopgap rather than the
+        # isolation boundary -- the container is that. Either directory is
+        # usually under the home directory anyway, in which case naming it costs
+        # no mount at all.
+        ctx.sandbox_paths = [
+            str(Path(output_filename).resolve().parent),
+            str(input_path.parent),
+        ]
         with pc_logging.Process(verb, "adhoc" if kind == "part" else "adhoc-sketch"):
             project = ctx.get_project("//")
             obj = project.get_part(object_name) if kind == "part" else project.get_sketch(object_name)

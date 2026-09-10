@@ -5,11 +5,12 @@
 #
 """Where the host's directories appear inside the ``docker`` sandbox.
 
-The rule is that they appear where they already are. The context root and the
-internal state directory are bind-mounted at the paths they have outside, so a
-path in a log line, in an exception, in a cached artifact or in a file a solver
-wrote means the same thing on both sides of the container boundary, and nothing
-has to be translated on the way in or read back differently on the way out.
+The rule is that they appear where they already are. The context root, the
+internal state directory and PartCAD's own installation are bind-mounted at the
+paths they have outside, so a path in a log line, in an exception, in a cached
+artifact or in a file a solver wrote means the same thing on both sides of the
+container boundary, and nothing has to be translated on the way in or read back
+differently on the way out.
 
 That is worth more than it sounds. The sandbox directory itself lives under the
 internal state directory, so a virtual environment created inside the container
@@ -21,11 +22,16 @@ naming it after the image.) A traceback names a file the user can open, and the
 whole class of bug where a path is rewritten in one place and not another does
 not arise.
 
-Windows is the exception, and it has to be: ``C:\\Users\\you`` is not a path a
-Linux container can have. There a drive letter becomes a top-level directory the
-way Docker Desktop mounts it -- ``C:\\Users\\you`` as ``/c/Users/you`` -- which
-is the one place PartCAD translates, and the reason ``translate()`` exists at
-all rather than being an identity nobody would write down.
+Windows cannot have that, and never could: ``C:\\Users\\you`` is not a path a
+Linux container can hold. There a drive letter becomes a top-level directory the
+way Docker Desktop mounts it -- ``C:\\Users\\you`` as ``/c/Users/you`` -- and
+``rewrite()`` fixes up the command line to match.
+
+So "the same path on both sides" is what a POSIX host gets, not a rule the
+design keeps everywhere; on Windows the translation already happens, and
+``translate()`` is not an identity nobody would write down. Anything that
+proposes mounting somewhere else is trading away a POSIX convenience, not
+breaking an invariant.
 """
 
 import os
@@ -79,6 +85,25 @@ def translate(host_path: str, windows: Optional[bool] = None) -> str:
     return "/%s/%s" % (drive, rest) if rest else "/%s" % drive
 
 
+def _comparable(path: str, windows: bool) -> str:
+    """``path`` in the form two of them are compared in.
+
+    Windows accepts both separators and ignores case, so ``C:\\Work``,
+    ``C:/work`` and ``c:\\WORK`` are one directory and have to compare as one.
+    Everything that decides something about a *pair* of paths goes through
+    here -- whether one contains another, whether an argument sits under a
+    mount -- because a rule applied in one of those places and not the other is
+    a rule with a hole in it, and both holes failed the same way: a directory
+    mounted twice because neither was seen to contain the other, or a path
+    reaching the container unrewritten.
+
+    Off Windows a path is compared as it is written. Case is significant there,
+    and a backslash is a legal character in a file name rather than a
+    separator -- folding either would merge two directories that are two.
+    """
+    return path.replace("\\", "/").lower() if windows else path
+
+
 def _tidy(path: str) -> str:
     """``path`` without a trailing separator, unless that is all it is.
 
@@ -98,33 +123,42 @@ def mounts(host_paths, windows: Optional[bool] = None) -> dict:
     something inside it gives the container two views of the same files, and
     which one a write lands in is then up to the order Docker happened to apply
     them in. The outermost wins, which is the one that contains the other.
+
+    All writable. Mounting the installation read-only was tried and taken back
+    out: it bought little -- a wrapper is read and executed, and what it writes
+    goes to the cache or back over its own protocol -- and cost a second thing
+    that could differ between two containers of one image, on a mount contract
+    that is a stopgap rather than a boundary. The boundary is the container.
     """
+    if windows is None:
+        windows = os.name == "nt"
+
     kept = []
     for path in sorted({_tidy(p) for p in host_paths}, key=len):
-        if not any(_contains(outer, path, windows) for outer in kept):
+        if not any(contains(outer, path, windows) for outer in kept):
             kept.append(path)
 
     return {path: {"bind": translate(path, windows), "mode": "rw"} for path in kept}
 
 
-def _contains(outer: str, inner: str, windows: Optional[bool] = None) -> bool:
+def contains(outer: str, inner: str, windows: Optional[bool] = None) -> bool:
     """Whether ``inner`` is ``outer`` or sits under it.
 
-    Both separators count, whichever platform this is running on: a Windows
-    path may be written with either, and the answer must not depend on where
-    the question is asked.
+    On Windows neither the case nor the separator decides: 'C:\\Users\\you' and
+    'c:/users/you/.partcad' are a parent and a child. Comparing them literally
+    meant they were not seen as one -- so both were mounted, which is the two
+    views of one directory 'mounts' exists to prevent. See '_comparable'.
 
-    And on Windows, neither does the case. 'rewrite' already matches
-    case-insensitively; comparing case-sensitively here meant 'C:\\Users\\you'
-    and 'c:\\users\\you\\.partcad' were not seen as a parent and a child, so both
-    were mounted -- the two views of one directory 'mounts' exists to prevent.
+    The trailing separator is checked so that a textual prefix is not mistaken
+    for a parent: '/srv/pkg' does not contain '/srv/pkg-other'.
     """
     if windows is None:
         windows = os.name == "nt"
-    if windows:
-        outer, inner = outer.lower(), inner.lower()
+    outer, inner = _comparable(outer, windows), _comparable(inner, windows)
     if outer == inner:
         return True
+    if windows:
+        return inner.startswith(outer + "/")
     return inner.startswith(outer + "/") or inner.startswith(outer + "\\")
 
 
@@ -148,8 +182,10 @@ def rewrite(argument: str, host_paths, windows: Optional[bool] = None) -> str:
         return argument
 
     for host in sorted({_tidy(p) for p in host_paths}, key=len, reverse=True):
-        # Case-insensitively, because Windows says 'C:' and 'c:' for one drive
-        # and 'Users' and 'users' for one directory.
-        if argument.lower().startswith(host.lower()):
+        # Neither case nor separator decides here either: an argument built
+        # with one and a mount recorded with the other name one directory.
+        # '_comparable' substitutes character for character, so the offset
+        # below still indexes the original.
+        if _comparable(argument, windows).startswith(_comparable(host, windows)):
             return translate(host, windows) + argument[len(host) :].replace("\\", "/")
     return argument

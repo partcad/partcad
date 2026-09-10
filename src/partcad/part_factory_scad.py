@@ -8,7 +8,10 @@
 #
 
 import asyncio
+import hashlib
 import os
+import re
+import shutil
 import subprocess
 import tempfile
 
@@ -160,7 +163,53 @@ class PartFactoryScad(PartFactoryFile):
 
             self.runtime = None  # Lazy initialization for subprocess runtime
 
+    def _keep_generated(self, part, produced_path: str) -> str:
+        """Move what OpenSCAD produced into the package, and remember where.
+
+        Returns the path to hand a wrapper. It is inside the package rather
+        than in the system temporary directory for one reason that matters:
+        every container sandbox mounts the context root, and '/tmp' it does not
+        -- so a temporary path is one this process can open and the interpreter
+        that reads the mesh cannot.
+
+        Recorded on the context under the object's name, so the file a wrapper
+        is given is one the context knows the provenance of.
+
+        The name is the part's, with the separators a hierarchical name can
+        carry flattened: 'package-a/cube' is a legal part name and not a legal
+        file name. Flattening alone would not be enough to name a file by,
+        though -- 'a/b' and 'a_b' are two parts and would be one mesh, and the
+        one that rendered second would answer for both. So the qualified name
+        is hashed and a prefix of that goes on the end, which distinguishes
+        every pair the substitution merged while staying the same string from
+        one run to the next (hence 'sha256' and not 'hash()', whose seed is per
+        process).
+        """
+        generated_dir = os.path.join(os.path.abspath(self.project.config_dir), ".partcad")
+        os.makedirs(generated_dir, exist_ok=True)
+
+        qualified_name = "%s:%s" % (part.project_name, part.name)
+        safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", part.name)
+        digest = hashlib.sha256(qualified_name.encode("utf-8")).hexdigest()[:8]
+        generated_path = os.path.join(generated_dir, "%s-%s.stl" % (safe_name, digest))
+
+        # 'move', not 'copy': the temporary file has no reader left once this
+        # returns, and moving it means there is never a moment where the mesh
+        # exists twice and the two could differ. 'shutil' rather than
+        # 'os.replace' because the two paths are usually on different
+        # filesystems, which 'os.replace' cannot cross.
+        shutil.move(produced_path, generated_path)
+
+        self.ctx.generated_files[qualified_name] = generated_path
+        return generated_path
+
     async def instantiate(self, part):
+        """Render the script with OpenSCAD and read the mesh back as a shape.
+
+        Two processes, and neither of them this one: OpenSCAD produces an STL,
+        and a wrapper in a sandboxed Python turns that into a shape, so that
+        build123d is not a dependency of the process the user is running.
+        """
         await super().instantiate(part)
 
         with pc_logging.Action("OpenSCAD", part.project_name, part.name):
@@ -174,6 +223,10 @@ class PartFactoryScad(PartFactoryFile):
             if scad_path is None:
                 raise Exception("OpenSCAD executable is not found. Please, install OpenSCAD first.")
 
+            # Where OpenSCAD writes, and nowhere else. This file is short-lived
+            # and belongs to this call: it exists because '-o' needs a path, and
+            # it is gone before this method returns. What outlives it is the copy
+            # made below, once there is something worth keeping.
             fd, stl_path = tempfile.mkstemp(suffix=".stl")
             os.close(fd)  # OpenSCAD writes to the path itself via '-o'
             try:
@@ -216,6 +269,22 @@ class PartFactoryScad(PartFactoryFile):
                     part.error("OpenSCAD failed to generate the STL file. Please, check the script.")
                     return None
 
+                # The run worked, so the mesh becomes a file of the package
+                # rather than a temporary one.
+                #
+                # It has to be somewhere the sandbox can open, and the package's
+                # own directory is: it is under the context root, which every
+                # container sandbox mounts. The system temporary directory is
+                # not, which is what a '.scad' part rendered in a container used
+                # to die of -- the output file simply never appeared.
+                #
+                # '.partcad/' inside the package, because this is PartCAD's
+                # working file and not one the author wrote: it sits beside
+                # their sources without being mistaken for one, and the name is
+                # already in this repository's '.gitignore', so a generated mesh
+                # cannot turn up as a change somebody has to explain.
+                generated_path = self._keep_generated(part, stl_path)
+
                 # The mesh is imported by a wrapper script executed in a sandboxed
                 # python runtime, so that build123d is not needed in this process.
                 # The wrapper falls back onto 'import_stl' if 'Mesher' fails,
@@ -240,7 +309,7 @@ class PartFactoryScad(PartFactoryFile):
 
                 command = [
                     wrapper_path,
-                    os.path.abspath(stl_path),
+                    generated_path,
                     os.path.abspath(self.project.config_dir),
                 ]
                 with telemetry.start_as_current_span("*PartFactoryScad.instantiate.{runtime.run_async}"):
@@ -271,5 +340,9 @@ class PartFactoryScad(PartFactoryFile):
 
                 return shape
             finally:
+                # Only when the run failed, or failed before '_keep_generated'
+                # moved it into the package -- which is why the check is for
+                # existence rather than for success. What was kept is a file of
+                # the package now and is not cleaned up here.
                 if os.path.exists(stl_path):
                     os.unlink(stl_path)
