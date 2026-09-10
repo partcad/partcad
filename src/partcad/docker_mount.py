@@ -80,6 +80,25 @@ def translate(host_path: str, windows: Optional[bool] = None) -> str:
     return "/%s/%s" % (drive, rest) if rest else "/%s" % drive
 
 
+def _comparable(path: str, windows: bool) -> str:
+    """``path`` in the form two of them are compared in.
+
+    Windows accepts both separators and ignores case, so ``C:\\Work``,
+    ``C:/work`` and ``c:\\WORK`` are one directory and have to compare as one.
+    Everything that decides something about a *pair* of paths goes through
+    here -- whether one contains another, whether one was asked for read-only,
+    whether an argument sits under a mount -- because a rule applied in two of
+    those three places is a rule with a hole in it, and the holes all failed
+    the same way: a directory mounted twice because neither was seen to contain
+    the other, or mounted writable after the caller said it must not be.
+
+    Off Windows a path is compared as it is written. Case is significant there,
+    and a backslash is a legal character in a file name rather than a
+    separator -- folding either would merge two directories that are two.
+    """
+    return path.replace("\\", "/").lower() if windows else path
+
+
 def _tidy(path: str) -> str:
     """``path`` without a trailing separator, unless that is all it is.
 
@@ -113,16 +132,11 @@ def mounts(host_paths, windows: Optional[bool] = None, read_only=()) -> dict:
     if windows is None:
         windows = os.name == "nt"
 
-    # Compared the way 'contains' and 'rewrite' compare: case-insensitively on
-    # Windows, where 'C:\PartCAD' and 'c:\partcad' are one directory. Matching
-    # case-sensitively here would mean a path asked for read-only and spelled
-    # differently came back 'rw' -- a sandbox given write access to something
-    # the caller said it must not write, which is the one direction this must
-    # not fail in.
-    def _key(path: str) -> str:
-        return path.lower() if windows else path
-
-    read_only = {_key(_tidy(p)) for p in read_only}
+    # Compared the way 'contains' and 'rewrite' compare -- see '_comparable'.
+    # Spelling a path differently in 'read_only' than in 'host_paths' used to
+    # bring it back 'rw': a sandbox given write access to something the caller
+    # said it must not write, which is the one direction this must not fail in.
+    read_only = {_comparable(_tidy(p), windows) for p in read_only}
 
     kept = []
     for path in sorted({_tidy(p) for p in host_paths}, key=len):
@@ -130,28 +144,32 @@ def mounts(host_paths, windows: Optional[bool] = None, read_only=()) -> dict:
             kept.append(path)
 
     return {
-        path: {"bind": translate(path, windows), "mode": "ro" if _key(path) in read_only else "rw"} for path in kept
+        path: {
+            "bind": translate(path, windows),
+            "mode": "ro" if _comparable(path, windows) in read_only else "rw",
+        }
+        for path in kept
     }
 
 
 def contains(outer: str, inner: str, windows: Optional[bool] = None) -> bool:
     """Whether ``inner`` is ``outer`` or sits under it.
 
-    Both separators count, whichever platform this is running on: a Windows
-    path may be written with either, and the answer must not depend on where
-    the question is asked.
+    On Windows neither the case nor the separator decides: 'C:\\Users\\you' and
+    'c:/users/you/.partcad' are a parent and a child. Comparing them literally
+    meant they were not seen as one -- so both were mounted, which is the two
+    views of one directory 'mounts' exists to prevent. See '_comparable'.
 
-    And on Windows, neither does the case. 'rewrite' already matches
-    case-insensitively; comparing case-sensitively here meant 'C:\\Users\\you'
-    and 'c:\\users\\you\\.partcad' were not seen as a parent and a child, so both
-    were mounted -- the two views of one directory 'mounts' exists to prevent.
+    The trailing separator is checked so that a textual prefix is not mistaken
+    for a parent: '/srv/pkg' does not contain '/srv/pkg-other'.
     """
     if windows is None:
         windows = os.name == "nt"
-    if windows:
-        outer, inner = outer.lower(), inner.lower()
+    outer, inner = _comparable(outer, windows), _comparable(inner, windows)
     if outer == inner:
         return True
+    if windows:
+        return inner.startswith(outer + "/")
     return inner.startswith(outer + "/") or inner.startswith(outer + "\\")
 
 
@@ -175,8 +193,10 @@ def rewrite(argument: str, host_paths, windows: Optional[bool] = None) -> str:
         return argument
 
     for host in sorted({_tidy(p) for p in host_paths}, key=len, reverse=True):
-        # Case-insensitively, because Windows says 'C:' and 'c:' for one drive
-        # and 'Users' and 'users' for one directory.
-        if argument.lower().startswith(host.lower()):
+        # Neither case nor separator decides here either: an argument built
+        # with one and a mount recorded with the other name one directory.
+        # '_comparable' substitutes character for character, so the offset
+        # below still indexes the original.
+        if _comparable(argument, windows).startswith(_comparable(host, windows)):
             return translate(host, windows) + argument[len(host) :].replace("\\", "/")
     return argument

@@ -118,6 +118,35 @@ def test_a_read_only_directory_is_matched_whatever_its_case_on_windows():
     }
 
 
+def test_a_read_only_directory_is_matched_whichever_separator_it_is_written_with():
+    """Windows takes both, so 'C:\\PartCAD' and 'C:/PartCAD' are one directory.
+
+    Comparing them literally brought the mount back 'rw' -- the one direction
+    this must not fail in, which is why the separator is folded wherever the
+    case is.
+    """
+    assert docker_mount.mounts(["C:\\PartCAD"], windows=True, read_only=["C:/PartCAD"]) == {
+        "C:\\PartCAD": {"bind": "/c/PartCAD", "mode": "ro"},
+    }
+
+
+def test_a_nested_directory_is_seen_whichever_separator_it_is_written_with():
+    """Otherwise neither is seen to contain the other and both are mounted.
+
+    Which is the two views of one directory this function exists to prevent.
+    """
+    assert docker_mount.contains("C:/work", "C:\\work\\pkg", windows=True) is True
+    assert docker_mount.mounts(["C:/work", "C:\\work\\pkg"], windows=True) == {
+        "C:/work": {"bind": "/c/work", "mode": "rw"},
+    }
+
+
+def test_a_backslash_is_a_file_name_character_off_windows():
+    """So folding it there would merge two directories that are two."""
+    assert docker_mount.contains("/srv/work", "/srv/work\\pkg", windows=False) is True
+    assert docker_mount.contains("/srv/work", "/srv/work-other", windows=False) is False
+
+
 def test_case_still_decides_off_windows():
     """Two directories differing in case are two directories on a POSIX host."""
     assert docker_mount.mounts(["/srv/PartCAD"], windows=False, read_only=["/srv/partcad"]) == {
@@ -181,3 +210,13 @@ def test_the_longest_mount_wins():
 def test_a_drive_letter_is_matched_whatever_its_case():
     """Windows says 'C:' and 'c:' for the same drive; both have to match."""
     assert docker_mount.rewrite(r"c:\work\pkg\part.py", [r"C:\work"], windows=True) == "/c/work/pkg/part.py"
+
+
+def test_an_argument_is_matched_whichever_separator_it_is_written_with():
+    """An argument built with one and a mount recorded with the other.
+
+    Left alone, it reached the container as a host path -- a file the
+    interpreter over there has no such name for.
+    """
+    assert docker_mount.rewrite("C:/work/pkg/part.py", [r"C:\work"], windows=True) == "/c/work/pkg/part.py"
+    assert docker_mount.rewrite(r"C:\work\pkg\part.py", ["C:/work"], windows=True) == "/c/work/pkg/part.py"
