@@ -8,6 +8,7 @@
 #
 
 import asyncio
+import hashlib
 import os
 import re
 import shutil
@@ -176,13 +177,21 @@ class PartFactoryScad(PartFactoryFile):
 
         The name is the part's, with the separators a hierarchical name can
         carry flattened: 'package-a/cube' is a legal part name and not a legal
-        file name.
+        file name. Flattening alone would not be enough to name a file by,
+        though -- 'a/b' and 'a_b' are two parts and would be one mesh, and the
+        one that rendered second would answer for both. So the qualified name
+        is hashed and a prefix of that goes on the end, which distinguishes
+        every pair the substitution merged while staying the same string from
+        one run to the next (hence 'sha256' and not 'hash()', whose seed is per
+        process).
         """
         generated_dir = os.path.join(os.path.abspath(self.project.config_dir), ".partcad")
         os.makedirs(generated_dir, exist_ok=True)
 
+        qualified_name = "%s:%s" % (part.project_name, part.name)
         safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", part.name)
-        generated_path = os.path.join(generated_dir, safe_name + ".stl")
+        digest = hashlib.sha256(qualified_name.encode("utf-8")).hexdigest()[:8]
+        generated_path = os.path.join(generated_dir, "%s-%s.stl" % (safe_name, digest))
 
         # 'move', not 'copy': the temporary file has no reader left once this
         # returns, and moving it means there is never a moment where the mesh
@@ -191,10 +200,16 @@ class PartFactoryScad(PartFactoryFile):
         # filesystems, which 'os.replace' cannot cross.
         shutil.move(produced_path, generated_path)
 
-        self.ctx.generated_files["%s:%s" % (part.project_name, part.name)] = generated_path
+        self.ctx.generated_files[qualified_name] = generated_path
         return generated_path
 
     async def instantiate(self, part):
+        """Render the script with OpenSCAD and read the mesh back as a shape.
+
+        Two processes, and neither of them this one: OpenSCAD produces an STL,
+        and a wrapper in a sandboxed Python turns that into a shape, so that
+        build123d is not a dependency of the process the user is running.
+        """
         await super().instantiate(part)
 
         with pc_logging.Action("OpenSCAD", part.project_name, part.name):

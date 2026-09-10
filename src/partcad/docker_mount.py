@@ -113,7 +113,7 @@ def mounts(host_paths, windows: Optional[bool] = None, read_only=()) -> dict:
     if windows is None:
         windows = os.name == "nt"
 
-    # Compared the way '_contains' and 'rewrite' compare: case-insensitively on
+    # Compared the way 'contains' and 'rewrite' compare: case-insensitively on
     # Windows, where 'C:\PartCAD' and 'c:\partcad' are one directory. Matching
     # case-sensitively here would mean a path asked for read-only and spelled
     # differently came back 'rw' -- a sandbox given write access to something
@@ -126,7 +126,7 @@ def mounts(host_paths, windows: Optional[bool] = None, read_only=()) -> dict:
 
     kept = []
     for path in sorted({_tidy(p) for p in host_paths}, key=len):
-        if not any(_contains(outer, path, windows) for outer in kept):
+        if not any(contains(outer, path, windows) for outer in kept):
             kept.append(path)
 
     return {
@@ -134,7 +134,7 @@ def mounts(host_paths, windows: Optional[bool] = None, read_only=()) -> dict:
     }
 
 
-def _contains(outer: str, inner: str, windows: Optional[bool] = None) -> bool:
+def contains(outer: str, inner: str, windows: Optional[bool] = None) -> bool:
     """Whether ``inner`` is ``outer`` or sits under it.
 
     Both separators count, whichever platform this is running on: a Windows

@@ -95,7 +95,7 @@ def test_the_sandbox_directory_says_which_sandbox_it_is(tmp_path):
 
 def _reachable(made, path) -> bool:
     """Whether the container could open ``path``: it is under one of the mounts."""
-    return any(docker_mount._contains(mount, path, windows=False) for mount in docker_mount.mounts(made._mounted))
+    return any(docker_mount.contains(mount, path, windows=False) for mount in docker_mount.mounts(made._mounted))
 
 
 def test_a_wrapper_is_reachable_from_inside_the_container(tmp_path):
@@ -373,12 +373,26 @@ class _Container:
     'sources' is either the paths, all writable, or a mapping of path to
     whether it is writable. 'Type' is what tells a bind mount from a volume an
     image declared itself, which PartCAD never asked for and does not compare.
+
+    Each mount lands where 'translate' says, which is what a container PartCAD
+    started would carry. A test that wants one landing somewhere else edits
+    'attrs' afterwards.
     """
 
     def __init__(self, sources, status="running"):
         if not isinstance(sources, dict):
             sources = {source: True for source in sources}
-        self.attrs = {"Mounts": [{"Type": "bind", "Source": source, "RW": rw} for source, rw in sources.items()]}
+        self.attrs = {
+            "Mounts": [
+                {
+                    "Type": "bind",
+                    "Source": source,
+                    "Destination": docker_mount.translate(source, windows=False),
+                    "RW": rw,
+                }
+                for source, rw in sources.items()
+            ]
+        }
         self.status = status
         self.removed = False
         self.started = False
@@ -488,6 +502,25 @@ def test_a_container_that_mounts_it_writable_is_replaced(tmp_path, monkeypatch):
     assert existing.removed is True
 
 
+def test_a_container_mounting_it_somewhere_else_is_replaced(tmp_path, monkeypatch):
+    """The right directories in the wrong places is still the wrong container.
+
+    A destination is derived from its source, so the two agree for as long as
+    that derivation does. The run where it does not is a PartCAD that changed
+    it, whose containers from before the change are still on the machine -- and
+    a path the host and the container disagree about is the whole class of bug
+    binding directories onto themselves exists to prevent.
+    """
+    made = _runtime(tmp_path)
+    existing = _Container(_wanted_binds(made))
+    existing.attrs["Mounts"][0]["Destination"] = "/somewhere/else"
+
+    _made, client, got = _started(tmp_path, monkeypatch, existing)
+
+    assert got is not existing
+    assert existing.removed is True
+
+
 def test_a_volume_the_image_declared_is_not_compared(tmp_path, monkeypatch):
     """PartCAD never asked for it and cannot match it.
 
@@ -533,6 +566,39 @@ def test_a_path_that_is_also_written_stays_writable(tmp_path):
     mounts = docker_mount.mounts(made._mounted, read_only=made._mounted_read_only)
 
     assert mounts[both]["mode"] == "rw"
+
+
+def test_a_writable_path_under_a_read_only_one_keeps_the_whole_mount_writable(tmp_path):
+    """'pc convert thing.step -o out/thing.stl', which used to be unable to write.
+
+    The output directory is inside the input's, so 'mounts' keeps only the
+    outer one -- and marking that read-only leaves the export with nowhere to
+    land. Write access wins over the subtree it was asked for, the same way it
+    wins when the two directories are one: a mount that cannot be written is
+    not a weaker version of what was requested, it is a failure.
+    """
+    made = _runtime(tmp_path)
+    inputs = str(tmp_path / "models")
+    made.ctx.sandbox_paths = [os.path.join(inputs, "out")]
+    made.ctx.sandbox_paths_read_only = [inputs]
+
+    mounts = docker_mount.mounts(made._mounted, read_only=made._mounted_read_only)
+
+    assert mounts[inputs]["mode"] == "rw"
+    # And it is the only mount covering the output, which is the reason.
+    assert os.path.join(inputs, "out") not in mounts
+
+
+def test_a_read_only_path_beside_a_writable_one_stays_read_only(tmp_path):
+    """Neither contains the other, so the claim about one says nothing about it."""
+    made = _runtime(tmp_path)
+    made.ctx.sandbox_paths = [str(tmp_path / "out")]
+    made.ctx.sandbox_paths_read_only = [str(tmp_path / "inputs")]
+
+    mounts = docker_mount.mounts(made._mounted, read_only=made._mounted_read_only)
+
+    assert mounts[str(tmp_path / "inputs")]["mode"] == "ro"
+    assert mounts[str(tmp_path / "out")]["mode"] == "rw"
 
 
 # --------------------------------------------------------------------------- #

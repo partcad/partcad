@@ -109,7 +109,7 @@ def test_a_trailing_separator_does_not_hide_a_read_only_mount():
 def test_a_read_only_directory_is_matched_whatever_its_case_on_windows():
     """'C:\\PartCAD' and 'c:\\partcad' are one directory, and it was asked for read-only.
 
-    Everything else here folds case on Windows -- 'rewrite' does, '_contains'
+    Everything else here folds case on Windows -- 'rewrite' does, 'contains'
     does -- and this has to as well, because the direction it fails in is the
     bad one: a mount the caller said must not be written coming back writable.
     """

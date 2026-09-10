@@ -228,9 +228,22 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         asked to be able to write is not one of these: the demand for write
         access is the specific claim, and an input that is also the output's
         directory is an ordinary way to run a conversion.
+
+        Which holds for a writable path *under* one asked read-only too, and
+        that is not a refinement -- it is the difference between
+        'pc convert thing.step -o out/thing.stl' working and not. The output
+        directory is inside the input's, so 'mounts' keeps only the outer one,
+        and marking that read-only leaves the export with nowhere to land.
+        Write access wins over the whole subtree it was asked for, because a
+        mount that cannot be written is not a weaker version of what was
+        requested; it is a failure.
         """
-        writable = {p for p in getattr(self.ctx, "sandbox_paths", ()) or () if p}
-        read_only = [p for p in getattr(self.ctx, "sandbox_paths_read_only", ()) or () if p and p not in writable]
+        writable = [p for p in getattr(self.ctx, "sandbox_paths", ()) or () if p]
+        read_only = [
+            p
+            for p in getattr(self.ctx, "sandbox_paths_read_only", ()) or ()
+            if p and not any(docker_mount.contains(p, w) for w in writable)
+        ]
         return [INSTALL_DIR] + read_only
 
     def get_venv_python_path(self, session=None, path=None):
@@ -297,12 +310,19 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             # Docker adds as a mount PartCAD never asked for and cannot match --
             # comparing those in would replace such an image's container before
             # every single command.
+            #
+            # Where each one lands is compared as well as whether it may be
+            # written. A destination is derived from its source, so the two
+            # agree for as long as that derivation does -- and the run where it
+            # does not is a PartCAD that changed it, whose containers from
+            # before the change are still on the machine, mounting the right
+            # directories in the wrong places.
             existing_binds = {
-                mount.get("Source"): bool(mount.get("RW", True))
+                mount.get("Source"): (mount.get("Destination"), bool(mount.get("RW", True)))
                 for mount in (existing.attrs.get("Mounts") or [])
                 if mount.get("Type") == "bind"
             }
-            wanted_binds = {host: spec["mode"] != "ro" for host, spec in mounts.items()}
+            wanted_binds = {host: (spec["bind"], spec["mode"] != "ro") for host, spec in mounts.items()}
             if existing_binds == wanted_binds:
                 if existing.status != "running":
                     existing.start()

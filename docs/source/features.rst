@@ -349,6 +349,13 @@ instead, on that mount's writable terms. Narrowing the context root to protect
 it would take write access away from the package being worked on, which is worse
 than what it would prevent.
 
+The same precedence settles the other direction, where an ad-hoc command names
+directories of its own: a command that reads a file and writes its output into a
+subdirectory of the one it read from gets one mount covering both, and that mount
+is writable. Write access is the specific claim, and a mount that cannot be
+written is not a weaker version of what was asked for -- it is the export having
+nowhere to land.
+
 All of them are mounted **at the same paths they have outside**, so a path in a
 log, in an error, in a cached artifact or in a ``.frd`` a solver wrote means the
 same thing on both sides and nothing has to be rewritten. The one exception is
