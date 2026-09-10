@@ -220,14 +220,16 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
     def _mounted(self) -> list:
         """The host directories the container needs to see.
 
-        Deliberately few, and as often as possible one. The home directory
-        leads because on an ordinary machine it already contains the other
-        three -- the state directory holding this sandbox and the caches
-        ('~/.partcad'), the package being worked on, and the installation
-        holding the scripts the interpreter over there is told to run -- so
-        'mounts' drops them as nested and the container has a single bind. That
-        is what lets one container serve every context: a mount set that does
-        not vary is a container that never has to be replaced.
+        Deliberately few, and on an ordinary machine two. The home directory
+        leads because it already contains the state directory holding this
+        sandbox and the caches ('~/.partcad'), the package being worked on, and
+        usually the installation -- so 'mounts' drops those as nested. The
+        temporary directory is the second, and is only nested inside the home
+        directory on Windows; on Linux it is '/tmp' and on macOS somewhere
+        under '/var/folders', neither of which is. That is the whole set on
+        such a machine, and it is the same set for every context -- which is
+        what lets one container serve all of them, because a mount set that
+        does not vary is a container that never has to be replaced.
 
         The others are still named because they are not always under it: a
         package on another volume, a system-wide installation, a file an ad-hoc

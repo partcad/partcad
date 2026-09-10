@@ -184,31 +184,41 @@ def test_a_context_names_the_home_directory_and_the_usual_three(tmp_path):
     )
 
 
+def _one_big_directory(tmp_path, monkeypatch):
+    """Put the home directory and the temporary one under 'tmp_path'.
+
+    Both are read from the platform, and neither is steerable by the lever you
+    would reach for first: 'HOME' is ignored on Windows, where 'expanduser'
+    reads 'USERPROFILE', and the temporary directory is under the profile there
+    but under '/var/folders' on macOS. A test that set 'HOME' and hoped
+    therefore passed on Linux, passed on Windows by accident -- the profile
+    happened to contain pytest's 'tmp_path' -- and would have failed on macOS,
+    where neither contains the other.
+
+    So both are stated outright, and the test says the same thing everywhere.
+    """
+    monkeypatch.setattr(runtime_python_docker.os.path, "expanduser", lambda p: str(tmp_path) if p == "~" else p)
+    monkeypatch.setattr(runtime_python_docker.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
+    monkeypatch.setattr(runtime_python_docker, "INSTALL_DIR", str(tmp_path / "lib" / "partcad"))
+
+
 def test_everything_under_one_directory_is_one_mount(tmp_path, monkeypatch):
     """The case worth having, and the reason the home directory is named at all.
 
-    On an ordinary machine '~/.partcad', the package and the installation are
-    all under '~', so the container gets a single bind -- and a mount set that
-    does not vary between contexts is a container that never has to be
-    replaced.
-
-    Asserted as "one mount that covers them all" rather than by naming it,
-    because pytest's 'tmp_path' is itself under the temporary directory, so on
-    this machine the one mount is that rather than the home directory. Which of
-    them swallows the others is the platform's business; that one of them does
-    is the property.
+    '~/.partcad', the package and the installation are all under '~' on an
+    ordinary machine, so they collapse into it. Here the temporary directory is
+    put under it as well, which is true on Windows and not on Linux or macOS --
+    so this is the best case rather than the common one, and what it pins is
+    that nesting collapses rather than how many mounts a given platform ends up
+    with.
     """
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _one_big_directory(tmp_path, monkeypatch)
     made = _runtime(tmp_path)
-    monkeypatch.setattr(runtime_python_docker, "INSTALL_DIR", str(tmp_path / "lib" / "partcad"))
     made.ctx.sandbox_paths = [str(tmp_path / "models")]
 
-    mounts = docker_mount.mounts(made._mounted)
-
-    assert len(mounts) == 1, mounts
-    outer = next(iter(mounts))
-    for path in made._mounted:
-        assert docker_mount.contains(outer, path), "%s is not under %s" % (path, outer)
+    assert docker_mount.mounts(made._mounted) == {
+        str(tmp_path): {"bind": docker_mount.translate(str(tmp_path)), "mode": "rw"}
+    }
 
 
 def test_everything_is_writable(tmp_path):
@@ -780,12 +790,12 @@ def test_two_ad_hoc_runs_ask_for_the_same_mounts(tmp_path, monkeypatch):
     is a container that gets replaced, so 'pc convert' threw the container away
     and started another every single time. Two runs, one mount set.
     """
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr(runtime_python_docker, "INSTALL_DIR", str(tmp_path / "lib" / "partcad"))
+    _one_big_directory(tmp_path, monkeypatch)
+    os.makedirs(tmp_path / "tmp", exist_ok=True)
 
     def one_run():
         made = _runtime(tmp_path)
-        made.ctx.root_path = tempfile.mkdtemp()
+        made.ctx.root_path = tempfile.mkdtemp(dir=str(tmp_path / "tmp"))
         return sorted(docker_mount.mounts(made._mounted)), made.container_name
 
     first, first_name = one_run()

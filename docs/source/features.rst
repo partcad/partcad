@@ -333,7 +333,7 @@ The ``docker`` sandbox
 
 The container is a place to run the interpreter, not a place to keep your work.
 What it can see is whatever PartCAD bind-mounts into it, and that list is kept
-as short as it can be -- on an ordinary machine, one directory:
+as short as it can be -- on an ordinary machine, two directories:
 
 * your **home directory**, which already contains most of the rest;
 * the **temporary directory**, because things land there without asking to be
@@ -348,10 +348,12 @@ as short as it can be -- on an ordinary machine, one directory:
 Nested directories are mounted once, by the outermost of them, since two views
 of one directory leave it undecided which a write lands in. So when the package,
 ``~/.partcad`` and the installation are all under your home directory -- which
-is the usual arrangement -- the container gets a **single** bind mount. The
-others are still named because they are not always under it: a package on
-another volume, a system-wide installation, a file an ad-hoc command was pointed
-at somewhere else.
+is the usual arrangement -- those three collapse into it, leaving the home
+directory and the temporary one. On Windows even that is a single mount, since
+the temporary directory lives inside the user profile; on Linux and macOS it
+does not, so there are two. The rest are still named because they are not
+always under either: a package on another volume, a system-wide installation, a
+file an ad-hoc command was pointed at somewhere else.
 
 That is not tidiness. A mount set that does not vary from one context to the
 next is a container that never has to be replaced, which is what lets one
