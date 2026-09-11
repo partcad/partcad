@@ -2555,9 +2555,10 @@ generic key/value request:
 The keys address every kind of data uniformly, so serving a new kind of object
 or a new piece of metadata needs no new API:
 
-- ``objects/<kind>`` -- all objects of a kind, as ``{name: config, ...}`` (kinds
-  are ``sketch``, ``part``, ``assembly``, ``interface``, ``provider``,
-  ``repository``, ``software``)
+- ``objects/<kind>`` -- all objects of a kind, as ``{name: config, ...}``. The
+  kinds are the ten in ``Project.OBJECT_KINDS``: ``material``, ``interface``,
+  ``sketch``, ``part``, ``assembly``, ``scene``, ``provider``, ``repository``,
+  ``software``, ``partType``
 - ``objects/<kind>/<name>`` -- a single object's config, fetched without listing
   the whole repository
 - ``deps`` -- the names of the child packages

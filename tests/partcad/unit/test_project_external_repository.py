@@ -338,3 +338,21 @@ def test_a_local_package_has_nothing_to_prefetch():
     before = project.object_count("part")
     asyncio.run(project.prefetch_object_configs_async(("part",)))
     assert project.object_count("part") == before
+
+
+def test_a_malformed_declaration_is_complained_about_once():
+    """Ten kinds asked about must not be ten copies of the same warning."""
+    ctx = pc.Context("examples")
+    data = {"meta": {"objectKinds": "part"}, "objects/sketch": {"outline": {"type": "basic"}}}
+    repo, _ = _make_repo(ctx, data)
+    asyncio.run(repo.ensure_enumerated_async())
+
+    warnings = []
+    original = pc.logging.warning
+    pc.logging.warning = lambda msg, *a: warnings.append(msg)
+    try:
+        for kind in ("sketch", "part", "assembly", "scene"):
+            repo.object_names(kind)
+    finally:
+        pc.logging.warning = original
+    assert len(warnings) == 1, warnings

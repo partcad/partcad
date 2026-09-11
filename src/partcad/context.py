@@ -48,6 +48,21 @@ from .test.all import tests as all_tests
 HAS_STUFF_KINDS = ("sketch", "part", "assembly", "scene")
 
 
+def _is_within(name: str, parent_name: Optional[str]) -> bool:
+    """Whether a package name is 'parent_name' or sits underneath it.
+
+    A package name is a path, so the boundary has to be the separator and not
+    just a prefix: '//foo' is not the parent of '//foobar', and matching it as
+    one made a listing of '//foo' include its neighbour -- and now also send a
+    round trip to that neighbour's repository plugin (see
+    '_prefetch_object_configs'). The root, '//', is the parent of everything,
+    which falls out of the same rule once the trailing separator is stripped.
+    """
+    if parent_name is None:
+        return True
+    return name == parent_name or name.startswith(parent_name.rstrip("/") + "/")
+
+
 def connectivity_probe():
     """The one address to ask "is there a network out of here?".
 
@@ -794,9 +809,7 @@ class Context:
         A no-op for the packages that are local, which is most of them; what it
         is for is the plugin-backed ones, where the enumerations are remote.
         """
-        projects = list(self.projects.values())
-        if parent_name is not None:
-            projects = [p for p in projects if p.name.startswith(parent_name)]
+        projects = [p for p in self.projects.values() if _is_within(p.name, parent_name)]
         projects = [p for p in projects if not p.skipped]
         if not projects:
             return
@@ -823,7 +836,7 @@ class Context:
         """
         projects = self.projects.values()
         if parent_name is not None:
-            projects = filter(lambda x: x.name.startswith(parent_name), projects)
+            projects = filter(lambda x: _is_within(x.name, parent_name), projects)
 
         # Unconditionally, not only under 'has_stuff': a skipped package holds
         # no objects, so the filter below would drop it anyway, but a caller

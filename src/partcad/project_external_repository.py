@@ -24,6 +24,10 @@ _MISSING = object()
 # '_served_kinds()'.
 OBJECT_KINDS_KEY = "objectKinds"
 
+# Distinguishes "the metadata has not been parsed yet" from a parse that
+# concluded the package declares nothing.
+_UNPARSED = object()
+
 
 class ProjectExternalRepository(ProjectPlugin):
     """A package whose contents are served by an external repository plugin.
@@ -81,6 +85,11 @@ class ProjectExternalRepository(ProjectPlugin):
         self._cache_version = cache_version
         self._request_cache: dict[str, object] = {}
         self._request_lock = threading.Lock()
+        # The parsed 'objectKinds', once the metadata has arrived. Kept apart
+        # from the metadata memo so that parsing happens once per package
+        # rather than once per kind asked about - and so that a malformed
+        # declaration is complained about once rather than ten times.
+        self._served_kinds_parsed = _UNPARSED
         # Objects are instantiated once, lazily, the first time this package's
         # 'parts'/'sketches'/'assemblies' are accessed (see '_lazy_objects').
         # '_instantiating' is the reentrancy guard so factories can write into
@@ -204,7 +213,14 @@ class ProjectExternalRepository(ProjectPlugin):
         with enough packages in it for this to matter.
         """
         meta = self._peek_data("meta")
-        return None if meta is _MISSING else self._parse_served_kinds(meta)
+        if meta is _MISSING:
+            # The metadata has not been read yet, so nothing is known about
+            # what this package holds: ask about every kind, as before. Not
+            # remembered - the answer changes as soon as 'meta' arrives.
+            return None
+        if self._served_kinds_parsed is _UNPARSED:
+            self._served_kinds_parsed = self._parse_served_kinds(meta)
+        return self._served_kinds_parsed
 
     def _peek_data(self, key: str):
         """The memoized value for 'key', or _MISSING - never a fetch."""
