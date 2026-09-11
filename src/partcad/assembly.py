@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 
 import asyncio
+import json
 import os
 import tempfile
 import typing
@@ -305,8 +306,19 @@ class Assembly(Shape):
             return None
 
         with pc_logging.Action("Interference", self.project_name, self.name):
+            # The tree travels as a JSON string rather than as itself. Anything
+            # recognisable as a shape or an assembly is turned into OCCT
+            # geometry on arrival (see ocp_serialize.decode), and a compound is
+            # exactly what this must not be given: the names go with it, and a
+            # report that two parts overlap has to be able to say which two.
+            # A string is left alone, so the wrapper decodes the tree itself,
+            # leaf by leaf, keeping each name attached to its solid.
             request_serialized = shape_envelope.serialize(
-                {"wrapped": obj, "min_volume": min_volume, "min_fraction": min_fraction}
+                {
+                    "assembly_json": json.dumps(obj),
+                    "min_volume": min_volume,
+                    "min_fraction": min_fraction,
+                }
             )
 
             runtime = ctx.get_python_runtime(version="3.11")

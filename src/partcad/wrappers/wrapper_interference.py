@@ -14,6 +14,7 @@
 # answer itself comes from a boolean common and the volume of what it produces.
 
 import itertools
+import json
 import os
 import sys
 
@@ -100,9 +101,15 @@ def _is_solid_enough_to_intersect(shape):
 
 def process(path, request):
     try:
-        obj = request.get("wrapped")
-        if obj is None:
+        # Not 'wrapped': that key is decoded into OCCT geometry on arrival, and
+        # an assembly decodes into one compound, which is the one thing this
+        # cannot use. The names have to survive - a report that two parts
+        # overlap has to say which two - so the tree arrives as JSON and is
+        # decoded here, leaf by leaf.
+        payload = request.get("assembly_json")
+        if payload is None:
             raise Exception("No assembly provided to check")
+        obj = json.loads(payload) if isinstance(payload, str) else payload
 
         # How much shared volume is worth reporting. Parts that are meant to fit
         # together touch, and meshed geometry touching is numerically noisy, so

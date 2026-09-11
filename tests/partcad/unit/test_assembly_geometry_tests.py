@@ -186,3 +186,50 @@ def test_the_cache_key_moves_when_the_thresholds_do():
     assert loose != strict
     ignoring = test.cache_key_suffix(None, _Assembly(config={"interference": {"ignore": [["a", "b"]]}}))
     assert ignoring != test.cache_key_suffix(None, _Assembly())
+
+
+# --- the request the core sends the wrapper ---------------------------------
+#
+# The tests above stub get_interference_async() out entirely, which is what let
+# a broken request reach CI: the core sent the assembly under "wrapped", where
+# ocp_serialize.decode turns anything shape-shaped into OCCT geometry, so the
+# wrapper was handed one TopoDS_Compound and died reaching for a name on it.
+# Nothing here exercised the handover. This does.
+
+
+def test_the_assembly_is_sent_as_json_rather_than_as_geometry():
+    import json as _json
+
+    from partcad.assembly import Assembly
+
+    envelope = {"name": "asm", "label": "asm", "assembly": [{"name": "a", "brep": "..."}]}
+    captured = {}
+
+    class _Runtime:
+        async def ensure_async(self, *args):
+            return None
+
+        async def run_async(self, command, request_serialized):
+            captured["request"] = request_serialized
+            return 0, '{"success": true, "overlaps": [], "unchecked": [], "parts": 0}', ""
+
+    class _Ctx:
+        def get_python_runtime(self, version=None):
+            return _Runtime()
+
+    assembly = Assembly.__new__(Assembly)
+    assembly.project_name = "pkg"
+    assembly.name = "asm"
+
+    async def _wrapped(ctx):
+        return envelope
+
+    assembly.get_wrapped = _wrapped
+    asyncio.run(assembly.get_interference_async(_Ctx()))
+
+    sent = _json.loads(captured["request"])
+    # Carried as a string: a dict shaped like an assembly would be decoded into
+    # a compound on arrival, and the names would go with it.
+    assert isinstance(sent["assembly_json"], str)
+    assert _json.loads(sent["assembly_json"]) == envelope
+    assert "wrapped" not in sent, "the geometry key is decoded on arrival; do not use it here"
