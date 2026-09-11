@@ -309,11 +309,13 @@ runs:
         # It is a trade, and this is the other half of it: a source change *can*
         # break the freeze (a lazily imported module, a file read relative to
         # "__file__" -- see "dev-tools/pyinstaller/README.md"), and that is now
-        # found on the push to "devel" that follows the merge rather than on the
-        # pull request. The push trigger of "build-standalone.yml" still lists
-        # "src/**" for exactly this, a release still refuses to publish with a
-        # platform missing, and "#deepTest" builds the whole set before a merge
-        # for a change that warrants it.
+        # found on "devel" after the merge rather than on the pull request. Not
+        # on the merge's own push any more: "build-standalone.yml" runs on the
+        # version bump that follows it, which is the same tree plus a version and
+        # the commit a release is cut from, so the bundles are frozen once and
+        # carry the version they will be published under. A release still refuses
+        # to publish with a platform missing, and "#deepTest" builds the whole set
+        # before a merge for a change that warrants it.
         emit bundle              deps ci packaging
         # Not "code": the IDE downloads the bundles rather than freezing them,
         # so what rebuilds it is the application around them.

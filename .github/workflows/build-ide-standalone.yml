@@ -20,22 +20,24 @@ on:
   merge_group:
   # Not on every change: this builds the standalone command line bundles first,
   # to put them inside the IDE, and those pull ~500MB of OpenCASCADE per runner.
-  # Only the changes that can alter what ships.
+  # Only the changes that can alter what ships, and on "devel" only once per
+  # version.
   #
-  # On a push that is a "paths:" filter and stays one. On a pull request it is
-  # the "set-matrix" job's gate instead, for the two reasons
-  # "build-standalone.yml" sets out beside its own trigger: "merge_group"
-  # supports no "paths:" filter, so this workflow used to build three IDEs in the
-  # queue for a change to a README; and a workflow skipped by "paths:" never
-  # creates the check run a required check waits for, while a skipped job does.
+  # Nothing filters this trigger. On a pull request and in the merge queue the
+  # "set-matrix" job's gate decides, for the two reasons "build-standalone.yml"
+  # sets out beside its own trigger: "merge_group" supports no "paths:" filter,
+  # so this workflow used to build three IDEs in the queue for a change to a
+  # README; and a workflow skipped by "paths:" never creates the check run a
+  # required check waits for, while a skipped job does. On a push it is the
+  # version-bump clause of that same gate, which "build-standalone.yml" now
+  # carries too -- an IDE archive is stamped with a version, and the one built
+  # for the merge carried the version that merge replaced. The "paths:" list
+  # that used to be here would only hide that gate: a bump touches
+  # "ide/vscode/package.json" today, so it passed, and the day
+  # "dev-tools/bumpversion.toml" stops naming a file under one of those paths no
+  # IDE is ever built on "devel" again with nothing to say so.
   push:
     branches: ["devel"]
-    paths:
-      - "ide/standalone/**"
-      - "ide/vscode/**"
-      - ".vscode/extensions.json"
-      - "install.sh"
-      - ".github/workflows/build-ide-standalone.yml"
   pull_request:
     branches: ["main", "devel"]
 
@@ -135,6 +137,28 @@ jobs:
     name: "Set matrix"
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Only a version bump builds an IDE on a push to "devel", the same guard
+    # "build-standalone.yml", "test.yml", "build.yml" and "test-dev.yml" carry;
+    # the long note is in "test.yml" and the one beside this workflow's trigger
+    # says what it means here.
+    #
+    # It is not only about what an archive is stamped with. The "bundles" job
+    # below reads the sibling "Standalone" run for this commit, and that workflow
+    # now declines a push that is not a bump -- so an IDE built for one would be
+    # an IDE looking for bundles that, by design, were never frozen.
+    #
+    # `inputs.tools_in_this_run` leads for the reason `inputs.called` leads
+    # there: "deploy.yml" calls this workflow to build what a release carries,
+    # and a called instance runs whatever the caller's commit message says.
+    # `github.event_name` cannot be asked -- inside a called workflow the whole
+    # `github` context is the caller's, so it reads "push" on the release path --
+    # and only a push carries `head_commit`, which is why the event name comes
+    # before the message test rather than after it.
+    if: >-
+      ${{ toJSON(inputs.tools_in_this_run) != 'null'
+      || github.event_name != 'push'
+      || github.ref != 'refs/heads/devel'
+      || startsWith(github.event.head_commit.message, 'Version updated') }}
     outputs:
       build: ${{ steps.set-matrix.outputs.build }}
       install: ${{ steps.set-matrix.outputs.install }}
@@ -305,8 +329,11 @@ jobs:
       # Note that a sibling run is no longer guaranteed even in the merge queue.
       # "build-standalone.yml" is gated on what the change touches now, so a
       # change to "ide/standalone" alone -- which is not a change to what gets
-      # frozen -- leaves this commit with no "Standalone" run anywhere. That is
-      # the case the base-branch fallback below was written for; what it costs is
+      # frozen -- leaves this commit with no "Standalone" run anywhere; and on a
+      # push it is gated on the commit being a version bump, so a dispatch of
+      # this workflow at any other commit on "devel" finds a run that was
+      # skipped, which is the same thing wearing a conclusion. That is the case
+      # the base-branch fallback below was written for; what it costs is
       # GRACE_SECONDS of waiting to establish that there is nothing to wait for.
       - name: Find the "Standalone" run that built the bundles
         id: resolve
@@ -415,6 +442,18 @@ jobs:
                 [ -n "${pending_first}" ] || pending_first="${id}"
                 continue
               fi
+              # A run whose every job was skipped is not a run that failed to
+              # produce bundles -- it is "Standalone" declining the commit. Its
+              # push trigger is gated on a version bump now, so every other push
+              # to "devel" leaves exactly that behind, and so does a manual
+              # dispatch of *this* workflow at such a commit. Counting it as
+              # barren below would fail the job over a freeze nobody asked for.
+              # It is evidence of nothing, so it is passed over as if it did not
+              # exist, which lands on the base branch fallback.
+              if [ "${conclusion}" = "skipped" ]; then
+                say "Run ${id} was skipped: \"Standalone\" declined ${HEAD_SHA}."
+                continue
+              fi
               names=$(bundles_of "${id}")
               if [ -n "${names}" ]; then
                 use_run="${id}"
@@ -475,9 +514,9 @@ jobs:
             break
           done
 
-          # (2) No run for this commit. That is legitimate: the two workflows
-          # have different path filters, and a change confined to
-          # "ide/standalone/**" fires this one and not that one. The
+          # (2) No run for this commit, or one that declined it. That is
+          # legitimate: the two workflows gate on different things, and a change
+          # confined to "ide/standalone/**" runs this one and not that one. The
           # IDE build only needs a working bundle to embed and smoke-test, so
           # the newest one on the base branch keeps that coverage -- as long as
           # nobody reading the log can mistake it for this commit's.
@@ -502,16 +541,17 @@ jobs:
                 "last 30 finished runs on ${base} still has an unexpired" \
                 "partcad-standalone-* artifact (they are kept for 14 days)." \
                 "The IDE cannot be built without them. Run the \"Standalone\"" \
-                "workflow on ${base} -- manually, or by pushing a change under" \
-                "one of its paths -- and then re-run this one."
+                "workflow on ${base} -- manually, or by landing a change there," \
+                "which bumps the version and freezes them -- and then re-run" \
+                "this one."
               exit 1
             fi
 
             echo "::warning::The command line bundles inside this IDE build are" \
               "NOT from ${HEAD_SHA}. They come from \"Standalone\" run ${use_run}," \
               "which built ${use_sha} on ${base}: $(run_url "${use_run}")." \
-              "\"Standalone\" never ran for this commit -- its path filters did" \
-              "not match it -- so an older bundle is the only one there is, and" \
+              "\"Standalone\" froze nothing for this commit -- its own gate did" \
+              "not select it -- so an older bundle is the only one there is, and" \
               "embedding it still exercises the IDE build end to end. Do not" \
               "read a green result as having tested this commit's command line" \
               "tools, though, because it has not."

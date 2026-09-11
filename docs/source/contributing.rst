@@ -819,11 +819,22 @@ CI fans out over operating systems, and a pull request does not pay for all of t
        over-running is the safe direction. If a description has to name the marker without asking for it,
        write it split across two code spans.
 
-A push to ``devel`` is the exception to all three: it runs no matrix at all unless its head commit message
-starts with ``Version updated``, which is the release commit. That exception applies to pushes and to nothing
-else -- the nightly run has no head commit to read a message from, so the guard leads with the event name and
-lets every other trigger through. It did not, from the day the guard was written until 0.8.32, and the nightly
-was skipped every night in between: if you change that condition, keep the event-name clause first.
+A push to ``devel`` is the exception to all three: it runs no matrix at all unless its head commit message starts with
+``Version updated``, which is the release commit. Every push to ``devel`` is followed by one of those within minutes
+and it carries the same tree, so what a merge costs is one build of that tree rather than two -- and the artifacts it
+produces are stamped with the version they will be released under rather than with the one the merge replaced.
+``Standalone`` and ``IDE`` are gated on this too; they used to run on the merge as well, which is where the second
+build and the stale version number came from. Neither has a ``paths:`` filter on its push trigger any more: the gate
+is what decides, and a filter in front of it could only ever hide it -- a version bump happens to touch
+``pyproject.toml`` and ``ide/vscode/package.json`` today, and the day ``dev-tools/bumpversion.toml`` stops naming such
+a file nothing would be built on ``devel`` again with nothing to say so.
+
+That exception applies to pushes and to nothing else -- the nightly run has no head commit to read a message from, so
+the guard leads with the event name and lets every other trigger through. It did not, from the day the guard was
+written until 0.8.32, and the nightly was skipped every night in between: if you change that condition, keep the
+event-name clause first. The two workflows that can also be *called* -- ``Standalone`` and ``IDE``, both of which
+``Deployment`` calls to build what a release carries -- lead with their ``inputs`` marker before that, because inside
+a called workflow the whole ``github`` context is the caller's and there is no other way to recognise one.
 
 The ``Standalone`` workflow reads the same tiers, job by job:
 
@@ -923,12 +934,12 @@ went *into* it: a dependency shipping a data file PyInstaller cannot see, a new 
 no build for one platform. So a dependency change freezes and a change to ``src/`` alone does not.
 
 That is a trade rather than a fact. A source change *can* break the freeze -- a lazily imported module, a file
-read relative to ``__file__``; ``dev-tools/pyinstaller/README.md`` has the list -- and that is now found on the
-push to ``devel`` after the merge rather than on the pull request. The push trigger of ``build-standalone.yml``
-still lists ``src/**`` for exactly this, a release still refuses to publish with a platform missing, and
-``#deepTest`` still builds the whole set before a merge for a change that warrants it. Note also which way the
-last row falls: an unclassified path counts as **both** source and dependency, so a bundle is skipped only for
-a directory somebody has named as source.
+read relative to ``__file__``; ``dev-tools/pyinstaller/README.md`` has the list -- and that is now found on
+``devel`` after the merge rather than on the pull request. Specifically on the version bump that follows the
+merge, which is the same tree with a version on it and the commit a release is cut from; a release still
+refuses to publish with a platform missing, and ``#deepTest`` still builds the whole set before a merge for a
+change that warrants it. Note also which way the last row falls: an unclassified path counts as **both**
+source and dependency, so a bundle is skipped only for a directory somebody has named as source.
 
 Two properties are worth knowing before you edit that list. It is **fail-safe**: a path it has not been taught
 counts as both source and a dependency, so it runs everything a source change runs, the standalone bundles
