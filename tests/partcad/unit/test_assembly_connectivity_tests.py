@@ -52,12 +52,19 @@ class _Assembly(_Shape):
     def __init__(self, children=(), config=None, **kwargs):
         super().__init__(config=config, **kwargs)
         self._children = list(children)
+        # The real Assembly exposes 'children'; the per-container walk reads it.
+        self.children = self._children
 
     async def do_instantiate(self):
         return None
 
     def connected_children(self):
-        return iter(self._children)
+        """Flattened, the way the real one is: a nested 'links:' becomes a
+        child assembly whose contents belong to the assembly embedding it."""
+        for child in self._children:
+            yield child
+            if isinstance(child.item, _Assembly):
+                yield from child.item.connected_children()
 
 
 @pytest.fixture(autouse=True)
@@ -345,3 +352,33 @@ def test_a_child_can_say_no_to_a_parent_that_says_yes():
     shaft = _Iface2({"multiConnect": True}, name="shaft")
     keyed = _Iface2({"multiConnect": False}, parent=shaft, name="keyed")
     assert keyed.get_multi_connect() is False
+
+
+def test_the_item_the_others_hang_from_is_exempt_wherever_it_sits(monkeypatch):
+    """The regression CI found in examples/feature_interface.
+
+    An ASSY file's top-level 'links:' becomes a child assembly, so flattening
+    the tree and exempting the first item exempts that wrapper and then reports
+    'example-bracket' - the one item that is allowed to be placed by
+    coordinates, because everything else connects to it.
+    """
+    monkeypatch.setattr("partcad.test.connectivity.Assembly", _Assembly)
+    inner = _Assembly([
+        _Child("example-bracket", _Item("bracket"), HERE),
+        _connected("example-motor", "example-bracket", "TR-4.5mm"),
+        _connected("screw-L", "example-bracket", "L-30mm"),
+    ])
+    root = _Assembly([_Child("links", inner, HERE)])
+    assert _run(ConnectivityTest(), root, ctx=_Ctx())
+
+
+def test_a_stray_inside_a_nested_group_is_still_reported(monkeypatch):
+    """The exemption is one item per group, not one per assembly."""
+    monkeypatch.setattr("partcad.test.connectivity.Assembly", _Assembly)
+    inner = _Assembly([
+        _Child("base", _Item("base"), HERE),
+        _connected("a", "base", "p0"),
+        _Child("stray", _Item("stray"), THERE),
+    ])
+    root = _Assembly([_Child("links", inner, HERE)])
+    assert not _run(ConnectivityTest(), root, ctx=_Ctx())

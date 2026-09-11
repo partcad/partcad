@@ -79,7 +79,7 @@ class ConnectivityTest(Test):
         problems = []
         problems.extend(self._duplicates(children, config))
         problems.extend(await self._crowded_ports(ctx, children))
-        problems.extend(self._unanchored(children, config))
+        problems.extend(self._unanchored(shape, config))
 
         if not problems:
             return self.passed(shape)
@@ -134,24 +134,45 @@ class ConnectivityTest(Test):
             )
         return problems
 
-    def _unanchored(self, children, config):
-        """Items placed by coordinates in an assembly that otherwise connects.
+    def _containers(self, assembly):
+        """Each group of items that were written as one 'links:' list.
 
-        Only meaningful once something does connect: an assembly built entirely
-        from coordinates is a legitimate way to write one, and every part of it
-        would otherwise be reported.
+        An ASSY file's top level 'links:' becomes a child assembly of the object
+        the file defines, and so does every nested one, so the groups are the
+        assembly's own children and then those of every assembly among them.
+        """
+        children = list(getattr(assembly, "children", []) or [])
+        yield children
+        for child in children:
+            item = child.item
+            if isinstance(item, Assembly):
+                yield from self._containers(item)
+
+    def _unanchored(self, shape, config):
+        """Items placed by coordinates in a group that otherwise connects.
+
+        Per group rather than per assembly, because the exemption is for the
+        item the others hang from and every 'links:' list has one. Flattening
+        the tree first would exempt the wrapper assembly that the file's top
+        level becomes, and then report the item it wraps - which is the one
+        thing that is allowed to be placed by coordinates.
+
+        Only meaningful once something in the group does connect: a group
+        written entirely as coordinates is a legitimate way to write one.
         """
         if not config.get("requireAnchored", True):
             return
-        connected = [child for child in children if child.connection]
-        if not connected or len(children) < 2:
-            return
-        for child in children[1:]:
-            if not child.connection:
-                yield (
-                    "'%s' is placed by coordinates in an assembly that connects "
-                    "its other items, so nothing holds it where it is" % child.name
-                )
+        for children in self._containers(shape):
+            if len(children) < 2:
+                continue
+            if not any(child.connection for child in children):
+                continue
+            for child in children[1:]:
+                if not child.connection:
+                    yield (
+                        "'%s' is placed by coordinates among items that connect, "
+                        "so nothing holds it where it is" % child.name
+                    )
 
 
 def _packed(location):
