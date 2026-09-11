@@ -14,6 +14,7 @@ import asyncio
 import shutil
 
 import partcad as pc
+from partcad import context as pc_context
 from partcad.cache import Cache
 from partcad.cache_backend_files import FilesCacheBackend
 from partcad.project_external_repository import ProjectExternalRepository
@@ -356,3 +357,65 @@ def test_a_malformed_declaration_is_complained_about_once():
     finally:
         pc.logging.warning = original
     assert len(warnings) == 1, warnings
+
+
+# --- the listing warms what it is about to read ------------------------------
+#
+# 'Context.get_all_packages' prefetches HAS_STUFF_KINDS before 'get_packages'
+# reads them back one at a time. Nothing exercised that wiring: the two
+# 'get_all_packages' calls elsewhere in the suite pass has_stuff=False, which
+# skips the prefetch entirely, so the whole point of the change went untested.
+
+
+def _plugin_backed(ctx, name, data):
+    """A plugin-backed package registered in the context, with a fake behind it."""
+    repo = ProjectExternalRepository(ctx, name, "/tmp/ext", config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+    asyncio.run(repo.ensure_enumerated_async())
+    ctx.projects[name] = repo
+    return repo, fake
+
+
+def test_the_listing_warms_the_kinds_it_is_about_to_read():
+    ctx = pc.Context("examples")
+    repo, fake = _plugin_backed(
+        ctx, "//ext", {"meta": {"objectKinds": ["part"]}, "objects/part": {"bolt": {"type": "step"}}}
+    )
+
+    ctx._prefetch_object_configs(None, pc_context.HAS_STUFF_KINDS)
+    assert "objects/part" in fake.keys
+    # ...and only the declared kind; the other three are answered from the metadata.
+    assert [k for k in fake.keys if k.startswith("objects/")] == ["objects/part"]
+
+    # What the listing then reads is a cache hit, which is the whole point.
+    before = list(fake.keys)
+    assert sum(repo.object_count(kind) for kind in pc_context.HAS_STUFF_KINDS) == 1
+    assert fake.keys == before
+
+
+def test_the_prefetch_skips_packages_outside_the_parent():
+    ctx = pc.Context("examples")
+    _, fake = _plugin_backed(ctx, "//ext", {"objects/part": {"bolt": {"type": "step"}}})
+
+    # '//other' is not this package's parent, so nothing is warmed for it -- and
+    # in particular no round trip is sent to a repository out of scope.
+    ctx._prefetch_object_configs("//other", pc_context.HAS_STUFF_KINDS)
+    assert [k for k in fake.keys if k.startswith("objects/")] == []
+
+
+def test_an_unreachable_repository_does_not_take_the_listing_down():
+    """The prefetch is a warm-up; nothing downstream depends on it having worked."""
+
+    class Unreachable:
+        async def get_data(self, key):
+            raise RuntimeError("the repository is not answering")
+
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", config_obj={})
+    repo._repository = Unreachable()
+    ctx.projects["//ext"] = repo
+
+    ctx._prefetch_object_configs(None, pc_context.HAS_STUFF_KINDS)  # must not raise
+    # ...and the package is still readable afterwards, the slow way.
+    assert repo.object_count("part") == 0
