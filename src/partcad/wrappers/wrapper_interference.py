@@ -142,6 +142,11 @@ def process(path, request):
         for name, shape in leaves:
             box = _box(shape)
             if box is None:
+                # An empty shape is not a part that overlaps nothing, it is a
+                # part nothing could be asked about. Dropping it here would
+                # take it out of 'parts' and out of 'unchecked' both, and a
+                # caller reading either would never learn it existed.
+                unchecked.append(name)
                 continue
             if not _is_solid_enough_to_intersect(shape):
                 unchecked.append(name)
