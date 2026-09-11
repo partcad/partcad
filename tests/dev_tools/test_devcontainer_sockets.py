@@ -130,3 +130,33 @@ def test_the_value_handed_to_ssh_is_not_quoted():
             break
     else:
         raise AssertionError("the behave job sets no SSH_AUTH_SOCK at all")
+
+
+def test_every_config_file_the_dev_container_jobs_name_exists():
+    """`configFile` has to name a real file, and nothing complains when it does not.
+
+    `devcontainer up --config <missing>` does not fail. It falls back to
+    discovering `.devcontainer/devcontainer.json`, so the job runs, the right
+    configuration is used, and the wrong path in the workflow says nothing --
+    for as long as that fallback exists. Every dev-container job in this file
+    pointed at `.devcontainer/.devcontainer.json`, which this repository has
+    never had.
+
+    That fallback is load-bearing for the agent socket in particular: the mount
+    is a `runArgs` entry in the very file the CLI had to guess its way to.
+    """
+    workflow = yaml.safe_load(TEST_DEV_WORKFLOW.read_text(encoding="utf-8"))
+
+    named = []
+    for job in workflow["jobs"].values():
+        for step in job.get("steps", []):
+            config = (step.get("with") or {}).get("configFile")
+            if config:
+                named.append((job.get("name", "?"), step.get("name", "?"), config))
+
+    assert named, "no dev-container step names a configFile any more"
+
+    missing = [entry for entry in named if not (REPO_ROOT / entry[2]).is_file()]
+    assert not missing, "these steps name a configFile that does not exist: " + ", ".join(
+        f"{job}/{step} -> {config}" for job, step, config in missing
+    )

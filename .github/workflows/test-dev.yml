@@ -143,7 +143,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           runCmd: |
             start_time=$SECONDS
@@ -219,7 +219,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           # "runCmd" is handed to a shell as one script, so the step's result is
           # the *last* command's unless the script says otherwise. This one used
@@ -257,7 +257,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -379,7 +379,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           env: |
             # TODO-25: Workaround for "Host key verification failed."
@@ -443,7 +443,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -590,7 +590,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           # Same shape as the two jobs above: every "pc" counts, and the report
           # is still written when one of them fails. This job was the only one of
