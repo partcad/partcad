@@ -67,6 +67,16 @@ class DegenerateTest(Test):
             return self.TEST_PASSED
 
         try:
+            # A shape that did not build has no size for the same reason it has
+            # nothing else, and 'cad' reports that. Measuring it would produce
+            # a second failure naming a cause that is not the cause - "it is
+            # empty" for a part whose script raised an ImportError - and send
+            # the reader after the wrong thing.
+            if await shape.get_wrapped(ctx) is None:
+                test_ctx[self.NOT_CACHEABLE] = True
+                self.debug(shape, "The shape did not build; that is the 'cad' test's to report")
+                return self.TEST_PASSED
+
             box = await shape.get_bounding_box_async(ctx)
         except Exception as e:
             # About the machine, not the shape: do not remember it.
@@ -75,7 +85,11 @@ class DegenerateTest(Test):
             return self.TEST_PASSED
 
         if box is None:
-            return self.failed(shape, "The shape has no extent at all: it is empty")
+            return self.failed(
+                shape,
+                "The shape built but occupies no space at all: its bounding box "
+                "is empty.",
+            )
 
         tolerance = float(config.get("tolerance", 1e-3))
         x_min, y_min, z_min, x_max, y_max, z_max = box

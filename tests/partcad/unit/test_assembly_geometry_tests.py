@@ -27,15 +27,19 @@ from partcad.test.interference import InterferenceTest, _is_ignored, _matches
 class _Shape:
     """The little a test needs of a shape: a config, a name, and a measurement."""
 
-    def __init__(self, config=None, box=(0, 0, 0, 10, 10, 10), overlaps=None, raises=None, unchecked=()):
+    def __init__(self, config=None, box=(0, 0, 0, 10, 10, 10), overlaps=None, raises=None, unchecked=(), unbuilt=False):
         self.config = config or {}
         self.project_name = "pkg"
         self.name = "thing"
         self._box = box
+        self._unbuilt = unbuilt
         self._overlaps = overlaps
         self._unchecked = list(unchecked)
         self._indeterminate = []
         self._raises = raises
+
+    async def get_wrapped(self, ctx):
+        return None if self._unbuilt else object()
 
     async def get_bounding_box_async(self, ctx):
         if self._raises:
@@ -301,3 +305,15 @@ def test_a_pass_reached_without_looking_at_everything_is_not_remembered():
     ctx = {}
     assert asyncio.run(InterferenceTest().test([], None, clean, ctx))
     assert InterferenceTest.NOT_CACHEABLE not in ctx
+
+
+def test_a_shape_that_never_built_is_the_cad_tests_to_report():
+    """Found in CI: a third-party example whose script raises ImportError was
+    failed twice - once by 'cad' for not building, and once here for "having
+    no extent at all", which names a cause that is not the cause."""
+    ctx = {}
+    assert asyncio.run(DegenerateTest().test([], None, _Shape(box=None, unbuilt=True), ctx))
+    assert ctx.get(DegenerateTest.NOT_CACHEABLE) is True
+
+    # ...but a shape that did build and encloses nothing is still reported.
+    assert not _run(DegenerateTest(), _Shape(box=None))
