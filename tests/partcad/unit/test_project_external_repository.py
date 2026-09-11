@@ -184,9 +184,7 @@ def test_cache_version_propagates_to_children():
     """The cache version is inherited by every child of a plugin-backed
     hierarchy, so the whole tree shares one versioned cache namespace."""
     ctx = pc.Context("examples")
-    top = ProjectExternalRepository(
-        ctx, "//ext", "/tmp/ext", plugin_ref="//ext:remote", cache_version=3
-    )
+    top = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", plugin_ref="//ext:remote", cache_version=3)
     top._repository = FakeRepository({"deps": ["motors"]})
     child = top.dependencies()["motors"]
     assert child["cacheVersion"] == 3
@@ -361,61 +359,99 @@ def test_a_malformed_declaration_is_complained_about_once():
 
 # --- the listing warms what it is about to read ------------------------------
 #
-# 'Context.get_all_packages' prefetches HAS_STUFF_KINDS before 'get_packages'
-# reads them back one at a time. Nothing exercised that wiring: the two
-# 'get_all_packages' calls elsewhere in the suite pass has_stuff=False, which
-# skips the prefetch entirely, so the whole point of the change went untested.
+# 'Context.get_all_packages(has_stuff=True)' prefetches HAS_STUFF_KINDS before
+# 'get_packages' reads them back one at a time. Nothing exercised that wiring:
+# the two 'get_all_packages' calls elsewhere in the suite pass has_stuff=False,
+# which skips the prefetch entirely, so the whole point of the change went
+# untested. These go in through the listing rather than through
+# '_prefetch_object_configs', so that the wiring is what is under test: a
+# listing that stopped prefetching would still pass a test that prefetched for
+# it.
 
 
-def _plugin_backed(ctx, name, data):
-    """A plugin-backed package registered in the context, with a fake behind it."""
+def _listing_context(tmp_path, data, name="//test/ext"):
+    """A context with one plugin-backed package in it, ready to be listed.
+
+    The package is injected rather than imported: a real one would need a
+    plugin to run, and what is under test here is the listing rather than the
+    import. Everything after that point sees an ordinary loaded package.
+    """
+    (tmp_path / "partcad.yaml").write_text("name: //test\ndesc: root\n")
+    ctx = pc.Context(str(tmp_path))
     repo = ProjectExternalRepository(ctx, name, "/tmp/ext", config_obj={})
     fake = FakeRepository(data)
     repo._repository = fake
-    asyncio.run(repo.ensure_enumerated_async())
+    asyncio.run(repo.ensure_enumerated_async())  # as the import would have
     ctx.projects[name] = repo
-    return repo, fake
+    return ctx, repo, fake
 
 
-def test_the_listing_warms_the_kinds_it_is_about_to_read():
-    ctx = pc.Context("examples")
-    repo, fake = _plugin_backed(
-        ctx, "//ext", {"meta": {"objectKinds": ["part"]}, "objects/part": {"bolt": {"type": "step"}}}
+def _record_prefetches(repo):
+    """What the listing asks this package to warm, in the order it asks."""
+    asked = []
+    original = repo.prefetch_object_configs_async
+
+    async def spy(kinds):
+        asked.append(tuple(kinds))
+        await original(kinds)
+
+    repo.prefetch_object_configs_async = spy
+    return asked
+
+
+def test_the_listing_warms_the_kinds_it_is_about_to_read(tmp_path):
+    ctx, repo, fake = _listing_context(
+        tmp_path, {"meta": {"objectKinds": ["part"]}, "objects/part": {"bolt": {"type": "step"}}}
     )
+    asked = _record_prefetches(repo)
 
-    ctx._prefetch_object_configs(None, pc_context.HAS_STUFF_KINDS)
-    assert "objects/part" in fake.keys
-    # ...and only the declared kind; the other three are answered from the metadata.
+    listed = [package["name"] for package in ctx.get_all_packages(has_stuff=True)]
+
+    # The listing warmed the package, once, for exactly the kinds it filters on.
+    assert asked == [pc_context.HAS_STUFF_KINDS]
+    # Only the declared kind was a round trip; the other three are answered from
+    # the metadata -- and there is only one of it, so what 'get_packages' read
+    # back afterwards was the memo. That cache hit is the whole point.
     assert [k for k in fake.keys if k.startswith("objects/")] == ["objects/part"]
-
-    # What the listing then reads is a cache hit, which is the whole point.
-    before = list(fake.keys)
-    assert sum(repo.object_count(kind) for kind in pc_context.HAS_STUFF_KINDS) == 1
-    assert fake.keys == before
+    assert "//test/ext" in listed
 
 
-def test_the_prefetch_skips_packages_outside_the_parent():
-    ctx = pc.Context("examples")
-    _, fake = _plugin_backed(ctx, "//ext", {"objects/part": {"bolt": {"type": "step"}}})
+def test_a_listing_that_filters_on_nothing_warms_nothing(tmp_path):
+    """has_stuff=False reads no kinds out of the packages, so it warms none."""
+    ctx, repo, fake = _listing_context(tmp_path, {"objects/part": {"bolt": {"type": "step"}}})
+    asked = _record_prefetches(repo)
 
-    # '//other' is not this package's parent, so nothing is warmed for it -- and
-    # in particular no round trip is sent to a repository out of scope.
-    ctx._prefetch_object_configs("//other", pc_context.HAS_STUFF_KINDS)
+    listed = [package["name"] for package in ctx.get_all_packages(has_stuff=False)]
+
+    assert asked == []
+    assert [k for k in fake.keys if k.startswith("objects/")] == []
+    assert "//test/ext" in listed
+
+
+def test_the_listing_skips_packages_outside_the_parent(tmp_path):
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "partcad.yaml").write_text("desc: sub\n")
+    ctx, repo, fake = _listing_context(tmp_path, {"objects/part": {"bolt": {"type": "step"}}})
+    ctx.import_all()  # so that '//test/sub' is a package a listing can start from
+    asked = _record_prefetches(repo)
+
+    # '//test/sub' is not this package's parent, so nothing is warmed for it --
+    # and in particular no round trip is sent to a repository out of scope.
+    ctx.get_all_packages(parent_name="//test/sub", has_stuff=True)
+    assert asked == []
     assert [k for k in fake.keys if k.startswith("objects/")] == []
 
 
-def test_an_unreachable_repository_does_not_take_the_listing_down():
+def test_an_unreachable_repository_does_not_take_the_listing_down(tmp_path):
     """The prefetch is a warm-up; nothing downstream depends on it having worked."""
 
     class Unreachable:
         async def get_data(self, key):
             raise RuntimeError("the repository is not answering")
 
-    ctx = pc.Context("examples")
-    repo = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", config_obj={})
+    ctx, repo, _ = _listing_context(tmp_path, {})
     repo._repository = Unreachable()
-    ctx.projects["//ext"] = repo
 
-    ctx._prefetch_object_configs(None, pc_context.HAS_STUFF_KINDS)  # must not raise
+    ctx.get_all_packages(has_stuff=True)  # must not raise
     # ...and the package is still readable afterwards, the slow way.
     assert repo.object_count("part") == 0
