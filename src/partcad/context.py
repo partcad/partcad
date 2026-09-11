@@ -41,6 +41,27 @@ from .plugin_provider_data_cart import *
 from . import telemetry
 from .test.all import tests as all_tests
 
+# What makes a package worth listing to a user interface: the kinds of object it
+# would have something to show for. Named once because two things read it and
+# they have to agree -- the filter in 'get_packages', and the prefetch in
+# 'get_all_packages' that warms exactly what that filter is about to read.
+HAS_STUFF_KINDS = ("sketch", "part", "assembly", "scene")
+
+
+def _is_within(name: str, parent_name: Optional[str]) -> bool:
+    """Whether a package name is 'parent_name' or sits underneath it.
+
+    A package name is a path, so the boundary has to be the separator and not
+    just a prefix: '//foo' is not the parent of '//foobar', and matching it as
+    one made a listing of '//foo' include its neighbour -- and now also send a
+    round trip to that neighbour's repository plugin (see
+    '_prefetch_object_configs'). The root, '//', is the parent of everything,
+    which falls out of the same rule once the trailing separator is stripped.
+    """
+    if parent_name is None:
+        return True
+    return name == parent_name or name.startswith(parent_name.rstrip("/") + "/")
+
 
 def connectivity_probe():
     """The one address to ask "is there a network out of here?".
@@ -773,12 +794,49 @@ class Context:
     def get_all_packages(self, parent_name=None, has_stuff: bool = True):
         # TODO(clairbee): leverage root_project.get_child_project_names()
         self.import_all(parent_name)
+        if has_stuff:
+            # 'get_packages' below reads HAS_STUFF_KINDS out of every package,
+            # one kind at a time, and for a plugin-backed package each of those
+            # is a round trip to the plugin. Warm them here instead: every
+            # package and every kind at once, on the traversal's event loop, so
+            # what follows reads a memo. See Project.prefetch_object_configs_async.
+            self._prefetch_object_configs(parent_name, HAS_STUFF_KINDS)
         return self.get_packages(parent_name=parent_name, has_stuff=has_stuff)
 
+    def _prefetch_object_configs(self, parent_name, kinds):
+        """Warm 'kinds' across every loaded package, concurrently.
+
+        A no-op for the packages that are local, which is most of them; what it
+        is for is the plugin-backed ones, where the enumerations are remote.
+        """
+        projects = [p for p in self.projects.values() if _is_within(p.name, parent_name)]
+        projects = [p for p in projects if not p.skipped]
+        if not projects:
+            return
+
+        async def prefetch():
+            # This is a warm-up and nothing depends on it having worked: a
+            # package whose prefetch failed is read the slow way by the
+            # accessors below, which report the failure themselves. So one
+            # unreachable repository must not take the listing down with it.
+            await asyncio.gather(
+                *(p.prefetch_object_configs_async(kinds) for p in projects),
+                return_exceptions=True,
+            )
+
+        # Called from the synchronous listing path, right after 'import_all'
+        # ran its own 'asyncio.run', so there is no loop to nest inside.
+        asyncio.run(prefetch())
+
     def get_packages(self, parent_name: str = None, has_stuff: bool = True) -> list[dict[str, str]]:
+        """Every loaded package, or only those with something to look at in them.
+
+        'has_stuff' is what makes it the second: a package is kept only if it
+        holds an object of one of HAS_STUFF_KINDS.
+        """
         projects = self.projects.values()
         if parent_name is not None:
-            projects = filter(lambda x: x.name.startswith(parent_name), projects)
+            projects = filter(lambda x: _is_within(x.name, parent_name), projects)
 
         # Unconditionally, not only under 'has_stuff': a skipped package holds
         # no objects, so the filter below would drop it anyway, but a caller
@@ -793,11 +851,7 @@ class Context:
             # instantiated dicts, so a plugin-backed package - which enumerates
             # lazily and does not instantiate up front - is counted correctly.
             projects = filter(
-                lambda x: x.object_count("sketch")
-                + x.object_count("part")
-                + x.object_count("assembly")
-                + x.object_count("scene")
-                > 0,
+                lambda x: sum(x.object_count(kind) for kind in HAS_STUFF_KINDS) > 0,
                 projects,
             )
         return list(

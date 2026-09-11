@@ -394,13 +394,20 @@ def encode(obj, name=None, label=None):
     non-shape OCCT object (a Location/Axis a build123d script showed) drops to
     null - every consumer already discards it - and any other unknown type
     raises, to catch real bugs.
+
+    Every JSON-native kind is settled before OCP is reached for, and that
+    ordering is the point rather than tidiness. Importing OCP is the better part
+    of a second - it is OpenCASCADE, several hundred megabytes of it - and the
+    answers that carry no geometry at all are not rare: a repository plugin's
+    reply is a dict of strings, and PartCAD asks a plugin one key at a time, in
+    a process of its own, hundreds of times over to list a large package tree.
+    Asking "is this dict a TopoDS_Shape?" first made every one of those calls
+    load the kernel to find out it was not. A value only reaches _ensure_ocp()
+    here when it is neither a scalar nor a container, which is the only way it
+    could be OCCT.
     """
     if obj is None or isinstance(obj, (bool, int, float, str)):
         return obj
-
-    _ensure_ocp()
-    if isinstance(obj, OCP.TopoDS.TopoDS_Shape):
-        return encode_shape(obj, name=name, label=label)
 
     if isinstance(obj, dict):
         # An already-built shape/assembly object keeps its own metadata verbatim.
@@ -427,6 +434,11 @@ def encode(obj, name=None, label=None):
 
     if isinstance(obj, BaseException):
         return str(obj)
+
+    # Nothing JSON-native is left, so this is where the kernel is needed.
+    _ensure_ocp()
+    if isinstance(obj, OCP.TopoDS.TopoDS_Shape):
+        return encode_shape(obj, name=name, label=label)
 
     if type(obj).__module__.split(".")[0] == "OCP":
         _warn("dropping non-shape OCCT object of type %s" % type(obj))

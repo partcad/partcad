@@ -575,6 +575,17 @@ class Project(project_config.Configuration):
         """
         return None
 
+    async def prefetch_object_configs_async(self, kinds) -> None:
+        """Warm the enumerations of 'kinds' from within an async context.
+
+        A no-op for a local package, whose objects are known at construction. A
+        plugin-backed package overrides this to fetch several kinds at once and
+        concurrently, so that a caller which then reads them one after another
+        through the synchronous accessors pays one round trip's latency rather
+        than one per kind (see Context.get_all_packages).
+        """
+        return None
+
     def object_count(self, kind: str) -> int:
         """Number of declared objects of a kind, without instantiating them."""
         return len(self.object_configs(kind))
