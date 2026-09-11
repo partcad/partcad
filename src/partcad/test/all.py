@@ -16,7 +16,11 @@ from .cam_subtractive import CamSubtractiveTest
 from .cam_forming import CamFormingTest
 from .cfd import CfdTest
 from .connect import ConnectTest
+from .connectivity import ConnectivityTest
+from .degenerate import DegenerateTest
 from .fea import FeaTest
+from .interference import InterferenceTest
+from .solidity import SolidityTest
 
 _global_tests: list[Test] = []
 
@@ -39,6 +43,17 @@ def tests(concurrency_cap: int) -> list[Test]:
                 CamSubtractiveTest(),
                 CamFormingTest(),
                 ConnectTest(),
+                ConnectivityTest(),
+                DegenerateTest(),
+                # Before interference, deliberately: a part that is inside out
+                # makes every boolean against it meaningless, so knowing which
+                # parts those are is what makes the interference result mean
+                # anything.
+                SolidityTest(),
+                # Realizes the assembly and intersects the pairs whose boxes
+                # meet, so it is the most expensive of the geometry checks and
+                # goes after the ones that are nearly free.
+                InterferenceTest(),
                 # Only ever run for a part that declares the matching section;
                 # see 'test/cae.py'. A package with no 'fea:'/'cfd:' in
                 # it pays nothing for these two being here.

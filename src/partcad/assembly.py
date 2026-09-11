@@ -7,10 +7,15 @@
 # Licensed under Apache License, Version 2.0.
 
 import asyncio
+import json
+import os
+import tempfile
 import typing
 
+from . import sandbox_versions
 from . import telemetry
 from . import shape_envelope
+from . import wrapper
 from .geom import Location
 from .plugin_provider_data_cart import ProviderCartItem
 from .revision import package_revision
@@ -276,6 +281,78 @@ class Assembly(Shape):
                 continue
             problems.extend([(child.name, problem) for problem in child.how.problems])
         return problems
+
+    async def get_interference_async(self, ctx, min_volume=1.0, min_fraction=0.0):
+        """The pairs of parts in this assembly whose solids share space.
+
+        Returned as {"overlaps": [{"a", "b", "volume"}, ...], "unchecked": [...],
+        "parts": n}, or None when the assembly could not be realized. Measured
+        in a sandbox, like every other operation on geometry: the core has no
+        CAD library.
+
+        'unchecked' names the parts a boolean could not be asked about because
+        they are not valid solids. It is reported rather than hidden: a shape
+        that is inside out intersects things it is nowhere near, so leaving it
+        out is the only way the rest of the answer means anything - and a caller
+        that was told nothing would take "no interference" for "checked".
+
+        'min_volume' and 'min_fraction' are what separates a design fault from a
+        design that fits together. Parts meant to go together touch, and meshed
+        geometry touching is numerically noisy, so an overlap smaller than this
+        is not reported.
+        """
+        obj = await self.get_wrapped(ctx)
+        if obj is None:
+            return None
+
+        with pc_logging.Action("Interference", self.project_name, self.name):
+            # The tree travels as a JSON string rather than as itself. Anything
+            # recognisable as a shape or an assembly is turned into OCCT
+            # geometry on arrival (see ocp_serialize.decode), and a compound is
+            # exactly what this must not be given: the names go with it, and a
+            # report that two parts overlap has to be able to say which two.
+            # A string is left alone, so the wrapper decodes the tree itself,
+            # leaf by leaf, keeping each name attached to its solid.
+            request_serialized = shape_envelope.serialize(
+                {
+                    "assembly_json": json.dumps(obj),
+                    "min_volume": min_volume,
+                    "min_fraction": min_fraction,
+                }
+            )
+
+            runtime = ctx.get_python_runtime(version="3.11")
+            await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+
+            # The wrapper writes nothing, but every wrapper is invoked with an
+            # output path; give it one inside a directory of our own.
+            with tempfile.TemporaryDirectory(prefix="partcad-interference-") as unused_dir:
+                command = [wrapper.get("interference.py"), os.path.join(unused_dir, "unused.txt")]
+                exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
+            if exitcode != 0 and len(errors) == 0:
+                errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+            if errors:
+                pc_logging.error(errors)
+                raise Exception(errors)
+
+            response_lines = response_serialized.strip().splitlines()
+            if not response_lines:
+                pc_logging.error("Empty response from wrapper: %s" % command[0])
+                return None
+            result = shape_envelope.deserialize(response_lines[-1].strip())
+
+            if not result.get("success", False):
+                pc_logging.error(
+                    "Interference failed for %s:%s: %s"
+                    % (self.project_name, self.name, result.get("exception", "Unknown error"))
+                )
+                return None
+            return {
+                "overlaps": result.get("overlaps", []),
+                "unchecked": result.get("unchecked", []),
+                "indeterminate": result.get("indeterminate", []),
+                "parts": result.get("parts", 0),
+            }
 
     async def resolve_connect_metadata(self, ctx):
         """Fill in the parts of the connection metadata that need the geometry.

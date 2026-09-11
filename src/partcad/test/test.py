@@ -129,6 +129,16 @@ class Test(ABC):
         message = self._log_message_prepare(*args)
         pc_logging.debug(f"Test: {shape.project_name}:{shape.name}: {self.name}{message}")
 
+    def info(self, shape, *args) -> None:
+        """Like logging.info(), prefixed with the test name and the shape name.
+
+        For what a reader of the result has to know in order to read it: a
+        check that could only be applied to part of what it was given says so
+        here, so that a pass is not mistaken for a clean bill of health.
+        """
+        message = self._log_message_prepare(*args)
+        pc_logging.info(f"Test: {shape.project_name}:{shape.name}: {self.name}{message}")
+
     def failed(self, shape, *args) -> bool:
         """This methods works like logging.error() but prepends the message with the test name and the shape name."""
         message = self._log_message_prepare(*args)

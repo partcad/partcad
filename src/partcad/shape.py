@@ -1871,6 +1871,56 @@ class Shape(ShapeConfiguration):
             )
         )
 
+    async def get_solidity_async(self, ctx):
+        """Whether this shape is a solid OCCT will do arithmetic on.
+
+        Returned as {"solids": n, "volume": v, "valid": bool}, with 'volume' and
+        'valid' None when the shape holds no solid at all - a sketch, a shell,
+        a wire - or None outright when the shape could not be built.
+
+        A negative volume means the faces are oriented inward: the shape is
+        inside out. It still builds, renders, exports and measures; only its
+        arithmetic is wrong, which is why this has to be asked rather than
+        noticed. Measured in a sandbox, like every other operation on geometry.
+        """
+        obj = await self.get_wrapped(ctx)
+        if obj is None:
+            return None
+
+        with pc_logging.Action("Solidity", self.project_name, self.name):
+            request_serialized = shape_envelope.serialize({"wrapped": obj})
+
+            runtime = ctx.get_python_runtime(version="3.11")
+            await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+
+            with tempfile.TemporaryDirectory(prefix="partcad-solidity-") as unused_dir:
+                command = [wrapper.get("solidity.py"), os.path.join(unused_dir, "unused.txt")]
+                exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
+            if exitcode != 0 and len(errors) == 0:
+                errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+            if errors:
+                pc_logging.error(errors)
+                raise Exception(errors)
+
+            response_lines = response_serialized.strip().splitlines()
+            if not response_lines:
+                pc_logging.error("Empty response from wrapper: %s" % command[0])
+                return None
+            result = shape_envelope.deserialize(response_lines[-1].strip())
+
+            if not result.get("success", False):
+                pc_logging.error(
+                    "Solidity check failed for %s:%s: %s"
+                    % (self.project_name, self.name, result.get("exception", "Unknown error"))
+                )
+                return None
+            return {
+                "solids": result.get("solids", 0),
+                "volume": result.get("volume"),
+                "min_solid_volume": result.get("min_solid_volume"),
+                "valid": result.get("valid"),
+            }
+
     async def get_bounding_box_async(self, ctx):
         """The axis-aligned bounding box of this shape, in its own coordinates.
 

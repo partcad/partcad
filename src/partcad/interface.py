@@ -307,6 +307,20 @@ class Interface:
         # thread rather than matching one. Both are inherited from the parent
         # interfaces when this one does not declare them, so a thread only has
         # to be spelled out once, on the interface that introduces it.
+        # option: "multiConnect"
+        # description: whether more than one item may be connected to the same
+        #              instance of this interface. False for a joint that is
+        #              made once - a bolt in a hole, a stud under a brick -
+        #              and true for one that is not, such as a shaft carrying
+        #              several parts along its length, or a rail.
+        # values: boolean
+        # default: false
+        # None when the option is absent, the boolean when it is given. The
+        # difference matters: an interface that inherits 'multiConnect: true'
+        # has to be able to say 'false' and be believed, and a stored False
+        # that means "not set" cannot be told from one that means "no".
+        self.multi_connect = bool(config["multiConnect"]) if "multiConnect" in config else None
+
         self.thread_step = config.get("threadStep", None)
         if self.thread_step is not None:
             if isinstance(self.thread_step, bool) or not isinstance(self.thread_step, (int, float)):
@@ -397,10 +411,32 @@ class Interface:
         """Whether this interface cuts its own thread, its own setting or inherited."""
         return bool(self._inherited("self_screw"))
 
-    def _inherited(self, attribute, seen=None):
-        """The attribute as declared here, or the first one found among the parents."""
+    def get_multi_connect(self):
+        """Whether one instance of this interface may take more than one item.
+
+        A stud takes one brick and a bolt hole takes one bolt, so two items
+        connected to the same port is a mistake worth reporting. A shaft is the
+        counter-example - several parts sit along it, all mated to the same
+        interface - and says so with 'multiConnect: true'. Inherited, so that
+        declaring it once on the interface a family derives from covers the
+        family.
+        """
+        # Only None is silence here, so 'multiConnect: false' on a child
+        # overrides a parent that allows many rather than being skipped over.
+        return bool(self._inherited("multi_connect", unset=(None,)))
+
+    def _inherited(self, attribute, seen=None, unset=(None, False)):
+        """The attribute as declared here, or the first one found among the parents.
+
+        'unset' says which stored values mean "nothing was declared here". It
+        includes False by default because most of these attributes store False
+        for an absent option and cannot tell that from an explicit one. An
+        attribute that does keep the difference - storing None when absent -
+        passes 'unset=(None,)' so that an explicit False overrides a parent
+        rather than being read as silence.
+        """
         value = getattr(self, attribute, None)
-        if value is not None and value is not False:
+        if value not in unset:
             return value
 
         # An interface hierarchy is a DAG rather than a tree, so the same parent
@@ -415,8 +451,8 @@ class Interface:
             parent = getattr(inherit, "interface", None)
             if parent is None:
                 continue
-            inherited = parent._inherited(attribute, seen)
-            if inherited is not None and inherited is not False:
+            inherited = parent._inherited(attribute, seen, unset)
+            if inherited not in unset:
                 return inherited
         return value
 
