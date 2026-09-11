@@ -1,0 +1,18 @@
+# What the sdist needs beyond the packages themselves.
+#
+# `pyproject.toml` names an in-tree build backend -- `backend-path` points at
+# `dev-tools/build-backend` -- so that a checkout which dropped the symlinks
+# carrying the AI agent skills is refused rather than packaged empty. An sdist
+# without that module in it cannot be built from at all: `python -m build` makes
+# the sdist and then builds the wheel *out of it*, and the wheel half fails with
+#
+#   `backend-path` entry 'dev-tools/build-backend' does not exist
+#
+# which is also what `pip install partcad-<version>.tar.gz` would have done to
+# anyone installing from the sdist on PyPI.
+#
+# This file is here rather than at the top of the repository, which is the only
+# place setuptools looks for it by that name. The backend points setuptools at
+# it -- one line, `manifest_maker.template` -- and says there why that is the
+# knob rather than `[sdist] template` in a `setup.cfg`.
+include dev-tools/build-backend/partcad_build_backend.py

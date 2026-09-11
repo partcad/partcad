@@ -383,7 +383,13 @@ skills stay at the top of the repository where a visitor finds them, and there i
 So `ai-agents/common` is *both* the plugin and the distribution, which is why `.github/actions/changed-scopes`
 classifies it into both buckets, why `pyproject.toml` and `dev-tools/pyinstaller/partcad.spec` both name it as
 data, and why a new file under a skill has to be covered by the `package-data` patterns or it is simply absent
-from what gets installed. See `ai-agents/README.md`. The snap
+from what gets installed. **The build refuses a checkout that dropped those symlinks** — `pyproject.toml` names
+an in-tree PEP 517 backend, `dev-tools/build-backend/`, which is `setuptools.build_meta` plus that one
+precondition on `build_wheel` and `build_sdist`. Without it the artifact is silently empty: `skills/**/*`
+matches nothing where `skills` is a text file holding a path, `plugin.json` matches that same kind of file and
+is packaged as its content, and the wheel then installs, imports and runs `pc version` with no skills in it.
+`build_editable` is *not* guarded, on purpose: an editable install reads the working tree live, and refusing
+there would fail `poetry install` over a data file. See `ai-agents/README.md`. The snap
 carries whatever the bundle carries,
 so it needs nothing extra of its
 own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
