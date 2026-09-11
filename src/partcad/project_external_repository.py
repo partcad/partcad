@@ -20,6 +20,10 @@ from . import tags as pc_tags
 # Distinguishes "no cached value" from a cached value of None.
 _MISSING = object()
 
+# What a package's metadata calls the list of object kinds it holds. See
+# '_served_kinds()'.
+OBJECT_KINDS_KEY = "objectKinds"
+
 
 class ProjectExternalRepository(ProjectPlugin):
     """A package whose contents are served by an external repository plugin.
@@ -38,6 +42,10 @@ class ProjectExternalRepository(ProjectPlugin):
         objects/<kind>/<name>       -> config                (single fetch)
         deps                        -> [child package names]
         meta                        -> package-level metadata
+
+    A package's metadata may carry 'objectKinds' to say which kinds it holds at
+    all; the kinds it leaves out are then never asked for. See
+    '_served_kinds()'.
 
     'get_data(key)' is the single method a repository plugin must implement; the
     accessors below are expressed entirely in terms of it.
@@ -167,6 +175,62 @@ class ProjectExternalRepository(ProjectPlugin):
         with self._request_lock:
             return self._request_cache.setdefault(scoped, value)
 
+    def _served_kinds(self):
+        """The object kinds this package holds, or None if it does not say.
+
+        A package has ten kinds of object (see 'Project.OBJECT_KINDS') and a
+        consumer that wants to know whether a package holds anything asks after
+        four of them - which, for a package served by a plugin, is four separate
+        runs of that plugin's script, one per kind, most of them to be told
+        'none'. 'pc list packages -r' over LDraw's 92 categories is 368 such
+        runs, and 276 of them are about kinds no LDraw category has ever had.
+
+        So a repository may say, in a package's metadata, which kinds that
+        package actually holds:
+
+            {"desc": "...", "objectKinds": ["part", "partType"]}
+
+        and every other kind is answered 'none' from here, without asking. This
+        narrows what is asked for and never what may be served: a repository
+        that says nothing is asked about everything exactly as before, and one
+        that lists a kind it turns out to have none of is merely asked a
+        question it answers emptily, as it is today.
+
+        Read from the metadata this package has *already* fetched, and never
+        fetched on its own account - a round trip to find out what not to ask
+        for would be a second round trip in the one case that today costs one:
+        a single package, reached without the traversal. Every traversal warms
+        'meta' as it goes (see 'ensure_enumerated_async'), which is every case
+        with enough packages in it for this to matter.
+        """
+        meta = self._peek_data("meta")
+        return None if meta is _MISSING else self._parse_served_kinds(meta)
+
+    def _peek_data(self, key: str):
+        """The memoized value for 'key', or _MISSING - never a fetch."""
+        with self._request_lock:
+            return self._request_cache.get(self._scope(key), _MISSING)
+
+    def _parse_served_kinds(self, meta):
+        if not isinstance(meta, dict):
+            return None
+        kinds = meta.get(OBJECT_KINDS_KEY)
+        if kinds is None:
+            return None
+        if not isinstance(kinds, (list, tuple, set)) or not all(isinstance(k, str) for k in kinds):
+            # Not something to guess at: ask about every kind, as if it had not
+            # been said at all, and say why once.
+            pc_logging.warning(
+                "%s: ignoring '%s' in the package metadata: expected a list of strings, got %r"
+                % (self.name, OBJECT_KINDS_KEY, kinds)
+            )
+            return None
+        return frozenset(kinds)
+
+    def _serves_kind(self, kind: str) -> bool:
+        kinds = self._served_kinds()
+        return kinds is None or kind in kinds
+
     def _cache_hash(self, scoped_key: str) -> CacheHash:
         # The cache directory is already scoped to this repository instance, so
         # the scoped key alone identifies the entry within it.
@@ -237,6 +301,25 @@ class ProjectExternalRepository(ProjectPlugin):
         await self._materialize_meta_async()
         # Warm 'deps' so the synchronous 'dependencies()' is a cache hit.
         await self.get_data_async("deps")
+
+    async def prefetch_object_configs_async(self, kinds) -> None:
+        """Fetch the enumerations of 'kinds' at once, concurrently.
+
+        Each key is a separate run of the plugin's script, so a caller that
+        reads several kinds through the synchronous accessors pays each round
+        trip end to end, one after another. Here they are in flight together and
+        land in the memo the accessors read, which is the whole difference
+        between 'pc list packages -r' over a plugin-backed hierarchy taking one
+        round trip per package and taking one per package per kind.
+
+        Only the kinds this package says it holds are asked for; the rest are
+        answered from '_served_kinds()' without a request at all.
+        """
+        served = self._served_kinds()
+        wanted = [kind for kind in kinds if served is None or kind in served]
+        if not wanted:
+            return
+        await asyncio.gather(*(self.get_data_async("objects/" + kind) for kind in wanted))
 
     def _instantiate_enumerated(self):
         """Instantiate this package's enumerated objects into the eager dicts.
@@ -359,12 +442,16 @@ class ProjectExternalRepository(ProjectPlugin):
         return config
 
     def _enumerate_object_configs(self, kind):
+        if not self._serves_kind(kind):
+            return {}
         configs = self.get_data("objects/" + kind)
         if not configs:
             return {}
         return {name: self._augment(config) for name, config in configs.items()}
 
     def _fetch_object_config(self, kind, name):
+        if not self._serves_kind(kind):
+            return None
         return self._augment(self.get_data("objects/" + kind + "/" + name))
 
     def dependencies(self):

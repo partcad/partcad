@@ -2562,7 +2562,7 @@ or a new piece of metadata needs no new API:
   the whole repository
 - ``deps`` -- the names of the child packages
 - ``meta`` -- package-level properties (``desc``, ``render``, ``manufacturable``,
-  ...)
+  ...), and ``objectKinds`` (see below)
 - ``files/<path>`` -- the base64-encoded content of a file an object references
   by ``path``. A plugin-backed package has no source tree, so a file-backed
   object's file is fetched from the plugin and materialized into the package's
@@ -2571,6 +2571,29 @@ or a new piece of metadata needs no new API:
 For a hierarchy, a child package's requests are prefixed with its
 ``subfolder``: a child in ``motors`` asks for ``motors/objects/part``,
 ``motors/deps`` and so on, all served by the same script.
+
+Say which kinds a package has
+-----------------------------
+
+Every key is a separate run of the script, and a package has ten kinds of
+object. Something as ordinary as listing the packages that hold anything to
+look at asks after four of them, per package, and for a hierarchy of a hundred
+packages that is four hundred runs -- most of them to be told "none".
+
+A package's ``meta`` may therefore carry ``objectKinds``, the kinds that
+package holds at all:
+
+.. code-block:: json
+
+  {"desc": "LDraw parts in the 'Brick' category.", "objectKinds": ["part", "partType"]}
+
+PartCAD then answers "none" for every other kind without asking. This narrows
+what is asked for and never what may be served: a plugin that lists a kind it
+turns out to have none of is simply asked a question it answers emptily, and a
+plugin that says nothing is asked about everything, as before. It is read out
+of the metadata PartCAD has already fetched and is never worth a request of its
+own, so a package reached on its own -- rather than through a traversal, which
+reads ``meta`` for every package as it goes -- is queried exactly as it was.
 
 Responses are cached per key (in memory and on disk), so a repository that is
 slow or remote is queried as little as possible. See

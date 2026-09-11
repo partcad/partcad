@@ -220,3 +220,121 @@ def test_hierarchy_forwards_under_a_subfolder():
     child._repository = fake
     assert child.object_names("part") == ["rotor"]
     assert "motors/objects/part" in fake.keys
+
+
+# --- 'objectKinds': the kinds a repository says it does not have -------------
+#
+# A package has ten kinds of object and every one of them is a separate key -
+# which, for a plugin-backed package, is a separate run of the plugin's script.
+# A repository that says which kinds it holds is not asked about the rest.
+#
+# The declaration is read out of the metadata the traversal has already
+# fetched, so these warm it the way 'ensure_enumerated_async' does.
+
+
+def test_a_kind_the_metadata_leaves_out_is_never_asked_for():
+    ctx = pc.Context("examples")
+    data = {
+        "meta": {"desc": "Parts only", "objectKinds": ["part"]},
+        "objects/part": {"bolt": {"type": "step"}},
+        # Served, but never asked for: the metadata does not list the kind.
+        "objects/sketch": {"outline": {"type": "basic"}},
+    }
+    repo, fake = _make_repo(ctx, data)
+    asyncio.run(repo.ensure_enumerated_async())
+
+    assert repo.object_names("part") == ["bolt"]
+    assert repo.object_names("sketch") == []
+    assert repo.object_config("sketch", "outline") is None
+    assert "objects/sketch" not in fake.keys
+    assert "objects/sketch/outline" not in fake.keys
+
+
+def test_a_repository_that_says_nothing_is_asked_about_everything():
+    """The default, and what every repository written before this did."""
+    ctx = pc.Context("examples")
+    data = {"meta": {"desc": "No declaration"}, "objects/sketch": {"outline": {"type": "basic"}}}
+    repo, fake = _make_repo(ctx, data)
+    asyncio.run(repo.ensure_enumerated_async())
+
+    assert repo.object_names("sketch") == ["outline"]
+    assert "objects/sketch" in fake.keys
+
+
+def test_a_malformed_declaration_is_ignored_rather_than_guessed_at():
+    ctx = pc.Context("examples")
+    data = {"meta": {"objectKinds": "part"}, "objects/sketch": {"outline": {"type": "basic"}}}
+    repo, fake = _make_repo(ctx, data)
+    asyncio.run(repo.ensure_enumerated_async())
+
+    assert repo.object_names("sketch") == ["outline"]
+    assert "objects/sketch" in fake.keys
+
+
+def test_the_declaration_is_never_worth_a_round_trip_of_its_own():
+    """It narrows what is asked for; it must not add a question to find out.
+
+    A package reached without the traversal has not read its metadata, so the
+    kinds are asked for as they always were - one fetch, not two.
+    """
+    ctx = pc.Context("examples")
+    data = {
+        "meta": {"objectKinds": ["part"]},
+        "objects/part": {"bolt": {"type": "step"}},
+        "objects/sketch": {"outline": {"type": "basic"}},
+    }
+    repo, fake = _make_repo(ctx, data)
+
+    assert repo.object_names("part") == ["bolt"]
+    assert fake.keys == ["objects/part"]  # no 'meta' fetched to decide
+
+
+# --- prefetching the kinds a listing is about to read ------------------------
+
+
+def test_prefetch_fetches_the_declared_kinds_together():
+    ctx = pc.Context("examples")
+    data = {
+        "meta": {"objectKinds": ["part", "assembly"]},
+        "objects/part": {"bolt": {"type": "step"}},
+        "objects/assembly": {"rig": {"type": "assy"}},
+    }
+    repo, fake = _make_repo(ctx, data)
+    asyncio.run(repo.ensure_enumerated_async())
+
+    asyncio.run(repo.prefetch_object_configs_async(("sketch", "part", "assembly", "scene")))
+    # Only the declared kinds were asked for...
+    assert sorted(k for k in fake.keys if k.startswith("objects/")) == [
+        "objects/assembly",
+        "objects/part",
+    ]
+
+    # ...and the synchronous accessors that follow add no round trips at all.
+    before = list(fake.keys)
+    assert repo.object_names("part") == ["bolt"]
+    assert repo.object_names("assembly") == ["rig"]
+    assert repo.object_names("sketch") == []
+    assert repo.object_names("scene") == []
+    assert fake.keys == before
+
+
+def test_prefetch_of_an_undeclared_repository_warms_every_kind_asked_for():
+    ctx = pc.Context("examples")
+    data = {"objects/part": {"bolt": {"type": "step"}}}
+    repo, fake = _make_repo(ctx, data)
+
+    asyncio.run(repo.prefetch_object_configs_async(("part", "scene")))
+    assert sorted(k for k in fake.keys if k.startswith("objects/")) == ["objects/part", "objects/scene"]
+    before = list(fake.keys)
+    assert repo.object_names("part") == ["bolt"]
+    assert fake.keys == before
+
+
+def test_a_local_package_has_nothing_to_prefetch():
+    """The hook exists on every package; for a local one it is a no-op."""
+    ctx = pc.Context("examples")
+    project = ctx.get_project(ctx.name)
+    assert project is not None
+    before = project.object_count("part")
+    asyncio.run(project.prefetch_object_configs_async(("part",)))
+    assert project.object_count("part") == before
