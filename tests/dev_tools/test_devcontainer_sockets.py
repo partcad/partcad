@@ -132,31 +132,44 @@ def test_the_value_handed_to_ssh_is_not_quoted():
         raise AssertionError("the behave job sets no SSH_AUTH_SOCK at all")
 
 
-def test_every_config_file_the_dev_container_jobs_name_exists():
-    """`configFile` has to name a real file, and nothing complains when it does not.
+def test_every_dev_container_step_names_a_config_file_that_exists():
+    """Every `devcontainers/ci` step names a real file, and none of them omits one.
 
-    `devcontainer up --config <missing>` does not fail. It falls back to
-    discovering `.devcontainer/devcontainer.json`, so the job runs, the right
-    configuration is used, and the wrong path in the workflow says nothing --
-    for as long as that fallback exists. Every dev-container job in this file
-    pointed at `.devcontainer/.devcontainer.json`, which this repository has
-    never had.
+    `devcontainer up --config <missing>` does not fail, and neither does one with
+    no `--config` at all: both fall back to discovering
+    `.devcontainer/devcontainer.json`. So the job runs, the right configuration is
+    used, and a wrong path -- or no path -- says nothing, for as long as that
+    fallback exists. Every step in this file named
+    `.devcontainer/.devcontainer.json`, which this repository has never had.
 
-    That fallback is load-bearing for the agent socket in particular: the mount
-    is a `runArgs` entry in the very file the CLI had to guess its way to.
+    That fallback is load-bearing for the agent socket in particular: the mount is
+    a `runArgs` entry in the very file the CLI had to guess its way to.
+
+    Both halves are checked, because they fail the same way and only one of them
+    is visible in a diff. Dropping the key is as silent as misspelling the path,
+    and a test that only inspected the steps that still had one would pass while
+    a step quietly went back to guessing.
     """
     workflow = yaml.safe_load(TEST_DEV_WORKFLOW.read_text(encoding="utf-8"))
 
-    named = []
-    for job in workflow["jobs"].values():
-        for step in job.get("steps", []):
-            config = (step.get("with") or {}).get("configFile")
-            if config:
-                named.append((job.get("name", "?"), step.get("name", "?"), config))
+    steps = [
+        (job.get("name", name), step)
+        for name, job in workflow["jobs"].items()
+        for step in job.get("steps", [])
+        if str(step.get("uses", "")).startswith("devcontainers/ci")
+    ]
+    assert steps, "no step uses devcontainers/ci any more"
 
-    assert named, "no dev-container step names a configFile any more"
-
-    missing = [entry for entry in named if not (REPO_ROOT / entry[2]).is_file()]
-    assert not missing, "these steps name a configFile that does not exist: " + ", ".join(
-        f"{job}/{step} -> {config}" for job, step, config in missing
+    omitted = [
+        f"{job}/{step.get('name', '?')}" for job, step in steps if not (step.get("with") or {}).get("configFile")
+    ]
+    assert not omitted, "these devcontainers/ci steps name no configFile, so the CLI " "guesses one: " + ", ".join(
+        omitted
     )
+
+    missing = [
+        f"{job}/{step.get('name', '?')} -> {(step['with'])['configFile']}"
+        for job, step in steps
+        if not (REPO_ROOT / (step["with"])["configFile"]).is_file()
+    ]
+    assert not missing, "these steps name a configFile that does not exist: " + ", ".join(missing)
