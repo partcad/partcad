@@ -1917,6 +1917,7 @@ class Shape(ShapeConfiguration):
             return {
                 "solids": result.get("solids", 0),
                 "volume": result.get("volume"),
+                "min_solid_volume": result.get("min_solid_volume"),
                 "valid": result.get("valid"),
             }
 

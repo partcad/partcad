@@ -40,7 +40,8 @@ class InterferenceTest(Test):
 
     def cache_key_suffix(self, ctx, shape) -> str:
         config = (shape.config or {}).get("interference") or {}
-        return "minVolume=%s,minFraction=%s,ignore=%s" % (
+        return ",skip=%s,minVolume=%s,minFraction=%s,ignore=%s" % (
+            bool(config.get("skip", False)),
             config.get("minVolume", 1.0),
             config.get("minFraction", 0.0),
             sorted(tuple(sorted(pair)) for pair in config.get("ignore", [])),
@@ -64,11 +65,14 @@ class InterferenceTest(Test):
             )
         except Exception as e:
             # An assembly that will not realize is what the 'cad' test is for;
-            # this one has nothing to say about it either way.
+            # this one has nothing to say about it either way - and nothing
+            # worth remembering, since the reason was not the assembly.
+            test_ctx[self.NOT_CACHEABLE] = True
             self.debug(shape, "Failed to check for interference: %s" % e)
             return self.TEST_PASSED
 
         if result is None:
+            test_ctx[self.NOT_CACHEABLE] = True
             self.debug(shape, "The assembly produced no geometry to check")
             return self.TEST_PASSED
 
@@ -84,6 +88,16 @@ class InterferenceTest(Test):
                 shape,
                 "%d part(s) are not valid solids and were not checked: %s"
                 % (len(unchecked), shown),
+            )
+
+        # A pair whose boolean did not come back is not a pair that does not
+        # overlap. Saying so is the difference between a check that found
+        # nothing and a check that could not look.
+        for pair in result.get("indeterminate") or []:
+            self.info(
+                shape,
+                "could not decide whether '%s' and '%s' overlap: %s"
+                % (pair["a"], pair["b"], pair.get("reason", "the boolean failed")),
             )
 
         overlaps = result.get("overlaps") or []

@@ -350,6 +350,7 @@ class Assembly(Shape):
             return {
                 "overlaps": result.get("overlaps", []),
                 "unchecked": result.get("unchecked", []),
+                "indeterminate": result.get("indeterminate", []),
                 "parts": result.get("parts", 0),
             }
 

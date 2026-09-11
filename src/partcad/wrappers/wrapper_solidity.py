@@ -43,11 +43,16 @@ def process(path, request):
         if shape is None:
             raise Exception("No wrapped object provided to check")
 
+        # Every solid separately, not the sum. A compound holding one inverted
+        # solid and a larger correct one adds up to a positive number, and the
+        # inversion - the thing this exists to find - disappears into the
+        # total.
         explorer = TopExp_Explorer(shape, TopAbs_SOLID)
-        solids = 0
+        volumes = []
         while explorer.More():
-            solids += 1
+            volumes.append(_volume(explorer.Current()))
             explorer.Next()
+        solids = len(volumes)
 
         # A shape with no solid in it is not inside out; it is a sketch, a
         # shell or a wire, and this check has nothing to say about it.
@@ -57,6 +62,7 @@ def process(path, request):
                 "exception": None,
                 "solids": 0,
                 "volume": None,
+                "min_solid_volume": None,
                 "valid": None,
             }
 
@@ -64,12 +70,22 @@ def process(path, request):
             "success": True,
             "exception": None,
             "solids": solids,
-            "volume": _volume(shape),
+            "volume": sum(volumes),
+            # The least of them: one solid the wrong way out condemns the shape
+            # however much correct material surrounds it.
+            "min_solid_volume": min(volumes),
             "valid": bool(BRepCheck_Analyzer(shape).IsValid()),
         }
     except Exception as e:
         wrapper_common.handle_exception(e)
-        return {"success": False, "exception": str(e), "solids": 0, "volume": None, "valid": None}
+        return {
+            "success": False,
+            "exception": str(e),
+            "solids": 0,
+            "volume": None,
+            "min_solid_volume": None,
+            "valid": None,
+        }
 
 
 if __name__ == "__main__":

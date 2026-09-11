@@ -34,6 +34,7 @@ class _Shape:
         self._box = box
         self._overlaps = overlaps
         self._unchecked = list(unchecked)
+        self._indeterminate = []
         self._raises = raises
 
     async def get_bounding_box_async(self, ctx):
@@ -47,7 +48,12 @@ class _Shape:
         self.asked_with = (min_volume, min_fraction)
         if self._overlaps is None:
             return None
-        return {"overlaps": self._overlaps, "unchecked": self._unchecked, "parts": 0}
+        return {
+            "overlaps": self._overlaps,
+            "unchecked": self._unchecked,
+            "indeterminate": self._indeterminate,
+            "parts": 0,
+        }
 
 
 class _Assembly(_Shape):
@@ -233,3 +239,32 @@ def test_the_assembly_is_sent_as_json_rather_than_as_geometry():
     assert isinstance(sent["assembly_json"], str)
     assert _json.loads(sent["assembly_json"]) == envelope
     assert "wrapped" not in sent, "the geometry key is decoded on arrival; do not use it here"
+
+
+def test_an_indeterminate_pair_is_not_reported_as_no_overlap(caplog):
+    """A boolean that did not come back is not an answer of "they are clear".
+
+    Dropping such a pair silently is how a check comes to certify what it never
+    looked at, which is the failure mode this whole set of tests exists for.
+    """
+    import logging
+
+    shape = _Assembly(overlaps=[])
+    shape._indeterminate = [{"a": "shaft", "b": "hub", "reason": "the boolean did not complete"}]
+    with caplog.at_level(logging.INFO):
+        assert _run(InterferenceTest(), shape)
+    assert "could not decide" in caplog.text
+    assert "shaft" in caplog.text
+
+
+def test_the_interference_cache_key_covers_skip_as_well_as_the_thresholds():
+    test = InterferenceTest()
+    assert test.cache_key_suffix(None, _Assembly()) != test.cache_key_suffix(
+        None, _Assembly(config={"interference": {"skip": True}})
+    )
+
+
+def test_a_verdict_that_turned_on_the_machine_is_not_remembered():
+    ctx = {}
+    assert asyncio.run(InterferenceTest().test([], None, _Assembly(raises=Exception("no runtime")), ctx))
+    assert ctx.get(InterferenceTest.NOT_CACHEABLE) is True

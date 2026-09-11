@@ -40,7 +40,12 @@ def _leaves(obj, prefix=""):
     renderer wants and the opposite of what this needs: a report saying two
     parts overlap has to be able to say which two.
     """
-    name = obj.get("name") or obj.get("label") or ""
+    # The label first, deliberately. Assembly._place() puts the object's
+    # identity in "name" - '//pkg:3010' - and what this placement of it is
+    # called in "label" - 'buttS8'. An assembly is mostly repeats of a few
+    # parts, so reporting by name says "3010 overlaps 3010", and the 'ignore'
+    # pairs, which are written as instance names, would never match.
+    name = obj.get("label") or obj.get("name") or ""
     path = "%s/%s" % (prefix, name) if prefix else name
     if ocp_serialize.is_assembly_object(obj):
         placed = []
@@ -152,17 +157,24 @@ def process(path, request):
         ]
 
         overlaps = []
+        indeterminate = []
         for a, b in candidates:
             name_a, shape_a, _ = boxes[a]
             name_b, shape_b, _ = boxes[b]
             try:
                 common = BRepAlgoAPI_Common(shape_a, shape_b)
-                if not common.IsDone():
-                    continue
-                volume = _volume(common.Shape())
-            except Exception:
-                # A boolean that will not run says nothing either way; a part
-                # that cannot be intersected is the 'cad' test's business.
+                done = common.IsDone()
+                volume = _volume(common.Shape()) if done else None
+            except Exception as e:
+                done, volume = False, None
+                reason = str(e)
+            else:
+                reason = "the boolean did not complete"
+            if not done or volume is None:
+                # Not "they do not overlap". The question was asked and did not
+                # come back, and answering a pass on that is how a check comes
+                # to certify what it never looked at.
+                indeterminate.append({"a": name_a, "b": name_b, "reason": reason})
                 continue
             if volume < min_volume:
                 continue
@@ -180,6 +192,7 @@ def process(path, request):
             "candidates": len(candidates),
             "overlaps": overlaps,
             "unchecked": unchecked,
+            "indeterminate": indeterminate,
         }
     except Exception as e:
         wrapper_common.handle_exception(e)
@@ -190,6 +203,7 @@ def process(path, request):
             "candidates": 0,
             "overlaps": [],
             "unchecked": [],
+            "indeterminate": [],
         }
 
 

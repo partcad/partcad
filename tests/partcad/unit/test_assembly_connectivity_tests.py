@@ -248,3 +248,100 @@ def test_two_placements_that_differ_only_by_arithmetic_noise_are_one_place():
     a = _packed(Location((1.0, 2.0, 3.0), (0, 0, 1), 90))
     b = _packed(Location((1.0 + 1e-12, 2.0, 3.0), (0, 0, 1), 90))
     assert a == b
+
+
+
+# --- what the review found --------------------------------------------------
+
+
+def test_a_solid_of_exactly_no_volume_is_not_a_solid():
+    """Negative is inside out; zero encloses nothing. Both are non-solids, and
+    zero is the boundary a mesh that collapses lands on."""
+    assert not _run(SolidityTest(), _Shape(solidity={"solids": 1, "volume": 0.0, "valid": True}))
+
+
+def test_one_inverted_solid_is_not_excused_by_the_others():
+    """A compound holding an inverted solid and a larger correct one sums to a
+    positive number, and the inversion disappears into the total. The least of
+    them decides."""
+    shape = _Shape(solidity={"solids": 2, "volume": 900.0, "min_solid_volume": -100.0, "valid": True})
+    assert not _run(SolidityTest(), shape)
+
+
+def test_the_settings_that_decide_a_verdict_are_in_its_cache_key():
+    """Test.test_cached() keys a remembered verdict on shape.hash plus this
+    suffix, and shape.hash carries none of these settings - so a suffix that
+    omits them hands back the answer from before they were changed."""
+    conn = ConnectivityTest()
+    assert conn.cache_key_suffix(None, _Assembly()) != conn.cache_key_suffix(
+        None, _Assembly(config={"connectivity": {"allowDuplicates": True}})
+    )
+    assert conn.cache_key_suffix(None, _Assembly()) != conn.cache_key_suffix(
+        None, _Assembly(config={"connectivity": {"requireAnchored": False}})
+    )
+    assert conn.cache_key_suffix(None, _Assembly()) != conn.cache_key_suffix(
+        None, _Assembly(config={"connectivity": {"skip": True}})
+    )
+    sol = SolidityTest()
+    assert sol.cache_key_suffix(None, _Shape()) != sol.cache_key_suffix(
+        None, _Shape(config={"solidity": {"skip": True}})
+    )
+
+
+def test_a_verdict_that_turned_on_the_machine_is_not_remembered():
+    """A missing runtime is not a fact about the shape. Cached, it would be
+    read back under a key that installing the runtime does not change."""
+    ctx = {}
+    assert _run_ctx(SolidityTest(), _Shape(raises=Exception("no runtime")), ctx)
+    assert ctx.get(SolidityTest.NOT_CACHEABLE) is True
+
+    ctx = {}
+    assert _run_ctx(ConnectivityTest(), _BrokenAssembly(), ctx)
+    assert ctx.get(ConnectivityTest.NOT_CACHEABLE) is True
+
+
+class _BrokenAssembly(_Assembly):
+    async def do_instantiate(self):
+        raise Exception("will not instantiate")
+
+
+def _run_ctx(test, shape, test_ctx):
+    return asyncio.run(test.test([], None, shape, test_ctx))
+
+
+# --- multiConnect, and being able to say "no" --------------------------------
+
+
+class _Iface2:
+    """The little of Interface these need: the stored value and the parents."""
+
+    def __init__(self, config, parent=None, name="i"):
+        from partcad.interface import Interface
+
+        self.get_multi_connect = Interface.get_multi_connect.__get__(self)
+        self._inherited = Interface._inherited.__get__(self)
+        self.multi_connect = bool(config["multiConnect"]) if "multiConnect" in config else None
+        self.full_name = name
+        self._parent = parent
+
+    def get_parents(self):
+        if self._parent is None:
+            return {}
+        return {"p": type("_Inherit", (), {"interface": self._parent})()}
+
+
+def test_an_interface_that_says_nothing_takes_one_item():
+    assert _Iface2({}).get_multi_connect() is False
+
+
+def test_multi_connect_is_inherited():
+    shaft = _Iface2({"multiConnect": True}, name="shaft")
+    assert _Iface2({}, parent=shaft, name="splined").get_multi_connect() is True
+
+
+def test_a_child_can_say_no_to_a_parent_that_says_yes():
+    """A stored False that means "not set" cannot be told from one that means
+    "no", so an explicit false used to be skipped and the parent's true won."""
+    shaft = _Iface2({"multiConnect": True}, name="shaft")
+    keyed = _Iface2({"multiConnect": False}, parent=shaft, name="keyed")
+    assert keyed.get_multi_connect() is False

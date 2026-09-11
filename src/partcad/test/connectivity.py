@@ -45,6 +45,16 @@ class ConnectivityTest(Test):
     def __init__(self) -> None:
         super().__init__("connectivity")
 
+    def cache_key_suffix(self, ctx, shape) -> str:
+        # Every setting that decides the verdict. Without them a cached pass is
+        # read back after the setting that produced it has been turned off.
+        config = (shape.config or {}).get("connectivity") or {}
+        return ",skip=%s,allowDuplicates=%s,requireAnchored=%s" % (
+            bool(config.get("skip", False)),
+            bool(config.get("allowDuplicates", False)),
+            bool(config.get("requireAnchored", True)),
+        )
+
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         if not isinstance(shape, Assembly):
             self.debug(shape, "Not applicable")
@@ -58,7 +68,10 @@ class ConnectivityTest(Test):
         try:
             await shape.do_instantiate()
         except Exception as e:
-            # An assembly that will not instantiate is the 'cad' test's business.
+            # An assembly that will not instantiate is the 'cad' test's
+            # business, and this verdict turned on that rather than on the
+            # assembly: do not remember it.
+            test_ctx[self.NOT_CACHEABLE] = True
             self.debug(shape, "Failed to instantiate: %s" % e)
             return self.TEST_PASSED
 

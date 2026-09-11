@@ -315,7 +315,11 @@ class Interface:
         #              several parts along its length, or a rail.
         # values: boolean
         # default: false
-        self.multi_connect = bool(config.get("multiConnect", False))
+        # None when the option is absent, the boolean when it is given. The
+        # difference matters: an interface that inherits 'multiConnect: true'
+        # has to be able to say 'false' and be believed, and a stored False
+        # that means "not set" cannot be told from one that means "no".
+        self.multi_connect = bool(config["multiConnect"]) if "multiConnect" in config else None
 
         self.thread_step = config.get("threadStep", None)
         if self.thread_step is not None:
@@ -417,12 +421,22 @@ class Interface:
         declaring it once on the interface a family derives from covers the
         family.
         """
-        return bool(self._inherited("multi_connect"))
+        # Only None is silence here, so 'multiConnect: false' on a child
+        # overrides a parent that allows many rather than being skipped over.
+        return bool(self._inherited("multi_connect", unset=(None,)))
 
-    def _inherited(self, attribute, seen=None):
-        """The attribute as declared here, or the first one found among the parents."""
+    def _inherited(self, attribute, seen=None, unset=(None, False)):
+        """The attribute as declared here, or the first one found among the parents.
+
+        'unset' says which stored values mean "nothing was declared here". It
+        includes False by default because most of these attributes store False
+        for an absent option and cannot tell that from an explicit one. An
+        attribute that does keep the difference - storing None when absent -
+        passes 'unset=(None,)' so that an explicit False overrides a parent
+        rather than being read as silence.
+        """
         value = getattr(self, attribute, None)
-        if value is not None and value is not False:
+        if value not in unset:
             return value
 
         # An interface hierarchy is a DAG rather than a tree, so the same parent
@@ -437,8 +451,8 @@ class Interface:
             parent = getattr(inherit, "interface", None)
             if parent is None:
                 continue
-            inherited = parent._inherited(attribute, seen)
-            if inherited is not None and inherited is not False:
+            inherited = parent._inherited(attribute, seen, unset)
+            if inherited not in unset:
                 return inherited
         return value
 

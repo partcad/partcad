@@ -43,6 +43,12 @@ class SolidityTest(Test):
     def __init__(self) -> None:
         super().__init__("solidity")
 
+    def cache_key_suffix(self, ctx, shape) -> str:
+        # Whatever decides the verdict has to be in the key, or turning a
+        # setting off hands back the answer from before it was turned off.
+        config = (shape.config or {}).get("solidity") or {}
+        return ",skip=%s" % bool(config.get("skip", False))
+
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         config = (shape.config or {}).get("solidity") or {}
         if config.get("skip", False):
@@ -58,11 +64,16 @@ class SolidityTest(Test):
         try:
             result = await shape.get_solidity_async(ctx)
         except Exception as e:
-            # A shape that will not build is what the 'cad' test is for.
+            # A shape that will not build is what the 'cad' test is for. This
+            # verdict is about the machine rather than the shape, so it must
+            # not be remembered: installing what was missing would not change
+            # the key it would be read back under.
+            test_ctx[self.NOT_CACHEABLE] = True
             self.debug(shape, "Failed to check: %s" % e)
             return self.TEST_PASSED
 
         if result is None:
+            test_ctx[self.NOT_CACHEABLE] = True
             self.debug(shape, "The shape produced no geometry to check")
             return self.TEST_PASSED
 
@@ -70,13 +81,22 @@ class SolidityTest(Test):
             self.debug(shape, "No solid to check: a sketch, a shell or a wire")
             return self.TEST_PASSED
 
-        volume = result.get("volume")
-        if volume is not None and volume < 0.0:
+        # The least of the solids, not their sum: a compound holding one
+        # inverted solid and a larger correct one adds up to a positive number,
+        # and the inversion disappears into the total.
+        volume = result.get("min_solid_volume")
+        if volume is None:
+            volume = result.get("volume")
+        # Non-positive, not negative. A solid of exactly zero volume is not a
+        # solid either, and it is the boundary a mesh that collapses lands on.
+        if volume is not None and volume <= 0.0:
             return self.failed(
                 shape,
-                "The shape is inside out: its volume measures %.3f mm^3, which is "
-                "negative because its faces are oriented inward. It will render "
-                "correctly and every boolean against it will be wrong." % volume,
+                "The shape is not a solid anything can be computed from: a "
+                "constituent solid measures %.3f mm^3. A negative volume means "
+                "its faces are oriented inward; zero means it encloses nothing. "
+                "It will render correctly and every boolean against it will be "
+                "wrong." % volume,
             )
 
         # Not a failure. Plenty of usable geometry is not a valid solid in

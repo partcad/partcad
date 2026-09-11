@@ -36,6 +36,15 @@ class DegenerateTest(Test):
     def __init__(self) -> None:
         super().__init__("degenerate")
 
+    def cache_key_suffix(self, ctx, shape) -> str:
+        # Whatever decides the verdict has to be in the key, or changing the
+        # tolerance hands back the answer from the old one.
+        config = (shape.config or {}).get("degenerate") or {}
+        return ",skip=%s,tolerance=%s" % (
+            bool(config.get("skip", False)),
+            config.get("tolerance", 1e-3),
+        )
+
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         config = (shape.config or {}).get("degenerate") or {}
         if config.get("skip", False):
@@ -51,6 +60,8 @@ class DegenerateTest(Test):
         try:
             box = await shape.get_bounding_box_async(ctx)
         except Exception as e:
+            # About the machine, not the shape: do not remember it.
+            test_ctx[self.NOT_CACHEABLE] = True
             self.debug(shape, "Failed to measure: %s" % e)
             return self.TEST_PASSED
 
