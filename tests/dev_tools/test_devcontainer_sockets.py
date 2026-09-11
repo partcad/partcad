@@ -54,6 +54,19 @@ def _binds():
     return [tuple(re.split(r":(?=/)", value, maxsplit=1)) for value in re.findall(r'"-v",\s*"([^"]+)"', text)]
 
 
+def _bound_agent_target():
+    """The container-side path devcontainer.json binds the agent socket to."""
+    return dict(_binds())[f"{HOST_LINK_DIR_JSON}/ssh-agent.sock"]
+
+
+def _behave_env():
+    """The `env` block the behave job hands to `devcontainers/ci`."""
+    workflow = yaml.safe_load(TEST_DEV_WORKFLOW.read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["behave"]["steps"]
+    behave = next(step for step in steps if step.get("name") == "Run Behave")
+    return behave["with"]["env"]
+
+
 def _link_names():
     """The link basenames `host-sockets-init.sh` is asked to write."""
     text = INIT_SCRIPT.read_text(encoding="utf-8")
@@ -89,15 +102,31 @@ def test_the_behave_job_points_ssh_at_the_socket_that_is_actually_bound():
     `features/install.feature:44 Install packages with ssh` fails alone among
     the suite's scenarios.
     """
-    targets = {source: target for source, target in _binds()}
-    bound_target = targets[f"{HOST_LINK_DIR_JSON}/ssh-agent.sock"]
+    assert f"SSH_AUTH_SOCK={_bound_agent_target()}" in _behave_env()
 
-    workflow = yaml.safe_load(TEST_DEV_WORKFLOW.read_text(encoding="utf-8"))
-    steps = workflow["jobs"]["behave"]["steps"]
-    behave = next(step for step in steps if step.get("name") == "Run Behave")
-    env = behave["with"]["env"]
 
-    assert f'SSH_AUTH_SOCK="{bound_target}"' in env, (
-        f"the behave job's env does not point SSH_AUTH_SOCK at {bound_target}, "
-        f"which is where devcontainer.json binds the host's agent socket"
-    )
+def test_the_value_handed_to_ssh_is_not_quoted():
+    """...and unquoted, which is not how the line above it is written.
+
+    The action reads that block with `core.getMultilineInput` and hands each
+    line to `--remote-env` as one argv element, verbatim -- `populateDefaults`
+    in its `common/src/envvars.ts` passes anything containing `=` "straight
+    through". No shell ever sees it, so nothing strips a quote: quoted, this
+    variable's value would carry the two quote characters and name a socket
+    that does not exist.
+
+    `GIT_SSH_COMMAND` in the same block *is* quoted and works anyway, because
+    git runs its value through `sh -c`. That makes the quoted form look like
+    the house style, and copying it here costs a CI round to find out
+    otherwise -- which is exactly what it cost once.
+    """
+    for line in _behave_env().splitlines():
+        name, _, value = line.partition("=")
+        if name.strip() == "SSH_AUTH_SOCK":
+            assert '"' not in value and "'" not in value, (
+                f"SSH_AUTH_SOCK is quoted ({value!r}); the quotes become part of the "
+                f"path, because this value never passes through a shell"
+            )
+            break
+    else:
+        raise AssertionError("the behave job sets no SSH_AUTH_SOCK at all")

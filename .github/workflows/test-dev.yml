@@ -398,7 +398,18 @@ jobs:
             # Set here rather than in "remoteEnv", because in the editor the
             # Dev Containers extension forwards an agent of its own and sets
             # this variable to its socket. CI is the case that has no agent.
-            SSH_AUTH_SOCK="/run/host-ssh-agent.sock"
+            #
+            # UNQUOTED, and the line above it is not a precedent to copy. The
+            # action reads this block with "core.getMultilineInput" and hands
+            # each line to "--remote-env" as one argv element, verbatim -- no
+            # shell, so nothing ever strips a quote (see "populateDefaults" in
+            # its common/src/envvars.ts: anything containing "=" is passed
+            # "straight through"). Quoted, the value of this variable would
+            # contain the two quote characters and name a socket that does not
+            # exist. GIT_SSH_COMMAND survives its quotes only because git runs
+            # that value through "sh -c", which removes them; a socket path
+            # never sees a shell.
+            SSH_AUTH_SOCK=/run/host-ssh-agent.sock
 
           # The suite's status is kept and reported, and the coverage report is
           # written either way. Ending on "coverage xml" reported *its* status,
