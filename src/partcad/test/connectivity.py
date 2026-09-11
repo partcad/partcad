@@ -78,8 +78,16 @@ class ConnectivityTest(Test):
         children = list(shape.connected_children())
         problems = []
         problems.extend(self._duplicates(children, config))
-        problems.extend(await self._crowded_ports(ctx, children))
+        crowded, consulted_interfaces = await self._crowded_ports(ctx, children)
+        problems.extend(crowded)
         problems.extend(self._unanchored(shape, config))
+
+        if consulted_interfaces:
+            # This verdict turned on an interface's 'multiConnect', which lives
+            # in the interface's own configuration - not in shape.hash and not
+            # among this shape's cache dependencies. Remembering the verdict
+            # would survive that setting being changed, so it is not kept.
+            test_ctx[self.NOT_CACHEABLE] = True
 
         if not problems:
             return self.passed(shape)
@@ -106,11 +114,13 @@ class ConnectivityTest(Test):
     async def _crowded_ports(self, ctx, children):
         """Two items connected to one port, unless the interface allows it.
 
-        Returns a list rather than yielding: asking an interface whether it
-        takes more than one item is awaited, and an async generator cannot be
-        collected as simply as the other two checks are.
+        Returns '(problems, consulted)': a list rather than a generator because
+        asking an interface whether it takes more than one item is awaited, and
+        'consulted' because an answer that came from an interface depends on
+        configuration this shape's cache key does not cover.
         """
         problems = []
+        consulted = False
         taken = {}
         for child in children:
             connection = child.connection
@@ -125,6 +135,7 @@ class ConnectivityTest(Test):
             if key not in taken:
                 taken[key] = child.name
                 continue
+            consulted = True
             if await _allows_many(ctx, interface):
                 continue
             where = port if port is not None else interface
@@ -132,7 +143,7 @@ class ConnectivityTest(Test):
                 "'%s' and '%s' are both connected to '%s' of '%s'"
                 % (taken[key], child.name, where, target)
             )
-        return problems
+        return problems, consulted
 
     def _containers(self, assembly):
         """Each group of items that were written as one 'links:' list.

@@ -382,3 +382,32 @@ def test_a_stray_inside_a_nested_group_is_still_reported(monkeypatch):
     ])
     root = _Assembly([_Child("links", inner, HERE)])
     assert not _run(ConnectivityTest(), root, ctx=_Ctx())
+
+
+def test_a_verdict_that_consulted_an_interface_is_not_remembered(monkeypatch):
+    """'multiConnect' lives in the interface's configuration, which is neither
+    in shape.hash nor among this shape's cache dependencies. A remembered
+    verdict would survive that setting being changed."""
+    monkeypatch.setattr("partcad.test.connectivity.Assembly", _Assembly)
+    children = [
+        _Child("shaft", _Item("shaft"), HERE),
+        _connected("gear1", "shaft", "along", "//pub:shaft"),
+        _connected("gear2", "shaft", "along", "//pub:shaft"),
+    ]
+    ctx_out = {}
+    assert _run_ctx2(ConnectivityTest(), _Assembly(children), _Ctx(multi={"//pub:shaft"}), ctx_out)
+    assert ctx_out.get(ConnectivityTest.NOT_CACHEABLE) is True
+
+
+def test_a_verdict_that_consulted_nothing_is_remembered(monkeypatch):
+    """Most assemblies never reach an interface: one item per port, no lookup,
+    and the verdict depends only on what shape.hash already covers."""
+    monkeypatch.setattr("partcad.test.connectivity.Assembly", _Assembly)
+    children = [_Child("a", _Item("a"), HERE), _Child("b", _Item("b"), THERE)]
+    ctx_out = {}
+    assert _run_ctx2(ConnectivityTest(), _Assembly(children), _Ctx(), ctx_out)
+    assert ConnectivityTest.NOT_CACHEABLE not in ctx_out
+
+
+def _run_ctx2(test, shape, ctx, test_ctx):
+    return asyncio.run(test.test([], ctx, shape, test_ctx))

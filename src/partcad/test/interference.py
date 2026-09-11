@@ -81,7 +81,15 @@ class InterferenceTest(Test):
         # inside-out one "shares" volume with parts it is nowhere near - so it
         # is left out, and an assembly built entirely from such parts is not
         # being checked at all. Whoever reads a pass should know which it was.
+        # A verdict reached while some of it could not be looked at is not a
+        # verdict about the assembly, and remembering it would hand back a pass
+        # that was never earned - without even repeating what went unexamined,
+        # since a cached result is returned before the test runs.
+        indeterminate = result.get("indeterminate") or []
         unchecked = result.get("unchecked") or []
+        if indeterminate or unchecked:
+            test_ctx[self.NOT_CACHEABLE] = True
+
         if unchecked:
             shown = ", ".join(unchecked[:5]) + ("..." if len(unchecked) > 5 else "")
             self.info(
@@ -93,7 +101,7 @@ class InterferenceTest(Test):
         # A pair whose boolean did not come back is not a pair that does not
         # overlap. Saying so is the difference between a check that found
         # nothing and a check that could not look.
-        for pair in result.get("indeterminate") or []:
+        for pair in indeterminate:
             self.info(
                 shape,
                 "could not decide whether '%s' and '%s' overlap: %s"

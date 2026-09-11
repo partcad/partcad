@@ -282,3 +282,22 @@ def test_a_sketch_is_flat_because_that_is_what_a_sketch_is():
     check an object cannot pass and should not be taking is worse than none.
     """
     assert _run(DegenerateTest(), _Sketch(box=(0, 0, 0, 20, 20, 0.0)))
+
+
+def test_a_pass_reached_without_looking_at_everything_is_not_remembered():
+    """A cached verdict is returned before the test runs, so remembering this
+    would hand back a pass that was never earned and would not even repeat
+    what had gone unexamined."""
+    for partial in ({"indeterminate": [{"a": "x", "b": "y", "reason": "boom"}]}, {"unchecked": ["x"]}):
+        shape = _Assembly(overlaps=[])
+        shape._indeterminate = partial.get("indeterminate", [])
+        shape._unchecked = partial.get("unchecked", [])
+        ctx = {}
+        assert asyncio.run(InterferenceTest().test([], None, shape, ctx))
+        assert ctx.get(InterferenceTest.NOT_CACHEABLE) is True, partial
+
+    # ...while a check that looked at everything and found nothing is kept.
+    clean = _Assembly(overlaps=[])
+    ctx = {}
+    assert asyncio.run(InterferenceTest().test([], None, clean, ctx))
+    assert InterferenceTest.NOT_CACHEABLE not in ctx
