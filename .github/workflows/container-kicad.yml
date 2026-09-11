@@ -1,0 +1,94 @@
+# The KiCad sandbox image, built and published by a job both test workflows wait
+# for.
+#
+# It is a workflow of its own because two workflows need the image and "needs:"
+# does not reach across one. "test.yml" always built it; "test-dev.yml" runs the
+# same unit tests inside the dev container, and
+# "tests/partcad/unit/test_part.py::test_part_example_kicad" there starts
+# "ghcr.io/partcad/partcad-container-kicad:<release>" -- the release PartCAD
+# itself reports, see "part_factory_kicad.get_runtime". On a version bump that
+# tag does not exist anywhere yet: the run that bumps the version is the run
+# that first creates it. So the dev container's "Run: pytest" raced the other
+# workflow's build and lost, on every version bump, with
+# 'APIError: ... ("manifest unknown")' -- a test written to fail when the KiCad
+# path is broken failing instead because an image had not been pushed yet.
+#
+# A reusable workflow is what gives each caller a real "needs:" edge on the one
+# build, the way "vsix.yml" gives "build.yml" and "deploy.yml" one .vsix. The
+# alternative -- each workflow building the image for itself -- is the same
+# recipe written twice, and two answers to "which image is this release's".
+name: Container (KiCad)
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  CONTAINER_REGISTRY: ghcr.io
+
+jobs:
+  kicad:
+    name: "Build Container for Kicad"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    # One build per commit rather than one per caller: both workflows call this
+    # for the same ref, and the second to arrive waits for the first instead of
+    # rebuilding and re-pushing the tag beside it (the second run then reads the
+    # layers the first published through "cacheFrom" below).
+    #
+    # "cancel-in-progress: false" is the point of the block, not a default left
+    # in place: a cancelled build here is precisely the missing image that
+    # everything waiting on this job is waiting for.
+    concurrency:
+      group: container-kicad-${{ github.event.pull_request.number || github.ref }}-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v7
+
+      # "setup-devcontainer" builds IMAGE_TAG out of "env.VERSION", and a called
+      # workflow inherits none of its caller's "env" -- nor can a caller pass it
+      # in, the "env" context not being available in a job's "with:".
+      #
+      # So read it from the file the release really lives in. A literal here
+      # would be a third copy of the version to keep in step with the other two,
+      # which is the arrangement "dev-tools/bumpversion.toml" exists to avoid;
+      # "tests/partcad_cli/unit/test_versions.py" is what keeps the value read
+      # here equal to the "VERSION:" both callers state.
+      - name: The release this commit is
+        shell: bash
+        run: |
+          set -e
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml | head -1)"
+          if [ -z "${version}" ]; then
+            echo "::error title=Container (KiCad)::no 'version = \"...\"' in pyproject.toml"
+            exit 1
+          fi
+          echo "VERSION=${version}"
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+
+      - name: Setup Dev Container
+        id: setup
+        uses: ./.github/actions/setup-devcontainer
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Container for Kicad
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom:
+            "${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad:${{ steps.setup.outputs.IMAGE_TAG }}"
+          imageName: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad
+          imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
+          configFile: tools/containers/devcontainer-kicad.json
+          push: always

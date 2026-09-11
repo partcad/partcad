@@ -163,13 +163,27 @@ jobs:
             echo "All installation attempts failed after 3 tries"
             exit 1
 
+  # The KiCad sandbox image "test_part_example_kicad" starts, by the release
+  # PartCAD reports. "test.yml" publishes the very same image, but a "needs:"
+  # does not reach across a workflow, so the job below used to race that build
+  # and pull a tag that did not exist yet -- on every version bump, which is
+  # the one commit for which nothing has ever pushed that tag. One build,
+  # waited for by both workflows: see ".github/workflows/container-kicad.yml".
+  container-kicad:
+    needs: scope
+    if: ${{ needs.scope.outputs.pytest == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/container-kicad.yml
+
   pytest:
     name: "Run: pytest"
     runs-on: ubuntu-24.04
     # 30 -> 45: the larger OCP 7.9 / build123d 0.11 install per sandbox, in
     # line with the "Pytest" job in test.yml.
     timeout-minutes: 45
-    needs: [scope, poetry-install]
+    needs: [scope, poetry-install, container-kicad]
     # The one job in this file that a change to ".devcontainer" alone does not
     # run. What it does is the "Pytest" matrix in "test.yml" over again, on one
     # image and one interpreter, and a change to the container's configuration

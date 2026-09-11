@@ -20,6 +20,7 @@ from . import telemetry, wrapper
 from .process_output import decode as decode_output
 from .healthcheck.openscad import find_executable as find_openscad_executable
 from .part_factory_file import PartFactoryFile
+from .part_factory_homogen import PartFactoryHomogen
 from . import sandbox_versions
 
 from . import shape_envelope
@@ -139,7 +140,7 @@ def _build_render_args(scad_executable, stl_path, source_path, config):
 
 
 @telemetry.instrument()
-class PartFactoryScad(PartFactoryFile):
+class PartFactoryScad(PartFactoryHomogen, PartFactoryFile):
     # The sandboxed runtime used to keep build123d out of the main process
     PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
 

@@ -1409,8 +1409,8 @@ be true for one ``material:``, one ``color:`` or one ``tolerance:`` to be true
 of the whole part. A mesh is one body: an STL file is a surface with nothing
 inside it to vary, and the only way it has a material at all is for somebody to
 say so. So is a solid built by a script, and so is one extruded from a single
-sketch. ``stl``, ``cadquery``, ``build123d``, ``sdf`` and ``extrude`` accept
-all three.
+sketch. ``stl``, ``cadquery``, ``build123d``, ``sdf``, ``scad`` and ``extrude``
+accept all three.
 
 A STEP file is not one body. It can carry many solids, each already stating a
 material and a colour of its own, and naming one for the file would be a claim
