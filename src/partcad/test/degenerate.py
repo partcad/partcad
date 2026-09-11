@@ -6,6 +6,7 @@
 
 from .test import Test
 from ..assembly import Assembly
+from ..sketch import Sketch
 
 
 class DegenerateTest(Test):
@@ -49,6 +50,14 @@ class DegenerateTest(Test):
         config = (shape.config or {}).get("degenerate") or {}
         if config.get("skip", False):
             self.debug(shape, "Skipped by configuration")
+            return self.TEST_PASSED
+
+        # A sketch is flat because that is what a sketch is. Measuring one
+        # against a rule about having size in every direction fails it for
+        # being what it was asked to be, and a check an object cannot pass and
+        # should not be taking is worse than no check.
+        if isinstance(shape, Sketch):
+            self.debug(shape, "Not applicable: a sketch is flat by definition")
             return self.TEST_PASSED
 
         # An assembly is checked through its parts, each of which is tested in

@@ -6,6 +6,7 @@
 
 from .test import Test
 from ..assembly import Assembly
+from ..sketch import Sketch
 
 
 class SolidityTest(Test):
@@ -53,6 +54,12 @@ class SolidityTest(Test):
         config = (shape.config or {}).get("solidity") or {}
         if config.get("skip", False):
             self.debug(shape, "Skipped by configuration")
+            return self.TEST_PASSED
+
+        # A sketch has no solid to be the wrong way out, and asking costs a
+        # sandbox each time. Answered here rather than by measuring.
+        if isinstance(shape, Sketch):
+            self.debug(shape, "Not applicable: a sketch has no solid")
             return self.TEST_PASSED
 
         # An assembly is checked through its parts, each tested in its own

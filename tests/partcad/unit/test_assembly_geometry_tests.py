@@ -60,11 +60,16 @@ class _Assembly(_Shape):
     pass
 
 
+class _Sketch(_Shape):
+    pass
+
+
 @pytest.fixture(autouse=True)
 def _assembly_is_an_assembly(monkeypatch):
-    """Both tests branch on isinstance(shape, Assembly); _Assembly stands in."""
+    """Both tests branch on isinstance(); the stubs stand in for the real classes."""
     monkeypatch.setattr("partcad.test.interference.Assembly", _Assembly)
     monkeypatch.setattr("partcad.test.degenerate.Assembly", _Assembly)
+    monkeypatch.setattr("partcad.test.degenerate.Sketch", _Sketch)
 
 
 def _run(test, shape):
@@ -268,3 +273,12 @@ def test_a_verdict_that_turned_on_the_machine_is_not_remembered():
     ctx = {}
     assert asyncio.run(InterferenceTest().test([], None, _Assembly(raises=Exception("no runtime")), ctx))
     assert ctx.get(InterferenceTest.NOT_CACHEABLE) is True
+
+
+
+def test_a_sketch_is_flat_because_that_is_what_a_sketch_is():
+    """Found by CI: 'circle' in examples/provider_manufacturer is a sketch,
+    20 x 20 x 0 mm, and this failed it for being what it was asked to be. A
+    check an object cannot pass and should not be taking is worse than none.
+    """
+    assert _run(DegenerateTest(), _Sketch(box=(0, 0, 0, 20, 20, 0.0)))
