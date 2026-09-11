@@ -993,17 +993,16 @@ jobs:
     # Deep runs only: the nightly schedule, a manual dispatch, a push, or
     # "#deepTest". Not on a pull request and not in the merge queue.
     #
-    # Because it cannot report anything there. The one step that exercises
-    # anything is "continue-on-error", and has been since the public index went
-    # to build123d 0.11 -- so on the full matrix this is fifteen jobs whose only
-    # way to fail is to fail at "setup-all", which every "Pytest" leg beside it
-    # has already proven on the same image and the same interpreter. What it is
-    # genuinely for is the log: a daily sweep over the whole public index, which
-    # a nightly run still delivers.
+    # Its step gates again as of the build123d 0.11 fixes below, so this job can
+    # now report a regression -- which is the condition the note here used to set
+    # for putting it back on the reduced tiers ("a job that can fail is worth
+    # running before a merge; this one cannot"). It is still deep-only, because
+    # that is fifteen jobs of up to 75 minutes on the full matrix and paying it
+    # per push is a cost decision rather than a consequence of this change. The
+    # nightly sweep is what verifies the public index today.
     #
-    # Put it back on the reduced tiers the day the step stops being
-    # "continue-on-error" -- see the TODO on it below. A job that can fail is
-    # worth running before a merge; this one cannot.
+    # So the tier is now a choice and no longer a dead end. Widen it when the
+    # minutes are worth spending; nothing about the step blocks that any more.
     if: ${{ needs.set-matrix.outputs.deep == 'true' && needs.set-matrix.outputs.examples == 'true' }}
     strategy:
       fail-fast: false
@@ -1030,16 +1029,23 @@ jobs:
         uses: ./.github/actions/sandbox-image
 
       # This exercises the whole public index (//pub/examples), most of which
-      # lives in the separate 'openvmp/partcad-index' repository. Several of
-      # those example scripts still use build123d APIs removed in 0.11
-      # (Face.thicken, Part.find_intersection, Solid.make_solid, ...), which
-      # this repository cannot fix. The step is allowed to fail so those
-      # external breakages do not block this PR; our own examples stay gated by
-      # "Examples (PartCAD)" above, which is not marked this way.
-      # TODO(clairbee): drop continue-on-error once partcad-index is updated
-      # for build123d 0.11.
+      # lives outside this repository -- 'partcad/partcad-index' and the example
+      # packages it imports. It was "continue-on-error" for eight parts none of
+      # whose files live here: seven written against build123d APIs removed in
+      # 0.11 (Face.thicken, Part.find_intersection, Solid.make_solid, ...) and
+      # one importing a 'path' distribution nothing declared.
+      #
+      # Fixed at the source rather than tolerated here. The build123d examples
+      # branch now carries v0.11.1, where upstream had already fixed its own
+      # examples, and the cadquery-contrib package declares the requirement its
+      # example imports. So the step gates again.
+      #
+      # It has to. Unlike "Repo //pub" below, this step does not swallow the
+      # exit codes -- under "bash -el" a failing "pc" ends it -- so
+      # "continue-on-error" was the only thing standing between a broken public
+      # index and a green tick, and a sweep that cannot go red is a sweep nobody
+      # reads. If an external package breaks again, fix it where it lives.
       - name: Basic integration test for CLI (all examples)
-        continue-on-error: true
         shell: bash -el {0}
         run: |
           . ~/.bashrc
@@ -1060,6 +1066,9 @@ jobs:
           mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
+        # As in "Repo //pub" below: that step gates as of this branch, so the
+        # failing run must still upload the report that says what failed.
+        if: always()
         uses: ./.github/actions/upload-test-results
         with:
           name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
@@ -1075,11 +1084,11 @@ jobs:
     needs:
       - set-matrix
       # - cache-preheat
-    # Deep runs only, for exactly the reason "Examples (All)" above is: its one
-    # substantive step is "continue-on-error", so before a merge it is six jobs
-    # of up to an hour that cannot report a regression. The nightly run keeps
-    # the sweep, and the two exit codes it prints as a notice are where a
-    # regression in it shows up.
+    # Deep runs only. That tier was chosen when this job's one substantive step
+    # was "continue-on-error" and so could not report a regression before a
+    # merge; it gates now, so the tier is a cost question -- six jobs of up to
+    # an hour per push -- rather than a job that would have nothing to say.
+    # Widen it when those minutes are worth spending.
     if: ${{ needs.set-matrix.outputs.deep == 'true' && needs.set-matrix.outputs.examples == 'true' }}
     strategy:
       fail-fast: false
@@ -1114,14 +1123,14 @@ jobs:
         with:
           job: pub-repo
 
-      # The whole public index, most of which lives in 'openvmp/partcad-index'
-      # and cannot be fixed here; see the note on "Examples (All)" above. Same
-      # reasoning applies -- allow the step to fail so external build123d 0.11
-      # breakages do not block this PR.
-      # TODO(clairbee): drop continue-on-error once partcad-index is updated
-      # for build123d 0.11.
+      # The whole public index. This gates: a part that stops building here is
+      # defective code, and a step that cannot go red cannot say so.
+      #
+      # It used to be "continue-on-error" AND to swallow both exit codes into a
+      # notice, which are two separate reasons it could not fail -- removing
+      # only the first would have left a step that still always succeeded while
+      # looking like it gated. Both are gone.
       - name: Basic integration test for CLI (on the public repo)
-        continue-on-error: true
         shell: bash -el {0}
         env:
           PC_PARTCAD_PACKAGE_SUB: ${{ github.workspace }}/partcad
@@ -1134,18 +1143,21 @@ jobs:
 
           # BEGIN PUBLIC REPO
           cd ./examples
-          # Both commands run whatever the other one does. The step is
-          # 'continue-on-error' precisely because the index carries packages
-          # this repository cannot fix, so a non-zero exit from the listing was
-          # never the signal here -- but under 'bash -e' it silently took the
-          # 'test' run below with it, and that is the more interesting half.
-          # It is not hypothetical: '//pub/universe/lego/ldraw' serves the LDraw
-          # library through a repository plugin that cannot answer within
-          # 'plugin.query.timeout', so the listing reports it and exits non-zero
-          # every time.
-          # Each exit code is reported rather than swallowed: 'continue-on-error'
-          # already keeps the job green, so the log is the only place a genuine
-          # regression in either command can show up.
+          # Both commands run whatever the other one does, which is what 'set +e'
+          # and the captured exit codes are for: under plain 'bash -e' a failing
+          # 'list all' took the 'test' run with it, and the 'test' run is the
+          # more interesting half. Running both and deciding afterwards means one
+          # failure does not hide the other's result.
+          #
+          # Both codes gate. A listing that cannot enumerate the index is not a
+          # lesser failure than a part that will not build -- it is the same
+          # sweep reporting that something in '//pub' is broken.
+          #
+          # Known: '//pub/universe/lego/ldraw' serves the LDraw library through a
+          # repository plugin that cannot answer within 'plugin.query.timeout',
+          # so the listing exits non-zero every time and this job is red until
+          # that is fixed. That is the point -- it was always broken, and the
+          # tolerance is what made it look otherwise.
           set +e
           ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub
           list_rc=$?
@@ -1159,7 +1171,23 @@ jobs:
           coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
           mamba deactivate
 
+          # The step's result, and last on purpose: the coverage report and the
+          # JUnit above are written before this decides anything, so a failing
+          # sweep still uploads the artifact that names which part failed.
+          # Exiting the command's own code rather than 1 keeps 'bounded.sh's
+          # timeout distinguishable from a part that would not build.
+          if [ "${test_rc}" -ne 0 ] || [ "${list_rc}" -ne 0 ]; then
+            echo "::error title=Repo //pub::'list all' exited ${list_rc}, 'test' exited ${test_rc}"
+            if [ "${test_rc}" -ne 0 ]; then
+              exit "${test_rc}"
+            fi
+            exit "${list_rc}"
+          fi
+
       - name: Upload test results & coverage reports to github and codecov
+        # The step above gates now, so without this the run that goes red is the
+        # one run whose JUnit never arrives -- exactly when it is worth having.
+        if: always()
         uses: ./.github/actions/upload-test-results
         with:
           name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
