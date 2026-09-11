@@ -505,9 +505,12 @@ jobs:
               exit 1
             fi
 
-            # No run at all for this commit -- yet, or ever.
+            # Nothing usable for this commit -- yet, or ever. "Usable" rather
+            # than "no run at all" because a skipped run is passed over above
+            # and lands here, and a log that then says there is no run
+            # contradicts the line that just named one.
             if [ "${elapsed}" -lt "${GRACE_SECONDS}" ]; then
-              say "No run for ${HEAD_SHA} yet (${elapsed}s in, deciding at ${GRACE_SECONDS}s)."
+              say "No usable run for ${HEAD_SHA} yet (${elapsed}s in, deciding at ${GRACE_SECONDS}s)."
               sleep "${POLL_SECONDS}"
               continue
             fi
@@ -521,7 +524,8 @@ jobs:
           # the newest one on the base branch keeps that coverage -- as long as
           # nobody reading the log can mistake it for this commit's.
           if [ -z "${use_run}" ]; then
-            say "No \"Standalone\" run exists for ${HEAD_SHA}; falling back to ${base}."
+            say "No \"Standalone\" run has bundles for ${HEAD_SHA} -- none ran," \
+                "or the one that did declined the commit. Falling back to ${base}."
             listing=$(runs_on_branch "${base}")
             while IFS=$'\t' read -r id sha conclusion; do
               [ -n "${id}" ] || continue
