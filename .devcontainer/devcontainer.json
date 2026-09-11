@@ -9,14 +9,15 @@
     "SKIP": "behave,prepare-commit-msg,poetry-install,poetry-lock,poetry-export"
   },
   // Runs on the host, before the container exists: resolves the Docker socket
-  // of a host that does not keep one at the standard path. See the second
-  // "-v" under runArgs below. Named ".cmd" rather than ".sh" because this
-  // runs in the host's own shell and a failure here aborts `devcontainer up`:
-  // the file is a polyglot that cmd.exe reads as a batch script doing nothing
-  // and /bin/sh reads as a wrapper around docker-socket-init.sh. Quoted, so a
-  // workspace path with a space in it still resolves.
+  // of a host that does not keep one at the standard path, and the running SSH
+  // agent. See the second and third "-v" under runArgs below. Named ".cmd"
+  // rather than ".sh" because this runs in the host's own shell and a failure
+  // here aborts `devcontainer up`: the file is a polyglot that cmd.exe reads as
+  // a batch script doing nothing and /bin/sh reads as a wrapper around
+  // host-sockets-init.sh. Quoted, so a workspace path with a space in it still
+  // resolves.
   "initializeCommand": {
-    "docker-socket": "\"${localWorkspaceFolder}/.devcontainer/docker-socket-init.cmd\""
+    "host-sockets": "\"${localWorkspaceFolder}/.devcontainer/host-sockets-init.cmd\""
   },
   "postCreateCommand": {
     "Start D-Bus": "sudo service dbus start && (until systemctl is-active --quiet dbus; do sleep 1; done)"
@@ -35,14 +36,32 @@
     // all (on Windows it is a named pipe), and this exact name is what Docker
     // Desktop translates, so no other spelling works on those hosts.
     "-v", "/var/run/docker.sock:/var/run/docker-host.sock",
-    // Then whatever .devcontainer/docker-socket-init.sh resolved, for a Linux
+    // Then whatever .devcontainer/host-sockets-init.sh resolved, for a Linux
     // host that keeps its daemon somewhere else: rootless, a unix:// value in
     // DOCKER_HOST, Colima.
-    "-v", "/tmp/partcad-devcontainer-${localEnv:USER}/docker.sock:/var/run/docker-host-alt.sock"
-    // Both are "-v" rather than "mounts" entries deliberately: "mounts" turns
-    // into "--mount", which aborts `devcontainer up` when the source does not
-    // exist, whereas "-v" leaves an empty directory in its place, which the
-    // container side reads as "no daemon here" and passes over in silence.
+    "-v", "/tmp/partcad-devcontainer-${localEnv:USER}/docker.sock:/var/run/docker-host-alt.sock",
+    // The host's SSH agent, resolved by the same script from SSH_AUTH_SOCK, so
+    // that a clone over SSH from in here authenticates with the host's keys
+    // and the private half stays on the host. The VS Code Dev Containers
+    // extension forwards the agent by itself and sets SSH_AUTH_SOCK to its own
+    // socket, which is why nothing points at this one by default -- overriding
+    // that would take agent forwarding away from the editor to give it back.
+    // What has no agent otherwise is `devcontainer up`, which forwards none:
+    // a terminal (AGENTS.md says to export SSH_AUTH_SOCK=/run/host-ssh-agent.sock
+    // there) and CI (test-dev.yml passes it to the behave job, whose scenarios
+    // clone over SSH).
+    //
+    // POSIX hosts only, WSL2 included. A native Windows host keeps its agent
+    // behind the named pipe \\.\pipe\openssh-ssh-agent, which is not something
+    // a Linux container can be handed as a unix socket, so this stays the empty
+    // directory and nothing here bridges it -- see host-sockets-init.cmd. That
+    // costs Windows nothing it had: the editor forwards its own agent there as
+    // everywhere, and CI runs this job on ubuntu.
+    "-v", "/tmp/partcad-devcontainer-${localEnv:USER}/ssh-agent.sock:/run/host-ssh-agent.sock"
+    // All three are "-v" rather than "mounts" entries deliberately: "mounts"
+    // turns into "--mount", which aborts `devcontainer up` when the source does
+    // not exist, whereas "-v" leaves an empty directory in its place, which the
+    // container side reads as "nothing here" and passes over in silence.
   ],
   "mounts": [
     // TODO: For some reason this leads to tests hanging in the CI.

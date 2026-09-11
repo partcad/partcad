@@ -470,11 +470,18 @@ ways out, on the host:
 
 * Scope the rule to `pushInsteadOf` rather than `insteadOf`, which is usually what the rule is for anyway: push
   over SSH, fetch anonymously over https.
-* Or forward the SSH agent the way the GPG one is forwarded above,
-  `--mount "type=bind,source=$SSH_AUTH_SOCK,target=/run/host-ssh-agent.sock"`, and
-  `export SSH_AUTH_SOCK=/run/host-ssh-agent.sock` in the container. Adding a mount means recreating the
-  container, and recreating it with the CLI is what leaves it with no gitconfig at all — hence the repo-local
-  identity above.
+* Or use the host's SSH agent, which is already bound in at `/run/host-ssh-agent.sock` —
+  `.devcontainer/host-sockets-init.sh` resolves `SSH_AUTH_SOCK` on the host and `devcontainer.json` binds it,
+  the same way the Docker socket arrives. Nothing points at it by default, because in the editor the extension
+  forwards an agent of its own and sets `SSH_AUTH_SOCK` to that; in a `devcontainer exec` shell, which forwards
+  none, `export SSH_AUTH_SOCK=/run/host-ssh-agent.sock` is the whole of it. No `--mount` of your own, so no
+  recreating the container — which is what would leave it with no gitconfig at all, hence the repo-local
+  identity above. An empty directory at that path means no agent was bound in, and there are two ways to get
+  one: on a POSIX host, none was running when the container started — start one and restart the container. On
+  a **native Windows host there will never be one**, because the Windows agent is the named pipe
+  `\\.\pipe\openssh-ssh-agent` and a Linux container cannot be handed a named pipe as a unix socket; take the
+  `pushInsteadOf` option above instead, or work from a VS Code terminal, where the extension forwards the
+  Windows agent itself. (WSL2 is a POSIX host for this purpose and behaves like the first case.)
 
 `GIT_CONFIG_GLOBAL=/dev/null` does not work around it: pre-commit strips `GIT_*` from the environment of the git
 it runs, keeping only `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_*`/`GIT_CONFIG_VALUE_*`, and those can only add

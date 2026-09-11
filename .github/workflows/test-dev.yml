@@ -143,7 +143,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           runCmd: |
             start_time=$SECONDS
@@ -219,7 +219,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           # "runCmd" is handed to a shell as one script, so the step's result is
           # the *last* command's unless the script says otherwise. This one used
@@ -257,7 +257,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -379,11 +379,37 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           env: |
             # TODO-25: Workaround for "Host key verification failed."
             GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+            # The agent "Start SSH Agent" above opened, which runs on the
+            # *runner* and not in the container. "devcontainers/ci" forwards
+            # neither the socket nor this variable -- it has no "mount" input at
+            # all -- so the agent was simply absent in here, and
+            # "features/install.feature:44 Install packages with ssh", which
+            # clones "git@github.com:", failed on every run of this job. It is
+            # the only scenario that did: 268 passed beside it. The socket
+            # arrives through the "-v" that .devcontainer/devcontainer.json
+            # binds, from the path .devcontainer/host-sockets-init.sh resolves
+            # on the runner; this is what points ssh at it.
+            #
+            # Set here rather than in "remoteEnv", because in the editor the
+            # Dev Containers extension forwards an agent of its own and sets
+            # this variable to its socket. CI is the case that has no agent.
+            #
+            # UNQUOTED, and the line above it is not a precedent to copy. The
+            # action reads this block with "core.getMultilineInput" and hands
+            # each line to "--remote-env" as one argv element, verbatim -- no
+            # shell, so nothing ever strips a quote (see "populateDefaults" in
+            # its common/src/envvars.ts: anything containing "=" is passed
+            # "straight through"). Quoted, the value of this variable would
+            # contain the two quote characters and name a socket that does not
+            # exist. GIT_SSH_COMMAND survives its quotes only because git runs
+            # that value through "sh -c", which removes them; a socket path
+            # never sees a shell.
+            SSH_AUTH_SOCK=/run/host-ssh-agent.sock
 
           # The suite's status is kept and reported, and the coverage report is
           # written either way. Ending on "coverage xml" reported *its* status,
@@ -417,7 +443,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -564,7 +590,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           # Same shape as the two jobs above: every "pc" counts, and the report
           # is still written when one of them fails. This job was the only one of
