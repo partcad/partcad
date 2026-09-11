@@ -384,6 +384,21 @@ jobs:
           env: |
             # TODO-25: Workaround for "Host key verification failed."
             GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+            # The agent "Start SSH Agent" above opened, which runs on the
+            # *runner* and not in the container. "devcontainers/ci" forwards
+            # neither the socket nor this variable -- it has no "mount" input at
+            # all -- so the agent was simply absent in here, and
+            # "features/install.feature:44 Install packages with ssh", which
+            # clones "git@github.com:", failed on every run of this job. It is
+            # the only scenario that did: 268 passed beside it. The socket
+            # arrives through the "-v" that .devcontainer/devcontainer.json
+            # binds, from the path .devcontainer/host-sockets-init.sh resolves
+            # on the runner; this is what points ssh at it.
+            #
+            # Set here rather than in "remoteEnv", because in the editor the
+            # Dev Containers extension forwards an agent of its own and sets
+            # this variable to its socket. CI is the case that has no agent.
+            SSH_AUTH_SOCK="/run/host-ssh-agent.sock"
 
           # The suite's status is kept and reported, and the coverage report is
           # written either way. Ending on "coverage xml" reported *its* status,
