@@ -470,8 +470,12 @@ ways out, on the host:
   forwards an agent of its own and sets `SSH_AUTH_SOCK` to that; in a `devcontainer exec` shell, which forwards
   none, `export SSH_AUTH_SOCK=/run/host-ssh-agent.sock` is the whole of it. No `--mount` of your own, so no
   recreating the container — which is what would leave it with no gitconfig at all, hence the repo-local
-  identity above. An empty directory at that path means the host had no agent running when the container
-  started; start one and restart the container.
+  identity above. An empty directory at that path means no agent was bound in, and there are two ways to get
+  one: on a POSIX host, none was running when the container started — start one and restart the container. On
+  a **native Windows host there will never be one**, because the Windows agent is the named pipe
+  `\\.\pipe\openssh-ssh-agent` and a Linux container cannot be handed a named pipe as a unix socket; take the
+  `pushInsteadOf` option above instead, or work from a VS Code terminal, where the extension forwards the
+  Windows agent itself. (WSL2 is a POSIX host for this purpose and behaves like the first case.)
 
 `GIT_CONFIG_GLOBAL=/dev/null` does not work around it: pre-commit strips `GIT_*` from the environment of the git
 it runs, keeping only `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_*`/`GIT_CONFIG_VALUE_*`, and those can only add

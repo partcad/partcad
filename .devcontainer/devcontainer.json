@@ -50,6 +50,13 @@
     // a terminal (AGENTS.md says to export SSH_AUTH_SOCK=/run/host-ssh-agent.sock
     // there) and CI (test-dev.yml passes it to the behave job, whose scenarios
     // clone over SSH).
+    //
+    // POSIX hosts only, WSL2 included. A native Windows host keeps its agent
+    // behind the named pipe \\.\pipe\openssh-ssh-agent, which is not something
+    // a Linux container can be handed as a unix socket, so this stays the empty
+    // directory and nothing here bridges it -- see host-sockets-init.cmd. That
+    // costs Windows nothing it had: the editor forwards its own agent there as
+    // everywhere, and CI runs this job on ubuntu.
     "-v", "/tmp/partcad-devcontainer-${localEnv:USER}/ssh-agent.sock:/run/host-ssh-agent.sock"
     // All three are "-v" rather than "mounts" entries deliberately: "mounts"
     // turns into "--mount", which aborts `devcontainer up` when the source does
