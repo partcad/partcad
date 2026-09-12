@@ -400,10 +400,36 @@ def test_the_kicad_container_is_the_image_partcad_already_builds():
     'partcad.part_factory_kicad' pulls the same image, pinned to the same
     release, to run 'kicad-cli' in. Pinning matters here as much as it does
     there: the container carries PartCAD's own environment.
-    """
-    from partcad_client import __version__
 
-    assert external.TOOLS["kicad"].image == "ghcr.io/partcad/partcad-container-kicad:" + __version__
+    Asserted of an installed PartCAD, where nothing overrides the tag. CI is
+    not that on a run that rebuilt PartCAD's images: it exports
+    'PC_CONTAINER_IMAGE_TAG' and the 'Pytest' job passes it through, because
+    another test in this suite starts the KiCad sandbox and has to reach the
+    image that run published. This module resolves the tag once, at import, so
+    the variable has to be gone *before* the module reads it -- unsetting it
+    inside the test would leave the constant carrying whatever the suite
+    started with. Hence the reload, twice: once to read it without, once to put
+    the module back the way the rest of this file found it.
+
+    'tests/partcad_utils/test_container_image.py' pins the other direction,
+    where the override is set and this module has to follow it.
+    """
+    import importlib
+    from unittest import mock
+
+    from partcad_client import __version__
+    from partcad_utils import container_image
+
+    with mock.patch.dict(os.environ):
+        os.environ.pop(container_image.ENV_VAR, None)
+        image = importlib.reload(external).TOOLS["kicad"].image
+
+    # Put the module back the way the rest of this file found it, before
+    # anything can fail: these tests hold 'external' by name, and a module left
+    # carrying one test's environment is the next one's mystery.
+    importlib.reload(external)
+
+    assert image == "ghcr.io/partcad/partcad-container-kicad:" + __version__
 
 
 @pytest.fixture

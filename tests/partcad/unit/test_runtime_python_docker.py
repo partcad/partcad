@@ -65,7 +65,13 @@ class _WindowsOs:
 # --------------------------------------------------------------------------- #
 
 
-def test_the_base_image_is_named_by_release_and_version():
+def test_the_base_image_is_named_by_release_and_version(no_image_tag_override):
+    """The name an installed PartCAD asks for, which is the release and nothing else.
+
+    `no_image_tag_override` because a run that rebuilt these images points every
+    reader at its own tag, this suite included -- so without it this asserted
+    the release on a developer machine and the branch tag in CI.
+    """
     assert (
         runtime_python_docker.image_for("3.11", release="0.8.58")
         == "ghcr.io/partcad/partcad-container-python:0.8.58-py3.11"

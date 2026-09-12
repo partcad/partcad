@@ -22,13 +22,14 @@ from partcad_utils import container_image
 
 
 @pytest.fixture(autouse=True)
-def _no_inherited_override(monkeypatch):
+def _no_inherited_override(no_image_tag_override):
     """The variable must not leak in from the environment running the suite.
 
     CI sets it on the runs that build branch images, and this file's whole
-    subject is what happens with and without it.
+    subject is what happens with and without it. The shared fixture in
+    'tests/conftest.py' is the one implementation; every test here wants it, so
+    it is taken automatically rather than named once per test.
     """
-    monkeypatch.delenv(container_image.ENV_VAR, raising=False)
 
 
 def test_the_release_is_the_tag_when_nothing_says_otherwise():
@@ -67,10 +68,16 @@ def test_the_kicad_image_pc_open_starts_follows_it(monkeypatch):
     That is the one reader whose tag is a module-level constant rather than a
     call, which is fine where it is used -- CI exports the variable before the
     process starts -- and is worth pinning precisely because it is the odd one.
+
+    Which is also why *both* halves reload. The suite itself may have been
+    started with the variable set -- CI starts it that way on a run that
+    rebuilt these images -- and the constant then carries that tag from before
+    this test existed, whatever the environment says by the time it runs. So
+    the "without" half is a reload too, under the fixture above.
     """
     import partcad_client.external as external
 
-    assert external.TOOLS["kicad"].image.endswith(":" + external.__version__)
+    assert importlib.reload(external).TOOLS["kicad"].image.endswith(":" + external.__version__)
 
     monkeypatch.setenv(container_image.ENV_VAR, external.__version__ + "-my-branch")
     reloaded = importlib.reload(external)
