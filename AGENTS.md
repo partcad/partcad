@@ -293,8 +293,9 @@ now builds and publishes `<release>-<branch>-<digest>-<commit>` and exports `PC_
 `partcad_utils.container_image.image_tag` reads and every reader of those images goes through — so the tests
 in that run reach what that run built. It is turned on by a change under `tools/containers/` (a
 `changed-scopes` bucket) or by `#images` in the pull request, and it is off otherwise, which is why an
-ordinary pull request still pays nothing for it. A branch tag is safe to publish from an unreviewed branch
-because nothing but that run asks for it -- the commit is in the name because a branch is not unique in time,
+ordinary pull request pays nothing extra for it -- it goes on building these images for `amd64` as a test,
+the way it always did, and goes on rendering against the release's. A branch tag is safe to publish from an
+unreviewed branch because nothing but that run asks for it -- the commit is in the name because a branch is not unique in time,
 and two pushes to one branch would otherwise build, test and *delete* one tag between them; the release tag,
 which somebody else pulls, is still only ever written by the bump. Both `CI` and `CI-Dev` call that action rather than deciding for themselves — they hand
 the answer to the same `Container (KiCad)` build, and two answers would be two tags for one image.

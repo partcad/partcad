@@ -1002,14 +1002,21 @@ Two things turn it on:
   installed into the image. It is matched as a plain substring, exactly like ``#deepTest``, with the same
   consequence: a pull request that merely mentions it opts itself in.
 
-A pull request that fires neither trigger rebuilds nothing, and that is the point of having a switch at all --
-building these images costs the better part of an hour on a deep run, and nearly every change has nothing to
-say about them.
+What the switch turns on is not the build. ``Build Docker Containers`` is gated on the union of the
+``pytest``, ``behave`` and ``examples`` gates, so it runs on any run whose tests could reach a container --
+and a pull request that fires neither trigger builds these images for ``linux/amd64`` as a test, exactly as
+it did before any of this, and renders against the release's. What firing a trigger adds is the
+``linux/arm64`` half, which goes through QEMU and costs minutes per version; publishing the result; pointing
+that run's own tests at it through ``PC_CONTAINER_IMAGE_TAG``; and deleting it afterwards. Worth paying where
+an image changed, worth nothing where none did, which is the whole reason for a switch.
 
-Neither trigger works from a **fork**, and the run says so: a fork's ``GITHUB_TOKEN`` is read-only however the
-workflow declares its permissions, so such a pull request builds the images as a test and runs against the
-release's, as it did before any of this. If you are changing one of these images from a fork, expect a
-maintainer to re-run the change from a branch of this repository before it lands.
+From a **fork** the trigger fires and cannot finish, and the run says so in a ``::warning::``. A fork's
+``GITHUB_TOKEN`` is read-only however the workflow declares its permissions, so nothing there can publish --
+and a tag claimed but not published is every test job failing to pull an image that was never there, which is
+worse than the gap it was meant to close. So such a pull request falls back to what every pull request did
+before any of this: it builds the images as a test and runs against the release's. If you are changing one of
+these images from a fork, expect a maintainer to re-run the change from a branch of this repository before it
+lands.
 
 These tags are cleaned up, in two places. ``CI`` deletes the Python sandbox tags it published once its own
 test jobs have finished -- it is their only consumer, the dev container being unable to use the ``docker``
