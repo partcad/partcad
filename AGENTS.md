@@ -289,7 +289,7 @@ container images — the Python sandbox bases and the KiCad sandbox — are tagg
 version bump on `devel` writes those tags, so until this existed a change to `tools/containers` built the new
 images and then tested against the last release's: a Dockerfile fix could not be proven on the pull request
 that made it, which is how the `pycairo` fix sat in the repository while every PNG went on failing. Such a run
-now builds and publishes `<release>-<branch>-<commit>` and exports `PC_CONTAINER_IMAGE_TAG`, which
+now builds and publishes `<release>-<branch>-<digest>-<commit>` and exports `PC_CONTAINER_IMAGE_TAG`, which
 `partcad_utils.container_image.image_tag` reads and every reader of those images goes through — so the tests
 in that run reach what that run built. It is turned on by a change under `tools/containers/` (a
 `changed-scopes` bucket) or by `#images` in the pull request, and it is off otherwise, which is why an

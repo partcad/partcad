@@ -396,7 +396,7 @@ def test_a_run_that_builds_its_own_tag_builds_both_architectures():
 
     A pull request builds amd64 alone, because arm64 goes through QEMU. That is
     a gap in *coverage* on an ordinary run and a gap in the *tag* on this one:
-    every Arm job resolves `<release>-<branch>-<commit>-py<X>-arm64` like every other
+    every Arm job resolves `<release>-<branch>-<digest>-<commit>-py<X>-arm64` like every
     job, finds nothing, and falls back -- `Pytest` to conda, which is the
     sandbox going untested, and the jobs with a `sandbox-image` step to a build
     of their own, which is the same QEMU time paid once per job. The run asked
@@ -421,7 +421,7 @@ def test_a_run_that_asked_for_images_builds_them_whatever_else_it_skips(workflow
 
     A change carrying the marker need not be one that runs any test suite --
     and if the builders were gated on the suites alone, such a run would print
-    "Container images: <release>-<branch> (built from this commit)" in its
+    "Container images: <the branch tag> (built from this commit)" in its
     summary and build nothing at all. A summary that says what did not happen
     is worse than no summary.
     """

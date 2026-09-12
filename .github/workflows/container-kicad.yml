@@ -37,7 +37,7 @@ on:
       tag:
         description: >-
           The tag to build under, and to publish under where "push" says so.
-          The release on an ordinary run; "<release>-<branch>-<commit>" on one that
+          The release on an ordinary run; "<release>-<branch>-<digest>-<commit>" on one that
           changes what the image contains. The caller decides -- see "Which
           images this run uses" in "test.yml" -- because a called workflow
           inherits none of its caller's "env" and cannot read the pull request

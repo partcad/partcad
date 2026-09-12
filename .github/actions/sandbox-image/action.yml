@@ -14,7 +14,7 @@ description: >-
 #
 # `.github/actions/container-images` answers that now, and answers it once for
 # the whole run: a commit that changes these images builds them and publishes
-# `<release>-<branch>-<commit>`, and every job here is handed that tag in
+# `<release>-<branch>-<digest>-<commit>`, and every job here is handed that tag in
 # `PC_CONTAINER_IMAGE_TAG`. A commit that does not change them is a commit
 # whose tree would build, byte for byte, what the release already published --
 # the image installs PartCAD at the release from PyPI and takes nothing from

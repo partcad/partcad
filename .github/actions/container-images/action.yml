@@ -11,7 +11,7 @@ description: >-
 # exists.
 #
 # A run that **changes what an image contains** publishes
-# `<release>-<branch>-<commit>` instead and points its own tests at it, which is what makes a Dockerfile fix
+# `<release>-<branch>-<digest>-<commit>` instead and points its own tests at it, which is what makes a Dockerfile fix
 # provable in the pull request that makes it rather than after it lands.
 # `changed-scopes` answers that from the paths; `#images` in the pull request
 # answers it from the author, for a change the paths cannot see -- a workflow
@@ -43,14 +43,14 @@ inputs:
   release:
     description: >-
       The release this tree is, which is the tag on an ordinary run and the stem
-      of `<release>-<branch>-<commit>` on one that builds its own.
+      of `<release>-<branch>-<digest>-<commit>` on one that builds its own.
     required: true
 
 outputs:
   tag:
     description: >-
       The tag to build under, and to publish under where `push` says so. The
-      release on an ordinary run; `<release>-<branch>-<commit>` on one that
+      release on an ordinary run; `<release>-<branch>-<digest>-<commit>` on one that
       builds its own, the commit being what makes it name exactly one build.
     value: ${{ steps.decide.outputs.tag }}
   release:
