@@ -1002,11 +1002,11 @@ Two things turn it on:
   installed into the image. It is matched as a plain substring, exactly like ``#deepTest``, with the same
   consequence: a pull request that merely mentions it opts itself in.
 
-Neither rebuilds anything on an ordinary pull request, and that is the point of having a switch at all --
+A pull request that fires neither trigger rebuilds nothing, and that is the point of having a switch at all --
 building these images costs the better part of an hour on a deep run, and nearly every change has nothing to
 say about them.
 
-Neither works from a **fork**, either, and the run says so: a fork's ``GITHUB_TOKEN`` is read-only however the
+Neither trigger works from a **fork**, and the run says so: a fork's ``GITHUB_TOKEN`` is read-only however the
 workflow declares its permissions, so such a pull request builds the images as a test and runs against the
 release's, as it did before any of this. If you are changing one of these images from a fork, expect a
 maintainer to re-run the change from a branch of this repository before it lands.

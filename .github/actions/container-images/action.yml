@@ -116,6 +116,16 @@ runs:
           # the same reason: a tag is 128 characters and a branch name is not
           # bounded at all.
           #
+          # Both of those are lossy, and the commit does not cover for them:
+          # "feat/x" and "feat_x" sanitise alike, two branches longer than the
+          # cut share a prefix, and two branches can sit on one commit. That is
+          # two runs with one tag again -- each publishing over the other and
+          # each deleting the other's images on the way out. So where the stem
+          # is not the branch name itself, it carries a digest of the *whole*
+          # original, which makes the mapping injective again. A name that
+          # needed no changing is its own stem and cannot collide with
+          # anything.
+          #
           # The commit is in there because the branch alone is not unique in
           # time, and every part of this mechanism assumes the tag names one
           # build. Two pushes to a branch are two runs; their concurrency
@@ -126,6 +136,9 @@ runs:
           # the tags of the run that superseded it, mid-flight. With the commit
           # in the tag each run builds, tests and deletes only its own.
           branch=$(printf '%s' "${BRANCH}" | sed 's|[^A-Za-z0-9_.-]|_|g' | cut -c1-40)
+          if [ "${branch}" != "${BRANCH}" ]; then
+            branch="${branch}-$(printf '%s' "${BRANCH}" | sha256sum | cut -c1-6)"
+          fi
           tag="${RELEASE}-${branch}-$(printf '%s' "${SHA}" | cut -c1-7)"
           push=true
           override="${tag}"

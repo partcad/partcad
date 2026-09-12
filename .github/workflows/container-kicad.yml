@@ -72,31 +72,34 @@ jobs:
     permissions:
       contents: read
       packages: write
-    # Keyed by the calling workflow as well as the commit, so that the two
-    # callers never share a group. They did, to build the image once per commit
-    # rather than once per caller -- and that is a trade this cannot make,
-    # because of how GitHub queues a group: one job runs, a second becomes
-    # pending, and a *third* arriving cancels the pending one. "cancel-in-
-    # progress: false" does not protect it; it only protects the running one.
+    # No concurrency group, which is a deliberate absence rather than an
+    # omission. There was one, to build the image once per commit rather than
+    # once per caller -- and that is a trade this cannot make, because of how
+    # GitHub queues a group: one job runs, a second becomes pending, and a
+    # *third* arriving cancels the pending one. "cancel-in-progress: false"
+    # does not protect it; it only protects the one that is running.
     #
-    # A third arrival is not exotic. Re-running "CI" while "CI-Dev"'s call is
-    # pending is enough -- and the cancelled call would take "Run: pytest",
-    # "Run: behave" and "Run: pc" with it, because a job whose dependency is
-    # cancelled is skipped. A suite that stops running is the one kind of CI
-    # failure nothing reports, which is the same rule the gates in "test.yml"
-    # are written around.
+    # A third arrival is not exotic. Two callers plus a re-run of either is
+    # enough, and so is a manual dispatch beside a push -- and the cancelled
+    # call would take "Run: pytest", "Run: behave" and "Run: pc" with it,
+    # because a job whose dependency is cancelled is skipped. A suite that
+    # stops running is the one kind of CI failure nothing reports, which is the
+    # rule the gates in "test.yml" are already written around.
     #
-    # So both callers build it, in parallel, and push the same tag -- the same
-    # commit, the same Dockerfile, the same layers off "cacheFrom", so the same
-    # image. That costs one cache-hit build of about a minute and buys back the
-    # wait the shared group imposed on whichever caller arrived second.
+    # Keying the group per caller narrows that, and keying it per *invocation*
+    # -- "github.run_id" -- leaves a group of one, which is a block that does
+    # nothing. So there is none. Every call builds, and two calls for one
+    # commit build the same image: same tag from the caller, same Dockerfile,
+    # same layers off "cacheFrom". That costs a cache-hit build of about a
+    # minute and cannot displace anything.
     #
-    # "cancel-in-progress: false" stays, and is the point of the block rather
-    # than a default left in place: a cancelled build here is precisely the
-    # missing image that everything waiting on this job is waiting for.
-    concurrency:
-      group: container-kicad-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.sha }}
-      cancel-in-progress: false
+    # What the old block's "cancel-in-progress: false" was protecting -- a
+    # cancelled build being precisely the missing image everything waiting on
+    # this job is waiting for -- is now simply not reachable: with no group,
+    # nothing here cancels anything. The caller's own workflow-level group
+    # still supersedes a whole run, which is correct, and gives version bumps a
+    # group of their own so that the one run that publishes a release's images
+    # is never the one cancelled.
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v7

@@ -140,11 +140,28 @@ def test_the_bump_wins_over_the_branch_tag(tmp_path):
 @pytest.mark.parametrize(
     "branch, stem",
     [
+        # A name a tag can hold already is its own stem, digest and all.
+        ("my-branch", "my-branch"),
+        ("release_1.2.3", "release_1.2.3"),
+    ],
+)
+def test_a_branch_a_registry_already_accepts_is_left_alone(tmp_path, branch, stem):
+    """Which is what makes it unable to collide with anything.
+
+    A clean name maps to itself, so two clean names are two stems; only a name
+    that had to be changed can land on somebody else's, and that is the case
+    the digest below covers.
+    """
+    assert decide(tmp_path, wanted="true", branch=branch)["tag"] == "%s-%s-%s" % (RELEASE, stem, SHORT)
+
+
+@pytest.mark.parametrize(
+    "branch, stem",
+    [
         ("claude/ci-images", "claude_ci-images"),
         ("a/b/c", "a_b_c"),
         # A tag is [A-Za-z0-9_.-]; a branch name is very nearly anything.
         ("feat/x:y z", "feat_x_y_z"),
-        ("release/1.2.3", "release_1.2.3"),
         # 128 characters is the whole tag, and a branch name is unbounded.
         ("z" * 80, "z" * 40),
     ],
@@ -153,10 +170,46 @@ def test_a_branch_name_is_made_into_something_a_registry_accepts(tmp_path, branc
     """A tag the registry refuses is a build that fails at the push.
 
     The substitution `setup-devcontainer` makes for "/", widened to everything
-    a tag may not hold, and truncated -- the commit after it is what keeps two
-    branches sharing a prefix apart.
+    a tag may not hold, and truncated for length. Both are lossy, so the stem
+    carries a digest of the whole original after it -- see the collision tests
+    below for what that is for.
     """
-    assert decide(tmp_path, wanted="true", branch=branch)["tag"] == "%s-%s-%s" % (RELEASE, stem, SHORT)
+    tag = decide(tmp_path, wanted="true", branch=branch)["tag"]
+
+    assert tag.startswith("%s-%s-" % (RELEASE, stem))
+    assert tag.endswith("-%s" % SHORT)
+
+
+@pytest.mark.parametrize(
+    "one, other",
+    [
+        # Sanitised alike.
+        ("feat/x", "feat_x"),
+        ("a/b", "a_b"),
+        # Truncated alike: the same first forty characters.
+        ("z" * 40 + "/first", "z" * 40 + "/second"),
+    ],
+)
+def test_two_branches_that_sanitise_alike_still_get_two_tags(tmp_path, one, other):
+    """The commit does not cover for this, because two branches can sit on one.
+
+    And then it is two runs with one tag again: each publishing over the other,
+    and each deleting the other's images on the way out. The digest of the
+    whole original name is what keeps them apart.
+    """
+    assert decide(tmp_path, wanted="true", branch=one)["tag"] != decide(tmp_path, wanted="true", branch=other)["tag"]
+
+
+def test_the_digest_is_of_the_branch_and_not_of_the_run(tmp_path):
+    """So the same branch is the same stem every time.
+
+    A tag that changed between two runs of one branch would be a tag no cache
+    ever hits and no reader could predict.
+    """
+    first = decide(tmp_path, wanted="true", branch="feat/x", sha="1111111aaa")["tag"]
+    second = decide(tmp_path, wanted="true", branch="feat/x", sha="2222222bbb")["tag"]
+
+    assert first.rsplit("-", 1)[0] == second.rsplit("-", 1)[0]
 
 
 def test_the_tag_names_one_commit_and_not_just_one_branch(tmp_path):
