@@ -293,7 +293,6 @@ def test_a_verdict_that_turned_on_the_machine_is_not_remembered():
     assert ctx.get(InterferenceTest.NOT_CACHEABLE) is True
 
 
-
 def test_a_sketch_is_flat_because_that_is_what_a_sketch_is():
     """Found by CI: 'circle' in examples/provider_manufacturer is a sketch,
     20 x 20 x 0 mm, and this failed it for being what it was asked to be. A

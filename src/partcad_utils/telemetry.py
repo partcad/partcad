@@ -14,7 +14,10 @@ from opentelemetry.trace import Tracer
 from . import telemetry_none, telemetry_sentry
 
 partcad_version = None
-tracer: Tracer | None  # To be initialized in telemetry_init()
+# Annotation *and* an initialiser: a bare annotation binds no name, so before
+# `init()`/`once()` ran, `tracer` did not exist at module scope at all and the
+# readers below only resolved it because each declared `global tracer`.
+tracer: Tracer | None = None  # To be initialized in telemetry_init()
 tracer_onced = False
 
 
@@ -32,7 +35,7 @@ def once():
         return
     tracer_onced = True
 
-    global tracer, partcad_version
+    global tracer
 
     if not os.getenv("PYTEST_VERSION"):
         # TODO(clairbee): add suport for alternate telemetry backends
@@ -48,7 +51,6 @@ def once():
 async def start_as_current_span_async(name, **kwargs):
     once()
 
-    global tracer
     with tracer.start_as_current_span(name, **kwargs) as span:
         yield span
 
@@ -57,7 +59,6 @@ async def start_as_current_span_async(name, **kwargs):
 def start_as_current_span(name: str, **kwargs):
     once()
 
-    global tracer
     with tracer.start_as_current_span(name, **kwargs) as span:
         yield span
 
@@ -71,8 +72,6 @@ def set_context(ctx):
 
 def instrument_span(name, category: str = ""):
     once()
-
-    global tracer
 
     def decorator(func, attr_getter):
         def wrapper(*args, **kwargs):

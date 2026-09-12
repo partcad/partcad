@@ -54,7 +54,7 @@ class WithPorts(Interface):
                 if interface.abstract:
                     continue
 
-                if not ":" in interface_name:
+                if ":" not in interface_name:
                     interface_name = self.project.name + ":" + interface_name
 
                 if not compatible and interface_name not in self.interfaces:

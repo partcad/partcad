@@ -181,7 +181,6 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         check_stage_sequence(node_list, self.name)
 
         async def wait_for_tasks():
-            nonlocal tasks
             while len(tasks) > 0:
                 task = tasks.pop(0)
                 f = await asyncio.tasks.wait([task])
@@ -242,8 +241,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         connect_to_port_pattern = None
         # "location" is an optional parameter for both parts and assemblies
         if "location" in node:
-            l = node["location"]
-            location = Location((l[0][0], l[0][1], l[0][2]), (l[1][0], l[1][1], l[1][2]), l[2])
+            loc = node["location"]
+            location = Location((loc[0][0], loc[0][1], loc[0][2]), (loc[1][0], loc[1][1], loc[1][2]), loc[2])
         elif "connect" in node:
             connect = node["connect"]
             connect_with_iface = connect.get("with", None)
@@ -293,7 +292,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             connect_to_port = None
 
         # Check if this node is for an assembly
-        if "links" in node and not node["links"] is None:
+        if "links" in node and node["links"] is not None:
             item = Assembly(
                 assembly.project_name,
                 {
@@ -367,7 +366,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     if (
                         connect_with_iface is None
                         and item.with_ports is not None
-                        and not "ports" in item.with_ports.config
+                        and "ports" not in item.with_ports.config
                         and len(list(item.with_ports.get_interfaces().keys())) == 1
                     ):
                         connect_with_iface = list(item.with_ports.get_interfaces().keys())[0]
@@ -395,7 +394,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                                 )
 
                     # If the source port is known, then use it
-                    if not connect_with_port is None:
+                    if connect_with_port is not None:
                         source_port = item.with_ports.get_ports()[connect_with_port]
                         pc_logging.debug("Configured source port: %s" % source_port.name)
                     else:
@@ -408,7 +407,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     if (
                         connect_to_iface is None
                         and target_part.with_ports is not None
-                        and not "ports" in target_part.with_ports.config
+                        and "ports" not in target_part.with_ports.config
                         and len(list(target_part.with_ports.get_interfaces().keys())) == 1
                     ):
                         connect_to_iface = list(target_part.with_ports.get_interfaces().keys())[0]
@@ -435,7 +434,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                                 )
 
                     # If the target port is configured, then use it
-                    if not connect_to_port is None:
+                    if connect_to_port is not None:
                         target_port = target_part.with_ports.get_ports()[connect_to_port]
                         pc_logging.debug("Configured target port: %s" % target_port.name)
                     else:
@@ -527,8 +526,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                                     )
                                 )
 
-                        if not connect_with_instance is None:
-                            if not connect_with_instance in source_iface:
+                        if connect_with_instance is not None:
+                            if connect_with_instance not in source_iface:
                                 pc_logging.error(
                                     "Connect %s to %s: source instance is not found: %s"
                                     % (
@@ -636,8 +635,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                                     )
                                 )
 
-                        if not connect_to_instance is None:
-                            if not connect_to_instance in target_iface:
+                        if connect_to_instance is not None:
+                            if connect_to_instance not in target_iface:
                                 pc_logging.error(
                                     "Connect %s to %s: target instance is not found: %s"
                                     % (
@@ -789,7 +788,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                                 connect_to_port = target_iface_instance[target_ports[connect_to_port_index]]
 
                     # If the source port is determined, then use it
-                    if not connect_with_port is None and source_port is None:
+                    if connect_with_port is not None and source_port is None:
                         source_port = item.with_ports.get_ports()[connect_with_port]
                         pc_logging.debug("Found source port: %s" % source_port.name)
                     if connect_with_port is not None and connect_with_port_pattern is not None:
@@ -799,7 +798,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                             )
 
                     # If the target port is determined, then use it
-                    if not connect_to_port is None and target_port is None:
+                    if connect_to_port is not None and target_port is None:
                         target_port = target_part.with_ports.get_ports()[connect_to_port]
                         pc_logging.debug("Found target port: %s" % target_port.name)
                     if connect_to_port is not None and connect_to_port_pattern is not None:

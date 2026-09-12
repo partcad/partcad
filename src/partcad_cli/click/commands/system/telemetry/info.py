@@ -22,6 +22,6 @@ def cli(cli_ctx) -> None:
                     id_value = file.read()
                     pc.logging.info(f"Telemetry ID: '{id_value}'")
             else:
-                pc.logging.info(f"Telemetry ID: None")
+                pc.logging.info("Telemetry ID: None")
         pc.logging.info(f"Telemetry type: '{pc.user_config.telemetry_config.type}'")
         pc.logging.info(f"Telemetry env: '{pc.user_config.telemetry_config.env}'")

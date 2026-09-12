@@ -13,7 +13,6 @@ import os
 import sys
 
 import build123d as b3d
-import pytest
 from OCP.TopoDS import TopoDS_Iterator
 
 import partcad as pc
@@ -119,9 +118,7 @@ class _SlowChild:
         await asyncio.sleep(self.delay)
         # Assembly now fetches child shapes as BREP envelopes, not build123d
         # objects, so hand back the envelope of a unit box.
-        return ocp_serialize.encode_shape(
-            b3d.Solid.make_box(1.0, 1.0, 1.0).wrapped, name=self.name, label=self.name
-        )
+        return ocp_serialize.encode_shape(b3d.Solid.make_box(1.0, 1.0, 1.0).wrapped, name=self.name, label=self.name)
 
 
 def _child_offsets(envelope):

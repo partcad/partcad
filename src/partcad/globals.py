@@ -44,7 +44,9 @@ from .part_factory_wrapper import PartFactoryWrapper
 from .plugin_factory_provider_enrich import PluginFactoryProviderEnrich
 from .plugin_factory_provider_manufacturer import PluginFactoryProviderManufacturer
 from .plugin_factory_provider_store import PluginFactoryProviderStore
-from .plugin_factory_repository import PluginFactoryRepository
+from .plugin_factory_repository import (  # noqa: F401  # imported for the registration side effect, like its siblings
+    PluginFactoryRepository,
+)
 from .plugin_factory_repository_basic import PluginFactoryRepositoryBasic
 
 # from .plugin_factory_repository_tree import PluginFactoryRepositoryTree
@@ -123,7 +125,6 @@ def init(config_path=None, search_root=True, user_config=UserConfig()) -> Contex
     """Initialize the default context explicitly using the desired path."""
     global _partcad_context
     global _partcad_context_path
-    global _partcad_context_lock
 
     with _partcad_context_lock:
         if _partcad_context is None:
@@ -140,7 +141,6 @@ def init(config_path=None, search_root=True, user_config=UserConfig()) -> Contex
 def fini():
     global _partcad_context
     global _partcad_context_path
-    global _partcad_context_lock
 
     with _partcad_context_lock:
         _partcad_context = None

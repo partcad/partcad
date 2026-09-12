@@ -175,13 +175,10 @@ def test_ignore_collision_builds_from_the_visual_geometry_instead(no_occt):
 
 def test_a_mesh_is_referenced_where_it_lies(tmp_path):
     world = tmp_path / "meshes.world"
-    world.write_text(
-        """<sdf version="1.9"><world name="w"><model name="m"><link name="l">
+    world.write_text("""<sdf version="1.9"><world name="w"><model name="m"><link name="l">
         <collision name="c"><geometry><mesh>
           <uri>%s</uri><scale>0.001 0.001 0.001</scale>
-        </mesh></geometry></collision></link></model></world></sdf>"""
-        % STL_EXAMPLE
-    )
+        </mesh></geometry></collision></link></model></world></sdf>""" % STL_EXAMPLE)
 
     result = wrapper_import_world.process({"world_file": str(world), "output_folder": str(tmp_path), "model_paths": []})
     node = result["root"]["links"][0]["links"][0]
@@ -194,12 +191,9 @@ def test_a_mesh_is_referenced_where_it_lies(tmp_path):
 def test_a_file_with_no_world_is_read_as_a_world_of_its_models(tmp_path):
     """Pointing a scene at a model file works rather than failing on a technicality."""
     model = tmp_path / "pallet.sdf"
-    model.write_text(
-        """<sdf version="1.9"><model name="pallet"><link name="l">
+    model.write_text("""<sdf version="1.9"><model name="pallet"><link name="l">
         <collision name="c"><geometry><mesh><uri>%s</uri></mesh></geometry></collision>
-        </link></model></sdf>"""
-        % STL_EXAMPLE
-    )
+        </link></model></sdf>""" % STL_EXAMPLE)
 
     result = wrapper_import_world.process({"world_file": str(model), "output_folder": str(tmp_path), "model_paths": []})
     assert result["world_name"] == "pallet"
@@ -208,14 +202,11 @@ def test_a_file_with_no_world_is_read_as_a_world_of_its_models(tmp_path):
 
 def test_an_include_that_cannot_be_resolved_is_reported(tmp_path):
     world = tmp_path / "w.world"
-    world.write_text(
-        """<sdf version="1.9"><world name="w">
+    world.write_text("""<sdf version="1.9"><world name="w">
         <include><uri>model://nothing_like_this</uri></include>
         <model name="m"><link name="l">
           <collision name="c"><geometry><mesh><uri>%s</uri></mesh></geometry></collision>
-        </link></model></world></sdf>"""
-        % STL_EXAMPLE
-    )
+        </link></model></world></sdf>""" % STL_EXAMPLE)
 
     result = wrapper_import_world.process({"world_file": str(world), "output_folder": str(tmp_path), "model_paths": []})
     assert result["dropped"]["include"] == 1
@@ -227,18 +218,13 @@ def test_an_include_that_cannot_be_resolved_is_reported(tmp_path):
 def test_an_include_that_resolves_is_read(tmp_path):
     models = tmp_path / "models" / "pallet"
     models.mkdir(parents=True)
-    (models / "model.sdf").write_text(
-        """<sdf version="1.9"><model name="pallet"><link name="l">
+    (models / "model.sdf").write_text("""<sdf version="1.9"><model name="pallet"><link name="l">
         <collision name="c"><geometry><mesh><uri>%s</uri></mesh></geometry></collision>
-        </link></model></sdf>"""
-        % STL_EXAMPLE
-    )
+        </link></model></sdf>""" % STL_EXAMPLE)
     world = tmp_path / "w.world"
-    world.write_text(
-        """<sdf version="1.9"><world name="w"><include>
+    world.write_text("""<sdf version="1.9"><world name="w"><include>
         <uri>model://pallet</uri><name>left</name><pose>1 0 0 0 0 0</pose>
-        </include></world></sdf>"""
-    )
+        </include></world></sdf>""")
 
     result = wrapper_import_world.process(
         {
@@ -256,21 +242,16 @@ def test_an_included_file_with_more_than_one_model_says_which_one_it_placed(tmp_
     """An <include> places one model, so the rest of them go unplaced."""
     models = tmp_path / "models" / "pair"
     models.mkdir(parents=True)
-    (models / "model.sdf").write_text(
-        """<sdf version="1.9">
+    (models / "model.sdf").write_text("""<sdf version="1.9">
         <model name="first"><link name="l">
           <collision name="c"><geometry><mesh><uri>%s</uri></mesh></geometry></collision>
         </link></model>
         <model name="second"><link name="l">
           <collision name="c"><geometry><mesh><uri>%s</uri></mesh></geometry></collision>
-        </link></model></sdf>"""
-        % (STL_EXAMPLE, STL_EXAMPLE)
-    )
+        </link></model></sdf>""" % (STL_EXAMPLE, STL_EXAMPLE))
     world = tmp_path / "w.world"
-    world.write_text(
-        """<sdf version="1.9"><world name="w">
-        <include><uri>model://pair</uri></include></world></sdf>"""
-    )
+    world.write_text("""<sdf version="1.9"><world name="w">
+        <include><uri>model://pair</uri></include></world></sdf>""")
 
     result = wrapper_import_world.process(
         {"world_file": str(world), "output_folder": str(tmp_path), "model_paths": [str(tmp_path / "models")]}
@@ -285,21 +266,16 @@ def test_a_model_nested_in_an_included_one_is_read_rather_than_counted_as_droppe
     """The nested model is placed by the outer one, so nothing goes unplaced."""
     models = tmp_path / "models" / "stack"
     models.mkdir(parents=True)
-    (models / "model.sdf").write_text(
-        """<sdf version="1.9"><model name="outer">
+    (models / "model.sdf").write_text("""<sdf version="1.9"><model name="outer">
         <link name="l">
           <collision name="c"><geometry><mesh><uri>%s</uri></mesh></geometry></collision>
         </link>
         <model name="inner"><link name="l">
           <collision name="c"><geometry><mesh><uri>%s</uri></mesh></geometry></collision>
-        </link></model></model></sdf>"""
-        % (STL_EXAMPLE, STL_EXAMPLE)
-    )
+        </link></model></model></sdf>""" % (STL_EXAMPLE, STL_EXAMPLE))
     world = tmp_path / "w.world"
-    world.write_text(
-        """<sdf version="1.9"><world name="w">
-        <include><uri>model://stack</uri></include></world></sdf>"""
-    )
+    world.write_text("""<sdf version="1.9"><world name="w">
+        <include><uri>model://stack</uri></include></world></sdf>""")
 
     result = wrapper_import_world.process(
         {"world_file": str(world), "output_folder": str(tmp_path), "model_paths": [str(tmp_path / "models")]}

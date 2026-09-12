@@ -613,13 +613,23 @@ jobs:
   #         job: cache-preheat
   #         preheat_only: "true"
 
+  # None of the four lint jobs is gated on "changed-scopes", and for the isort
+  # job that is a correction rather than an omission. It used to check
+  # "src tests", which is always the "code" bucket, so gating it on `pytest` was
+  # consistent. All three now check the whole repository (the scope is in
+  # "pyproject.toml"), and several of the trees that brings in belong to buckets
+  # that leave `pytest` false: "ide/standalone/tests/*.py" is `ide`, "docs/*.py"
+  # and every "AGENTS.md" are `docs`, "dev-tools/pyinstaller" is `packaging`.
+  # Gated, a change to any of those would skip the linters and merge an unsorted
+  # file -- which is how #629 merged three of them 83 seconds after the isort
+  # gate landed in #633. Each job is seconds on one runner; the gate is not
+  # worth that.
+  #
+  # "needs: set-matrix" stays, and is what keeps the "a push to devel runs
+  # nothing unless the commit is a version bump" rule applying to these jobs.
   lint-isort:
     name: "Lint (isort)"
     needs: set-matrix
-    # Same gate as "Pytest": the source tree is what this can say anything
-    # about. "changed-scopes" is fail-safe, so a path it does not recognise
-    # turns this back on.
-    if: ${{ needs.set-matrix.outputs.pytest == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -643,8 +653,133 @@ jobs:
       # "--filter-files" so the "extend_skip"/"extend_skip_glob" entries in
       # "pyproject.toml" are honoured -- see the comment beside them for what
       # they protect and why sorting those files is a bug rather than a tidy-up.
+      #
+      # "." rather than a list of directories: what is in scope is stated in
+      # "pyproject.toml", once, for all three linters, so that this job, the
+      # "pre-commit" hook and a developer's own "poetry run isort ." cannot come
+      # to disagree about it. A path list here would be a fourth answer, and the
+      # one that silently stops covering a directory somebody adds.
       - name: Check import order
-        run: isort --check-only --diff --filter-files --settings-path pyproject.toml src tests
+        run: isort --check-only --diff --filter-files --settings-path pyproject.toml .
+
+  # Siblings of the job above rather than steps inside it, deliberately: the
+  # check name is what a branch-protection rule names, so each linter gets a
+  # name of its own that can be required independently, and a red check says
+  # which linter is unhappy without opening the log. Each is seconds on one
+  # runner; the cost of three is not worth collapsing.
+  lint-black:
+    name: "Lint (black)"
+    needs: set-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      # Same version as the pre-commit hook and as `pyproject.toml` resolves.
+      # black's stable style changes between major versions, so an unpinned
+      # runner would reformat the tree from under the hook that just passed.
+      - name: Install black
+        run: pip install "black==26.5.1"
+      # "." for the reason the isort job above gives: "force-exclude" in
+      # "pyproject.toml" is what holds "examples/" and "features/" out.
+      - name: Check formatting
+        run: black --check --diff .
+
+  lint-flake8:
+    name: "Lint (flake8)"
+    needs: set-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      # `Flake8-pyproject` is what makes flake8 read `[tool.flake8]` at all.
+      # Install flake8 without it and this job checks at 79 columns and fails
+      # on a tree the hook just passed.
+      - name: Install flake8
+        run: pip install "flake8==7.3.0" "Flake8-pyproject==1.2.4"
+      # "." for the reason the isort job above gives. flake8's own
+      # "extend-exclude" holds the two trees out, and unlike the other two
+      # tools it only applies that to files it discovers by walking -- which is
+      # exactly what this is, and why the hook needs an "exclude:" of its own.
+      - name: Lint
+        run: flake8 .
+
+  # The `pre-commit` hooks that are not otherwise gated. There used to be a job
+  # for this in "test-dev.yml"; it was commented out, and had been for long
+  # enough that both paths in it had gone stale
+  # ("dev-tools/pre-commit-config.yaml" moved, ".devcontainer/.devcontainer.json"
+  # never existed under that name). So `shellcheck`, `hadolint`, the workflow
+  # and YAML schema checks, the whitespace fixers and the "examples reference a
+  # checked-in image" check were enforced only for people who happened to commit
+  # from inside the dev container.
+  #
+  # This replaces it with a job that needs no dev container at all: the hooks
+  # below install their own tools, so a plain runner with `pre-commit` on it is
+  # the whole requirement.
+  #
+  # Ungated for the reason the three jobs above are, and then some: these hooks
+  # cover shell scripts, Dockerfiles, workflow YAML and the examples tree, which
+  # no single bucket implies at all.
+  lint-pre-commit:
+    name: "Lint (pre-commit)"
+    needs: set-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('dev-tools/pre-commit-config.yaml') }}
+      - name: Install pre-commit
+        run: pip install "pre-commit==4.4.0"
+      # Two hooks shell out to a binary rather than installing one: the
+      # `shellcheck` hook declared `language: system` in
+      # "dev-tools/pre-commit-config.yaml", and hadolint, whose upstream hook is
+      # also `system`. The dev container's image carries both; a plain runner
+      # has shellcheck and not hadolint, so fetch it -- at the same version the
+      # hook's `rev:` pins, so this job and the hook check with one tool.
+      # The checksum is upstream's published one for this exact asset, pinned
+      # here rather than fetched beside the binary: a checksum downloaded from
+      # the same place as the file it vouches for verifies nothing. Verified
+      # *before* the binary is made executable or run, so a mismatch fails the
+      # job with the file still inert. Bump both together when the `rev:` in
+      # "dev-tools/pre-commit-config.yaml" moves.
+      - name: Tools the system hooks need
+        env:
+          HADOLINT_VERSION: v2.14.0
+          HADOLINT_SHA256: 6bf226944684f56c84dd014e8b979d27425c0148f61b3bd99bcc6f39e9dc5a47
+        run: |
+          set -e
+          shellcheck --version >/dev/null
+          curl -fsSL -o /tmp/hadolint \
+            "https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VERSION}/hadolint-Linux-x86_64"
+          echo "${HADOLINT_SHA256}  /tmp/hadolint" | sha256sum --check --strict -
+          sudo install -m 0755 /tmp/hadolint /usr/local/bin/hadolint
+          hadolint --version
+      # SKIP, and why each:
+      #   pytest, behave          -- their own jobs, and they need the CAD stack
+      #   isort, black, flake8    -- the three jobs above; running them here too
+      #                              would put two red checks on one problem
+      #   eslint                  -- needs `npm install` under ide/vscode; the
+      #                              extension has its own workflow
+      #   poetry-lock/export/install -- these rewrite files rather than check
+      #                              them, which is not what a CI gate does
+      - name: Run the hooks
+        env:
+          SKIP: pytest,behave,isort,black,flake8,eslint,poetry-lock,poetry-export,poetry-install
+        run: |
+          set -e
+          pre-commit run --config dev-tools/pre-commit-config.yaml \
+            --all-files --show-diff-on-failure --color=always
 
   test-pytest:
     name: "Pytest"

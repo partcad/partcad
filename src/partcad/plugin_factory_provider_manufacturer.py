@@ -47,7 +47,7 @@ class PluginFactoryProviderManufacturer(PluginFactoryProvider):
         # TODO(clairbee): add vendor/SKU-based availability check
         caps = await self.plugin.get_caps()
         if cart_item.material:
-            if not cart_item.material in caps["materials"]:
+            if cart_item.material not in caps["materials"]:
                 return False
             if cart_item.color:
                 # TODO(clairbee): implement color mapping as a function in

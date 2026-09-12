@@ -16,7 +16,7 @@ class ImportConfiguration:
     def __init__(self, config_obj: dict = {}, parent: p.Project | None = None):
         self.config_obj = config_obj
         self.name = config_obj.get("name")
-        if not "type" in config_obj:
+        if "type" not in config_obj:
             if "url" in config_obj:
                 if config_obj["url"].endswith(".tar.gz"):
                     config_obj["type"] = "tar"

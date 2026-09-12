@@ -92,8 +92,7 @@ def test_a_scene_keeps_every_other_way_of_placing_an_object():
     for text in (PLACED, CONNECTED.replace('      how:\n        stage: "1"\n', "")):
         assert check(text, assy_lint.FLAVOR_SCENE) == []
 
-    ports = textwrap.dedent(
-        """\
+    ports = textwrap.dedent("""\
         links:
           - part: cube
             name: block
@@ -103,8 +102,7 @@ def test_a_scene_keeps_every_other_way_of_placing_an_object():
               with: a
               to: b
               exploded: 5
-        """
-    )
+        """)
     assert check(ports, assy_lint.FLAVOR_SCENE) == []
 
 

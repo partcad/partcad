@@ -6,8 +6,6 @@
 """The StaleGitLocks healthcheck removes leftover git cache lock files that no
 process holds, and never touches a lock a process still holds."""
 
-import os
-
 import pytest
 from filelock import FileLock
 

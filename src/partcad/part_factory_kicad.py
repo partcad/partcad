@@ -23,7 +23,7 @@ kicad_runtime_uses_docker = False
 
 
 async def get_runtime(ctx):
-    global kicad_runtime, kicad_runtime_uses_docker, kicad_runtime_lock
+    global kicad_runtime, kicad_runtime_uses_docker
     with kicad_runtime_lock:
         kicad_runtime = runtime.Runtime(ctx, "shell")
         kicad_runtime_uses_docker = ctx.user_config.use_docker_kicad

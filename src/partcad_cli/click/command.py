@@ -600,7 +600,6 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
 
         # Prepare the callboack to be used by command handlers should they need a PartCAD context object
         def get_partcad_context():
-            nonlocal ctx, path
             from partcad.globals import init
 
             try:

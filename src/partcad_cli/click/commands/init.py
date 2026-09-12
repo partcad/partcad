@@ -140,7 +140,7 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
     with pc.telemetry.set_context(cli_ctx.otel_context):
         # ctx: pc.Context = cli_ctx.get_partcad_context()
 
-        if not click_ctx.parent.params.get("package") is None:
+        if click_ctx.parent.params.get("package") is not None:
             if os.path.isdir(click_ctx.parent.params.get("package")):
                 dst_path = os.path.join(click_ctx.parent.params.get("package"), "partcad.yaml")
             else:

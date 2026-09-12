@@ -42,9 +42,7 @@ def import_world_action(project: Project, scene_file: str, config: dict) -> str:
 
     name = Path(scene_file).stem
     if project.get_scene_config(name) is not None:
-        raise ValueError(
-            "The package already has a scene named '%s'; rename the world file or remove it first" % name
-        )
+        raise ValueError("The package already has a scene named '%s'; rename the world file or remove it first" % name)
 
     world_config = {"type": "world", "path": str(Path(scene_file).resolve())}
     # What the world reader takes from a scene's declaration. An import has

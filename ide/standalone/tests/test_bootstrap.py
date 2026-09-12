@@ -20,6 +20,7 @@ import json
 import re
 
 import pytest
+
 from conftest import COMPONENT_ROOT, REPO_ROOT
 
 BOOTSTRAP = COMPONENT_ROOT / "bootstrap"

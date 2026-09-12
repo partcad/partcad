@@ -21,10 +21,6 @@ import sys
 from io import BytesIO
 
 import pytest
-
-import partcad as pc
-from partcad import brep_inspect
-
 from OCP.Bnd import Bnd_Box
 from OCP.BRep import BRep_Builder
 from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
@@ -33,11 +29,14 @@ from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
 from OCP.BRepGProp import BRepGProp
 from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
 from OCP.BRepTools import BRepTools
+from OCP.gp import gp_Trsf, gp_Vec
 from OCP.GProp import GProp_GProps
 from OCP.TopAbs import TopAbs_FACE, TopAbs_SHELL, TopAbs_SOLID
 from OCP.TopExp import TopExp_Explorer
 from OCP.TopoDS import TopoDS_Compound, TopoDS_Shell
-from OCP.gp import gp_Trsf, gp_Vec
+
+import partcad as pc
+from partcad import brep_inspect
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 import wrapper_common  # noqa: E402

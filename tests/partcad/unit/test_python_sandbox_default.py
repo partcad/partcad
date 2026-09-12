@@ -12,8 +12,6 @@ asking means talking to a daemon and a command that never builds a sandbox
 should not pay for it.
 """
 
-import types
-
 import pytest
 
 from partcad import context as pc_context

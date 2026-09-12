@@ -6,7 +6,7 @@
 
 import asyncio
 import json
-from typing import Any, List
+from typing import List
 
 import rich_click as click
 

@@ -204,23 +204,105 @@ markers = [
 # format = "allure_behave.formatter:AllureFormatter"
 # outfile = "allure-results"
 
+# What the three linters check, stated once here rather than three times on
+# three command lines: `isort`, `black` and `flake8` are all invoked on `.`, by
+# the `pre-commit` hooks and by the `Lint (...)` jobs in
+# ".github/workflows/test.yml" alike, so this file is the only place the scope
+# is written down and a hook and a job cannot come to disagree about it.
+#
+# The scope is "PartCAD's own Python": "src/", "tests/", "cad/", "dev-tools/",
+# "ide/", "tools/", "docs/" and the root "conftest.py". Two trees are held out,
+# and not because they are unimportant:
+#
+#   * "examples/" is CAD part scripts, written the way a *user* writes one --
+#     `from build123d import *`, and a `show_object` the runner injects at
+#     execution time. flake8 reports 102 findings there and essentially all of
+#     them are that idiom (F403/F405/F401/F821), which is why `[tool.ruff.lint]`
+#     below already waives exactly those three for `pc lint` of a part. Sorting
+#     their imports carries the wrappers' risk too: these are sandbox scripts,
+#     and their rendered output is checked in.
+#   * "features/" is `behave` step definitions, where every module defines
+#     several functions called `step_impl` and the decorator is what
+#     distinguishes them. 29 of its 56 findings are F811 "redefinition of
+#     unused 'step_impl'" -- the framework's idiom, reported as a defect.
+#
+# Covering either means deciding which codes to waive across a whole directory,
+# which is a policy question and a change of its own -- not something to settle
+# inside a change whose point is that the gate agrees with the tree.
+#
+# `force-exclude` rather than `extend-exclude`: black applies `extend-exclude`
+# only to files it *discovers* by walking, and `pre-commit` hands it the staged
+# files by name. `force-exclude` is the one black also applies to those. This is
+# the same trap as isort's `--filter-files` below.
 [tool.black]
 line-length = 120
 target-version = ['py310']
+force-exclude = """
+^/(examples|features)/
+"""
 
+# Read only because `Flake8-pyproject` is installed: flake8 itself has never
+# supported `pyproject.toml`. Without that plugin this whole table was inert and
+# flake8 fell back to its built-in defaults -- which is why it used to report
+# E501 at 79 columns on a repository that formats at 120, and why nobody could
+# run it usefully.
 [tool.flake8]
-exclude = ".venv"
-extend-ignore = "E203"
+# `extend-exclude` rather than `exclude`, which *replaces* flake8's built-in
+# list (".git", "__pycache__", ".tox", ".eggs", ...) instead of adding to it.
+# ".venv" has to be named either way -- it is not in that built-in list, and
+# `poetry.toml` sets `in-project = true`, so the virtualenv is inside the tree
+# a `flake8 .` walks.
+#
+# Note that unlike black's `force-exclude` and isort's `--filter-files`, this
+# governs *discovery* only: flake8 has no force-exclude, and checks any file
+# handed to it by name regardless. That is why the `flake8` hook in
+# "dev-tools/pre-commit-config.yaml" carries an `exclude:` of its own -- the
+# one place the two trees above are named twice, and the comment there says so.
+extend-exclude = ".venv,examples,features"
 max-line-length = 120
 
-[tool.pylint."messages control"]
-ignore = ["setup.py", "__init__.py"]
-disable = "all"
-enable = [
-  "empty-docstring",
-  "missing-class-docstring",
-  "missing-function-docstring",
-  "missing-module-docstring"
+# E203 is the usual black-compatibility waiver (black puts a space before the
+# `:` in a slice; pycodestyle disagrees, and black wins).
+#
+# E501 is waived because *black* owns line length here, at the same 120 stated
+# above. What is left over after black has run is the handful of long string
+# literals black deliberately will not split, so flake8's copy of the rule only
+# ever disagrees with the formatter that already ran.
+#
+# E722 and E731 are deferred rather than endorsed: a bare `except:` and a
+# `name = lambda ...` each need a per-site judgement (what should be caught,
+# whether the alias wants to become a `def`), and neither is a correctness
+# question. Turning either on is its own change.
+extend-ignore = "E203,E501,E722,E731"
+
+# The files where a finding is the idiom rather than a defect. The first two
+# entries are the same paths `[tool.isort]` skips below, for the same reason:
+# these scripts run inside a CAD sandbox, add their own directory to `sys.path`
+# and then import their neighbours by bare name, so a late import (E402) and an
+# import that only exists for its side effect (F401) are the design.
+#
+# The patterns are repository-relative because that is how CI and the hook
+# invoke flake8 (`flake8 src tests` from the root), and flake8 fnmatches them
+# against the path it was handed. fnmatch's `*` spans `/`, so the two
+# directory entries below also cover the files nested one level deeper.
+per-file-ignores = [
+  "src/partcad/wrappers/*:E402,F401,F403,F405,F841,E721",
+  "src/partcad/builtin/*:E402,F401,F403,F405",
+  # Pins expat, sanitises the environment and aliases `partcad_utils.*` in, each
+  # before the thing that needs it, then re-exports the public API.
+  "src/partcad/__init__.py:E402,F401,F403,F405",
+  # `import *` is how these compose their namespace.
+  "src/partcad/context.py:F403,F405",
+  "src/partcad/plugin_provider.py:F403,F405",
+  "src/partcad/plugin_factory_provider_manufacturer.py:F403,F405",
+  "src/partcad/plugin_factory_provider_store.py:F403,F405",
+  "src/partcad/plugin_request_provider_quote.py:F403,F405",
+  # Import after a `sys.path` mutation, like the wrappers.
+  "src/partcad/shape.py:E402",
+  "src/partcad/healthcheck/tests.py:E402",
+  "tests/partcad_service_json_rpc/test_ansi_rendering.py:E402",
+  # A CQGI part script: the runner injects `show_object` at execution time.
+  "tests/partcad/unit/data/*:F821",
 ]
 
 [tool.isort]
@@ -267,15 +349,36 @@ known_first_party = [
 # commit that sorted it. The comments in those files say the same thing, but a
 # comment does not stop `isort .`.
 extend_skip = ["src/partcad/__init__.py"]
-extend_skip_glob = ["*/src/partcad/wrappers/*", "*/src/partcad/builtin/*"]
+# The last two are the held-out trees the comment above `[tool.black]`
+# explains; the first two are the sandbox scripts this comment is about.
+extend_skip_glob = [
+  "src/partcad/wrappers/*",
+  "src/partcad/builtin/*",
+  "examples/*",
+  "features/*",
+]
 
-[tools.pyright]
+# Read by Pylance, which `.devcontainer/devcontainer.json` recommends, and by
+# `pyright` if anyone runs it. The table was spelled `[tools.pyright]` until
+# 2026-09 -- one letter, and the wrong one: `tools` is not a table any tool
+# looks in, so these two settings had never applied to anything. Nothing here
+# gates: there is no type checker in any dependency group, so this is editor
+# diagnostics only, and adopting one is a decision of its own.
+[tool.pyright]
 reportMissingTypeArgument = true  # Report generic classes used without type arguments
 strictListInference = true  # Use union types when inferring types of lists elements, instead of Any
 
 # export POETRY_MULTIPROJECT_CHECK_DIR="/tmp/.check_partcad-dev"
 # export POETRY_MULTIPROJECT_PREPARE_DIR="/tmp/.prepare_partcad-dev"
 
+# NOT this repository's own linting. `ruff` is a runtime dependency of PartCAD
+# (the `partcad` group), and `partcad.lint.python` shells out to it to lint the
+# *user's* part scripts: `ruff check --no-cache --output-format=json <target>`,
+# with neither `--config` nor `--isolated`, so ruff discovers configuration by
+# walking up from the file it was handed. This block therefore applies when
+# `pc lint` runs on a part inside this repository -- the examples -- and never
+# to `src/`. The three codes are waived because a CAD part script is written as
+# `from build123d import *` and leans on the star import.
 [tool.ruff.lint]
 ignore = ["F401", "F403", "F405"]
 
@@ -305,13 +408,17 @@ packages = [
 # `poetry install` installs it editable and the groups add what the suites need.
 #
 [tool.poetry.group.dev.dependencies]
-# black and isort are not run by any CI job or pre-commit hook (see
-# dev-tools/pre-commit-config.yaml), so these are the versions a developer
-# gets, not a gate. Note that black 26's stable style reformats ~54 files in
-# this repo and isort does not agree with the tree as committed today;
-# applying either belongs in its own PR, not in a dependency bump.
+# All three gate: each is a `pre-commit` hook and a `Lint (...)` job in
+# `test.yml`, and each of those pins the version this group resolves, so the
+# hook and the job cannot disagree about what "clean" means. Bumping one of
+# these therefore reformats or re-lints the tree -- do it in a change of its
+# own, and update the pin in both places at the same time.
 black = "^26.5.1"
 flake8 = "^7.3.0"
+# flake8 cannot read `pyproject.toml` on its own. Without this plugin the
+# `[tool.flake8]` table above is inert and flake8 silently falls back to its
+# own defaults -- 79 columns on a repository that formats at 120.
+Flake8-pyproject = "^1.2.3"
 isort = "^8.0.1"
 sentry-sdk = {extras = ["opentelemetry"], version = "^2.66.0"}
 poetry-plugin-shell = "^1.0.1"

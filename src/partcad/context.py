@@ -191,7 +191,7 @@ class Context:
     class PackageLock(object):
         def __init__(self, ctx, package_name: str):
             ctx.project_locks_lock.acquire()
-            if not package_name in ctx.project_locks:
+            if package_name not in ctx.project_locks:
                 ctx.project_locks[package_name] = threading.Lock()
             self.lock = ctx.project_locks[package_name]
             ctx.project_locks_lock.release()
@@ -645,7 +645,7 @@ class Context:
                     "path": next_import,
                 }
                 next_project = self.import_project(project, prj_conf)
-                if not next_project is None:
+                if next_project is not None:
                     result = self._get_project_recursive(next_project, import_list)
                     return result
         else:
@@ -667,7 +667,7 @@ class Context:
                         prj_conf["orig_name"] = prj_conf["name"]
                     prj_conf["name"] = next_project_path
                     next_project = self.import_project(project, prj_conf)
-                    if not next_project is None:
+                    if next_project is not None:
                         result = self._get_project_recursive(next_project, import_list)
                         return result
                     break
@@ -883,7 +883,7 @@ class Context:
         source_interface_name = source_interface.full_name
         target_interface_name = target_interface.full_name
 
-        if not source_interface_name in self.mates:
+        if source_interface_name not in self.mates:
             self.mates[source_interface_name] = {}
         if target_interface_name in self.mates[source_interface_name]:
             pc_logging.debug("Mate already exists: %s -> %s" % (source_interface_name, target_interface_name))
@@ -894,9 +894,9 @@ class Context:
         self.mates[source_interface_name][target_interface_name] = mate
 
     def get_mate(self, source_interface_name, target_interface_name) -> Mating | None:
-        if not source_interface_name in self.mates:
+        if source_interface_name not in self.mates:
             return None
-        if not target_interface_name in self.mates[source_interface_name]:
+        if target_interface_name not in self.mates[source_interface_name]:
             return None
 
         return self.mates[source_interface_name][target_interface_name]
@@ -922,7 +922,7 @@ class Context:
         real_source_interfaces = {interface: set([interface]) for interface in source_interfaces}
         for interface in source_interfaces:
             for compatible_interface in self.get_interface(interface).compatible_with:
-                if not compatible_interface in real_source_interfaces:
+                if compatible_interface not in real_source_interfaces:
                     real_source_interfaces[compatible_interface] = set()
                 real_source_interfaces[compatible_interface].add(interface)
 
@@ -943,7 +943,7 @@ class Context:
         real_target_interfaces = {interface: set([interface]) for interface in target_interfaces}
         for interface in target_interfaces:
             for compatible_interface in self.get_interface(interface).compatible_with:
-                if not compatible_interface in real_target_interfaces:
+                if compatible_interface not in real_target_interfaces:
                     real_target_interfaces[compatible_interface] = set()
                 real_target_interfaces[compatible_interface].add(interface)
         target_interfaces = target_interfaces.union(compatible_target_interfaces)
@@ -1157,7 +1157,7 @@ class Context:
 
         # Place each part in the corresponding supplier cart
         for part_spec, provider_name in preferred_suppliers.items():
-            if not provider_name in supplier_carts:
+            if provider_name not in supplier_carts:
                 supplier_carts[provider_name] = ProviderCart()
             cart_item = await supplier_carts[provider_name].add_part_spec(self, part_spec)
 
@@ -1545,7 +1545,7 @@ class Context:
             if python_runtime not in ("docker", "remote"):
                 image = None
             runtime_name = python_runtime + "-" + version + ("@" + image if image else "")
-            if not runtime_name in self.runtimes_python:
+            if runtime_name not in self.runtimes_python:
                 self.runtimes_python[runtime_name] = runtime_python_all.create(
                     self, version, python_runtime, image=image
                 )

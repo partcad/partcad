@@ -41,8 +41,6 @@ development environment -- over a data file the developer can fix with one
 import json
 import os
 
-from setuptools.command.egg_info import manifest_maker
-
 # Everything a PEP 517 frontend may call. The hooks not named below are
 # re-exported unchanged, which is the point: this is setuptools, with a
 # precondition, and the day setuptools grows a hook it should arrive here
@@ -50,6 +48,7 @@ from setuptools.command.egg_info import manifest_maker
 from setuptools.build_meta import *  # noqa: F401,F403
 from setuptools.build_meta import build_sdist as _build_sdist
 from setuptools.build_meta import build_wheel as _build_wheel
+from setuptools.command.egg_info import manifest_maker
 
 # Relative to the project root, which is the directory a PEP 517 build runs in.
 _PACKAGE = os.path.join("src", "partcad", "ai_agents")

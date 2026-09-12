@@ -36,7 +36,6 @@ import hashlib
 import json
 
 from .. import cae as pc_cae
-from .. import logging as pc_logging
 from .. import output
 from .. import runtime as pc_runtime
 from ..part import Part

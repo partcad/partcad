@@ -118,6 +118,16 @@ repos:
   # is sorted despite the skip, which is precisely the reordering the skip
   # exists to prevent. `--settings-path` for the same reason -- the config is
   # found from the repository root rather than from each file's directory.
+  #
+  # The `exclude:` on all three is `examples/` and `features/`, the two trees
+  # `pyproject.toml` holds out -- the comment above `[tool.black]` there says
+  # which idiom each of them is full of and why waiving it is a decision of its
+  # own. isort and black are configured to skip them and would skip them
+  # without this; flake8 is *not*, because its `extend-exclude` governs only
+  # the files it discovers by walking, and pre-commit hands a hook the staged
+  # files by name. So one of the three needs this line and the other two carry
+  # it to say, on the hook itself, what that hook looks at. If the held-out set
+  # changes it changes in `pyproject.toml` and in these three places.
   - repo: local
     hooks:
       - id: isort
@@ -127,6 +137,36 @@ repos:
         language: python
         additional_dependencies: ["isort==8.0.1"]
         types: [python]
+        exclude: ^(examples|features)/
+      # black and flake8 join isort on the same terms: local rather than a hook
+      # repository (nothing to clone, so a gitconfig that rewrites GitHub to SSH
+      # cannot break the install), pinned to the version `pyproject.toml`
+      # resolves, and mirrored by a job in `test.yml`.
+      #
+      # black holds back the two trees above and nothing else. The sandbox
+      # scripts isort skips are skipped because their *import order* is load
+      # bearing, and black never reorders imports -- it only wraps lines, which
+      # is safe there. (It needs `force-exclude` rather than `extend-exclude`
+      # for what it does hold back, for the reason `--filter-files` is on the
+      # isort line above: `pre-commit` passes files by name.)
+      - id: black
+        name: black
+        description: formatting, as configured in pyproject.toml
+        entry: black --check --diff
+        language: python
+        additional_dependencies: ["black==26.5.1"]
+        types: [python]
+        exclude: ^(examples|features)/
+      # `Flake8-pyproject` is not optional here: without it flake8 does not read
+      # `[tool.flake8]` at all and checks at its own 79-column default.
+      - id: flake8
+        name: flake8
+        description: lint, as configured in pyproject.toml
+        entry: flake8
+        language: python
+        additional_dependencies: ["flake8==7.3.0", "Flake8-pyproject==1.2.4"]
+        types: [python]
+        exclude: ^(examples|features)/
   - repo: local
     hooks:
       - id: shellcheck

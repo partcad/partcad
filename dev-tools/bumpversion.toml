@@ -181,4 +181,3 @@ replace = "devcontainer:{new_version}"
 filename = ".devcontainer/Dockerfile"
 search = "IMAGE_VERSION={current_version}"
 replace = "IMAGE_VERSION={new_version}"
-

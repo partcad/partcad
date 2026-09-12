@@ -23,7 +23,6 @@ import os
 import shutil
 import sys
 
-
 FAILURES = []
 
 
@@ -62,8 +61,7 @@ def main() -> int:
     check(
         "PC_CONTAINER_ALLOWED_COMMANDS is JSON",
         readable,
-        "the RPC service reads it at startup and an unreadable one leaves the image able to run "
-        "nothing at all",
+        "the RPC service reads it at startup and an unreadable one leaves the image able to run nothing at all",
     )
     check(
         "the allowlist maps 'python'",
@@ -74,21 +72,18 @@ def main() -> int:
     check(
         "what the allowlist maps 'python' to exists",
         bool(parsed.get("python")) and os.access(parsed.get("python", ""), os.X_OK),
-        "the name resolves to a file that is not there, which fails at the first command rather "
-        "than at build time",
+        "the name resolves to a file that is not there, which fails at the first command rather than at build time",
     )
 
     check(
         "the RPC service is at /pc",
         os.path.isfile("/pc/pc-container-json-rpc.py"),
-        "the image's entrypoint serves it from there, and the 'remote' sandbox has nothing to talk "
-        "to without it",
+        "the image's entrypoint serves it from there, and the 'remote' sandbox has nothing to talk to without it",
     )
     check(
         "flask_jsonrpc is importable",
         _importable("flask_jsonrpc"),
-        "the service imports it at startup, so the container would exit immediately instead of "
-        "serving",
+        "the service imports it at startup, so the container would exit immediately instead of serving",
     )
 
     state = os.environ.get("PC_INTERNAL_STATE_DIR", "")

@@ -4,10 +4,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .test import Test
 from .. import brep_inspect
 from ..assembly import Assembly
 from ..sketch import Sketch
+from .test import Test
 
 
 class ShellTest(Test):
