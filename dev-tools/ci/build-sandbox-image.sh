@@ -59,7 +59,15 @@ PC_CACHE_FROM="${PC_CACHE_FROM:-}"
 
 # Resolved against this file rather than the working directory, so that a
 # caller's 'cd' cannot change which Dockerfile gets built.
-here=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+#
+# 'CDPATH' is cleared first because a caller that exports one sends 'cd' to
+# whatever that path resolves the argument against, and makes it print the
+# directory it chose -- so the assignment would capture the wrong tree, or the
+# right one with a line of noise in front of it. It is 'unset' in the subshell
+# rather than the usual 'CDPATH= cd ...' prefix because shellcheck cannot tell
+# that prefix from a mistyped assignment (SC1007), and this needs no
+# suppression to say the same thing.
+here=$(unset CDPATH; cd -- "$(dirname -- "$0")/../.." && pwd)
 context="${here}/tools/containers"
 dockerfile="${context}/python/Dockerfile"
 
