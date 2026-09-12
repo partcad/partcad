@@ -223,6 +223,27 @@ def test_schema_a_geometry_check_rejects_what_it_does_not_read(check):
     assert any("boolean" in error.message for error in errors)
 
 
+@pytest.mark.parametrize("check", ["degenerate", "shell", "solidity"])
+def test_schema_a_geometry_check_is_validated_on_a_partType_backed_part_too(check):
+    """That branch takes any key, and these three still have to be the right shape.
+
+    A part whose 'type' names a partType is matched by a branch that allows
+    undeclared properties, because the wrapper script reads configuration keys of
+    its own invention. The geometry checks are not among those: they are
+    PartCAD's, and a 'skip' that is the string "false" reads as true and turns
+    the check off in silence.
+    """
+    validate({"parts": {"widget": {"type": ":box", check: {"skip": True}}}})
+
+    errors = failures({"parts": {"widget": {"type": ":box", check: {"skip": "false"}}}})
+    assert any("boolean" in error.message for error in errors)
+
+
+def test_schema_a_partTypes_own_keys_are_still_allowed():
+    """The branch must not close: ':ldraw' identifies its part with 'dat'."""
+    validate({"parts": {"widget": {"type": ":ldraw", "dat": "3001.dat", "shell": {"skip": True}}}})
+
+
 # The package walk: which check claims which file, and what it reports.
 
 

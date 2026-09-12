@@ -122,6 +122,23 @@ def test_the_solid_is_oriented_rather_than_left_inside_out():
     assert _volume(solid) == BOX_VOLUME
 
 
+def test_a_shell_that_cannot_be_oriented_is_left_as_it_is(monkeypatch):
+    """'BRepCheck_Shell.Closed()' and "can be oriented" are different questions.
+
+    It asks whether the faces leave a free edge, not whether their orientations
+    agree, so a closed shell can still be one 'OrientClosedSolid' refuses - and
+    the solid that would come back from it is the inside-out one this conversion
+    exists to avoid making. Forced here, because a shell in that state is
+    laborious to build and the branch is one line either way.
+    """
+    import OCP.BRepLib
+
+    shell = _sub_shape(_box(), TopAbs_SHELL)
+    monkeypatch.setattr(OCP.BRepLib.BRepLib, "OrientClosedSolid_s", staticmethod(lambda solid: False))
+
+    assert wrapper_common.solidify(shell) is shell
+
+
 def test_a_shell_that_does_not_close_is_left_as_it_is():
     """There is no solid it bounds, and inventing one would be worse than saying so."""
     builder = _builder()

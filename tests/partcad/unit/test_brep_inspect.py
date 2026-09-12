@@ -144,6 +144,43 @@ def test_uncompressed_and_compressed_payloads_are_told_apart_by_the_frame():
     assert shape_envelope.brep_plain(shape_envelope.brep_base64(zstd_compress(plain, 3))) == plain
 
 
+def test_a_payload_that_keeps_expanding_is_refused_rather_than_decompressed():
+    """A zstd frame costs nothing to make and can expand without bound.
+
+    This is the one place the core process decompresses a shape, and what it
+    decompresses comes out of a cache that a shared backend need not have got
+    from this machine. So the read is bounded, and a frame that is still
+    producing at the limit is refused; 'topology()' reports that as a payload it
+    could not read, which is a verdict it already has to have.
+    """
+    bomb = zstd_compress(b"\0" * (64 << 20), 3)
+    assert len(bomb) * shape_envelope.MAX_BREP_EXPANSION < 64 << 20, "the bomb has to exceed its own limit"
+
+    with pytest.raises(ValueError):
+        shape_envelope.brep_plain(bomb)
+
+    assert brep_inspect.topology(bomb) is None
+    assert brep_inspect.free_shells(bomb) is None
+    assert brep_inspect.envelope_free_shells({"brep": bomb}) == (0, 1)
+
+
+@pytest.mark.parametrize("name", sorted(FIXTURES))
+def test_real_geometry_is_nowhere_near_the_limit(name):
+    """The bound has to be one no shape can reach, or it is a bug generator.
+
+    BREP compresses by a few times over; the limit is two orders of magnitude
+    above that, and the floor keeps a small payload from being held to a small
+    multiple of very little.
+    """
+    plain = payload(name)
+    compressed = zstd_compress(plain, 3)
+    limit = max(shape_envelope.MAX_BREP_EXPANSION_FLOOR, shape_envelope.MAX_BREP_EXPANSION * len(compressed))
+
+    assert shape_envelope.brep_plain(compressed) == plain
+    assert len(plain) < limit
+    assert len(plain) / len(compressed) < shape_envelope.MAX_BREP_EXPANSION / 5
+
+
 def test_an_envelope_is_walked_and_an_assembly_with_it():
     """A shell anywhere in an assembly is a shell in the shape."""
     solid = {"name": "a", "label": "a", "brep": payload("solid.brep")}

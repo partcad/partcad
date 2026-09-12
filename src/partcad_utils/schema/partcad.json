@@ -822,7 +822,7 @@
             },
             {
               "type": "object",
-              "description": "A part built by a package-defined partType (its 'type' references a partType). partType-specific properties are allowed.",
+              "description": "A part built by a package-defined partType (its 'type' references a partType). partType-specific properties are allowed -- a wrapper script reads configuration keys of its own invention, so this branch cannot close. The geometry checks below are named anyway: they are PartCAD's keys rather than the partType's, and a 'shell: skip: \"false\"' that nothing validates reads as true and turns the check off in silence.",
               "properties": {
                 "type": {
                   "type": "string",
@@ -836,7 +836,10 @@
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
-                "unless": { "$ref": "#/definitions/unless" }
+                "unless": { "$ref": "#/definitions/unless" },
+                "degenerate": { "$ref": "#/definitions/geometry-check-degenerate" },
+                "shell": { "$ref": "#/definitions/geometry-check" },
+                "solidity": { "$ref": "#/definitions/geometry-check" }
               },
               "required": ["type"],
               "additionalProperties": true

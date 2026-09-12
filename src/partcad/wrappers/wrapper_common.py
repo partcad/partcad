@@ -217,6 +217,15 @@ def _shell_to_solid(shell):
     converting without orienting would turn a shell nothing computed from into a
     solid everything computes from wrongly; 'BRepLib.OrientClosedSolid_s'
     reverses it when needed and is what makes this conversion safe.
+
+    Which is why its answer is read rather than assumed. It returns False for a
+    solid it cannot orient - "open or incoherent" - and a shell can reach it in
+    that state: 'BRepCheck_Shell.Closed()' asks whether the faces leave a free
+    edge, not whether their orientations agree with each other, so a shell whose
+    faces are coherently joined and inconsistently turned passes the check above
+    and cannot be oriented here. The shell is then kept as it is, which is the
+    same answer an unclosed one gets and for the same reason: the solid that
+    would be returned is exactly the one this is written to avoid making.
     """
     import OCP.BRep  # noqa: F401
     import OCP.BRepCheck  # noqa: F401
@@ -232,7 +241,8 @@ def _shell_to_solid(shell):
         solid = OCP.TopoDS.TopoDS_Solid()
         builder.MakeSolid(solid)
         builder.Add(solid, shell)
-        OCP.BRepLib.BRepLib.OrientClosedSolid_s(solid)
+        if not OCP.BRepLib.BRepLib.OrientClosedSolid_s(solid):
+            return None
         if solid.IsNull():
             return None
         return solid
