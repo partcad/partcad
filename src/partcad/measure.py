@@ -14,9 +14,7 @@ codec, so this module never touches OCP.
 """
 
 from . import logging as pc_logging
-from . import sandbox_versions
-from . import shape_envelope
-from . import wrapper
+from . import sandbox_versions, shape_envelope, wrapper
 from .geom import Location
 
 # The bounding box only needs OCCT itself, no CAD kernel on top of it.

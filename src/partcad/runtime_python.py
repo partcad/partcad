@@ -17,12 +17,9 @@ import signal
 import subprocess
 import sys
 
-from . import sandbox_lock
-from . import sandbox_versions
-from . import runtime
 from . import logging as pc_logging
+from . import runtime, sandbox_lock, sandbox_versions, telemetry
 from .process_output import decode as decode_output
-from . import telemetry
 
 # Every session v-env directory is named this way, which is what lets the
 # environment lock recover the session hash from the path alone.

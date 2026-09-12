@@ -9,11 +9,12 @@
 #
 
 import asyncio
-import docker
-import pytest
+import os
 import shutil
 import sys
-import os
+
+import docker
+import pytest
 
 import partcad as pc
 

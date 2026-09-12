@@ -87,7 +87,7 @@ def _quat_to_axis_angle(q):
 
 def _build_trsf(q, t):
     """Build the OCCT gp_Trsf for quaternion 'q' and translation 't' (lazy OCP)."""
-    from OCP.gp import gp_Trsf, gp_Quaternion, gp_Vec
+    from OCP.gp import gp_Quaternion, gp_Trsf, gp_Vec
 
     w, x, y, z = q
     trsf = gp_Trsf()

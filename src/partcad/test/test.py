@@ -7,8 +7,8 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from abc import ABC, abstractmethod
 import copy
+from abc import ABC, abstractmethod
 
 from .. import logging as pc_logging
 from ..concurrency import ReentrantGate

@@ -4,24 +4,25 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import rich_click as click
 import atexit
-import logging
 import locale
+import logging
 import platform
 import re
-import sentry_sdk
 import sys
+
+import rich_click as click
+import sentry_sdk
 import sentry_sdk.session
 import yaml
 
 import partcad_utils
 import partcad_utils.logging_remote_client as logging_remote_client
+from partcad_cli.click.cli_context import CliContext
+from partcad_cli.click.loader import Loader
 from partcad_utils import logging as pc_logging
 from partcad_utils import telemetry as pc_telemetry
 from partcad_utils.user_config import user_config as pc_user_config
-from partcad_cli.click.loader import Loader
-from partcad_cli.click.cli_context import CliContext
 
 # partcad's package __init__ used to run this when the CLI imported it; the CLI
 # no longer imports the heavy partcad package, so initialize telemetry here.

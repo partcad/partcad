@@ -12,16 +12,11 @@ import os
 import sys
 import typing
 
-from . import shape_envelope
-
+from . import logging as pc_logging
+from . import sandbox_versions, shape_envelope, telemetry, wrapper
 from .plugin import Plugin
 from .plugin_factory_file import PluginFactoryFile
 from .runtime_python import PythonRuntime, shape_docker_image
-
-from . import wrapper
-from . import logging as pc_logging
-from . import sandbox_versions
-from . import telemetry
 
 
 async def query_with_deadline(plugin: Plugin, run, timeout: int, subject: typing.Optional[str] = None):

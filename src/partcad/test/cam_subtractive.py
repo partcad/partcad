@@ -7,10 +7,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .test import Test
 from ..part import Part
 from ..part_config import PartConfiguration
 from ..part_config_manufacturing import METHOD_SUBTRACTIVE
+from .test import Test
 
 
 class CamSubtractiveTest(Test):

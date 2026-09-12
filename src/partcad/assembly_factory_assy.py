@@ -8,18 +8,19 @@
 #
 
 import asyncio
-from jinja2 import FileSystemLoader
-from jinja2.sandbox import SandboxedEnvironment
 import fnmatch
 import os
-import yaml
 
+import yaml
+from jinja2 import FileSystemLoader
+from jinja2.sandbox import SandboxedEnvironment
+
+from . import logging as pc_logging
 from . import telemetry
 from .assembly import Assembly, AssemblyChild
 from .assembly_connect import ConnectHow, check_stage_sequence
 from .assembly_factory_file import AssemblyFactoryFile
 from .geom import Location
-from . import logging as pc_logging
 
 
 @telemetry.instrument()

@@ -35,9 +35,7 @@ nothing.
 import os
 from typing import Optional
 
-from . import runtime
-from . import runtime_python
-from . import telemetry
+from . import runtime, runtime_python, telemetry
 from .runtime_json_rpc import RuntimeJsonRpcClient
 
 # Never sent, whatever an argument points into. A sandbox needs none of them,

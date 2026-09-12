@@ -7,15 +7,16 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from jinja2 import Environment, FileSystemLoader, ChoiceLoader
 import json
 import math
 import os
-import yaml
 
-from .project import Project
+import yaml
+from jinja2 import ChoiceLoader, Environment, FileSystemLoader
+
 from . import logging as pc_logging
 from . import telemetry
+from .project import Project
 
 DEFAULT_CONFIG_FILENAME = "partcad.yaml"
 

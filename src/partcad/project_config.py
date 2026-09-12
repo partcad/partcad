@@ -6,14 +6,14 @@
 #
 # Licensed under Apache License, Version 2.0.
 
-from packaging.specifiers import SpecifierSet
 import sys
 
+from packaging.specifiers import SpecifierSet
+
 from . import consts
-from . import logging as pc_logging
 from . import exception as pc_exception
-from . import sandbox_versions
-from . import telemetry
+from . import logging as pc_logging
+from . import sandbox_versions, telemetry
 
 
 @telemetry.instrument()

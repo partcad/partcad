@@ -5,9 +5,9 @@
 #
 
 import asyncio
+from pathlib import Path
 
 import rich_click as click
-from pathlib import Path
 
 import partcad as pc
 from partcad.actions.add import add_object_from_url_async, looks_like_url

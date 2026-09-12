@@ -14,6 +14,12 @@ import sys
 import partcad as pc
 from partcad import shape_envelope
 
+# 'partcad' before OCP, and 'isort: split' so it stays there: importing the
+# package pins the standard library's expat (see the comment on 'import
+# pyexpat' in partcad/__init__.py), and whatever loads first wins for the
+# process.
+# isort: split
+
 from OCP.Bnd import Bnd_Box
 from OCP.BRepBndLib import BRepBndLib
 from OCP.BRepGProp import BRepGProp

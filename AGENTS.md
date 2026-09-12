@@ -384,7 +384,29 @@ pins the order of its `CLASSES` section, under the `reproducible` parameter of t
 default). An implementation another package supplies may not be, and those files are named one by one in that
 job's `UNSTABLE` list — keep it short, and give every entry a reason there and in the package it belongs to.
 
-Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.toml`.
+Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.toml`. Only **`isort` is a gate**:
+it runs as a `pre-commit` hook and as the `Lint (isort)` job in `test.yml`, and the tree is sorted. Run it as
+CI runs it, from the repository root:
+
+```bash
+poetry run isort --check --diff --filter-files --settings-path pyproject.toml src tests
+```
+
+`--filter-files` is not decoration. isort applies the `extend_skip` / `extend_skip_glob` entries in
+`pyproject.toml` to the files it *discovers* by walking a directory, and not to files handed to it by name — so
+without that flag, sorting a named `src/partcad/wrappers/*.py` reorders imports whose order is what the dynamic
+loader needs (the expat/VTK pin; the config comment has the detail). Pass a directory or pass the flag.
+
+**`black` and `flake8` are not gates, and adding a hook for either today would fail the build**, so do not
+treat a diff from them as something a change of yours introduced:
+
+* `black` reformats 44 files under its 26.x stable style — drift that predates this and belongs in its own
+  reformatting PR, exactly as the comment beside `black = "^26.5.1"` in `pyproject.toml` says. What *is* true
+  is that black and isort no longer disagree: after the sort, no black hunk touches an import line.
+* `flake8` does not read `[tool.flake8]` from `pyproject.toml` at all — it needs the `Flake8-pyproject` plugin
+  or a `.flake8` file, neither of which is here — so it reports `E501` at **79** columns rather than the
+  configured 120. At the intended 120 it still reports 369 findings, most of them `E402` in the sandbox
+  wrappers, where a late import is the point. Making it gateable is a change of its own.
 
 ### Packaging
 

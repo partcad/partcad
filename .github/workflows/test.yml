@@ -191,7 +191,7 @@ env:
   # is the interpreter PartCAD itself runs on. 'test-pub-repo', which renders
   # the public index, uses PYTHONS_SANDBOX instead.
   PYTHONS_SLIM: '["3.10", "3.14"]'
-  VERSION: 0.8.72
+  VERSION: 0.8.74
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
   PC_TELEMETRY_PERFORMANCE: false
@@ -673,6 +673,39 @@ jobs:
   #       with:
   #         job: cache-preheat
   #         preheat_only: "true"
+
+  lint-isort:
+    name: "Lint (isort)"
+    needs: set-matrix
+    # Same gate as "Pytest": the source tree is what this can say anything
+    # about. "changed-scopes" is fail-safe, so a path it does not recognise
+    # turns this back on.
+    if: ${{ needs.set-matrix.outputs.pytest == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # No matrix, and no "setup-all"/"setup-test". Import order is a property of
+    # the text in the repository, not of the interpreter reading it, so one
+    # runner answers for every cell the other jobs fan out over -- and this
+    # needs neither the CAD stack nor a sandbox to do it.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      # Pinned, and pinned to the same version as the pre-commit hook in
+      # "dev-tools/pre-commit-config.yaml" and the "^8.0.1" in
+      # "pyproject.toml": a gate that drifts from the hook is a gate that
+      # fails a commit the hook passed.
+      - name: Install isort
+        run: pip install "isort==8.0.1"
+
+      # "--filter-files" so the "extend_skip"/"extend_skip_glob" entries in
+      # "pyproject.toml" are honoured -- see the comment beside them for what
+      # they protect and why sorting those files is a bug rather than a tidy-up.
+      - name: Check import order
+        run: isort --check-only --diff --filter-files --settings-path pyproject.toml src tests
 
   test-pytest:
     name: "Pytest"

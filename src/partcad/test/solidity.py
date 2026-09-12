@@ -4,9 +4,9 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .test import Test
 from ..assembly import Assembly
 from ..sketch import Sketch
+from .test import Test
 
 
 class SolidityTest(Test):
@@ -32,30 +32,17 @@ class SolidityTest(Test):
     it would condemn an entire library that works. That is reported and passed.
 
     A shape holding no solid at all - a sketch, a shell, a wire - is not inside
-    out and is passed over. A part that is genuinely built as a void, if such a
-    thing is wanted, says so:
-
-        parts:
-          cavity:
-            solidity:
-              skip: true
+    out and is passed over. That is decided on what the shape *is*, not on what
+    it asks for: there is no way for a part to turn this check off. A solid of
+    negative volume is broken whatever it was meant to be, and a check an object
+    can exclude itself from is a check that reports on the objects that did not
+    need checking.
     """
 
     def __init__(self) -> None:
         super().__init__("solidity")
 
-    def cache_key_suffix(self, ctx, shape) -> str:
-        # Whatever decides the verdict has to be in the key, or turning a
-        # setting off hands back the answer from before it was turned off.
-        config = (shape.config or {}).get("solidity") or {}
-        return ",skip=%s" % bool(config.get("skip", False))
-
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
-        config = (shape.config or {}).get("solidity") or {}
-        if config.get("skip", False):
-            self.debug(shape, "Skipped by configuration")
-            return self.TEST_PASSED
-
         # A sketch has no solid to be the wrong way out, and asking costs a
         # sandbox each time. Answered here rather than by measuring.
         if isinstance(shape, Sketch):

@@ -16,6 +16,7 @@ import threading
 import time
 
 import pytest
+
 from partcad_client import client as client_module
 from partcad_client.client import DaemonClient, DaemonError, DaemonStalled
 from partcad_service_json_rpc.core import events

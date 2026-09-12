@@ -30,6 +30,7 @@ from pathlib import Path
 from textwrap import dedent
 
 import pytest
+
 from partcad_service_json_rpc.rpc.methods import build_registry
 
 PARTCAD_CLI_SRC = Path(__file__).resolve().parents[3] / "src" / "partcad_cli"

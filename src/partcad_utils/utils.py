@@ -10,13 +10,12 @@ import os
 import re
 import stat
 import sys
-from types import ModuleType, FunctionType
 from gc import get_referents
-
+from types import FunctionType, ModuleType
 from urllib.parse import unquote, urlparse
 
-from . import telemetry
 from . import logging as pc_logging
+from . import telemetry
 
 # What counts as a URL rather than a path, wherever PartCAD has to tell the two
 # apart. Deliberately just the two schemes 'fileFrom: url' can actually fetch:

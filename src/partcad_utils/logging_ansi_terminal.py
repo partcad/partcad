@@ -8,14 +8,14 @@
 
 import atexit
 import logging
-from logging.handlers import QueueHandler, QueueListener
 import queue
 import sys
-import time
-from typing import Any
 import threading
+import time
+from logging.handlers import QueueHandler, QueueListener
+from typing import Any
 
-from .logging import ops, error
+from .logging import error, ops
 
 
 class TimeSortedActions:

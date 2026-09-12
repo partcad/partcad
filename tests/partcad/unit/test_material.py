@@ -21,7 +21,7 @@ import pytest
 
 import partcad as pc
 from partcad import material as pc_material
-from partcad.project import OBJECT_KINDS, OBJECT_KIND_SECTIONS
+from partcad.project import OBJECT_KIND_SECTIONS, OBJECT_KINDS
 from partcad.shape import Shape
 
 DATA = "tests/partcad/unit/data/material"

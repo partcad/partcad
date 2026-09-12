@@ -6,12 +6,14 @@
 #
 # Licensed under Apache License, Version 2.0.
 
-from . import runtime_python_docker
-from . import runtime_python_none
-from . import runtime_python_pypy
-from . import runtime_python_remote
-from . import runtime_python_conda
-from . import runtime_python_venv
+from . import (
+    runtime_python_conda,
+    runtime_python_docker,
+    runtime_python_none,
+    runtime_python_pypy,
+    runtime_python_remote,
+    runtime_python_venv,
+)
 
 
 def create(ctx, version, python_runtime=None, image=None):

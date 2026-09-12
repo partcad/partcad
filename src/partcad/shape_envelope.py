@@ -39,6 +39,21 @@ on the layer, and that is the whole reason this module exists:
 import base64
 import json
 
+try:
+    # Python 3.14 and newer carry zstd in the standard library; below that the
+    # backport of that very module provides it, and PartCAD depends on it. Same
+    # two-step, for the same reason, as in 'wrappers/ocp_serialize.py': what the
+    # two sides exchange is the zstd frame format itself.
+    #
+    # The incremental decompressor rather than the one-shot 'decompress()': only
+    # it takes a bound on how much it will produce. See 'brep_plain()'.
+    from compression.zstd import ZstdDecompressor as _ZstdDecompressor
+except ImportError:  # pragma: no cover - exercised on the other interpreter
+    try:
+        from backports.zstd import ZstdDecompressor as _ZstdDecompressor
+    except ImportError:
+        _ZstdDecompressor = None
+
 # The three object shapes are told apart by which of these keys is present.
 KEY_BREP = "brep"
 KEY_ASSEMBLY = "assembly"
@@ -52,6 +67,32 @@ KEY_LOCATION = "location"
 # small and everything that identifies an object travels beside its name. Like
 # the placement, it is data the core carries opaquely and never interprets.
 KEY_PROPERTIES = "properties"
+
+# The zstd frame header. Sniffed rather than declared in the envelope, so that
+# a payload written without compression stays readable; the one copy of this
+# constant on the geometry side is 'ocp_serialize.ZSTD_MAGIC'.
+ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
+
+# How far a BREP payload may expand before 'brep_plain()' refuses to finish
+# decompressing it, as a multiple of the compressed size and never less than the
+# floor. Both come from measurement rather than from taste: across the shapes
+# the example packages build, BREP compresses by a median of 4.3x and at worst
+# by 17.4x, while a zstd frame of 6 KB expands to 200 MB - a ratio of 32,000 -
+# and costs nothing to write. The gap between the two is wide enough that a
+# limit set in the middle of it cannot be reached by geometry.
+#
+# It is a ratio rather than a size so that it scales with the part instead of
+# guessing how large a part may be, and the floor is there so that a payload of
+# a few hundred bytes is not held to a few tens of thousands.
+#
+# What it defends: this is the one place the *core* process decompresses a shape.
+# Everywhere else the payload is moved around unopened, and the one process that
+# does open it - a sandbox running a wrapper - is a subprocess whose death costs
+# one shape. The core is a daemon that may be serving several workspaces, and
+# what it decompresses here comes out of a shape cache, which on a shared
+# 'memcache' or 's3' backend is not necessarily something this machine wrote.
+MAX_BREP_EXPANSION = 100
+MAX_BREP_EXPANSION_FLOOR = 1 << 20
 
 
 def is_shape_object(obj) -> bool:
@@ -85,6 +126,48 @@ def brep_base64(value) -> str:
     if isinstance(value, str):
         return value
     return base64.b64encode(value).decode("ascii")
+
+
+def brep_plain(value) -> bytes:
+    """The BREP bytes themselves: the payload, decompressed.
+
+    'brep_bytes()' hands back the payload as it is carried, which is a zstd
+    frame; this unwraps it into the ASCII BREP that OCCT wrote. Everything the
+    core does with a shape moves the frame around unopened, so this is for the
+    one thing that reads it: 'brep_inspect', which answers a question about the
+    shape's topology off the bytes rather than by starting a sandbox.
+
+    A payload that is not a zstd frame is returned as it is. That is how a peer
+    without zstd writes one (see 'ocp_serialize._compress'), and telling the two
+    apart by the frame header rather than by a flag in the envelope is what lets
+    either be read without the format saying which it is.
+
+    Bounded (see MAX_BREP_EXPANSION): a frame that keeps producing past the
+    limit raises rather than being decompressed to the end. Raising is the right
+    answer for the only caller there is - 'brep_inspect.topology()' reads a
+    refusal as "this payload could not be read", which is a verdict it already
+    has to have, and which reports nothing about the shape.
+    """
+    data = brep_bytes(value)
+    if not data.startswith(ZSTD_MAGIC):
+        return data
+    if _ZstdDecompressor is None:
+        raise RuntimeError(
+            "the BREP payload is zstd-compressed, but zstd is not available here. "
+            "On Python below 3.14 it comes from the 'backports.zstd' package."
+        )
+
+    limit = max(MAX_BREP_EXPANSION_FLOOR, MAX_BREP_EXPANSION * len(data))
+    decompressor = _ZstdDecompressor()
+    plain = decompressor.decompress(data, max_length=limit)
+    if not decompressor.eof:
+        # Either the frame is still producing at the limit, or it ended early.
+        # Both mean the same thing here: what is in hand is not a payload.
+        raise ValueError(
+            "the BREP payload did not decompress into %d bytes or fewer (%dx its "
+            "compressed size of %d); refusing to read it" % (limit, MAX_BREP_EXPANSION, len(data))
+        )
+    return plain
 
 
 def make_shape(brep, name=None, label=None) -> dict:

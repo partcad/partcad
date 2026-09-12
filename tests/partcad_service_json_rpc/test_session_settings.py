@@ -17,6 +17,7 @@ environment variables, which is the point: there is one answer, not three.
 """
 
 import pytest
+
 from partcad_utils.booleans import to_bool
 
 

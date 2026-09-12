@@ -7,13 +7,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from . import logging as pc_logging
+from . import sandbox_versions, shape_envelope, telemetry, wrapper
 from .part_factory_homogen import PartFactoryHomogen
 from .sketch import Sketch
-from . import logging as pc_logging
-from . import wrapper
-from . import shape_envelope
-from . import sandbox_versions
-from . import telemetry
 
 
 # Homogeneous: an extrusion is one sketch swept into one solid, so a single

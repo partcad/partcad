@@ -4,9 +4,13 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .test import Test
 from ..assembly import Assembly
 from ..sketch import Sketch
+from .test import Test
+
+# How thin, in millimetres, an object may be in one direction before it counts
+# as flat. Not settable per object: see the class docstring.
+TOLERANCE = 1e-3
 
 
 class DegenerateTest(Test):
@@ -25,33 +29,21 @@ class DegenerateTest(Test):
     towers built out of it looked wrong.
 
     So: a shape whose bounding box is empty, or which is flat to within a
-    thousandth of a millimetre in any direction, is reported. A genuinely flat
-    object - a sketch, a decal, a shim - says so:
+    thousandth of a millimetre in any direction, is reported.
 
-        parts:
-          shim:
-            degenerate:
-              skip: true
+    There is no way for a part to turn this off. A part that measured a
+    millimetre where it should have measured ten is broken whatever it says
+    about itself, and a check an object can exclude itself from is a check that
+    reports on the objects that did not need checking. A kind of object that is
+    flat by nature is passed over here, on what it *is* rather than on what it
+    asks for: that is what the two clauses below do for a sketch and for an
+    assembly.
     """
 
     def __init__(self) -> None:
         super().__init__("degenerate")
 
-    def cache_key_suffix(self, ctx, shape) -> str:
-        # Whatever decides the verdict has to be in the key, or changing the
-        # tolerance hands back the answer from the old one.
-        config = (shape.config or {}).get("degenerate") or {}
-        return ",skip=%s,tolerance=%s" % (
-            bool(config.get("skip", False)),
-            config.get("tolerance", 1e-3),
-        )
-
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
-        config = (shape.config or {}).get("degenerate") or {}
-        if config.get("skip", False):
-            self.debug(shape, "Skipped by configuration")
-            return self.TEST_PASSED
-
         # A sketch is flat because that is what a sketch is. Measuring one
         # against a rule about having size in every direction fails it for
         # being what it was asked to be, and a check an object cannot pass and
@@ -87,14 +79,12 @@ class DegenerateTest(Test):
         if box is None:
             return self.failed(
                 shape,
-                "The shape built but occupies no space at all: its bounding box "
-                "is empty.",
+                "The shape built but occupies no space at all: its bounding box " "is empty.",
             )
 
-        tolerance = float(config.get("tolerance", 1e-3))
         x_min, y_min, z_min, x_max, y_max, z_max = box
         extents = (x_max - x_min, y_max - y_min, z_max - z_min)
-        flat = [axis for axis, extent in zip("XYZ", extents) if extent <= tolerance]
+        flat = [axis for axis, extent in zip("XYZ", extents) if extent <= TOLERANCE]
         if flat:
             return self.failed(
                 shape,

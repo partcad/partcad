@@ -36,14 +36,14 @@ try:
 except ModuleNotFoundError:  # Python 3.10
     import tomli as tomllib
 
+import pytest
+
+import partcad
 import partcad_cli
 import partcad_client
 import partcad_ide_client
 import partcad_service_json_rpc
 import partcad_utils
-import pytest
-
-import partcad
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BUMPVERSION = REPO_ROOT / "dev-tools" / "bumpversion.toml"

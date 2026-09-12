@@ -30,6 +30,7 @@ from collections.abc import Iterator
 
 import pytest
 from click.testing import CliRunner
+
 from partcad_cli.click.command import cli
 from partcad_cli.click.commands import open as open_command
 from partcad_client import external

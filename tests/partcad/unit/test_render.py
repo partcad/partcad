@@ -12,8 +12,9 @@ import asyncio
 import copy
 import os
 import platform
-import pytest
 import tempfile
+
+import pytest
 
 import partcad as pc
 

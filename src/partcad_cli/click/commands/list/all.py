@@ -14,9 +14,9 @@ from .materials import cli as list_materials
 from .mates import cli as list_mates
 from .packages import cli as list_packages
 from .parts import cli as list_parts
+from .providers import cli as list_providers
 from .scenes import cli as list_scenes
 from .sketches import cli as list_sketches
-from .providers import cli as list_providers
 from .software import cli as list_software
 
 

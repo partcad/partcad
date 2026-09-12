@@ -29,9 +29,7 @@ interpreter) purely to draw a picture.
 import importlib
 
 from . import logging as pc_logging
-from . import sandbox_versions
-from . import shape_envelope
-from . import wrapper
+from . import sandbox_versions, shape_envelope, wrapper
 
 # The tessellation the viewer gets. Coarser than a render's default would be
 # worth: this is an interactive preview that has to cross a socket and load in a

@@ -10,10 +10,10 @@
 import copy
 import typing
 
-from .sketch_factory import SketchFactory
 from . import logging as pc_logging
-from .utils import format_parameterized_name, get_child_project_path
 from . import telemetry
+from .sketch_factory import SketchFactory
+from .utils import format_parameterized_name, get_child_project_path
 
 
 @telemetry.instrument()

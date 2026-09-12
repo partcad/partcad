@@ -9,15 +9,14 @@
 
 import asyncio
 import re
-
 import threading
 
+from . import logging as pc_logging
+from . import telemetry
 from .geom import Location
 from .interface_inherit import InterfaceInherits
 from .sketch import Sketch
-from . import logging as pc_logging
 from .utils import resolve_resource_path
-from . import telemetry
 
 # OCP is not imported at module scope: this module is on the 'import partcad'
 # path, and only the two viewer/parameter paths below actually need OCCT, which

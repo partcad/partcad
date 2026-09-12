@@ -12,7 +12,6 @@ import pytest
 
 import partcad.healthcheck.openscad as pc_openscad
 
-
 # The standalone bundle ships its own OpenSCAD and must run that one rather than
 # whatever the host happens to have installed. Nothing about that ordering is
 # observable from a build -- a bundle built on a machine with no OpenSCAD passes

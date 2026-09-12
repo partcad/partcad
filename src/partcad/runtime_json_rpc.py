@@ -9,9 +9,10 @@
 
 import asyncio
 import json
-import requests
 import threading
 from typing import Any, Dict, Union
+
+import requests
 
 from . import logging as pc_logging
 

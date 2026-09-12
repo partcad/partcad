@@ -8,19 +8,20 @@
 #
 import os
 
-from .test import Test
 from .cad import CadTest
 from .cam import CamTest
 from .cam_additive_solid import CamAdditiveSolidTest
-from .cam_subtractive import CamSubtractiveTest
 from .cam_forming import CamFormingTest
+from .cam_subtractive import CamSubtractiveTest
 from .cfd import CfdTest
 from .connect import ConnectTest
 from .connectivity import ConnectivityTest
 from .degenerate import DegenerateTest
 from .fea import FeaTest
 from .interference import InterferenceTest
+from .shell import ShellTest
 from .solidity import SolidityTest
+from .test import Test
 
 _global_tests: list[Test] = []
 
@@ -45,6 +46,12 @@ def tests(concurrency_cap: int) -> list[Test]:
                 ConnectTest(),
                 ConnectivityTest(),
                 DegenerateTest(),
+                # Costs no sandbox at all: the verdict is read off the BREP
+                # bytes the core already holds (see partcad.brep_inspect), so it
+                # goes with the nearly-free checks rather than the measured ones.
+                # Before solidity, which has nothing to say about a shape with no
+                # solid in it - this is what says why there is none.
+                ShellTest(),
                 # Before interference, deliberately: a part that is inside out
                 # makes every boolean against it meaningless, so knowing which
                 # parts those are is what makes the interference result mean

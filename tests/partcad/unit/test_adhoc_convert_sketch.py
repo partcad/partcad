@@ -1,9 +1,10 @@
-import pytest
 import shutil
 import tempfile
 from pathlib import Path
-from partcad.adhoc.convert import convert_sketch_file, generate_partcad_config
 
+import pytest
+
+from partcad.adhoc.convert import convert_sketch_file, generate_partcad_config
 
 SKETCH_INPUT_FORMATS = ["svg", "dxf", "build123d", "cadquery"]
 SKETCH_OUTPUT_FORMATS = ["svg", "dxf"]

@@ -11,11 +11,18 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # '.brep' is excluded from both because a BREP file is not source: it is
+      # what 'BRepTools::Write' wrote, and the fixtures under
+      # 'tests/partcad/unit/data/brep/' are checked in precisely so that a test
+      # reads real writer output. That output has trailing spaces on most of its
+      # lines and no final newline, so either hook would rewrite it into
+      # something OCCT never produced - which is the one property the fixtures
+      # have. (Files under 'examples/' are already covered by the path above.)
       - id: trailing-whitespace
-        exclude: "^examples/|_ai_.+\\.(py|scad)"
+        exclude: "^examples/|_ai_.+\\.(py|scad)|\\.brep$"
         exclude_types: [svg]
       - id: end-of-file-fixer
-        exclude: "^examples/|_ai_.+\\.(py|scad)"
+        exclude: "^examples/|_ai_.+\\.(py|scad)|\\.brep$"
         exclude_types: [svg]
       - id: check-yaml
         exclude: "^tests/partcad/unit/data/project_config_(template|include).yaml$"
@@ -96,6 +103,30 @@ repos:
         pass_filenames: false
         stages: [post-checkout, post-merge]
         always_run: true
+  # isort, as a local hook for the same two reasons the Poetry hooks above are
+  # local: a hook repository has to be cloned, and a developer whose gitconfig
+  # rewrites `https://github.com/` to SSH has that clone fail in a shell with no
+  # agent behind it. `additional_dependencies` comes from PyPI over https.
+  #
+  # The version is the one `pyproject.toml` resolves, so the hook and
+  # `poetry run isort` cannot disagree about what "sorted" means.
+  #
+  # `--filter-files` is not optional and not a tidiness flag. pre-commit hands
+  # the hook the staged files by name, and isort applies `extend_skip` /
+  # `extend_skip_glob` to what it *discovers* by walking a directory, not to
+  # what it is handed: without this flag a staged `src/partcad/wrappers/*.py`
+  # is sorted despite the skip, which is precisely the reordering the skip
+  # exists to prevent. `--settings-path` for the same reason -- the config is
+  # found from the repository root rather than from each file's directory.
+  - repo: local
+    hooks:
+      - id: isort
+        name: isort
+        description: import order, as configured in pyproject.toml
+        entry: isort --check-only --diff --filter-files --settings-path pyproject.toml
+        language: python
+        additional_dependencies: ["isort==8.0.1"]
+        types: [python]
   - repo: local
     hooks:
       - id: shellcheck

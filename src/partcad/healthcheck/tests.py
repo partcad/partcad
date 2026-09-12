@@ -4,10 +4,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import pkgutil
 import importlib
-from pathlib import Path
+import pkgutil
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 from .. import logging as pc_logging
 

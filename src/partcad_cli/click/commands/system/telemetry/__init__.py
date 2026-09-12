@@ -5,8 +5,8 @@
 #
 
 import os
-import rich_click as click
 
+import rich_click as click
 
 from .. import SystemCommands
 

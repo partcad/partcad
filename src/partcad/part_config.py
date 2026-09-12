@@ -8,8 +8,8 @@
 #
 
 from .config import Configuration
-from .shape_config import ShapeConfiguration
 from .part_config_manufacturing import PartConfigManufacturing
+from .shape_config import ShapeConfiguration
 
 
 class PartConfiguration(Configuration, ShapeConfiguration):

@@ -11,15 +11,15 @@ import asyncio
 import copy
 import hashlib
 
-from .test import Test
-from ..part import Part
-from ..part_config import PartConfiguration
+from .. import software as pc_software
 from ..assembly import Assembly
 from ..assembly_config import AssemblyConfiguration
-from ..plugin_provider_data_cart import ProviderCartItem, resolve_cart_object
 from ..file_factory import declared_hash, unreproducible_reason
+from ..part import Part
+from ..part_config import PartConfiguration
+from ..plugin_provider_data_cart import ProviderCartItem, resolve_cart_object
 from ..shape_config import final_config as _final_config
-from .. import software as pc_software
+from .test import Test
 
 
 class CamTest(Test):

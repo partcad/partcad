@@ -423,7 +423,16 @@ not give you:
 * **The** ``pre-commit`` **hooks do not run.** ``pre-commit`` is installed by the dev container's image, not by
   ``poetry install``, and ``.git/hooks/pre-commit`` is written by ``pre-commit install`` running inside the container.
   So there is no hook to fail, and ``git commit`` runs no gate at all without saying so. Run ``pytest``, ``behave``
-  and the linters yourself before committing; CI runs them regardless.
+  and the linters yourself before committing; CI runs them regardless. The linter that gates is ``isort``:
+
+  .. code-block:: bash
+
+     poetry run isort --check --diff --filter-files --settings-path pyproject.toml src tests
+
+  ``--filter-files`` is what makes the ``extend_skip``/``extend_skip_glob`` entries in ``pyproject.toml`` apply to
+  files named on the command line, and those entries are not style preferences — they hold the import order that the
+  CAD sandbox wrappers need in order to pin expat before OCP loads. ``black`` and ``flake8`` are configured but do not
+  gate; the root ``AGENTS.md`` says what each would take to turn on.
 * **A Docker daemon**, which only the KiCad example needs. Without one that example is skipped, whether the machine
   said so in advance — ``PC_USE_DOCKER=false`` in the environment, or ``useDocker: false`` in the user configuration —
   or the daemon simply is not answering. Having no container runtime is the one thing that test passes over: an image
@@ -503,7 +512,7 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
 .. code-block::
 
-  Installing the current project: partcad (0.8.72)
+  Installing the current project: partcad (0.8.74)
 
 .. warning::
 

@@ -9,8 +9,7 @@
 import os
 import shutil
 
-from . import runtime_python_conda
-from . import telemetry
+from . import runtime_python_conda, telemetry
 
 
 @telemetry.instrument()

@@ -9,11 +9,11 @@
 
 import os
 
-from .plugin_factory import PluginFactory
-from .file_factory import FileFactory
 from . import factory
 from . import logging as pc_logging
 from . import telemetry
+from .file_factory import FileFactory
+from .plugin_factory import PluginFactory
 
 
 @telemetry.instrument()

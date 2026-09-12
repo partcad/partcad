@@ -9,8 +9,8 @@
 
 import asyncio
 
-from .cache_hash import CacheHash
 from . import cache_backend
+from .cache_hash import CacheHash
 
 
 class Cache:

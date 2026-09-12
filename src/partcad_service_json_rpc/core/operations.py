@@ -23,6 +23,7 @@ from urllib.request import url2pathname
 
 import yaml
 from packaging.specifiers import SpecifierSet
+
 from partcad_utils import conda as pc_conda
 from partcad_utils.utils import directory_size_mb
 
@@ -1363,7 +1364,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.72"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.74"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None

@@ -11,10 +11,10 @@
 import copy
 import typing
 
-from .plugin_config import PluginConfiguration
-from .plugin_factory import PluginFactory
 from . import logging as pc_logging
 from . import telemetry
+from .plugin_config import PluginConfiguration
+from .plugin_factory import PluginFactory
 
 
 @telemetry.instrument()

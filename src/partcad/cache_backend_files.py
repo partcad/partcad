@@ -18,8 +18,8 @@ from pathlib import Path
 
 import aiofiles
 
-from .cache_backend import CacheBackend
 from . import telemetry
+from .cache_backend import CacheBackend
 
 
 @telemetry.instrument()

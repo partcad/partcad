@@ -1,10 +1,9 @@
 import os
 
-from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
-from . import wrapper
-from . import shape_envelope
+from . import shape_envelope, wrapper
 from .exception import PartFactoryError
+from .part_factory_file import PartFactoryFile
 
 
 class PartFactoryObj(PartFactoryFile):

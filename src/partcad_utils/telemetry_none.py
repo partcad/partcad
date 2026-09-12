@@ -5,7 +5,8 @@
 #
 
 from contextlib import contextmanager
-from opentelemetry.trace import Tracer, Span
+
+from opentelemetry.trace import Span, Tracer
 
 
 class NoneSpan(Span):

@@ -122,8 +122,12 @@ poetry run partcad-json-rpc --http   # serve on 127.0.0.1:8017 instead
 ```bash
 poetry run black --check src/partcad_service_json_rpc tests/partcad_service_json_rpc
 poetry run flake8 src/partcad_service_json_rpc tests/partcad_service_json_rpc
-poetry run isort --check src/partcad_service_json_rpc tests/partcad_service_json_rpc
+poetry run isort --check --filter-files src/partcad_service_json_rpc tests/partcad_service_json_rpc
 ```
+
+Only `isort` gates: it is a `pre-commit` hook and the `Lint (isort)` job in `test.yml`. `black` and `flake8`
+report pre-existing findings that are nobody's change in particular — the root [AGENTS.md](../../AGENTS.md) has the
+counts and what each would take to turn on.
 
 ## Method surface
 
