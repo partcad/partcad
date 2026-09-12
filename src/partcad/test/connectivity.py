@@ -140,8 +140,7 @@ class ConnectivityTest(Test):
                 continue
             where = port if port is not None else interface
             problems.append(
-                "'%s' and '%s' are both connected to '%s' of '%s'"
-                % (taken[key], child.name, where, target)
+                "'%s' and '%s' are both connected to '%s' of '%s'" % (taken[key], child.name, where, target)
             )
         return problems, consulted
 

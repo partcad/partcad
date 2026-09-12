@@ -598,7 +598,6 @@ def clone_single_commit(repo_url, cache_path, revision, git_config=(), user_conf
 
 
 def get_cache_lock(hash):
-    global global_cache_lock
     global_cache_lock.acquire()
     if hash not in cache_locks:
         cache_locks[hash] = threading.Lock()
@@ -953,7 +952,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 # No update was performed
                                 before = None
 
-                        if not before is None:
+                        if before is not None:
                             # Update was performed
                             after = repo.head.target
                             if before != after:
@@ -1029,7 +1028,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                             )
                             raise RuntimeError(f"Failed to clone repo: {e}") from e
                 attempt += 1
-        if not self.import_rel_path is None:
+        if self.import_rel_path is not None:
             cache_path = os.path.join(cache_path, self.import_rel_path)
 
         return cache_path

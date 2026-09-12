@@ -22,9 +22,11 @@ def semaphore_wrapper(f):
 
     return wrapper
 
+
 class Severity(Enum):
     FAILED = 1
     WARNING = 2
+
 
 class LintingReport:
     def __init__(self, package: str) -> None:
@@ -82,12 +84,7 @@ class Linting(ABC):
 
         result: LintingReport = await self.validate(ctx, package, target, lint_ctx)
 
-        await ctx.cache_lints.write_data_async(
-          hash,
-          {
-            cache_key: json.dumps(result.to_dict()).encode()
-          }
-        )
+        await ctx.cache_lints.write_data_async(hash, {cache_key: json.dumps(result.to_dict()).encode()})
 
         return result
 

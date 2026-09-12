@@ -12,7 +12,6 @@ import pathlib
 import re
 import signal
 
-import pytest
 from packaging.requirements import Requirement
 
 import partcad as pc

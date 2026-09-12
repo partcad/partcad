@@ -15,6 +15,7 @@ import stat
 import brand
 import pytest
 import verify_bundle
+
 from conftest import COMPONENT_ROOT
 
 PLAN = {
@@ -176,9 +177,7 @@ def test_the_activity_bar_is_reported(tmp_path, capsys):
     extensions = resources / "app" / "extensions"
     manifest = extensions / "PartCAD.partcad-official-1.0.0" / "package.json"
     package = json.loads(manifest.read_text(encoding="utf-8"))
-    package["contributes"] = {
-        "viewsContainers": {"activitybar": [{"id": "partcad-container", "title": "PartCAD"}]}
-    }
+    package["contributes"] = {"viewsContainers": {"activitybar": [{"id": "partcad-container", "title": "PartCAD"}]}}
     manifest.write_text(json.dumps(package), encoding="utf-8")
 
     assert run(resources, tmp_path) == 0

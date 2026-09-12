@@ -31,8 +31,7 @@ WRAPPERS = os.path.dirname(pc_wrapper.get("export.py"))
 # argv[1] is the output path and argv[2] the working directory, which is what
 # every wrapper is invoked with; argv[3] is this test telling it where the
 # wrappers are, since it is not being run out of a sandbox.
-SCRIPT = textwrap.dedent(
-    """
+SCRIPT = textwrap.dedent("""
     import os
     import sys
 
@@ -52,8 +51,7 @@ SCRIPT = textwrap.dedent(
     os.write(1, b"OCCT: writing... ")
 
     wrapper_common.handle_output({"success": True, "echo": request.get("echo")})
-    """
-)
+    """)
 
 
 def _run(tmp_path):

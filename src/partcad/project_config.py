@@ -89,7 +89,7 @@ class Configuration:
         else:
             self.config_obj["name"] = name
 
-        if not "render" in self.config_obj or self.config_obj["render"] is None:
+        if "render" not in self.config_obj or self.config_obj["render"] is None:
             self.config_obj["render"] = {}
 
         # Backward compatibility for "import" -> "dependencies" renaming

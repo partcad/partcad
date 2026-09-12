@@ -156,9 +156,7 @@ def process(path, request):
         # Broadphase. Boxes are cheap, booleans are not, so only the pairs whose
         # boxes meet are asked the expensive question.
         candidates = [
-            (a, b)
-            for a, b in itertools.combinations(range(len(boxes)), 2)
-            if not boxes[a][2].IsOut(boxes[b][2])
+            (a, b) for a, b in itertools.combinations(range(len(boxes)), 2) if not boxes[a][2].IsOut(boxes[b][2])
         ]
 
         overlaps = []

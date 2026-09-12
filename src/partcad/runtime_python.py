@@ -1032,7 +1032,7 @@ class PythonRuntime(runtime.Runtime):
         if path is None:
             if session is None or not session["dirty"]:
                 # Use the full interpreter path if known
-                if not self.exec_path is None:
+                if self.exec_path is not None:
                     return self.exec_path
                 # If the full path is not known, use the interpreter name
                 path = self.path

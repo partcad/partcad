@@ -28,9 +28,7 @@ class SketchFactoryDxf(SketchFactoryPython):
                 python_version = sandbox_versions.DEFAULT_PYTHON_VERSION
             # CadQuery has no release for Python 3.10, so a package that asks
             # for it still gets rendered on the oldest interpreter it supports.
-            python_version = sandbox_versions.at_least(
-                python_version, sandbox_versions.MIN_PYTHON_VERSION_CADQUERY
-            )
+            python_version = sandbox_versions.at_least(python_version, sandbox_versions.MIN_PYTHON_VERSION_CADQUERY)
             super().__init__(
                 ctx,
                 source_project,

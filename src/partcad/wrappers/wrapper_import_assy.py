@@ -74,9 +74,18 @@ def clone_transformation(src: gp_Trsf) -> gp_Trsf:
     """Creates a deep copy of a gp_Trsf transformation matrix."""
     new_trsf = gp_Trsf()
     new_trsf.SetValues(
-        src.Value(1, 1), src.Value(1, 2), src.Value(1, 3), src.Value(1, 4),
-        src.Value(2, 1), src.Value(2, 2), src.Value(2, 3), src.Value(2, 4),
-        src.Value(3, 1), src.Value(3, 2), src.Value(3, 3), src.Value(3, 4)
+        src.Value(1, 1),
+        src.Value(1, 2),
+        src.Value(1, 3),
+        src.Value(1, 4),
+        src.Value(2, 1),
+        src.Value(2, 2),
+        src.Value(2, 3),
+        src.Value(2, 4),
+        src.Value(3, 1),
+        src.Value(3, 2),
+        src.Value(3, 3),
+        src.Value(3, 4),
     )
     return new_trsf
 
@@ -90,11 +99,7 @@ def invert_transformation(src: gp_Trsf) -> gp_Trsf:
 
 def transformation_difference(t1: gp_Trsf, t2: gp_Trsf) -> float:
     """Computes the maximum absolute difference between corresponding matrix elements."""
-    return max(
-        abs(t1.Value(row, col) - t2.Value(row, col))
-        for row in range(1, 4)
-        for col in range(1, 5)
-    )
+    return max(abs(t1.Value(row, col) - t2.Value(row, col)) for row in range(1, 4) for col in range(1, 5))
 
 
 def combine_transformations(parent: gp_Trsf, local: gp_Trsf, tolerance=1e-7) -> gp_Trsf:
@@ -118,13 +123,13 @@ def convert_location(trsf: gp_Trsf, precision=5):
     translation = [
         round(trsf.TranslationPart().X(), precision),
         round(trsf.TranslationPart().Y(), precision),
-        round(trsf.TranslationPart().Z(), precision)
+        round(trsf.TranslationPart().Z(), precision),
     ]
 
     quaternion = trsf.GetRotation()
     w, x, y, z = quaternion.W(), quaternion.X(), quaternion.Y(), quaternion.Z()
 
-    norm = math.sqrt(w*w + x*x + y*y + z*z)
+    norm = math.sqrt(w * w + x * x + y * y + z * z)
     if norm < 1e-6:
         return [translation, [1.0, 0.0, 0.0], 0.0]
 
@@ -138,7 +143,7 @@ def convert_location(trsf: gp_Trsf, precision=5):
         rotation_axis = [
             round(x / sin_half_angle, precision),
             round(y / sin_half_angle, precision),
-            round(z / sin_half_angle, precision)
+            round(z / sin_half_angle, precision),
         ]
 
     return [translation, rotation_axis, rotation_angle_deg]

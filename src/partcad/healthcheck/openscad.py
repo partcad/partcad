@@ -149,7 +149,7 @@ class LinuxOpenSCADCheck(OpenSCADCheck):
         except subprocess.CalledProcessError as e:
             pc_logging.error("Failed to update apt package index.")
             pc_logging.debug(e)
-        except Exception as e:
+        except Exception:
             pc_logging.exception("Unexpected error during 'apt-get update'")
             return False
 
@@ -167,7 +167,7 @@ class LinuxOpenSCADCheck(OpenSCADCheck):
         except subprocess.CalledProcessError as e:
             pc_logging.error("OpenSCAD installation failed.")
             pc_logging.debug(e)
-        except Exception as e:
+        except Exception:
             pc_logging.exception("Unexpected error during OpenSCAD installation.")
 
         return False
@@ -307,7 +307,9 @@ class WindowsOpenSCADCheck(OpenSCADCheck):
                     new_path = ";".join(paths + [resolved_str])
                     winreg.SetValueEx(key, "PATH", 0, winreg.REG_EXPAND_SZ, new_path)
                     pc_logging.info(f"Added '{resolved_str}' to user PATH.")
-                    pc_logging.info("You may need to restart your PowerShell session or log out and back in for changes to take effect.")
+                    pc_logging.info(
+                        "You may need to restart your PowerShell session or log out and back in for changes to take effect."
+                    )
                 else:
                     pc_logging.info(f"'{resolved_str}' is already in the user PATH. No changes made.")
                 return True
@@ -320,14 +322,13 @@ class WindowsOpenSCADCheck(OpenSCADCheck):
 
         return False
 
-
     def fix(self) -> bool:
         pc_logging.info(f"Downloading OpenSCAD in '{self.installation_path}'...")
         try:
             urllib.request.urlretrieve(self.openscad_zip_url, self.openscad_zip_path)
             urllib.request.urlretrieve(self.openscad_zip_sha256_url, self.openscad_zip_sha256_path)
         except urllib.error.URLError as e:
-            pc_logging.error(f"Failed to download OpenSCAD.")
+            pc_logging.error("Failed to download OpenSCAD.")
             pc_logging.debug(str(e))
             return False
 
@@ -339,7 +340,7 @@ class WindowsOpenSCADCheck(OpenSCADCheck):
             pc_logging.error(f"SHA256 checksum file '{self.openscad_zip_sha256_path}' not found")
             return False
         except Exception as e:
-            pc_logging.error(f"Error reading SHA256 checksum file.")
+            pc_logging.error("Error reading SHA256 checksum file.")
             pc_logging.debug(str(e))
             return False
 
@@ -351,7 +352,7 @@ class WindowsOpenSCADCheck(OpenSCADCheck):
                     h.update(chunk)
             actual = h.hexdigest()
         except Exception as e:
-            pc_logging.error(f"Error computing SHA256 checksum")
+            pc_logging.error("Error computing SHA256 checksum")
             pc_logging.debug(str(e))
             return False
 
@@ -364,11 +365,11 @@ class WindowsOpenSCADCheck(OpenSCADCheck):
             with zipfile.ZipFile(self.openscad_zip_path, "r") as z:
                 z.extractall(self.installation_path)
         except zipfile.BadZipfile as e:
-            pc_logging.error(f"Failed to unpack OpenSCAD package.")
+            pc_logging.error("Failed to unpack OpenSCAD package.")
             pc_logging.debug(str(e))
             return False
         except Exception as e:
-            pc_logging.error(f"Error unpacking OpenSCAD package.")
+            pc_logging.error("Error unpacking OpenSCAD package.")
             pc_logging.debug(str(e))
             return False
 

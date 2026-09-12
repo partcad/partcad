@@ -8,8 +8,6 @@
 #
 
 import hashlib
-import os
-import struct
 
 from . import logging as pc_logging
 

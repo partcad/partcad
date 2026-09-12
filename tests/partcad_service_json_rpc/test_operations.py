@@ -1787,9 +1787,7 @@ def test_inline_hands_the_model_back_as_bytes(tmp_path):
     model.write_bytes(b"glTF-ish")
     session, _ = make_cae_session(FakeAnalysablePart("bracket", result={"findings": [], "filepath": str(model)}))
 
-    result = operations.cae_analyze(
-        session, {"package": "//", "object": "bracket", "analysis": "fea", "inline": True}
-    )
+    result = operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea", "inline": True})
 
     assert base64.b64decode(result["content"]) == b"glTF-ish"
 
@@ -1804,9 +1802,7 @@ def test_a_model_that_is_not_where_it_said_still_returns_the_findings(tmp_path):
         )
     )
 
-    result = operations.cae_analyze(
-        session, {"package": "//", "object": "bracket", "analysis": "fea", "inline": True}
-    )
+    result = operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea", "inline": True})
 
     assert result["content"] is None
     assert result["findings"] == [{"message": "too thin"}]

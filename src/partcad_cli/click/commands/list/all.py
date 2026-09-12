@@ -11,7 +11,7 @@ from ...cli_context import CliContext
 from .assemblies import cli as list_assemblies
 from .interfaces import cli as list_interfaces
 from .materials import cli as list_materials
-from .mates import cli as list_mates
+from .mates import cli as list_mates  # noqa: F401  # its runner.invoke() below is commented out (TODO there)
 from .packages import cli as list_packages
 from .parts import cli as list_parts
 from .providers import cli as list_providers

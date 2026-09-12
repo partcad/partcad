@@ -21,7 +21,7 @@ def cli(cli_ctx, dsn: str) -> None:
     with pc.telemetry.set_context(cli_ctx.otel_context):
         with pc.logging.Process("SysSetTelDsn", "global"):
             yaml, config = pc_actions_config.system_config_get()
-            if not "telemetry" in config:
+            if "telemetry" not in config:
                 config["telemetry"] = {}
 
             config["telemetry"]["sentryDsn"] = dsn

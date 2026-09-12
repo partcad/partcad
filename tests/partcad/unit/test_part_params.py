@@ -9,7 +9,6 @@
 #
 
 import asyncio
-from unittest.mock import patch
 
 import partcad as pc
 
@@ -31,10 +30,13 @@ def test_part_params_get_2():
     assert asyncio.run(brick.get_wrapped(ctx)) is not None
     assert brick.config["parameters"]["width"]["default"] == 17.0
 
+
 def test_part_user_config_params_get():
     """Load a CadQuery part using enrichment for parameters and see if the parameters changed from user_config"""
     ctx = pc.Context("examples/produce_part_cadquery_primitive")
-    pc.user_config.parameter_config["//pub/examples/partcad/produce_part_cadquery_primitive:cube_enrich"] = {"width": 33.0}
+    pc.user_config.parameter_config["//pub/examples/partcad/produce_part_cadquery_primitive:cube_enrich"] = {
+        "width": 33.0
+    }
     cube_enrich = ctx._get_part(":cube_enrich")
     assert cube_enrich is not None
     assert asyncio.run(cube_enrich.get_wrapped(ctx)) is not None

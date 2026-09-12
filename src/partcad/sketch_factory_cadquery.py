@@ -107,7 +107,10 @@ class SketchFactoryCadquery(SketchFactoryPython):
 
             if exitcode != 0 and len(errors) == 0:
                 errors = "%s: %s: Failed to instantiate" % (sketch.project_name, sketch.name)
-                pc_logging.debug("%s: %s: Failed to execute command: '%s' with exitcode %s" % (sketch.project_name, sketch.name, " ".join(command), exitcode))
+                pc_logging.debug(
+                    "%s: %s: Failed to execute command: '%s' with exitcode %s"
+                    % (sketch.project_name, sketch.name, " ".join(command), exitcode)
+                )
 
             if len(errors) > 0:
                 error_lines = errors.split("\n")

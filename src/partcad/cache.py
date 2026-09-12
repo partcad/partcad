@@ -61,9 +61,7 @@ class Cache:
 
         async def task_backend(backend):
             accepted = {
-                self._name(hash_str, key): value
-                for key, value in items.items()
-                if backend.accepts(key, len(value))
+                self._name(hash_str, key): value for key, value in items.items() if backend.accepts(key, len(value))
             }
             if not accepted:
                 return {}

@@ -37,9 +37,10 @@ flake8 src/partcad tests/partcad
 isort --check --filter-files src/partcad tests/partcad
 ```
 
-Only `isort` gates: it is a `pre-commit` hook and the `Lint (isort)` job in `test.yml`. `black` and `flake8`
-report pre-existing findings that are nobody's change in particular — the root [AGENTS.md](../../AGENTS.md) has the
-counts and what each would take to turn on.
+All three gate — each is a `pre-commit` hook and a `Lint (...)` job in `test.yml`, and the tree satisfies
+all three, so a finding from any of them is yours. See the root [AGENTS.md](../../AGENTS.md) for the two flags that
+are load-bearing (`--filter-files`, and the `Flake8-pyproject` plugin without which flake8 reads no config
+at all).
 
 ## Conventions
 

@@ -39,6 +39,15 @@ ARG PYTHON_VERSION=3.11
 # asks for: "prefer a wheel to a toolchain". The toolchain is ~200 MB and this
 # image is the floor under every derived one.
 FROM python:${PYTHON_VERSION}-slim AS pycairo-wheel
+# DL3008 asks for `=<version>` on each package. This Dockerfile is built for
+# every supported Python, and those base images span two Debian releases
+# (bookworm for the older ones, trixie for the newer), so there is no one
+# version string that exists in both archives -- a pinned one would 404 the
+# fetch on whichever half of the matrix it was not written for. The same reason
+# the runtime stage below carries this, and the reason `.devcontainer/Dockerfile`
+# does. `tools/containers/kicad/Dockerfile` can pin because it is built `FROM`
+# one fixed image.
+# hadolint ignore=DL3008
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends build-essential libcairo2-dev pkg-config \
   && rm -rf /var/lib/apt/lists/*
@@ -86,6 +95,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 # renamed the package to `libglib2.0-0t64`. Asking for the new name and falling
 # back is what lets one Dockerfile serve every version, rather than a
 # conditional on a base image that will move again.
+#
+# And the same split is why nothing here is version-pinned; see DL3008 above.
+# hadolint ignore=DL3008
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends \
     ca-certificates \
