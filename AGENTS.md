@@ -389,7 +389,16 @@ precondition on `build_wheel` and `build_sdist`. Without it the artifact is sile
 matches nothing where `skills` is a text file holding a path, `plugin.json` matches that same kind of file and
 is packaged as its content, and the wheel then installs, imports and runs `pc version` with no skills in it.
 `build_editable` is *not* guarded, on purpose: an editable install reads the working tree live, and refusing
-there would fail `poetry install` over a data file. See `ai-agents/README.md`. The snap
+there would fail `poetry install` over a data file.
+
+The installed copies have a lifecycle of their own. Re-running `pc init` updates them and **removes what
+PartCAD no longer ships** — a retired skill left behind describes a CLI that has moved, and the agent follows
+it anyway. The Claude plugin directory is entirely PartCAD's, so anything unshipped there goes; under
+`.cursor/skills` the `pc-` prefix is not proof of authorship, so those copies carry a `metadata.partcad` stamp
+and only stamped ones are removed. That stamp is `partcad.__version__` read at install time and **must not
+become a literal**: a literal is one more `dev-tools/bumpversion.toml` entry and one more thing to forget,
+which is how the plugin manifest sat at 0.1.0 for twenty-three releases. The `AgentSkills` healthcheck reads
+the same stamp — `pc upgrade` replaces PartCAD and leaves the skills alone, so something has to notice. See `ai-agents/README.md`. The snap
 carries whatever the bundle carries,
 so it needs nothing extra of its
 own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).

@@ -105,11 +105,50 @@ get the same thing:
   rewritten, so the `pc render` and `pc adhoc convert` command lines these files
   are full of are left alone.
 
+`--agents` chooses which of them to install for — `all` (the default), or a
+comma-separated list. An agent PartCAD does not know is an error rather than a
+quiet no-op: a typo that installs nothing looks exactly like an agent that is
+not supported yet. Adding a third agent is a line in `AGENTS` in
+`src/partcad/ai_agents/__init__.py` and a function saying where its directory is
+— the skills themselves are vendor-neutral and are not copied per agent.
+
 Neither destination is written through a symlink, and this repository is why:
 `.claude/skills/pc` here points at `ai-agents/claude`, so following it would
 have `pc init` overwrite the working tree with a copy of the installed PartCAD.
-Everything installed is namespaced, so a re-run updates PartCAD's own skills and
-touches nothing else in those directories.
+
+### What a re-run does
+
+Installing again updates what is there, and **removes what PartCAD has stopped
+shipping**. A retired skill left behind goes on describing a CLI that has moved,
+which is worse than having no skill at all: the agent follows it, and it looks
+like a working one.
+
+Only PartCAD's own go. The whole `.claude/skills/pc/` directory is the plugin,
+so there it is anything not currently shipped. Under `.cursor/skills` the `pc-`
+prefix is not proof of authorship, so the Cursor copies carry a stamp:
+
+```yaml
+metadata:
+  partcad: 0.8.69
+```
+
+A `pc-` skill without one is somebody else's — hand-written, or installed by a
+PartCAD older than the stamp — and is never touched. The cost is a retired skill
+lingering for whoever has not reinstalled since; the alternative is deleting a
+file PartCAD did not write.
+
+The same stamp is what `pc healthcheck` reads: it compares the installed skills
+against the running PartCAD and reports the ones an older release wrote, since
+`pc upgrade` replaces PartCAD and leaves them alone. `--fix` reinstalls them,
+for the agents that had them and no others. On the Claude side the plugin
+manifest already carries the version, so nothing extra is needed there.
+
+**The version in that stamp is never a literal in the source.** It is
+`partcad.__version__`, read at install time. A literal would be one more entry
+in `dev-tools/bumpversion.toml` and one more thing to forget on a release —
+which is exactly how the plugin manifest sat at `0.1.0` for twenty-three
+releases (see *Versioning* below). `__version__` is already bumped and
+`tests/partcad_cli/unit/test_versions.py` already fails if it stops moving.
 
 The plugin folder is named `claude`, but the command namespace comes from
 `plugin.json`'s `name` field (`pc`), so skills invoke as `/pc:<skill>`.
