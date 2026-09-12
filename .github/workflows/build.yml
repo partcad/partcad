@@ -205,6 +205,54 @@ jobs:
           assert ai_agents.plugin_manifest()['name'], 'the wheel carries no plugin manifest'
           "
           pc --no-ansi version
+
+      # What the wheel carries is one thing; what `pc init` writes out of it is
+      # what a user actually gets, and it is a different code path. `plugin.yml`
+      # validates the plugin this repository *publishes*; nothing validated the
+      # one `pc init` installs until this. The manifests are compared byte for
+      # byte, so `claude plugin validate` passing there carries over to here.
+      - name: Test what `pc init` installs
+        shell: bash -el {0}
+        run: |
+          . ~/.bashrc
+          . ~/.bash_profile
+          mamba activate ${{ format('env-test-build-{0}', matrix.python-version) }}
+          export WORKSPACE="$(mktemp -d)"
+          export REPO="${PWD}"
+          ( cd "${WORKSPACE}" && git init -q . && pc --no-ansi init )
+          python -c "
+          import filecmp, json, os
+          import partcad
+          import partcad.ai_agents as ai_agents
+
+          workspace = os.environ['WORKSPACE']
+          repo = os.environ['REPO']
+          shipped = ai_agents.available_skills()
+
+          # Claude gets the plugin, and the skills under it verbatim.
+          plugin = os.path.join(workspace, '.claude', 'skills', ai_agents.plugin_name())
+          installed = os.path.join(plugin, '.claude-plugin', 'plugin.json')
+          published = os.path.join(repo, 'ai-agents', 'claude', '.claude-plugin', 'plugin.json')
+          assert filecmp.cmp(installed, published, shallow=False), 'the installed manifest is not the published one'
+          assert json.load(open(installed))['version'] == partcad.__version__, 'the manifest states another version'
+          for skill in shipped:
+              here = os.path.join(plugin, 'skills', skill, 'SKILL.md')
+              there = os.path.join(ai_agents.SKILLS_DIR, skill, 'SKILL.md')
+              assert filecmp.cmp(here, there, shallow=False), skill + ' was not installed verbatim for Claude'
+
+          # Cursor gets them prefixed, renamed to match, and stamped.
+          for skill in shipped:
+              name = ai_agents.CURSOR_PREFIX + skill
+              text = open(os.path.join(workspace, '.cursor', 'skills', name, 'SKILL.md'), encoding='utf-8').read()
+              # A literal rather than a regex: '$' inside a double-quoted shell
+              # heredoc is one more thing that has to survive two quoting layers.
+              assert ('name: ' + name + '\n') in text, name + ' does not name its own directory'
+              assert ai_agents.stamped_version(text) == partcad.__version__, name + ' is not stamped with this version'
+              assert 'pc:' not in text, name + ' still points at the plugin namespace Cursor has not got'
+
+          print('pc init installed', len(shipped), 'skills for', ', '.join(sorted(ai_agents.AGENTS)))
+          "
+          rm -rf "${WORKSPACE}"
           partcad-json-rpc --help >/dev/null
           # The shim brings the wheel in, and owns nothing of its own.
           python -m pip install --no-index --find-links=dist --find-links=dev-tools/shim/dist partcad-cli
