@@ -27,39 +27,40 @@ on:
         default: true
   merge_group:
   # Freezing pulls ~500MB of OpenCASCADE per runner, so this does not run on
-  # every change: only on the ones that can change what is frozen.
+  # every change: only on the ones that can change what is frozen, and on
+  # "devel" only once per version.
   #
-  # On a push that is a "paths:" filter, and it stays one -- a push is a single
-  # commit on a branch, which is exactly what the filter was designed for.
   # "main" is absent on purpose: a push there runs "deploy.yml", which calls this
   # workflow itself. Listing it here would build everything twice.
   #
-  # Both "snap/**" and ".snapcraft.yaml" are listed. The recipe lives at the
-  # root, but snapcraft still reads assets -- hooks, gui, keys -- from "snap/".
-  # That directory is empty today, so the pattern matches nothing; it is here so
-  # that the first hook someone adds is built rather than silently untested.
+  # No filtering of any kind sits on this trigger. What governs a push is the
+  # "set-matrix" gate below -- only a commit whose message starts with "Version
+  # updated" builds anything -- which is what "test.yml", "build.yml" and
+  # "test-dev.yml" have always done and what this workflow did not. Every other
+  # push to "devel" is followed by a bump within minutes ("version-bump.yml"
+  # runs on all of them), and the bump carries the source change that preceded
+  # it, so the bundles are frozen once, from the commit a release is cut from,
+  # and are stamped with that version. They used to be frozen twice: once for
+  # the merge, carrying the version it replaced, and again for the bump.
+  #
+  # The "paths:" list that used to be here cannot come back, not even as a
+  # narrowing filter in front of that gate. A bump happens to touch
+  # "pyproject.toml" and "src/**", so it would pass today; the day
+  # "dev-tools/bumpversion.toml" stops naming a file on such a list, nothing is
+  # ever frozen on "devel" again and nothing says so. One gate, in one place,
+  # that a reader can see the whole of.
   push:
     branches: ["devel"]
-    paths:
-      - "dev-tools/pyinstaller/**"
-      - "dev-tools/snap/**"
-      - ".snapcraft.yaml"
-      - "snap/**"
-      - "install.sh"
-      - ".github/workflows/build-standalone.yml"
-      - "src/**"
-      - "pyproject.toml"
-      - "requirements*.txt"
-  # A pull request carries no "paths:" filter any more, and that is not the same
+  # A pull request carries no "paths:" filter either, and that is not the same
   # as running on everything -- the filtering moved into the "build" job below,
   # where the merge queue obeys it too.
   #
   # It had to move. "merge_group" supports no "paths:" filter at all: GitHub
-  # filters that event on branches only. So the list above governed the pull
-  # request and then stopped governing anything the moment the same commit
-  # entered the queue, where this workflow froze four bundles for a change to a
-  # README. The second reason is required checks: a workflow skipped by a
-  # "paths:" filter creates no check run, and a required check that is never
+  # filters that event on branches only. So the list this workflow used to carry
+  # governed the pull request and then stopped governing anything the moment the
+  # same commit entered the queue, where this workflow froze four bundles for a
+  # change to a README. The second reason is required checks: a workflow skipped
+  # by a "paths:" filter creates no check run, and a required check that is never
   # created leaves a pull request waiting forever, while a job skipped by an
   # "if:" reports "skipped", which counts as passing.
   pull_request:
@@ -320,6 +321,38 @@ jobs:
   set-matrix:
     name: "Set matrix"
     runs-on: ubuntu-latest
+    # Only a version bump freezes anything on a push to "devel", as in
+    # "test.yml", "build.yml" and "test-dev.yml" -- that first file carries the
+    # long note, and this is the same guard for the same reason. Every other
+    # push there is followed by a bump within minutes, and the bump is the
+    # commit a release is cut from, so freezing for both means freezing the same
+    # tree twice and publishing the first copy under the version it replaced.
+    #
+    # Stated here and nowhere else in this workflow: every other job needs this
+    # one, directly or through "build", and a job that needs a skipped job is
+    # skipped.
+    #
+    # Two clauses lead the message test, and neither is decoration.
+    #
+    #   * A called instance always runs. "deploy.yml" calls this workflow to
+    #     build what a release carries, and the caller has already decided. It
+    #     calls from "main" and from a tag, so the ref clause would let it
+    #     through today as well -- `inputs.called` says so directly rather than
+    #     by geography, and keeps saying it if a caller is ever added on "devel".
+    #     The note on `concurrency` above says why that marker, and not
+    #     `github.event_name` or `github.workflow`, is what identifies a called
+    #     run: inside one the whole `github` context is the caller's.
+    #   * Only a push carries `head_commit`. On every other trigger it is null,
+    #     `startsWith` reads that as the empty string, and without the event-name
+    #     clause the whole condition would be false -- which is how the nightly
+    #     run of "test.yml" came to be skipped every night until the same clause
+    #     was put first there. Here that would be the merge queue and every
+    #     manual dispatch.
+    if: >-
+      ${{ toJSON(inputs.called) != 'null'
+      || github.event_name != 'push'
+      || github.ref != 'refs/heads/devel'
+      || startsWith(github.event.head_commit.message, 'Version updated') }}
     outputs:
       build: ${{ steps.set-matrix.outputs.build }}
       install: ${{ steps.set-matrix.outputs.install }}

@@ -298,13 +298,18 @@ One bucket boundary in there is a deliberate trade rather than a fact, and it is
 `dev-tools/pyinstaller/`, `dev-tools/snap/`, `.snapcraft.yaml` and `install.sh` — not on `src/**`. Freezing
 is the most expensive thing here, and what makes a bundle differ from a working wheel is nearly always what
 went into it. A source change *can* break the freeze all the same (see `dev-tools/pyinstaller/README.md`),
-and the safety net for that is the push trigger of `build-standalone.yml`, which still lists `src/**` and
-fires on the push to `devel` after the merge — do not remove it, it is now the only thing that builds a
-bundle for a source change short of `#deepTest`.
+and the safety net for that is what `devel` does after the merge: the version bump that follows it is the same tree
+with a version on it, and `build-standalone.yml` freezes there. Short of `#deepTest` that bump is the only thing that
+builds a bundle for a source change, so do not narrow what a push to `devel` runs.
 
-`docs/source/contributing.rst` explains both to contributors. Note that a push to `devel` runs no matrix at
-all unless its head commit message starts with `Version updated` — the `set-matrix` job, and every job that
-depends on it, is skipped otherwise.
+`docs/source/contributing.rst` explains both to contributors. Note that a push to `devel` runs no matrix at all unless
+its head commit message starts with `Version updated` — the `set-matrix` job, and every job that depends on it, is
+skipped otherwise. That holds for every workflow now, `Standalone` and `IDE` included. Those two used to run on the
+merge as well: the same tree was built twice, minutes apart, and the first set of artifacts carried the version that
+merge had just replaced. Neither carries a `paths:` filter on its push trigger any more, because the gate is what
+decides and a filter in front of it could only ever hide it — a bump touches `pyproject.toml` and
+`ide/vscode/package.json` today, and the day `dev-tools/bumpversion.toml` stops naming such a file nothing would ever
+be built on `devel` again, with nothing to say so.
 
 **Neither gate trusts pytest's exit code.** On Windows it disagrees with the run in both directions — exit `0`
 with a test having failed (which is what #444 was written for), and exit `127` after a session where every test
