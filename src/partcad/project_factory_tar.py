@@ -11,12 +11,13 @@
 import hashlib
 import inspect
 import os
-import requests
 import tarfile
 
+import requests
+
 from . import project_factory as pf
-from .project_local import ProjectLocal
 from . import telemetry
+from .project_local import ProjectLocal
 
 
 class TarImportConfiguration:

@@ -14,10 +14,8 @@ envelope. Serialization goes through the pure 'shape_envelope' codec, so this
 module never touches OCP.
 """
 
-from . import wrapper
-from . import sandbox_versions
-from . import shape_envelope
 from . import logging as pc_logging
+from . import sandbox_versions, shape_envelope, wrapper
 
 # 'offset'/'scale' mirror the build123d relocate()/scale() the core used to run
 # in-process, so their runtime needs build123d; 'compound' only needs OCP to

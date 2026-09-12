@@ -9,13 +9,14 @@
 #
 
 
-import rich_click as click
 import os
 import threading
 
+import rich_click as click
+from opentelemetry import context as otel_context
+
 import partcad as pc
 import partcad.user_config as user_config
-from opentelemetry import context as otel_context
 from partcad_cli.click.cli_context import CliContext
 from partcad_utils import conda as pc_conda
 from partcad_utils.utils import directory_size_mb

@@ -5,6 +5,7 @@
 #
 
 import os
+
 import rich_click as click
 
 from partcad_cli.click.loader import Loader

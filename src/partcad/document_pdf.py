@@ -18,9 +18,7 @@ import os
 
 from . import document as pc_document
 from . import logging as pc_logging
-from . import sandbox_versions
-from . import shape_envelope
-from . import wrapper
+from . import sandbox_versions, shape_envelope, wrapper
 
 # The paper the instruction book is printed on. A4 is the ISO default and what
 # the rest of the world prints on; "letter" is accepted for North America.

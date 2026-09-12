@@ -8,12 +8,13 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import asyncio
 import os
 from concurrent.futures import ThreadPoolExecutor
+from typing import Callable
+
 from opentelemetry import context as otel_context
 from opentelemetry.trace import Tracer
-from typing import Callable
-import asyncio
 
 from .telemetry import tracer
 from .user_config import user_config

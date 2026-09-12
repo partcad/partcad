@@ -1,11 +1,8 @@
 import os
 
-from .part_factory_python import PartFactoryPython
 from . import logging as pc_logging
-from . import sandbox_versions
-from . import wrapper
-from . import transform
-from . import shape_envelope
+from . import sandbox_versions, shape_envelope, transform, wrapper
+from .part_factory_python import PartFactoryPython
 
 
 class PartFactorySdf(PartFactoryPython):

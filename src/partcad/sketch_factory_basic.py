@@ -7,12 +7,9 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .sketch_factory import SketchFactory
 from . import logging as pc_logging
-from . import wrapper
-from . import shape_envelope
-from . import sandbox_versions
-from . import telemetry
+from . import sandbox_versions, shape_envelope, telemetry, wrapper
+from .sketch_factory import SketchFactory
 
 
 # TODO(clairbee): distinguish between inner and outer wires?

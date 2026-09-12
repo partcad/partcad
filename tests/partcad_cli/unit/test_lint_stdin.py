@@ -19,6 +19,7 @@ import io
 import sys
 
 import pytest
+
 from partcad_cli.click.commands.lint import _read_stdin
 
 # A description someone would really write, in characters cp1252 does not have.

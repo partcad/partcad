@@ -8,13 +8,13 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import hashlib
-import re
-import os
-import shutil
-import time
 import contextlib
+import hashlib
+import os
+import re
+import shutil
 import threading
+import time
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
@@ -22,11 +22,11 @@ import pygit2
 from filelock import FileLock
 from pygit2.enums import CheckoutStrategy, ConfigLevel, CredentialType, ReferenceType, ResetMode
 
-from .project_local import ProjectLocal
 from . import consts
-from . import project_factory as pf
 from . import logging as pc_logging
+from . import project_factory as pf
 from . import telemetry
+from .project_local import ProjectLocal
 
 
 class GitCallbacks(pygit2.RemoteCallbacks):

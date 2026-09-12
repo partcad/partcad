@@ -4,14 +4,14 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 from typing import Optional
+
 import partcad.logging as pc_logging
 from partcad.project import Project
-from partcad.utils import resolve_resource_path
-
 from partcad.shape import PART_EXTENSION_MAPPING
+from partcad.utils import resolve_resource_path
 
 SHALLOW_COPY_SUFFICIENT_TYPES = ["alias", "enrich"]
 

@@ -4,9 +4,9 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .test import Test
 from ..assembly import Assembly
 from ..sketch import Sketch
+from .test import Test
 
 
 class DegenerateTest(Test):

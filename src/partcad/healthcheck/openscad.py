@@ -14,22 +14,23 @@ version is a development snapshot rather than a release, and for the expiry that
 comes with it.
 """
 
-import os
-import shutil
-import sys
-import zipfile
 import hashlib
+import os
 import platform
+import shutil
 import subprocess
+import sys
 import urllib.error
 import urllib.request
+import zipfile
 from pathlib import Path
+
 if platform.system() == "Windows":
     import winreg
 
-from partcad.user_config import UserConfig, user_config
-from partcad.logging import logging as pc_logging
 from partcad.healthcheck.tests import HealthCheckReport, HealthCheckTest
+from partcad.logging import logging as pc_logging
+from partcad.user_config import UserConfig, user_config
 
 
 # Where the bundle keeps OpenSCAD, relative to the directory holding the frozen

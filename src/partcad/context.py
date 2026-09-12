@@ -9,37 +9,34 @@
 import asyncio
 import os
 import re
-import sys
-import time
 import socket
+import sys
 import threading
+import time
 import urllib.parse
-from typing import Optional, Any
+from typing import Any, Optional
 
-from .cache import Cache
-from .cache_shape import ShapeCache
 from . import consts
 from . import logging as pc_logging
-from .mating import Mating
 from . import output
-from . import runtime
-from . import runtime_javascript_all
-from . import runtime_python_all
-from . import sandbox_versions
-from . import tags as pc_tags
-from . import project_factory_local as rfl
-from . import project_factory_git as rfg
-from . import project_factory_tar as rft
 from . import project_factory_external as rfe
+from . import project_factory_git as rfg
+from . import project_factory_local as rfl
+from . import project_factory_tar as rft
+from . import runtime, runtime_javascript_all, runtime_python_all, sandbox_versions
+from . import tags as pc_tags
+from . import telemetry
+from .cache import Cache
+from .cache_shape import ShapeCache
+from .mating import Mating
+from .part import Part
+from .plugin_provider_data_cart import *
+from .plugin_request_provider_quote import ProviderRequestQuote
+from .project import Project
 from .sync_threads import threadpool_manager
+from .test.all import tests as all_tests
 from .user_config import UserConfig
 from .utils import *
-from .part import Part
-from .project import Project
-from .plugin_request_provider_quote import ProviderRequestQuote
-from .plugin_provider_data_cart import *
-from . import telemetry
-from .test.all import tests as all_tests
 
 # What makes a package worth listing to a user interface: the kinds of object it
 # would have something to show for. Named once because two things read it and

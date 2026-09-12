@@ -9,8 +9,7 @@
 import os
 import shutil
 
-from . import runtime_python
-from . import telemetry
+from . import runtime_python, telemetry
 
 
 @telemetry.instrument()

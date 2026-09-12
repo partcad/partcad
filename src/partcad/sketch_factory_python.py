@@ -9,10 +9,9 @@
 
 import os
 
-from .sketch_factory_file import SketchFactoryFile
+from . import sandbox_versions, telemetry
 from .runtime_python import PythonRuntime, environment_requirements, shape_docker_image
-from . import sandbox_versions
-from . import telemetry
+from .sketch_factory_file import SketchFactoryFile
 
 
 # TODO(clairbee): create ShapeFactoryPython to be reused

@@ -7,9 +7,8 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .interface import Interface
-
 from . import telemetry
+from .interface import Interface
 
 
 @telemetry.instrument(exclude=["info"])

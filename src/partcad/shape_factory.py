@@ -7,13 +7,11 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from . import factory
-
-from .file_factory import FileFactory
-from .port import WithPorts
-from . import sandbox_versions
+from . import factory, sandbox_versions
 from . import software as pc_software
 from . import telemetry
+from .file_factory import FileFactory
+from .port import WithPorts
 
 
 @telemetry.instrument()

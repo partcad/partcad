@@ -11,8 +11,8 @@ import os
 import pytest
 from filelock import FileLock
 
-from partcad.user_config import user_config
 from partcad.healthcheck.stale_git_locks import StaleGitLocksCheck
+from partcad.user_config import user_config
 
 
 @pytest.fixture

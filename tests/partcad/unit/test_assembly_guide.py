@@ -14,8 +14,7 @@ import tempfile
 import pytest
 
 import partcad as pc
-from partcad import assembly_factory_assy
-from partcad import assembly_guide
+from partcad import assembly_factory_assy, assembly_guide
 from partcad import document as pc_document
 from partcad.assembly import Assembly
 from partcad.exception import NotAnAssemblyFileError, NotManufacturableError

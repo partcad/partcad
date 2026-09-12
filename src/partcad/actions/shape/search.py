@@ -1,10 +1,10 @@
-from partcad.part import Part
-from partcad.sketch import Sketch
-from partcad.context import Context
-from partcad.assembly import Assembly
-from partcad.interface import Interface
-from partcad.scene import Scene
 from partcad.actions.common import _search
+from partcad.assembly import Assembly
+from partcad.context import Context
+from partcad.interface import Interface
+from partcad.part import Part
+from partcad.scene import Scene
+from partcad.sketch import Sketch
 
 
 def search_parts(ctx: Context, package: str, recursive: bool, keyword: str) -> list[Part]:

@@ -9,14 +9,9 @@
 
 import os
 
-from . import wrapper
 from . import logging as pc_logging
+from . import sandbox_versions, shape_envelope, telemetry, wrapper
 from .sketch_factory_python import SketchFactoryPython
-
-from . import shape_envelope
-
-from . import sandbox_versions
-from . import telemetry
 
 
 @telemetry.instrument()

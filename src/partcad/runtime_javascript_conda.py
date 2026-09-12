@@ -21,11 +21,8 @@ import sys
 
 from partcad_utils import conda as pc_conda
 
-from . import runtime_javascript
-from . import runtime_python_conda
-from . import sandbox_lock
 from . import logging as pc_logging
-from . import telemetry
+from . import runtime_javascript, runtime_python_conda, sandbox_lock, telemetry
 
 
 @telemetry.instrument()

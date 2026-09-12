@@ -5,16 +5,17 @@
 #
 
 import os
-import uuid
 import platform
+import uuid
+
 import psutil
 import sentry_sdk
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.propagate import set_global_textmap
-from sentry_sdk.integrations.logging import LoggingIntegration
-from sentry_sdk.integrations.opentelemetry import SentrySpanProcessor, SentryPropagator
 import sentry_sdk.types
+from opentelemetry import trace
+from opentelemetry.propagate import set_global_textmap
+from opentelemetry.sdk.trace import TracerProvider
+from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.opentelemetry import SentryPropagator, SentrySpanProcessor
 
 from . import logging
 

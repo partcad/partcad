@@ -9,9 +9,9 @@
 
 import typing
 
-from .sketch import Sketch
-from .shape_factory import ShapeFactory
 from . import telemetry
+from .shape_factory import ShapeFactory
+from .sketch import Sketch
 
 
 @telemetry.instrument()

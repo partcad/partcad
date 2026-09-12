@@ -5,6 +5,7 @@
 #
 
 import rich_click as click
+
 from partcad_client import daemon
 
 

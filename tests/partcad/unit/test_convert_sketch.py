@@ -1,13 +1,13 @@
-import pytest
 import shutil
 from pathlib import Path
+
+import pytest
 import yaml
 
 import partcad as pc
-from partcad.context import Context
 from partcad.actions.sketch import convert_sketch_action
+from partcad.context import Context
 from partcad.shape import SKETCH_EXTENSION_MAPPING
-
 
 SKETCH_INPUTS = {
     "cylinder_svg": {"type": "svg", "path": "svg/cylinder.svg"},

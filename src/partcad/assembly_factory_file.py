@@ -10,9 +10,9 @@
 
 import os
 
+from . import logging as pc_logging
 from . import telemetry
 from .assembly_factory import AssemblyFactory
-from . import logging as pc_logging
 
 
 @telemetry.instrument()

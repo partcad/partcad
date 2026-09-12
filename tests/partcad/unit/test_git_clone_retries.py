@@ -1,9 +1,10 @@
-import pytest
 import tempfile
-import partcad as pc
-from pygit2 import GitError
 from unittest.mock import MagicMock, patch
 
+import pytest
+from pygit2 import GitError
+
+import partcad as pc
 from partcad.user_config import UserConfig
 
 repo_url = "https://github.com/partcad/partcad"

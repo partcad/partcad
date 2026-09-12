@@ -17,7 +17,7 @@ import asyncio
 import pytest
 
 import partcad as pc
-from partcad.render import VIEWS, VIEW_NAMES, resolve_viewport
+from partcad.render import VIEW_NAMES, VIEWS, resolve_viewport
 from partcad.shape import Shape
 
 # The names the thin CLI inlines for '--help' and for rejecting a typo without a

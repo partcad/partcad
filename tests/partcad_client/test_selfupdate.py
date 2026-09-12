@@ -24,6 +24,7 @@ import tarfile
 import textwrap
 
 import pytest
+
 from partcad_client import selfupdate
 
 # ---------------------------------------------------------------------------

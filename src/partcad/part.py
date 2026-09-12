@@ -9,9 +9,9 @@
 
 import typing
 
+from . import telemetry
 from .shape import Shape
 from .sync_threads import threadpool_manager
-from . import telemetry
 
 
 @telemetry.instrument(exclude=["ref_inc"])

@@ -1,4 +1,4 @@
-from . import add, part, shape, sketch, package, assembly, scene
+from . import add, assembly, package, part, scene, shape, sketch
 
 __all__ = [
     "add",

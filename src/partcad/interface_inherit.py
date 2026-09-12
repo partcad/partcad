@@ -7,9 +7,9 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from . import logging as pc_logging
 from . import telemetry
 from .geom import Location
-from . import logging as pc_logging
 
 
 @telemetry.instrument()

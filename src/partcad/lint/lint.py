@@ -1,12 +1,13 @@
 import json
-from enum import Enum
 from abc import ABC, abstractmethod
+from enum import Enum
 
-from ..project import Project
-from ..context import Context
+from partcad.cache_hash import CacheHash
+
 from .. import logging as pc_logging
 from ..concurrency import ReentrantGate
-from partcad.cache_hash import CacheHash
+from ..context import Context
+from ..project import Project
 
 # Separate from the tests' gate: the two limits are unrelated. Per loop for the
 # same reason, though -- the daemon runs one 'asyncio.run()' per request, so a

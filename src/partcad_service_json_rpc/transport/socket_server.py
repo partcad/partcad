@@ -25,9 +25,10 @@ import socket
 import threading
 from typing import Callable, Mapping, Optional
 
-from ..rpc.dispatcher import INVALID_PARAMS, Dispatcher, Handler
 from partcad_utils.framing import read_message, write_message
 from partcad_utils.logging_ansi_render import AnsiEventRenderer
+
+from ..rpc.dispatcher import INVALID_PARAMS, Dispatcher, Handler
 
 STOP_METHOD = "daemon.stop"
 

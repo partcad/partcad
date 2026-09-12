@@ -9,13 +9,10 @@
 
 import os
 
+from . import logging as pc_logging
+from . import shape_envelope, telemetry, wrapper
 from .part_factory_file import PartFactoryFile
 from .part_factory_homogen import PartFactoryHomogen
-from . import logging as pc_logging
-from . import wrapper
-from . import telemetry
-
-from . import shape_envelope
 
 
 @telemetry.instrument()

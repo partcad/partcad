@@ -9,13 +9,9 @@
 
 import os
 
-from . import sandbox_versions
-from . import telemetry
-from . import wrapper
-from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
-
-from . import shape_envelope
+from . import sandbox_versions, shape_envelope, telemetry, wrapper
+from .part_factory_file import PartFactoryFile
 
 
 @telemetry.instrument()

@@ -13,9 +13,9 @@ import hashlib
 import os
 
 import pytest
+from http_server import serve as _serve
 
 import partcad as pc
-from http_server import serve as _serve
 
 
 def test_file_url_part_1():
