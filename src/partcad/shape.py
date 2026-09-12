@@ -26,7 +26,6 @@ from . import sandbox_versions, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from .shape_config import ShapeConfiguration
-from .sync_threads import threadpool_manager  # noqa: F401  # kept for the module import; unused directly
 from .utils import total_size
 
 if TYPE_CHECKING:

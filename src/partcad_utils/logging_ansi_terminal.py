@@ -13,7 +13,6 @@ import sys
 import threading
 import time
 from logging.handlers import QueueHandler, QueueListener
-from typing import Any  # noqa: F401
 
 from .logging import error, ops
 

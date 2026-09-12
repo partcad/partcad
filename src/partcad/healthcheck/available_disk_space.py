@@ -5,7 +5,6 @@
 #
 
 import shutil
-from pathlib import Path  # noqa: F401
 
 from partcad.user_config import user_config
 

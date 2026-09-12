@@ -27,8 +27,10 @@ def test_project_config_version_1():
 def test_project_config_version_2():
     """Negative test case for PartCAD version requirement in the package config file"""
     # A bare `except:` here used to swallow the `assert False` it was paired
-    # with, so this test passed whether or not the invalid config raised.
-    with pytest.raises(Exception):
+    # with, so this test passed whether or not the invalid config raised. Named
+    # rather than `Exception`, so that the test fails if the config starts
+    # failing for some *other* reason -- which a bare `Exception` would accept.
+    with pytest.raises(pc.exception.NeedsUpdateException):
         pc.Context("tests/partcad/unit/data/project_config_invalid_1.yaml")
 
 

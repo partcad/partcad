@@ -747,13 +747,23 @@ jobs:
       # also `system`. The dev container's image carries both; a plain runner
       # has shellcheck and not hadolint, so fetch it -- at the same version the
       # hook's `rev:` pins, so this job and the hook check with one tool.
+      # The checksum is upstream's published one for this exact asset, pinned
+      # here rather than fetched beside the binary: a checksum downloaded from
+      # the same place as the file it vouches for verifies nothing. Verified
+      # *before* the binary is made executable or run, so a mismatch fails the
+      # job with the file still inert. Bump both together when the `rev:` in
+      # "dev-tools/pre-commit-config.yaml" moves.
       - name: Tools the system hooks need
+        env:
+          HADOLINT_VERSION: v2.14.0
+          HADOLINT_SHA256: 6bf226944684f56c84dd014e8b979d27425c0148f61b3bd99bcc6f39e9dc5a47
         run: |
           set -e
           shellcheck --version >/dev/null
-          sudo curl -fsSL -o /usr/local/bin/hadolint \
-            https://github.com/hadolint/hadolint/releases/download/v2.14.0/hadolint-Linux-x86_64
-          sudo chmod +x /usr/local/bin/hadolint
+          curl -fsSL -o /tmp/hadolint \
+            "https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VERSION}/hadolint-Linux-x86_64"
+          echo "${HADOLINT_SHA256}  /tmp/hadolint" | sha256sum --check --strict -
+          sudo install -m 0755 /tmp/hadolint /usr/local/bin/hadolint
           hadolint --version
       # SKIP, and why each:
       #   pytest, behave          -- their own jobs, and they need the CAD stack
