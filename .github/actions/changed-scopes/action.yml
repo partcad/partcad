@@ -261,12 +261,15 @@ runs:
               # Markdown file that turned out to be *data* under "src/" still
               # counts as code.
               add docs ;;
-            tools/containers/*)
-              # The Dockerfiles PartCAD's own images are built from. Source as
-              # well -- a change here is a change to the tree under test like
-              # any other -- but named first and given a bucket of its own,
-              # because it is the one kind of change whose subject is an image
-              # rather than the code that runs in one. See the "images" output.
+            tools/containers/*|dev-tools/ci/build-sandbox-image.sh)
+              # What PartCAD's own images are built from: the Dockerfiles, and
+              # the one script that builds a sandbox image (both the job that
+              # publishes them and ".github/actions/sandbox-image" run it, so a
+              # change to it changes every one of those images). Source as well
+              # -- a change here is a change to the tree under test like any
+              # other -- but named first and given a bucket of its own, because
+              # it is the one kind of change whose subject is an image rather
+              # than the code that runs in one. See the "images" output.
               add containers; add code ;;
             src/*|tests/*|features/*|cad/*|tools/*|dev-tools/*|conftest.py|behave.ini)
               add code ;;

@@ -1010,17 +1010,32 @@ workflow declares its permissions, so such a pull request builds the images as a
 release's, as it did before any of this. If you are changing one of these images from a fork, expect a
 maintainer to re-run the change from a branch of this repository before it lands.
 
-Nothing prunes these tags yet. Each such run leaves one KiCad tag and one Python sandbox tag per supported
-interpreter per architecture, named after the branch, and they stay in the registry after the branch is gone.
-That is a handful of tags per pull request that touches an image, which is rare -- but if you are looking at a
-long list of ``<release>-<something>`` tags on ghcr, this is where they come from and deleting them is safe:
-nothing outside the run that made them ever resolves one.
+These tags are cleaned up, in two places. ``CI`` deletes the Python sandbox tags it published once its own
+test jobs have finished -- it is their only consumer, the dev container being unable to use the ``docker``
+sandbox at all -- and ``Prune container images`` sweeps nightly for anything left: the KiCad tag, which ``CI``
+cannot delete because ``CI-Dev`` reads it too and a ``needs:`` does not reach across a workflow; whatever a
+cancelled run abandoned; and the ``partcad-devcontainer`` tags, which ``CI-Dev`` has been publishing on every
+non-bump run since long before any of this and which nothing has ever removed. The sweep deletes a tag only
+when it looks like ``<release>-<something that is not py<N>>`` *and* the version is a month old, so the release
+tags, the ``<release>-py<N>-<arch>`` images and the moving ``py<N>-<arch>`` tags are all out of its reach by
+construction. Run it by hand with ``dry-run`` to see what it would take.
 
 One detail is worth knowing if you are reading the workflows: the tag goes *on* the image and the release goes
 *into* it. A ``<release>-<branch>`` image still installs the release, because what it is built to test is this
 commit's Dockerfile. ``.github/actions/container-images`` is where all of this is decided, once, for both
 ``CI`` and ``CI-Dev`` -- they hand the same answer to the same ``Container (KiCad)`` build, which could not be
 told two different tags to build one image under.
+
+A test job does not build these images. It pulls what ``Build Docker Containers`` built, which is why every
+job that can reach a container waits for that one. ``.github/actions/sandbox-image`` used to build a copy per
+job, because on a pull request the published tag was somebody else's build and nothing could tell whether this
+commit had changed the Dockerfile -- and that is the question the ``images`` gate above now answers for the
+whole run. What is left in the action is a pull, plus a build for the one caller with no such job to wait for:
+``Examples via bundle`` in ``Standalone``, which runs on the version bump in a different workflow from the one
+publishing that release's images. That build is not a second implementation either -- both it and
+``Build Docker Containers`` run ``dev-tools/ci/build-sandbox-image.sh``, so there is one answer to "how is this
+image built" and the two cannot drift into testing an image built differently from the one that was published.
+Changing that script counts as a container change, like changing a Dockerfile.
 
 Implementation Details
 ----------------------

@@ -528,6 +528,31 @@ def test_a_container_definition_is_its_own_bucket_and_source_too(tmp_path):
     assert subjects["pytest"] and subjects["behave"] and subjects["examples"]
 
 
+def test_the_script_that_builds_an_image_is_a_container_change_too(tmp_path):
+    """It is not under `tools/containers`, and it decides what every one of
+    these images is.
+
+    Both the job that publishes them and `.github/actions/sandbox-image` run
+    `dev-tools/ci/build-sandbox-image.sh` -- that is what makes there be one
+    answer to "how is this image built" -- so a change to it is a change to the
+    images, and `dev-tools/*` alone would have classified it as plain source.
+    """
+    subjects, buckets = classify(tmp_path, ["dev-tools/ci/build-sandbox-image.sh"])
+
+    assert buckets == {"containers", "code"}
+    assert subjects["images"]
+
+
+def test_its_neighbours_in_that_directory_are_not(tmp_path):
+    """Only the one file, not `dev-tools/ci`. `bounded.sh` wraps a command in a
+    test job and has nothing to do with an image.
+    """
+    subjects, buckets = classify(tmp_path, ["dev-tools/ci/bounded.sh"])
+
+    assert buckets == {"code"}
+    assert not subjects["images"]
+
+
 def test_nothing_else_rebuilds_the_images(tmp_path):
     """Not even a workflow change, which turns on everything else here.
 

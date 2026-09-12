@@ -87,7 +87,7 @@ def test_the_base_image_is_the_one_ci_publishes():
     workflow = (pathlib.Path(__file__).resolve().parents[3] / ".github" / "workflows" / "test.yml").read_text()
     assert "${{ github.repository }}-container-python" in workflow
     assert runtime_python_docker.BASE_IMAGE == "ghcr.io/partcad/partcad-container-python"
-    assert '--tag "${IMAGE}:${IMAGE_TAG}-py${PY}-${ARCH}"' in workflow
+    assert 'PC_IMAGE_REF="${IMAGE}:${IMAGE_TAG}-py${PY}-${ARCH}"' in workflow
     assert "container_image.image_tag(release)" in inspect.getsource(runtime_python_docker)
 
 
@@ -132,7 +132,7 @@ def test_the_version_tag_is_published_once_by_the_version_bump():
     assert step["env"]["IMAGE_TAG"] == "${{ needs.set-matrix.outputs.image-tag }}"
     # The release still goes *into* the image, whatever the image is called.
     assert step["env"]["PC_VERSION"] == "${{ needs.set-matrix.outputs.image-release }}"
-    assert '--build-arg "PARTCAD_VERSION=${PC_VERSION}"' in step["run"]
+    assert 'PC_PARTCAD_VERSION="${PC_VERSION}"' in step["run"]
 
 
 def test_the_moving_tag_is_not_written_by_a_build():
@@ -145,8 +145,11 @@ def test_the_moving_tag_is_not_written_by_a_build():
     """
     run = _step("Build the Python sandbox images")["run"]
 
-    assert '--tag "${IMAGE}:py${PY}-${ARCH}"' not in run
-    assert '--cache-from "type=registry,ref=${IMAGE}:py${PY}-${ARCH}"' in run
+    assert 'PC_IMAGE_REF="${IMAGE}:py${PY}-${ARCH}"' not in run
+    # It is the cache source and only the cache source. The `type=registry,ref=`
+    # around it is `dev-tools/ci/build-sandbox-image.sh`'s to write now, this
+    # step naming the image the layers come from.
+    assert 'PC_CACHE_FROM="${IMAGE}:py${PY}-${ARCH}"' in run
 
 
 def test_the_release_advances_the_moving_tag_without_rebuilding():

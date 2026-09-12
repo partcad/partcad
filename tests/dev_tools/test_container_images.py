@@ -26,6 +26,7 @@ The library half of the same subject is `tests/partcad_utils/test_container_imag
 
 import os
 import pathlib
+import re
 import subprocess
 
 import pytest
@@ -261,8 +262,8 @@ def test_the_python_sandbox_images_are_tagged_with_it_and_carry_the_release():
     assert step["env"]["PC_VERSION"] == "${{ needs.set-matrix.outputs.image-release }}"
     assert step["env"]["PUSH"] == "${{ needs.set-matrix.outputs.image-push }}"
 
-    assert '--tag "${IMAGE}:${IMAGE_TAG}-py${PY}-${ARCH}"' in step["run"]
-    assert '--build-arg "PARTCAD_VERSION=${PC_VERSION}"' in step["run"]
+    assert 'PC_IMAGE_REF="${IMAGE}:${IMAGE_TAG}-py${PY}-${ARCH}"' in step["run"]
+    assert 'PC_PARTCAD_VERSION="${PC_VERSION}"' in step["run"]
 
 
 def test_a_run_that_builds_its_own_tag_builds_both_architectures():
@@ -352,6 +353,174 @@ def test_the_dev_container_jobs_forward_it_inside(job):
         )
 
 
+# --------------------------------------------------------------------------- #
+# One build, and the tags cleaned up after it                                  #
+# --------------------------------------------------------------------------- #
+
+BUILD_SCRIPT = "dev-tools/ci/build-sandbox-image.sh"
+PRUNE = "prune-container-images.yml"
+
+
+def test_only_one_thing_knows_how_to_build_a_sandbox_image():
+    """Two spellings of it do not fail when they drift -- they disagree.
+
+    `Build the Python sandbox images` publishes one, and
+    `.github/actions/sandbox-image` builds one when the pull comes up empty.
+    They used to be two `docker build` invocations in two files with the same
+    Dockerfile and the same two build arguments, and nothing keeping them in
+    step: a job testing an image built differently from the one the run
+    published, under a name saying they are the same.
+    """
+    assert (REPO_ROOT / BUILD_SCRIPT).is_file()
+
+    (step,) = [
+        s
+        for s in _workflow("test.yml")["jobs"]["build-containers"]["steps"]
+        if s.get("name", "").startswith("Build the Python sandbox")
+    ]
+    action = (REPO_ROOT / ".github" / "actions" / "sandbox-image" / "action.yml").read_text()
+
+    for where, text in (("build-containers", step["run"]), ("sandbox-image", action)):
+        assert BUILD_SCRIPT in text, where
+        # ...and neither builds it a second way of its own.
+        assert "docker buildx build" not in text, where
+        assert "docker build " not in text, where
+
+
+def test_the_build_script_keeps_the_tag_and_the_release_apart():
+    """The tag goes on the image; the release goes into it.
+
+    One caller passes a branch tag and the release; the other passes the tag it
+    just failed to pull. A script that derived either from the other would make
+    that impossible.
+    """
+    script = (REPO_ROOT / BUILD_SCRIPT).read_text()
+
+    assert "PC_IMAGE_REF" in script
+    assert "PC_PARTCAD_VERSION" in script
+    assert '--build-arg "PARTCAD_VERSION=${PC_PARTCAD_VERSION}"' in script
+    assert '--tag "${PC_IMAGE_REF}"' in script
+
+
+def test_a_test_job_no_longer_builds_the_image_it_renders_in():
+    """It pulls what `build-containers` built, which is the point.
+
+    Every job in `test.yml` that can reach a container waits for that job, so
+    the tag it needs is published before it starts -- and the build that stayed
+    in the action is for `Examples via bundle` in `build-standalone.yml`, which
+    has no such `needs:` because it is in another workflow.
+    """
+    action = (REPO_ROOT / ".github" / "actions" / "sandbox-image" / "action.yml").read_text()
+
+    assert "docker pull" in action
+    # The build is reached only when the pull did not work.
+    body = action[action.index("docker pull") :]
+    assert body.index("else") < body.index(BUILD_SCRIPT)
+
+
+def test_the_run_deletes_the_python_tags_it_published():
+    """And only on a run that published any: `image-override` is empty
+    otherwise, so an ordinary pull request does not have this job at all.
+
+    `always()`, because a red run leaks exactly as much as a green one.
+    """
+    job = _workflow("test.yml")["jobs"]["cleanup-images"]
+    condition = " ".join(str(job["if"]).split())
+
+    assert "always()" in condition
+    assert "outputs.image-override != ''" in condition
+    assert job["permissions"]["packages"] == "write"
+
+    # Everything that could still be pulling one.
+    for consumer in CONSUMERS["test.yml"]:
+        assert consumer in job["needs"], consumer
+    assert "build-containers" in job["needs"]
+
+
+def test_the_run_does_not_delete_the_kicad_tag():
+    """`CI-Dev` pulls it too, and a `needs:` does not reach across a workflow.
+
+    That is the fact this whole mechanism was built around, and deleting the
+    tag here would turn it into the same `manifest unknown` -- arriving as a
+    race rather than as a certainty. The nightly sweep takes it instead. The
+    Python images have no such reader: the dev container cannot use the
+    `docker` sandbox at all, so `CI` is their only consumer.
+    """
+    (step,) = _workflow("test.yml")["jobs"]["cleanup-images"]["steps"]
+
+    assert "container-python" in step["run"]
+    assert "container-kicad" not in step["run"]
+
+
+def test_the_nightly_sweep_covers_every_package_that_grows_branch_tags():
+    """Including the dev container image, which predates all of this.
+
+    `setup-devcontainer` has been publishing `<release>-<branch>` on every
+    non-bump run of `CI-Dev` for as long as it has existed, and nothing has
+    ever deleted one.
+    """
+    jobs = _workflow(PRUNE)["jobs"]
+    (job,) = jobs.values()
+    (step,) = job["steps"]
+
+    assert job["permissions"]["packages"] == "write"
+    for package in ("-devcontainer", "-container-python", "-container-kicad"):
+        assert package in step["run"], package
+
+    # A schedule, and a way to run it by hand without deleting anything.
+    on = _workflow(PRUNE)[True]  # YAML parses a bare `on:` key as the boolean
+    assert "schedule" in on
+    assert "dry-run" in on["workflow_dispatch"]["inputs"]
+
+
+def _tag_rule():
+    """The sweep's `is_branch_tag`, extracted so it can be run over real tags."""
+    (step,) = list(_workflow(PRUNE)["jobs"].values())[0]["steps"]
+    match = re.search(r"^is_branch_tag\(\) \{.*?^\}$", step["run"], re.S | re.M)
+    assert match, "the sweep no longer has an 'is_branch_tag' function"
+    return match.group(0)
+
+
+@pytest.mark.parametrize(
+    "tag, deleted",
+    [
+        # What a released PartCAD resolves. Deleting one of these is the only
+        # way this workflow can do real damage.
+        ("0.8.70", False),
+        ("0.8.70-py3.11-amd64", False),
+        ("0.8.70-py3.14-arm64", False),
+        # The moving tag a third-party plugin builds `FROM`.
+        ("py3.11-amd64", False),
+        ("py3.14-arm64", False),
+        # Anything with no release in front of it is not ours to reason about.
+        ("latest", False),
+        ("main", False),
+        # What a run publishes for itself, which is what this exists to remove.
+        ("0.8.70-my-branch", True),
+        ("0.8.70-claude_ci-images", True),
+        ("0.8.70-my-branch-py3.11-amd64", True),
+        ("0.8.70-feat_x-py3.14-arm64", True),
+        ("0.10.0-devel", True),
+        # A branch actually called "py3-weird" is kept forever. That is the
+        # harmless half of being wrong, and it is which half that matters.
+        ("0.8.70-py3-weird-py3.11-amd64", False),
+    ],
+)
+def test_the_sweep_deletes_branch_tags_and_nothing_else(tmp_path, tag, deleted):
+    script = tmp_path / "rule.sh"
+    script.write_text(
+        'set -euo pipefail\n%s\nif is_branch_tag "$1"; then echo DELETE; else echo KEEP; fi\n' % _tag_rule()
+    )
+    result = subprocess.run(
+        ["bash", str(script), tag],
+        env={"PATH": "/usr/bin:/bin:/usr/local/bin"},
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout.strip() == ("DELETE" if deleted else "KEEP"), tag
+
+
 def test_the_sandbox_action_reads_the_same_variable_and_pulls_what_was_published():
     """`.github/actions/sandbox-image` makes the base image available under the
     name PartCAD resolves, so it has to resolve it the same way.
@@ -367,6 +536,6 @@ def test_the_sandbox_action_reads_the_same_variable_and_pulls_what_was_published
 
     assert 'tag_prefix="${PC_CONTAINER_IMAGE_TAG:-${release}}"' in action
     assert 'tag="${image}:${tag_prefix}-py${PYTHON_VERSION}-${arch}"' in action
-    # The release still goes *into* the image it may have to build.
-    assert '--build-arg "PARTCAD_VERSION=${release}"' in action
-    assert "PREFER_PUBLISHED=true" in action
+    # The release still goes *into* the image it may have to build, and it is
+    # the one thing the tag does not tell the build script.
+    assert 'PC_PARTCAD_VERSION="${release}"' in action

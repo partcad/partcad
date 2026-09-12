@@ -403,19 +403,22 @@ jobs:
           fi
           echo "Architectures: ${ARCHES}"
 
+          # The build itself is "dev-tools/ci/build-sandbox-image.sh" and not
+          # written out here, because ".github/actions/sandbox-image" also has
+          # to be able to build one -- and two spellings of "build this image"
+          # do not fail when they drift, they disagree: a job testing an image
+          # built differently from the one this job published, under a name
+          # that says they are the same.
           for PY in $(echo "${PYTHONS}" | jq -r '.[]'); do
             for ARCH in ${ARCHES}; do
               echo "::group::python ${PY} (${ARCH})"
-              docker buildx build \
-                --platform "linux/${ARCH}" \
-                --build-arg "PYTHON_VERSION=${PY}" \
-                --build-arg "PARTCAD_VERSION=${PC_VERSION}" \
-                --tag "${IMAGE}:${IMAGE_TAG}-py${PY}-${ARCH}" \
-                --cache-from "type=registry,ref=${IMAGE}:py${PY}-${ARCH}" \
-                --cache-to type=inline \
-                --output "type=image,push=${PUSH}" \
-                --file tools/containers/python/Dockerfile \
-                tools/containers
+              PC_IMAGE_REF="${IMAGE}:${IMAGE_TAG}-py${PY}-${ARCH}" \
+              PC_PYTHON_VERSION="${PY}" \
+              PC_PARTCAD_VERSION="${PC_VERSION}" \
+              PC_PLATFORM="linux/${ARCH}" \
+              PC_PUSH="${PUSH}" \
+              PC_CACHE_FROM="${IMAGE}:py${PY}-${ARCH}" \
+                dev-tools/ci/build-sandbox-image.sh
               echo "::endgroup::"
             done
           done
@@ -1356,3 +1359,109 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           codecov-files: pub-repo-test-results/junit.xml
           coverage-report: pub-repo-test-results/coverage.xml
+
+  # The tags this run published for its own use, deleted now that nothing in
+  # this workflow is going to ask for them again.
+  #
+  # Only a run that built images of its own has any -- "image-override" is empty
+  # otherwise -- so on an ordinary pull request this job does not exist. What it
+  # removes is what "Build the Python sandbox images" pushed under
+  # "<release>-<branch>-py<X>-<arch>": one tag per supported interpreter per
+  # architecture, per run, none of which anybody will ever pull again.
+  #
+  # "always()", because a red run leaks exactly as much as a green one and the
+  # tags are no more useful afterwards. A cancelled run may not get here at all,
+  # which is the first of two reasons the nightly sweep in
+  # "prune-container-images.yml" exists rather than this being the whole story.
+  #
+  # The second reason is the KiCad image, which this job deliberately does NOT
+  # touch. "CI-Dev" pulls that tag too -- "test_part_example_kicad" runs there
+  # as well -- and a "needs:" does not reach across a workflow, which is the
+  # fact this entire mechanism was built around. So there is no moment at which
+  # this workflow knows the other one is finished with it, and deleting it here
+  # would be the same "manifest unknown" that started all of this, arriving as a
+  # race instead of a certainty. The Python images have no such reader: the dev
+  # container cannot use the "docker" sandbox at all (it holds the *host's*
+  # socket -- see "mounts_are_shared"), so this workflow is the only consumer
+  # and it is done with them here.
+  cleanup-images:
+    name: "Remove this run's sandbox images"
+    needs:
+      - set-matrix
+      - build-containers
+      - test-pytest
+      - test-behave
+      - test-examples-partcad
+      - test-examples-all
+      - test-pub-repo
+    if: ${{ always() && needs.set-matrix.outputs.image-override != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      packages: write
+    steps:
+      - name: Delete the Python sandbox images this run published
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # The tag, and the package it is a tag of. Both built the same way
+          # the build built them, out of the same two values.
+          IMAGE_TAG: ${{ needs.set-matrix.outputs.image-tag }}
+          PYTHONS: ${{ env.PYTHONS }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY%%/*}"
+          package="${GITHUB_REPOSITORY#*/}-container-python"
+
+          # Both architectures, whether or not this run built both: a delete of
+          # a tag that is not there is a no-op, and listing what was built
+          # would be a third place that knows the arch rule.
+          wanted=""
+          for py in $(echo "${PYTHONS}" | jq -r '.[]'); do
+            for arch in amd64 arm64; do
+              wanted="${wanted} ${IMAGE_TAG}-py${py}-${arch}"
+            done
+          done
+          echo "looking for:${wanted}"
+
+          # A *version* is what the API deletes, and a version can carry more
+          # than one tag. Ours never does -- each build is its own manifest --
+          # but a version that has picked up a tag we did not publish is one
+          # whose deletion would take that tag with it, so it is left alone and
+          # said out loud instead.
+          failed=0
+          versions=$(gh api --paginate \
+            "orgs/${owner}/packages/container/${package}/versions?per_page=100" \
+            --jq '.[] | {id: .id, tags: (.metadata.container.tags // [])} | @json' || true)
+          if [ -z "${versions}" ]; then
+            echo "::warning::could not list versions of ${package}; the nightly sweep will pick these up"
+            exit 0
+          fi
+
+          while IFS= read -r version; do
+            [ -n "${version}" ] || continue
+            id=$(echo "${version}" | jq -r '.id')
+            tags=$(echo "${version}" | jq -r '.tags | join(" ")')
+            for tag in ${tags}; do
+              case " ${wanted} " in
+              *" ${tag} "*) ;;
+              *) continue ;;
+              esac
+              others=$(echo "${version}" | jq -r --arg t "${tag}" '.tags | map(select(. != $t)) | join(", ")')
+              if [ -n "${others}" ]; then
+                echo "::warning::${tag} shares a version with ${others}; leaving it"
+                continue
+              fi
+              echo "deleting ${package}:${tag} (version ${id})"
+              gh api --method DELETE \
+                "orgs/${owner}/packages/container/${package}/versions/${id}" || failed=1
+            done
+          done <<< "${versions}"
+
+          # Never the run's verdict. This is housekeeping after the tests have
+          # already said what they had to say, and the nightly sweep deletes
+          # whatever this could not -- so a permissions problem here is worth a
+          # warning on a pull request and a red job once a night, where somebody
+          # is looking at the sweep rather than at somebody else's change.
+          if [ "${failed}" -ne 0 ]; then
+            echo "::warning::some versions could not be deleted; the nightly sweep will pick them up"
+          fi
