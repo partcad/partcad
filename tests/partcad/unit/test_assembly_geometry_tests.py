@@ -130,8 +130,14 @@ def test_an_assembly_is_checked_through_its_parts():
     assert _run(DegenerateTest(), _Assembly(box=None))
 
 
-def test_a_shape_that_cannot_be_measured_is_left_to_the_cad_test():
-    assert _run(DegenerateTest(), _Shape(raises=Exception("no runtime")))
+def test_a_check_that_cannot_run_fails_rather_than_passes():
+    """The distinction this branch got wrong. A shape that did not build is
+    answered earlier and left to 'cad'; an exception here means the check
+    itself broke, and reporting that as a pass is how a TypeError in the
+    serialisation came to certify every assembly as free of interference."""
+    ctx = {}
+    assert not asyncio.run(DegenerateTest().test([], None, _Shape(raises=Exception("boom")), ctx))
+    assert ctx.get(DegenerateTest.NOT_CACHEABLE) is True
 
 
 # --- interference -----------------------------------------------------------
@@ -264,6 +270,56 @@ def test_the_assembly_is_sent_as_json_rather_than_as_geometry():
     assert "wrapped" not in sent, "the geometry key is decoded on arrival; do not use it here"
 
 
+def test_an_envelope_carrying_bytes_can_still_be_sent():
+    """The regression, and the reason the test above did not catch it.
+
+    A real envelope carries its BREP payloads as bytes, which json.dumps
+    cannot encode at all. That is what shape_envelope.dumps is for. Using the
+    stock one raised a TypeError which the test caught and reported as a pass,
+    so 'interference' answered "nothing overlaps" for every assembly ever
+    given to it - including a 732-part model where two parts really did.
+
+    The envelope above is all strings, which is exactly why it proved nothing.
+    """
+    import json as _json
+
+    from partcad.assembly import Assembly
+
+    envelope = {
+        "name": "asm",
+        "label": "asm",
+        "assembly": [{"name": "a", "label": "a", "brep": b"\x00\x01 not text"}],
+    }
+    captured = {}
+
+    class _Runtime:
+        async def ensure_async(self, *args):
+            return None
+
+        async def run_async(self, command, request_serialized):
+            captured["request"] = request_serialized
+            return 0, '{"success": true, "overlaps": [], "unchecked": [], "parts": 0}', ""
+
+    class _Ctx:
+        def get_python_runtime(self, version=None):
+            return _Runtime()
+
+    assembly = Assembly.__new__(Assembly)
+    assembly.project_name = "pkg"
+    assembly.name = "asm"
+
+    async def _wrapped(ctx):
+        return envelope
+
+    assembly.get_wrapped = _wrapped
+
+    # The bug was a TypeError raised here, so simply getting an answer is the
+    # assertion; the payload has to survive the trip as well.
+    result = asyncio.run(assembly.get_interference_async(_Ctx()))
+    assert result is not None
+    assert isinstance(_json.loads(captured["request"])["assembly_json"], str)
+
+
 def test_an_indeterminate_pair_is_not_reported_as_no_overlap(caplog):
     """A boolean that did not come back is not an answer of "they are clear".
 
@@ -289,7 +345,7 @@ def test_the_interference_cache_key_covers_skip_as_well_as_the_thresholds():
 
 def test_a_verdict_that_turned_on_the_machine_is_not_remembered():
     ctx = {}
-    assert asyncio.run(InterferenceTest().test([], None, _Assembly(raises=Exception("no runtime")), ctx))
+    assert not asyncio.run(InterferenceTest().test([], None, _Assembly(raises=Exception("boom")), ctx))
     assert ctx.get(InterferenceTest.NOT_CACHEABLE) is True
 
 

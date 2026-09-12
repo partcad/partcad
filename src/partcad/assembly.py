@@ -7,7 +7,6 @@
 # Licensed under Apache License, Version 2.0.
 
 import asyncio
-import json
 import os
 import tempfile
 import typing
@@ -313,7 +312,13 @@ class Assembly(Shape):
             # leaf by leaf, keeping each name attached to its solid.
             request_serialized = shape_envelope.serialize(
                 {
-                    "assembly_json": json.dumps(obj),
+                    # shape_envelope.dumps, not json.dumps: the envelope carries
+                    # its BREP payloads as bytes, which stock JSON cannot encode
+                    # at all. Getting this wrong raised a TypeError that the
+                    # test caught and reported as a pass, so the check answered
+                    # "no interference" for every assembly without ever looking
+                    # at one.
+                    "assembly_json": shape_envelope.dumps(obj),
                     "min_volume": min_volume,
                     "min_fraction": min_fraction,
                 }
