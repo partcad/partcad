@@ -15,6 +15,12 @@ import pytest
 
 import partcad as pc
 
+# 'partcad' before OCP, and 'isort: split' so it stays there: importing the
+# package pins the standard library's expat (see the comment on 'import
+# pyexpat' in partcad/__init__.py), and whatever loads first wins for the
+# process.
+# isort: split
+
 from OCP.BRepGProp import BRepGProp
 from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
 from OCP.GProp import GProp_GProps
