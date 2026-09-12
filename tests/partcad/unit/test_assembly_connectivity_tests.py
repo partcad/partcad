@@ -124,8 +124,11 @@ def test_an_assembly_is_checked_through_its_parts():
     assert _run(SolidityTest(), _Assembly(solidity={"solids": 1, "volume": -5.0, "valid": False}))
 
 
-def test_a_shape_that_cannot_be_measured_is_left_to_the_cad_test():
-    assert _run(SolidityTest(), _Shape(raises=Exception("no runtime")))
+def test_a_check_that_cannot_run_fails_rather_than_passes():
+    """An exception here means this check broke, not that the shape is fine."""
+    ctx = {}
+    assert not asyncio.run(SolidityTest().test([], None, _Shape(raises=Exception("boom")), ctx))
+    assert ctx.get(SolidityTest.NOT_CACHEABLE) is True
 
 
 # --- connectivity: two items in one place -----------------------------------
@@ -301,15 +304,16 @@ def test_the_settings_that_decide_a_verdict_are_in_its_cache_key():
     assert sol.cache_key_suffix(None, _Shape(config={"solidity": {"skip": True}})) == ""
 
 
-def test_a_verdict_that_turned_on_the_machine_is_not_remembered():
-    """A missing runtime is not a fact about the shape. Cached, it would be
-    read back under a key that installing the runtime does not change."""
+def test_a_check_that_cannot_run_is_failed_and_not_remembered():
+    """It fails, because an exception means the check broke rather than that
+    the shape is sound - and it is not remembered, because the reason was not
+    the shape."""
     ctx = {}
-    assert _run_ctx(SolidityTest(), _Shape(raises=Exception("no runtime")), ctx)
+    assert not _run_ctx(SolidityTest(), _Shape(raises=Exception("boom")), ctx)
     assert ctx.get(SolidityTest.NOT_CACHEABLE) is True
 
     ctx = {}
-    assert _run_ctx(ConnectivityTest(), _BrokenAssembly(), ctx)
+    assert not _run_ctx(ConnectivityTest(), _BrokenAssembly(), ctx)
     assert ctx.get(ConnectivityTest.NOT_CACHEABLE) is True
 
 
