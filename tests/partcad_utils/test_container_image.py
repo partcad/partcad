@@ -74,6 +74,18 @@ def test_the_kicad_image_pc_open_starts_follows_it(monkeypatch):
     rebuilt these images -- and the constant then carries that tag from before
     this test existed, whatever the environment says by the time it runs. So
     the "without" half is a reload too, under the fixture above.
+
+    And why the module is put back under the environment the *suite* has rather
+    than the one this test made. Reloading it with the variable removed leaves a
+    constant saying "the release" in a process where the release image may not
+    exist -- this being a run that published its own -- for whatever runs next
+    in this worker. Nothing in the suite reads that constant after this file
+    today, in the order a serial run happens to produce; `pytest-xdist` hands a
+    worker whatever files it hands it, and "happens to produce" is not a thing
+    to rest on. `monkeypatch.undo()` is what restores it: the fixture above and
+    this test share one `monkeypatch`, so undoing it takes out the removal as
+    well as the override, and the reload after it reads what the process started
+    with.
     """
     import partcad_client.external as external
 
@@ -84,8 +96,12 @@ def test_the_kicad_image_pc_open_starts_follows_it(monkeypatch):
     try:
         assert reloaded.TOOLS["kicad"].image.endswith(":" + external.__version__ + "-my-branch")
     finally:
-        monkeypatch.delenv(container_image.ENV_VAR, raising=False)
+        monkeypatch.undo()
         importlib.reload(external)
+
+    # Left agreeing with the environment, whichever environment that is: the
+    # release on a developer machine, the tag this run published in CI.
+    assert external.TOOLS["kicad"].image.endswith(":" + container_image.image_tag(external.__version__))
 
 
 def test_no_reader_spells_the_tag_for_itself():
