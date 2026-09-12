@@ -45,16 +45,22 @@ CALLERS = {
 
 
 def _jobs(workflow):
+    """The `jobs:` mapping of one workflow file, parsed."""
     return yaml.safe_load((WORKFLOWS / workflow).read_text())["jobs"]
 
 
 def _needs(job):
-    """A job's dependencies, whichever of the two spellings it uses."""
+    """A job's dependencies, whichever of the two spellings it uses.
+
+    `needs:` takes a bare string as readily as a list, and a workflow here uses
+    both, so a membership test against the raw value would pass on a substring.
+    """
     needs = job.get("needs") or []
     return [needs] if isinstance(needs, str) else needs
 
 
 def test_the_image_is_built_by_one_reusable_workflow():
+    """One build step, and it is the KiCad devcontainer definition it builds."""
     jobs = _jobs("container-kicad.yml")
     assert len(jobs) == 1
     (job,) = jobs.values()
@@ -62,9 +68,47 @@ def test_the_image_is_built_by_one_reusable_workflow():
     step = [s for s in job["steps"] if s.get("uses", "").startswith("devcontainers/ci")]
     assert len(step) == 1
     assert step[0]["with"]["configFile"] == "tools/containers/devcontainer-kicad.json"
-    # Published, not merely built: what waits on this job waits for a tag it can
-    # pull from somewhere else entirely.
-    assert step[0]["with"]["push"] == "always"
+
+
+def test_the_tag_it_publishes_is_the_tag_the_runtime_pulls():
+    """`:<release>`, with nothing else in it.
+
+    Both readers build the tag the same way -- `part_factory_kicad.get_runtime`
+    and `partcad_client.external.KICAD` each write
+    `...-container-kicad:` + `__version__` -- so a tag carrying anything else is
+    a tag nobody pulls. This step used to take `setup-devcontainer`'s
+    IMAGE_TAG, which is `<release>-<branch>` on every commit that is not a
+    version bump: published where nothing looks, and agreeing with the readers
+    on the one commit whose tests need a new image only by accident.
+    """
+    (job,) = _jobs("container-kicad.yml").values()
+    (step,) = [s for s in job["steps"] if s.get("uses", "").startswith("devcontainers/ci")]
+
+    assert step["with"]["imageTag"] == "${{ env.VERSION }}"
+    assert step["with"]["cacheFrom"].endswith(":${{ env.VERSION }}")
+
+    for source in ("src/partcad/part_factory_kicad.py", "src/partcad_client/external.py"):
+        text = (REPO_ROOT / source).read_text()
+        assert 'partcad-container-kicad:" + ' in text, source
+        assert "partcad-container-kicad:%s" not in text, source
+
+
+def test_it_publishes_on_the_version_bump_and_not_from_a_branch():
+    """The rule "Build the Python sandbox images" states at length in test.yml.
+
+    Build always, because the build is the test; publish on the version bump,
+    because a tag somebody else pulls is not a thing an unreviewed branch may
+    hand them. Now that the tag is the bare release rather than a
+    branch-suffixed one, an unconditional `push: always` here would have every
+    pull request overwrite the image a released PartCAD pulls.
+    """
+    (job,) = _jobs("container-kicad.yml").values()
+    (step,) = [s for s in job["steps"] if s.get("uses", "").startswith("devcontainers/ci")]
+    push = " ".join(step["with"]["push"].split())
+
+    assert "'always' || 'never'" in push
+    assert "github.ref == 'refs/heads/devel'" in push
+    assert "startsWith(github.event.head_commit.message, 'Version updated')" in push
 
 
 def test_the_build_is_not_cancellable():
@@ -86,19 +130,25 @@ def test_nothing_else_is_built_alongside_it():
 
 @pytest.mark.parametrize("workflow", sorted(CALLERS))
 def test_both_test_workflows_call_it(workflow):
+    """Once each. A caller that loses the call loses the wait with it."""
     calls = [name for name, job in _jobs(workflow).items() if job.get("uses") == REUSABLE]
     assert calls == ["container-kicad"], workflow
 
 
 @pytest.mark.parametrize("workflow", sorted(CALLERS))
 def test_the_job_running_the_unit_tests_waits_for_it(workflow):
+    """`test_part_example_kicad` lives in both, and starts the container."""
     job = _jobs(workflow)[CALLERS[workflow]]
     assert "container-kicad" in _needs(job), workflow
 
 
 @pytest.mark.parametrize("workflow", sorted(CALLERS))
 def test_the_caller_grants_the_permission_to_publish(workflow):
-    """A called workflow gets the calling job's permissions and no more."""
+    """A called workflow gets the calling job's permissions and no more.
+
+    Declared in the called workflow too, but that can only narrow: without the
+    grant here the publish fails on the one run that has to make it.
+    """
     job = _jobs(workflow)["container-kicad"]
     assert job["permissions"]["packages"] == "write"
 
@@ -120,12 +170,19 @@ SCOPES = ("pytest", "behave", "examples")
 
 
 def _scopes_named(job):
+    """The `changed-scopes` outputs a job's `if:` is gated on.
+
+    Read out of the condition text rather than evaluated: what matters is which
+    scopes a gate mentions at all, since that is what decides whether a builder
+    can be skipped on a run where something waiting for it is not.
+    """
     condition = str(job.get("if") or "")
     return {scope for scope in SCOPES if "outputs.%s ==" % scope in condition}
 
 
 @pytest.mark.parametrize("workflow", sorted(CONSUMERS))
 def test_every_test_job_waits_for_every_container(workflow):
+    """The rule, job by job: no test starts before every image exists."""
     jobs = _jobs(workflow)
     for consumer in CONSUMERS[workflow]:
         missing = [b for b in BUILDERS[workflow] if b not in _needs(jobs[consumer])]
