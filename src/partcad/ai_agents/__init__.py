@@ -53,6 +53,7 @@ import re
 import shutil
 from typing import Optional
 
+from .. import __version__
 from .. import logging as pc_logging
 from ..launch_config import find_repository_root
 
@@ -85,6 +86,26 @@ CLAUDE_PLUGIN_DIR = ".claude-plugin"
 # prefix is the plugin's name because they are the same skill: `/pc:init` in
 # Claude Code is `pc-init` in Cursor.
 CURSOR_PREFIX = "pc-"
+
+# The front matter key the Cursor copies are stamped with, under `metadata:`.
+# Two things depend on it and neither has another way to know:
+#
+#   * staleness -- the skills a user has are the ones the PartCAD that wrote
+#     them shipped, and nothing else in a `.cursor/skills` directory says which
+#     PartCAD that was. The Claude side has `plugin.json` for this.
+#   * ownership -- a `pc-` directory carrying this stamp is one PartCAD wrote,
+#     so it is one PartCAD may remove when the skill behind it is retired. A
+#     `pc-something` a user wrote themselves has no stamp and is never touched.
+#
+# The value is `partcad.__version__`, read here, at install time. It is
+# deliberately *not* a literal in this file: a literal would be one more entry
+# in `dev-tools/bumpversion.toml` and one more thing to forget on a release --
+# which is exactly how the Claude plugin manifest sat at 0.1.0 for twenty-three
+# releases (see the note at the top of that file). `__version__` is already
+# bumped, `tests/partcad_cli/unit/test_versions.py` already fails if it stops
+# moving, and reading it costs nothing. Do not replace this with a constant.
+STAMP_KEY = "partcad"
+STAMP_SECTION = "metadata"
 
 
 def plugin_manifest() -> dict:
@@ -120,14 +141,66 @@ def _front_matter_bounds(text: str) -> Optional[tuple[int, int]]:
     return 4, end + 1
 
 
-def rename_skill(text: str, name: str, skills: list[str]) -> str:
+def _stamp(front_matter: str, version: str) -> str:
+    """Return `front_matter` carrying `metadata.partcad: <version>`.
+
+    Inserted as text rather than by parsing and re-dumping the YAML: a round
+    trip through a parser reflows the long `description:` line every skill has
+    and reorders the keys, so every install would rewrite files it did not
+    change. An existing `metadata:` block is added to rather than replaced --
+    the skills in this repository have none, but an author's may.
+    """
+    line = "%s: %s" % (STAMP_KEY, version)
+
+    section = re.search(r"^%s:[ \t]*$" % re.escape(STAMP_SECTION), front_matter, re.MULTILINE)
+    if section is None:
+        separator = "" if front_matter.endswith("\n") else "\n"
+        return front_matter + separator + "%s:\n  %s\n" % (STAMP_SECTION, line)
+
+    body = front_matter[section.end() :]
+    # The indentation the block already uses, so that this belongs to it.
+    nested = re.match(r"\n([ \t]+)\S", body)
+    indent = nested.group(1) if nested else "  "
+
+    existing = re.search(r"^%s%s:[ \t]*.*$" % (re.escape(indent), re.escape(STAMP_KEY)), body, re.MULTILINE)
+    if existing is not None:
+        start = section.end() + existing.start()
+        end = section.end() + existing.end()
+        return front_matter[:start] + indent + line + front_matter[end:]
+
+    return front_matter[: section.end()] + "\n" + indent + line + front_matter[section.end() :]
+
+
+def stamped_version(text: str) -> Optional[str]:
+    """The PartCAD version that wrote this skill, or None if nothing did.
+
+    None is the answer for a skill a user wrote themselves *and* for one an
+    older PartCAD installed before it stamped anything. Both are left alone by
+    everything that reads this, which is the safe direction: the cost is a
+    retired skill lingering for somebody who has not reinstalled since, and the
+    alternative is deleting a file PartCAD may not have written.
+    """
+    bounds = _front_matter_bounds(text)
+    if bounds is None:
+        return None
+    start, end = bounds
+    found = re.search(
+        r"^[ \t]+%s:[ \t]*(?P<version>\S+)[ \t]*$" % re.escape(STAMP_KEY),
+        text[start:end],
+        re.MULTILINE,
+    )
+    return found.group("version") if found else None
+
+
+def rename_skill(text: str, name: str, skills: list[str], version: Optional[str] = None) -> str:
     """Return `text` as the skill `name`, for an agent with no plugin namespace.
 
-    Two things change, and only these two. The `name` in the front matter, which
-    has to match the directory the skill is installed in or it answers to a
-    command nobody typed. And every `pc:<skill>` in the text -- `/pc:setup` in
+    Three things change, and only these three. The `name` in the front matter,
+    which has to match the directory the skill is installed in or it answers to
+    a command nobody typed. Every `pc:<skill>` in the text -- `/pc:setup` in
     prose, `# pc:init` as a title -- which names a skill through the plugin
-    namespace that does not exist here.
+    namespace that does not exist here. And the stamp, which says which PartCAD
+    wrote the file and marks it as PartCAD's to replace or retire.
 
     `skills` is what makes the second one safe: only the names actually shipped
     are rewritten, so a `pc:` that is something else, and the `pc render` and
@@ -143,6 +216,8 @@ def rename_skill(text: str, name: str, skills: list[str]) -> str:
             count=1,
             flags=re.MULTILINE,
         )
+        if version is not None:
+            front_matter = _stamp(front_matter, version)
         text = text[:start] + front_matter + text[end:]
 
     if skills:
@@ -171,6 +246,63 @@ def _writable_destination(path: str, what: str) -> bool:
         pc_logging.warning("Not installing %s: '%s' is not a directory" % (what, path))
         return False
     return True
+
+
+def _ours_to_retire(directory: str) -> Optional[str]:
+    """The name of a Cursor skill PartCAD may remove, or None to leave it alone.
+
+    Ours is a `pc-` directory carrying the stamp: `pc init` wrote it, so `pc
+    init` may retire it when the skill behind it is gone. Anything else in that
+    directory belongs to somebody else -- a `pc-` skill an author wrote by hand,
+    or one an older PartCAD installed before it stamped anything -- and a
+    retired skill lingering there is a much smaller harm than deleting a file
+    PartCAD did not write.
+    """
+    name = os.path.basename(directory)
+    if not name.startswith(CURSOR_PREFIX):
+        return None
+
+    try:
+        with open(os.path.join(directory, "SKILL.md"), "r", encoding="utf-8") as f:
+            text = f.read()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+    if stamped_version(text) is None:
+        pc_logging.debug("Leaving '%s' in place: PartCAD does not ship it and did not write it" % directory)
+        return None
+    return name
+
+
+def _retire(parent: str, keep: list[str], owned) -> list[str]:
+    """Remove the skills under `parent` that PartCAD no longer ships.
+
+    A skill retired upstream keeps being offered to the agent otherwise, and an
+    agent that follows it drives a CLI that no longer works that way -- which is
+    worse than having no skill at all, because it looks like a working one. That
+    is what makes this a removal rather than a warning.
+
+    `owned` decides what may go: the whole plugin directory is PartCAD's, so
+    there it is every name; under `.cursor/skills` it is the stamped ones.
+    Returns the names removed, for the caller to report.
+    """
+    if not os.path.isdir(parent):
+        return []
+
+    retired = []
+    for name in sorted(os.listdir(parent)):
+        directory = os.path.join(parent, name)
+        if name in keep or os.path.islink(directory) or not os.path.isdir(directory):
+            continue
+        if owned(directory) is None:
+            continue
+        try:
+            shutil.rmtree(directory)
+        except OSError as e:
+            pc_logging.warning("Failed to remove the retired skill '%s': %s" % (directory, e))
+            continue
+        retired.append(name)
+    return retired
 
 
 def install_claude_plugin(root: str) -> bool:
@@ -202,7 +334,10 @@ def install_claude_plugin(root: str) -> bool:
         pc_logging.warning("Failed to install the Claude plugin into '%s': %s" % (destination, e))
         return False
 
+    retired = _retire(os.path.join(destination, "skills"), skills, lambda directory: directory)
     pc_logging.info("Installed the '%s' plugin (%d skills) into '%s'" % (name, len(skills), destination))
+    if retired:
+        pc_logging.info("Removed %d skill(s) PartCAD no longer ships: %s" % (len(retired), ", ".join(retired)))
     return True
 
 
@@ -237,7 +372,7 @@ def install_cursor_skills(root: str) -> bool:
             with open(os.path.join(source, "SKILL.md"), "r", encoding="utf-8") as f:
                 text = f.read()
             with open(os.path.join(target, "SKILL.md"), "w", encoding="utf-8", newline="\n") as f:
-                f.write(rename_skill(text, name, skills))
+                f.write(rename_skill(text, name, skills, __version__))
         except OSError as e:
             pc_logging.warning("Failed to install '%s' into '%s': %s" % (name, target, e))
             continue
@@ -246,24 +381,49 @@ def install_cursor_skills(root: str) -> bool:
     if not installed:
         return False
 
+    retired = _retire(destination, [CURSOR_PREFIX + skill for skill in skills], _ours_to_retire)
     pc_logging.info("Installed %d skills into '%s' as '%s*'" % (installed, destination, CURSOR_PREFIX))
+    if retired:
+        pc_logging.info("Removed %d skill(s) PartCAD no longer ships: %s" % (len(retired), ", ".join(retired)))
     return True
 
 
-def install_agent_skills(package_dir: str = ".") -> bool:
-    """Install the skills for every agent, beside the package in `package_dir`.
+# Every agent this knows how to install for, and what installing means for it.
+# The skills themselves are vendor-neutral `SKILL.md` folders, so an agent is
+# added here by teaching this one function where its directory is and whether it
+# has a namespace of its own -- not by writing a second copy of the library.
+AGENTS = {
+    "claude": install_claude_plugin,
+    "cursor": install_cursor_skills,
+}
+
+
+def install_agent_skills(package_dir: str = ".", agents=None) -> bool:
+    """Install the skills for `agents`, beside the package in `package_dir`.
 
     The files go to the root of the git repository holding the package, because
     that is what an editor opens as its workspace; when the package is not in a
     repository, they go next to the package itself. This is the same root
     `add_render_configuration` writes into, and for the same reason.
 
+    `agents` is the names to install for, defaulting to all of them. An unknown
+    name is an error rather than a no-op: a typo that silently installs nothing
+    looks exactly like an agent PartCAD does not support yet.
+
     Returns True when anything was installed. Nothing here is a reason for
     `pc init` to fail -- the package is created either way -- so every failure
     is reported and returns False.
     """
+    if agents is None:
+        agents = list(AGENTS)
+
+    unknown = [agent for agent in agents if agent not in AGENTS]
+    if unknown:
+        pc_logging.error("Unknown agent(s): %s. Known: %s" % (", ".join(sorted(unknown)), ", ".join(sorted(AGENTS))))
+        return False
+
     root = find_repository_root(package_dir) or os.path.abspath(package_dir)
-    # `or` short-circuits, and both of these have to run.
-    claude = install_claude_plugin(root)
-    cursor = install_cursor_skills(root)
-    return claude or cursor
+    # Every one of them runs: a refusal for one agent is not a reason to skip
+    # the next, so this must not short-circuit the way `and`/`or` would.
+    installed = [AGENTS[agent](root) for agent in agents]
+    return any(installed)

@@ -86,6 +86,23 @@ Feature: `pc init` command
     And a file named "partcad.yaml" should not exist
     And a file named ".vscode/launch.json" should not exist
 
+  @pc-init @agent-skills @agents
+  Scenario: Install the skills for one agent only
+    Given a file named "partcad.yaml" does not exist
+    When I run "pc --no-ansi init --agents cursor"
+    Then the command should exit with a status code of "0"
+    And a file named ".cursor/skills/pc-init/SKILL.md" should be created
+    And a directory named ".claude" should not exist
+
+  @pc-init @agent-skills @agents @failure
+  Scenario: Ask for an agent PartCAD does not know
+    # A typo that installs nothing looks exactly like an agent that is not
+    # supported yet, so it is an error rather than a quiet no-op.
+    When I run "pc --no-ansi init --skills-only --agents kursor"
+    Then the command should exit with a status code of "1"
+    And STDERR should contain "Unknown agent(s): kursor"
+    And a directory named ".cursor" should not exist
+
   @pc-init @agent-skills @skills-only @failure
   Scenario: Ask for the skills and for no skills at once
     When I run "pc --no-ansi init --skills-only --no-skills"

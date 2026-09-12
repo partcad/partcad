@@ -185,7 +185,15 @@ Package commands
 
   ``--no-skills`` skips the skills. ``--skills-only`` installs *just* them and touches no package at all, which
   is how a repository that has a package already gets them, or gets a newer PartCAD's -- there is nothing to
-  create, so an existing ``partcad.yaml`` is neither read nor replaced.
+  create, so an existing ``partcad.yaml`` is neither read nor replaced. ``--agents`` chooses which agents to
+  install for: ``all`` (the default), or a comma-separated list of ``claude`` and ``cursor``. An agent PartCAD
+  does not know is an error, because a typo that installs nothing looks exactly like an agent that is not
+  supported yet.
+
+  Installing again updates what is there and **removes the skills PartCAD has stopped shipping**: a retired
+  skill left behind describes a CLI that has moved on, which is worse than no skill at all because the agent
+  follows it anyway. Only PartCAD's own are removed -- the Cursor copies carry a ``metadata.partcad`` stamp
+  saying which release wrote them, and a ``pc-`` skill without one is somebody else's and is left alone.
 
 ``pc install``
   Download everything the current package needs to be built - the PartCAD counterpart of ``npm install``.
@@ -509,6 +517,12 @@ Other commands
 ``pc healthcheck``
   Check the host system for known issues. Use ``--dry-run`` to list the available checks, ``--filters`` to run
   only checks with the given tags, and ``--fix`` to attempt automatic fixes.
+
+  One of them is about this repository rather than the host: ``AgentSkills`` compares the AI agent skills
+  installed here against the PartCAD running, and reports the ones an older release wrote. ``pc upgrade``
+  replaces PartCAD and leaves them where they are, so without this an agent goes on reading instructions for a
+  CLI that has moved -- silently, since a stale skill looks exactly like a current one. ``--fix`` reinstalls
+  them, for the agents that had them and no others.
 
 ``pc search``
   Search for objects by keyword. Subcommands: ``all``, ``parts``, ``sketches``, ``assemblies``,

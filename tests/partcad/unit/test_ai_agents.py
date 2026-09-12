@@ -19,6 +19,7 @@ import os
 import pytest
 import yaml
 
+import partcad
 import partcad.ai_agents as ai_agents
 
 
@@ -255,3 +256,135 @@ def test_a_destination_that_is_a_file_is_refused(tmp_path):
 
     assert not ai_agents.install_cursor_skills(str(tmp_path))
     assert (tmp_path / ".cursor" / "skills").read_text(encoding="utf-8") == "not a directory\n"
+
+
+# --- The stamp: which PartCAD wrote a skill, and whose skill it is ---
+
+
+def test_installed_cursor_skills_say_which_partcad_wrote_them(tmp_path):
+    """Nothing else in a `.cursor/skills` directory records that.
+
+    The Claude side has the plugin manifest; this is the Cursor equivalent, and
+    it is what `pc healthcheck` compares against the version running.
+    """
+    ai_agents.install_cursor_skills(str(tmp_path))
+
+    for skill in ai_agents.available_skills():
+        text = (tmp_path / ".cursor" / "skills" / ("pc-" + skill) / "SKILL.md").read_text(encoding="utf-8")
+        assert ai_agents.stamped_version(text) == partcad.__version__
+
+
+def test_the_stamp_is_added_to_an_existing_metadata_block():
+    """An author's own `metadata:` is added to rather than replaced."""
+    original = "\n".join(["---", "name: render", "metadata:", "  author: somebody", "---", "", "body", ""])
+    stamped = ai_agents.rename_skill(original, "pc-render", ["render"], "1.2.3")
+
+    assert "  author: somebody" in stamped
+    assert "  partcad: 1.2.3" in stamped
+    assert stamped.count("metadata:") == 1
+    assert ai_agents.stamped_version(stamped) == "1.2.3"
+
+
+def test_re_stamping_replaces_rather_than_repeats():
+    """Installing twice must not leave two versions in one file."""
+    once = ai_agents.rename_skill("---\nname: render\n---\n\nbody\n", "pc-render", ["render"], "1.0.0")
+    twice = ai_agents.rename_skill(once, "pc-render", ["render"], "2.0.0")
+
+    assert ai_agents.stamped_version(twice) == "2.0.0"
+    assert twice.count("partcad:") == 1
+
+
+def test_an_unstamped_skill_reports_no_version():
+    """A user's own skill, and one an older PartCAD installed, look the same."""
+    assert ai_agents.stamped_version("---\nname: mine\n---\n") is None
+    assert ai_agents.stamped_version("no front matter at all\n") is None
+
+
+# --- Retirement: a skill PartCAD stopped shipping stops being offered ---
+
+
+def test_a_retired_skill_is_removed_from_both_agents(tmp_path):
+    """It would otherwise be offered forever, describing a CLI that moved on.
+
+    That is worse than no skill at all: the agent follows it, and it looks like
+    a working one.
+    """
+    ai_agents.install_agent_skills(str(tmp_path))
+
+    ghost = tmp_path / ".cursor" / "skills" / "pc-ghost"
+    ghost.mkdir()
+    (ghost / "SKILL.md").write_text(
+        "---\nname: pc-ghost\ndescription: retired\nmetadata:\n  partcad: 0.0.1\n---\n", encoding="utf-8"
+    )
+    plugin_ghost = tmp_path / ".claude" / "skills" / "pc" / "skills" / "ghost"
+    plugin_ghost.mkdir()
+    (plugin_ghost / "SKILL.md").write_text("---\nname: ghost\n---\n", encoding="utf-8")
+
+    ai_agents.install_agent_skills(str(tmp_path))
+
+    assert not ghost.exists()
+    assert not plugin_ghost.exists()
+    # And everything still shipped survived the pruning.
+    assert len(list((tmp_path / ".claude" / "skills" / "pc" / "skills").iterdir())) == len(ai_agents.available_skills())
+
+
+def test_a_skill_the_user_wrote_is_never_retired(tmp_path):
+    """`pc-` is PartCAD's namespace, but the stamp is what proves authorship.
+
+    Somebody's hand-written `pc-mine` has none, so it stays -- and so does one
+    an older PartCAD installed before stamping existed. The cost is a retired
+    skill lingering; the alternative is deleting a file PartCAD did not write.
+    """
+    theirs = tmp_path / ".cursor" / "skills" / "pc-mine"
+    theirs.mkdir(parents=True)
+    (theirs / "SKILL.md").write_text("---\nname: pc-mine\ndescription: mine\n---\n", encoding="utf-8")
+    unrelated = tmp_path / ".cursor" / "skills" / "openspec-propose"
+    unrelated.mkdir()
+    (unrelated / "SKILL.md").write_text("---\nname: openspec-propose\n---\n", encoding="utf-8")
+
+    ai_agents.install_cursor_skills(str(tmp_path))
+
+    assert (theirs / "SKILL.md").is_file()
+    assert (unrelated / "SKILL.md").is_file()
+
+
+def test_retirement_does_not_follow_symlinks(tmp_path):
+    """The same rule the installation side keeps: never write through one."""
+    if os.name == "nt":
+        pytest.skip("symlinks need a privilege Windows does not grant by default")
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "SKILL.md").write_text("---\nname: pc-linked\nmetadata:\n  partcad: 0.0.1\n---\n", encoding="utf-8")
+    skills = tmp_path / ".cursor" / "skills"
+    skills.mkdir(parents=True)
+    os.symlink(elsewhere, skills / "pc-linked")
+
+    ai_agents.install_cursor_skills(str(tmp_path))
+
+    assert (elsewhere / "SKILL.md").is_file()
+
+
+# --- Which agents ---
+
+
+def test_only_the_named_agents_are_installed_for(tmp_path):
+    assert ai_agents.install_agent_skills(str(tmp_path), ["cursor"])
+
+    assert (tmp_path / ".cursor" / "skills" / "pc-init" / "SKILL.md").is_file()
+    assert not (tmp_path / ".claude").exists()
+
+
+def test_an_unknown_agent_is_an_error_rather_than_a_quiet_no_op(tmp_path):
+    """A typo that installs nothing looks exactly like an unsupported agent."""
+    assert not ai_agents.install_agent_skills(str(tmp_path), ["cursor", "emacs"])
+
+    assert not (tmp_path / ".cursor").exists()
+
+
+def test_every_agent_is_installed_for_by_default(tmp_path):
+    ai_agents.install_agent_skills(str(tmp_path))
+
+    assert sorted(ai_agents.AGENTS) == ["claude", "cursor"]
+    assert (tmp_path / ".claude" / "skills" / "pc").is_dir()
+    assert (tmp_path / ".cursor" / "skills" / "pc-init").is_dir()
