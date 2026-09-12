@@ -66,6 +66,17 @@ def test_the_build_is_not_cancellable():
     assert job["concurrency"]["cancel-in-progress"] is False
 
 
+def test_nothing_else_is_built_alongside_it():
+    """`devcontainers/ci` pushes in its *post-job* step, so the tag appears when
+    the job ends rather than when the build finishes. A second image built in
+    this job would hold the push back by however long that image takes -- which
+    is how a build that finished at 22:37 came to publish at 23:03.
+    """
+    (job,) = _jobs("container-kicad.yml").values()
+    builds = [s for s in job["steps"] if "docker build" in s.get("run", "") or "buildx build" in s.get("run", "")]
+    assert builds == []
+
+
 @pytest.mark.parametrize("workflow", sorted(CALLERS))
 def test_both_test_workflows_call_it(workflow):
     calls = [name for name, job in _jobs(workflow).items() if job.get("uses") == REUSABLE]

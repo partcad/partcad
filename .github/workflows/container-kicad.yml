@@ -13,6 +13,18 @@
 # 'APIError: ... ("manifest unknown")' -- a test written to fail when the KiCad
 # path is broken failing instead because an image had not been pushed yet.
 #
+# The window is far wider than it looks, and that is the part worth knowing:
+# "devcontainers/ci" builds in its step and **pushes in its post-job step**, so
+# the tag reaches the registry when the whole job ends, not when the build
+# finishes. Inside the old "build-containers" that put twenty-five minutes
+# between the two -- "Build Container for Kicad" was done at 22:37:25 on
+# 0.8.70 and the push ran at 23:03:12, the Python sandbox images having been
+# built in between -- and the dev container's pytest reached the KiCad test at
+# 23:02:30, ninety seconds early. Waiting on the *job* is therefore the only
+# thing that helps, which is exactly what "needs:" waits for; waiting on the
+# step would not have. It is also why this job builds nothing else: alone, its
+# post step pushes a minute after its build rather than half an hour after.
+#
 # A reusable workflow is what gives each caller a real "needs:" edge on the one
 # build, the way "vsix.yml" gives "build.yml" and "deploy.yml" one .vsix. The
 # alternative -- each workflow building the image for itself -- is the same
