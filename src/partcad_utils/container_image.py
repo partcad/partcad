@@ -16,7 +16,7 @@ CI needs one other answer. A change to ``tools/containers`` builds images that
 are not the release's, and the tests in that same run have to reach *those*
 rather than the ones the last release published -- otherwise a Dockerfile fix
 cannot be proven and a Dockerfile regression cannot be caught until after it
-lands. Such a run builds ``<release>-<branch>`` and exports
+lands. Such a run builds ``<release>-<branch>-<commit>`` and exports
 ``PC_CONTAINER_IMAGE_TAG``.
 
 Read out of the environment, and that is deliberately the whole of the mechanism

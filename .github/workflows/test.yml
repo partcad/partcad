@@ -347,7 +347,8 @@ jobs:
       # There is a third tag, and it exists because of that last sentence. A run
       # that changes what these images contain has to *test* what it built, and
       # neither tag above can carry it. So such a run builds and publishes
-      # "<release>-<branch>-py<X>-<arch>" and points its own tests at it: a tag
+      # "<release>-<branch>-<commit>-py<X>-<arch>" and points its own tests at
+      # it: a tag
       # nobody but this run resolves, which is what makes it safe to publish
       # from an unreviewed branch. Which runs those are is decided in "Which
       # images this run uses" on "set-matrix"; "image-tag" and "image-push"
@@ -390,7 +391,7 @@ jobs:
           #
           # A run building its own tag pays it regardless, because there the
           # half-built tag is not a gap in coverage but a gap in the tag: the
-          # Arm test jobs resolve "<release>-<branch>-py<X>-arm64" like every
+          # Arm test jobs resolve "<release>-<branch>-<commit>-py<X>-arm64" like every
           # other job, find nothing, and fall back -- "Pytest" to conda, which
           # is the sandbox not being tested at all, and the jobs that use
           # ".github/actions/sandbox-image" to a build of their own, which is
@@ -702,7 +703,7 @@ jobs:
     # that built none of its own -- and an empty value is the release, which is
     # what every installed PartCAD resolves. So this line changes nothing except
     # on a run that changed what the images contain, where it is what points the
-    # tests at the "<release>-<branch>" images "build-containers" and
+    # tests at the "<release>-<branch>-<commit>" images "build-containers" and
     # "container-kicad" published a few jobs ago rather than at the last
     # release's. Read by "partcad_utils.container_image", and through it by
     # "runtime_python_docker.image_for", "part_factory_kicad.get_runtime" and
@@ -1366,7 +1367,8 @@ jobs:
   # Only a run that built images of its own has any -- "image-override" is empty
   # otherwise -- so on an ordinary pull request this job does not exist. What it
   # removes is what "Build the Python sandbox images" pushed under
-  # "<release>-<branch>-py<X>-<arch>": one tag per supported interpreter per
+  # "<release>-<branch>-<commit>-py<X>-<arch>": one tag per supported
+  # interpreter per
   # architecture, per run, none of which anybody will ever pull again.
   #
   # "always()", because a red run leaks exactly as much as a green one and the

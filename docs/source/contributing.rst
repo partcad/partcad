@@ -987,8 +987,9 @@ caught there at all. That is how ``tools/containers/python/Dockerfile`` came to 
 reportlab needs while every PNG in every rendering job went on failing: the fix was in the repository and not
 in the tag, and no run could tell.
 
-So a run that changes an image builds and publishes ``<release>-<branch>`` instead, and points its own tests
-at it. Nothing but that run ever asks for that tag, which is what makes publishing it from an unreviewed branch
+So a run that changes an image builds and publishes ``<release>-<branch>-<commit>`` instead, and points its own
+tests at it. The commit is in the name because a branch is not unique in time: two pushes to one branch are two
+runs, and each has to own the tag it builds, tests and deletes. Nothing but that run ever asks for that tag, which is what makes publishing it from an unreviewed branch
 safe -- the release tag, the one somebody else pulls, is still only ever written by the bump. The run exports
 ``PC_CONTAINER_IMAGE_TAG`` to every job that runs a test, and ``partcad_utils.container_image.image_tag`` reads
 it: unset, which is every installed PartCAD, it is the release.
@@ -1021,7 +1022,7 @@ tags, the ``<release>-py<N>-<arch>`` images and the moving ``py<N>-<arch>`` tags
 construction. Run it by hand with ``dry-run`` to see what it would take.
 
 One detail is worth knowing if you are reading the workflows: the tag goes *on* the image and the release goes
-*into* it. A ``<release>-<branch>`` image still installs the release, because what it is built to test is this
+*into* it. A ``<release>-<branch>-<commit>`` image still installs the release, because what it is built to test is this
 commit's Dockerfile. ``.github/actions/container-images`` is where all of this is decided, once, for both
 ``CI`` and ``CI-Dev`` -- they hand the same answer to the same ``Container (KiCad)`` build, which could not be
 told two different tags to build one image under.

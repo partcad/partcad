@@ -1,7 +1,7 @@
 # The branch-tagged container images nobody is going to pull again.
 #
-# Three packages here carry a tag of the form "<release>-<branch>" beside the
-# release tags a published PartCAD resolves:
+# Three packages here carry a tag that starts "<release>-" and goes on to name
+# a branch, beside the release tags a published PartCAD resolves:
 #
 #   partcad-devcontainer       every run of "CI-Dev" that is not a version bump
 #                              publishes one -- see ".github/actions/setup-devcontainer"

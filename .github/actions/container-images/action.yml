@@ -10,8 +10,8 @@ description: >-
 # an installed PartCAD pulls, and publishing it is the whole reason that run
 # exists.
 #
-# A run that **changes what an image contains** publishes `<release>-<branch>`
-# instead and points its own tests at it, which is what makes a Dockerfile fix
+# A run that **changes what an image contains** publishes
+# `<release>-<branch>-<commit>` instead and points its own tests at it, which is what makes a Dockerfile fix
 # provable in the pull request that makes it rather than after it lands.
 # `changed-scopes` answers that from the paths; `#images` in the pull request
 # answers it from the author, for a change the paths cannot see -- a workflow
@@ -43,12 +43,15 @@ inputs:
   release:
     description: >-
       The release this tree is, which is the tag on an ordinary run and the stem
-      of `<release>-<branch>` on one that builds its own.
+      of `<release>-<branch>-<commit>` on one that builds its own.
     required: true
 
 outputs:
   tag:
-    description: "The tag to build under, and to publish under where `push` says so."
+    description: >-
+      The tag to build under, and to publish under where `push` says so. The
+      release on an ordinary run; `<release>-<branch>-<commit>` on one that
+      builds its own, the commit being what makes it name exactly one build.
     value: ${{ steps.decide.outputs.tag }}
   release:
     description: >-
@@ -82,6 +85,10 @@ runs:
         # Never interpolated into the script: a branch name is text somebody
         # chose, like the pull request title `test-depth` is careful with.
         BRANCH: ${{ github.head_ref || github.ref_name }}
+        # The commit, because a branch is not unique in time and the tag has to
+        # be. Both workflows see the same value for one event, which is what
+        # lets them agree on a tag without talking to each other.
+        SHA: ${{ github.sha }}
         IS_RELEASE_PUBLISH: >-
           ${{ (github.event_name == 'push'
           && github.ref == 'refs/heads/devel'
@@ -102,9 +109,24 @@ runs:
           override=""
           why="the release, published by this run"
         elif [ "${WANTED}" = "true" ] && [ "${FROM_A_FORK}" != "true" ]; then
-          # The same sanitisation "setup-devcontainer" applies: a branch name
-          # may hold "/", a tag may not.
-          tag="${RELEASE}-$(printf '%s' "${BRANCH}" | sed 's|/|_|g')"
+          # A tag may hold [A-Za-z0-9_.-] and a branch name may hold a good deal
+          # more, so everything else becomes "_" -- the substitution
+          # "setup-devcontainer" makes for "/", widened, because a tag the
+          # registry refuses is a build that fails at the push. Truncated for
+          # the same reason: a tag is 128 characters and a branch name is not
+          # bounded at all.
+          #
+          # The commit is in there because the branch alone is not unique in
+          # time, and every part of this mechanism assumes the tag names one
+          # build. Two pushes to a branch are two runs; their concurrency
+          # groups do not serialise them across workflows, so both would build
+          # "<release>-<branch>", publish it, and test against whichever push
+          # landed last. Worse, "cleanup-images" runs under "always()" --
+          # which includes *cancelled* -- so the superseded run would delete
+          # the tags of the run that superseded it, mid-flight. With the commit
+          # in the tag each run builds, tests and deletes only its own.
+          branch=$(printf '%s' "${BRANCH}" | sed 's|[^A-Za-z0-9_.-]|_|g' | cut -c1-40)
+          tag="${RELEASE}-${branch}-$(printf '%s' "${SHA}" | cut -c1-7)"
           push=true
           override="${tag}"
           why="built from this commit, because the images changed or '#images' asked"

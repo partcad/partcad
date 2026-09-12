@@ -128,6 +128,30 @@ def test_the_build_is_not_cancellable():
     assert job["concurrency"]["cancel-in-progress"] is False
 
 
+def test_the_two_callers_never_share_a_concurrency_group():
+    """They did, to build the image once per commit rather than once per caller.
+
+    That is a trade this cannot make. GitHub queues a group by running one job
+    and leaving the next pending -- and a *third* arrival cancels the pending
+    one, which `cancel-in-progress: false` does not prevent; it only protects
+    the one that is running. Re-running `CI` while `CI-Dev`'s call is pending is
+    enough, and the cancelled call takes `Run: pytest`, `Run: behave` and
+    `Run: pc` with it, a job whose dependency is cancelled being skipped.
+
+    A suite that stops running is the one kind of CI failure nothing reports,
+    which is the rule the gating test below is written around too. So the group
+    carries the calling workflow, both callers build, and the cost is one
+    cache-hit build of the same tag from the same commit.
+    """
+    (job,) = _jobs("container-kicad.yml").values()
+    group = job["concurrency"]["group"]
+
+    assert "github.workflow" in group
+    # ...and still one group per commit within a caller, so a re-run of one
+    # workflow does not build the same tag twice at once.
+    assert "github.sha" in group
+
+
 def test_nothing_else_is_built_alongside_it():
     """`devcontainers/ci` pushes in its *post-job* step, so the tag appears when
     the job ends rather than when the build finishes. A second image built in

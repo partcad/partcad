@@ -47,6 +47,8 @@ ACTION = REPO_ROOT / ".github" / "actions" / "container-images" / "action.yml"
 USES = "./.github/actions/container-images"
 
 RELEASE = "0.8.70"
+SHA = "abc1234def5678"
+SHORT = SHA[:7]
 
 
 def _action():
@@ -62,7 +64,7 @@ def _decide_script():
     return step["run"]
 
 
-def decide(tmp_path, wanted="false", branch="my-branch", release_publish="false", fork="false"):
+def decide(tmp_path, wanted="false", branch="my-branch", release_publish="false", fork="false", sha=SHA):
     """Run the action's one step and return its outputs."""
     output = tmp_path / "output"
     output.touch()
@@ -76,6 +78,7 @@ def decide(tmp_path, wanted="false", branch="my-branch", release_publish="false"
             "WANTED": wanted,
             "RELEASE": RELEASE,
             "BRANCH": branch,
+            "SHA": sha,
             "IS_RELEASE_PUBLISH": release_publish,
             "FROM_A_FORK": fork,
             "GITHUB_OUTPUT": str(output),
@@ -117,10 +120,10 @@ def test_a_run_that_changed_the_images_builds_and_tests_its_own(tmp_path):
     """
     out = decide(tmp_path, wanted="true")
     assert out == {
-        "tag": "%s-my-branch" % RELEASE,
+        "tag": "%s-my-branch-%s" % (RELEASE, SHORT),
         "release": RELEASE,
         "push": "true",
-        "override": "%s-my-branch" % RELEASE,
+        "override": "%s-my-branch-%s" % (RELEASE, SHORT),
     }
 
 
@@ -135,17 +138,51 @@ def test_the_bump_wins_over_the_branch_tag(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "branch, tag",
+    "branch, stem",
     [
-        ("claude/ci-images", "%s-claude_ci-images" % RELEASE),
-        ("a/b/c", "%s-a_b_c" % RELEASE),
+        ("claude/ci-images", "claude_ci-images"),
+        ("a/b/c", "a_b_c"),
+        # A tag is [A-Za-z0-9_.-]; a branch name is very nearly anything.
+        ("feat/x:y z", "feat_x_y_z"),
+        ("release/1.2.3", "release_1.2.3"),
+        # 128 characters is the whole tag, and a branch name is unbounded.
+        ("z" * 80, "z" * 40),
     ],
 )
-def test_a_slash_in_the_branch_name_is_not_a_slash_in_the_tag(tmp_path, branch, tag):
-    """A tag may not hold one, and a branch name routinely does. The same
-    substitution `setup-devcontainer` makes.
+def test_a_branch_name_is_made_into_something_a_registry_accepts(tmp_path, branch, stem):
+    """A tag the registry refuses is a build that fails at the push.
+
+    The substitution `setup-devcontainer` makes for "/", widened to everything
+    a tag may not hold, and truncated -- the commit after it is what keeps two
+    branches sharing a prefix apart.
     """
-    assert decide(tmp_path, wanted="true", branch=branch)["tag"] == tag
+    assert decide(tmp_path, wanted="true", branch=branch)["tag"] == "%s-%s-%s" % (RELEASE, stem, SHORT)
+
+
+def test_the_tag_names_one_commit_and_not_just_one_branch(tmp_path):
+    """Two pushes to a branch are two runs, and each has to own its own tag.
+
+    Their concurrency groups do not serialise them across workflows, so both
+    would build `<release>-<branch>`, publish it, and test against whichever
+    landed last. And `cleanup-images` runs under `always()` -- which includes
+    *cancelled* -- so the superseded run would delete the tags of the run that
+    superseded it, while that one was still using them.
+    """
+    first = decide(tmp_path, wanted="true", sha="1111111aaaaaaa")["tag"]
+    second = decide(tmp_path, wanted="true", sha="2222222bbbbbbb")["tag"]
+
+    assert first.endswith("-1111111")
+    assert second.endswith("-2222222")
+    assert first != second
+
+
+def test_the_release_tag_carries_no_commit(tmp_path):
+    """It is the release, which is a name an installed PartCAD resolves.
+
+    The commit belongs only to a tag nobody outside its own run asks for.
+    """
+    assert decide(tmp_path, release_publish="true")["tag"] == RELEASE
+    assert decide(tmp_path)["tag"] == RELEASE
 
 
 def test_a_fork_asks_for_nothing_it_cannot_publish(tmp_path):
@@ -271,7 +308,7 @@ def test_a_run_that_builds_its_own_tag_builds_both_architectures():
 
     A pull request builds amd64 alone, because arm64 goes through QEMU. That is
     a gap in *coverage* on an ordinary run and a gap in the *tag* on this one:
-    every Arm job resolves `<release>-<branch>-py<X>-arm64` like every other
+    every Arm job resolves `<release>-<branch>-<commit>-py<X>-arm64` like every other
     job, finds nothing, and falls back -- `Pytest` to conda, which is the
     sandbox going untested, and the jobs with a `sandbox-image` step to a build
     of their own, which is the same QEMU time paid once per job. The run asked
@@ -500,6 +537,9 @@ def _tag_rule():
         ("0.8.70-claude_ci-images", True),
         ("0.8.70-my-branch-py3.11-amd64", True),
         ("0.8.70-feat_x-py3.14-arm64", True),
+        # With the commit in it, which is the shape a run actually publishes.
+        ("0.8.70-my-branch-abc1234", True),
+        ("0.8.70-my-branch-abc1234-py3.11-amd64", True),
         ("0.10.0-devel", True),
         # A branch actually called "py3-weird" is kept forever. That is the
         # harmless half of being wrong, and it is which half that matters.
