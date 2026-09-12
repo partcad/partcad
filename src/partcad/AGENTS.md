@@ -34,8 +34,12 @@ it passes.
 ```bash
 black --check src/partcad tests/partcad     # line-length 120 (pyproject.toml)
 flake8 src/partcad tests/partcad
-isort --check src/partcad tests/partcad
+isort --check --filter-files src/partcad tests/partcad
 ```
+
+Only `isort` gates: it is a `pre-commit` hook and the `Lint (isort)` job in `test.yml`. `black` and `flake8`
+report pre-existing findings that are nobody's change in particular — the root [AGENTS.md](../../AGENTS.md) has the
+counts and what each would take to turn on.
 
 ## Conventions
 

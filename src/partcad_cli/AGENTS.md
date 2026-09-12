@@ -186,8 +186,12 @@ pc list all -r //pub/examples/partcad   # from ./examples, or any dir with a par
 ```bash
 black --check src/partcad_cli tests/partcad_cli
 flake8 src/partcad_cli tests/partcad_cli
-isort --check src/partcad_cli tests/partcad_cli
+isort --check --filter-files src/partcad_cli tests/partcad_cli
 ```
+
+Only `isort` gates: it is a `pre-commit` hook and the `Lint (isort)` job in `test.yml`. `black` and `flake8`
+report pre-existing findings that are nobody's change in particular — the root [AGENTS.md](../../AGENTS.md) has the
+counts and what each would take to turn on.
 
 ## Commit
 

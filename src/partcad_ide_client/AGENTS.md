@@ -54,11 +54,13 @@ stubbed out, and the sandbox side is covered by the render tests.
 
 ```bash
 poetry run black --check src/partcad_ide_client tests/partcad_ide_client
+poetry run isort --check --filter-files src/partcad_ide_client tests/partcad_ide_client
 ```
 
-Note that `flake8` reports E501 at 79 columns on every file in this repo (it does not read the 120-column
-setting from `pyproject.toml` without a plugin), and `isort` disagrees with the tree as committed; neither
-gates a PR. See the root [AGENTS.md](../../AGENTS.md).
+`isort` gates — a `pre-commit` hook and the `Lint (isort)` job in `test.yml` — and the tree is sorted, so a
+diff from it is yours. `flake8` still does not: it reports E501 at 79 columns on every file in this repo,
+because it does not read the 120-column setting from `pyproject.toml` without a plugin. See the root
+[AGENTS.md](../../AGENTS.md) for what each of the three costs to turn on.
 
 ## Commit
 
