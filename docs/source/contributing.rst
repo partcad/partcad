@@ -1003,9 +1003,12 @@ Two things turn it on:
   consequence: a pull request that merely mentions it opts itself in.
 
 What the switch turns on is not the build. ``Build Docker Containers`` is gated on the union of the
-``pytest``, ``behave`` and ``examples`` gates, so it runs on any run whose tests could reach a container --
-and a pull request that fires neither trigger builds these images for ``linux/amd64`` as a test, exactly as
-it did before any of this, and renders against the release's. What firing a trigger adds is the
+``pytest``, ``behave`` and ``examples`` gates *and* on this run having a tag of its own, so it runs on any
+run whose tests could reach a container -- and a pull request that fires neither trigger builds these images
+for ``linux/amd64`` as a test, exactly as it did before any of this, and renders against the release's. That
+fourth condition is what stops ``#images`` meaning nothing on a change that runs no tests at all: a
+documentation-only pull request that opts in still builds and publishes, rather than opting into a build the
+other three gates would then skip. What firing a trigger adds is the
 ``linux/arm64`` half, which goes through QEMU and costs minutes per version; publishing the result; pointing
 that run's own tests at it through ``PC_CONTAINER_IMAGE_TAG``; and deleting it afterwards. Worth paying where
 an image changed, worth nothing where none did, which is the whole reason for a switch.
