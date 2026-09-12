@@ -61,6 +61,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
+from partcad_utils.container_image import image_tag
 from partcad_utils.workspace import determine_root_path, socket_path
 
 from . import __version__, object_types
@@ -263,7 +264,9 @@ KICAD = Tool(
     # and there is one KiCad container in the product rather than two. It is
     # `linux/amd64` only, as KiCad's own images are; a machine that cannot run
     # it almost certainly has KiCad installed, which is used first anyway.
-    image="ghcr.io/partcad/partcad-container-kicad:" + __version__,
+    # Resolved once, at import: the tag CI overrides is exported before the
+    # process starts, and a released PartCAD has nothing to override.
+    image="ghcr.io/partcad/partcad-container-kicad:" + image_tag(__version__),
     binaries=("kicad",),
     macos_apps=("KiCad/KiCad.app", "KiCad.app"),
     windows_globs=("KiCad/*/bin/kicad.exe",),

@@ -52,6 +52,15 @@ jobs:
     outputs:
       devcontainer: ${{ steps.scope.outputs.devcontainer }}
       pytest: ${{ steps.scope.outputs.devcontainer-pytest }}
+      # Which of PartCAD's own container images this run addresses, and whether
+      # it may publish them. The same question "test.yml" asks, of the same
+      # action and with the same answer: both files call "container-kicad.yml",
+      # which builds one image per commit, and it cannot be told two different
+      # tags to build it under.
+      image-tag: ${{ steps.images.outputs.tag }}
+      image-push: ${{ steps.images.outputs.push }}
+      image-release: ${{ steps.images.outputs.release }}
+      image-override: ${{ steps.images.outputs.override }}
     steps:
       - uses: actions/checkout@v7
       - name: Decide the depth
@@ -62,6 +71,12 @@ jobs:
         uses: ./.github/actions/changed-scopes
         with:
           deep: ${{ steps.depth.outputs.deep }}
+      - name: Which images this run uses
+        id: images
+        uses: ./.github/actions/container-images
+        with:
+          wanted: ${{ steps.depth.outputs.images == 'true' || steps.scope.outputs.images == 'true' }}
+          release: ${{ env.VERSION }}
 
   devcontainer:
     name: "Build: Dev Container"
@@ -178,11 +193,22 @@ jobs:
     # "Run: pytest". Gated on "pytest" it would be skipped for such a change,
     # and a job whose dependency is skipped is skipped: the two jobs that
     # change is for would quietly stop running.
-    if: ${{ needs.scope.outputs.devcontainer == 'true' }}
+    #
+    # ...or this run decided to build images of its own, which no scope
+    # implies: a change carrying "#images" need not be one that runs anything
+    # in this file, and a run whose summary says it rebuilt these images had
+    # better have rebuilt them.
+    if: >-
+      ${{ needs.scope.outputs.devcontainer == 'true'
+      || needs.scope.outputs.image-override != '' }}
     permissions:
       contents: read
       packages: write
     uses: ./.github/workflows/container-kicad.yml
+    with:
+      tag: ${{ needs.scope.outputs.image-tag }}
+      push: ${{ needs.scope.outputs.image-push == 'true' }}
+      release: ${{ needs.scope.outputs.image-release }}
 
   pytest:
     name: "Run: pytest"
@@ -242,6 +268,14 @@ jobs:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
           configFile: .devcontainer/devcontainer.json
           push: never
+          # The images this run built, where it built any. Empty otherwise,
+          # which "partcad_utils.container_image" reads as "the release" -- the
+          # default every installed PartCAD has. Forwarded into the container
+          # because that is where the tests run and where PartCAD reads it;
+          # "test_part_example_kicad" starts the KiCad sandbox by this name.
+          # See "Which images this run uses" on "Scope".
+          env: |
+            PC_CONTAINER_IMAGE_TAG=${{ needs.scope.outputs.image-override }}
           # "runCmd" is handed to a shell as one script, so the step's result is
           # the *last* command's unless the script says otherwise. This one used
           # to end with "echo DONE", which meant a failing pytest was reported as
@@ -354,7 +388,7 @@ jobs:
     # asks "pc open" what it would do rather than doing it -- and the wait
     # is free either way, the build running from "scope" while
     # "poetry-install" is still going.
-    needs: [poetry-install, container-kicad]
+    needs: [scope, poetry-install, container-kicad]
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
       contents: read
@@ -437,6 +471,13 @@ jobs:
             # that value through "sh -c", which removes them; a socket path
             # never sees a shell.
             SSH_AUTH_SOCK=/run/host-ssh-agent.sock
+            # The images this run built, where it built any. Empty otherwise,
+            # which "partcad_utils.container_image" reads as "the release" -- the
+            # default every installed PartCAD has. Forwarded into the container
+            # because that is where the tests run and where PartCAD reads it;
+            # "test_part_example_kicad" starts the KiCad sandbox by this name.
+            # See "Which images this run uses" on "Scope".
+            PC_CONTAINER_IMAGE_TAG=${{ needs.scope.outputs.image-override }}
 
           # The suite's status is kept and reported, and the coverage report is
           # written either way. Ending on "coverage xml" reported *its* status,
@@ -581,7 +622,7 @@ jobs:
     # asks "pc open" what it would do rather than doing it -- and the wait
     # is free either way, the build running from "scope" while
     # "poetry-install" is still going.
-    needs: [poetry-install, container-kicad]
+    needs: [scope, poetry-install, container-kicad]
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
       contents: read
@@ -625,6 +666,14 @@ jobs:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
           configFile: .devcontainer/devcontainer.json
           push: never
+          # The images this run built, where it built any. Empty otherwise,
+          # which "partcad_utils.container_image" reads as "the release" -- the
+          # default every installed PartCAD has. Forwarded into the container
+          # because that is where the tests run and where PartCAD reads it;
+          # "test_part_example_kicad" starts the KiCad sandbox by this name.
+          # See "Which images this run uses" on "Scope".
+          env: |
+            PC_CONTAINER_IMAGE_TAG=${{ needs.scope.outputs.image-override }}
           # Same shape as the two jobs above: every "pc" counts, and the report
           # is still written when one of them fails. This job was the only one of
           # the three that ever went red, and only by accident -- the "pc"

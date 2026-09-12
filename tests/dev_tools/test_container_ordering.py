@@ -71,44 +71,55 @@ def test_the_image_is_built_by_one_reusable_workflow():
 
 
 def test_the_tag_it_publishes_is_the_tag_the_runtime_pulls():
-    """`:<release>`, with nothing else in it.
+    """Whatever the caller decided, and the same thing the caller's tests read.
 
     Both readers build the tag the same way -- `part_factory_kicad.get_runtime`
     and `partcad_client.external.KICAD` each write
-    `...-container-kicad:` + `__version__` -- so a tag carrying anything else is
-    a tag nobody pulls. This step used to take `setup-devcontainer`'s
-    IMAGE_TAG, which is `<release>-<branch>` on every commit that is not a
-    version bump: published where nothing looks, and agreeing with the readers
-    on the one commit whose tests need a new image only by accident.
+    `...-container-kicad:` + `container_image.image_tag(__version__)` -- so a
+    tag carrying anything else is a tag nobody pulls. This step used to take
+    `setup-devcontainer`'s IMAGE_TAG, which is `<release>-<branch>` on every
+    commit that is not a version bump: published where nothing looks, and
+    agreeing with the readers on the one commit whose tests need a new image
+    only by accident. The branch tag is back, but as one end of a wire rather
+    than a coincidence -- the caller hands it here *and* exports it as
+    `PC_CONTAINER_IMAGE_TAG`, which is what `image_tag` reads.
+
+    The cache is the exception, and deliberately so: it comes from the release's
+    image, because on the run that matters most -- the first build of a branch
+    tag -- the tag itself does not exist yet.
     """
     (job,) = _jobs("container-kicad.yml").values()
     (step,) = [s for s in job["steps"] if s.get("uses", "").startswith("devcontainers/ci")]
 
-    assert step["with"]["imageTag"] == "${{ env.VERSION }}"
-    assert step["with"]["cacheFrom"].endswith(":${{ env.VERSION }}")
+    assert step["with"]["imageTag"] == "${{ inputs.tag }}"
+    assert step["with"]["cacheFrom"].endswith(":${{ inputs.release }}")
 
+    # That the readers agree is pinned where the agreement lives, in
+    # tests/partcad_utils/test_container_image.py: both of them resolve the tag
+    # through `container_image.image_tag`, which is the release unless CI has
+    # redirected them at the images built out of this commit.
     for source in ("src/partcad/part_factory_kicad.py", "src/partcad_client/external.py"):
         text = (REPO_ROOT / source).read_text()
-        assert 'partcad-container-kicad:" + ' in text, source
-        assert "partcad-container-kicad:%s" not in text, source
+        assert "partcad-container-kicad:" in text, source
+        assert "image_tag(" in text, source
 
 
-def test_it_publishes_on_the_version_bump_and_not_from_a_branch():
+def test_whether_it_publishes_is_the_callers_answer_and_not_a_second_one():
     """The rule "Build the Python sandbox images" states at length in test.yml.
 
-    Build always, because the build is the test; publish on the version bump,
-    because a tag somebody else pulls is not a thing an unreviewed branch may
-    hand them. Now that the tag is the bare release rather than a
-    branch-suffixed one, an unconditional `push: always` here would have every
-    pull request overwrite the image a released PartCAD pulls.
+    Build always, because the build is the test; publish where publishing is
+    this run's to do. Which runs those are is one question with one answer --
+    `.github/actions/container-images`, whose conditions
+    `tests/dev_tools/test_container_images.py` pins -- and this workflow is told
+    it rather than working it out again. It has to be: the caller exports the
+    same tag to its test jobs, and a second copy of the condition here is a
+    second chance to build one tag and look for another.
     """
     (job,) = _jobs("container-kicad.yml").values()
     (step,) = [s for s in job["steps"] if s.get("uses", "").startswith("devcontainers/ci")]
     push = " ".join(step["with"]["push"].split())
 
-    assert "'always' || 'never'" in push
-    assert "github.ref == 'refs/heads/devel'" in push
-    assert "startsWith(github.event.head_commit.message, 'Version updated')" in push
+    assert push == "${{ inputs.push && 'always' || 'never' }}"
 
 
 def test_the_build_is_not_cancellable():
@@ -216,7 +227,10 @@ def test_the_dev_container_build_follows_the_scope_that_runs_its_dependents():
     the two jobs that such a change is the whole reason to run.
     """
     jobs = _jobs("test-dev.yml")
-    assert "outputs.devcontainer ==" in jobs["container-kicad"]["if"]
-    assert "outputs.pytest ==" not in jobs["container-kicad"]["if"]
-    # ...and it is the same gate the chain those jobs hang off already carries.
-    assert jobs["container-kicad"]["if"] == jobs["devcontainer"]["if"]
+    condition = jobs["container-kicad"]["if"]
+    assert "outputs.devcontainer ==" in condition
+    assert "outputs.pytest ==" not in condition
+    # ...and it carries the gate the chain those jobs hang off already carries,
+    # widened and never narrowed. The one disjunct beyond it is the run that
+    # built images of its own, which no scope implies -- see the note there.
+    assert jobs["devcontainer"]["if"].strip("${} ") in " ".join(condition.split())

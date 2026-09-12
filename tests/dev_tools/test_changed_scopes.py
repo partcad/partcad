@@ -56,6 +56,7 @@ SUBJECTS = {
     "ide",
     "vsix",
     "plugin",
+    "images",
 }
 
 
@@ -111,15 +112,16 @@ def test_a_deep_run_turns_everything_on(tmp_path):
 
 
 def test_an_unknown_path_runs_everything(tmp_path):
-    """The fail-safe, and the reason it lands in two buckets rather than one.
+    """The fail-safe, and the reason it lands in three buckets rather than one.
 
-    "code" alone would leave the standalone bundles unbuilt for a path nobody
-    has classified -- and an unclassified path is precisely the one nobody has
-    thought about. A file has to be *named* as source before it stops being
-    treated as something that can change what gets frozen.
+    "code" alone would leave the standalone bundles unbuilt and PartCAD's own
+    container images unrebuilt for a path nobody has classified -- and an
+    unclassified path is precisely the one nobody has thought about. A file has
+    to be *named* as source before it stops being treated as something that can
+    change what gets frozen or what an image contains.
     """
     subjects, buckets = classify(tmp_path, ["a-brand-new-directory/whatever.py"])
-    assert buckets == {"code", "deps"}
+    assert buckets == {"code", "deps", "containers"}
     # Not "all of them": the IDE is not rebuilt by a source change, here or in
     # "build-ide-standalone.yml", because it downloads the bundles rather than
     # freezing them. Everything else is on.
@@ -305,8 +307,19 @@ def test_the_dev_container_alone_runs_it_but_not_pytest_inside_it(tmp_path):
     assert not subjects["wheel"]
 
 
-def test_ci_configuration_runs_everything(tmp_path):
+def test_ci_configuration_runs_everything_but_the_image_builds(tmp_path):
+    """One exception, and it is a cost decision rather than an oversight.
+
+    A workflow change *can* change how PartCAD's own images are built -- this
+    action and the jobs reading it are where that is decided -- so by the rule
+    every other subject follows, "ci" would turn the image builds on. It does
+    not, because that is eleven image builds on every pull request that edits a
+    workflow. "#images" is how such a change asks for them; see
+    ".github/actions/test-depth".
+    """
     subjects, _ = classify(tmp_path, [".github/actions/changed-scopes/action.yml"])
+
+    assert not subjects.pop("images")
     assert all(subjects.values()), subjects
 
 
@@ -336,16 +349,16 @@ def test_every_top_level_entry_is_classified_deliberately(tmp_path):
 
     # What each top-level entry is allowed to be. Anything absent from here is a
     # new entry, and the assertion below says to come and decide about it. The
-    # two entries that are "code" *and* "deps" are the ones nothing classifies:
-    # they reach the catch-all, which is the fail-safe.
+    # two entries carrying all three of "code", "deps" and "containers" are the
+    # ones nothing classifies: they reach the catch-all, which is the fail-safe.
     expected = {
         ".devcontainer": {"devcontainer"},
         ".github": {"ci"},
         ".claude": {"docs"},
         ".claude-plugin": {"ai"},
         ".cursor": {"docs"},
-        ".gitattributes": {"code", "deps"},
-        ".gitignore": {"code", "deps"},
+        ".gitattributes": {"code", "deps", "containers"},
+        ".gitignore": {"code", "deps", "containers"},
         ".readthedocs.yaml": {"docs"},
         ".snapcraft.yaml": {"packaging"},
         ".vscode": {"ide"},
@@ -500,3 +513,39 @@ def test_an_unknown_event_runs_everything(tmp_path):
 def test_a_deep_run_never_asks(tmp_path):
     """It short-circuits before the API call -- the stub would fail if reached."""
     assert run_files_step(tmp_path, "pull_request", file_count=10, deep=True, fail=True) is True
+
+
+def test_a_container_definition_is_its_own_bucket_and_source_too(tmp_path):
+    """`tools/containers` is the one change whose subject is an image.
+
+    Source as well, because it is a file in the tree under test like any other
+    -- the bucket is what turns the image builds on, not a reclassification.
+    """
+    subjects, buckets = classify(tmp_path, ["tools/containers/kicad/Dockerfile"])
+
+    assert buckets == {"containers", "code"}
+    assert subjects["images"]
+    assert subjects["pytest"] and subjects["behave"] and subjects["examples"]
+
+
+def test_nothing_else_rebuilds_the_images(tmp_path):
+    """Not even a workflow change, which turns on everything else here.
+
+    Eleven image builds on every pull request that edits a workflow is a cost
+    nobody asked for; "#images" is how a change that does need them says so,
+    and "test-depth" is what reads it.
+    """
+    for path in (".github/workflows/test.yml", "src/partcad/part_factory_kicad.py", "pyproject.toml"):
+        subjects, _ = classify(tmp_path, [path])
+        assert not subjects["images"], path
+
+
+def test_an_unclassified_path_rebuilds_them(tmp_path):
+    """Fail-safe, like every other subject: what nobody classified runs."""
+    subjects, _ = classify(tmp_path, ["something/nobody/named"])
+    assert subjects["images"]
+
+
+def test_a_deep_run_rebuilds_them(tmp_path):
+    subjects, _ = classify(tmp_path, [], all_=True)
+    assert subjects["images"]

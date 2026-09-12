@@ -241,14 +241,23 @@ jobs:
     # deps ci", and the same line for the other two), so the union is no wider
     # in practice than the "pytest" gate this used to carry; it is written out
     # so that the day they stop agreeing is not the day a suite disappears.
+    # ...plus the run that decided to build images of its own, which is not
+    # implied by any of the three: a change that turns none of the test suites
+    # on can still carry "#images", and a run whose summary says it rebuilt
+    # these images had better have rebuilt them.
     if: >-
       ${{ needs.set-matrix.outputs.pytest == 'true'
       || needs.set-matrix.outputs.behave == 'true'
-      || needs.set-matrix.outputs.examples == 'true' }}
+      || needs.set-matrix.outputs.examples == 'true'
+      || needs.set-matrix.outputs.image-override != '' }}
     permissions:
       contents: read
       packages: write
     uses: ./.github/workflows/container-kicad.yml
+    with:
+      tag: ${{ needs.set-matrix.outputs.image-tag }}
+      push: ${{ needs.set-matrix.outputs.image-push == 'true' }}
+      release: ${{ needs.set-matrix.outputs.image-release }}
 
   build-containers:
     name: "Build Docker Containers"
@@ -268,7 +277,8 @@ jobs:
     if: >-
       ${{ needs.set-matrix.outputs.pytest == 'true'
       || needs.set-matrix.outputs.behave == 'true'
-      || needs.set-matrix.outputs.examples == 'true' }}
+      || needs.set-matrix.outputs.examples == 'true'
+      || needs.set-matrix.outputs.image-override != '' }}
     permissions:
       packages: write
     steps:
@@ -334,27 +344,42 @@ jobs:
       # Both tags are read by somebody who is not this run, and neither is a
       # thing an unreviewed branch may hand them.
       #
+      # There is a third tag, and it exists because of that last sentence. A run
+      # that changes what these images contain has to *test* what it built, and
+      # neither tag above can carry it. So such a run builds and publishes
+      # "<release>-<branch>-py<X>-<arch>" and points its own tests at it: a tag
+      # nobody but this run resolves, which is what makes it safe to publish
+      # from an unreviewed branch. Which runs those are is decided in "Which
+      # images this run uses" on "set-matrix"; "image-tag" and "image-push"
+      # above are that decision.
+      #
       # What consumes the published images is stated in
-      # ".github/actions/sandbox-image": a push to "devel" or "main" pulls them,
-      # because there the published image is the subject; everything else builds
-      # the tree under test, because there the published image is somebody
-      # else's build made before this commit existed.
+      # ".github/actions/sandbox-image": a push to "devel" or "main", or a run
+      # that built a tag of its own, pulls them, because there the published
+      # image is the subject; everything else builds the tree under test,
+      # because there the published image is somebody else's build made before
+      # this commit existed.
       - name: Build the Python sandbox images
         env:
           PYTHONS: ${{ env.PYTHONS }}
           DEEP: ${{ needs.set-matrix.outputs.deep }}
           IMAGE: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-python
-          PC_VERSION: ${{ env.VERSION }}
-          # The version bump on "devel", and nothing else. "workflow_dispatch"
-          # is the recovery path for a publish that failed -- it publishes
-          # whatever tree it is dispatched at, so it has to be dispatched at the
-          # bump commit and nowhere else.
-          PUSH: >-
-            ${{ ((github.event_name == 'push'
-            && github.ref == 'refs/heads/devel'
-            && startsWith(github.event.head_commit.message, 'Version updated'))
-            || github.event_name == 'workflow_dispatch')
-            && 'true' || 'false' }}
+          # The release goes *into* the image; the tag goes *on* it, and the two
+          # part company on a run that builds images of its own. What a
+          # "<release>-<branch>" image is for is testing this commit's
+          # Dockerfile, so the PartCAD it installs is still the release -- only
+          # the name it answers to changes, which is the name this run's tests
+          # resolve through "container_image.image_tag".
+          PC_VERSION: ${{ needs.set-matrix.outputs.image-release }}
+          IMAGE_TAG: ${{ needs.set-matrix.outputs.image-tag }}
+          # The version bump on "devel", a manual dispatch, or a run that built
+          # a branch tag of its own -- decided once, in "Which images this run
+          # uses" on "set-matrix", because "container-kicad.yml" has to be told
+          # the same answer and two copies of it are two answers.
+          PUSH: ${{ needs.set-matrix.outputs.image-push }}
+          # A run that built a tag of its own. Not the same question as PUSH,
+          # which is also true for the version bump.
+          OWN_TAG: ${{ needs.set-matrix.outputs.image-override != '' }}
         run: |
           # arm64 goes through QEMU and costs minutes per version, so a pull
           # request builds amd64 alone and a deep run covers both. That is a real
@@ -362,7 +387,16 @@ jobs:
           # Arm laptop pulls -- but the arm64 half is also what the nightly run
           # and "#deepTest" exist for, and paying it on every push to every pull
           # request would make this job the slowest thing in CI.
-          if [ "${DEEP}" = "true" ]; then
+          #
+          # A run building its own tag pays it regardless, because there the
+          # half-built tag is not a gap in coverage but a gap in the tag: the
+          # Arm test jobs resolve "<release>-<branch>-py<X>-arm64" like every
+          # other job, find nothing, and fall back -- "Pytest" to conda, which
+          # is the sandbox not being tested at all, and the jobs that use
+          # ".github/actions/sandbox-image" to a build of their own, which is
+          # QEMU time spent once per job instead of once here. That run asked
+          # for these images; this is what it asked for.
+          if [ "${DEEP}" = "true" ] || [ "${OWN_TAG}" = "true" ]; then
             ARCHES="amd64 arm64"
           else
             ARCHES="amd64"
@@ -376,7 +410,7 @@ jobs:
                 --platform "linux/${ARCH}" \
                 --build-arg "PYTHON_VERSION=${PY}" \
                 --build-arg "PARTCAD_VERSION=${PC_VERSION}" \
-                --tag "${IMAGE}:${PC_VERSION}-py${PY}-${ARCH}" \
+                --tag "${IMAGE}:${IMAGE_TAG}-py${PY}-${ARCH}" \
                 --cache-from "type=registry,ref=${IMAGE}:py${PY}-${ARCH}" \
                 --cache-to type=inline \
                 --output "type=image,push=${PUSH}" \
@@ -526,6 +560,18 @@ jobs:
       pytest: ${{ steps.scope.outputs.pytest }}
       behave: ${{ steps.scope.outputs.behave }}
       examples: ${{ steps.scope.outputs.examples }}
+      # What tag PartCAD's own container images are built, published and pulled
+      # under on this run, and whether this run may publish them. One answer,
+      # read by both builders and handed to every job that runs a test, so that
+      # an image built here is the image tested here. See the step below.
+      image-tag: ${{ steps.images.outputs.tag }}
+      image-push: ${{ steps.images.outputs.push }}
+      image-release: ${{ steps.images.outputs.release }}
+      # The tag as an override for PartCAD itself, empty unless this run built
+      # images of its own -- 'partcad_utils.container_image' reads it, and an
+      # empty value leaves every reader on the release, which is the default
+      # every installed PartCAD has.
+      image-override: ${{ steps.images.outputs.override }}
     steps:
       - uses: actions/checkout@v7
 
@@ -538,6 +584,17 @@ jobs:
         uses: ./.github/actions/changed-scopes
         with:
           deep: ${{ steps.depth.outputs.deep }}
+
+      # Which images this run addresses, and whether it may publish them --
+      # three cases, spelled out in the action. "test-dev.yml" asks the same
+      # question of the same action, and both hand the answer to the same
+      # "container-kicad.yml".
+      - name: Which images this run uses
+        id: images
+        uses: ./.github/actions/container-images
+        with:
+          wanted: ${{ steps.depth.outputs.images == 'true' || steps.scope.outputs.images == 'true' }}
+          release: ${{ env.VERSION }}
 
       - name: Set matrix
         id: set-matrix
@@ -637,6 +694,20 @@ jobs:
     # here: ubuntu ~25-31 min, Windows ~38-50 min -- the 45-minute step was still
     # catching the slower Windows runs, so give it headroom.
     timeout-minutes: 60
+
+    # The tag PartCAD addresses its own container images by, empty on a run
+    # that built none of its own -- and an empty value is the release, which is
+    # what every installed PartCAD resolves. So this line changes nothing except
+    # on a run that changed what the images contain, where it is what points the
+    # tests at the "<release>-<branch>" images "build-containers" and
+    # "container-kicad" published a few jobs ago rather than at the last
+    # release's. Read by "partcad_utils.container_image", and through it by
+    # "runtime_python_docker.image_for", "part_factory_kicad.get_runtime" and
+    # "partcad_client.external"; ".github/actions/sandbox-image" reads the same
+    # variable out of this environment. See "Which images this run uses" on
+    # "set-matrix".
+    env:
+      PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
 
     steps:
       - uses: actions/checkout@v7
@@ -763,6 +834,10 @@ jobs:
     # for all of that and was not enough; the last re-measure was 25 minutes of
     # growth ago.
     timeout-minutes: 75
+
+    # The images this run built, where it built any. See "Pytest" above.
+    env:
+      PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
 
     steps:
       - uses: actions/checkout@v7
@@ -891,6 +966,10 @@ jobs:
     # both: ubuntu 24-32 min, Windows ~55 min and climbing -- 60 min was still
     # cancelling the slowest Windows cells, so give it real headroom.
     timeout-minutes: 75
+
+    # The images this run built, where it built any. See "Pytest" above.
+    env:
+      PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
 
     steps:
       - uses: actions/checkout@v7
@@ -1081,6 +1160,10 @@ jobs:
     # the timeout.
     timeout-minutes: 75
 
+    # The images this run built, where it built any. See "Pytest" above.
+    env:
+      PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
+
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-all
@@ -1185,6 +1268,10 @@ jobs:
     # future wedge gets to burn before this job says so, which is the thing the
     # deadline exists to prevent.
     timeout-minutes: 60
+
+    # The images this run built, where it built any. See "Pytest" above.
+    env:
+      PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
 
     steps:
       - uses: actions/checkout@v7

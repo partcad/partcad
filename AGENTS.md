@@ -281,7 +281,22 @@ request used to get — every current image, macOS included, and the full Python
 pull request drops is coverage the commit still earns before it lands, once per merge rather than once per
 push. Everything else gets `deep`: the nightly schedule, a manual dispatch, any push, and a pull request
 whose title or description contains `#deepTest`. `#deepTest` runs exactly what it ran before any of this
-existed.
+existed. It answers a second, narrower question the same way: `#images` rebuilds PartCAD's own container
+images (see below).
+
+A third gate, `.github/actions/container-images`, answers **which images this run is about**. PartCAD's
+container images — the Python sandbox bases and the KiCad sandbox — are tagged with the release, and only the
+version bump on `devel` writes those tags, so until this existed a change to `tools/containers` built the new
+images and then tested against the last release's: a Dockerfile fix could not be proven on the pull request
+that made it, which is how the `pycairo` fix sat in the repository while every PNG went on failing. Such a run
+now builds and publishes `<release>-<branch>` and exports `PC_CONTAINER_IMAGE_TAG`, which
+`partcad_utils.container_image.image_tag` reads and every reader of those images goes through — so the tests
+in that run reach what that run built. It is turned on by a change under `tools/containers/` (a
+`changed-scopes` bucket) or by `#images` in the pull request, and it is off otherwise, which is why an
+ordinary pull request still pays nothing for it. A branch tag is safe to publish from an unreviewed branch
+because nothing but that run asks for it; the release tag, which somebody else pulls, is still only ever
+written by the bump. Both `CI` and `CI-Dev` call that action rather than deciding for themselves — they hand
+the answer to the same `Container (KiCad)` build, and two answers would be two tags for one image.
 
 `.github/actions/changed-scopes` answers **which jobs at all**, by sorting the changed files into buckets: a
 documentation-only change runs the documentation build and nothing else, an `ai-agents/` change runs the

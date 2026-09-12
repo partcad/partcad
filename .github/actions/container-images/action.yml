@@ -1,0 +1,135 @@
+name: "Container images"
+description: >-
+  Which tag PartCAD's own container images are built, published and pulled under
+  on this run, and whether this run may publish them.
+
+# Three cases, and the first is the one everything else is measured against.
+#
+# A **version bump on `devel`** (and a manual dispatch, which is the recovery
+# path for a publish that failed) publishes the *release* tag: that is the image
+# an installed PartCAD pulls, and publishing it is the whole reason that run
+# exists.
+#
+# A run that **changes what an image contains** publishes `<release>-<branch>`
+# instead and points its own tests at it, which is what makes a Dockerfile fix
+# provable in the pull request that makes it rather than after it lands.
+# `changed-scopes` answers that from the paths; `#images` in the pull request
+# answers it from the author, for a change the paths cannot see -- a workflow
+# edit, a base image that moved. A branch tag is safe to publish from an
+# unreviewed branch precisely because nothing but this run asks for it: the
+# release tag is what somebody else pulls, and that one is still only written by
+# the bump.
+#
+# **Everything else** builds and publishes nothing, and its tests run against
+# the release's images exactly as an installed PartCAD does. A pull request from
+# a **fork** lands here whatever it changed, because its token cannot publish
+# anywhere: the coverage is lost, which the run says out loud, and that is the
+# cheaper of the two failures -- a tag claimed and not published is every test
+# job failing to pull an image that was never there.
+#
+# It is an action rather than a step because two workflows need the answer --
+# `test.yml` builds the images and runs the tests, `test-dev.yml` runs the same
+# tests inside the dev container -- and both hand it to the same
+# `container-kicad.yml`. Two copies of this would be two answers to "which image
+# is this run's", which is the thing the whole mechanism is trying not to have.
+
+inputs:
+  wanted:
+    description: >-
+      Whether this run builds images of its own: the `images` output of
+      `changed-scopes` (the paths) or of `test-depth` (the `#images` marker).
+      Anything but the string `true` is a no.
+    required: true
+  release:
+    description: >-
+      The release this tree is, which is the tag on an ordinary run and the stem
+      of `<release>-<branch>` on one that builds its own.
+    required: true
+
+outputs:
+  tag:
+    description: "The tag to build under, and to publish under where `push` says so."
+    value: ${{ steps.decide.outputs.tag }}
+  release:
+    description: >-
+      The release, unchanged. Returned so that a caller threading these into a
+      reusable workflow has one place to read all four: the layer cache is taken
+      from the release's image even when `tag` is a branch's own, and the
+      PartCAD installed *into* the image is the release either way.
+    value: ${{ steps.decide.outputs.release }}
+  push:
+    description: >-
+      Whether this run may publish `tag`. The build happens either way, because
+      the build is the test.
+    value: ${{ steps.decide.outputs.push }}
+  override:
+    description: >-
+      `tag` where this run built its own images and the empty string otherwise.
+      Exported as `PC_CONTAINER_IMAGE_TAG` to every job that runs a test, where
+      `partcad_utils.container_image` reads it -- and empty leaves every reader
+      on the release, which is the default every installed PartCAD has.
+    value: ${{ steps.decide.outputs.override }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Which images this run uses
+      id: decide
+      shell: bash
+      env:
+        WANTED: ${{ inputs.wanted }}
+        RELEASE: ${{ inputs.release }}
+        # Never interpolated into the script: a branch name is text somebody
+        # chose, like the pull request title `test-depth` is careful with.
+        BRANCH: ${{ github.head_ref || github.ref_name }}
+        IS_RELEASE_PUBLISH: >-
+          ${{ (github.event_name == 'push'
+          && github.ref == 'refs/heads/devel'
+          && startsWith(github.event.head_commit.message, 'Version updated'))
+          || github.event_name == 'workflow_dispatch' }}
+        # A pull request from a fork, whose `GITHUB_TOKEN` is read-only however
+        # the workflow declares its permissions. Nothing here can publish, so
+        # nothing here may claim a tag that is going to be missing when the
+        # tests reach for it. Not a case for the release publish above: that is
+        # a push to this repository's own `devel`.
+        FROM_A_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
+      run: |
+        set -euo pipefail
+
+        if [ "${IS_RELEASE_PUBLISH}" = "true" ]; then
+          tag="${RELEASE}"
+          push=true
+          override=""
+          why="the release, published by this run"
+        elif [ "${WANTED}" = "true" ] && [ "${FROM_A_FORK}" != "true" ]; then
+          # The same sanitisation "setup-devcontainer" applies: a branch name
+          # may hold "/", a tag may not.
+          tag="${RELEASE}-$(printf '%s' "${BRANCH}" | sed 's|/|_|g')"
+          push=true
+          override="${tag}"
+          why="built from this commit, because the images changed or '#images' asked"
+        elif [ "${WANTED}" = "true" ]; then
+          # Wanted and impossible. Degrade to the ordinary case rather than to a
+          # broken one: a tag claimed here and not published is a tag every test
+          # job then fails to pull, which is worse than the coverage gap it was
+          # meant to close. Said out loud, because "this pull request did not
+          # test the images it changed" is not a thing to discover later.
+          tag="${RELEASE}"
+          push=false
+          override=""
+          why="the release's; a fork's pull request cannot publish, so the images it changed go untested here"
+          warn="this pull request changes PartCAD's container images, but a fork's token cannot publish them,"
+          warn="${warn} so its tests run against the release's images instead."
+          echo "::warning::${warn}"
+        else
+          tag="${RELEASE}"
+          push=false
+          override=""
+          why="the release's, pulled; this run builds them as a test and publishes nothing"
+        fi
+
+        echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+        echo "release=${RELEASE}" >> "${GITHUB_OUTPUT}"
+        echo "push=${push}" >> "${GITHUB_OUTPUT}"
+        echo "override=${override}" >> "${GITHUB_OUTPUT}"
+        echo "Container images: ${tag} (${why})." >> "${GITHUB_STEP_SUMMARY}"

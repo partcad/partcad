@@ -96,6 +96,19 @@ outputs:
   plugin:
     description: "Build and validate the Claude Code plugin."
     value: ${{ steps.classify.outputs.plugin }}
+  images:
+    description: >
+      Build PartCAD's own container images out of this commit, publish them
+      under a tag of this branch's own, and point the tests in this run at
+      those rather than at the ones the release published.
+
+      True for a change to "tools/containers". Deliberately NOT for the "ci"
+      bucket, which every other subject here listens to: a workflow change
+      *can* change how an image is built, but turning eleven image builds on
+      for every pull request that edits a workflow is a cost nobody asked for.
+      "#images" in a pull request is the way to ask, and
+      ".github/actions/test-depth" reads it.
+    value: ${{ steps.classify.outputs.images }}
 
 runs:
   using: composite
@@ -191,7 +204,7 @@ runs:
 
         if [ "${ALL}" = "true" ]; then
           add code; add deps; add docs; add ai; add devcontainer; add vscode
-          add ide; add packaging; add ci
+          add ide; add packaging; add ci; add containers
         else
           while IFS= read -r f; do
             [ -n "${f}" ] || continue
@@ -248,6 +261,13 @@ runs:
               # Markdown file that turned out to be *data* under "src/" still
               # counts as code.
               add docs ;;
+            tools/containers/*)
+              # The Dockerfiles PartCAD's own images are built from. Source as
+              # well -- a change here is a change to the tree under test like
+              # any other -- but named first and given a bucket of its own,
+              # because it is the one kind of change whose subject is an image
+              # rather than the code that runs in one. See the "images" output.
+              add containers; add code ;;
             src/*|tests/*|features/*|cad/*|tools/*|dev-tools/*|conftest.py|behave.ini)
               add code ;;
             pyproject.toml|poetry.lock|poetry.toml|requirements*.txt|requirements*.in)
@@ -265,13 +285,14 @@ runs:
             *.md|*.rst|LICENSE.txt|apache20.svg)
               add docs ;;
             *)
-              # Anything this action has not been taught. Both buckets, not just
-              # "code": "code" alone would leave the bundles unbuilt for a path
-              # nobody has classified, and an unclassified path is exactly the
-              # one nobody has thought about. A file has to be *named* above as
-              # source before it stops being treated as something that can
-              # change what gets frozen.
-              add code; add deps ;;
+              # Anything this action has not been taught. All three buckets,
+              # not just "code": "code" alone would leave the bundles unbuilt
+              # and the images unrebuilt for a path nobody has classified, and
+              # an unclassified path is exactly the one nobody has thought
+              # about. A file has to be *named* above as source before it stops
+              # being treated as something that can change what gets frozen or
+              # what an image contains.
+              add code; add deps; add containers ;;
             esac
           done < "${RUNNER_TEMP}/changed-files.txt"
         fi
@@ -322,6 +343,10 @@ runs:
         emit ide                 ci packaging vscode ide
         emit vsix                ci vscode
         emit plugin              ci ai
+        # The one subject that does not listen to "ci" -- see the note on the
+        # "images" output for why, and for what to do when a workflow change
+        # does need the images rebuilt.
+        emit images              containers
 
         {
           echo "### Changed scopes"

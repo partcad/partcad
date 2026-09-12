@@ -37,6 +37,16 @@ description: >-
 # is present locally is used without asking a registry, so an image somebody
 # built by hand for testing is picked up the way a pulled one is". This is that,
 # automated.
+#
+# There is one case where a pull request does pull after all, and it is the
+# other half of the same argument. A run that *changed* these images built and
+# published `<release>-<branch>` of its own a few jobs ago, and exported
+# `PC_CONTAINER_IMAGE_TAG` so that PartCAD resolves that tag -- see
+# `partcad_utils.container_image` and "Which images this run uses" in
+# `test.yml`. There the published image is the subject again, and it is this
+# commit's, so this pulls it: building a second copy here would test the same
+# Dockerfile while leaving the thing `build-containers` actually published
+# unproven, which is the failure above with the branches swapped.
 
 inputs:
   python-version:
@@ -78,6 +88,22 @@ runs:
           exit 1
         fi
 
+        # The tag goes on the image; the release goes into it. They are the same
+        # string except on a run that built images of its own, which addresses
+        # them by `<release>-<branch>` while still installing the release --
+        # exactly what "Build the Python sandbox images" did when it built them.
+        #
+        # Read out of the ambient environment, not an input, because that is
+        # where `partcad_utils.container_image` reads it: the job exports it
+        # once, and this step and the PartCAD running in it are then answering
+        # the same question the same way by construction. An input would be a
+        # second place to set it, which is a second place for it to disagree.
+        tag_prefix="${PC_CONTAINER_IMAGE_TAG:-${release}}"
+        if [ "${tag_prefix}" != "${release}" ]; then
+          # Published by this run, a few jobs ago. See the note at the top.
+          PREFER_PUBLISHED=true
+        fi
+
         # The suffix `docker_image.candidates()` tries first, spelled Docker's
         # way -- see `ARCH_ALIASES`. Only the two architectures CI runs on are
         # named: anything else is a runner nobody has, and guessing a suffix
@@ -91,7 +117,7 @@ runs:
             ;;
         esac
 
-        tag="${image}:${release}-py${PYTHON_VERSION}-${arch}"
+        tag="${image}:${tag_prefix}-py${PYTHON_VERSION}-${arch}"
 
         if [ "${PREFER_PUBLISHED}" = "true" ]; then
           echo "::group::pulling ${tag}"
