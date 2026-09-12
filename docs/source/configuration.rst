@@ -944,7 +944,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|extrude|sweep>
+      type: <scad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|extrude|sweep>
       desc: <(optional) textual description>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
@@ -1042,7 +1042,7 @@ Define parts with CodeCAD scripts using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d|chili3d|sdf>
+      type: <scad|cadquery|build123d|chili3d|sdf>
       cwd: <alternative current working directory>
       showObject: <(optional) the name of the object to show using "show_object(...)">
       patch:

@@ -122,6 +122,27 @@ def test_packing_is_deterministic(package_dir):
     assert runtime.pack_directory(str(package_dir)) == runtime.pack_directory(str(package_dir))
 
 
+def test_the_gzip_wrapper_carries_no_timestamp_either(package_dir):
+    """The half the test above only caught by accident.
+
+    `tarfile`'s "w:gz" gives `gzip.GzipFile` no mtime, so it stamps the current
+    time into the gzip header -- and two packs of one directory then differ in
+    bytes 4 through 8 and nowhere else. Every member in the archive had an
+    mtime of 0 and the function was still not deterministic; the test above saw
+    it only when its two calls happened to straddle a second, which is the
+    shape of a flake that costs a CI run every so often and reproduces for
+    nobody.
+
+    Asserted on the header directly rather than by packing twice a second
+    apart: the invariant is "no clock in the output", and a test that sleeps to
+    show it is a test that usually does not.
+    """
+    packed = base64.b64decode(runtime.pack_directory(str(package_dir)))
+
+    assert packed[:2] == b"\x1f\x8b", "not a gzip stream"
+    assert int.from_bytes(packed[4:8], "little") == 0
+
+
 def test_the_archive_carries_no_timestamps_or_ownership(package_dir):
     """What makes it deterministic, asserted rather than inferred."""
     with tarfile.open(fileobj=io.BytesIO(base64.b64decode(runtime.pack_directory(str(package_dir)))), mode="r:gz") as t:

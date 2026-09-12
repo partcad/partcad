@@ -43,6 +43,8 @@ from typing import Optional
 
 import docker
 
+from partcad_utils import container_image
+
 from . import docker_image, docker_mount
 from . import logging as pc_logging
 from . import runtime, runtime_python, telemetry
@@ -114,12 +116,17 @@ INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def image_for(version: str, release: Optional[str] = None) -> str:
-    """PartCAD's own base image for this Python version."""
+    """PartCAD's own base image for this Python version.
+
+    The release names the tag, except where CI says otherwise -- a run building
+    the images out of this commit rather than pulling the release's addresses
+    them by a tag of its own. See 'partcad_utils.container_image'.
+    """
     if release is None:
         from . import __version__
 
         release = __version__
-    return "%s:%s-py%s" % (BASE_IMAGE, release, version)
+    return "%s:%s-py%s" % (BASE_IMAGE, container_image.image_tag(release), version)
 
 
 def _short(image: str) -> str:

@@ -9,6 +9,7 @@
 import asyncio
 import base64
 import contextlib
+import gzip
 import io
 import os
 import subprocess
@@ -92,22 +93,31 @@ def pack_directory(path: str) -> str:
     That is not for reproducibility's sake -- nothing compares these -- but so
     that a diff between two runs is a difference in the package rather than in
     the clock.
+
+    The gzip *wrapper* has an mtime of its own, and that is why this builds the
+    two layers itself instead of asking `tarfile` for "w:gz": that mode hands
+    `gzip.GzipFile` no mtime, so it stamps the current time into the header and
+    two packs of one directory came out differing in bytes 4 through 8 and
+    nowhere else. Every promise above was kept and the function was still not
+    deterministic -- which `test_packing_is_deterministic` caught only when its
+    two calls happened to straddle a second.
     """
     buffer = io.BytesIO()
-    with tarfile.open(fileobj=buffer, mode="w:gz", compresslevel=6) as tar:
+    with gzip.GzipFile(fileobj=buffer, mode="wb", compresslevel=6, mtime=0) as compressed:
+        with tarfile.open(fileobj=compressed, mode="w") as tar:
 
-        def sanitize(info: tarfile.TarInfo) -> tarfile.TarInfo:
-            info.mtime = 0
-            info.uid = info.gid = 0
-            info.uname = info.gname = ""
-            return info
+            def sanitize(info: tarfile.TarInfo) -> tarfile.TarInfo:
+                info.mtime = 0
+                info.uid = info.gid = 0
+                info.uname = info.gname = ""
+                return info
 
-        for entry in sorted(os.listdir(path)):
-            if entry in (".git", "__pycache__", ".venv"):
-                # Never wanted in a sandbox, and '.git' alone can be most of
-                # what a package weighs.
-                continue
-            tar.add(os.path.join(path, entry), arcname=entry, filter=sanitize)
+            for entry in sorted(os.listdir(path)):
+                if entry in (".git", "__pycache__", ".venv"):
+                    # Never wanted in a sandbox, and '.git' alone can be most of
+                    # what a package weighs.
+                    continue
+                tar.add(os.path.join(path, entry), arcname=entry, filter=sanitize)
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 

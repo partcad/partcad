@@ -28,6 +28,15 @@ outputs:
       pull request. What a job reads when it wants "everything but the images a
       pull request drops".'
     value: ${{ steps.decide.outputs.queue }}
+  images:
+    description: >
+      '"true" when the run was *asked* to rebuild PartCAD''s own container
+      images -- "#images" in a pull request. It is an opt-in and nothing more:
+      the automatic answer, a change under "tools/containers", is
+      ".github/actions/changed-scopes". A workflow reads the two together,
+      because a change that alters how an image is built can be invisible to
+      both the paths and the person writing the description.'
+    value: ${{ steps.decide.outputs.images }}
 
 runs:
   using: composite
@@ -86,6 +95,26 @@ runs:
           reason="'#deepTest' in the pull request"
         fi
 
+        # The images marker, read here because this is where a pull request's
+        # own words are already read, and matched exactly the way "#deepTest"
+        # is -- case-insensitively, in the title as well as the body, and with
+        # no attempt to tell an opt-in from a mention. A description that
+        # merely names the marker rebuilds the images, which costs minutes and
+        # publishes a branch tag nobody was going to pull; a marker somebody
+        # typed and did not get costs a run that tested the release's images
+        # while claiming to test this commit's. Over-running is the safe
+        # direction here too. Write it split across two code spans to name it
+        # without asking for it.
+        #
+        # It does not reach the merge queue, and does not need to: a queued
+        # commit's images are the ones "devel" is about to publish, and the run
+        # that publishes them is the version bump that follows the merge.
+        if printf '%s\n%s' "${PR_TITLE}" "${PR_BODY}" | grep -qiF '#images'; then
+          images=true
+        else
+          images=false
+        fi
+
         # Kept as separate booleans because that is what an "if:" can read
         # without a string comparison in every workflow.
         [ "${tier}" = "deep" ] && deep=true || deep=false
@@ -94,6 +123,7 @@ runs:
         echo "tier=${tier}" >> "${GITHUB_OUTPUT}"
         echo "deep=${deep}" >> "${GITHUB_OUTPUT}"
         echo "queue=${queue}" >> "${GITHUB_OUTPUT}"
+        echo "images=${images}" >> "${GITHUB_OUTPUT}"
         case "${tier}" in
         deep)
           echo "Full matrix (${reason})." >> "${GITHUB_STEP_SUMMARY}" ;;
@@ -104,4 +134,8 @@ runs:
           echo "Pull request matrix (${reason}): no macOS, no second image per OS, and the oldest and newest Python only. The merge queue runs the rest before this merges; put '#deepTest' in the pull request description for everything now." \
             >> "${GITHUB_STEP_SUMMARY}" ;;
         esac
+        if [ "${images}" = "true" ]; then
+          echo "PartCAD's own container images are rebuilt from this commit ('#images' in the pull request), published under a tag of this branch's own, and used by the tests in this run." \
+            >> "${GITHUB_STEP_SUMMARY}"
+        fi
         cat "${GITHUB_STEP_SUMMARY}"

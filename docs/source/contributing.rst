@@ -912,6 +912,8 @@ and turns each subject on or off:
      - ``Standalone``, ``IDE``
    * - ``pyproject.toml``, ``poetry.lock``, root ``requirements*``
      - the tests, the wheel **and** ``Standalone``
+   * - ``tools/containers/``
+     - the tests and the wheel, **and** a rebuild of PartCAD's own container images -- see below
    * - ``src/``, ``tests/``, ``features/``, ``examples/``, ``cad/``, ``tools/``, ``dev-tools/``
      - the tests and the wheel, but **not** ``Standalone``
    * - anything else
@@ -978,6 +980,82 @@ the sandbox -- and a sandbox is built at the version PartCAD pins rather than at
 on, so they run the two ends of the range a sandbox can be built at instead
 (``sandbox_versions.MIN_PYTHON_VERSION_CADQUERY`` and ``MAX_PYTHON_VERSION_CAD``). ``Behave`` drives the command
 line, so it stays on the oldest and newest supported Python.
+
+Testing a change to a container image
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+PartCAD ships container images of its own: the Python sandbox base images the ``docker`` sandbox renders in,
+and the KiCad sandbox ``pc open --with kicad`` and ``test_part_example_kicad`` start. Every one of them is
+addressed by the release that built it -- ``<name>:<release>``, plus the architecture suffix where there is
+one -- and that tag is written by exactly one run: the version bump on ``devel``.
+
+That leaves a gap on a pull request, and it is not a small one. A run that *changes* ``tools/containers``
+builds those images as a test, but its tests go on pulling the tag the last release published -- so a
+Dockerfile fix cannot be proven in the pull request that makes it, and a Dockerfile regression cannot be
+caught there at all. That is how ``tools/containers/python/Dockerfile`` came to carry the ``pycairo`` wheel
+reportlab needs while every PNG in every rendering job went on failing: the fix was in the repository and not
+in the tag, and no run could tell.
+
+So a run that changes an image builds and publishes ``<release>-<branch>-<digest>-<commit>`` instead, and points its own
+tests at it. The commit is in the name because a branch is not unique in time: two pushes to one branch are two
+runs, and each has to own the tag it builds, tests and deletes. Nothing but that run ever asks for that tag, which is what makes publishing it from an unreviewed branch
+safe -- the release tag, the one somebody else pulls, is still only ever written by the bump. The run exports
+``PC_CONTAINER_IMAGE_TAG`` to every job that runs a test, and ``partcad_utils.container_image.image_tag`` reads
+it: unset, which is every installed PartCAD, it is the release.
+
+Two things turn it on:
+
+* A change under ``tools/containers/`` does, by itself. That is the row in the table above.
+* ``#images`` anywhere in the pull request's title or description does, for a change the paths cannot see --
+  a workflow edit, a base image that moved under an unpinned tag, a dependency that changes what gets
+  installed into the image. It is matched as a plain substring, exactly like ``#deepTest``, with the same
+  consequence: a pull request that merely mentions it opts itself in.
+
+What the switch turns on is not the build. ``Build Docker Containers`` is gated on the union of the
+``pytest``, ``behave`` and ``examples`` gates *and* on this run having a tag of its own, so it runs on any
+run whose tests could reach a container -- and a pull request that fires neither trigger builds these images
+for ``linux/amd64`` as a test, exactly as it did before any of this, and renders against the release's. That
+fourth condition is what stops ``#images`` meaning nothing on a change that runs no tests at all: a
+documentation-only pull request that opts in still builds and publishes, rather than opting into a build the
+other three gates would then skip. What firing a trigger adds is the
+``linux/arm64`` half, which goes through QEMU and costs minutes per version; publishing the result; pointing
+that run's own tests at it through ``PC_CONTAINER_IMAGE_TAG``; and deleting it afterwards. Worth paying where
+an image changed, worth nothing where none did, which is the whole reason for a switch.
+
+From a **fork** the trigger fires and cannot finish, and the run says so in a ``::warning::``. A fork's
+``GITHUB_TOKEN`` is read-only however the workflow declares its permissions, so nothing there can publish --
+and a tag claimed but not published is every test job failing to pull an image that was never there, which is
+worse than the gap it was meant to close. So such a pull request falls back to what every pull request did
+before any of this: it builds the images as a test and runs against the release's. If you are changing one of
+these images from a fork, expect a maintainer to re-run the change from a branch of this repository before it
+lands.
+
+These tags are cleaned up, in two places. ``CI`` deletes the Python sandbox tags it published once its own
+test jobs have finished -- it is their only consumer, the dev container being unable to use the ``docker``
+sandbox at all -- and ``Prune container images`` sweeps nightly for anything left: the KiCad tag, which ``CI``
+cannot delete because ``CI-Dev`` reads it too and a ``needs:`` does not reach across a workflow; whatever a
+cancelled run abandoned; and the ``partcad-devcontainer`` tags, which ``CI-Dev`` has been publishing on every
+non-bump run since long before any of this and which nothing has ever removed. The sweep deletes a tag only
+when it looks like ``<release>-<something that is not py<N>>`` *and* the version is a month old, so the release
+tags, the ``<release>-py<N>-<arch>`` images and the moving ``py<N>-<arch>`` tags are all out of its reach by
+construction. Run it by hand with ``dry-run`` to see what it would take.
+
+One detail is worth knowing if you are reading the workflows: the tag goes *on* the image and the release goes
+*into* it. A ``<release>-<branch>-<digest>-<commit>`` image still installs the release, because what it is built to test is this
+commit's Dockerfile. ``.github/actions/container-images`` is where all of this is decided, once, for both
+``CI`` and ``CI-Dev`` -- they hand the same answer to the same ``Container (KiCad)`` build, which could not be
+told two different tags to build one image under.
+
+A test job does not build these images. It pulls what ``Build Docker Containers`` built, which is why every
+job that can reach a container waits for that one. ``.github/actions/sandbox-image`` used to build a copy per
+job, because on a pull request the published tag was somebody else's build and nothing could tell whether this
+commit had changed the Dockerfile -- and that is the question the ``images`` gate above now answers for the
+whole run. What is left in the action is a pull, plus a build for the one caller with no such job to wait for:
+``Examples via bundle`` in ``Standalone``, which runs on the version bump in a different workflow from the one
+publishing that release's images. That build is not a second implementation either -- both it and
+``Build Docker Containers`` run ``dev-tools/ci/build-sandbox-image.sh``, so there is one answer to "how is this
+image built" and the two cannot drift into testing an image built differently from the one that was published.
+Changing that script counts as a container change, like changing a Dockerfile.
 
 Implementation Details
 ----------------------

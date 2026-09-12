@@ -12,6 +12,7 @@ being Windows changes the answer. Actually running an interpreter over there is
 the job of the integration legs in CI, which have a Docker daemon.
 """
 
+import inspect
 import os
 import pathlib
 import platform
@@ -64,7 +65,13 @@ class _WindowsOs:
 # --------------------------------------------------------------------------- #
 
 
-def test_the_base_image_is_named_by_release_and_version():
+def test_the_base_image_is_named_by_release_and_version(no_image_tag_override):
+    """The name an installed PartCAD asks for, which is the release and nothing else.
+
+    `no_image_tag_override` because a run that rebuilt these images points every
+    reader at its own tag, this suite included -- so without it this asserted
+    the release on a developer machine and the branch tag in CI.
+    """
     assert (
         runtime_python_docker.image_for("3.11", release="0.8.58")
         == "ghcr.io/partcad/partcad-container-python:0.8.58-py3.11"
@@ -75,13 +82,19 @@ def test_the_base_image_is_the_one_ci_publishes():
     """Two places name it, and a name that drifts is a sandbox that pulls nothing.
 
     The workflow builds `<registry>/<repository>-container-python` and tags it
-    `<release>-py<version>-<arch>`; `image_for()` asks for the same thing minus
-    the architecture, which `docker_image.candidates()` appends.
+    `<tag>-py<version>-<arch>`; `image_for()` asks for the same thing minus the
+    architecture, which `docker_image.candidates()` appends.
+
+    `<tag>` is the release on an ordinary run, and a run that rebuilt these
+    images addresses them by one of its own -- which is why both sides go
+    through `container_image.image_tag` rather than writing the release
+    directly. See `tests/dev_tools/test_container_images.py`.
     """
     workflow = (pathlib.Path(__file__).resolve().parents[3] / ".github" / "workflows" / "test.yml").read_text()
     assert "${{ github.repository }}-container-python" in workflow
     assert runtime_python_docker.BASE_IMAGE == "ghcr.io/partcad/partcad-container-python"
-    assert "${PC_VERSION}-py${PY}-${ARCH}" in workflow
+    assert 'PC_IMAGE_REF="${IMAGE}:${IMAGE_TAG}-py${PY}-${ARCH}"' in workflow
+    assert "container_image.image_tag(release)" in inspect.getsource(runtime_python_docker)
 
 
 def _build_containers_steps():
@@ -106,14 +119,26 @@ def test_the_version_tag_is_published_once_by_the_version_bump():
     queue run -- so the nightly rewrote it, daily, with whatever 'devel' held at
     the time. A pin that moves under the package that took it is not a pin, and
     the comment beside it had called it immutable throughout.
-    """
-    push = _step("Build the Python sandbox images")["env"]["PUSH"]
 
-    assert "refs/heads/devel" in push
-    assert "Version updated" in push
-    # The recovery path for a bump whose push failed, and the only other way in.
-    assert "workflow_dispatch" in push
-    assert "refs/heads/main" not in push
+    The condition itself is no longer written here. It moved into
+    `.github/actions/container-images`, which answers the same question for the
+    KiCad image and for `CI-Dev`, and which is where the rule is now pinned
+    (`tests/dev_tools/test_container_images.py`): a version bump or a dispatch
+    publishes the release tag, a run that rebuilt the images publishes one of
+    its own, and nothing else publishes at all. What this asserts is the half
+    that lives in this workflow -- that the step takes both the tag and the
+    permission from that one answer, rather than deciding either for itself.
+    A second copy here is how the two would come to disagree, and a build under
+    one tag with permission granted for another is precisely the release tag
+    being overwritten from a branch.
+    """
+    step = _step("Build the Python sandbox images")
+
+    assert step["env"]["PUSH"] == "${{ needs.set-matrix.outputs.image-push }}"
+    assert step["env"]["IMAGE_TAG"] == "${{ needs.set-matrix.outputs.image-tag }}"
+    # The release still goes *into* the image, whatever the image is called.
+    assert step["env"]["PC_VERSION"] == "${{ needs.set-matrix.outputs.image-release }}"
+    assert 'PC_PARTCAD_VERSION="${PC_VERSION}"' in step["run"]
 
 
 def test_the_moving_tag_is_not_written_by_a_build():
@@ -126,8 +151,11 @@ def test_the_moving_tag_is_not_written_by_a_build():
     """
     run = _step("Build the Python sandbox images")["run"]
 
-    assert '--tag "${IMAGE}:py${PY}-${ARCH}"' not in run
-    assert '--cache-from "type=registry,ref=${IMAGE}:py${PY}-${ARCH}"' in run
+    assert 'PC_IMAGE_REF="${IMAGE}:py${PY}-${ARCH}"' not in run
+    # It is the cache source and only the cache source. The `type=registry,ref=`
+    # around it is `dev-tools/ci/build-sandbox-image.sh`'s to write now, this
+    # step naming the image the layers come from.
+    assert 'PC_CACHE_FROM="${IMAGE}:py${PY}-${ARCH}"' in run
 
 
 def test_the_release_advances_the_moving_tag_without_rebuilding():

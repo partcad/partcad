@@ -281,7 +281,40 @@ request used to get — every current image, macOS included, and the full Python
 pull request drops is coverage the commit still earns before it lands, once per merge rather than once per
 push. Everything else gets `deep`: the nightly schedule, a manual dispatch, any push, and a pull request
 whose title or description contains `#deepTest`. `#deepTest` runs exactly what it ran before any of this
-existed.
+existed. It answers a second, narrower question the same way: `#images` rebuilds PartCAD's own container
+images (see below).
+
+A third gate, `.github/actions/container-images`, answers **which images this run is about**. PartCAD's
+container images — the Python sandbox bases and the KiCad sandbox — are tagged with the release, and only the
+version bump on `devel` writes those tags, so until this existed a change to `tools/containers` built the new
+images and then tested against the last release's: a Dockerfile fix could not be proven on the pull request
+that made it, which is how the `pycairo` fix sat in the repository while every PNG went on failing. Such a run
+now builds and publishes `<release>-<branch>-<digest>-<commit>` and exports `PC_CONTAINER_IMAGE_TAG`, which
+`partcad_utils.container_image.image_tag` reads and every reader of those images goes through — so the tests
+in that run reach what that run built. It is turned on by a change under `tools/containers/` (a
+`changed-scopes` bucket) or by `#images` in the pull request, and it is off otherwise, which is why an
+ordinary pull request pays nothing extra for it -- it goes on building these images for `amd64` as a test,
+the way it always did, and goes on rendering against the release's. A branch tag is safe to publish from an
+unreviewed branch because nothing but that run asks for it -- the commit is in the name because a branch is not unique in time,
+and two pushes to one branch would otherwise build, test and *delete* one tag between them; the release tag,
+which somebody else pulls, is still only ever written by the bump. Both `CI` and `CI-Dev` call that action rather than deciding for themselves — they hand
+the answer to the same `Container (KiCad)` build, and two answers would be two tags for one image.
+
+Two consequences of that gate are worth knowing. **A test job does not build these images**: it pulls what
+`Build Docker Containers` built, which is why every job that can reach a container waits for that one.
+`.github/actions/sandbox-image` used to build a copy per job, for a reason the gate now answers; what is left
+is a pull, plus a build for the one caller with no such job to wait for (`Examples via bundle` in
+`Standalone`, which runs on the version bump in a *different* workflow from the one publishing that release's
+images). Both that build and `Build Docker Containers` run `dev-tools/ci/build-sandbox-image.sh` — there is
+one answer to "how is this image built", because two spellings of it do not fail when they drift, they
+disagree: a job testing an image built differently from the one the run published, under a name saying they
+are the same. A change to that script is a container change, like a change to a Dockerfile. And **the branch
+tags are cleaned up**: `CI` deletes the Python ones when its test jobs finish (it is their only consumer),
+and `prune-container-images.yml` sweeps nightly for the rest — the KiCad tag, which `CI` must not delete
+because `CI-Dev` reads it too, whatever a cancelled run left, and the `partcad-devcontainer` tags
+`setup-devcontainer` has published on every non-bump run since long before any of this. The sweep keeps
+anything that is not `<release>-<not py<N>>` and anything under a month old, so the release tags and the
+moving `py<N>-<arch>` tags are out of its reach by construction.
 
 `.github/actions/changed-scopes` answers **which jobs at all**, by sorting the changed files into buckets: a
 documentation-only change runs the documentation build and nothing else, an `ai-agents/` change runs the
