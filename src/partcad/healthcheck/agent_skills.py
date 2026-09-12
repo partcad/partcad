@@ -29,10 +29,9 @@ to bump.
 import json
 import os
 
-from .tests import HealthCheckReport, HealthCheckTest
-from .. import __version__
-from .. import ai_agents
+from .. import __version__, ai_agents
 from ..launch_config import find_repository_root
+from .tests import HealthCheckReport, HealthCheckTest
 
 
 class AgentSkillsCheck(HealthCheckTest):
