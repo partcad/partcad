@@ -122,15 +122,38 @@ export function toShape(value, depth = 0) {
  * it bounds ('wrapper_common.solidify'). A part that is a shell is a skin -- it
  * renders and measures correctly, and every boolean against it comes back with
  * no solid in it -- and a Chili3D script can return one, so the gap is real.
- * The kernel has what the first half of it needs: 'wasm.Shape.isClosed' answers
- * for a shell (unlike OCCT's own 'Closed' flag), and 'wasm.ShapeFactory.solid'
- * builds a positively-oriented solid from one. What is not established is the
- * other half -- whether 'wasm.Shape.iterShape' composes a compound's own
- * location into the children it yields, which is what decides whether a
- * compound can be rebuilt with a shell in it replaced without moving the rest
- * of it. Answer that before adding it here; getting it wrong displaces a part
- * silently. Until then a shell from a Chili3D script reaches the core as a
- * shell, where 'partcad.brep_inspect' finds it and the 'shell' check reports it.
+ * The kernel has what it needs. 'wasm.Shape.isClosed' answers for a shell
+ * (unlike OCCT's own 'Closed' flag) and 'wasm.ShapeFactory.solid' builds a
+ * solid from one -- both checked against the real wasm, not assumed.
+ *
+ * An earlier note here said the blocker was whether 'wasm.Shape.iterShape'
+ * composes a compound's location into the children it yields, since rebuilding
+ * a compound with a child replaced would then move the rest of it. That was
+ * wrong twice over, and probing the kernel is what showed it:
+ *
+ *   - Nothing needs rebuilding. 'wasm.Shape.replaceSubShape' swaps a sub-shape
+ *     in place, so the shell inside a compound can become the solid it bounds
+ *     without the compound being taken apart, and the placement question never
+ *     arises.
+ *   - The question was not even answerable in those terms: 'wasm.Shape' exposes
+ *     no transform, no location, no 'moved' -- clone, findAncestor,
+ *     findSubShapes, iterShape, sectionSS, sectionSP, isClosed, splitShapes,
+ *     removeFeature, removeSubShape, replaceSubShape, hlr, sewing, and that is
+ *     all of it. There is no way from here to give a compound a location to
+ *     compose in the first place.
+ *
+ * And placement was never relevant to a bare shell, which is the common case: a
+ * script that returns one needs 'isClosed' and 'solid', no iteration at all.
+ * That half was blocked for no reason.
+ *
+ * What is actually in the way is narrower and is a typing detail:
+ * 'ShapeFactory.solid' wants a 'TopoDS_Shell'-typed pointer, while
+ * 'findSubShapes' hands back 'TopoDS_Shape', so the binding rejects the call
+ * ("Expected null or instance of TopoDS_Shell") until the shape is downcast.
+ * Find the downcast and this is a small change, not a blocked one.
+ *
+ * Until then a shell from a Chili3D script reaches the core as a shell, where
+ * 'partcad.brep_inspect' finds it and the 'shell' check reports it.
  *
  * Returns '{compound, components}', both already encoded as envelopes, or
  * '{compound: null, components: []}' when the script produced no geometry.
