@@ -18,4 +18,4 @@ work itself: those runtimes belong to the daemon's environment and need not
 exist on the client side at all.
 """
 
-__version__ = "0.8.73"
+__version__ = "0.8.74"
