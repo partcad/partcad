@@ -89,14 +89,27 @@ def process(path, request):
             shape = getattr(shape, shape._obj_name)  # convert to direct API
 
         # TODO(clairbee): do we really want to explode compounds?
+        #
+        # 'get_downcasted_shape' takes the first of solids/faces/wires/edges the
+        # shape holds any of, and knows nothing about shells - so a compound
+        # holding a shell and no solid comes back as that shell's faces, which a
+        # part's compound does not take. Such a part is therefore empty, and it
+        # is the 'degenerate' check that says so rather than 'shell'. Handing the
+        # compound over whole would let wrapper_common.solidify() state the shell
+        # as a solid instead; what stops that being a one-line change is the
+        # question above, since it is the same call that explodes a compound of
+        # solids into its solids.
         if is_build123d_compound(shape):
             converted.append(get_downcasted_shape(shape.wrapped))
 
         elif is_build123d_shell(shape):
-            faces = []
-            for face in shape.faces():
-                faces.append(get_downcasted_shape(face.wrapped))
-            converted.extend(faces)
+            # The shell, not the faces it is made of. A closed one becomes the
+            # solid it bounds in wrapper_common.combine, and an open one stays a
+            # shell for the core to report; exploding it here produced neither,
+            # because a part's compound takes no bare faces - a script returning
+            # 'Shell' built a part with nothing in it. A sketch still keeps the
+            # faces: combine descends into a shell to collect them.
+            converted.append(downcast(shape.wrapped))
 
         # TODO(clairbee): is this needed?
         # elif is_build123d_shape(shape):

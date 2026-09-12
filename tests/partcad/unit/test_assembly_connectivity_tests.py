@@ -109,9 +109,15 @@ def test_something_with_no_solid_in_it_is_not_inside_out():
     assert _run(SolidityTest(), _Shape(solidity={"solids": 0, "volume": None, "valid": None}))
 
 
-def test_a_part_can_opt_out():
+def test_a_part_cannot_opt_out():
+    """An inside-out solid fails whatever the part says about itself.
+
+    There is no setting for this. A part that asked not to be checked used to
+    pass; the check now reads the geometry and nothing else, because a solid of
+    negative volume is broken however it came to be declared.
+    """
     config = {"solidity": {"skip": True}}
-    assert _run(SolidityTest(), _Shape(config=config, solidity={"solids": 1, "volume": -5.0, "valid": False}))
+    assert not _run(SolidityTest(), _Shape(config=config, solidity={"solids": 1, "volume": -5.0, "valid": False}))
 
 
 def test_an_assembly_is_checked_through_its_parts():
@@ -257,7 +263,6 @@ def test_two_placements_that_differ_only_by_arithmetic_noise_are_one_place():
     assert a == b
 
 
-
 # --- what the review found --------------------------------------------------
 
 
@@ -289,10 +294,11 @@ def test_the_settings_that_decide_a_verdict_are_in_its_cache_key():
     assert conn.cache_key_suffix(None, _Assembly()) != conn.cache_key_suffix(
         None, _Assembly(config={"connectivity": {"skip": True}})
     )
+    # 'solidity' has nothing in its key: it reads the geometry and takes no
+    # settings, so there is nothing a package can change that moves the answer.
     sol = SolidityTest()
-    assert sol.cache_key_suffix(None, _Shape()) != sol.cache_key_suffix(
-        None, _Shape(config={"solidity": {"skip": True}})
-    )
+    assert sol.cache_key_suffix(None, _Shape()) == ""
+    assert sol.cache_key_suffix(None, _Shape(config={"solidity": {"skip": True}})) == ""
 
 
 def test_a_verdict_that_turned_on_the_machine_is_not_remembered():
@@ -363,11 +369,13 @@ def test_the_item_the_others_hang_from_is_exempt_wherever_it_sits(monkeypatch):
     coordinates, because everything else connects to it.
     """
     monkeypatch.setattr("partcad.test.connectivity.Assembly", _Assembly)
-    inner = _Assembly([
-        _Child("example-bracket", _Item("bracket"), HERE),
-        _connected("example-motor", "example-bracket", "TR-4.5mm"),
-        _connected("screw-L", "example-bracket", "L-30mm"),
-    ])
+    inner = _Assembly(
+        [
+            _Child("example-bracket", _Item("bracket"), HERE),
+            _connected("example-motor", "example-bracket", "TR-4.5mm"),
+            _connected("screw-L", "example-bracket", "L-30mm"),
+        ]
+    )
     root = _Assembly([_Child("links", inner, HERE)])
     assert _run(ConnectivityTest(), root, ctx=_Ctx())
 
@@ -375,11 +383,13 @@ def test_the_item_the_others_hang_from_is_exempt_wherever_it_sits(monkeypatch):
 def test_a_stray_inside_a_nested_group_is_still_reported(monkeypatch):
     """The exemption is one item per group, not one per assembly."""
     monkeypatch.setattr("partcad.test.connectivity.Assembly", _Assembly)
-    inner = _Assembly([
-        _Child("base", _Item("base"), HERE),
-        _connected("a", "base", "p0"),
-        _Child("stray", _Item("stray"), THERE),
-    ])
+    inner = _Assembly(
+        [
+            _Child("base", _Item("base"), HERE),
+            _connected("a", "base", "p0"),
+            _Child("stray", _Item("stray"), THERE),
+        ]
+    )
     root = _Assembly([_Child("links", inner, HERE)])
     assert not _run(ConnectivityTest(), root, ctx=_Ctx())
 

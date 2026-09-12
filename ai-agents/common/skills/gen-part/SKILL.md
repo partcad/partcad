@@ -90,6 +90,17 @@ skipped.
 pc --no-ansi test <name>
 ```
 
+Three of its checks fail geometry that instantiates perfectly, and all three are
+about a part that would look right in the pictures rendered below: `shell` (the
+part is a surface rather than a body — the faces do not close, so it has no
+inside and every boolean against it is meaningless), `degenerate` (it has no size
+left in some direction) and `solidity` (its faces are oriented inward, so its
+volume is negative). **None of them can be turned off on the part** — there is
+no such setting, and inventing one is rejected by `pc lint`. Fix the geometry:
+close the shape, keep the feature that collapsed, orient the faces outward. A
+part that fails one of these is a part nothing downstream can compute with,
+however good the picture of it looks.
+
 ## 7. Render it from several angles, compare, and iterate
 
 `pc test` proves the geometry instantiates. It says nothing about whether the

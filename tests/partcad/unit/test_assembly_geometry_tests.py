@@ -99,16 +99,30 @@ def test_a_shape_with_no_extent_at_all_fails():
     assert not _run(DegenerateTest(), _Shape(box=None))
 
 
-def test_something_meant_to_be_flat_can_say_so():
+def test_a_part_cannot_declare_itself_flat():
+    """A part that collapsed in one direction fails whatever it says about itself.
+
+    There is no setting for this. A part that asked not to be measured used to
+    pass; the check now reads the bounding box and nothing else, because a part
+    that measured a millimetre where it should have measured ten is broken
+    however it came to be declared. A kind of object that is flat by nature - a
+    sketch - is still passed over, on what it is rather than on what it asks.
+    """
     shape = _Shape(config={"degenerate": {"skip": True}}, box=(0, 0, 0, 10, 10, 0))
-    assert _run(DegenerateTest(), shape)
+    assert not _run(DegenerateTest(), shape)
 
 
-def test_the_tolerance_is_configurable():
+def test_the_tolerance_is_fixed():
+    """A part cannot move the line between a thin solid and a flat one.
+
+    'degenerate' measures against one constant, and a part asking for a
+    stricter rule is measured by the constant anyway - narrowing what counts as
+    a body is how a check stops reporting the parts that needed reporting.
+    """
     thin = _Shape(box=(0, 0, 0, 10, 10, 0.05))
     assert _run(DegenerateTest(), thin)  # thinner than a brick, but a solid
     strict = _Shape(config={"degenerate": {"tolerance": 0.1}}, box=(0, 0, 0, 10, 10, 0.05))
-    assert not _run(DegenerateTest(), strict)
+    assert _run(DegenerateTest(), strict)
 
 
 def test_an_assembly_is_checked_through_its_parts():
