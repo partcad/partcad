@@ -39,6 +39,18 @@ on the layer, and that is the whole reason this module exists:
 import base64
 import json
 
+try:
+    # Python 3.14 and newer carry zstd in the standard library; below that the
+    # backport of that very module provides it, and PartCAD depends on it. Same
+    # two-step, for the same reason, as in 'wrappers/ocp_serialize.py': what the
+    # two sides exchange is the zstd frame format itself.
+    from compression.zstd import decompress as _zstd_decompress
+except ImportError:  # pragma: no cover - exercised on the other interpreter
+    try:
+        from backports.zstd import decompress as _zstd_decompress
+    except ImportError:
+        _zstd_decompress = None
+
 # The three object shapes are told apart by which of these keys is present.
 KEY_BREP = "brep"
 KEY_ASSEMBLY = "assembly"
@@ -52,6 +64,11 @@ KEY_LOCATION = "location"
 # small and everything that identifies an object travels beside its name. Like
 # the placement, it is data the core carries opaquely and never interprets.
 KEY_PROPERTIES = "properties"
+
+# The zstd frame header. Sniffed rather than declared in the envelope, so that
+# a payload written without compression stays readable; the one copy of this
+# constant on the geometry side is 'ocp_serialize.ZSTD_MAGIC'.
+ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
 
 
 def is_shape_object(obj) -> bool:
@@ -85,6 +102,31 @@ def brep_base64(value) -> str:
     if isinstance(value, str):
         return value
     return base64.b64encode(value).decode("ascii")
+
+
+def brep_plain(value) -> bytes:
+    """The BREP bytes themselves: the payload, decompressed.
+
+    'brep_bytes()' hands back the payload as it is carried, which is a zstd
+    frame; this unwraps it into the ASCII BREP that OCCT wrote. Everything the
+    core does with a shape moves the frame around unopened, so this is for the
+    one thing that reads it: 'brep_inspect', which answers a question about the
+    shape's topology off the bytes rather than by starting a sandbox.
+
+    A payload that is not a zstd frame is returned as it is. That is how a peer
+    without zstd writes one (see 'ocp_serialize._compress'), and telling the two
+    apart by the frame header rather than by a flag in the envelope is what lets
+    either be read without the format saying which it is.
+    """
+    data = brep_bytes(value)
+    if not data.startswith(ZSTD_MAGIC):
+        return data
+    if _zstd_decompress is None:
+        raise RuntimeError(
+            "the BREP payload is zstd-compressed, but zstd is not available here. "
+            "On Python below 3.14 it comes from the 'backports.zstd' package."
+        )
+    return _zstd_decompress(data)
 
 
 def make_shape(brep, name=None, label=None) -> dict:

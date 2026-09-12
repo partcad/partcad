@@ -171,6 +171,35 @@ isort --check src/partcad tests/partcad
   that now analyses perfectly well. `CaeTest` is the only test that reaches that state, and the flag exists
   for it.
 
+- **A part is a body, not a skin** (`wrappers/wrapper_common.solidify`, `brep_inspect.py`,
+  `test/shell.py`): a shell is a set of faces with nothing said about which side of them is material; a solid
+  is a shell declared to bound a volume. The declaration changes nothing about how the shape looks and
+  everything about what can be computed from it — a boolean taken against a shell comes back with no solid in
+  it — so a part handed back as a shell renders, exports and measures correctly and is wrong for interference,
+  CAM, FEA and any mass in a bill of materials. cadquery and build123d both let a script return one, and a
+  partType that meshes triangles builds one by nature.
+
+  So the wrappers convert: `solidify()` replaces a **closed** shell with the solid it already bounds,
+  descending into compounds (which is the case that happens, since `combine()` compounds whatever a script
+  returned) and orienting the result, because a closed shell whose faces point inward would otherwise become a
+  solid of negative volume — the failure `test/solidity.py` exists to report. It returns its argument
+  unchanged when there is nothing to convert, so a part with no shell in it serializes to the bytes it always
+  did. An **open** shell is left alone: there is no solid it bounds, and declaring one anyway would replace an
+  honest surface with an invalid solid that computes nonsense. Neither is a part read from a *file* — `step`,
+  `brep`: those wrappers hand over what the file holds, because the file is the authority on what the part is,
+  `pc convert` round-trips through them, and a surface model somebody shipped is worth reporting rather than
+  quietly changing.
+
+  Which leaves the core to notice the ones that were not converted, and it does that **without a CAD kernel
+  and without a sandbox**: `brep_inspect.py` reads the `TShapes` section of the BREP payload the core already
+  holds — one record per shape, each opening with a two-letter type code — and counts the shells no solid
+  references. Every solid is bounded by a shell, so "the payload contains a shell" is true of a box and says
+  nothing; what is asked is whether a shell bounds anything. It counts the references rather than resolving
+  them, so it never has to know which end of the record list the indices count from. `test/shell.py` is the
+  check that reports the result, and it is the cheapest one `pc test` runs. Do not answer this question in a
+  sandbox, and do not turn the scanner into a BREP reader: everything between a record's type code and the line
+  its sub-shape list ends on is geometry, and is skipped unread.
+
 - **One shape, one lock** (`Shape.locked()`): a shape is held still both while it is instantiated and while
   any file derived from it is produced. They are one question because the output path is derived from the
   shape -- `<part>.<format>` beside the package -- so two concurrent runs over one shape resolve to one path

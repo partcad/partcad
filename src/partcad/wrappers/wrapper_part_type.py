@@ -23,6 +23,12 @@ and is expected to leave its result in a global 'output':
 Both '__file__' and the run name '__partcad_part__' are set on the script, so it
 can gate its build logic (``if __name__ == "__partcad_part__":``) and remain
 importable for its own unit tests.
+
+A shape handed back as a *closed shell* is stated as the solid it already bounds
+before it is serialized (see wrapper_common.solidify). A partType that meshes
+triangles naturally builds a shell, and a shell is a skin: nothing downstream of
+a boolean works on one. So a partType need not know to declare the solid itself,
+and one that already does is unaffected.
 """
 
 import os
@@ -55,6 +61,14 @@ def process(path, request):
     if exception:
         wrapper_common.handle_exception(Exception(str(exception)), path)
         return {"success": False, "exception": str(exception), "shapes": shapes}
+
+    # A partType that meshes triangles - which is what the ones in the public
+    # index do - naturally builds a shell, and a shell is a skin rather than a
+    # body: every boolean against one comes back with no solid in it. A closed
+    # one is stated as the solid it already bounds, here rather than in each
+    # partType, so that a package-supplied script gets it right by default.
+    # See wrapper_common.solidify.
+    shapes = [wrapper_common.solidify(shape) for shape in shapes]
 
     return {"success": True, "exception": None, "shapes": shapes}
 

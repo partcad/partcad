@@ -118,6 +118,20 @@ export function toShape(value, depth = 0) {
  *     edges/wires/faces goes into the compound.
  * Nested arrays are walked and preserved in the components tree.
  *
+ * One thing the twin does and this does not: turn a closed shell into the solid
+ * it bounds ('wrapper_common.solidify'). A part that is a shell is a skin -- it
+ * renders and measures correctly, and every boolean against it comes back with
+ * no solid in it -- and a Chili3D script can return one, so the gap is real.
+ * The kernel has what the first half of it needs: 'wasm.Shape.isClosed' answers
+ * for a shell (unlike OCCT's own 'Closed' flag), and 'wasm.ShapeFactory.solid'
+ * builds a positively-oriented solid from one. What is not established is the
+ * other half -- whether 'wasm.Shape.iterShape' composes a compound's own
+ * location into the children it yields, which is what decides whether a
+ * compound can be rebuilt with a shell in it replaced without moving the rest
+ * of it. Answer that before adding it here; getting it wrong displaces a part
+ * silently. Until then a shell from a Chili3D script reaches the core as a
+ * shell, where 'partcad.brep_inspect' finds it and the 'shell' check reports it.
+ *
  * Returns '{compound, components}', both already encoded as envelopes, or
  * '{compound: null, components: []}' when the script produced no geometry.
  */

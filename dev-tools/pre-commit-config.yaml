@@ -11,11 +11,18 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # '.brep' is excluded from both because a BREP file is not source: it is
+      # what 'BRepTools::Write' wrote, and the fixtures under
+      # 'tests/partcad/unit/data/brep/' are checked in precisely so that a test
+      # reads real writer output. That output has trailing spaces on most of its
+      # lines and no final newline, so either hook would rewrite it into
+      # something OCCT never produced - which is the one property the fixtures
+      # have. (Files under 'examples/' are already covered by the path above.)
       - id: trailing-whitespace
-        exclude: "^examples/|_ai_.+\\.(py|scad)"
+        exclude: "^examples/|_ai_.+\\.(py|scad)|\\.brep$"
         exclude_types: [svg]
       - id: end-of-file-fixer
-        exclude: "^examples/|_ai_.+\\.(py|scad)"
+        exclude: "^examples/|_ai_.+\\.(py|scad)|\\.brep$"
         exclude_types: [svg]
       - id: check-yaml
         exclude: "^tests/partcad/unit/data/project_config_(template|include).yaml$"

@@ -195,6 +195,34 @@ def test_schema_every_registered_part_type_is_accepted():
         validate({"parts": {"widget": {"type": part_type}}})
 
 
+# The geometry checks 'pc test' runs take a section on the part they check, and
+# that section is how a part says it is deliberately what the check reports. An
+# option the checks read and the schema rejects is an option nobody can use.
+
+
+@pytest.mark.parametrize("check", ["degenerate", "shell", "solidity"])
+def test_schema_a_geometry_check_can_be_turned_off_on_a_part(check):
+    """'pc test' reads '<check>: skip: true'; 'pc lint' used to reject all three."""
+    validate({"parts": {"widget": {"type": "cadquery", check: {"skip": True}}}})
+
+
+def test_schema_only_degenerate_takes_a_tolerance():
+    """It is the one check with a threshold; the others have nothing to tune."""
+    validate({"parts": {"widget": {"type": "cadquery", "degenerate": {"tolerance": 0.01}}}})
+    for check in ("shell", "solidity"):
+        errors = failures({"parts": {"widget": {"type": "cadquery", check: {"tolerance": 0.01}}}})
+        assert any("tolerance" in error.message for error in errors)
+
+
+@pytest.mark.parametrize("check", ["degenerate", "shell", "solidity"])
+def test_schema_a_geometry_check_rejects_what_it_does_not_read(check):
+    """A misspelled option is silently ignored at runtime, so it is caught here."""
+    errors = failures({"parts": {"widget": {"type": "cadquery", check: {"skipp": True}}}})
+    assert any("skipp" in error.message for error in errors)
+    errors = failures({"parts": {"widget": {"type": "cadquery", check: {"skip": "yes"}}}})
+    assert any("boolean" in error.message for error in errors)
+
+
 # The package walk: which check claims which file, and what it reports.
 
 

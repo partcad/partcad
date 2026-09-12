@@ -90,6 +90,17 @@ skipped.
 pc --no-ansi test <name>
 ```
 
+Three of its checks fail geometry that instantiates perfectly, and all three are
+about a part that would look right in the pictures rendered below: `shell` (the
+part is a surface rather than a body — the faces do not close, so it has no
+inside and every boolean against it is meaningless), `degenerate` (it has no size
+left in some direction) and `solidity` (its faces are oriented inward, so its
+volume is negative). Fix the geometry rather than the declaration: close the
+shape, keep the feature that collapsed, orient the faces outward. Only where the
+part is genuinely meant to be that way — a shim that is flat, a wrap that is a
+surface — does it say so, with `shell: {skip: true}` or
+`degenerate: {skip: true}` on the part.
+
 ## 7. Render it from several angles, compare, and iterate
 
 `pc test` proves the geometry instantiates. It says nothing about whether the

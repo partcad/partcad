@@ -243,6 +243,32 @@ Object commands
   (``connect``; see "Testing the instructions" in :doc:`assy`), and whether the engineering analyses a part
   asks for come back clean (``fea`` and ``cfd``; see :ref:`pc cae <cae>`).
 
+  Three of them ask something else: not whether the object built, but whether what was built is what
+  somebody meant. ``shell`` fails a part that came back as a *surface* rather than as a body -- a set of
+  faces with nothing said about which side of them is material, which renders and exports like the part
+  that was meant while every boolean against it comes back with no solid in it, so interference, CAM, FEA
+  and any mass computed from it are wrong. ``degenerate`` fails one that has no size left in some
+  direction: a 2 x 2 brick that meshed into a flat disc because a subfile could not be fetched. ``solidity``
+  fails one whose faces are oriented inward, which measures the right size and reports a *negative* volume.
+  All three are about an object that looks entirely correct in a picture, which is why they have to be asked
+  rather than noticed, and none of them needs a solver. ``shell`` needs nothing at all: its answer is read
+  straight out of the geometry the object has already produced, so it is asked of every part.
+
+  Where an object is deliberately what one of them reports -- a shim that is flat, a wrap that is a surface,
+  a part built as a void -- it says so, and the check passes it over:
+
+  .. code-block:: yaml
+
+    parts:
+      canopy:
+        type: build123d
+        shell:
+          skip: true
+      shim:
+        type: cadquery
+        degenerate:
+          skip: true      # or: tolerance: 0.05, to allow a thinner part
+
   The manufacturability test asks for exactly what ``pc supply`` would order. An assembly that is sold
   assembled (see :ref:`procurement`) passes once a supplier carries it, and is not taken apart: the parts
   inside it are the seller's problem. Every other assembly has to declare how it is assembled, and everything

@@ -128,6 +128,121 @@ def handle_output(model):
         payload = payload[os.write(_response_fd, payload) :]
 
 
+def solidify(shape):
+    """Replace every closed shell in 'shape' with the solid it already bounds.
+
+    A shell is a skin: faces joined along their edges, with nothing said about
+    which side of them is material. A solid is a shell that has been declared to
+    bound a volume, and the declaration is the whole difference. It changes
+    nothing about how the shape looks and everything about what can be computed
+    from it: two 10 mm cubes overlapping by 5 mm share 500 mm^3 and add up to
+    1500, and asking OCCT for either against the second one's *shell* returns a
+    result with no solid in it and a volume of zero. So a part handed back as a
+    shell builds, renders, exports and measures its right size while being
+    useless for interference, CAM, FEA or a bill of materials, and nothing about
+    it looks wrong.
+
+    Which is worth fixing here rather than reporting, because a *closed* shell
+    and the solid it bounds are the same geometry: the solid states what the
+    shell already is. So a script that hands back 'Shell' instead of 'Solid' -
+    which cadquery and build123d both let it do, as does a partType wrapper
+    meshing triangles - produces the part that was meant.
+
+    A shell that is **not** closed is left alone. There is no solid it bounds,
+    and declaring one anyway would replace a shape that is honestly a surface
+    with a solid OCCT reports as invalid and computes nonsense from - a worse
+    thing than the shell, and a silent one. Such a shape reaches the core as a
+    shell, which is what 'partcad.brep_inspect' looks for and the 'shell' check
+    reports.
+
+    A compound is descended into and rebuilt with the shells in it converted,
+    which is the case that matters most in practice: both wrappers compound
+    whatever a script returns, so a shell usually arrives inside one rather than
+    on its own. Solids are left as they are, boundary shell included - a solid's
+    shell is not a free shell, and rebuilding it would be the one way to break a
+    shape this is supposed to leave alone.
+
+    Returns the argument itself when nothing changed, so a part with no shell in
+    it serializes to exactly the bytes it did before: rebuilding a compound bakes
+    the parent's location into its children, and a shape nobody asked about must
+    not move.
+    """
+    import OCP.TopAbs  # noqa: F401
+    import OCP.TopoDS  # noqa: F401
+
+    if shape is None or not isinstance(shape, OCP.TopoDS.TopoDS_Shape) or shape.IsNull():
+        return shape
+
+    shape_type = shape.ShapeType()
+    if shape_type == OCP.TopAbs.TopAbs_SHELL:
+        solid = _shell_to_solid(shape)
+        return shape if solid is None else solid
+    if shape_type != OCP.TopAbs.TopAbs_COMPOUND:
+        return shape
+
+    children = []
+    changed = False
+    iterator = OCP.TopoDS.TopoDS_Iterator(shape)
+    while iterator.More():
+        child = iterator.Value()
+        solidified = solidify(child)
+        changed = changed or solidified is not child
+        children.append(solidified)
+        iterator.Next()
+    if not changed:
+        return shape
+
+    # Iterated cumulatively (TopoDS_Iterator's default), so each child comes out
+    # with this compound's own location composed into it; the replacement is
+    # therefore built at the identity rather than carrying that location twice.
+    builder = OCP.TopoDS.TopoDS_Builder()
+    rebuilt = OCP.TopoDS.TopoDS_Compound()
+    builder.MakeCompound(rebuilt)
+    for child in children:
+        builder.Add(rebuilt, child)
+    return rebuilt
+
+
+def _shell_to_solid(shell):
+    """The solid a closed shell bounds, or None if the shell is not closed.
+
+    'BRepCheck_Shell.Closed()' asks the geometry rather than reading the shell's
+    'Closed' flag: the flag is set by the algorithms that happen to know, so a
+    shell that came out of sewing or out of a mesher can be closed with the flag
+    unset, and trusting it would leave exactly the shapes this is for as shells.
+
+    The solid is oriented after it is built. A closed shell whose faces point
+    inward bounds the space *outside* it, and the solid made from it measures a
+    negative volume - the failure 'partcad.test.solidity' exists to report. So
+    converting without orienting would turn a shell nothing computed from into a
+    solid everything computes from wrongly; 'BRepLib.OrientClosedSolid_s'
+    reverses it when needed and is what makes this conversion safe.
+    """
+    import OCP.BRep  # noqa: F401
+    import OCP.BRepCheck  # noqa: F401
+    import OCP.BRepLib  # noqa: F401
+    import OCP.TopoDS  # noqa: F401
+
+    try:
+        shell = OCP.TopoDS.TopoDS.Shell_s(shell)
+        if OCP.BRepCheck.BRepCheck_Shell(shell).Closed() != OCP.BRepCheck.BRepCheck_Status.BRepCheck_NoError:
+            return None
+
+        builder = OCP.BRep.BRep_Builder()
+        solid = OCP.TopoDS.TopoDS_Solid()
+        builder.MakeSolid(solid)
+        builder.Add(solid, shell)
+        OCP.BRepLib.BRepLib.OrientClosedSolid_s(solid)
+        if solid.IsNull():
+            return None
+        return solid
+    except Exception as e:
+        # Whatever it was, the shell is still a usable answer; say so where it
+        # can be read rather than failing the part over an improvement.
+        sys.stderr.write("wrapper_common: could not turn a closed shell into a solid: %s\n" % e)
+        return None
+
+
 def combine(shapes, kind):
     """Compound the script's result shapes and collect its components.
 
@@ -139,9 +254,12 @@ def combine(shapes, kind):
         wraps such geometry is descended into rather than dropped: cadquery and
         build123d routinely hand a sketch back as a compound of faces (cadquery
         2.8's Workplane.placeSketch is one), and discarding it would leave the
-        sketch empty.
+        sketch empty. A shell is descended into for the same reason: it is a set
+        of faces, and a sketch has no volume for it to bound.
       - "part" (default): every shape is a component, and everything except bare
-        edges/wires/faces goes into the compound.
+        edges/wires/faces goes into the compound. A closed shell becomes the
+        solid it bounds first (see solidify), because a part that is a skin
+        rather than a body computes nothing.
     Nested lists are walked and preserved in the components tree. Returns
     (TopoDS_Compound, components).
     """
@@ -165,11 +283,11 @@ def combine(shapes, kind):
                 continue
             if not isinstance(shape, OCP.TopoDS.TopoDS_Shape) or shape.IsNull():
                 continue
-            shape_type = shape.ShapeType()
             if kind == "sketch":
-                if shape_type == OCP.TopAbs.TopAbs_COMPOUND:
-                    # Descend into the compound and keep the edges/wires/faces it
-                    # holds, instead of discarding the whole wrapper.
+                shape_type = shape.ShapeType()
+                if shape_type in (OCP.TopAbs.TopAbs_COMPOUND, OCP.TopAbs.TopAbs_SHELL):
+                    # Descend into the wrapper and keep the edges/wires/faces it
+                    # holds, instead of discarding it whole.
                     iterator = OCP.TopoDS.TopoDS_Iterator(shape)
                     while iterator.More():
                         walk([iterator.Value()], out)
@@ -179,8 +297,11 @@ def combine(shapes, kind):
                     out.append(shape)
                     builder.Add(compound, shape)
             else:
+                # The one place both wrappers funnel whatever a script returned,
+                # so the one place to state a closed shell as the solid it is.
+                shape = solidify(shape)
                 out.append(shape)
-                if shape_type not in lower_dim:
+                if shape.ShapeType() not in lower_dim:
                     builder.Add(compound, shape)
 
     walk(shapes, components)
