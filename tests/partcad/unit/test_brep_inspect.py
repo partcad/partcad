@@ -287,3 +287,66 @@ def test_no_cad_kernel_is_loaded_to_answer_the_question():
     )
     assert result.returncode == 0, result.stderr
     assert "clean" in result.stdout
+
+
+# --- geometry that belongs to no body -----------------------------------------
+
+
+def test_a_solid_owns_its_faces_as_well_as_its_shell():
+    """The arithmetic has to hold one dimension down too, or it reports nonsense.
+
+    Every face of a box belongs to its shell, every wire to a face and every
+    edge to a wire. If 'free' counted a compound's references as bounding, or
+    counted the wrong level, a plain solid would come back full of loose
+    geometry and the check would fail every part there is.
+    """
+    topology = brep_inspect.topology(payload("solid.brep"))
+    assert topology.count("face") == 6
+    assert topology.free_count("face") == 0
+    assert topology.free_count("wire") == 0
+    assert topology.free_count("edge") == 0
+
+
+def test_a_bare_face_is_a_surface_that_bounds_nothing():
+    """What a script returning a sketch where a part was meant hands back."""
+    topology = brep_inspect.topology(payload("face.brep"))
+    assert topology.count("face") == 1
+    assert topology.free_count("face") == 1
+    assert topology.free_shells == 0, "a face is not a shell, and must not be counted as one"
+
+
+def test_a_shells_faces_are_owned_even_when_the_shell_is_not():
+    """An open shell is loose; the faces in it are not loose as well.
+
+    Reporting both would say a shell of six faces is seven problems, and the
+    'shell' branch of the check would then be unreachable for the reader.
+    """
+    topology = brep_inspect.topology(payload("shell_open.brep"))
+    assert topology.free_shells == 1
+    assert topology.free_count("face") == 0
+
+
+@pytest.mark.parametrize("name", sorted(FIXTURES))
+def test_no_fixture_reports_loose_geometry_it_does_not_have(name):
+    """Only the face fixture is loose 2D geometry; the rest are bodies or skins."""
+    topology = brep_inspect.topology(payload(name))
+    expected = 1 if name == "face.brep" else 0
+    assert topology.free_count("face") == expected
+
+
+def test_the_envelope_walker_reports_geometry_by_type():
+    """'envelope_free_geometry' is the shell walker generalised, same tree walk."""
+    envelope = {"name": "surface", "brep": payload("face.brep")}
+    free, unread = brep_inspect.envelope_free_geometry(envelope)
+    assert unread == 0
+    assert free["face"] == 1 and free["shell"] == 0
+    # The older reader still answers its own question, unchanged.
+    assert brep_inspect.envelope_free_shells(envelope) == (0, 0)
+
+
+def test_the_envelope_walker_descends_into_an_assembly():
+    """A surface anywhere in the tree is a surface in the shape."""
+    envelope = {"assembly": [{"name": "a", "brep": payload("solid.brep")}, {"name": "b", "brep": payload("face.brep")}]}
+    free, unread = brep_inspect.envelope_free_geometry(envelope)
+    assert unread == 0
+    assert free["face"] == 1

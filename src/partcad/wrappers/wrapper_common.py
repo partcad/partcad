@@ -253,6 +253,26 @@ def _shell_to_solid(shell):
         return None
 
 
+def holds_a_solid(shape) -> bool:
+    """Whether 'shape' is, or contains at any depth, a solid.
+
+    'TopExp_Explorer' walks the whole tree, so a solid nested inside compounds
+    inside a compound is found - which is the case worth asking about, since a
+    script is free to hand back a compound of compounds.
+
+    The question exists because "what is in this compound" decides whether it
+    is safe to explode: a compound that holds a solid is a body and its solids
+    are what a part wants, while one that holds none is a skin or a surface,
+    and exploding it loses what says so.
+    """
+    import OCP.TopAbs  # noqa: F401
+    import OCP.TopExp  # noqa: F401
+
+    if shape is None or shape.IsNull():
+        return False
+    return OCP.TopExp.TopExp_Explorer(shape, OCP.TopAbs.TopAbs_SOLID).More()
+
+
 def combine(shapes, kind):
     """Compound the script's result shapes and collect its components.
 

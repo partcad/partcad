@@ -88,9 +88,9 @@ class ShellTest(Test):
             self.debug(shape, "The shape did not build; that is the 'cad' test's to report")
             return self.TEST_PASSED
 
-        free_shells, unread = brep_inspect.envelope_free_shells(envelope)
+        free, unread = brep_inspect.envelope_free_geometry(envelope)
 
-        if free_shells:
+        if free["shell"]:
             return self.failed(
                 shape,
                 "The shape is a skin rather than a body: %d shell(s) that no "
@@ -99,7 +99,31 @@ class ShellTest(Test):
                 "solid in it - so interference, CAM, FEA and any mass computed "
                 "from it are wrong. A shell a script returns is closed into a "
                 "solid automatically, so either these faces enclose nothing or "
-                "they come from a file that states the part as a surface." % free_shells,
+                "they come from a file that states the part as a surface." % free["shell"],
+            )
+
+        # The same failure one dimension further down, and it reaches here the
+        # same way: a script that returned a face, or a compound holding one,
+        # rather than the body it was meant to build. Reported separately
+        # because the remedy differs - a shell that encloses nothing needs its
+        # gaps closed, while a bare face was never a body at all - and reported
+        # at all because the alternative is what used to happen: a part's
+        # compound takes no bare face (see wrapper_common.combine), so such a
+        # part arrived empty and 'degenerate' called it flat, which names a
+        # symptom rather than the cause.
+        loose = [(name, free[name]) for name in ("face", "wire", "edge") if free[name]]
+        if loose:
+            return self.failed(
+                shape,
+                "The shape is %s rather than a body: %s. A part is a volume; "
+                "this is geometry that bounds none, so it has no mass, no "
+                "interior, and nothing can be machined from or fitted against "
+                "it. Check what the script returned - a sketch, a section or a "
+                "surface where a solid was meant."
+                % (
+                    "a surface" if free["face"] else "a curve",
+                    ", ".join("%d loose %s(s)" % (count, name) for name, count in loose),
+                ),
             )
 
         if unread:

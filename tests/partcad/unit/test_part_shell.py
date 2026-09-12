@@ -68,6 +68,22 @@ SCRIPTS = {
 
             output = {"shape": bd.Box(10, 20, 30).shells()[0].wrapped}
     """,
+    "compound_closed_build123d.py": """
+        import build123d as bd
+
+        # The same closed shell inside a compound, which is what a script that
+        # groups whatever it produced hands back. The wrapper used to explode
+        # this into the shell's faces, and a part takes no bare face, so the
+        # part arrived with nothing in it.
+        show_object(bd.Compound(children=[bd.Box(10, 20, 30).shells()[0]]))
+    """,
+    "compound_face_build123d.py": """
+        import build123d as bd
+
+        # A compound of one face: a surface where a body was meant, and nothing
+        # solidify can do about it. It has to arrive and be reported.
+        show_object(bd.Compound(children=[bd.Box(10, 20, 30).faces()[0]]))
+    """,
 }
 
 CONFIG = """
@@ -91,6 +107,10 @@ parts:
       skip: true
   closed_part_type:
     type: ":shell_box"
+  compound_closed_build123d:
+    type: build123d
+  compound_face_build123d:
+    type: build123d
 """
 
 
@@ -178,3 +198,40 @@ def test_a_part_cannot_declare_its_way_out_of_the_check(context):
 
     assert brep_inspect.topology(envelope["brep"]).free_shells == 1
     assert asyncio.run(ShellTest().test([], context, part)) == ShellTest.TEST_FAILED
+
+
+# --- a compound is descended into, not exploded -------------------------------
+
+
+def test_a_compound_holding_a_closed_shell_becomes_the_solid_it_bounds(context):
+    """What used to arrive as an empty part is the body it meant.
+
+    'get_downcasted_shape' knows nothing about shells, so a compound holding
+    one and no solid came back as that shell's faces - which a part's compound
+    does not take. The wrapper now asks what is in the compound first and hands
+    this one over whole, so solidify gets to state it as a solid.
+    """
+    part, envelope = _envelope(context, "compound_closed_build123d")
+    assert envelope is not None, "the part built nothing at all"
+
+    topology = brep_inspect.topology(envelope["brep"])
+    assert topology is not None
+    assert topology.count("solid") == 1
+    assert topology.free_shells == 0
+    assert topology.free_count("face") == 0
+
+
+def test_a_compound_holding_a_bare_face_is_reported_as_a_surface(context):
+    """The half solidify cannot fix still has to arrive and be named.
+
+    A face bounds no volume, so there is nothing to convert it into. What the
+    change buys is that it reaches the core at all: before, the part was empty
+    and 'degenerate' called it flat, which is a symptom rather than the cause.
+    """
+    part, envelope = _envelope(context, "compound_face_build123d")
+    assert envelope is not None, "the surface did not reach the core"
+
+    free, unread = brep_inspect.envelope_free_geometry(envelope)
+    assert unread == 0
+    assert free["face"] >= 1
+    assert free["shell"] == 0

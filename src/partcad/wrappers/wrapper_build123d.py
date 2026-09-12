@@ -88,19 +88,33 @@ def process(path, request):
         if is_build123d(shape):
             shape = getattr(shape, shape._obj_name)  # convert to direct API
 
-        # TODO(clairbee): do we really want to explode compounds?
+        # TODO(clairbee): do we really want to explode compounds *of solids*?
         #
         # 'get_downcasted_shape' takes the first of solids/faces/wires/edges the
         # shape holds any of, and knows nothing about shells - so a compound
-        # holding a shell and no solid comes back as that shell's faces, which a
-        # part's compound does not take. Such a part is therefore empty, and it
-        # is the 'degenerate' check that says so rather than 'shell'. Handing the
-        # compound over whole would let wrapper_common.solidify() state the shell
-        # as a solid instead; what stops that being a one-line change is the
-        # question above, since it is the same call that explodes a compound of
-        # solids into its solids.
+        # holding a shell and no solid used to come back as that shell's faces,
+        # which a part's compound does not take (see wrapper_common.combine).
+        # Such a part arrived empty, and 'degenerate' called it flat: a symptom,
+        # named instead of the cause.
+        #
+        # So ask what is in there first. 'holds_a_solid' explores the whole tree,
+        # compounds inside compounds included, and the answer splits the two
+        # cases that were being run together:
+        #   - it holds a solid: a body, and its solids are what a part wants.
+        #     Exploded exactly as before, so the question above is still open
+        #     and nothing about the common case changes.
+        #   - it holds none: a skin or a surface, and the compound itself is the
+        #     evidence of that. Handed over whole, so wrapper_common.solidify()
+        #     gets its chance to state a closed shell as the solid it bounds,
+        #     and whatever it cannot convert reaches the core intact for
+        #     'brep_inspect' to find and the 'shell' check to report as a skin
+        #     or a surface rather than as an empty part.
+        # The only parts whose behaviour changes are the ones that were empty.
         if is_build123d_compound(shape):
-            converted.append(get_downcasted_shape(shape.wrapped))
+            if wrapper_common.holds_a_solid(shape.wrapped):
+                converted.append(get_downcasted_shape(shape.wrapped))
+            else:
+                converted.append(downcast(shape.wrapped))
 
         elif is_build123d_shell(shape):
             # The shell, not the faces it is made of. A closed one becomes the

@@ -302,3 +302,67 @@ def test_a_shell_is_not_something_a_boolean_can_be_taken_against():
     assert _volume(BRepAlgoAPI_Common(other, solid).Shape()) == pytest.approx(500.0)
     assert _volume(BRepAlgoAPI_Cut(other, solid).Shape()) == pytest.approx(500.0)
     assert _volume(BRepAlgoAPI_Fuse(other, solid).Shape()) == pytest.approx(1500.0)
+
+
+# --- what is actually inside a compound ---------------------------------------
+
+
+def test_a_compound_of_solids_is_a_body():
+    assert wrapper_common.holds_a_solid(_compound(_box())) is True
+
+
+def test_a_solid_on_its_own_is_a_body():
+    assert wrapper_common.holds_a_solid(_box()) is True
+
+
+def test_a_compound_of_a_shell_is_not_a_body():
+    """The case that decides whether the build123d wrapper may explode it."""
+    shell = _sub_shape(_box(), TopAbs_SHELL)
+    assert wrapper_common.holds_a_solid(_compound(shell)) is False
+
+
+def test_a_compound_of_a_face_is_not_a_body():
+    face = _sub_shape(_box(), TopAbs_FACE)
+    assert wrapper_common.holds_a_solid(_compound(face)) is False
+
+
+def test_the_search_goes_all_the_way_down():
+    """Compounds inside compounds: a script is free to nest them arbitrarily.
+
+    Asking only the immediate children would call the first of these a skin -
+    its one child is a compound, not a solid - and explode it, which is the bug
+    this replaces rather than a new spelling of it.
+    """
+    buried_solid = _compound(_compound(_compound(_box())))
+    assert wrapper_common.holds_a_solid(buried_solid) is True
+
+    shell = _sub_shape(_box(), TopAbs_SHELL)
+    buried_shell = _compound(_compound(_compound(shell)))
+    assert wrapper_common.holds_a_solid(buried_shell) is False
+
+
+def test_a_solid_buried_beside_a_shell_still_counts():
+    """One body anywhere in the tree makes it a body; the shell is solidify's."""
+    shell = _sub_shape(_box(), TopAbs_SHELL)
+    assert wrapper_common.holds_a_solid(_compound(_compound(shell), _compound(_box()))) is True
+
+
+def test_an_empty_compound_holds_no_solid():
+    assert wrapper_common.holds_a_solid(_compound()) is False
+
+
+def test_a_compound_of_a_closed_shell_survives_solidify_as_a_body():
+    """The end of the path the build123d wrapper now leaves open.
+
+    Handed over whole rather than exploded, a compound holding nothing but a
+    closed shell reaches solidify, which states it as the solid it bounds - so
+    what used to arrive as an empty part arrives as the body it meant.
+    """
+    shell = _sub_shape(_box(), TopAbs_SHELL)
+    compound = _compound(shell)
+    assert wrapper_common.holds_a_solid(compound) is False
+
+    result = wrapper_common.solidify(compound)
+    assert wrapper_common.holds_a_solid(result) is True
+    assert _topology(result).free_shells == 0
+    assert _volume(result) == pytest.approx(BOX[0] * BOX[1] * BOX[2])

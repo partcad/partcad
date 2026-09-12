@@ -103,28 +103,53 @@ _TSHAPES = b"TShapes "
 _REFERENCE = re.compile(rb"[+-]\d+")
 
 
+# What a record's sub-shape list names, one dimension down: a solid is bounded
+# by shells, a shell by faces, a face by wires, a wire by edges. Only the type
+# one dimension up counts as bounding, which is why 'Co' is deliberately absent
+# - a compound holding a bare face does not make that face part of a body, and
+# counting its references as bounding is exactly how a surface handed back as a
+# part would disappear from this.
+_BOUNDED_BY = {
+    b"So": "shell",
+    b"Sh": "face",
+    b"Fa": "wire",
+    b"Wi": "edge",
+}
+
+
 class Topology:
     """The shape types a BREP payload holds, and how many of each.
 
     'counts' is keyed by the names in SHAPE_TYPES, and holds only the types
     that occur. 'root' is the outermost shape's type -- what the payload *is*.
-    'free_shells' is the number of shells no solid bounds itself with; see the
-    module docstring for why that is the question worth asking.
+
+    'free' is the part worth asking about: for each of shell, face, wire and
+    edge, how many records of that type nothing one dimension up refers to. A
+    body's geometry is all bounded - its faces belong to a shell, its shell to
+    a solid - so a non-zero entry is geometry that is in the payload without
+    being part of a body: a skin, a surface, a bare curve. 'free_shells' is
+    kept as an attribute of its own because it is the question this module was
+    written for; see the module docstring.
     """
 
-    __slots__ = ("counts", "root", "free_shells")
+    __slots__ = ("counts", "root", "free_shells", "free")
 
-    def __init__(self, counts, root, free_shells):
+    def __init__(self, counts, root, free_shells, free=None):
         self.counts = counts
         self.root = root
         self.free_shells = free_shells
+        self.free = free if free is not None else {"shell": free_shells}
 
     def count(self, shape_type: str) -> int:
         """How many records of 'shape_type' the payload holds."""
         return self.counts.get(shape_type, 0)
 
+    def free_count(self, shape_type: str) -> int:
+        """How many records of 'shape_type' nothing one dimension up refers to."""
+        return self.free.get(shape_type, 0)
+
     def __repr__(self) -> str:
-        return "Topology(root=%r, free_shells=%r, counts=%r)" % (self.root, self.free_shells, self.counts)
+        return "Topology(root=%r, free=%r, counts=%r)" % (self.root, self.free, self.counts)
 
 
 def looks_like_brep(data: bytes) -> bool:
@@ -224,21 +249,23 @@ def topology(payload) -> Topology | None:
 
     counts: dict[str, int] = {}
     root = None
-    # The shells that bound a solid, by record index. A set rather than a
-    # count: two solids may be bounded by the same shell.
-    bounding: set[int] = set()
+    # The records something one dimension up refers to, by record index, per
+    # type. Sets rather than counts: two solids may be bounded by the same
+    # shell, and two faces may share an edge.
+    bounded: dict[str, set[int]] = {name: set() for name in _BOUNDED_BY.values()}
     try:
         for code, references in _records(data):
             root = SHAPE_TYPES[code]
             counts[root] = counts.get(root, 0) + 1
-            if code == b"So":
-                bounding.update(abs(int(token)) for token in _REFERENCE.findall(references))
+            child = _BOUNDED_BY.get(code)
+            if child is not None:
+                bounded[child].update(abs(int(token)) for token in _REFERENCE.findall(references))
     except ValueError:
         return None
 
     # 'root' is the last record: see the module docstring.
-    free_shells = max(counts.get("shell", 0) - len(bounding), 0)
-    return Topology(counts=counts, root=root, free_shells=free_shells)
+    free = {name: max(counts.get(name, 0) - len(indices), 0) for name, indices in bounded.items()}
+    return Topology(counts=counts, root=root, free_shells=free["shell"], free=free)
 
 
 def free_shells(payload) -> int | None:
@@ -247,19 +274,20 @@ def free_shells(payload) -> int | None:
     return None if result is None else result.free_shells
 
 
-def envelope_free_shells(envelope) -> tuple[int, int]:
-    """Walk a shape/assembly envelope: (free shells found, payloads not read).
+def envelope_free_geometry(envelope) -> tuple[dict[str, int], int]:
+    """Walk a shape/assembly envelope: (free geometry by type, payloads not read).
 
-    An assembly is a tree of envelopes (see shape_envelope), and a shell
-    anywhere in it is a shell in the shape. The second number is how many
-    payloads could not be read at all, which a caller has to keep separate from
-    the first: zero free shells out of nothing read says nothing.
+    An assembly is a tree of envelopes (see shape_envelope), and geometry that
+    belongs to no body anywhere in it is geometry that belongs to no body in
+    the shape. The second number is how many payloads could not be read at all,
+    which a caller has to keep separate from the first: nothing found out of
+    nothing read says nothing.
     """
-    found = 0
+    found = {name: 0 for name in _BOUNDED_BY.values()}
     unread = 0
 
     def walk(obj):
-        nonlocal found, unread
+        nonlocal unread
         if isinstance(obj, list):
             for item in obj:
                 walk(item)
@@ -271,11 +299,22 @@ def envelope_free_shells(envelope) -> tuple[int, int]:
             return
         if shape_envelope.KEY_BREP not in obj:
             return
-        count = free_shells(obj[shape_envelope.KEY_BREP])
-        if count is None:
+        result = topology(obj[shape_envelope.KEY_BREP])
+        if result is None:
             unread += 1
-        else:
-            found += count
+            return
+        for name in found:
+            found[name] += result.free_count(name)
 
     walk(envelope)
     return found, unread
+
+
+def envelope_free_shells(envelope) -> tuple[int, int]:
+    """Walk a shape/assembly envelope: (free shells found, payloads not read).
+
+    The shell half of 'envelope_free_geometry', which is the question this
+    module was written for.
+    """
+    found, unread = envelope_free_geometry(envelope)
+    return found["shell"], unread
