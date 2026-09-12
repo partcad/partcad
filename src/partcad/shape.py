@@ -26,7 +26,7 @@ from . import sandbox_versions, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from .shape_config import ShapeConfiguration
-from .sync_threads import threadpool_manager
+from .sync_threads import threadpool_manager  # noqa: F401  # kept for the module import; unused directly
 from .utils import total_size
 
 if TYPE_CHECKING:
@@ -236,9 +236,7 @@ class Shape(ShapeConfiguration):
         self.owns_cache_entry = True
 
         if self.cacheable:
-            cad_config = {
-                key: value for key, value in self.config.items() if key not in _NON_GEOMETRIC_CONFIG_KEYS
-            }
+            cad_config = {key: value for key, value in self.config.items() if key not in _NON_GEOMETRIC_CONFIG_KEYS}
             self.hash.add_dict(cad_config)
 
     def set_environment_cache_key(self, environment_cache_key: str) -> None:
@@ -280,7 +278,7 @@ class Shape(ShapeConfiguration):
 
         # Check for a match in other files associated with this shape
         if self.path and os.path.exists(self.path):
-            with open(self.path, errors='replace') as f:
+            with open(self.path, errors="replace") as f:
                 if keyword and keyword.lower() in f.read().lower():
                     return True
         return False
@@ -1234,9 +1232,7 @@ class Shape(ShapeConfiguration):
                 extra = {"output_files": [final_filepath]}
             else:
                 extra = {}
-            exitcode, response_serialized, errors = await runtime.run_async(
-                command, request_serialized, **extra
-            )
+            exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized, **extra)
             if exitcode != 0 and len(errors) == 0:
                 errors = "Failed to execute command '%s' with exit code %s" % (" ".join(command), exitcode)
             if errors:

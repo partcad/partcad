@@ -267,9 +267,7 @@ class ProjectExternalRepository(ProjectPlugin):
 
     async def _write_cache(self, scoped_key: str, value):
         try:
-            await self._cache.write_data_async(
-                self._cache_hash(scoped_key), {"data": json.dumps(value).encode()}
-            )
+            await self._cache.write_data_async(self._cache_hash(scoped_key), {"data": json.dumps(value).encode()})
         except Exception as e:
             pc_logging.debug("%s: cache write failed for '%s': %s" % (self.name, scoped_key, e))
 

@@ -1,15 +1,16 @@
-from flask import Flask, request, jsonify
-from flask_jsonrpc import JSONRPC
-import subprocess
 import base64
 import io
 import json
 import logging
-import shutil
-import tarfile
-import typing as t
-import tempfile
 import os
+import shutil
+import subprocess
+import tarfile
+import tempfile
+import typing as t
+
+from flask import Flask, jsonify
+from flask_jsonrpc import JSONRPC
 
 logging.basicConfig(level=logging.DEBUG)
 

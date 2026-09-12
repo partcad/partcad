@@ -13,8 +13,6 @@ enumeration loop at the first one (taking the objects declared after it with it)
 and raise a bare KeyError at anyone who then asked for one by name.
 """
 
-import os
-
 import pytest
 import yaml
 

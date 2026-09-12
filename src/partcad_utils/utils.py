@@ -146,7 +146,7 @@ def format_parameterized_name(base: str, parameters: dict) -> str:
 
 @telemetry.start_as_current_span("resolve_resource_path")
 def resolve_resource_path(current_project_name, pattern: str):
-    if not ":" in pattern:
+    if ":" not in pattern:
         pattern = ":" + pattern
     project_pattern, item_pattern = pattern.split(":")
     if project_pattern == "":

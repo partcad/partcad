@@ -5,7 +5,7 @@
 #
 
 import shutil
-from pathlib import Path
+from pathlib import Path  # noqa: F401
 
 from partcad.user_config import user_config
 
@@ -40,7 +40,7 @@ class AvailableDiskSpaceCheck(HealthCheckTest):
                 self.findings.append(
                     f"Insufficient disk space. Need at least {self.min_space} GB free in {path}. Currently, only {free // (1024 * 1024 * 1024)} GB is available."
                 )
-        except Exception as e:
+        except Exception:
             self.findings.append("Error checking disk space")
 
         return HealthCheckReport(self.name, self.findings)

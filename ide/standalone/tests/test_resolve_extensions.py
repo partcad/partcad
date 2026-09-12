@@ -8,8 +8,9 @@
 
 import pytest
 import resolve_extensions
-from conftest import COMPONENT_ROOT, REPO_ROOT
 from resolve_extensions import PolicyError, build_plan
+
+from conftest import COMPONENT_ROOT, REPO_ROOT
 
 
 def test_a_recommendation_is_installed_from_the_gallery_by_default():

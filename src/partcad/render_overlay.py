@@ -209,8 +209,7 @@ def report(shape, records: list, overlay: Overlay) -> None:
     )
     if not records:
         pc_logging.warning(
-            "%s:%s: nothing to draw for %s: this object declares no ports"
-            % (shape.project_name, shape.name, asked_for)
+            "%s:%s: nothing to draw for %s: this object declares no ports" % (shape.project_name, shape.name, asked_for)
         )
         return
 

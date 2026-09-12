@@ -199,7 +199,7 @@ class Project(project_config.Configuration):
     class MaterialLock(object):
         def __init__(self, prj, material_name: str):
             prj.material_locks_lock.acquire()
-            if not material_name in prj.material_locks:
+            if material_name not in prj.material_locks:
                 prj.material_locks[material_name] = threading.Lock()
             self.lock = prj.material_locks[material_name]
             prj.material_locks_lock.release()
@@ -213,7 +213,7 @@ class Project(project_config.Configuration):
     class InterfaceLock(object):
         def __init__(self, prj, interface_name: str):
             prj.interface_locks_lock.acquire()
-            if not interface_name in prj.interface_locks:
+            if interface_name not in prj.interface_locks:
                 prj.interface_locks[interface_name] = threading.Lock()
             self.lock = prj.interface_locks[interface_name]
             prj.interface_locks_lock.release()
@@ -227,7 +227,7 @@ class Project(project_config.Configuration):
     class SketchLock(object):
         def __init__(self, prj, sketch_name: str):
             prj.sketch_locks_lock.acquire()
-            if not sketch_name in prj.sketch_locks:
+            if sketch_name not in prj.sketch_locks:
                 prj.sketch_locks[sketch_name] = threading.Lock()
             self.lock = prj.sketch_locks[sketch_name]
             prj.sketch_locks_lock.release()
@@ -241,7 +241,7 @@ class Project(project_config.Configuration):
     class PartLock(object):
         def __init__(self, prj, part_name: str):
             prj.part_locks_lock.acquire()
-            if not part_name in prj.part_locks:
+            if part_name not in prj.part_locks:
                 prj.part_locks[part_name] = threading.Lock()
             self.lock = prj.part_locks[part_name]
             prj.part_locks_lock.release()
@@ -255,7 +255,7 @@ class Project(project_config.Configuration):
     class AssemblyLock(object):
         def __init__(self, prj, assembly_name: str):
             prj.assembly_locks_lock.acquire()
-            if not assembly_name in prj.assembly_locks:
+            if assembly_name not in prj.assembly_locks:
                 prj.assembly_locks[assembly_name] = threading.Lock()
             self.lock = prj.assembly_locks[assembly_name]
             prj.assembly_locks_lock.release()
@@ -269,7 +269,7 @@ class Project(project_config.Configuration):
     class SceneLock(object):
         def __init__(self, prj, scene_name: str):
             prj.scene_locks_lock.acquire()
-            if not scene_name in prj.scene_locks:
+            if scene_name not in prj.scene_locks:
                 prj.scene_locks[scene_name] = threading.Lock()
             self.lock = prj.scene_locks[scene_name]
             prj.scene_locks_lock.release()
@@ -283,7 +283,7 @@ class Project(project_config.Configuration):
     class ProviderLock(object):
         def __init__(self, prj, provider_name: str):
             prj.provider_locks_lock.acquire()
-            if not provider_name in prj.provider_locks:
+            if provider_name not in prj.provider_locks:
                 prj.provider_locks[provider_name] = threading.Lock()
             self.lock = prj.provider_locks[provider_name]
             prj.provider_locks_lock.release()
@@ -297,7 +297,7 @@ class Project(project_config.Configuration):
     class RepositoryLock(object):
         def __init__(self, prj, repository_name: str):
             prj.repository_locks_lock.acquire()
-            if not repository_name in prj.repository_locks:
+            if repository_name not in prj.repository_locks:
                 prj.repository_locks[repository_name] = threading.Lock()
             self.lock = prj.repository_locks[repository_name]
             prj.repository_locks_lock.release()
@@ -441,7 +441,7 @@ class Project(project_config.Configuration):
 
         if (
             "desc" in self.config_obj
-            and not self.config_obj["desc"] is None
+            and self.config_obj["desc"] is not None
             and isinstance(self.config_obj["desc"], str)
         ):
             self.desc = self.config_obj["desc"].strip()
@@ -772,7 +772,7 @@ class Project(project_config.Configuration):
     def init_mates(self):
         mates = self.config_obj.get("mates", {})
         for source_interface_name, mate_config in mates.items():
-            if not ":" in source_interface_name:
+            if ":" not in source_interface_name:
                 source_interface_name = self.name + ":" + source_interface_name
             source_package_name, short_source_interface_name = self.resolve(source_interface_name)
 
@@ -888,7 +888,7 @@ class Project(project_config.Configuration):
                 return self.interfaces[interface_name]
 
             # This is just a regular interface name, no params (interface_name == result_name)
-            if not interface_name in self.interface_configs:
+            if interface_name not in self.interface_configs:
                 # We don't know anything about such a interface
                 pc_logging.error(
                     "Interface '%s' not found in '%s'",
@@ -964,7 +964,7 @@ class Project(project_config.Configuration):
         return self.object_config("partType", part_type_name)
 
     def get_object_config(self, object_name, configs: dict[str, dict[str, typing.Any]]):
-        if not object_name in configs:
+        if object_name not in configs:
             return None
         return configs[object_name]
 
@@ -1724,7 +1724,7 @@ class Project(project_config.Configuration):
 
             # Fill in the parameter values
             param_name: str
-            if "parameters" in config and not config["parameters"] is None:
+            if "parameters" in config and config["parameters"] is not None:
                 # Filling "parameters"
                 for param_name, param_value in params.items():
                     if config["parameters"][param_name]["type"] == "string":
@@ -1757,7 +1757,7 @@ class Project(project_config.Configuration):
                         config["parameters"][param_name]["default"] = param_value
             else:
                 # Filling "with"
-                if not "with" in config:
+                if "with" not in config:
                     config["with"] = {}
                 for param_name, param_value in params.items():
                     config["with"][param_name] = param_value
@@ -2613,7 +2613,7 @@ class Project(project_config.Configuration):
             lines += [usage]
             lines += [""]
 
-        if self.config_obj.get("dependencies", None) is not None and not "packages" in exclude:
+        if self.config_obj.get("dependencies", None) is not None and "packages" not in exclude:
             dependencies = copy.copy(self.config_obj["dependencies"])
             child_packages = self.get_child_project_names(absolute=False)
             display_dependencies = []
@@ -2725,7 +2725,7 @@ class Project(project_config.Configuration):
                 parameters += "</ul>\n"
                 columns += [parameters]
 
-            if not "images" in config and "desc" in config and "INSERT_IMAGE_HERE" in config["desc"]:
+            if "images" not in config and "desc" in config and "INSERT_IMAGE_HERE" in config["desc"]:
                 config["images"] = list(
                     re.findall(
                         r"INSERT_IMAGE_HERE\(([^)]*)\)",
@@ -2754,8 +2754,8 @@ class Project(project_config.Configuration):
 
             if hasattr(shape, "interfaces"):
                 interfaces = "Interfaces:<br/>"
-                for interface in shape.interfaces:
-                    interfaces += "- %s<br/>" % interface.name
+                for iface in shape.interfaces:
+                    interfaces += "- %s<br/>" % iface.name
                 columns += [interfaces]
 
             lines = ["### %s" % display_name]
@@ -2768,7 +2768,7 @@ class Project(project_config.Configuration):
             lines += [""]
             return lines
 
-        if self.assemblies and not "assemblies" in exclude:
+        if self.assemblies and "assemblies" not in exclude:
             lines += ["## Assemblies"]
             lines += [""]
             shape_names = sorted(self.assemblies.keys())
@@ -2782,7 +2782,7 @@ class Project(project_config.Configuration):
                     display_name = name
                 lines += add_section(name, display_name, shape, render_cfg)
 
-        if self.parts and not "parts" in exclude:
+        if self.parts and "parts" not in exclude:
             # Built first, and the heading only emitted if anything came of it:
             # 'add_section' skips a part with no rendered image, and a package
             # where that is true of every part would otherwise get a "## Parts"
@@ -2802,7 +2802,7 @@ class Project(project_config.Configuration):
                 lines += ["## Parts", ""]
                 lines += part_lines
 
-        if self.interfaces and not "interfaces" in exclude:
+        if self.interfaces and "interfaces" not in exclude:
             lines += ["## Interfaces"]
             lines += [""]
             shape_names = sorted(self.interfaces.keys())
@@ -2810,7 +2810,7 @@ class Project(project_config.Configuration):
                 shape = self.interfaces[name]
                 lines += add_section(name, name, shape, render_cfg)
 
-        if self.sketches and not "sketches" in exclude:
+        if self.sketches and "sketches" not in exclude:
             lines += ["## Sketches"]
             lines += [""]
             shape_names = sorted(self.sketches.keys())

@@ -1,5 +1,5 @@
 import shutil
-import time
+import time  # noqa: F401
 from pathlib import Path
 from typing import Optional
 

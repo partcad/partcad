@@ -59,8 +59,7 @@ class PartFactoryBrep(PartFactoryFile):
             response = shape_envelope.deserialize(response_serialized)
             if not response.get("success", False):
                 message = response.get("exception") or (
-                    "the BREP wrapper reported failure without a message for '%s:%s'"
-                    % (part.project_name, part.name)
+                    "the BREP wrapper reported failure without a message for '%s:%s'" % (part.project_name, part.name)
                 )
                 pc_logging.error(message)
                 raise PartFactoryError(message)

@@ -8,8 +8,8 @@
 #
 
 import hashlib
-import os
-import struct
+import os  # noqa: F401
+import struct  # noqa: F401
 
 from . import logging as pc_logging
 

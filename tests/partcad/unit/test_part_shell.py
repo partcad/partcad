@@ -27,14 +27,13 @@ import sys
 import textwrap
 
 import pytest
+from OCP.BRepGProp import BRepGProp
+from OCP.GProp import GProp_GProps
+from OCP.TopAbs import TopAbs_SOLID
 
 import partcad as pc
 from partcad import brep_inspect
 from partcad.test.shell import ShellTest
-
-from OCP.BRepGProp import BRepGProp
-from OCP.GProp import GProp_GProps
-from OCP.TopAbs import TopAbs_SOLID
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 import ocp_serialize  # noqa: E402

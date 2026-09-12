@@ -13,7 +13,7 @@ import sys
 import threading
 import time
 from logging.handlers import QueueHandler, QueueListener
-from typing import Any
+from typing import Any  # noqa: F401
 
 from .logging import error, ops
 
@@ -111,7 +111,7 @@ class AnsiTerminalProgressHandler(logging.Handler):
     def __init__(self, stream=sys.stdout) -> None:
         super().__init__()
         self.thread_lock = threading.Lock()
-        if not stream is None:
+        if stream is not None:
             self.stream = stream
         else:
             self.stream = sys.stdout
@@ -133,7 +133,7 @@ class AnsiTerminalProgressHandler(logging.Handler):
         return "\u001b[1A\u001b[2K" * self.footer_size
 
     def run_thread(self):
-        while not self.process is None:
+        while self.process is not None:
             time.sleep(0.25)
             if time.time() - self.last_output > 0.5:
                 self.emit(None)
@@ -147,7 +147,7 @@ class AnsiTerminalProgressHandler(logging.Handler):
         # protect the status data store in 'self' from other threads
         self.thread_lock.acquire()
 
-        if not record is None:
+        if record is not None:
             ignore_message = False
             if hasattr(record, "pc_event"):
                 if record.pc_event == "process_start":
@@ -158,7 +158,7 @@ class AnsiTerminalProgressHandler(logging.Handler):
                     self.process_start = time.time()
                     self.actions_total = 0
 
-                    if not self.thread is None:
+                    if self.thread is not None:
                         self.thread_lock.release()
                         raise Exception("nested processes")
                     self.thread = threading.Thread(
@@ -215,7 +215,7 @@ class AnsiTerminalProgressHandler(logging.Handler):
 
         output += self.clear_footer()
 
-        if not record is None:
+        if record is not None:
             if not ignore_message:
                 if record.levelno == logging.DEBUG:
                     output += COLOR_DEBUG + "DEBUG:" + COLOR_NONE + " "
@@ -231,7 +231,7 @@ class AnsiTerminalProgressHandler(logging.Handler):
                 msg = self.format(record)
                 output += "%s\n" % msg
 
-        if not self.process is None:
+        if self.process is not None:
             seconds = int(now - self.process_start)
 
             output += NO_WRAP
@@ -313,7 +313,6 @@ def init(stream=None):
     global listener
     global queue_handler
     global log_queue
-    global ops
 
     if log_queue is None:
         log_queue = queue.Queue(-1)

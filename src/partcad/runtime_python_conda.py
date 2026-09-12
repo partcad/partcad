@@ -217,7 +217,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     if stderr is not None and stderr.strip() != "":
                         pc_logging.warning("conda venv check error: %s" % stderr)
                     else:
-                        pc_logging.warning(f"conda venv check error")
+                        pc_logging.warning("conda venv check error")
                     self.conda_initialized = False
                 elif stdout is None or stdout.strip() == "":
                     pc_logging.warning("conda venv check warning: empty version")

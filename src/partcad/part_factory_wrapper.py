@@ -31,9 +31,7 @@ class PartFactoryWrapper(PartFactory):
 
             # 'type' is '<package>:<partType>' by the time we get here.
             self.part_type_ref = config["type"]
-            self.part_type_package, self.part_type_name = resolve_resource_path(
-                target_project.name, self.part_type_ref
-            )
+            self.part_type_package, self.part_type_name = resolve_resource_path(target_project.name, self.part_type_ref)
 
             python_version = self.project.python_version or sandbox_versions.DEFAULT_PYTHON_VERSION
             self.runtime = self.ctx.get_python_runtime(python_version, image=self.project.docker_image_declared)
@@ -99,9 +97,7 @@ class PartFactoryWrapper(PartFactory):
 
             pt_config = pt_project.get_part_type_config(self.part_type_name)
             if pt_config is None:
-                part.error(
-                    "partType '%s' not found in '%s'" % (self.part_type_name, self.part_type_package)
-                )
+                part.error("partType '%s' not found in '%s'" % (self.part_type_name, self.part_type_package))
                 return None
 
             kind = pt_config.get("kind", "wrapper")

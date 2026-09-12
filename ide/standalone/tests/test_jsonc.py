@@ -8,9 +8,9 @@
 
 import json
 
+import jsonc
 import pytest
 
-import jsonc
 from conftest import REPO_ROOT
 
 

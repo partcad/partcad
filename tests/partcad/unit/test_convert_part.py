@@ -196,7 +196,7 @@ def test_convert_with_dry_run(tmp_path: Path):
 
     convert_part_action(project, part_name, "step", output_dir=str(output_dir), dry_run=True)
 
-    expected_files = list(output_dir.glob(f"*.step"))
+    expected_files = list(output_dir.glob("*.step"))
     assert not expected_files, "Dry-run mode should not create files."
 
     pc_logging.info("Dry-run conversion verified successfully.")

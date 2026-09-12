@@ -8,6 +8,8 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import pytest
+
 import partcad as pc
 
 
@@ -24,11 +26,10 @@ def test_project_config_version_1():
 
 def test_project_config_version_2():
     """Negative test case for PartCAD version requirement in the package config file"""
-    try:
-        ctx = pc.Context("tests/partcad/unit/data/project_config_invalid_1.yaml")
-        assert False, "Invalid configuration file did not cause an exception"
-    except:
-        _ignore = True
+    # A bare `except:` here used to swallow the `assert False` it was paired
+    # with, so this test passed whether or not the invalid config raised.
+    with pytest.raises(Exception):
+        pc.Context("tests/partcad/unit/data/project_config_invalid_1.yaml")
 
 
 def test_project_config_template():
@@ -45,7 +46,7 @@ def test_project_config_template():
     # In this test case, the template is used to name the part the same name as
     # the package is called.
     part = ctx._get_part("//that://that")
-    assert not part is None
+    assert part is not None
 
 
 def test_project_config_template_override():
@@ -67,4 +68,4 @@ def test_project_config_template_override():
     # The part is named by a variable pulled in from the Jinja include, not by
     # the package name.
     part = ctx._get_part("//that_include:defined")
-    assert not part is None
+    assert part is not None

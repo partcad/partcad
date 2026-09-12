@@ -16,7 +16,7 @@ def test_package_test_recursive_1():
     ctx = pc.Context("examples")
     examples = ctx.get_project(pc.ROOT)
     assert examples is not None
-    assert examples.test(ctx) == True
+    assert examples.test(ctx) is True
 
 
 def test_package_test_async():
@@ -24,4 +24,4 @@ def test_package_test_async():
     ctx = pc.Context("examples/provider_manufacturer")
     manufacturer = ctx.get_project(".")
     assert manufacturer is not None
-    assert manufacturer.test_log_wrapper(ctx) == True
+    assert manufacturer.test_log_wrapper(ctx) is True

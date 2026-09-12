@@ -100,7 +100,7 @@ class PythonLinting(Linting):
             stdout, _ = await p.communicate()
             stdout = decode_output(stdout)
 
-            if stdout and 'passed' not in stdout:
+            if stdout and "passed" not in stdout:
                 for item in json.loads(stdout):
                     location = item.get("location", {})
                     linting_report.add(

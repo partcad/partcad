@@ -65,9 +65,7 @@ def test_assembly_cache_value_is_a_nested_tree():
 
     def has_sub(t):
         return any(
-            ocp_serialize.is_assembly_object(c) or has_sub(c)
-            for c in t.get("assembly", [])
-            if isinstance(c, dict)
+            ocp_serialize.is_assembly_object(c) or has_sub(c) for c in t.get("assembly", []) if isinstance(c, dict)
         )
 
     assert has_sub(tree), "logo_embedded must keep its sub-assemblies nested"
@@ -124,6 +122,6 @@ def test_assembly_tree_round_trips_to_the_same_geometry():
     # way, so Bnd_Box's own gap cancels out.
     rebuilt_bbox = _bbox(rebuilt)
     original_bbox = _bbox(original)
-    assert all(abs(a - b) < 1e-6 for a, b in zip(rebuilt_bbox, original_bbox, strict=True)), (
-        "the assembly does not occupy the same space: %r vs %r" % (rebuilt_bbox, original_bbox)
-    )
+    assert all(
+        abs(a - b) < 1e-6 for a, b in zip(rebuilt_bbox, original_bbox, strict=True)
+    ), "the assembly does not occupy the same space: %r vs %r" % (rebuilt_bbox, original_bbox)

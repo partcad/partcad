@@ -943,11 +943,11 @@ async def _lint_async(ctx, pc, packages, filter_prefix):
     tasks = []
     lint_checks = get_linting_checks(pc.user_config.threads_max)
     if filter_prefix:
-        lint_checks = list(filter(lambda l: l.name.startswith(filter_prefix), lint_checks))
+        lint_checks = list(filter(lambda check: check.name.startswith(filter_prefix), lint_checks))
 
     for package in packages:
         prj = ctx.get_project(package)
-        tasks.extend([l.lint_log_wrapper(ctx, prj, t) for l in lint_checks for t in l.get_targets(ctx, prj)])
+        tasks.extend([c.lint_log_wrapper(ctx, prj, t) for c in lint_checks for t in c.get_targets(ctx, prj)])
     await asyncio.gather(*tasks)
 
 
