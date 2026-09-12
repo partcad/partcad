@@ -200,6 +200,14 @@ isort --check src/partcad tests/partcad
   sandbox, and do not turn the scanner into a BREP reader: everything between a record's type code and the line
   its sub-shape list ends on is geometry, and is skipped unread.
 
+  **No object can exclude itself from this check, nor from `degenerate` or `solidity`, and none of the three
+  may be given a setting that lets it.** All three report a fact about the geometry — a surface where a body
+  was meant, a part that collapsed in one direction, a solid that is inside out — and a part in that state is
+  one nothing downstream can compute with, whatever it was meant to be. A check an object can turn off is a
+  check that reports on the objects that did not need checking. A *kind* of object that is exempt is exempt on
+  what it is and decided here: a sketch is not measured for having size in every direction, and an assembly is
+  checked through its parts. What to do about a part that fails is a decision to take on that part.
+
 - **One shape, one lock** (`Shape.locked()`): a shape is held still both while it is instantiated and while
   any file derived from it is produced. They are one question because the output path is derived from the
   shape -- `<part>.<format>` beside the package -- so two concurrent runs over one shape resolve to one path

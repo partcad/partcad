@@ -12,36 +12,6 @@
       },
       "additionalProperties": false
     },
-    "geometry-check": {
-      "type": "object",
-      "description": "What one of the geometry checks 'pc test' runs is told about this object. 'skip: true' turns the check off for it, which is how an object says it is deliberately what the check reports - a part built as a void for 'solidity', a surface rather than a body for 'shell'",
-      "properties": {
-        "skip": {
-          "type": "boolean",
-          "default": false,
-          "description": "Do not run this check on this object"
-        }
-      },
-      "additionalProperties": false
-    },
-    "geometry-check-degenerate": {
-      "type": "object",
-      "description": "What the 'degenerate' check is told about this object: whether to run at all, and how thin counts as flat. A genuinely flat object - a shim, a decal - says 'skip: true'",
-      "properties": {
-        "skip": {
-          "type": "boolean",
-          "default": false,
-          "description": "Do not run this check on this object"
-        },
-        "tolerance": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "default": 0.001,
-          "description": "How thin, in millimetres, this object may be in one direction before it counts as flat"
-        }
-      },
-      "additionalProperties": false
-    },
     "cae-analysis": {
       "type": "object",
       "description": "The boundary conditions one analysis is run under. 'fix:' names what is held still, 'load:' what is pulled on; both name interface types this object implements, and 'load' values are a force (or a mass, which is the default reading of a bare number - in kilograms)",
@@ -756,9 +726,6 @@
                 "cae": { "$ref": "#/definitions/output-section" },
                 "fea": { "$ref": "#/definitions/cae-analysis" },
                 "cfd": { "$ref": "#/definitions/cae-analysis" },
-                "degenerate": { "$ref": "#/definitions/geometry-check-degenerate" },
-                "shell": { "$ref": "#/definitions/geometry-check" },
-                "solidity": { "$ref": "#/definitions/geometry-check" },
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
@@ -822,7 +789,7 @@
             },
             {
               "type": "object",
-              "description": "A part built by a package-defined partType (its 'type' references a partType). partType-specific properties are allowed -- a wrapper script reads configuration keys of its own invention, so this branch cannot close. The geometry checks below are named anyway: they are PartCAD's keys rather than the partType's, and a 'shell: skip: \"false\"' that nothing validates reads as true and turns the check off in silence.",
+              "description": "A part built by a package-defined partType (its 'type' references a partType). partType-specific properties are allowed.",
               "properties": {
                 "type": {
                   "type": "string",
@@ -836,10 +803,7 @@
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
-                "unless": { "$ref": "#/definitions/unless" },
-                "degenerate": { "$ref": "#/definitions/geometry-check-degenerate" },
-                "shell": { "$ref": "#/definitions/geometry-check" },
-                "solidity": { "$ref": "#/definitions/geometry-check" }
+                "unless": { "$ref": "#/definitions/unless" }
               },
               "required": ["type"],
               "additionalProperties": true

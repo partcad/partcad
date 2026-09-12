@@ -195,55 +195,6 @@ def test_schema_every_registered_part_type_is_accepted():
         validate({"parts": {"widget": {"type": part_type}}})
 
 
-# The geometry checks 'pc test' runs take a section on the part they check, and
-# that section is how a part says it is deliberately what the check reports. An
-# option the checks read and the schema rejects is an option nobody can use.
-
-
-@pytest.mark.parametrize("check", ["degenerate", "shell", "solidity"])
-def test_schema_a_geometry_check_can_be_turned_off_on_a_part(check):
-    """'pc test' reads '<check>: skip: true'; 'pc lint' used to reject all three."""
-    validate({"parts": {"widget": {"type": "cadquery", check: {"skip": True}}}})
-
-
-def test_schema_only_degenerate_takes_a_tolerance():
-    """It is the one check with a threshold; the others have nothing to tune."""
-    validate({"parts": {"widget": {"type": "cadquery", "degenerate": {"tolerance": 0.01}}}})
-    for check in ("shell", "solidity"):
-        errors = failures({"parts": {"widget": {"type": "cadquery", check: {"tolerance": 0.01}}}})
-        assert any("tolerance" in error.message for error in errors)
-
-
-@pytest.mark.parametrize("check", ["degenerate", "shell", "solidity"])
-def test_schema_a_geometry_check_rejects_what_it_does_not_read(check):
-    """A misspelled option is silently ignored at runtime, so it is caught here."""
-    errors = failures({"parts": {"widget": {"type": "cadquery", check: {"skipp": True}}}})
-    assert any("skipp" in error.message for error in errors)
-    errors = failures({"parts": {"widget": {"type": "cadquery", check: {"skip": "yes"}}}})
-    assert any("boolean" in error.message for error in errors)
-
-
-@pytest.mark.parametrize("check", ["degenerate", "shell", "solidity"])
-def test_schema_a_geometry_check_is_validated_on_a_partType_backed_part_too(check):
-    """That branch takes any key, and these three still have to be the right shape.
-
-    A part whose 'type' names a partType is matched by a branch that allows
-    undeclared properties, because the wrapper script reads configuration keys of
-    its own invention. The geometry checks are not among those: they are
-    PartCAD's, and a 'skip' that is the string "false" reads as true and turns
-    the check off in silence.
-    """
-    validate({"parts": {"widget": {"type": ":box", check: {"skip": True}}}})
-
-    errors = failures({"parts": {"widget": {"type": ":box", check: {"skip": "false"}}}})
-    assert any("boolean" in error.message for error in errors)
-
-
-def test_schema_a_partTypes_own_keys_are_still_allowed():
-    """The branch must not close: ':ldraw' identifies its part with 'dat'."""
-    validate({"parts": {"widget": {"type": ":ldraw", "dat": "3001.dat", "shell": {"skip": True}}}})
-
-
 # The package walk: which check claims which file, and what it reports.
 
 

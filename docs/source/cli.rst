@@ -254,20 +254,11 @@ Object commands
   rather than noticed, and none of them needs a solver. ``shell`` needs nothing at all: its answer is read
   straight out of the geometry the object has already produced, so it is asked of every part.
 
-  Where an object is deliberately what one of them reports -- a shim that is flat, a wrap that is a surface,
-  a part built as a void -- it says so, and the check passes it over:
-
-  .. code-block:: yaml
-
-    parts:
-      canopy:
-        type: build123d
-        shell:
-          skip: true
-      shim:
-        type: cadquery
-        degenerate:
-          skip: true      # or: tolerance: 0.05, to allow a thinner part
+  None of the three can be turned off on an object. A part that is a surface, or has collapsed in one
+  direction, or is inside out, is a part nothing downstream can compute with -- whatever it was meant to be --
+  and a check an object can exclude itself from is a check that reports on the objects that did not need
+  checking. A kind of object that is exempt is exempt on what it *is*: a sketch is not measured for having
+  size in every direction, and an assembly is checked through its parts.
 
   The manufacturability test asks for exactly what ``pc supply`` would order. An assembly that is sold
   assembled (see :ref:`procurement`) passes once a supplier carries it, and is not taken apart: the parts

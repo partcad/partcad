@@ -83,8 +83,8 @@ parts:
     type: cadquery
   open_build123d:
     type: build123d
-  # The same shape, declared as deliberately a surface.
-  open_but_intended:
+  # The same shape, with a section that is not an option PartCAD has.
+  open_declares_a_skip:
     type: build123d
     path: open_build123d.py
     shell:
@@ -167,14 +167,14 @@ def test_a_shell_that_does_not_close_stays_a_shell_and_is_reported(context):
     assert asyncio.run(ShellTest().test([], context, part)) == ShellTest.TEST_FAILED
 
 
-def test_a_part_that_is_meant_to_be_a_surface_says_so(context):
-    """The same shape, declared with the check turned off.
+def test_a_part_cannot_declare_its_way_out_of_the_check(context):
+    """A 'shell: skip' in the declaration changes nothing; it is not an option.
 
-    Through the declaration rather than by setting the flag on the object, so
-    that what is tested is the option a package actually writes - the one the
-    configuration schema has to accept.
+    'pc lint' rejects the section outright (there is no such key in the schema),
+    and the check would fail the part anyway - which is what this asserts,
+    through the real configuration rather than by setting a flag on the object.
     """
-    part, envelope = _envelope(context, "open_but_intended")
+    part, envelope = _envelope(context, "open_declares_a_skip")
 
     assert brep_inspect.topology(envelope["brep"]).free_shells == 1
-    assert asyncio.run(ShellTest().test([], context, part)) == ShellTest.TEST_PASSED
+    assert asyncio.run(ShellTest().test([], context, part)) == ShellTest.TEST_FAILED

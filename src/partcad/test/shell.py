@@ -47,30 +47,17 @@ class ShellTest(Test):
     boundary. What is reported is a shell no solid owns: the shape itself, or one
     inside the compound it is.
 
-    A part that is genuinely a surface - a sheet, a decal, a wrap, a scanned
-    surface nobody has closed - says so:
-
-        parts:
-          canopy:
-            shell:
-              skip: true
+    There is no way for a part to turn this off. A part that is a surface is not
+    a part somebody can compute with, whatever it was meant to be, and a check an
+    object can exclude itself from is a check that reports on the objects that
+    did not need checking. The verdict is a fact about the geometry; what to do
+    about a part that fails is a decision to take on the part.
     """
 
     def __init__(self) -> None:
         super().__init__("shell")
 
-    def cache_key_suffix(self, ctx, shape) -> str:
-        # Whatever decides the verdict has to be in the key, or turning a
-        # setting off hands back the answer from before it was turned off.
-        config = (shape.config or {}).get("shell") or {}
-        return ",skip=%s" % bool(config.get("skip", False))
-
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
-        config = (shape.config or {}).get("shell") or {}
-        if config.get("skip", False):
-            self.debug(shape, "Skipped by configuration")
-            return self.TEST_PASSED
-
         # A sketch is made of edges, wires and faces, and a shell is not one of
         # the things it can be: the sketch factories keep the faces out of a
         # shell rather than the shell (see wrapper_common.combine). Failing one
@@ -112,8 +99,7 @@ class ShellTest(Test):
                 "solid in it - so interference, CAM, FEA and any mass computed "
                 "from it are wrong. A shell a script returns is closed into a "
                 "solid automatically, so either these faces enclose nothing or "
-                "they come from a file that states the part as a surface. Say "
-                "'shell: skip: true' on the part if that is what it is." % free_shells,
+                "they come from a file that states the part as a surface." % free_shells,
             )
 
         if unread:

@@ -230,17 +230,19 @@ def test_the_check_passes_a_solid_and_fails_a_free_shell():
     assert verdict(_Shape(envelope("compound_two_solids.brep"))) == ShellTest.TEST_PASSED
 
 
-def test_a_part_that_is_meant_to_be_a_surface_says_so():
+def test_a_part_cannot_exclude_itself():
+    """There is no setting for this, and a part that invents one is still checked.
+
+    A shell is a fact about the geometry. A check an object can turn off is a
+    check that reports on the objects that did not need checking.
+    """
     shape = _Shape(envelope("shell_open.brep"), config={"shell": {"skip": True}})
-    assert verdict(shape) == ShellTest.TEST_PASSED
+    assert verdict(shape) == ShellTest.TEST_FAILED
 
-
-def test_the_skip_setting_reaches_the_cache_key():
-    """Or turning it off hands back the answer from before it was turned off."""
+    # ...and nothing a package writes moves the key the verdict is stored under.
     test = ShellTest()
-    plain = test.cache_key_suffix(None, _Shape(None))
-    skipped = test.cache_key_suffix(None, _Shape(None, config={"shell": {"skip": True}}))
-    assert plain != skipped
+    assert test.cache_key_suffix(None, _Shape(None)) == ""
+    assert test.cache_key_suffix(None, _Shape(None, config={"shell": {"skip": True}})) == ""
 
 
 def test_a_shape_that_did_not_build_is_the_cad_checks_to_report():
