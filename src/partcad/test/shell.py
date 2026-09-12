@@ -88,7 +88,7 @@ class ShellTest(Test):
             self.debug(shape, "The shape did not build; that is the 'cad' test's to report")
             return self.TEST_PASSED
 
-        free, unread = brep_inspect.envelope_free_geometry(envelope)
+        free, totals, unread = brep_inspect.envelope_free_geometry(envelope)
 
         if free["shell"]:
             return self.failed(
@@ -111,20 +111,36 @@ class ShellTest(Test):
         # compound takes no bare face (see wrapper_common.combine), so such a
         # part arrived empty and 'degenerate' called it flat, which names a
         # symptom rather than the cause.
+        #
+        # Only when there is no solid at all, though. Loose faces *beside* a
+        # body are not the same thing as loose faces *instead of* one, and the
+        # distinction is not academic: every cq_warehouse fastener in '//pub' is
+        # a solid that also carries three or four dozen faces belonging to
+        # nothing, and failing those as "a surface rather than a body" would be
+        # saying something false about a part that is plainly a body. What that
+        # geometry is - construction leftovers, a thread that was never fused -
+        # is worth knowing and is said at debug level, but it is not this
+        # check's to fail.
         loose = [(name, free[name]) for name in ("face", "wire", "edge") if free[name]]
         if loose:
-            return self.failed(
-                shape,
-                "The shape is %s rather than a body: %s. A part is a volume; "
-                "this is geometry that bounds none, so it has no mass, no "
-                "interior, and nothing can be machined from or fitted against "
-                "it. Check what the script returned - a sketch, a section or a "
-                "surface where a solid was meant."
-                % (
-                    "a surface" if free["face"] else "a curve",
-                    ", ".join("%d loose %s(s)" % (count, name) for name, count in loose),
-                ),
-            )
+            described = ", ".join("%d loose %s(s)" % (count, name) for name, count in loose)
+            if totals.get("solid"):
+                self.debug(
+                    shape,
+                    "A body, and %s alongside it: geometry that bounds nothing "
+                    "and that nothing downstream reads. Not a failure - the "
+                    "part is a solid - but it is dead weight in the payload." % described,
+                )
+            else:
+                return self.failed(
+                    shape,
+                    "The shape is %s rather than a body: %s, and no solid at "
+                    "all. A part is a volume; this is geometry that bounds "
+                    "none, so it has no mass, no interior, and nothing can be "
+                    "machined from or fitted against it. Check what the script "
+                    "returned - a sketch, a section or a surface where a solid "
+                    "was meant." % ("a surface" if free["face"] else "a curve", described),
+                )
 
         if unread:
             # Nothing was read, so nothing is known: neither a pass to remember

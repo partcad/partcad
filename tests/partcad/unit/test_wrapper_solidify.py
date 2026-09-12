@@ -366,3 +366,66 @@ def test_a_compound_of_a_closed_shell_survives_solidify_as_a_body():
     assert wrapper_common.holds_a_solid(result) is True
     assert _topology(result).free_shells == 0
     assert _volume(result) == pytest.approx(BOX[0] * BOX[1] * BOX[2])
+
+
+# --- loose geometry beside a body is not a body's absence ----------------------
+
+
+class _StubShape:
+    """The little 'ShellTest' needs: a name, a config, and an envelope."""
+
+    def __init__(self, envelope):
+        self.config = {}
+        self.project_name = "pkg"
+        self.name = "thing"
+        self._envelope = envelope
+
+    async def get_wrapped(self, ctx):
+        return self._envelope
+
+
+def _solid_beside_a_loose_face():
+    """A body, plus a face that belongs to nothing - what a real part looks like.
+
+    Found in '//pub': every cq_warehouse fastener is exactly this shape, one
+    solid carrying three or four dozen faces that no shell encloses.
+    """
+    box = _box()
+    face = _sub_shape(BRepPrimAPI_MakeBox(5.0, 5.0, 5.0).Shape(), TopAbs_FACE)
+    return _compound(box, face)
+
+
+def test_a_solid_with_a_loose_face_beside_it_is_still_a_body():
+    topology = _topology(_solid_beside_a_loose_face())
+    assert topology.count("solid") == 1
+    assert topology.free_shells == 0
+    assert topology.free_count("face") == 1, "the loose face is seen"
+
+
+def test_the_shell_check_does_not_fail_a_body_for_loose_geometry():
+    """The regression this test exists for.
+
+    Reporting loose faces without asking whether there is a solid failed 23
+    cq_warehouse fasteners in '//pub' as "a surface rather than a body" - of
+    parts that are plainly bodies. Loose faces beside a solid are dead weight,
+    not a missing body, and the check has to tell the two apart.
+    """
+    import asyncio
+
+    from partcad.test.shell import ShellTest
+
+    envelope = {"name": "fastener", "brep": _brep(_solid_beside_a_loose_face())}
+    verdict = asyncio.run(ShellTest().test([], None, _StubShape(envelope)))
+    assert verdict == ShellTest.TEST_PASSED
+
+
+def test_the_shell_check_still_fails_loose_geometry_with_no_body():
+    """The other side of it: the same faces, with no solid anywhere."""
+    import asyncio
+
+    from partcad.test.shell import ShellTest
+
+    face = _sub_shape(_box(), TopAbs_FACE)
+    envelope = {"name": "surface", "brep": _brep(_compound(face))}
+    verdict = asyncio.run(ShellTest().test([], None, _StubShape(envelope)))
+    assert verdict != ShellTest.TEST_PASSED

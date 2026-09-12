@@ -231,7 +231,8 @@ def test_a_compound_holding_a_bare_face_is_reported_as_a_surface(context):
     part, envelope = _envelope(context, "compound_face_build123d")
     assert envelope is not None, "the surface did not reach the core"
 
-    free, unread = brep_inspect.envelope_free_geometry(envelope)
+    free, totals, unread = brep_inspect.envelope_free_geometry(envelope)
     assert unread == 0
     assert free["face"] >= 1
     assert free["shell"] == 0
+    assert totals.get("solid", 0) == 0, "no body, which is what makes this a failure rather than a note"

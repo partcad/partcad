@@ -274,16 +274,25 @@ def free_shells(payload) -> int | None:
     return None if result is None else result.free_shells
 
 
-def envelope_free_geometry(envelope) -> tuple[dict[str, int], int]:
-    """Walk a shape/assembly envelope: (free geometry by type, payloads not read).
+def envelope_free_geometry(envelope) -> tuple[dict[str, int], dict[str, int], int]:
+    """Walk a shape/assembly envelope: (free geometry, totals, payloads not read).
 
     An assembly is a tree of envelopes (see shape_envelope), and geometry that
     belongs to no body anywhere in it is geometry that belongs to no body in
-    the shape. The second number is how many payloads could not be read at all,
-    which a caller has to keep separate from the first: nothing found out of
-    nothing read says nothing.
+    the shape.
+
+    'totals' is what makes the first number readable. Loose faces beside a
+    solid are not the same finding as loose faces instead of one: a cq_warehouse
+    fastener is a solid that also carries three dozen faces belonging to
+    nothing, and calling that "a surface rather than a body" would be false of
+    a part that is plainly a body. The caller needs both numbers to tell the
+    two apart.
+
+    The last number is how many payloads could not be read at all, which has to
+    be kept apart from the rest: nothing found out of nothing read says nothing.
     """
     found = {name: 0 for name in _BOUNDED_BY.values()}
+    totals: dict[str, int] = {}
     unread = 0
 
     def walk(obj):
@@ -305,9 +314,11 @@ def envelope_free_geometry(envelope) -> tuple[dict[str, int], int]:
             return
         for name in found:
             found[name] += result.free_count(name)
+        for name, count in result.counts.items():
+            totals[name] = totals.get(name, 0) + count
 
     walk(envelope)
-    return found, unread
+    return found, totals, unread
 
 
 def envelope_free_shells(envelope) -> tuple[int, int]:
@@ -316,5 +327,5 @@ def envelope_free_shells(envelope) -> tuple[int, int]:
     The shell half of 'envelope_free_geometry', which is the question this
     module was written for.
     """
-    found, unread = envelope_free_geometry(envelope)
+    found, _totals, unread = envelope_free_geometry(envelope)
     return found["shell"], unread

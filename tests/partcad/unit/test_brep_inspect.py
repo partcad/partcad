@@ -337,9 +337,10 @@ def test_no_fixture_reports_loose_geometry_it_does_not_have(name):
 def test_the_envelope_walker_reports_geometry_by_type():
     """'envelope_free_geometry' is the shell walker generalised, same tree walk."""
     envelope = {"name": "surface", "brep": payload("face.brep")}
-    free, unread = brep_inspect.envelope_free_geometry(envelope)
+    free, totals, unread = brep_inspect.envelope_free_geometry(envelope)
     assert unread == 0
     assert free["face"] == 1 and free["shell"] == 0
+    assert totals.get("solid", 0) == 0, "a bare face carries no body"
     # The older reader still answers its own question, unchanged.
     assert brep_inspect.envelope_free_shells(envelope) == (0, 0)
 
@@ -347,6 +348,7 @@ def test_the_envelope_walker_reports_geometry_by_type():
 def test_the_envelope_walker_descends_into_an_assembly():
     """A surface anywhere in the tree is a surface in the shape."""
     envelope = {"assembly": [{"name": "a", "brep": payload("solid.brep")}, {"name": "b", "brep": payload("face.brep")}]}
-    free, unread = brep_inspect.envelope_free_geometry(envelope)
+    free, totals, unread = brep_inspect.envelope_free_geometry(envelope)
     assert unread == 0
     assert free["face"] == 1
+    assert totals["solid"] == 1, "the solid half of the assembly is still counted"
