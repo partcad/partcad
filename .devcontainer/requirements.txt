@@ -841,6 +841,8 @@ filelock==3.32.0 ; python_version >= "3.10" and python_version < "3.15" \
 findpython==0.8.0 ; python_version >= "3.10" and python_version < "3.15" \
     --hash=sha256:4a61ee1618a8b55014f7d41f59345d322be93f6ce62395bdccccc651b3f7e28a \
     --hash=sha256:53b32264874dfa5990bd09d717819386d8db3149d89fe20f88fe1078de286bae
+flake8-pyproject==1.2.4 ; python_version >= "3.10" and python_version < "3.15" \
+    --hash=sha256:ea34c057f9a9329c76d98723bb2bb498cc6ba8ff9872c4d19932d48c91249a77
 flake8==7.3.0 ; python_version >= "3.10" and python_version < "3.15" \
     --hash=sha256:b9696257b9ce8beb888cdbe31cf885c90d31928fe202be0889a7cdafad32f01e \
     --hash=sha256:fe044858146b9fc69b551a4b490d69cf960fcb78ad1edcb84e7fbb1b4a8e3872
