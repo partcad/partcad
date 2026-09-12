@@ -9,9 +9,9 @@
 
 import typing
 
-from .plugin_request_repository_caps import PluginRequestRepositoryCaps
-from .plugin import Plugin
 from . import telemetry
+from .plugin import Plugin
+from .plugin_request_repository_caps import PluginRequestRepositoryCaps
 
 
 @telemetry.instrument()

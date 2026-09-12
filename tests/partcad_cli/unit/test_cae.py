@@ -22,6 +22,7 @@ import json
 
 import pytest
 from click.testing import CliRunner
+
 from partcad_cli.click import analysis as analysis_module
 from partcad_cli.click.command import cli
 

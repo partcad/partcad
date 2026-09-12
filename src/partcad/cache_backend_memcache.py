@@ -25,9 +25,9 @@ run that never switches this tier on never pays for it.
 
 import asyncio
 
-from .cache_backend import PooledCacheBackend, broken_dependency
 from . import logging as pc_logging
 from . import telemetry
+from .cache_backend import PooledCacheBackend, broken_dependency
 
 # memcached refuses a key with whitespace or control characters, and caps it at
 # 250 bytes. A cache entry name is '<hex hash>.<key>' and a namespace is user

@@ -11,6 +11,7 @@ import random
 import string
 
 from partcad.shape_config_store import ShapeConfigStore
+
 from . import logging as pc_logging
 
 

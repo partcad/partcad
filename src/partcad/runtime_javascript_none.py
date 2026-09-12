@@ -22,10 +22,8 @@ import os
 import shutil
 import subprocess
 
-from . import runtime_javascript
-from . import sandbox_versions
 from . import logging as pc_logging
-from . import telemetry
+from . import runtime_javascript, sandbox_versions, telemetry
 
 
 def find_node() -> str | None:

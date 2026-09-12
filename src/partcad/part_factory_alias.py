@@ -10,10 +10,10 @@
 import copy
 import typing
 
-from . import part_factory as pf
 from . import logging as pc_logging
-from .utils import format_parameterized_name, get_child_project_path
+from . import part_factory as pf
 from . import telemetry
+from .utils import format_parameterized_name, get_child_project_path
 
 
 @telemetry.instrument()

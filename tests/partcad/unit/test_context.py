@@ -8,12 +8,13 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import asyncio
 import os
+from unittest.mock import patch
 
 import pytest
-import asyncio
+
 import partcad as pc
-from unittest.mock import patch
 
 
 def test_ctx1():

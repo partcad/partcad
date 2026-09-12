@@ -13,9 +13,9 @@ import shutil
 import sys
 import threading
 
-from .part_factory_step import PartFactoryStep
 from . import logging as pc_logging
 from . import runtime
+from .part_factory_step import PartFactoryStep
 
 kicad_runtime_lock = threading.Lock()
 kicad_runtime = None

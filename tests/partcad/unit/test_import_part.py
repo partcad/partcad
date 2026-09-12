@@ -1,10 +1,12 @@
 import shutil
+from pathlib import Path
 from unittest.mock import patch
+
 import pytest
 import yaml
-from pathlib import Path
-from partcad.context import Context
+
 from partcad.actions.part import import_part_action
+from partcad.context import Context
 
 SOURCE_DIR = Path("/workspaces/partcad/examples/feature_import")
 

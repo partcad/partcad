@@ -8,12 +8,11 @@
 #
 import os
 
-from .test import Test
 from .cad import CadTest
 from .cam import CamTest
 from .cam_additive_solid import CamAdditiveSolidTest
-from .cam_subtractive import CamSubtractiveTest
 from .cam_forming import CamFormingTest
+from .cam_subtractive import CamSubtractiveTest
 from .cfd import CfdTest
 from .connect import ConnectTest
 from .connectivity import ConnectivityTest
@@ -21,6 +20,7 @@ from .degenerate import DegenerateTest
 from .fea import FeaTest
 from .interference import InterferenceTest
 from .solidity import SolidityTest
+from .test import Test
 
 _global_tests: list[Test] = []
 

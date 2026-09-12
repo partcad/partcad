@@ -10,9 +10,7 @@ core process stays free of any CAD library; only the shape's BREP envelope and
 the numeric result cross the boundary.
 """
 
-from .. import wrapper
-from .. import shape_envelope
-from .. import sandbox_versions
+from .. import sandbox_versions, shape_envelope, wrapper
 
 
 async def free_bounds_count(ctx, envelope):

@@ -12,10 +12,10 @@ import asyncio
 import importlib.util
 import os
 import shutil
+import sys
 import venv
 
 import pytest
-import sys
 
 import partcad as pc
 from partcad.user_config import UserConfig

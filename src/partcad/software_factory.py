@@ -6,8 +6,7 @@
 
 import typing
 
-from . import factory
-from . import telemetry
+from . import factory, telemetry
 from .software import Software
 
 

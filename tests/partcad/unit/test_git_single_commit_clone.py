@@ -23,9 +23,8 @@ from pathlib import Path
 
 import pygit2
 import pytest
-from pygit2.enums import ObjectType
-
 from git_http_server import mirror, serve_git
+from pygit2.enums import ObjectType
 
 from partcad.project_factory_git import clone_single_commit
 

@@ -8,13 +8,13 @@
 # Licensed under Apache License, Version 2.0.
 
 import logging
-from logging import DEBUG, INFO, WARN, WARNING, ERROR, CRITICAL
 import threading
 import time
+from logging import CRITICAL, DEBUG, ERROR, INFO, WARN, WARNING
 
 import sentry_sdk
-
 from opentelemetry import trace
+
 from . import telemetry
 
 # Track if any errors occurred during the execution for test purposes and for

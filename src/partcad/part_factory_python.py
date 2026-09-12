@@ -9,11 +9,10 @@
 
 import os
 
+from . import sandbox_versions, telemetry
 from .part_factory_file import PartFactoryFile
 from .part_factory_homogen import PartFactoryHomogen
 from .runtime_python import PythonRuntime, environment_requirements, shape_docker_image
-from . import sandbox_versions
-from . import telemetry
 
 
 @telemetry.instrument()

@@ -10,10 +10,10 @@
 
 import asyncio
 import os
-import pytest
 import sys
 
 import build123d as b3d
+import pytest
 from OCP.TopoDS import TopoDS_Iterator
 
 import partcad as pc

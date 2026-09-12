@@ -4,14 +4,14 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from contextlib import asynccontextmanager, contextmanager
 import inspect
-from opentelemetry import trace, context
-from opentelemetry.trace import Tracer
 import os
+from contextlib import asynccontextmanager, contextmanager
 
-from . import telemetry_none
-from . import telemetry_sentry
+from opentelemetry import context, trace
+from opentelemetry.trace import Tracer
+
+from . import telemetry_none, telemetry_sentry
 
 partcad_version = None
 tracer: Tracer | None  # To be initialized in telemetry_init()

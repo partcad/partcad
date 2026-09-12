@@ -7,20 +7,20 @@
 # Licensed under Apache License, Version 2.0.
 
 import asyncio
+import base64
 import contextlib
-import docker
 import io
 import os
 import subprocess
 import tarfile
 import time
-import base64
 
+import docker
 
-from .runtime_json_rpc import RuntimeJsonRpcClient
 from . import logging as pc_logging
-from .process_output import decode as decode_output
 from . import sandbox_lock
+from .process_output import decode as decode_output
+from .runtime_json_rpc import RuntimeJsonRpcClient
 
 
 async def communicate(p, stdin: bytes, timeout=None):

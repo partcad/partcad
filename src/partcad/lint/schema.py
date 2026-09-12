@@ -1,12 +1,9 @@
 import json
 import os
+
 import aiofiles
 
-from ..project import Project
-from ..context import Context
-from .. import logging as pc_logging
 from partcad.cache_hash import CacheHash
-from .lint import Linting, Severity, LintingReport
 
 # Shared with every client's `pc lint --file`, which is why it is not in this
 # package: the daemon checks a package's files when it walks the package graph,
@@ -20,6 +17,11 @@ from partcad_utils.assy_lint import (
     schema_for_file,
     validate_source,
 )
+
+from .. import logging as pc_logging
+from ..context import Context
+from ..project import Project
+from .lint import Linting, LintingReport, Severity
 
 
 class YamlLinting(Linting):

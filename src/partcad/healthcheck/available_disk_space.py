@@ -4,11 +4,12 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from pathlib import Path
 import shutil
+from pathlib import Path
+
+from partcad.user_config import user_config
 
 from .tests import HealthCheckReport, HealthCheckTest
-from partcad.user_config import user_config
 
 
 class AvailableDiskSpaceCheck(HealthCheckTest):

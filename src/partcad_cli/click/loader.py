@@ -4,9 +4,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import rich_click as click
 import importlib
 import os
+
+import rich_click as click
 
 from partcad_utils import logging as pc_logging
 

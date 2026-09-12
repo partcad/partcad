@@ -26,6 +26,7 @@ from types import SimpleNamespace
 
 import pytest
 import yaml
+
 from partcad_service_json_rpc.core import operations
 from partcad_service_json_rpc.core.events import EventEmitter
 from partcad_service_json_rpc.core.session import Session

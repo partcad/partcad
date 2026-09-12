@@ -96,6 +96,30 @@ repos:
         pass_filenames: false
         stages: [post-checkout, post-merge]
         always_run: true
+  # isort, as a local hook for the same two reasons the Poetry hooks above are
+  # local: a hook repository has to be cloned, and a developer whose gitconfig
+  # rewrites `https://github.com/` to SSH has that clone fail in a shell with no
+  # agent behind it. `additional_dependencies` comes from PyPI over https.
+  #
+  # The version is the one `pyproject.toml` resolves, so the hook and
+  # `poetry run isort` cannot disagree about what "sorted" means.
+  #
+  # `--filter-files` is not optional and not a tidiness flag. pre-commit hands
+  # the hook the staged files by name, and isort applies `extend_skip` /
+  # `extend_skip_glob` to what it *discovers* by walking a directory, not to
+  # what it is handed: without this flag a staged `src/partcad/wrappers/*.py`
+  # is sorted despite the skip, which is precisely the reordering the skip
+  # exists to prevent. `--settings-path` for the same reason -- the config is
+  # found from the repository root rather than from each file's directory.
+  - repo: local
+    hooks:
+      - id: isort
+        name: isort
+        description: import order, as configured in pyproject.toml
+        entry: isort --check-only --diff --filter-files --settings-path pyproject.toml
+        language: python
+        additional_dependencies: ["isort==8.0.1"]
+        types: [python]
   - repo: local
     hooks:
       - id: shellcheck

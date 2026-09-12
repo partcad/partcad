@@ -16,15 +16,11 @@ produces the shape(s) (see wrappers/wrapper_part_type.py).
 import base64
 import os
 
+from . import logging as pc_logging
+from . import sandbox_versions, shape_envelope, telemetry, transform, wrapper
 from .part_factory import PartFactory
 from .runtime_python import environment_requirements
 from .utils import resolve_resource_path
-from . import logging as pc_logging
-from . import sandbox_versions
-from . import shape_envelope
-from . import telemetry
-from . import transform
-from . import wrapper
 
 
 @telemetry.instrument()

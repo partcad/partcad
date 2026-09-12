@@ -9,12 +9,11 @@
 
 import json
 
+from . import shape_envelope, telemetry
 from .cache import Cache
 from .cache_backend import PROPERTIES_SUFFIX
 from .cache_hash import CacheHash
 from .utils import total_size
-from . import shape_envelope
-from . import telemetry
 
 # The on-disk shape cache used to be pickled. That worked only because the
 # wrapper protocol installed OCP 'copyreg' handlers as a global side effect -

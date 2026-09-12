@@ -1,9 +1,10 @@
-from click.testing import CliRunner
 import logging
 from collections.abc import Iterator
 
-from partcad_cli.click.command import cli
+from click.testing import CliRunner
+
 from partcad_cli import __version__
+from partcad_cli.click.command import cli
 
 
 def test_version(click_runner: Iterator[CliRunner]) -> None:

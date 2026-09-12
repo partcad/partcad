@@ -190,8 +190,8 @@ def test_convert_stl_returns_bytes():
 @pytest.mark.slow
 def test_convert_leaves_no_temporary_file():
     """The temporary file used by the exporter must not survive the call."""
-    import tempfile
     import os
+    import tempfile
 
     ctx, cube = _cube()
 

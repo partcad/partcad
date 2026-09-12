@@ -20,6 +20,7 @@ import re
 from collections.abc import Iterator
 
 from click.testing import CliRunner
+
 from partcad_cli.click.command import cli
 
 # Every line the report promises, on either side.

@@ -6,6 +6,7 @@
 """Tests for the executable entry point helpers."""
 
 import pytest
+
 from partcad_service_json_rpc import __main__ as m
 
 

@@ -22,29 +22,50 @@ from typing import TYPE_CHECKING, List, Optional
 
 import ruamel.yaml
 
-from . import assembly, assembly_config, assembly_guide
+from . import (
+    assembly,
+    assembly_config,
+)
 from . import assembly_factory_alias as afa
-from . import consts, document as pc_document, factory, interface
+from . import (
+    assembly_guide,
+    consts,
+)
+from . import document as pc_document
+from . import (
+    factory,
+    interface,
+)
 from . import logging as pc_logging
-from . import material, material_config
-from . import output
-from . import part_config
+from . import (
+    material,
+    material_config,
+    output,
+    part_config,
+)
 from . import part_factory_alias as pfa
 from . import (
     plugin_config,
     plugin_provider,
     plugin_repository,
     project_config,
+    scene,
+    scene_config,
+)
+from . import scene_factory as scnf
+from . import (
     sketch,
     sketch_config,
-    software as pc_software,
+)
+from . import sketch_factory_alias as sfa
+from . import software as pc_software
+from . import (
     software_config,
 )
-from . import scene, scene_config
-from . import scene_factory as scnf
-from . import sketch_factory_alias as sfa
 from . import tags as pc_tags
-from . import telemetry
+from . import (
+    telemetry,
+)
 from .document_pdf import render_pdf_async
 from .exception import EmptyShapesError, NeedsUpdateException, ObjectNameTakenError
 from .part import Part

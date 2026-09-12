@@ -7,7 +7,6 @@
 # Licensed under Apache License, Version 2.0.
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
 import asyncio
 import base64
@@ -17,20 +16,18 @@ import sys
 import tempfile
 import threading
 import warnings
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
+from . import cae as pc_cae
+from . import logging as pc_logging
+from . import output, render_overlay
+from . import runtime as pc_runtime
+from . import sandbox_versions, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
-from . import output
 from .shape_config import ShapeConfiguration
-from .utils import total_size
-from . import logging as pc_logging
 from .sync_threads import threadpool_manager
-from . import render_overlay
-from . import sandbox_versions
-from . import wrapper
-from . import cae as pc_cae
-from . import runtime as pc_runtime
+from .utils import total_size
 
 if TYPE_CHECKING:
     from partcad.context import Context
@@ -42,9 +39,7 @@ if TYPE_CHECKING:
 # get_wrapped(), and convert()/show() which hand a live object to a CAD library
 # - can import the OCP codec lazily.
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-from . import shape_envelope
-
-from . import telemetry
+from . import shape_envelope, telemetry
 
 PART_EXTENSION_MAPPING = {
     "step": "step",

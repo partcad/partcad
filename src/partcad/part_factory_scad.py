@@ -16,14 +16,11 @@ import subprocess
 import tempfile
 
 from . import logging as pc_logging
-from . import telemetry, wrapper
-from .process_output import decode as decode_output
+from . import sandbox_versions, shape_envelope, telemetry, wrapper
 from .healthcheck.openscad import find_executable as find_openscad_executable
 from .part_factory_file import PartFactoryFile
 from .part_factory_homogen import PartFactoryHomogen
-from . import sandbox_versions
-
-from . import shape_envelope
+from .process_output import decode as decode_output
 
 
 def _scad_literal(value):

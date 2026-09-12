@@ -11,11 +11,8 @@ import os
 import threading
 
 from . import logging as pc_logging
-from . import wrapper
+from . import shape_envelope, telemetry, wrapper
 from .part_factory_file import PartFactoryFile
-from . import telemetry
-
-from . import shape_envelope
 
 
 @telemetry.instrument()

@@ -4,10 +4,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from . import part_factory as pf
 from . import logging as pc_logging
-from .utils import resolve_resource_path, get_child_project_path
+from . import part_factory as pf
 from . import telemetry
+from .utils import get_child_project_path, resolve_resource_path
 
 
 @telemetry.instrument()

@@ -4,11 +4,13 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import rich_click as click
 import asyncio
 import json
 
+import rich_click as click
+
 import partcad as pc
+
 from ...cli_context import CliContext
 
 

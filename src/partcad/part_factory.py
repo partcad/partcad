@@ -9,10 +9,9 @@
 
 import typing
 
-from . import factory
+from . import factory, telemetry
 from .part import Part
 from .shape_factory import ShapeFactory
-from . import telemetry
 
 
 @telemetry.instrument()

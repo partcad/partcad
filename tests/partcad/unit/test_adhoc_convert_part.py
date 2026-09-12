@@ -1,10 +1,11 @@
-import pytest
 import shutil
 import tempfile
 from pathlib import Path
-from partcad.context import Context
-from partcad.adhoc.convert import convert_cad_file, generate_partcad_config
 
+import pytest
+
+from partcad.adhoc.convert import convert_cad_file, generate_partcad_config
+from partcad.context import Context
 
 OUTPUT_FORMATS = ["stl", "step", "brep", "3mf", "threejs", "obj"]
 

@@ -33,6 +33,7 @@ only thing that could still be reading it.
 """
 
 import rich_click as click
+
 from partcad_client import selfupdate
 
 

@@ -16,9 +16,9 @@ built cannot mean one thing for a conversion and another for a projection.
 """
 
 import asyncio
-from pathlib import Path
 import shutil
 import tempfile
+from pathlib import Path
 
 from .. import logging as pc_logging
 from ..context import Context

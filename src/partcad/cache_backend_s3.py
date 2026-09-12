@@ -24,9 +24,9 @@ The client library ('aioboto3') is an optional extra: pip install
 
 import asyncio
 
-from .cache_backend import PooledCacheBackend, missing_dependency
 from . import logging as pc_logging
 from . import telemetry
+from .cache_backend import PooledCacheBackend, missing_dependency
 
 # The errors S3 answers a missing object with. Both are ordinary cache misses,
 # not failures: a HEAD-less GET says NoSuchKey, and a bucket the caller may not

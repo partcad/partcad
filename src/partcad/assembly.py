@@ -12,18 +12,16 @@ import os
 import tempfile
 import typing
 
-from . import sandbox_versions
-from . import telemetry
-from . import shape_envelope
-from . import wrapper
+from . import logging as pc_logging
+from . import sandbox_versions, shape_envelope
+from . import software as pc_software
+from . import telemetry, wrapper
 from .geom import Location
 from .plugin_provider_data_cart import ProviderCartItem
 from .revision import package_revision
 from .shape import Shape
 from .shape_config import final_config as _final_config
-from . import software as pc_software
 from .sync_threads import threadpool_manager
-from . import logging as pc_logging
 
 # This module needs no CAD library at all: an assembly is built as a nested
 # BREP-envelope object with child placements carried as plain data, and the

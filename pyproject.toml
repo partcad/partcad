@@ -225,7 +225,49 @@ enable = [
 
 [tool.isort]
 profile = "black"
-known_first_party = ["partcad"]
+# `profile = "black"` brings black's *default* line length, 88, and isort does
+# not read `[tool.black]`. Left at 88 it explodes import lines that black is
+# happy to leave on one -- black then keeps them exploded, because isort writes
+# the trailing comma black treats as "keep this split". The two tools converge,
+# but on a shape neither config asked for, so state the same 120 twice.
+line_length = 120
+# All six packages, and not just `partcad`. The other five resolve as
+# first-party today only because isort auto-detects `src/` into `src_paths`,
+# which is a property of where it was invoked rather than of this config: run
+# from elsewhere, or with the wheel installed non-editable, they land in
+# third-party and the grouping silently changes. Naming them says it outright.
+known_first_party = [
+  "partcad",
+  "partcad_cli",
+  "partcad_client",
+  "partcad_ide_client",
+  "partcad_service_json_rpc",
+  "partcad_utils",
+]
+
+# Where the import order is what the dynamic loader needs rather than what
+# reads tidily, so sorting it is a bug rather than a tidy-up:
+#
+#   * `src/partcad/wrappers/` and `src/partcad/builtin/` are the scripts that
+#     run inside a CAD sandbox. They add their own directory to `sys.path` and
+#     then import their neighbours by bare name, and several of them import
+#     `pyexpat` (or a module that does) before anything that can pull OCP in:
+#     VTK, which the OCP build links against, bundles an older expat under the
+#     same `XML_*` names, and whichever loads first wins for the process. Sorted
+#     alphabetically, `build123d` lands ahead of the `wrapper_common` that was
+#     pinning expat for it, and the next `xml.dom` use dies with "undefined
+#     symbol: XML_SetReparseDeferralEnabled".
+#   * `src/partcad/__init__.py` sanitises the environment, pins expat, and
+#     aliases `partcad_utils.*` into this namespace -- each step before the one
+#     that depends on it, and the two `from . import` lines at the end are there
+#     for the attribute binding their comments describe.
+#
+# None of that is visible to pytest: a wrapper is executed in a sandbox, so a
+# wrong order here is a render failing on a machine that has VTK, long after the
+# commit that sorted it. The comments in those files say the same thing, but a
+# comment does not stop `isort .`.
+extend_skip = ["src/partcad/__init__.py"]
+extend_skip_glob = ["*/src/partcad/wrappers/*", "*/src/partcad/builtin/*"]
 
 [tools.pyright]
 reportMissingTypeArgument = true  # Report generic classes used without type arguments

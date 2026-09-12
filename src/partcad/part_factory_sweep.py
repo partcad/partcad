@@ -7,12 +7,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from . import logging as pc_logging
+from . import sandbox_versions, shape_envelope, wrapper
 from .part_factory import PartFactory
 from .sketch import Sketch
-from . import logging as pc_logging
-from . import wrapper
-from . import shape_envelope
-from . import sandbox_versions
 
 
 class PartFactorySweep(PartFactory):

@@ -11,9 +11,8 @@ this check passes through the bundled copy -- which is the point of carrying it.
 The wheels carry nothing, and there this reports what it always did.
 """
 
-from partcad_utils import conda as pc_conda
-
 from partcad.runtime_python_conda import CondaPythonRuntime
+from partcad_utils import conda as pc_conda
 
 from .tests import HealthCheckReport, HealthCheckTest
 

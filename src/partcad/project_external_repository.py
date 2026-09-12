@@ -11,11 +11,11 @@ import asyncio
 import json
 import threading
 
+from . import logging as pc_logging
+from . import tags as pc_tags
 from .cache_hash import CacheHash
 from .project_plugin import ProjectPlugin
 from .sync_threads import threadpool_manager
-from . import logging as pc_logging
-from . import tags as pc_tags
 
 # Distinguishes "no cached value" from a cached value of None.
 _MISSING = object()

@@ -62,11 +62,9 @@ import threading
 
 from filelock import FileLock
 
-from . import sandbox_versions
-from . import runtime
 from . import logging as pc_logging
+from . import runtime, sandbox_versions, telemetry
 from .process_output import decode as decode_output
-from . import telemetry
 
 # The baseline environment, shared by every PartCAD package that needs nothing
 # beyond the defaults. Named rather than hashed so it stays recognizable in
