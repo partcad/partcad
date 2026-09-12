@@ -64,12 +64,17 @@ class InterferenceTest(Test):
                 min_fraction=float(config.get("minFraction", 0.0)),
             )
         except Exception as e:
-            # An assembly that will not realize is what the 'cad' test is for;
-            # this one has nothing to say about it either way - and nothing
-            # worth remembering, since the reason was not the assembly.
+            # Not a pass. An assembly that will not realize returns None below
+            # and is the 'cad' test's business; reaching here instead means the
+            # check itself broke, and reporting that as "no interference found"
+            # is how a check comes to certify what it never looked at.
+            #
+            # It did: json.dumps() cannot encode the BREP bytes the envelope
+            # carries, the TypeError landed here, and every assembly passed
+            # without being examined. The message was at debug level, so
+            # nothing said so.
             test_ctx[self.NOT_CACHEABLE] = True
-            self.debug(shape, "Failed to check for interference: %s" % e)
-            return self.TEST_PASSED
+            return self.failed(shape, "the interference check could not be run: %s" % e)
 
         if result is None:
             test_ctx[self.NOT_CACHEABLE] = True

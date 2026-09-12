@@ -71,10 +71,10 @@ class DegenerateTest(Test):
 
             box = await shape.get_bounding_box_async(ctx)
         except Exception as e:
-            # About the machine, not the shape: do not remember it.
+            # Not a pass: a shape that did not build was answered above, so
+            # reaching here means this check broke.
             test_ctx[self.NOT_CACHEABLE] = True
-            self.debug(shape, "Failed to measure: %s" % e)
-            return self.TEST_PASSED
+            return self.failed(shape, "the degenerate check could not be run: %s" % e)
 
         if box is None:
             return self.failed(
