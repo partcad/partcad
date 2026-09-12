@@ -119,12 +119,16 @@ def test_a_run_that_changed_the_images_builds_and_tests_its_own(tmp_path):
     unreviewed branch precisely because nothing but this run asks for it.
     """
     out = decide(tmp_path, wanted="true")
-    assert out == {
-        "tag": "%s-my-branch-%s" % (RELEASE, SHORT),
-        "release": RELEASE,
-        "push": "true",
-        "override": "%s-my-branch-%s" % (RELEASE, SHORT),
-    }
+
+    assert out["release"] == RELEASE
+    assert out["push"] == "true"
+    # The tag and the override are one value: the thing built is the thing the
+    # tests in this run resolve. Its shape is pinned separately below; here
+    # what matters is that a run which built its own images says so twice and
+    # says the same thing both times.
+    assert out["tag"] == out["override"]
+    assert out["tag"].startswith("%s-my-branch-" % RELEASE)
+    assert out["tag"].endswith("-%s" % SHORT)
 
 
 def test_the_bump_wins_over_the_branch_tag(tmp_path):
@@ -137,22 +141,28 @@ def test_the_bump_wins_over_the_branch_tag(tmp_path):
     assert out["override"] == ""
 
 
-@pytest.mark.parametrize(
-    "branch, stem",
-    [
-        # A name a tag can hold already is its own stem, digest and all.
-        ("my-branch", "my-branch"),
-        ("release_1.2.3", "release_1.2.3"),
-    ],
-)
-def test_a_branch_a_registry_already_accepts_is_left_alone(tmp_path, branch, stem):
-    """Which is what makes it unable to collide with anything.
+def test_every_stem_carries_a_digest_of_the_whole_branch(tmp_path):
+    """ "Every" is the load-bearing word, and it was learnt the hard way.
 
-    A clean name maps to itself, so two clean names are two stems; only a name
-    that had to be changed can land on somebody else's, and that is the case
-    the digest below covers.
+    The digest was added only where sanitising had changed the name, on the
+    reasoning that a name a registry already accepts maps to itself and so
+    cannot land on anybody else's stem. It can: `feat_x-79b4cc` is a name a
+    branch may have, and it is also what `feat/x` produces. One shape, two
+    ways to reach it.
+
+    Unconditional, the stem is a function of the whole branch name and of
+    nothing else, which is what "no two branches share a tag" actually asks
+    for.
     """
-    assert decide(tmp_path, wanted="true", branch=branch)["tag"] == "%s-%s-%s" % (RELEASE, stem, SHORT)
+    tag = decide(tmp_path, wanted="true", branch="my-branch")["tag"]
+
+    release, rest = tag.split("-", 1)
+    stem, digest, sha = rest.rsplit("-", 2)
+
+    assert release == RELEASE
+    assert stem == "my-branch"
+    assert len(digest) == 10 and set(digest) <= set("0123456789abcdef")
+    assert sha == SHORT
 
 
 @pytest.mark.parametrize(
@@ -188,6 +198,10 @@ def test_a_branch_name_is_made_into_something_a_registry_accepts(tmp_path, branc
         ("a/b", "a_b"),
         # Truncated alike: the same first forty characters.
         ("z" * 40 + "/first", "z" * 40 + "/second"),
+        # Clean names, which the conditional digest used to leave alone and
+        # which therefore could not collide -- until one of them was somebody
+        # else's stem. See the round trip below.
+        ("feat_x", "feat_y"),
     ],
 )
 def test_two_branches_that_sanitise_alike_still_get_two_tags(tmp_path, one, other):
@@ -198,6 +212,27 @@ def test_two_branches_that_sanitise_alike_still_get_two_tags(tmp_path, one, othe
     whole original name is what keeps them apart.
     """
     assert decide(tmp_path, wanted="true", branch=one)["tag"] != decide(tmp_path, wanted="true", branch=other)["tag"]
+
+
+def test_a_stem_is_not_reachable_as_somebody_elses_branch_name(tmp_path):
+    """The collision the conditional digest left behind.
+
+    `feat/x` produced the stem `feat_x-<digest>`, and a branch *named*
+    `feat_x-<digest>` was clean, so it was left alone and produced that same
+    stem. Two branches, one tag, and at one commit one image.
+
+    Built out of the action's own output rather than a literal digest, so that
+    changing the digest's length or algorithm cannot quietly stop this from
+    testing anything: whatever stem the action makes of `feat/x` is fed back in
+    as a branch name.
+    """
+    lossy = decide(tmp_path, wanted="true", branch="feat/x")["tag"]
+    # Everything between the release and the commit: the stem as published.
+    stem = lossy[len(RELEASE) + 1 : -(len(SHORT) + 1)]
+    assert stem.startswith("feat_x-")
+
+    impersonator = decide(tmp_path, wanted="true", branch=stem)["tag"]
+    assert impersonator != lossy
 
 
 def test_the_digest_is_of_the_branch_and_not_of_the_run(tmp_path):
