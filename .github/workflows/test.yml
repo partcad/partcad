@@ -191,33 +191,94 @@ env:
   # is the interpreter PartCAD itself runs on. 'test-pub-repo', which renders
   # the public index, uses PYTHONS_SANDBOX instead.
   PYTHONS_SLIM: '["3.10", "3.14"]'
-  VERSION: 0.8.70
+  VERSION: 0.8.71
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
   PC_TELEMETRY_PERFORMANCE: false
 
 jobs:
+  # Every container this workflow publishes is built before any job that could
+  # run a test inside one. Both builders below therefore appear in the "needs:"
+  # of every test job that can reach a container -- which on Linux is nearly all
+  # of them, the "docker" Python sandbox being the default wherever a runtime
+  # answers.
+  #
+  # It is close to free, and where it is not, it is the case it is for. On a
+  # pull request "Build Docker Containers" is a minute: the registry cache hits
+  # and only amd64 is built. It is the version-bump push to "devel" that takes
+  # half an hour, and that is the one run where the images do not exist yet and
+  # a test reaching for one finds nothing -- so the run that pays for the wait
+  # is the run that needs it.
+  #
+  # What it buys differs by image, and only one of the two is a hard failure.
+  # A missing Python sandbox image is caught: ".github/actions/sandbox-image"
+  # builds the tree's own copy when the pull comes up empty, so the job stays
+  # honest either way -- but on a push to "devel" or "main" that fallback is
+  # precisely what the job did not want, the published tag being the subject
+  # there, and until this ordering existed it took the fallback every time. A
+  # missing KiCad image is not caught by anything: "get_runtime" hands the tag
+  # to "containers.run()", which pulls, and a pull of a tag nobody has pushed
+  # is 'APIError: ... ("manifest unknown")'.
+  #
+  # The KiCad sandbox image. It used to be the first step of
+  # "build-containers" below; it is a call into "container-kicad.yml" now
+  # because "test-dev.yml" needs the same image and needs it *finished* -- and
+  # a "needs:" does not reach across a workflow, so the dev container's pytest
+  # job raced this build and pulled a tag that did not exist yet. See the note
+  # at the top of that file.
+  #
+  # "needs: set-matrix" carries the same two things it carries for
+  # "build-containers": only "test-pytest" consumes this image, so it follows
+  # that job's gate rather than carrying one of its own, and the "only a
+  # version bump runs the matrix on a push to devel" guard lives on
+  # "set-matrix" (see the long note there) rather than being restated here.
+  container-kicad:
+    needs: set-matrix
+    # The union of what the jobs needing this one are gated on, and it has to
+    # be: a job whose dependency is skipped is skipped, so a gate narrower than
+    # its dependents' would not delay "Behave" -- it would silently delete it.
+    # The three scopes come out of the same buckets today ("emit pytest code
+    # deps ci", and the same line for the other two), so the union is no wider
+    # in practice than the "pytest" gate this used to carry; it is written out
+    # so that the day they stop agreeing is not the day a suite disappears.
+    if: >-
+      ${{ needs.set-matrix.outputs.pytest == 'true'
+      || needs.set-matrix.outputs.behave == 'true'
+      || needs.set-matrix.outputs.examples == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/container-kicad.yml
+
   build-containers:
     name: "Build Docker Containers"
     runs-on: ubuntu-24.04
-    # The KiCad sandbox image, which only "test-pytest" below consumes, so it
-    # follows that job's gate rather than carrying one of its own.
+    # The Python sandbox images, which "test-pytest" below pulls on a push to
+    # "devel" or "main" (see ".github/actions/sandbox-image"), so this follows
+    # that job's gate rather than carrying one of its own.
     #
     # "needs: set-matrix" is also what carries the "only a version bump runs the
     # matrix on a push to devel" guard here. That guard lives on "set-matrix"
     # (see the long note there); a job that needs a skipped job is skipped, so
     # stating it twice would only be two places to keep in step.
     needs: set-matrix
-    if: ${{ needs.set-matrix.outputs.pytest == 'true' }}
+    # The union, for the reason given on "container-kicad" above: every test
+    # job that can render in the sandbox waits for this one now, and a gate
+    # narrower than theirs would skip them rather than delay them.
+    if: >-
+      ${{ needs.set-matrix.outputs.pytest == 'true'
+      || needs.set-matrix.outputs.behave == 'true'
+      || needs.set-matrix.outputs.examples == 'true' }}
     permissions:
       packages: write
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v7
-      - name: Setup Dev Container
-        id: setup
-        uses: ./.github/actions/setup-devcontainer
 
+      # No "setup-devcontainer" here: its one output, IMAGE_TAG, was read by the
+      # KiCad step that has moved to "container-kicad.yml". The images below are
+      # tagged from "env.VERSION" directly, the branch name having no place in a
+      # tag a package is invited to pin.
       - name: Login to GitHub Container Registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
         with:
@@ -225,19 +286,10 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Container for Kicad
-        uses: devcontainers/ci@v0.3
-        with:
-          cacheFrom:
-            "${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad:${{ steps.setup.outputs.IMAGE_TAG }}"
-          imageName: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad
-          imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
-          configFile: tools/containers/devcontainer-kicad.json
-          push: always
-
       # QEMU and buildx are what the Python base images below are built with:
-      # they fan out over architectures, and "devcontainers/ci" above builds for
-      # the runner's alone.
+      # they fan out over architectures, unlike the KiCad image in
+      # "container-kicad.yml", which "devcontainers/ci" builds for the runner's
+      # alone (that sandbox is linux/amd64 only -- see "tools/containers/kicad").
       - name: Set up QEMU
         uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3.6.0
         with:
@@ -599,6 +651,10 @@ jobs:
     needs:
       - set-matrix
       - build-containers
+      # "test_part_example_kicad" starts the KiCad sandbox by the release
+      # PartCAD reports, so the image has to be published before this runs --
+      # never mind that this workflow is the one publishing it.
+      - container-kicad
       # - cache-preheat
     # Skipped when nothing this suite can see has changed -- documentation, the
     # Claude Code plugin, the VS Code extension, the dev container's own
@@ -706,6 +762,10 @@ jobs:
     name: "Behave"
     needs:
       - set-matrix
+      # Both container builds, per the note at the top of "jobs:": no test
+      # starts before every image it might run in exists.
+      - build-containers
+      - container-kicad
       # - cache-preheat
     # Same gate as "Pytest" above. Note that a change to ".devcontainer" is not
     # in it: these jobs run natively, with mamba, and never enter the dev
@@ -844,6 +904,10 @@ jobs:
     name: "Examples (PartCAD)"
     needs:
       - set-matrix
+      # Both container builds, per the note at the top of "jobs:": no test
+      # starts before every image it might run in exists.
+      - build-containers
+      - container-kicad
       # - cache-preheat
     if: ${{ needs.set-matrix.outputs.examples == 'true' }}
     strategy:
@@ -1022,6 +1086,10 @@ jobs:
     name: "Examples (All)"
     needs:
       - set-matrix
+      # Both container builds, per the note at the top of "jobs:": no test
+      # starts before every image it might run in exists.
+      - build-containers
+      - container-kicad
       # - cache-preheat
     # Deep runs only: the nightly schedule, a manual dispatch, a push, or
     # "#deepTest". Not on a pull request and not in the merge queue.
@@ -1116,6 +1184,10 @@ jobs:
     name: "Repo //pub"
     needs:
       - set-matrix
+      # Both container builds, per the note at the top of "jobs:": no test
+      # starts before every image it might run in exists.
+      - build-containers
+      - container-kicad
       # - cache-preheat
     # Deep runs only. That tier was chosen when this job's one substantive step
     # was "continue-on-error" and so could not report a regression before a
