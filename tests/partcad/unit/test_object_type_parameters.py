@@ -23,7 +23,7 @@ import yaml
 import partcad as pc
 from partcad.part_factory import PartFactory
 
-ACCEPTING_TYPES = ["stl", "cadquery", "build123d", "sdf", "extrude"]
+ACCEPTING_TYPES = ["stl", "cadquery", "build123d", "sdf", "extrude", "scad"]
 REJECTING_TYPES = ["step", "kicad"]
 POLICED = ["material", "color", "tolerance"]
 
@@ -42,7 +42,7 @@ def _write_package(tmp_path, parts):
         "parts": parts,
     }
     (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(config))
-    for extension in [".stl", ".py", ".step"]:
+    for extension in [".stl", ".py", ".step", ".scad"]:
         for name in parts:
             (tmp_path / (name + extension)).write_text("")
             path = parts[name].get("path")
