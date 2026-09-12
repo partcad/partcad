@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""The one KiCad image, and the two workflows that have to wait for it.
+"""No test starts before every container it might run in has been published.
 
 `tests/partcad/unit/test_part.py::test_part_example_kicad` starts
 `ghcr.io/partcad/partcad-container-kicad:<release>` -- the release PartCAD
@@ -19,6 +19,13 @@ a reusable workflow both of them call. Lose the call from either one and the
 failure is not a missing job: it is `APIError: ... ("manifest unknown")` from a
 test whose whole purpose is to fail when the KiCad path is broken, hours into a
 run, on the version bump and nowhere else.
+
+The rule the later half of this file pins is the general form of that: a test
+job waits for every container it might run in, and a container's build is gated
+no more narrowly than the jobs waiting for it. The second half is not a detail.
+A job whose dependency is skipped is skipped rather than delayed, so a builder
+gated on less than its dependents does not make them wait -- it deletes them,
+and a suite that stops running is the one kind of CI failure nothing reports.
 """
 
 import pathlib
@@ -94,3 +101,65 @@ def test_the_caller_grants_the_permission_to_publish(workflow):
     """A called workflow gets the calling job's permissions and no more."""
     job = _jobs(workflow)["container-kicad"]
     assert job["permissions"]["packages"] == "write"
+
+
+# Every job that runs a test and can reach a container. On Linux that is all of
+# them: the "docker" Python sandbox is the default wherever a container runtime
+# answers, and "Sandbox (docker)" is left out only because it builds the image
+# it runs in rather than consuming a published one.
+CONSUMERS = {
+    "test.yml": ["test-pytest", "test-behave", "test-examples-partcad", "test-examples-all", "test-pub-repo"],
+    "test-dev.yml": ["pytest", "behave", "integration-tests"],
+}
+
+BUILDERS = {"test.yml": ["build-containers", "container-kicad"], "test-dev.yml": ["container-kicad"]}
+
+# The scopes a job can be gated on. "deep" is not one of them: it only ever
+# narrows a gate further, and a builder is not obliged to cover it.
+SCOPES = ("pytest", "behave", "examples")
+
+
+def _scopes_named(job):
+    condition = str(job.get("if") or "")
+    return {scope for scope in SCOPES if "outputs.%s ==" % scope in condition}
+
+
+@pytest.mark.parametrize("workflow", sorted(CONSUMERS))
+def test_every_test_job_waits_for_every_container(workflow):
+    jobs = _jobs(workflow)
+    for consumer in CONSUMERS[workflow]:
+        missing = [b for b in BUILDERS[workflow] if b not in _needs(jobs[consumer])]
+        assert missing == [], "%s: %s does not wait for %s" % (workflow, consumer, missing)
+
+
+def test_the_builders_are_gated_no_narrower_than_what_waits_for_them():
+    """A job whose dependency is skipped is skipped, not delayed.
+
+    So a builder gated on less than its dependents does not make them wait --
+    it deletes them. "Behave" is gated on the `behave` scope and "Examples" on
+    `examples`, while both builders carried the `pytest` gate they were written
+    with; the three come out of the same buckets today, which is exactly what
+    would have made the day they stop agreeing hard to see.
+    """
+    jobs = _jobs("test.yml")
+    wanted = set()
+    for consumer in CONSUMERS["test.yml"]:
+        wanted |= _scopes_named(jobs[consumer])
+    assert wanted == set(SCOPES)  # or this test is checking less than it reads
+
+    for builder in BUILDERS["test.yml"]:
+        assert _scopes_named(jobs[builder]) >= wanted, builder
+
+
+def test_the_dev_container_build_follows_the_scope_that_runs_its_dependents():
+    """`devcontainer`, not `devcontainer-pytest`.
+
+    A change under ".devcontainer" runs "Run: behave" and "Run: pc" and not
+    "Run: pytest" -- so the narrower gate would skip this build, and with it
+    the two jobs that such a change is the whole reason to run.
+    """
+    jobs = _jobs("test-dev.yml")
+    assert "outputs.devcontainer ==" in jobs["container-kicad"]["if"]
+    assert "outputs.pytest ==" not in jobs["container-kicad"]["if"]
+    # ...and it is the same gate the chain those jobs hang off already carries.
+    assert jobs["container-kicad"]["if"] == jobs["devcontainer"]["if"]

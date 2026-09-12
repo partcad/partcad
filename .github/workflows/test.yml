@@ -197,6 +197,29 @@ env:
   PC_TELEMETRY_PERFORMANCE: false
 
 jobs:
+  # Every container this workflow publishes is built before any job that could
+  # run a test inside one. Both builders below therefore appear in the "needs:"
+  # of every test job that can reach a container -- which on Linux is nearly all
+  # of them, the "docker" Python sandbox being the default wherever a runtime
+  # answers.
+  #
+  # It is close to free, and where it is not, it is the case it is for. On a
+  # pull request "Build Docker Containers" is a minute: the registry cache hits
+  # and only amd64 is built. It is the version-bump push to "devel" that takes
+  # half an hour, and that is the one run where the images do not exist yet and
+  # a test reaching for one finds nothing -- so the run that pays for the wait
+  # is the run that needs it.
+  #
+  # What it buys differs by image, and only one of the two is a hard failure.
+  # A missing Python sandbox image is caught: ".github/actions/sandbox-image"
+  # builds the tree's own copy when the pull comes up empty, so the job stays
+  # honest either way -- but on a push to "devel" or "main" that fallback is
+  # precisely what the job did not want, the published tag being the subject
+  # there, and until this ordering existed it took the fallback every time. A
+  # missing KiCad image is not caught by anything: "get_runtime" hands the tag
+  # to "containers.run()", which pulls, and a pull of a tag nobody has pushed
+  # is 'APIError: ... ("manifest unknown")'.
+  #
   # The KiCad sandbox image. It used to be the first step of
   # "build-containers" below; it is a call into "container-kicad.yml" now
   # because "test-dev.yml" needs the same image and needs it *finished* -- and
@@ -211,7 +234,17 @@ jobs:
   # "set-matrix" (see the long note there) rather than being restated here.
   container-kicad:
     needs: set-matrix
-    if: ${{ needs.set-matrix.outputs.pytest == 'true' }}
+    # The union of what the jobs needing this one are gated on, and it has to
+    # be: a job whose dependency is skipped is skipped, so a gate narrower than
+    # its dependents' would not delay "Behave" -- it would silently delete it.
+    # The three scopes come out of the same buckets today ("emit pytest code
+    # deps ci", and the same line for the other two), so the union is no wider
+    # in practice than the "pytest" gate this used to carry; it is written out
+    # so that the day they stop agreeing is not the day a suite disappears.
+    if: >-
+      ${{ needs.set-matrix.outputs.pytest == 'true'
+      || needs.set-matrix.outputs.behave == 'true'
+      || needs.set-matrix.outputs.examples == 'true' }}
     permissions:
       contents: read
       packages: write
@@ -229,7 +262,13 @@ jobs:
     # (see the long note there); a job that needs a skipped job is skipped, so
     # stating it twice would only be two places to keep in step.
     needs: set-matrix
-    if: ${{ needs.set-matrix.outputs.pytest == 'true' }}
+    # The union, for the reason given on "container-kicad" above: every test
+    # job that can render in the sandbox waits for this one now, and a gate
+    # narrower than theirs would skip them rather than delay them.
+    if: >-
+      ${{ needs.set-matrix.outputs.pytest == 'true'
+      || needs.set-matrix.outputs.behave == 'true'
+      || needs.set-matrix.outputs.examples == 'true' }}
     permissions:
       packages: write
     steps:
@@ -690,6 +729,10 @@ jobs:
     name: "Behave"
     needs:
       - set-matrix
+      # Both container builds, per the note at the top of "jobs:": no test
+      # starts before every image it might run in exists.
+      - build-containers
+      - container-kicad
       # - cache-preheat
     # Same gate as "Pytest" above. Note that a change to ".devcontainer" is not
     # in it: these jobs run natively, with mamba, and never enter the dev
@@ -828,6 +871,10 @@ jobs:
     name: "Examples (PartCAD)"
     needs:
       - set-matrix
+      # Both container builds, per the note at the top of "jobs:": no test
+      # starts before every image it might run in exists.
+      - build-containers
+      - container-kicad
       # - cache-preheat
     if: ${{ needs.set-matrix.outputs.examples == 'true' }}
     strategy:
@@ -1006,6 +1053,10 @@ jobs:
     name: "Examples (All)"
     needs:
       - set-matrix
+      # Both container builds, per the note at the top of "jobs:": no test
+      # starts before every image it might run in exists.
+      - build-containers
+      - container-kicad
       # - cache-preheat
     # Deep runs only: the nightly schedule, a manual dispatch, a push, or
     # "#deepTest". Not on a pull request and not in the merge queue.
@@ -1100,6 +1151,10 @@ jobs:
     name: "Repo //pub"
     needs:
       - set-matrix
+      # Both container builds, per the note at the top of "jobs:": no test
+      # starts before every image it might run in exists.
+      - build-containers
+      - container-kicad
       # - cache-preheat
     # Deep runs only. That tier was chosen when this job's one substantive step
     # was "continue-on-error" and so could not report a regression before a

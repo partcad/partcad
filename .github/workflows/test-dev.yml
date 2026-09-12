@@ -171,7 +171,14 @@ jobs:
   # waited for by both workflows: see ".github/workflows/container-kicad.yml".
   container-kicad:
     needs: scope
-    if: ${{ needs.scope.outputs.pytest == 'true' }}
+    # The "devcontainer" scope, not the narrower "pytest" one this job was
+    # first written with, because all three jobs below wait for it now and two
+    # of them run on a change that "devcontainer-pytest" excludes -- a change
+    # under ".devcontainer" runs "Run: behave" and "Run: pc" and not
+    # "Run: pytest". Gated on "pytest" it would be skipped for such a change,
+    # and a job whose dependency is skipped is skipped: the two jobs that
+    # change is for would quietly stop running.
+    if: ${{ needs.scope.outputs.devcontainer == 'true' }}
     permissions:
       contents: read
       packages: write
@@ -341,7 +348,13 @@ jobs:
     # get a larger bump because they also cover Windows and macOS.
     timeout-minutes: 90
 
-    needs: poetry-install
+    # The KiCad image as well, on the same rule as "test.yml": no test job
+    # starts before every container it might run in has been published.
+    # Nothing here starts that container today -- "features/open.feature"
+    # asks "pc open" what it would do rather than doing it -- and the wait
+    # is free either way, the build running from "scope" while
+    # "poetry-install" is still going.
+    needs: [poetry-install, container-kicad]
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
       contents: read
@@ -562,7 +575,13 @@ jobs:
     name: "Run: pc"
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    needs: poetry-install
+    # The KiCad image as well, on the same rule as "test.yml": no test job
+    # starts before every container it might run in has been published.
+    # Nothing here starts that container today -- "features/open.feature"
+    # asks "pc open" what it would do rather than doing it -- and the wait
+    # is free either way, the build running from "scope" while
+    # "poetry-install" is still going.
+    needs: [poetry-install, container-kicad]
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
       contents: read
