@@ -140,7 +140,19 @@ runs:
           # the tags of the run that superseded it, mid-flight. With the commit
           # in the tag each run builds, tests and deletes only its own.
           branch=$(printf '%s' "${BRANCH}" | sed 's|[^A-Za-z0-9_.-]|_|g' | cut -c1-40)
-          digest=$(printf '%s' "${BRANCH}" | sha256sum | cut -c1-10)
+          # 'sha256sum' is GNU coreutils and macOS does not ship it; 'shasum'
+          # is what is there, and both print the same lowercase hex. This step
+          # runs on the Linux job that decides, so the fallback is not for
+          # production -- it is for 'tests/dev_tools/test_container_images.py',
+          # which extracts this script and runs it on whatever host the suite
+          # is on, and which found this as an exit status of 127 on the macOS
+          # cells. A tag rule that can only be verified on one platform is one
+          # that stops being verified the day the decider moves.
+          if command -v sha256sum >/dev/null 2>&1; then
+            digest=$(printf '%s' "${BRANCH}" | sha256sum | cut -c1-10)
+          else
+            digest=$(printf '%s' "${BRANCH}" | shasum -a 256 | cut -c1-10)
+          fi
           tag="${RELEASE}-${branch}-${digest}-$(printf '%s' "${SHA}" | cut -c1-7)"
           push=true
           override="${tag}"

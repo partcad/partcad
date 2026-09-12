@@ -64,7 +64,10 @@ def _decide_script():
     return step["run"]
 
 
-def decide(tmp_path, wanted="false", branch="my-branch", release_publish="false", fork="false", sha=SHA):
+PATH = "/usr/bin:/bin:/usr/local/bin"
+
+
+def decide(tmp_path, wanted="false", branch="my-branch", release_publish="false", fork="false", sha=SHA, path=PATH):
     """Run the action's one step and return its outputs."""
     output = tmp_path / "output"
     output.touch()
@@ -74,7 +77,7 @@ def decide(tmp_path, wanted="false", branch="my-branch", release_publish="false"
     subprocess.run(
         ["bash", "-c", _decide_script()],
         env={
-            "PATH": "/usr/bin:/bin:/usr/local/bin",
+            "PATH": path,
             "WANTED": wanted,
             "RELEASE": RELEASE,
             "BRANCH": branch,
@@ -245,6 +248,54 @@ def test_the_digest_is_of_the_branch_and_not_of_the_run(tmp_path):
     second = decide(tmp_path, wanted="true", branch="feat/x", sha="2222222bbb")["tag"]
 
     assert first.rsplit("-", 1)[0] == second.rsplit("-", 1)[0]
+
+
+def _without_sha256sum(tmp_path):
+    """A `PATH` holding what the script needs except GNU's `sha256sum`.
+
+    Which is macOS. Built out of symlinks rather than by editing `PATH`,
+    because the real one is in `/usr/bin` and dropping that directory would
+    take `sed` and `cut` with it.
+    """
+    import shutil
+
+    stand_in = tmp_path / "bin"
+    stand_in.mkdir()
+    for tool in ("sed", "cut", "shasum", "perl", "grep", "cat", "env", "bash"):
+        found = shutil.which(tool, path=PATH)
+        if found:
+            (stand_in / tool).symlink_to(found)
+
+    # Otherwise the test below is two runs of the same branch of the script,
+    # passing because it compares a thing with itself.
+    assert shutil.which("sha256sum", path=str(stand_in)) is None
+    return str(stand_in)
+
+
+def test_the_digest_does_not_depend_on_which_hasher_the_host_has(tmp_path):
+    """`sha256sum` is GNU coreutils, and the macOS runners do not have it.
+
+    The script reaches for `shasum -a 256` there, and the two have to agree:
+    the tag is what the run publishes and what every job then pulls, so a
+    digest that differed by platform would be a second name for one image --
+    and this suite, which runs the script on whatever host it is on, would
+    have two right answers.
+
+    What it caught first was cruder than a disagreement: the macOS `Pytest`
+    cells failing at exit status 127, `sha256sum` not being a command there at
+    all.
+    """
+    here = tmp_path / "with"
+    here.mkdir()
+    ordinary = decide(here, wanted="true", branch="feat/x")
+
+    elsewhere = tmp_path / "without"
+    elsewhere.mkdir()
+    fallback = decide(elsewhere, wanted="true", branch="feat/x", path=_without_sha256sum(tmp_path))
+
+    assert fallback["tag"] == ordinary["tag"]
+    # And it is a real tag either way, rather than two equal failures.
+    assert fallback["tag"] == "%s-feat_x-79b4cc554b-%s" % (RELEASE, SHORT)
 
 
 def test_the_tag_names_one_commit_and_not_just_one_branch(tmp_path):
