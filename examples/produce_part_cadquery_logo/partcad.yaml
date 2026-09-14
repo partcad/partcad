@@ -7,13 +7,123 @@ docs:
     pc inspect bone
     ```
 
+# These are printed, and the pseudo 3D printer that the provider example
+# defines is what prints them. Declared here rather than there because it is
+# this package that has to be able to say how its parts come to exist.
+suppliers:
+  - //pub/examples/partcad/provider_manufacturer:my3dPrinter
+
+materials:
+  pla:
+    formal: PLA
+    full: Polylactic Acid
+    desc: >-
+      A semi-crystalline thermoplastic, and the usual material for a 3D printed
+      part.
+    url: https://en.wikipedia.org/wiki/Polylactic_acid
+    density: 0.001320 # g/mm^3
+    tags:
+      - 3d-printed
+      - low-cost
+      - biodegradable
+
 parts:
+  # One plate, bored three ways, because the bolt meets each of them
+  # differently: 9mm clearance where it passes through, 8mm and tapped where it
+  # takes hold of the thread, and 7.188mm - the thread's pitch diameter - where
+  # a plate is pushed on over the thread rather than screwed along it.
+  #
+  # Of the two that hold the thread, only one can be tapped ahead of the other:
+  # a bolt has one thread and has to find both, so the two tapped holes have to
+  # be a whole number of pitches apart. That is what sets the spacing below.
   head_half:
     type: cadquery
     desc: Bracket used as one side of the head on PartCAD logo
+    properties:
+      material: pla
+    manufacturing:
+      method: additive
+    parameters:
+      # How precisely it has to be printed. Without this the part is asking for
+      # perfect precision, which 'pc test' reports as no tolerance at all.
+      tolerance:
+        type: float
+        default: 0.2
+      bore:
+        type: float
+        default: 9.0 # ISO 273 medium clearance for an M8
+    implements:
+      # A through hole is enterable from either end, so it is declared at both:
+      # the bolt arrives at the outer face, and the bracket underneath meets the
+      # inner one. Each points the way something travelling through it goes.
+      "//pub/std/metric/m:m-thru-depth;size=8,depth=2.5":
+        # Inside the U, where the head of the bolt bears.
+        inner: [[0, 0, 2.5], [1, 0, 0], 180]
+        # The underside of the bracket.
+        outer: [[0, 0, 0], [0, 0, 1], 0]
+
+  head_half_tapped:
+    type: cadquery
+    path: head_half.py
+    desc: The same bracket, tapped M8 so the bolt takes hold in it
+    properties:
+      material: pla
+    manufacturing:
+      method: additive
+    parameters:
+      tolerance:
+        type: float
+        default: 0.2
+      bore:
+        type: float
+        default: 8.0 # the thread's major diameter, which is what a tapped hole measures
+    implements:
+      "//pub/std/metric/m:m-threaded-thru-depth;size=8,depth=2.5":
+        # Inside the U, where the head of the bolt bears.
+        inner: [[0, 0, 2.5], [1, 0, 0], 180]
+        # The underside of the bracket.
+        outer: [[0, 0, 0], [0, 0, 1], 0]
+
   bone:
     type: cadquery
     desc: Plate used as one of the bones on PartCAD logo
+    properties:
+      material: pla
+    manufacturing:
+      method: additive
+    parameters:
+      tolerance:
+        type: float
+        default: 0.2
+      bore:
+        type: float
+        # The thread's pitch diameter: this one is pushed onto the bolt rather
+        # than screwed onto it, and the thread bites in half its depth.
+        default: 7.188
+    implements:
+      "//pub/std/metric/m:m-press-thru-depth;size=8,depth=2.5":
+        top: [[0, 0, 1.25], [1, 0, 0], 180]
+        bottom: [[0, 0, -1.25], [0, 0, 1], 0]
+
+  bone_tapped:
+    type: cadquery
+    path: bone.py
+    desc: The same plate, tapped M8 so the bolt takes hold in it
+    properties:
+      material: pla
+    manufacturing:
+      method: additive
+    parameters:
+      tolerance:
+        type: float
+        default: 0.2
+      bore:
+        type: float
+        default: 8.0
+    implements:
+      "//pub/std/metric/m:m-threaded-thru-depth;size=8,depth=2.5":
+        top: [[0, 0, 1.25], [1, 0, 0], 180]
+        bottom: [[0, 0, -1.25], [0, 0, 1], 0]
 
 render:
   readme:

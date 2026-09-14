@@ -104,6 +104,11 @@ parts:
     type: alias
     source: //pub/examples/partcad/feature_interface:socket-head-m4-screw-6mm
 
+  # The one bought part of the PartCAD logo.
+  screw_m8_35mm:
+    type: alias
+    source: //pub/examples/partcad/produce_part_step:bolt
+
 render:
   svg:
   readme:

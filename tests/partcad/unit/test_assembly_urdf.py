@@ -83,14 +83,37 @@ def structure(assembly):
 
 
 def placement(packed):
-    """A packed location as a comparable value, up to the sign of the axis."""
-    return (
-        tuple(round(v, 4) for v in packed[0]),
-        # The axis only means something when there is a rotation, and an
-        # axis/angle pair and its negation are the same rotation.
-        tuple(round(abs(v) * (1 if packed[2] >= 0 else -1), 4) for v in packed[1]) if abs(packed[2]) > 1e-6 else None,
-        round(abs(packed[2]), 4),
-    )
+    """A packed location as a comparable value: one form per orientation.
+
+    An axis/angle pair is not unique. Turning 90 degrees about -Z, -90 about
+    +Z and 270 about +Z are one orientation written three ways, and a round
+    trip through another format is free to come back with any of them. So each
+    is reduced to the same representative here: the angle brought into
+    [0, 360), then folded into (0, 180] by negating the axis, which is what
+    makes 270 about +Z and 90 about -Z compare equal.
+
+    Taking 'abs()' of the axis - which this did before - is not that. It threw
+    the axis direction away, so it called 90 about +Z and 90 about -Z equal,
+    which they are not, while still calling those two equal forms different.
+    """
+    translation = tuple(round(v, 4) for v in packed[0])
+    angle = packed[2] % 360.0
+    if abs(angle) < 1e-6 or abs(angle - 360.0) < 1e-6:
+        # No rotation, so the axis says nothing.
+        return translation, None, 0.0
+    axis = tuple(float(v) for v in packed[1])
+    if angle > 180.0:
+        angle = 360.0 - angle
+        axis = tuple(-v for v in axis)
+    if abs(angle - 180.0) < 1e-6:
+        # A half turn is its own inverse, so the two axis directions are one
+        # orientation; take the one whose first non-zero component is positive.
+        for v in axis:
+            if abs(v) > 1e-9:
+                if v < 0:
+                    axis = tuple(-w for w in axis)
+                break
+    return translation, tuple(round(v, 4) for v in axis), round(angle, 4)
 
 
 def link_frames(urdf_assembly):
@@ -439,9 +462,12 @@ def test_export_logo_to_urdf(tmp_path):
     # (the assembly and its ASSY container) do not.
     meshes = robot.findall("link/visual/geometry/mesh")
     assert len(meshes) == 5
-    # The logo places two bones and two head halves, so three distinct meshes.
+    # Five distinct meshes, because the five placed parts are five different
+    # parts. The two bones are bored differently from each other and so are the
+    # two head halves - of each pair one is tapped and takes hold of the bolt's
+    # thread, and the other is not - so nothing is placed twice.
     referenced = {mesh.get("filename") for mesh in meshes}
-    assert len(referenced) == 3
+    assert len(referenced) == 5
     for reference in referenced:
         assert (tmp_path / reference).is_file()
         # Millimetre meshes, as URDF states it.
@@ -835,3 +861,23 @@ def test_info_reports_the_urdf_without_building_it():
     assert info["RootLink"] == "base_link"
     assert info["UrdfMovableJoints"] == ["shoulder_pan (revolute)"]
     assert DROPPED_LABELS["joint_kinematics"] in info["Dropped"]
+
+
+def test_placement_gives_one_form_per_orientation():
+    """The comparison the round-trip test rests on.
+
+    An axis/angle pair is not unique, and a round trip through another format
+    may come back with any spelling of the same orientation. It used to take
+    'abs()' of the axis, which threw its direction away: 90 degrees about +Z
+    and about -Z compared equal though they are different rotations, while
+    270 about +Z and 90 about -Z compared different though they are one.
+    """
+    origin = (0.0, 0.0, 0.0)
+    spellings = [((0, 0, 1), 270.0), ((0, 0, -1), 90.0), ((0, 0, 1), -90.0), ((0, 0, -1), -270.0)]
+    forms = {placement((origin, axis, angle)) for axis, angle in spellings}
+    assert len(forms) == 1
+
+    assert placement((origin, (0, 0, 1), 90.0)) != placement((origin, (0, 0, -1), 90.0))
+    assert placement((origin, (0, 0, 1), 0.0))[1] is None
+    # A half turn is its own inverse, so both axis directions are one orientation.
+    assert placement((origin, (0, 0, 1), 180.0)) == placement((origin, (0, 0, -1), 180.0))

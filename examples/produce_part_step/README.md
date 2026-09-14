@@ -2,6 +2,22 @@
 
 PartCAD example project to demonstrate parts defined using STEP files.
 
+## Tolerance, and what it has to do with buying
+
+A `step` part takes no `tolerance` parameter, and `pc test` says so in as
+many words: *the part type 'step' does not accept one*. That is about the
+file format rather than about the part. A STEP file has a place of its own
+to carry tolerance, so a second one in `partcad.yaml` would be a second
+answer to a question the file has already answered - and the two would be
+free to disagree.
+
+It is not a statement that a part read from a file has to be bought. A
+proper STEP file, one that carries its tolerance, describes something that
+can be made. The bolt here is declared with a `vendor` and an `sku` because
+a standard fastener is bought, which is a fact about hex bolts and not
+about STEP.
+
+
 ## Usage
 ```shell
 pc inspect bolt
@@ -13,21 +29,21 @@ pc inspect bolt
 ### bolt
 <table><tr>
 <td valign=top><a href="bolt.step"><img src="././bolt.svg" alt="bolt" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
-<td valign=top>M8x30-screw</td>
+<td valign=top>M8x35-screw</td>
 <td valign=top>Aliases:<br/><ul><li>hexhead</li></ul></td>
 </tr></table>
 
 ### fastener (alias to bolt)
 <table><tr>
 <td valign=top><a href="fastener.step"><img src="././fastener.svg" alt="fastener" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
-<td valign=top>M8x30-screw</td>
+<td valign=top>M8x35-screw</td>
 <td valign=top>Aliases:<br/><ul><li>hexhead</li></ul></td>
 </tr></table>
 
 ### screw (alias to bolt)
 <table><tr>
 <td valign=top><a href="screw.step"><img src="././screw.svg" alt="screw" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
-<td valign=top>M8x30-screw</td>
+<td valign=top>M8x35-screw</td>
 <td valign=top>Aliases:<br/><ul><li>hexhead</li></ul></td>
 </tr></table>
 

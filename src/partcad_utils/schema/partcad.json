@@ -742,6 +742,103 @@
         { "$ref": "#/definitions/interface-movement-body" }
       ]
     },
+    "check-interference": {
+      "description": "What 'partcad.test.interference' does with this assembly. There is no list of pairs to excuse here: two parts have one relationship, the 'connect' that joins them, and that is where an overlap which is meant to be there is stated - with 'selfScrew' or 'snapIn' on the interface, the mating or the connection's 'how', or with 'interferes' naming the further items the same act of joining drives through.",
+      "type": "object",
+      "properties": {
+        "skip": { "type": "boolean", "default": false, "description": "Do not run this check on this object." },
+        "minVolume": {
+          "description": "Shared volume, in mm^3, below which an overlap is not reported. A rounding tolerance and nothing else: the default of 0.05 is orders of magnitude below any overlap a person would call one, and above the noise of two surfaces that meet exactly.",
+          "type": "number",
+          "minimum": 0
+        },
+        "minFraction": {
+          "description": "The same floor expressed as a share of the smaller of the two parts, for assemblies whose parts differ enormously in size. An overlap has to clear both.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "check-connectivity": {
+      "description": "What 'partcad.test.connectivity' does with this assembly.",
+      "type": "object",
+      "properties": {
+        "skip": { "type": "boolean", "default": false, "description": "Do not run this check on this object." },
+        "allowDuplicates": {
+          "description": "Whether the same part in the same place twice is allowed.",
+          "type": "boolean",
+          "default": false
+        },
+        "requireAnchored": {
+          "description": "Whether every item after the first has to be connected to something rather than placed by coordinates. An assembly that says it is manufacturable is held to this whatever it says here.",
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "check-validity": {
+      "description": "What 'partcad.test.validity' does with this object.",
+      "type": "object",
+      "properties": {
+        "skip": { "type": "boolean", "default": false, "description": "Do not run this check on this object." }
+      },
+      "additionalProperties": false
+    },
+    "mating": {
+      "description": "How one particular pair of interfaces goes together. Stated once for the pair and applied to every connection that joins them, alongside the freedom of movement that connection is left with.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "properties": {
+            "desc": { "type": "string", "maxLength": 1000 },
+            "selfScrew": {
+              "description": "Whether joining these two interfaces cuts a thread rather than matching one, which is what lets the two ends carry different threads or one of them none. An interface declares 'selfScrew' on itself when that is true wherever it is used, such as a self-tapping screw; said here it is true of the pairing, which is the only place it can be said when neither end knows on its own - the same screw cuts its own thread in a pilot hole and cuts nothing in the clearance hole it passes through on the way. A connection's 'how' overrides it for a single joint.",
+              "type": "boolean",
+              "default": false
+            },
+            "snapIn": {
+              "description": "Whether joining these two interfaces is done by pushing one past the other rather than by screwing it in: a bore pushed onto a thread it is not cut to match, a clip over a barb. Getting past means passing through, and a model that holds no springs holds them overlapping, so the two are expected to share that space. Said here for the same reason 'selfScrew' is, and never alongside it: a joint is pushed together or threaded into place, not both. A connection's 'how' overrides it for a single joint.",
+              "type": "boolean",
+              "default": false
+            },
+            "sourcePortSelector": { "type": "string", "minLength": 1 },
+            "targetPortSelector": { "type": "string", "minLength": 1 }
+          },
+          "patternProperties": {
+            "^(move[XYZ]|turn[XYZ]|move-[xyz]|turn-[xyz])$": { "$ref": "#/definitions/interface-movement-value" }
+          },
+          "additionalProperties": { "$ref": "#/definitions/interface-movement-body-custom" },
+          "allOf": [
+            {
+              "if": { "properties": { "selfScrew": { "const": true } }, "required": ["selfScrew"] },
+              "then": { "properties": { "snapIn": { "const": false } } }
+            }
+          ]
+        }
+      ]
+    },
+    "mates": {
+      "description": "The interfaces an interface can be connected to: a single name, a list of names, or a mapping of each name to the properties of that pairing.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": { "$ref": "#/definitions/object-reference" },
+          "uniqueItems": true
+        },
+        {
+          "type": "object",
+          "patternProperties": {
+            "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": { "$ref": "#/definitions/mating" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "interface-parameter": {
       "description": "An interface's 'parameters:'. It holds two kinds at once, told apart by what each declares rather than by where it is written: a construction parameter, exactly as a part or a sketch declares one ('size: {type: float, default: 3.0}'), which a reference sets ('m-thru;size=4'); and a freedom-of-movement parameter, which states a range and an axis ('min', 'max', 'dir') and says what a connection made through the interface may still do. The two vocabularies do not overlap: one of the six predefined movement names, a '[min, max, default]' list, or a 'min'/'max'/'dir' or 'type: move'/'type: turn' makes it the second kind; anything else is the first.",
       "oneOf": [
@@ -1003,6 +1100,20 @@
     "import": { "$ref": "#/definitions/import-section" },
     "open": { "$ref": "#/definitions/open-section" },
     "materials": { "$ref": "#/definitions/materials" },
+    "mates": {
+      "description": "Matings declared apart from the interfaces they apply to, so that a package can mate interfaces it does not own: each source interface, then each interface it mates with.",
+      "type": ["object", "null"],
+      "patternProperties": {
+        "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": {
+          "type": "object",
+          "patternProperties": {
+            "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": { "$ref": "#/definitions/mating" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "dependencies": {
       "type": ["object", "null"],
       "patternProperties": {
@@ -1130,6 +1241,7 @@
                   "uniqueItems": true
                 },
                 "parameters": { "$ref": "#/definitions/shape-parameter"},
+                "validity": { "$ref": "#/definitions/check-validity" },
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "cae": { "$ref": "#/definitions/output-section" },
@@ -1314,6 +1426,9 @@
                 "sku": { "type": "string", "minLength": 1 },
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "interference": { "$ref": "#/definitions/check-interference" },
+                "connectivity": { "$ref": "#/definitions/check-connectivity" },
+                "validity": { "$ref": "#/definitions/check-validity" },
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "simulate": { "$ref": "#/definitions/simulate" },
@@ -1346,6 +1461,9 @@
                   "uniqueItems": true
                 },
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "interference": { "$ref": "#/definitions/check-interference" },
+                "connectivity": { "$ref": "#/definitions/check-connectivity" },
+                "validity": { "$ref": "#/definitions/check-validity" },
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "simulate": { "$ref": "#/definitions/simulate" },
@@ -1672,23 +1790,7 @@
               },
               "additionalProperties": false
             },
-            "mates": {
-              "oneOf": [
-                { "type": "string", "minLength": 1 },
-                {
-                  "type": "array",
-                  "items": { "$ref": "#/definitions/object-reference" },
-                  "uniqueItems": true
-                },
-                {
-                  "type": "object",
-                  "patternProperties": {
-                    "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": { "$ref": "#/definitions/interface-parameter"}
-                  },
-                  "additionalProperties": false
-                }
-              ]
-            },
+            "mates": { "$ref": "#/definitions/mates" },
             "parameters": { "$ref": "#/definitions/interface-parameter"},
             "motion": { "$ref": "#/definitions/motion" },
             "physics": { "$ref": "#/definitions/physics" }
