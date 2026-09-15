@@ -4,12 +4,18 @@ Simulation, URDF, SDFormat and MJCF
 PartCAD can read a `URDF <https://wiki.ros.org/urdf>`_ file as an assembly
 (``type: urdf``), write one back out (``pc export -t urdf``), and convert an
 assembly between URDF and ASSY in either direction (``pc convert assembly``).
-It does the same for `SDFormat <http://sdformat.org/>`_ -- what Gazebo describes
-a simulation *world* in -- against a :ref:`scene <scenes>` rather than an
-assembly: ``type: world``, ``pc export -S -t world``, ``pc convert scene``. And
-it does the same for `MJCF <https://mujoco.readthedocs.io/en/stable/XMLreference.html>`_,
-what `MuJoCo <https://mujoco.org/>`_ describes a model in: ``type: mjcf``,
-``pc export -t mjcf``, as an assembly or as a scene.
+URDF is the one of these three PartCAD implements itself, because it describes a
+robot rather than any one engine's world and ROS, MuJoCo, PyBullet and Isaac all
+read it.
+
+The same machinery reads and writes `SDFormat <http://sdformat.org/>`_ -- what
+Gazebo describes a simulation *world* in -- against a :ref:`scene <scenes>`
+rather than an assembly, and
+`MJCF <https://mujoco.readthedocs.io/en/stable/XMLreference.html>`_, what
+`MuJoCo <https://mujoco.org/>`_ describes a model in, as either. Neither is in
+this wheel: each is declared by the plugin package for its engine and named
+through it (``sim-gazebo:world``, ``sim-mujoco:mjcf``). See `An engine's own
+scene format is its plugin's`_ below.
 
 It can also **run** one. ``simulate:`` is where a part or an assembly says what
 it is supposed to do -- or not do -- once it is placed in a world and the world
@@ -383,142 +389,75 @@ kinematic one, using machinery PartCAD already had. What is still missing is the
 other half - a *named configuration* of the whole assembly rather than a value
 written into one connection - which is item 5 below.
 
-Reading a Gazebo world
-======================
+An engine's own scene format is its plugin's
+============================================
 
-A ``.world`` file reaches a package the same two ways a URDF does, and they mean
-the same two things. ``pc add scene world <path>`` *declares* it: the package
-points at the file, the file stays SDFormat, and the shapes its models place
-become parts as it is read. ``pc import scene <path>`` *converts* it: the
-package gains one part per shape and an ``.assy`` scene that places them, and
-nothing points at the world file afterwards.
+SDFormat and MJCF are read and written exactly the way URDF is -- one entry of an
+``import:`` section for the reader, one of an ``export:`` section for the writer,
+the same sandbox, the same envelopes, the same ``dropped`` counters -- but the
+entries are **not in this wheel**. Each belongs to the plugin package for its
+engine:
 
-The two formats meet at the world's initial state. ``SceneFactoryWorld`` drives
-``wrapper_import_world`` in a python sandbox, which parses the XML with the
-standard library, places every model at its ``<pose>`` and every link at its own
-pose inside the model, and hands back plain data. The core registers one part
-per shape -- ``<scene>/<model>/<link>``, and ``<scene>/<model>/<link>/<n>`` for a
-link made of several -- and builds the very same tree an ASSY scene produces.
+.. list-table::
+   :header-rows: 1
+   :widths: 20 24 28 28
 
-Unlike the URDF reader, this one **keeps the nesting**: SDFormat's models are
-containers of links and of other models, which is exactly what a PartCAD
-sub-assembly is, so nothing has to be flattened. The URDF reader flattens
-because a URDF's tree is its *kinematics*, and that is a different thing from
-containment.
+   * - Engine
+     - Package
+     - Scene type
+     - Export
+   * - Gazebo
+     - `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_
+     - ``sim-gazebo:world``
+     - ``pc export -S -t sim-gazebo:world``
+   * - MuJoCo
+     - `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_
+     - ``sim-mujoco:mjcf``
+     - ``pc export -S -t sim-mujoco:mjcf``
 
-Everything else is the same trade: a ``<mesh>`` becomes a part that reads the
-very file the world named, ``<box>``/``<cylinder>``/``<sphere>`` are written out
-as STEP under PartCAD's own state directory (the world file is not touched), and
-what a link says about itself -- mass, inertia, friction, contact, colour --
-becomes named PartCAD properties, the very same ones the URDF reader states.
+That is the same rule the simulator itself follows, and for the same reason.
+Reading a format, writing it, launching the application on it and running a
+physics step with it are one body of knowledge about one engine; PartCAD ships
+the *concept* -- the ``import:`` and ``export:`` sections, the sandbox, the
+``simulation:`` plugin protocol, the ``open:`` entry -- and the engine's package
+supplies the knowledge. Each of those two packages declares all four for its own
+format, so importing it is what makes the type, the exporter, ``pc sim`` and
+``pc open --with`` all work at once.
 
-What a static arrangement cannot hold is counted and reported rather than passed
-over in silence: joints, lights, sensors, plugins, actors, physics settings, and
-the ``<plane>`` every ground plane is. ``pc info`` lists the tally.
+A package that uses one imports it and names the type through it:
 
-The one part most likely to come up empty is ``<include>``. It names a model by
-URI, and outside a Gazebo installation there is no model database to resolve one
-against; what is resolvable -- a relative path, a ``file://``, a ``model://``
-that lands in ``modelPaths`` or beside the world file -- is read, and the rest is
-reported.
+.. code-block:: yaml
 
-Writing a Gazebo world
-======================
+  dependencies:
+    sim-gazebo:
+      type: git
+      url: https://github.com/partcad/partcad-sim-gazebo.git
 
-``pc export -S -t world`` writes a scene as a ``.world`` file plus the mesh files
-it references. Like the URDF exporter it is handed the assembly tree itself
-(``decode: false``), because the models, the links, the poses and the properties
-are built from what the tree says and decoding would throw all four away.
+  scenes:
+    warehouse:
+      type: sim-gazebo:world
+      path: warehouse.world
 
-Anything placed in the world is a ``<model>``, anything with a subtree is a
-``<model>`` wherever it sits, and a node that is geometry is a ``<link>`` with a
-``<visual>`` and a ``<collision>``. Meshes are written in millimetres and
-referenced with ``<scale>0.001 0.001 0.001</scale>``, and poses are in metres
-and radians, exactly as the URDF exporter does it.
+A bare ``type: world`` resolves to nothing and says so. So does
+``pc export -t mjcf``: nothing in ``//builtin/export`` writes either format, and
+the qualified spelling is what reaches the package that does.
 
-Two things the file gets that the scene never said, because a world without them
-is not usable: a ``sun`` light and a ground plane. Both are export parameters
-(``sun``, ``ground_plane``) and both can be turned off. Every model is written
-``<static>true</static>`` for the same kind of reason -- a scene states where
-things are, and a dynamic model would start falling the moment the world loaded
--- and that too is a parameter (``static``).
+What the readers preserve and what they cannot is documented in those
+repositories, beside the code -- including the parts of MJCF that are easy to
+get wrong (angles are degrees by default, an orientation has five spellings, and
+a box's ``size`` is its half-extents), and the export parameters a simulation
+needs that a scene never states (``static``, ``flatten``, ``light``,
+``ground_plane``, ``sun``). The two readers are best-effort in exactly the way
+the URDF reader above is: what a static arrangement cannot hold is counted and
+reported rather than passed over, and ``pc info`` lists it.
 
-A PartCAD property SDFormat has no spelling for is reported at info level rather
-than dropped in silence, the mirror image of the reader refusing to invent one.
-
-.. note::
-
-   "SDF" is two unrelated things in PartCAD. The ``sdf`` *part* type is a signed
-   distance function. SDFormat is what this section is about, and it is called
-   ``world`` everywhere in PartCAD -- the scene type, the export file type, and
-   the extension of the files themselves.
-
-Reading and writing MJCF
-========================
-
-MJCF is what MuJoCo describes a model in, and it is the third description of a
-placed arrangement PartCAD reads. ``type: mjcf`` declares one, in
-``assemblies:`` or in ``scenes:``, and ``pc export -t mjcf`` writes one.
-
-It is the only one of the three that is **both** an assembly type and a scene
-type, and that is not a hedge. A URDF describes one robot and a ``.world``
-describes one world, so each of them reaches PartCAD as one kind of object. An
-MJCF file is routinely used for both -- the same element holds a manipulator and
-the table it is bolted to -- and nothing in the file says which it is. So both
-types exist, one reader serves them
-(``AssemblyFactoryMjcf``/``SceneFactoryMjcf``), and the package says what it
-meant by declaring it in one section or the other.
-
-The reader maps ``<worldbody>`` onto the tree the other two readers produce: a
-body is a sub-assembly, a body of one geom *is* that geom named after the body,
-a body of several holds one part per geom under ``<object>/<body>/<geom>``, and
-every geom becomes a part of the package. Three things about MJCF are easy to
-get wrong and are handled in ``mujoco_common.py`` rather than at each call site:
-
-* **Angles are degrees by default** -- the opposite of URDF and SDFormat, which
-  are radians with no way to say otherwise. ``<compiler angle="radian">`` says
-  so; a file that omits the element is in degrees.
-* **An orientation has five spellings** -- ``quat``, ``axisangle``, ``euler``
-  (in whichever sequence ``<compiler eulerseq>`` names), ``xyaxes`` and
-  ``zaxis`` -- and all five appear in real models. All five are read; only
-  ``quat`` is ever written, because it is the one spelling that needs no
-  ``<compiler>`` to be read back.
-* **Sizes are half-sizes.** A box's ``size`` is its half-extents and a
-  cylinder's is ``(radius, half-length)``, where SDFormat and URDF state the
-  whole thing.
-
-``<default>`` classes are applied (including ``childclass``), ``<include>`` is
-spliced in before anything is read, and everything a static arrangement cannot
-hold -- joints, actuators, tendons, sensors, lights, cameras, contacts,
-keyframes -- is counted and reported exactly as the other two readers report
-what they drop.
-
-The exporter is handed the assembly tree itself (``decode: false``) for the
-reason the URDF and world exporters are, and writes one ``<body>`` per node with
-a ``<geom type="mesh">`` per shape. Meshes are written in millimetres and
-referenced with ``scale="0.001 0.001 0.001"``, and MuJoCo reads **binary** STL
-only, which is why ``ascii`` defaults to false and an ``ascii: true`` is
-reported rather than quietly written.
-
-Three of its parameters exist because a simulation needs what a scene does not
-say:
-
-``static``
-   A scene states where things are, so every body is welded to the world unless
-   this is turned off, which gives each of them a ``<freejoint>``. A simulation
-   of a model that cannot move has nothing to report.
-
-``flatten``
-   Write every node that holds geometry as a body of the ``<worldbody>`` itself,
-   at the world pose the tree puts it at, rather than nesting the bodies as the
-   tree nests. A nested body with no joint above it is one rigid body with its
-   parent -- right for a rigid product, wrong for a stack of blocks that is
-   meant to be able to fall over.
-
-``light`` and ``ground_plane``
-   What makes the file usable rather than what the scene says, the same way the
-   world exporter's ``sun`` and ``ground_plane`` are. The plane is a ``<geom>``
-   of the ``<worldbody>`` itself, so it is static whatever ``static`` says.
+One consequence is worth stating because it is a change and not an oversight:
+``pc open --with mujoco`` no longer converts a scene into MJCF. It opens a file
+that already is one -- the application's ``open:`` entry names the extensions its
+format is stored in -- and refuses anything else with the export that does work.
+An ad-hoc conversion has a throwaway package around the file and no dependency on
+either plugin, so it cannot run the exporter that would be needed; see
+:doc:`cli`.
 
 Every description is a Jinja2 template
 ======================================
@@ -535,7 +474,7 @@ parameter, and ``name`` for the object's own.
 
    scenes:
      cell:
-       type: mjcf
+       type: sim-mujoco:mjcf
        path: cell.xml
        parameters:
          conveyor_length: 2.0
@@ -583,7 +522,11 @@ is one simulation, and states four things:
    The simulation plugin that runs it, by full path. There is no default:
    PartCAD implements no simulator, so a package imports one and says which.
    `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is the
-   MuJoCo one.
+   MuJoCo one and
+   `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ the
+   Gazebo one. Each also declares the reader, the writer and the ``open:`` entry
+   for that engine's own scene format, because those are one piece of knowledge
+   and the simulator is what decides what the file has to say.
 
 ``validation:``
    A Python expression over ``before`` and ``after`` that says whether what
@@ -652,10 +595,28 @@ A simulator is somebody's program with a release cycle of its own; shipping one
 inside the wheel would make every PartCAD release a statement about which
 version of it you get, and would pin a large dependency on every user who never
 simulates anything. So PartCAD ships the concept -- the section, the sandbox
-wrapper, the runner, the MJCF export -- and a package supplies the physics, the
-same way ``//pub/feature/render/draftwright`` supplies technical drawings. The
-MuJoCo plugin is
-`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_.
+wrapper, the runner -- and a package supplies the physics, the same way
+``//pub/feature/render/draftwright`` supplies technical drawings.
+
+``format:`` resolves in the plugin's own package first, which is what lets a
+plugin name the format it implements itself. An engine's scene format is
+exactly that: MJCF is MuJoCo's and SDFormat is Gazebo's, so each plugin declares
+the ``export:`` that writes it beside the ``simulation:`` that reads it.
+
+There are two, and they are deliberately alike:
+`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ and
+`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_. Each
+declares four things about one format -- ``import:`` to read it, ``export:`` to
+write it, ``simulation:`` to run it and ``open:`` to look at it -- so a world
+somebody else wrote is a scene you can place parts in, and a scene you built out
+of parts is a model the engine can run.
+
+Where the simulator comes from is the one way they differ, and it is not a
+difference in the section. MuJoCo is a wheel, so the plugin lists it under
+``pythonRequirements`` and a machine with no MuJoCo simulates just the same.
+Gazebo is not a wheel and there is none, so that plugin names an image under
+``dockerImage`` and looks for a local ``gz`` first -- the same two places
+``pc open --with gazebo`` looks.
 
 ``before`` and ``after`` are all PartCAD knows about a result. What is *inside*
 them, and anything else beside them, is the plugin's own vocabulary -- the

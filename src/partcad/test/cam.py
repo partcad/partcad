@@ -10,6 +10,7 @@
 import asyncio
 import copy
 import hashlib
+import math
 
 from .. import software as pc_software
 from ..assembly import Assembly
@@ -179,16 +180,29 @@ class CamTest(Test):
 
         return f"No suppliers provide the {shape.kind}"
 
-    def tolerance_failure(self, part: Part) -> str | None:
+    async def tolerance_failure(self, part: Part) -> str | None:
         """Why this part's manufacturing tolerance is unusable, or None if it is fine.
 
-        A part that is going to be made has to say how precisely. 'tolerance' is
-        an object-type parameter of the homogeneous part types, and it reads back
-        as 0.0 when nothing declared one - a demand for perfect precision, which
-        is what "nobody said" amounts to and is not something a manufacturer can
-        be asked for. Read through 'get_object_type_parameter()' rather than
-        'get_mcftt()' because the default lives on the part's type, and that is
-        the reader that knows it.
+        A part that is going to be made has to say how precisely, and there are
+        several places it may say it from - a 'tolerance:' field, the file it is
+        read from, the 'tolerance' object-type parameter of the homogeneous
+        types. 'get_tolerance()' is what knows which of them applies to this
+        part; this only judges the answer, so that "how precisely is this made"
+        has one reader and not one per caller.
+
+        Three answers, and each means something different:
+
+        * None - the part has no way to say at all. Its type takes no tolerance
+          and its file states none, so this is a fact about the type rather than
+          about the declaration, and the message says which type.
+        * 0.0 - nothing was said by a part that could have said. It reads as a
+          demand for perfect precision, which is not something a manufacturer can
+          be asked for.
+        * NaN - the file states several tolerances that are not the same. That is
+          a part tolerated feature by feature, which is a *better* answer than one
+          number and not a missing one, so it passes: the file goes to the
+          manufacturer, and it is the file that says how precisely each feature
+          has to be made.
 
         Checked here, in the part path of the CAM test, rather than in a sibling
         test class: the siblings ('cam-additive', 'cam-subtractive',
@@ -198,9 +212,12 @@ class CamTest(Test):
         Assemblies reach it for free - 'test_assembly()' runs every test in
         'tests_to_run' over its supply BoM, and this test is one of them.
         """
-        tolerance = part.get_object_type_parameter("tolerance")
+        tolerance = await part.get_tolerance()
         if tolerance is None:
             return "No manufacturing tolerance: the part type '%s' does not accept one" % part.config.get("type")
+        if math.isnan(tolerance):
+            self.debug(part, "Tolerated feature by feature by the file it is read from")
+            return None
         if tolerance == 0.0:
             return "No manufacturing tolerance is specified"
         return None
@@ -233,7 +250,7 @@ class CamTest(Test):
             # that is bought comes as it comes, which is the same reason the
             # MCFTT parameters are documented as having no effect on a part with
             # a vendor and an SKU.
-            failure = self.tolerance_failure(part)
+            failure = await self.tolerance_failure(part)
             if failure:
                 return self.failed(part, failure)
 

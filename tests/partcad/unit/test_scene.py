@@ -49,7 +49,7 @@ def project(tmp_path):
 
 
 def test_a_package_declares_scenes_beside_its_assemblies(project):
-    assert sorted(project.scene_configs) == ["bench", "warehouse"]
+    assert sorted(project.scene_configs) == ["bench"]
     # And they are a namespace of their own: nothing here is an assembly.
     assert project.get_assembly_config("bench") is None
 
@@ -121,7 +121,7 @@ def test_a_scene_alias_resolves_to_a_scene_and_not_to_an_assembly(tmp_path):
 def test_the_context_resolves_a_scene_by_name(tmp_path):
     ctx = pc.Context(str(sandbox(tmp_path)))
     assert ctx.get_scene("//%s:bench" % SCENE_EXAMPLE_PACKAGE) is not None
-    assert ctx.stats_scenes >= 2
+    assert ctx.stats_scenes >= 1
 
 
 #
@@ -173,20 +173,41 @@ def test_an_assembly_keeps_the_assembly_instructions(tmp_path):
 
 def test_scenes_are_enumerated_for_rendering(project):
     shapes = project._enumerate_shapes(None, None, [], None)
-    assert sorted(shape.name for shape in shapes if shape.kind == "scene") == ["bench", "warehouse"]
+    assert sorted(shape.name for shape in shapes if shape.kind == "scene") == ["bench"]
 
 
-def test_a_world_scene_owns_the_parts_named_under_it(project):
-    """A world's links are parts of the package that nothing declares.
+def test_an_imported_scene_owns_the_parts_named_under_it(tmp_path):
+    """An imported scene's shapes are parts of the package that nothing declares.
 
     'get_part' has to build the scene that produces one when it is handed such
     a name, which is what '_derived_part_owner' decides - and it has to say
     which *kind* of object owns it, because 'assemblies:' and 'scenes:' are
     separate namespaces.
+
+    The format is one this package declares, because that is the only kind there
+    is now: the engine scene formats belong to their plugins, and the rule under
+    test is PartCAD's rather than any one format's.
     """
+    root = tmp_path / "derived"
+    root.mkdir()
+    (root / "reader.py").write_text("def process(path, request):\n    return {}\n", encoding="utf-8")
+    (root / "site.demo").write_text("nothing here is parsed\n", encoding="utf-8")
+    (root / "partcad.yaml").write_text(
+        "name: //d\n"
+        "import:\n"
+        "  demo:\n"
+        "    path: reader.py\n"
+        "    extension: demo\n"
+        "    kinds: [scene]\n"
+        "    noun: model\n"
+        "scenes:\n"
+        "  warehouse:\n    type: demo\n    path: site.demo\n",
+        encoding="utf-8",
+    )
+    project = pc.Context(str(root)).get_project("//")
+
     assert project._derived_part_owner("warehouse/pallet_a/link") == ("scene", "warehouse")
-    # An ASSY scene materializes nothing, and an ordinary name is not one of these.
-    assert project._derived_part_owner("bench/block") is None
+    # A name no scene of this package owns is not one of these.
     assert project._derived_part_owner("brackets/left") is None
 
 
@@ -202,19 +223,30 @@ def test_the_package_schema_accepts_the_scene_example():
     assert not errors, "\n".join("%s: %s" % (list(e.path), e.message) for e in errors)
 
 
-def test_the_world_file_type_is_one_pc_export_knows(tmp_path):
-    """'-t world' is a built-in file type, so 'pc export' does not reject it."""
+def test_an_engine_scene_format_is_not_a_file_type_this_wheel_knows(tmp_path):
+    """'-t world' resolves to nothing, and that is the point of the split.
+
+    SDFormat is written by 'partcad/partcad-sim-gazebo' and MJCF by
+    'partcad/partcad-sim-mujoco', so the bare names are not built-in file types
+    and 'pc export -t world' has nothing to resolve. The qualified spelling,
+    'sim-gazebo:world', reaches the package that does implement it.
+
+    'urdf' is the counterpart that stays: it describes a robot rather than any
+    one engine's world, and it is still handed the tree rather than the geometry
+    it decodes to.
+    """
     from partcad import output
 
     ctx = pc.Context(str(sandbox(tmp_path)))
     formats = output.all_formats(ctx)
-    assert "world" in formats
+    assert "world" not in formats
+    assert "mjcf" not in formats
 
-    config = output.builtin_formats(ctx, output.EXPORT)["world"]
-    implementation = output.Implementation(output.EXPORT, "world", config)
-    assert implementation.extension("bin") == "world"
-    # Handed the tree rather than the geometry it decodes to: the models, the
-    # links, the poses and the properties are all built from what it says.
+    config = output.builtin_formats(ctx, output.EXPORT)["urdf"]
+    implementation = output.Implementation(output.EXPORT, "urdf", config)
+    assert implementation.extension("bin") == "urdf"
+    # Handed the tree rather than the geometry it decodes to: the links, the
+    # poses and the properties are all built from what it says.
     assert implementation.decode is False
 
 

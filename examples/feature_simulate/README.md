@@ -76,7 +76,7 @@ ordinary export, so the same file can be written out and looked at -- or
 opened in MuJoCo:
 
 ```shell
-pc export -a -t mjcf -O ./ unstable
+pc export -a -t sim-mujoco:mjcf -O ./ unstable
 pc open --with mujoco ./unstable.xml
 ```
 

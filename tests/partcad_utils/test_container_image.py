@@ -121,3 +121,101 @@ def test_no_reader_spells_the_tag_for_itself():
 
     docker_runtime = (root / "src/partcad/runtime_python_docker.py").read_text()
     assert "container_image.image_tag(release)" in docker_runtime
+
+
+def test_the_owner_is_partcads_when_nothing_says_otherwise():
+    assert container_image.image_name("ghcr.io/partcad/partcad-container-python") == (
+        "ghcr.io/partcad/partcad-container-python"
+    )
+
+
+def test_the_owner_override_replaces_only_the_owner(monkeypatch):
+    """The registry and the image's own name are not the fork's to change."""
+    monkeypatch.setenv(container_image.ENV_VAR_OWNER, "seekbirdy")
+    assert container_image.image_name("ghcr.io/partcad/partcad-container-python") == (
+        "ghcr.io/seekbirdy/partcad-container-python"
+    )
+
+
+def test_the_owner_is_lowercased(monkeypatch):
+    """A GitHub login may hold capitals and a registry path may not.
+
+    `ghcr.io/SeekBirdy/...` is refused at the push, with an error about the
+    name rather than about the case -- and the run that hits it is a fork's
+    first, which is the worst moment to hand somebody that.
+    """
+    monkeypatch.setenv(container_image.ENV_VAR_OWNER, "SeekBirdy")
+    assert container_image.image_name("ghcr.io/partcad/partcad-container-python") == (
+        "ghcr.io/seekbirdy/partcad-container-python"
+    )
+
+
+@pytest.mark.parametrize("value", ["", "   ", "\n"])
+def test_a_blank_owner_is_unset_rather_than_an_owner(monkeypatch, value):
+    monkeypatch.setenv(container_image.ENV_VAR_OWNER, value)
+    assert container_image.image_name("ghcr.io/partcad/partcad-container-python") == (
+        "ghcr.io/partcad/partcad-container-python"
+    )
+
+
+@pytest.mark.parametrize("name", ["partcad-container-python", "partcad/partcad-container-python"])
+def test_a_name_this_cannot_parse_is_left_alone(monkeypatch, name):
+    """Rewriting a segment of it would invent a reference rather than redirect one."""
+    monkeypatch.setenv(container_image.ENV_VAR_OWNER, "seekbirdy")
+    assert container_image.image_name(name) == name
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["ghcr.io/someone-else/their-image", "docker.io/library/alpine", "quay.io/acme/thing"],
+)
+def test_an_image_that_is_not_partcads_is_left_alone(monkeypatch, name):
+    """This redirects PartCAD's own images and nothing else.
+
+    `//builtin/open` is data: a user may declare a tool of their own with an
+    image of their own, and `partcad_client.external` runs every declaration
+    through here. Moving somebody else's image into a fork's namespace would
+    point the run at a repository with nothing to do with it -- and would fail
+    to pull, which is the better of the two outcomes.
+    """
+    monkeypatch.setenv(container_image.ENV_VAR_OWNER, "seekbirdy")
+    assert container_image.image_name(name) == name
+
+
+def test_the_image_pc_open_starts_follows_the_owner(monkeypatch):
+    """The second reader of the image `container-kicad.yml` publishes.
+
+    That workflow publishes `<this repository>-container-kicad`, so in a fork
+    the image is the fork's. `partcad.part_factory_kicad` follows the owner;
+    this path is the other consumer, and one following while the other does not
+    is how `pc open --with kicad` ends up reaching for a tag nobody published.
+    """
+    import importlib
+
+    import partcad_client.external as external
+
+    monkeypatch.setenv(container_image.ENV_VAR_OWNER, "seekbirdy")
+    reloaded = importlib.reload(external)
+    try:
+        assert reloaded.TOOLS["kicad"].image.startswith("ghcr.io/seekbirdy/")
+    finally:
+        monkeypatch.undo()
+        importlib.reload(external)
+
+
+def test_the_python_sandbox_image_follows_the_owner(monkeypatch):
+    from partcad import runtime_python_docker
+
+    monkeypatch.setenv(container_image.ENV_VAR_OWNER, "seekbirdy")
+    assert runtime_python_docker.image_for("3.11", "0.8.70").startswith("ghcr.io/seekbirdy/")
+
+
+def test_both_overrides_apply_together(monkeypatch):
+    """What a fork that built its own images actually exports: owner and tag."""
+    from partcad import runtime_python_docker
+
+    monkeypatch.setenv(container_image.ENV_VAR_OWNER, "seekbirdy")
+    monkeypatch.setenv(container_image.ENV_VAR, "0.8.70-my-branch")
+    assert runtime_python_docker.image_for("3.11", "0.8.70") == (
+        "ghcr.io/seekbirdy/partcad-container-python:0.8.70-my-branch-py3.11"
+    )

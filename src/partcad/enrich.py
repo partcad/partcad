@@ -96,6 +96,10 @@ ENRICH_IGNORED_PROPERTIES = frozenset(
         "exclude",
         "flip-y",
         "ignore-visibility",
+        # Two different things under one name: how a sketch merges its edges
+        # into wires, and how precisely a 'step' part has to be made. An enrich
+        # answers for neither - what it points at is what gets built, and what
+        # gets made.
         "tolerance",
         "use-faces",
         "use-wires",

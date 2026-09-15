@@ -10,6 +10,7 @@
 import asyncio
 import fnmatch
 import os
+from typing import Optional
 
 import yaml
 
@@ -66,6 +67,26 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         elif ":" not in name:
             name = ":" + name
         return self.project.normalize(name)
+
+    def node_description(self, node) -> Optional[str]:
+        """What a node says it is, in words, or None.
+
+        Free-form text about the item the node places, or - on a container node
+        - about the sub-assembly it declares. Nothing in PartCAD is built out of
+        it; it is what the assembly's generated documents say about this item
+        (see assembly_guide.py), which is why an empty one is dropped here
+        rather than carried as a paragraph with nothing in it.
+
+        Reads whatever the file parsed to, the root node included, so it answers
+        for a file that is not a node at all rather than being the first thing
+        to fail on one.
+        """
+        description = node.get("description", None) if isinstance(node, dict) else None
+        if description is None:
+            return None
+        if not isinstance(description, str):
+            description = str(description)
+        return description.strip() or None
 
     def node_params(self, node) -> dict:
         """The parameter overrides a link carries, if any."""
@@ -140,6 +161,14 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         with pc_logging.Action("ASSY", assembly.project_name, assembly.name):
             assy = self.read_assy()
 
+            # The root node of an ASSY file is a container like any other, and
+            # its "description" is what the file says about the assembly as a
+            # whole. The package that declares the assembly may say it better
+            # ("desc"), so that one wins; with neither, the assembly's documents
+            # would have nothing to say about it at all.
+            if not assembly.desc:
+                assembly.desc = self.node_description(assy)
+
             result = await self.handle_node(assembly, assy)
             if result is not None:
                 assembly.children.append(result)
@@ -192,6 +221,11 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             name = node["name"]
         else:
             name = None
+
+        # "description" is what this node is, in words, and is optional for
+        # every kind of node: the item a part or assembly node places, or the
+        # sub-assembly a container node declares.
+        description = self.node_description(node)
 
         connect = None
         # The non-geometric half of a "connect*" section: free-form context and
@@ -271,6 +305,11 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 {
                     "name": f"{self.name}:{name}",
                     "child": True,
+                    # A container node declares a sub-assembly, so what the node
+                    # says it is is what that sub-assembly is: the same "desc"
+                    # a package-declared assembly carries, and read as such by
+                    # everything that documents one.
+                    "desc": description,
                     "cache": self.ctx.user_config.cache,
                     "cache_dependencies_ignore": self.ctx.user_config.cache_dependencies_ignore,
                 },
@@ -902,7 +941,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 )
 
         if item is not None:
-            return AssemblyChild(item, name, location, connect_comment, connect_how, connection)
+            return AssemblyChild(item, name, location, connect_comment, connect_how, connection, description)
         else:
             return None
 

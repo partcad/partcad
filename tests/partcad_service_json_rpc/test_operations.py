@@ -1591,6 +1591,106 @@ def test_bom_names_the_scene_it_could_not_find():
     assert session.partcad.logging.messages("error") == ["Scene //:world is not found"]
 
 
+def open_tools_of(projects):
+    """What 'open.tools' reports for a workspace holding these packages."""
+    session, _ = make_session()
+    session.partcad.output = types.SimpleNamespace(
+        OPEN="open",
+        BUILTIN_PACKAGES={"open": "//builtin/open"},
+    )
+    ctx = FakeContext()
+    for name, config_obj in projects.items():
+        ctx.projects[name] = FakeProject(name=name, config_obj=config_obj)
+    session.partcad_ctx = ctx
+    return operations.open_tools(session, {"package": "//"})
+
+
+def test_open_tools_reports_the_applications_a_package_declares():
+    """Which is the only half of 'pc open' that needs the package graph.
+
+    A plugin package declares no objects at all, so the default "keep only
+    packages holding something" filter is exactly the one that would drop it;
+    'open_tools' asks with 'has_stuff=False' for that reason.
+    """
+    declared = open_tools_of({"//plugin": {"open": {"gazebo": {"displayName": "Gazebo", "sceneType": "world"}}}})
+
+    assert declared == {"tools": {"gazebo": {"displayName": "Gazebo", "sceneType": "world"}}}
+
+
+def test_open_tools_does_not_send_the_built_in_table_over_the_wire():
+    """The client reads those out of the wheel it is running from.
+
+    Sending them too would mean a client whose daemon is a different release
+    quietly gets that release's table, for applications it already knows about.
+    """
+    declared = open_tools_of(
+        {
+            "//builtin/open": {"open": {"freecad": {"displayName": "FreeCAD"}}},
+            "//plugin": {"open": {"mujoco": {"displayName": "MuJoCo"}}},
+        }
+    )
+
+    assert list(declared["tools"]) == ["mujoco"]
+
+
+def test_a_package_with_no_open_section_contributes_nothing():
+    assert open_tools_of({"//other": {"parts": {"cube": {"type": "step"}}}}) == {"tools": {}}
+
+
+def fake_output_module(builtin=("svg",)):
+    """A stand-in for 'partcad.output', answering what the validation asks of it."""
+    return types.SimpleNamespace(
+        all_formats=lambda ctx: list(builtin),
+        NON_WRAPPER_FORMATS=set(),
+        SECTIONS=("export", "render"),
+        format_names=lambda section: list(section or {}),
+        split_format=lambda project_name, fmt: (
+            (fmt, None) if ":" not in fmt else (fmt.split(":", 1)[1], fmt.split(":", 1)[0])
+        ),
+    )
+
+
+def validate_format(fmt, packages=(), projects=None):
+    """Call the file-type check the way 'render_objects' does."""
+    session, _ = make_session()
+    session.partcad.output = fake_output_module()
+    ctx = FakeContext()
+    for name, config_obj in (projects or {}).items():
+        ctx.projects[name] = FakeProject(name=name, config_obj=config_obj)
+    operations._validate_output_format(session.partcad, ctx, fmt, list(packages))
+
+
+def test_a_file_type_nothing_implements_is_refused_with_the_list():
+    with pytest.raises(operations.JsonRpcError) as caught:
+        validate_format("nosuchtype")
+    assert caught.value.code == operations.USAGE_ERROR
+    assert "Known types: svg" in caught.value.message
+
+
+def test_a_file_type_named_by_its_package_is_checked_against_that_package():
+    """Not against the list: "which types can I write" is what a path answers.
+
+    Nothing in '//builtin/export' writes an engine's own scene format, so the
+    list is exactly where such a name is not, and checking it there refused the
+    one spelling that works.
+    """
+    validate_format("//plugin:world", projects={"//plugin": {"export": {"world": {"path": "w.py"}}}})
+
+
+def test_a_package_that_is_not_in_the_graph_is_reported_as_the_package():
+    with pytest.raises(operations.JsonRpcError) as caught:
+        validate_format("//plugin:world")
+    assert "//plugin" in caught.value.message
+    assert "imported by this workspace" in caught.value.message
+
+
+def test_a_package_that_declares_no_such_file_type_says_what_it_declares():
+    with pytest.raises(operations.JsonRpcError) as caught:
+        validate_format("//plugin:world", projects={"//plugin": {"export": {"mjcf": {"path": "m.py"}}}})
+    assert "declares no 'world' file type" in caught.value.message
+    assert "It declares: mjcf" in caught.value.message
+
+
 def test_render_hands_the_resolved_viewport_to_the_context(monkeypatch):
     resolved = {"viewport_origin": [0, -100, 0], "viewport_up": [0, 0, 1]}
     _fake_render_module(monkeypatch, lambda view, origin, up: dict(resolved))
@@ -1601,6 +1701,10 @@ def test_render_hands_the_resolved_viewport_to_the_context(monkeypatch):
         NON_WRAPPER_FORMATS=set(),
         SECTIONS=("export", "render"),
         format_names=lambda section: [],
+        # A file type may name the package that implements it, and the real
+        # module is what splits the two apart. This stands in for the module, so
+        # it answers for everything the code under test asks of it.
+        split_format=lambda project_name, fmt: (fmt, None) if ":" not in fmt else tuple(fmt.split(":", 1)[::-1]),
     )
     rendered = []
 

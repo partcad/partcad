@@ -100,6 +100,13 @@ class ObjectTypeParameterException(Exception):
     hang this on. Every name outside the policed registry stays free, because
     parameters are otherwise the object's own invention.
 
+    'noun' is what the declaration was written as, because one of these is not a
+    parameter: a 'step' part states its manufacturing tolerance as a field of its
+    own ('PartFactory.ACCEPTS_TOLERANCE_FIELD'), the parameter of that name being
+    rejected by that type for a reason of its own. The type-by-type question is
+    identical and so is what to do about it, so the two share this rather than
+    the message being wrong for one of them.
+
     Raised while the object is being created, like 'UnknownTypeException' above,
     so that 'Project.record_broken_object()' files it against that one object
     and the rest of the package goes on loading. It stays an error rather than
@@ -107,13 +114,14 @@ class ObjectTypeParameterException(Exception):
     whose author can correct it, not a feature PartCAD took away.
     """
 
-    def __init__(self, kind: str, t, name, parameter: str):
+    def __init__(self, kind: str, t, name, parameter: str, noun: str = "parameter"):
         self.kind = kind
         self.type = t
         self.name = name
         self.parameter = parameter
+        self.noun = noun
         super().__init__(
-            "the %s type '%s' does not accept the '%s' parameter declared by '%s'" % (kind, t, parameter, name)
+            "the %s type '%s' does not accept the '%s' %s declared by '%s'" % (kind, t, parameter, noun, name)
         )
 
 

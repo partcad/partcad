@@ -39,7 +39,7 @@ There are many ways to produce a PartCAD model that can be consumed by others.
   - [URDF files](./produce_assembly_urdf/)
 
 - Place objects into scenes (where things are, not how they got there):
-  - [Assembly YAML (ASSY) files and Gazebo world files](./produce_scene_assy/)
+  - [Assembly YAML (ASSY) files read as a scene](./produce_scene_assy/)
 
 - Ship software with the hardware:
   - [Firmware images and other files a product ships with](./produce_software/)

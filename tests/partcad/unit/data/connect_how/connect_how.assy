@@ -1,8 +1,17 @@
+description: |
+  Two screws driven into a plate, described by the file itself.
+
+  The package that declares this assembly says it better, so this text only
+  reaches the documents of the declaration that carries no "desc" of its own.
 links:
   - part: plate
+    description: |
+      The plate the screws are driven into. It is the fixture here: lay it flat
+      before starting.
 
   - part: screw
     name: screw-tl
+    description: The screw in the top left hole.
     connect:
       name: plate
       to: m3-thru

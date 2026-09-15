@@ -119,8 +119,23 @@ at all).
   corrected `fileHash` has to move the cache key, or `pc test` answers the new declaration with the old one's
   failure.
 
-- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships three packages inside itself, reachable from
-  every context as `//builtin/export`, `//builtin/render` and `//builtin/scene` (loaded
+- **A file type may name the package that implements it** (`output.split_format`,
+  `Shape._output_implementor`): `pc export -t sim-gazebo:world`, the spelling `import:`, `simulation:` and
+  `pc cae --implementation` already took. It exists because there are formats PartCAD ships no implementation
+  of — an engine's own scene format lives in that engine's plugin package — so the bare name has nothing to
+  resolve. The named package goes in as a layer directly *above* `//builtin` rather than replacing the lot,
+  unlike `import_declaration()` with the same spelling, because this section also decides where the file
+  goes: `output_dir` and `prefix` are the caller's business whoever writes the file.
+
+  Two places filter a format name against a list and both had to learn about it: `Project.render_async()`
+  enumerates the file types this package and the built-in ones declare, and a path is in neither, so
+  `pc export -t <package>:<type>` reported success and wrote nothing; and the daemon's
+  `_validate_output_format()` rejected it before resolving it. Anything else that grows such a list needs the
+  same treatment — "which types can I write" is a question a path has already answered.
+
+- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships five packages inside itself, reachable from
+  every context as `//builtin/export`, `//builtin/render`, `//builtin/import`, `//builtin/open` and
+  `//builtin/scene` (loaded
   on demand by `Context.get_project`, see `output.py`). The first two declare implementations — the file
   types `pc export` and `pc render` write — in
   exactly the form a user's package declares one: a `path` to a script, its `pythonRequirements`, and the
@@ -232,8 +247,13 @@ at all).
   **There is deliberately no `//builtin/simulate`.** `simulation:` is a third section resolved exactly like
   the other two — a plugin is an `output.Implementation` like any other — and PartCAD implements none of it.
   A simulator is somebody's program with a release cycle of its own, so PartCAD ships the concept (the
-  section, `wrappers/wrapper_simulate.py`, the runner in `simulation.py`, the `mjcf` export a scene reaches a
-  plugin through) and a package supplies the physics: `partcad/partcad-sim-mujoco` is the MuJoCo one.
+  section, `wrappers/wrapper_simulate.py`, the runner in `simulation.py`) and a package supplies the physics:
+  `partcad/partcad-sim-mujoco` is the MuJoCo one and `partcad/partcad-sim-gazebo` the Gazebo one. Each
+  declares four things about one format — `import:` to read it, `export:` to write it, `simulation:` to run
+  it and `open:` to look at it — because they are one piece of knowledge and a reader and a writer maintained
+  apart disagree. A plugin's `format:` therefore resolves in **its own** package as well as the scene's
+  (`simulation._export_scene_async` passes the plugin as the options package), which is what lets it name the
+  format it implements itself.
   `simulation:` is also **not** in `output.SECTIONS`: everything that reads that tuple is asking which file
   types exist, and a simulation is not one.
 
@@ -242,8 +262,16 @@ at all).
   `assembly_factory_imported.py` is one factory for every such type, and the reader it runs is named by the
   declaration. Everything below the reader — sandbox, tree walk, part registration, the report of what was
   dropped — was identical in the three factories that used to exist, so only the reader knows XML and only
-  the reader is a plugin. `//builtin/import` ships `urdf`; `mjcf` and `world` belong to the two engine
-  plugins, beside the exporter and the simulator that share their knowledge of the format.
+  the reader is a plugin. `//builtin/import` ships `urdf` and nothing else; `mjcf` and `world` belong to the
+  two engine plugins, beside the exporter, the `open:` entry and the simulator that share their knowledge of
+  the format. The wheel carries no copy of either, so `type: world` resolves to nothing and says which
+  package to name: the spelling is the full path, `type: sim-gazebo:world`.
+
+  **A type named by its full path is resolved from the package that declared the object, not from the root.**
+  `Context.get_project_from()`, not `get_project()`: a package's objects are created as part of loading it,
+  so the package doing the asking is not in `ctx.projects` yet and a root-first lookup answers None for a
+  dependency that is declared perfectly well. That is not a corner case — it is every object of this kind on
+  the way in — and it worked on the second attempt, which is what made it look like a flake.
 
   Two things about it are easy to get wrong. **`import:` was the old name of `dependencies:`**, and
   `project_config.py` used to migrate it in silence — copy the value across and delete the key — which would

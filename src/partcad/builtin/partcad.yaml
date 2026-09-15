@@ -7,6 +7,9 @@
 #
 #   - `//builtin/export` -- the 3D/CAD formats `pc export` writes.
 #   - `//builtin/render` -- the 2D projections `pc render` writes.
+#   - `//builtin/import` -- the third-party formats a package can declare an
+#     object as.
+#   - `//builtin/open` -- the applications `pc open` launches.
 #
 # And one that declares an object rather than a way of producing one:
 #
@@ -15,8 +18,11 @@
 #
 # There is deliberately no `//builtin/simulate`. A simulator is somebody's
 # program with a release cycle of its own, so PartCAD ships the concept -- the
-# `simulation:` section, the sandbox wrapper, the MJCF export -- and a package
-# supplies the physics (`partcad/partcad-sim-mujoco` for MuJoCo).
+# `simulation:` section, the sandbox wrapper, the runner -- and a package
+# supplies the physics: `partcad/partcad-sim-mujoco` for MuJoCo,
+# `partcad/partcad-sim-gazebo` for Gazebo. Each of those also declares the
+# reader, the writer and the `open:` entry for its own scene format, which is
+# where MJCF and SDFormat belong and where they are on their way to.
 #
 # A package that wants to produce a format differently does not patch anything
 # here. It declares the same format in its own `export:`/`render:` section with
@@ -26,9 +32,18 @@
 name: //builtin
 desc: |
   The packages PartCAD ships with itself: the built-in ways of producing output
-  files, declared in `//builtin/export` and `//builtin/render`, and the scene a
-  simulation places its subject in, in `//builtin/scene`.
+  files, declared in `//builtin/export` and `//builtin/render`, the formats it
+  reads in `//builtin/import`, the applications it opens in `//builtin/open`,
+  and the scene a simulation places its subject in, in `//builtin/scene`.
 
+# Only three of the five children are listed. Every `//builtin/*` package is
+# reachable by path whatever this says -- `output.BUILTIN_PATHS` maps each one
+# to a directory inside the installation and `Context._get_builtin_project()`
+# loads it straight from there, so that they resolve in a context whose root
+# package is called something else entirely. What listing one here would add is
+# eager loading of it with this package, which is the opposite of what
+# `//builtin` is for: a context that never reads a foreign format should not pay
+# for `//builtin/import`.
 dependencies:
   export:
     type: local

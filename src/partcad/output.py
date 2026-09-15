@@ -108,14 +108,13 @@ SIMULATE = "simulation"
 # format live with that engine's plugin -- 'mjcf' in 'partcad/partcad-sim-mujoco'
 # and 'world' in 'partcad/partcad-sim-gazebo'.
 #
-# The section is spelled 'import:' and not 'import:' because that name is
-# taken: 'import:' is the historical spelling of 'dependencies:', and
-# 'ProjectConfiguration' does not merely warn about it - it copies the value
-# into 'dependencies' and deletes the key (see 'project_config.py'). A section
-# by that name would be read as a dependency list and then removed before
-# anything here could see it. The plural also reads better beside 'partTypes:',
-# which is the other section where a package declares something PartCAD then
-# resolves by name.
+# 'import:' was the historical spelling of 'dependencies:', which is why a
+# package whose 'import:' describes transports rather than readers is told to
+# rename it rather than quietly migrated ('ProjectConfiguration' used to copy
+# the value into 'dependencies'; see 'project_config.py'). The name is this
+# section's now, and it is the right one: what an entry declares is how a file
+# of that format is read *in*, which is the mirror of 'export:' and reads that
+# way beside it.
 #
 # What an entry declares, beyond the implementation keys every section shares:
 #
@@ -526,6 +525,38 @@ def config_sections(section: str) -> tuple:
     return (RENDER, EXPORT) if section == EXPORT else (EXPORT, RENDER)
 
 
+def split_format(project_name: str, format_name):
+    """A file type's name, and the package that implements it when one is named.
+
+    An export or a render format is ordinarily a bare name -- 'step', 'png' --
+    and every package with an opinion about it is layered on top of the built-in
+    one. It may also be written as a full resource path, 'sim-mujoco:mjcf',
+    which names the package the implementation lives in.
+
+    That spelling is not new here: it is what the other three sections resolved
+    through this module already take -- 'import:' in 'import_declaration()',
+    'simulation:' in 'partcad.simulation.resolve_plugin()', 'cae:' in
+    'pc cae --implementation' -- and it is here for the reason it is there. A
+    format PartCAD ships no implementation of has no other way to be reached:
+    nothing in '//builtin/export' writes MJCF or SDFormat, because an engine's
+    own scene format travels with that engine's plugin package, so
+    'pc export -t mjcf' has nothing to resolve and 'pc export -t sim-mujoco:mjcf'
+    has.
+
+    Returns the bare name and the package path, or the name and None. Turning
+    that path into a package is the caller's, because the caller is the one with
+    a context to turn it in.
+    """
+    if not isinstance(format_name, str) or ":" not in format_name:
+        return format_name, None
+    # Late, for the reason 'import_declaration()' imports it late: this module
+    # is imported from 'factory' and must not drag the package machinery in.
+    from .utils import resolve_resource_path
+
+    package, name = resolve_resource_path(project_name, format_name)
+    return name, package
+
+
 def builtin_project(ctx, section: str):
     """The package that declares the built-in implementations of a section.
 
@@ -597,7 +628,11 @@ def import_declaration(ctx, project, type_name: str):
         from .utils import resolve_resource_path
 
         plugin_package, format_name = resolve_resource_path(project.name, type_name)
-        plugin_project = ctx.get_project(plugin_package)
+        # From the package that declared the object, not from the root: this
+        # runs while that package is still being loaded (its objects are created
+        # as part of loading it), and the root is not registered until that
+        # finishes. See 'Context.get_project_from()'.
+        plugin_project = ctx.get_project_from(project, plugin_package)
         if plugin_project is None:
             pc_logging.error(
                 "The package implementing the '%s' object type is not found: %s" % (format_name, plugin_package)

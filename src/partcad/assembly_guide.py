@@ -183,6 +183,31 @@ def _slug(text):
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", text).strip("-") or "image"
 
 
+def _prose(text) -> list:
+    """Free-form text from an ASSY file, as the paragraphs of a document.
+
+    A 'description' or a 'comment' is written by hand in YAML, most often as a
+    block scalar hard-wrapped to fit the file it is in. Those line breaks belong
+    to the file rather than to the text, and the three output formats disagree
+    about them - HTML turns one into a '<br/>' and the PDF starts a new line,
+    while markdown folds it away - so they are folded here, once, and only a
+    blank line, which is the break that was meant, starts a new paragraph.
+    """
+    if not text:
+        return []
+    paragraphs = []
+    for chunk in re.split(r"\n\s*\n", str(text).strip()):
+        collapsed = " ".join(chunk.split())
+        if collapsed:
+            paragraphs.append(collapsed)
+    return paragraphs
+
+
+def _prose_blocks(text) -> list:
+    """The paragraphs of '_prose()', as blocks of a document."""
+    return [doc.Paragraph(paragraph) for paragraph in _prose(text)]
+
+
 #
 # The steps of an assembly
 #
@@ -200,6 +225,13 @@ class GuideStep:
     counterpart_name: str
     counterpart_location: Location
     connection: Optional[dict] = None
+    # What the ASSY file says about this step in words, as opposed to the
+    # sentence 'description()' composes out of the connection: the node's own
+    # 'description' (what the item being added is) and the 'comment' of the
+    # 'connect'/'connectPorts' section that placed it (context that is
+    # deliberately not an instruction - see docs/source/assy.rst).
+    item_description: Optional[str] = None
+    comment: Optional[str] = None
     # Where the two are pulled apart to, and the line that shows the gap.
     direction: tuple = (0.0, 0.0, 1.0)
     distance: float = FALLBACK_EXPLODED_DISTANCE
@@ -237,6 +269,11 @@ class GuideSection:
     name: str
     steps: list = field(default_factory=list)
     top: bool = False
+    # The item everything else is added to. No step places it - there is nothing
+    # yet to place it against - so it is named on the assembly's own page, and
+    # it is the only item whose 'description' has nowhere else to go.
+    base_name: Optional[str] = None
+    base_description: Optional[str] = None
 
 
 async def collect_sections_async(ctx, assembly) -> list:
@@ -324,6 +361,8 @@ async def _build_section(ctx, assembly, content=None, top=False):
         if not placed:
             # The first item is what everything else is added to; there is
             # nothing yet to connect it to.
+            section.base_name = child.name or child.item.name
+            section.base_description = child.description
             placed.append(child)
             continue
 
@@ -337,6 +376,8 @@ async def _build_section(ctx, assembly, content=None, top=False):
             counterpart_name=counterpart_name,
             counterpart_location=counterpart_location,
             connection=child.connection,
+            item_description=child.description,
+            comment=child.comment,
         )
         await _resolve_step_geometry(ctx, step)
         section.steps.append(step)
@@ -686,8 +727,7 @@ async def _title_page(project, assembly, images, sections):
     if image is not None:
         blocks.append(doc.ImageRow([image], height=0.5))
 
-    if assembly.desc:
-        blocks.append(doc.Paragraph(assembly.desc))
+    blocks += _prose_blocks(assembly.desc)
 
     properties = [("Package", project.name)]
     author = package_author(project)
@@ -715,9 +755,7 @@ async def _section_pages(project, section: GuideSection, images: ImageSource, se
     if image is not None:
         blocks.append(doc.ImageRow([image], height=0.5))
 
-    desc = getattr(section.assembly, "desc", None)
-    if desc:
-        blocks.append(doc.Paragraph(desc))
+    blocks += _prose_blocks(getattr(section.assembly, "desc", None))
     blocks.append(
         doc.Properties(
             [
@@ -728,6 +766,9 @@ async def _section_pages(project, section: GuideSection, images: ImageSource, se
     )
     if section.top and section_count > 1:
         blocks.append(doc.Paragraph("Assemble the sub-assemblies documented above before starting on this one."))
+    if section.base_name:
+        blocks.append(doc.Paragraph("Start with %s." % section.base_name))
+        blocks += _prose_blocks(section.base_description)
 
     pages = [doc.Page(title=section.name, blocks=blocks)]
 
@@ -755,7 +796,15 @@ async def _step_page(section: GuideSection, step: GuideStep, images: ImageSource
     if row:
         blocks.append(doc.ImageRow(row, height=0.3))
 
+    blocks += _prose_blocks(step.item_description)
     blocks.append(doc.Paragraph(step.description()))
+    # Marked as a note, because it is one: a "comment" is context around the
+    # step and never the step itself, and the reader has to be able to tell
+    # which of the two paragraphs is the thing to do.
+    comment = _prose(step.comment)
+    if comment:
+        blocks.append(doc.Paragraph("Note: %s" % comment[0]))
+        blocks += [doc.Paragraph(paragraph) for paragraph in comment[1:]]
 
     exploded = await images.shape_image_async(
         exploded_assembly(step),

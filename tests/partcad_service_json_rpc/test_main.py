@@ -101,3 +101,29 @@ def test_settings_argv_of_a_default_launcher_is_empty():
     # Nothing was asked for, so nothing is passed on -- the daemon is spawned
     # with the same argv it always was.
     assert m.settings_argv(m.parse_args([])) == []
+
+
+def test_building_the_session_says_this_process_serves(monkeypatch):
+    """The one place the daemon admits to being one.
+
+    `partcad.context.probe_timeout()` reads this, and gives a daemon twice as
+    long to decide it has no network: it is long-lived, it caches that answer
+    for five minutes, and it holds it for every client of the workspace rather
+    than for one command.
+
+    Asserted of `_build_session` because that is what every serving channel
+    calls -- the detached socket daemon (in the grandchild), the Windows pipe
+    child, stdio and HTTP -- and what the launcher that starts a daemon and
+    exits does not. The `Session` itself is mocked out: what is under test is
+    the marking, and building a real one warms a PartCAD context.
+    """
+    from unittest import mock
+
+    from partcad_utils import process_role
+
+    monkeypatch.setattr(process_role, "_is_daemon", False)
+    monkeypatch.setattr(m, "Session", mock.MagicMock())
+
+    assert process_role.is_daemon() is False
+    m._build_session(m.parse_args([]))
+    assert process_role.is_daemon() is True

@@ -126,7 +126,11 @@ def image_for(version: str, release: Optional[str] = None) -> str:
         from . import __version__
 
         release = __version__
-    return "%s:%s-py%s" % (BASE_IMAGE, container_image.image_tag(release), version)
+    return "%s:%s-py%s" % (
+        container_image.image_name(BASE_IMAGE),
+        container_image.image_tag(release),
+        version,
+    )
 
 
 def _short(image: str) -> str:

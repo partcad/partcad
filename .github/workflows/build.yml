@@ -79,7 +79,18 @@ jobs:
     # As in "test.yml": a push to "devel" runs this only for a version bump, and
     # the event name leads because a "schedule" carries no "head_commit" -- see
     # the long note there.
-    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    #
+    # "github.event.repository.fork" is the last clause and it is what lets a
+    # fork run this at all. The reasoning above is about *this* repository: a
+    # push to "devel" here is followed by a version bump within the hour, so
+    # the matrix runs on that instead. A fork has no bump coming, so without
+    # this clause a contributor who pushes to their fork's "devel" -- which is
+    # what a fork's default branch is called -- gets a run in which every
+    # single job is skipped, and nothing anywhere says why.
+    if: >-
+      ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel'
+      || startsWith(github.event.head_commit.message, 'Version updated')
+      || github.event.repository.fork }}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       # Which of the four artifacts below this change can say anything about.

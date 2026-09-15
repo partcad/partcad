@@ -42,6 +42,7 @@ The following syntax is used to create a node that places a part in the assembly
 
     part: <name of a part from this package or a global path "{/package}:{part}">
     name: <(optional) name to use for this part in this assembly>
+    description: <(optional) free form text, see "Description" below>
     location: <(optional) OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
     connectPorts: # alternative to "location", used to connect by ports
       with: <(optional) name of the port in this part, if more than one exists>
@@ -88,6 +89,29 @@ The following syntax is used to create a node that places an assembly in the ass
     assembly: <name of an assembly from this package or a global path "{/package}:{assembly}">
     ... # same as for parts
 
+Description
+-----------
+
+The `description` field of any node is free form text about that node: the part
+or the assembly it places, or - on a container node - the sub-assembly it
+declares.
+
+  .. code-block:: yaml
+
+    description: |
+      A NEMA 17 stepper on a printed bracket.
+    links:
+      - part: example-bracket
+        description: The fixture everything else is mounted on.
+
+It is used when the assembly is documented (`pc render -t pdf` and
+`pc render -t html`): the description of the file's own root node is what the
+assembly instruction book says about the assembly as a whole, unless the package
+that declares the assembly gives it a `desc` of its own; the description of a
+container node is what the book says about that sub-assembly; and the
+description of a part or assembly node is shown with the step that adds it.
+Nothing else in PartCAD parses it or acts upon it.
+
 Comment
 -------
 
@@ -101,7 +125,9 @@ The `comment` field of a `connect` or `connectPorts` section is free form text.
         The motor is easier to align if the bracket is laid face down first.
 
 It is supplementary context for a human, or for an LLM, that is reading the
-assembly. PartCAD never parses it and never acts upon it.
+assembly. PartCAD never parses it and never acts upon it; it is shown as a note
+beside the step this connection makes in the assembly instruction book, and
+reported by `pc info`.
 
 .. warning::
 

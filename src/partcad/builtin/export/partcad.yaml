@@ -31,6 +31,13 @@ desc: |
   that `pc export` writes. A package replaces any of them, or adds one of its
   own, by declaring that file type in its own `export:` section.
 
+# What is *not* here is as deliberate as what is. An engine's own scene format
+# is written by that engine's plugin package -- `mjcf` by
+# `partcad/partcad-sim-mujoco` and `world` by `partcad/partcad-sim-gazebo` --
+# beside the reader and the simulator that share their knowledge of it, so it is
+# `pc export -t sim-mujoco:mjcf` rather than `pc export -t mjcf`. `urdf` stays
+# here: it describes a robot rather than any one engine's world.
+
 export:
   step:
     desc: ISO 10303-21 (STEP), the CAD interchange format.
@@ -110,56 +117,6 @@ export:
     tolerance: 0.1
     angularTolerance: 0.1
 
-  world:
-    desc: |
-      SDFormat, the XML Gazebo describes a simulation world in: a `.world` file
-      plus the mesh files it references. It is the format a **scene** is
-      exported to (`pc export -S -t world`), and, like `urdf` below, it is
-      handed the assembly *tree* itself rather than the geometry it decodes to
-      (`decode: false`) - one model per object placed in the scene, named,
-      placed and looked up by what the tree says.
-
-      Not to be confused with the `sdf` *part* type, which is a signed distance
-      function and has nothing to do with this. See
-      `builtin/export/export_world.py`.
-    path: export_world.py
-    extension: world
-    # 'decode: false' -- see wrappers/wrapper_export.py, and the same note on
-    # 'urdf' below.
-    decode: false
-    pythonRequirements:
-      - cadquery-ocp==7.9.3.1.1
-    # The meshes are written by this exporter itself, so it takes the mesh
-    # options too.
-    tolerance: 0.1
-    angularTolerance: 0.1
-    ascii: false
-    # Write an '<inertial>' for every link, computing one from the solid and
-    # 'density' (kg/m^3) for a part that does not state its own.
-    inertial: true
-    # A scene states where things are, so nothing in it is meant to move: every
-    # model is written '<static>true</static>' unless this is turned off.
-    static: true
-    # What makes the file usable rather than what the scene says: a world with
-    # no light renders black, and one with no ground has nothing to stand on.
-    sun: true
-    ground_plane: true
-    # 'world_name' defaults to the object's label, 'mesh_dir' to
-    # '<file stem>_meshes' next to the world file, 'mesh_prefix' to empty (which
-    # makes the mesh references relative to the world file; a Gazebo model
-    # database sets it to 'model://<name>/'), 'version' to the SDFormat version
-    # 'gazebo_common.SDF_VERSION' names, and 'density' to the exporter's own
-    # default.
-    # world_name: <name>
-    # mesh_dir: <directory>
-    # mesh_prefix: <prefix>
-    # version: "1.9"
-    # density: 2700.0
-    # Hand the exporter what the parts report about themselves - mass, inertia,
-    # friction, colour - so that it writes those rather than recomputing them or
-    # losing them. See 'wrappers/wrapper_export.properties_index()'.
-    properties: true
-
   urdf:
     desc: |
       Unified Robot Description Format: a URDF file plus the mesh files it
@@ -198,59 +155,4 @@ export:
     # losing them. The properties travel on the shape envelopes; this asks for
     # the index that looks one up by name, which costs a walk of the tree that
     # is already in hand. See 'wrappers/wrapper_export.properties_index()'.
-    properties: true
-
-  mjcf:
-    desc: |
-      MJCF, the XML MuJoCo describes a model in: an `.xml` file plus the mesh
-      files it references. It is the format a scene or an assembly is handed to
-      a MuJoCo simulation in (`pc sim`, through a plugin package such as
-      `partcad/partcad-sim-mujoco`), and it is
-      what `pc open --with mujoco` converts a scene to before opening it.
-
-      Like `world` and `urdf` it is handed the assembly *tree* itself rather
-      than the geometry it decodes to (`decode: false`) - one body per object
-      placed in the scene, named, placed and looked up by what the tree says.
-      See `builtin/export/export_mjcf.py`.
-    path: export_mjcf.py
-    extension: xml
-    # 'decode: false' -- see wrappers/wrapper_export.py, and the same note on
-    # 'world' above.
-    decode: false
-    pythonRequirements:
-      - cadquery-ocp==7.9.3.1.1
-    # The meshes are written by this exporter itself, so it takes the mesh
-    # options too. 'ascii' stays false: MuJoCo reads binary STL only.
-    tolerance: 0.1
-    angularTolerance: 0.1
-    ascii: false
-    # A scene states where things are, so nothing in it is meant to move: every
-    # body is welded to the world unless this is turned off, which is what
-    # gives each of them a '<freejoint>'. `pc sim` turns it off, because a
-    # simulation of a model that cannot move has nothing to report.
-    static: true
-    # Write every node that holds geometry as a body of the '<worldbody>'
-    # itself, at the world pose the tree puts it at, rather than nesting the
-    # bodies as the tree nests. A nested body with no joint above it is one
-    # rigid body with its parent, which is right for a rigid product and wrong
-    # for a stack of blocks that is meant to be able to fall over. `pc sim`
-    # turns it on for the same reason it turns 'static' off.
-    flatten: false
-    # What makes the file usable rather than what the scene says: a model with
-    # no light renders black, and one with no ground has nothing to stand on.
-    # The plane is a geom of the '<worldbody>' itself, so it is static whatever
-    # 'static' says.
-    light: true
-    ground_plane: true
-    # 'model_name' defaults to the object's label, 'mesh_dir' to
-    # '<file stem>_meshes' next to the model file, 'density' (kg/m^3) to the
-    # exporter's own default, and 'timestep' to MuJoCo's.
-    # model_name: <name>
-    # mesh_dir: <directory>
-    # density: 2700.0
-    # timestep: 0.002
-    gravity: [0.0, 0.0, -9.81]
-    # Hand the exporter what the parts report about themselves - mass, friction,
-    # colour - so that it writes those rather than losing them. See
-    # 'wrappers/wrapper_export.properties_index()'.
     properties: true

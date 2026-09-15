@@ -64,10 +64,20 @@ def test_an_unknown_field_does_not_break_a_declaration():
     assert tools["democad"].display_name == "DemoCAD"
 
 
-def test_the_version_placeholder_pins_an_image_partcad_publishes():
-    """So the release number is not written down twice."""
-    assert external.TOOLS["kicad"].image.endswith(":" + external.__version__)
-    assert "{version}" not in external.TOOLS["kicad"].image
+def test_the_version_placeholder_pins_an_image_partcad_publishes(external_at_release):
+    """So the release number is not written down twice.
+
+    Asserted of an installed PartCAD, where nothing overrides the tag, which is
+    what the fixture re-imports the module for: a run that rebuilt PartCAD's
+    images exports `PC_CONTAINER_IMAGE_TAG`, and the table this reads is built
+    as the module is imported, so without it the assertion below is comparing
+    the release against a branch tag on exactly those runs. The nightly is one
+    of them.
+    """
+    image = external_at_release.TOOLS["kicad"].image
+
+    assert image.endswith(":" + external.__version__)
+    assert "{version}" not in image
 
 
 def test_an_applications_own_file_is_opened_and_anything_else_imported():
@@ -91,8 +101,20 @@ def test_an_application_with_no_templates_just_takes_the_file():
 
 
 def test_a_front_end_gets_its_own_arguments():
-    """Gazebo is three generations of one program, and they differ."""
-    gazebo = external.TOOLS["gazebo"]
+    """Gazebo is three generations of one program, and they differ.
+
+    Declared rather than looked up, because the Gazebo entry belongs to
+    `partcad/partcad-sim-gazebo` now -- which makes this a test of what a
+    package's own declaration reaches, which is the point of `binaryArgs`.
+    """
+    gazebo = external.tool_from_declaration(
+        "gazebo",
+        {
+            "displayName": "Gazebo",
+            "binaries": ["gz", "ign", "gazebo"],
+            "binaryArgs": {"gz": ["sim"], "ign": ["gazebo"]},
+        },
+    )
 
     assert gazebo.launch_args("gz") == ("sim",)
     assert gazebo.launch_args("ign") == ("gazebo",)

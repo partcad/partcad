@@ -35,7 +35,8 @@ async def get_runtime(ctx):
                 # this commit rather than the ones the release published -- the
                 # TODO that stood here asked for exactly that, and
                 # 'partcad_utils.container_image' is where it ended up.
-                "ghcr.io/partcad/partcad-container-kicad:"
+                container_image.image_name("ghcr.io/partcad/partcad-container-kicad")
+                + ":"
                 + container_image.image_tag(sys.modules["partcad"].__version__),
                 "integration-kicad",
                 5000,

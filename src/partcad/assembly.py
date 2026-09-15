@@ -38,7 +38,7 @@ class AssemblyChild:
     placed with 'location:', and for assemblies built through 'add()'.
     """
 
-    def __init__(self, item, name=None, location=None, comment=None, how=None, connection=None):
+    def __init__(self, item, name=None, location=None, comment=None, how=None, connection=None, description=None):
         self.item = item
         self.name = name
         self.location = location
@@ -48,6 +48,12 @@ class AssemblyChild:
         self.comment = comment
         self.how = how
         self.connection = connection
+        # What the ASSY node that placed this child says the child is, in words
+        # (its 'description'). Unlike 'comment' it belongs to the node rather
+        # than to a connection, so an item placed by 'location:' carries one
+        # too. Like 'comment', nothing in PartCAD interprets it: it is what the
+        # assembly's generated documents say about this step (assembly_guide.py).
+        self.description = description
 
     def connect_info(self):
         """What the ASSY file says about connecting this child, or None.

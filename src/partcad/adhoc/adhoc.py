@@ -31,10 +31,11 @@ KINDS = {
     "part": ("parts", "input_part"),
     "sketch": ("sketches", "input_sketch"),
     # A scene is the third thing a file can hold: an arrangement of objects
-    # rather than one shape. Only the self-contained scene formats reach here --
-    # a '.world' and an MJCF model name their meshes by path, so a throwaway
-    # package around one is enough, while an '.assy' names the parts of a
-    # package and is refused below.
+    # rather than one shape. Only a self-contained scene format could reach here
+    # -- one that names its meshes by path, so that a throwaway package around it
+    # is enough -- and PartCAD implements none: an '.assy' names the parts of a
+    # package and is refused below, and an engine's own format is implemented by
+    # that engine's plugin package, which a throwaway package cannot reach.
     "scene": ("scenes", "input_scene"),
 }
 

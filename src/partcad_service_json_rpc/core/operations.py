@@ -476,9 +476,9 @@ def import_object(session, params):
     """Import a part, assembly or scene into a package, copying (and maybe converting) it.
 
     Served by the daemon rather than the client because the work runs through
-    sandboxed wrappers: importing an assembly drives ``wrapper_import_assy`` or
-    ``wrapper_import_urdf`` in a Python runtime, importing a scene drives
-    ``wrapper_import_world``, and ``--target-format`` converts through the same
+    sandboxed wrappers: importing an assembly or a scene drives the reader the
+    ``import:`` declaration for that format names -- one PartCAD ships, or one a
+    plugin package does -- and ``--target-format`` converts through the same
     machinery. Those runtimes belong to the daemon's environment and need not
     exist on the client side at all.
     """
@@ -521,8 +521,21 @@ def import_object(session, params):
             for key in ("ignoreCollision", "modelPaths"):
                 if params.get(key) is not None:
                     config[key] = params[key]
+            # Required, with no default. It used to default to 'world', which
+            # was the only scene format PartCAD read; every arrangement format
+            # now belongs to a simulation engine's plugin package, so a default
+            # could only ever name a type that does not resolve -- and would
+            # report that as a broken package rather than as a missing argument.
+            scene_type = params.get("scene_type")
+            if not scene_type:
+                raise JsonRpcError(
+                    USAGE_ERROR,
+                    "Importing a scene needs the format to read it as ('scene_type'): a format a package "
+                    "declares under 'import:' with 'scene' among its 'kinds', named through that package "
+                    "(for example 'sim-gazebo:world').",
+                )
             try:
-                name = import_scene_action(package_obj, params.get("scene_type", "world"), source, config)
+                name = import_scene_action(package_obj, scene_type, source, config)
             except Exception as e:  # pylint: disable=broad-except
                 pc.logging.exception("Error importing scene")
                 raise JsonRpcError(USAGE_ERROR, "Error importing scene: %s" % e) from e
@@ -775,8 +788,11 @@ def adhoc_convert(session, params):
         from partcad.shape import PART_EXTENSION_MAPPING as mapping
     elif kind == "scene":
         # The third kind of object a file can hold: an arrangement rather than a
-        # shape or a drawing. `pc open --with mujoco` is what asks for it -- a
-        # Gazebo world written out as the MJCF MuJoCo reads.
+        # shape or a drawing. Nothing asks for it today -- `pc open` refuses a
+        # scene it would have to convert, because every arrangement format
+        # belongs to a plugin package an ad-hoc context cannot reach -- and it is
+        # here because the machinery is the part conversion's. See
+        # `partcad.adhoc.convert.convert_scene_file`.
         from partcad.adhoc.convert import convert_scene_file as convert_fn
         from partcad.shape import SCENE_EXTENSION_MAPPING as mapping
     else:
@@ -1580,7 +1596,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.80"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.89"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -2513,9 +2529,37 @@ def _validate_output_format(pc, ctx, fmt, packages):
     The set is not fixed: on top of what `//builtin/export` and `//builtin/render`
     implement, a package may declare a file type of its own in its `export:` or
     `render:` section, and that has to be nameable on the command line.
+
+    A file type may also be named by its full path, `sim-gazebo:world`, which is
+    how one that no package *here* declares is reached -- an engine's own scene
+    format lives in that engine's plugin package, and the object being exported
+    belongs to somebody else's. That is checked against the package it names
+    rather than against this set: the set answers "which types can I write", and
+    a path is already an answer to it.
     """
     if fmt is None:
         return
+
+    bare, package_path = pc.output.split_format(ctx.name, fmt)
+    if package_path is not None:
+        package_obj = ctx.get_project(package_path)
+        if package_obj is None:
+            raise JsonRpcError(
+                USAGE_ERROR,
+                "The package implementing the '%s' file type is not found: %s. "
+                "Is it imported by this workspace?" % (bare, package_path),
+            )
+        declared = set()
+        for section in pc.output.SECTIONS:
+            declared.update(pc.output.format_names(package_obj.config_obj.get(section)))
+        if bare not in declared:
+            raise JsonRpcError(
+                USAGE_ERROR,
+                "The package '%s' declares no '%s' file type. It declares: %s"
+                % (package_path, bare, ", ".join(sorted(declared)) or "none"),
+            )
+        return
+
     known = set(pc.output.all_formats(ctx)) | pc.output.NON_WRAPPER_FORMATS
     for package in packages:
         package_obj = ctx.get_project(package)

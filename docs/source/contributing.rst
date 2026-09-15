@@ -512,7 +512,7 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
 .. code-block::
 
-  Installing the current project: partcad (0.8.80)
+  Installing the current project: partcad (0.8.89)
 
 .. warning::
 
@@ -887,8 +887,75 @@ CI fans out over operating systems, and a pull request does not pay for all of t
        over-running is the safe direction. If a description has to name the marker without asking for it,
        write it split across two code spans.
 
-A push to ``devel`` is the exception to all three: it runs no matrix at all unless its head commit message starts with
-``Version updated``, which is the release commit. Every push to ``devel`` is followed by one of those within minutes
+.. _Running CI in your own fork:
+
+Running CI in your own fork
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A pull request **against this repository whose branch lives in your fork** runs with a read-only token and no
+repository secrets. That is GitHub's rule, not a setting either side can change, and it holds whether or not you have
+write access here -- what decides it is that the head is somewhere else. Most of CI does not care: the tests, the
+linters, the extension and the bundles all run on a fork exactly as they run here.
+
+A pull request **inside your fork** -- branch to branch, both in your copy -- is a different thing and gets the full
+run: a writable token, your own secrets, your own container images. Nothing is held back there, because nothing about
+it is untrusted from your fork's point of view. That is the run to open when you want CI to behave exactly as it does
+on a pull request here, and it is worth knowing that the test for it is the head being in *another* repository and not
+the head repository being a fork of something -- the two differ for precisely this case, and reading the wrong one
+used to leave a fork unable to test its own work.
+
+One thing does. A change under ``tools/containers/`` (or a ``#images`` marker) means the run has to *build* PartCAD's
+container images and push them somewhere its own test jobs can pull them from, and a fork's pull request cannot push
+anywhere. Such a run falls back to the release's images, so the change you made to them goes untested -- which used to
+be a ``::warning::`` somewhere inside a green run.
+
+The ``Prerequisites`` job now says so before the run instead, and says where to go:
+
+.. code-block:: text
+
+   | Capability         | State            | Detail                                           |
+   | packages: write    | unavailable here | read-only, because GitHub gives a fork's pull    |
+   |                    |                  | request a read-only token                        |
+
+.. note::
+
+   That job asks the registry what it grants the token, and it treats the answer as confirmation only. A granted
+   ``push`` proves the write works; a withheld one proves nothing, because ghcr answers ``pull`` and no ``push`` on
+   ``partcad/partcad`` itself -- the repository that publishes every one of these images. So the job never stops a run
+   over that answer. What it costs is the case it was added for: a fork whose **Workflow permissions** are read-only
+   is not caught before its push, only at it.
+
+**Run CI in your fork to get that coverage.** Push the branch to your fork and start *CI* from its **Actions** tab
+with "Run workflow". There the token writes to ``ghcr.io/<you>/partcad-container-*``, the run builds your images, and
+its test jobs pull what it built rather than upstream's -- ``PC_CONTAINER_IMAGE_OWNER`` is what redirects them,
+beside the ``PC_CONTAINER_IMAGE_TAG`` that redirects the tag. Link the run on your pull request and a reviewer can see
+it went green.
+
+Two things a fork needs once, and ``Prerequisites`` fails with both if they are missing:
+
+* **Actions enabled.** A fork's **Actions** tab starts with "I understand my workflows, go ahead and enable them".
+* **Read and write workflow permissions**, under **Settings -> Actions -> General**. Nothing else: the
+  ``ghcr.io/<you>/partcad-container-*`` package is created on the first push, and no secret of your own is needed.
+
+Note that a fork's default branch is called ``devel`` too, and a push to it used to run a matrix in which every single
+job was skipped -- the ``Version updated`` rule below is about *this* repository, where a bump follows every merge
+within minutes, and a fork has no bump coming. It no longer applies to a fork.
+
+``SSH_PRIVATE_KEY_RO`` is the other secret this repository holds, and what it is for is a dependency that is not
+public. These suites drive ``pc install``, and a PartCAD package may declare a ``git`` dependency on any repository --
+so a **private** fork testing its own packages clones its own private repositories in CI, and this is the credential
+that lets it. The public upstream needs none: its own dependencies are public and clone over https.
+
+So ``Prerequisites`` asks for it where the repository is private and reports it as *not needed* where it is public, and
+the behave jobs start no agent where there is no key -- unconditional, the agent action is handed an empty string and
+fails the whole job with "The ssh-private-key argument is empty". The privacy of the repository is a heuristic for
+"its dependencies are private too", not a fact: if your fork is private but everything it installs is public, set
+``needs-ssh: "false"`` on the ``Prerequisites`` job in your copy of ``test.yml`` and ``test-dev.yml``.
+
+A push to ``devel`` **in this repository** is the exception to all three: it runs no matrix at all unless its head
+commit message starts with ``Version updated``, which is the release commit. (A fork is exempt -- see `Running CI in
+your own fork`_ above. The reasoning below is about the bump that follows every merge here, and a fork has no bump
+coming, so the rule would leave it with a run in which every job is skipped.) Every push to ``devel`` is followed by one of those within minutes
 and it carries the same tree, so what a merge costs is one build of that tree rather than two -- and the artifacts it
 produces are stamped with the version they will be released under rather than with the one the merge replaced.
 ``Standalone`` and ``IDE`` are gated on this too; they used to run on the merge as well, which is where the second

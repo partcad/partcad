@@ -16,7 +16,7 @@ import pytest
 import partcad as pc
 from partcad import assembly_factory_assy, assembly_guide
 from partcad import document as pc_document
-from partcad.assembly import Assembly
+from partcad.assembly import Assembly, AssemblyChild
 from partcad.exception import NotAnAssemblyFileError, NotManufacturableError
 from partcad.geom import Location
 
@@ -297,6 +297,103 @@ def test_exploded_is_validated_where_it_is_declared():
     assert factory._exploded_distance(True, "bracket") is None
 
 
+def test_prose_folds_the_line_breaks_of_the_file():
+    """Text hand-wrapped in an ASSY file reads the same in all three formats
+
+    HTML turns a line break into a '<br/>' and the PDF starts a new line, while
+    markdown folds it away, so the wrapping of the file would otherwise be a
+    different document in each of them.
+    """
+    assert assembly_guide._prose(None) == []
+    assert assembly_guide._prose("   \n  ") == []
+    assert assembly_guide._prose("One sentence,\nwrapped by the file.") == ["One sentence, wrapped by the file."]
+    # A blank line is the break that was meant, and starts a paragraph.
+    assert assembly_guide._prose("First.\n\nSecond.\n") == ["First.", "Second."]
+
+
+def test_build_section_carries_the_words_of_the_assy_file(monkeypatch):
+    """What each node of the file says about itself reaches the pages showing it
+
+    The first item is placed by no step - there is nothing yet to place it
+    against - so the assembly's own page is the only place its description can
+    go.
+    """
+
+    async def no_geometry(ctx, step):
+        """The gap between two items needs a CAD runtime; this test needs none."""
+
+    monkeypatch.setattr(assembly_guide, "_resolve_step_geometry", no_geometry)
+
+    content = make_assembly("widget:None", child=True)
+    content.children.append(AssemblyChild(make_assembly("bracket"), "bracket", Location(), description="The fixture."))
+    content.children.append(
+        AssemblyChild(
+            make_assembly("screw"),
+            "screw",
+            Location(),
+            comment="Start it by hand.",
+            connection={"target": "bracket"},
+            description="The screw that holds it down.",
+        )
+    )
+
+    section = asyncio.run(assembly_guide._build_section(None, content, content))
+
+    assert (section.base_name, section.base_description) == ("bracket", "The fixture.")
+    (step,) = section.steps
+    assert step.item_description == "The screw that holds it down."
+    assert step.comment == "Start it by hand."
+
+
+def test_section_page_names_the_item_to_start_with():
+    """The assembly's own page says what to pick up first, and what it is"""
+    section = assembly_guide.GuideSection(
+        assembly=make_assembly("widget", desc="A widget.\nMade of two parts."),
+        name="widget",
+        base_name="bracket",
+        base_description="The fixture everything else is mounted on.",
+    )
+
+    (page,) = asyncio.run(assembly_guide._section_pages(None, section, assembly_guide.ImageSource(), 1))
+    texts = [block.text for block in page.blocks if isinstance(block, pc_document.Paragraph)]
+
+    assert texts == [
+        "A widget. Made of two parts.",
+        "Start with bracket.",
+        "The fixture everything else is mounted on.",
+    ]
+
+
+def test_step_page_shows_what_the_file_says_about_the_step():
+    """A step's page carries the node's description and the connection's comment
+
+    The comment is marked as a note: it is context around the step and never the
+    step itself (see docs/source/assy.rst), and the reader has to be able to
+    tell which of the paragraphs is the thing to do.
+    """
+    step = assembly_guide.GuideStep(
+        number=1,
+        item=make_assembly("screw"),
+        item_name="screw",
+        location=Location(),
+        counterpart=make_assembly("bracket"),
+        counterpart_name="bracket",
+        counterpart_location=Location(),
+        item_description="The screw that holds it down.",
+        comment="Start this screw by hand:\nthe plate flexes if it is torqued down first.",
+    )
+    section = assembly_guide.GuideSection(assembly=make_assembly("widget"), name="widget", steps=[step])
+
+    page = asyncio.run(assembly_guide._step_page(section, step, assembly_guide.ImageSource()))
+    texts = [block.text for block in page.blocks if isinstance(block, pc_document.Paragraph)]
+
+    assert texts == [
+        "The screw that holds it down.",
+        "Add screw to bracket.",
+        "Note: Start this screw by hand: the plate flexes if it is torqued down first.",
+    ]
+
+
 def test_step_description_names_the_ports():
     """A step says what is connected to what"""
     step = assembly_guide.GuideStep(
@@ -485,6 +582,12 @@ def test_render_assembly_guide_sub_assemblies():
     # of its own: the top level assembly is documented once, with its own steps.
     assert titles.count("logo_embedded") == 2  # the title page and its own page
     assert "<h1>logo_embedded: step 3 of 3</h1>" in html
+    # What the ASSY file says about its nodes: the container node's description
+    # on the sub-assembly's own page, and the first item's - which no step
+    # places - on the page of the assembly it starts.
+    assert "<p>The skull, made of two identical halves.</p>" in html
+    assert "<p>Start with bone1.</p>" in html
+    assert "<p>The first of the two crossed bones, laid flat.</p>" in html
 
 
 @pytest.mark.slow

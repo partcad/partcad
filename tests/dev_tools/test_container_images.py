@@ -99,7 +99,7 @@ def test_an_ordinary_run_builds_the_release_and_publishes_nothing(tmp_path):
     tests run against what an installed PartCAD pulls.
     """
     out = decide(tmp_path)
-    assert out == {"tag": RELEASE, "release": RELEASE, "push": "false", "override": ""}
+    assert out == {"tag": RELEASE, "release": RELEASE, "push": "false", "override": "", "degraded": "false"}
 
 
 def test_the_version_bump_publishes_the_release_tag(tmp_path):
@@ -110,7 +110,7 @@ def test_the_version_bump_publishes_the_release_tag(tmp_path):
     image.
     """
     out = decide(tmp_path, release_publish="true")
-    assert out == {"tag": RELEASE, "release": RELEASE, "push": "true", "override": ""}
+    assert out == {"tag": RELEASE, "release": RELEASE, "push": "true", "override": "", "degraded": "false"}
 
 
 def test_a_run_that_changed_the_images_builds_and_tests_its_own(tmp_path):
@@ -334,7 +334,22 @@ def test_a_fork_asks_for_nothing_it_cannot_publish(tmp_path):
     leaving it to be worked out from a rendering that looks fine.
     """
     out = decide(tmp_path, wanted="true", fork="true")
-    assert out == {"tag": RELEASE, "release": RELEASE, "push": "false", "override": ""}
+    assert out == {"tag": RELEASE, "release": RELEASE, "push": "false", "override": "", "degraded": "true"}
+
+
+def test_degraded_tells_the_two_kinds_of_not_publishing_apart(tmp_path):
+    """`push=false` is both "nothing to publish" and "could not publish".
+
+    Only the second is a gap in what this run proves, and only the second has
+    anything to tell the contributor -- so `.github/actions/preflight` needs
+    them separated. Reading `push` alone, it would stay silent on exactly the
+    run that has something to say.
+    """
+    ordinary = decide(tmp_path, wanted="false", fork="true")
+    assert ordinary["push"] == "false" and ordinary["degraded"] == "false"
+
+    wanted_and_impossible = decide(tmp_path, wanted="true", fork="true")
+    assert wanted_and_impossible["push"] == "false" and wanted_and_impossible["degraded"] == "true"
 
 
 def test_the_fork_test_above_is_testing_the_fork_and_not_the_default(tmp_path):
@@ -346,14 +361,29 @@ def test_the_fork_test_above_is_testing_the_fork_and_not_the_default(tmp_path):
     assert decide(tmp_path, wanted="true", fork="false")["push"] == "true"
 
 
-def test_only_a_pull_request_can_be_a_fork():
+def test_only_a_pull_request_whose_head_is_elsewhere_is_a_fork():
     """`github.event.pull_request` is empty on every other event, and a push to
     this repository's own `devel` is what the release publish is.
+
+    The head being in *another* repository is the test, not the head repository
+    being a fork of something. `head.repo.fork` -- which this read until a
+    contributor asked why their fork could not test its own work -- answers a
+    different question, and the two disagree for a pull request opened inside a
+    fork, branch to branch: that head repository is a fork, and its token is
+    fully writable because the head is that same repository. Reading the wrong
+    one made such a run publish nothing and test the upstream release's images,
+    in the contributor's own copy, with nothing untrusted anywhere in it.
+
+    Pinned as an exact string because it is an Actions expression the script
+    never sees: nothing else here can fail if it goes wrong.
     """
     (step,) = [s for s in _action()["runs"]["steps"] if s.get("id") == "decide"]
     condition = " ".join(step["env"]["FROM_A_FORK"].split())
 
-    assert condition == "${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}"
+    assert condition == (
+        "${{ github.event_name == 'pull_request'"
+        " && github.event.pull_request.head.repo.full_name != github.repository }}"
+    )
 
 
 def test_the_release_publish_is_the_bump_on_devel_and_a_dispatch():

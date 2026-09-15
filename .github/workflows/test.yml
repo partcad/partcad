@@ -191,7 +191,7 @@ env:
   # is the interpreter PartCAD itself runs on. 'test-pub-repo', which renders
   # the public index, uses PYTHONS_SANDBOX instead.
   PYTHONS_SLIM: '["3.10", "3.14"]'
-  VERSION: 0.8.80
+  VERSION: 0.8.89
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
   PC_TELEMETRY_PERFORMANCE: false
@@ -233,7 +233,11 @@ jobs:
   # version bump runs the matrix on a push to devel" guard lives on
   # "set-matrix" (see the long note there) rather than being restated here.
   container-kicad:
-    needs: set-matrix
+    # "preflight" too: this job pushes to the registry, and a run that
+    # cannot must be told so by the job whose subject that is, rather than
+    # by a 500MB push failing here. Every test job already needs this one,
+    # so gating it gates them.
+    needs: [set-matrix, preflight]
     # The union of what the jobs needing this one are gated on, and it has to
     # be: a job whose dependency is skipped is skipped, so a gate narrower than
     # its dependents' would not delay "Behave" -- it would silently delete it.
@@ -270,7 +274,11 @@ jobs:
     # matrix on a push to devel" guard here. That guard lives on "set-matrix"
     # (see the long note there); a job that needs a skipped job is skipped, so
     # stating it twice would only be two places to keep in step.
-    needs: set-matrix
+    # "preflight" too: this job pushes to the registry, and a run that
+    # cannot must be told so by the job whose subject that is, rather than
+    # by a 500MB push failing here. Every test job already needs this one,
+    # so gating it gates them.
+    needs: [set-matrix, preflight]
     # The union, for the reason given on "container-kicad" above: every test
     # job that can render in the sandbox waits for this one now, and a gate
     # narrower than theirs would skip them rather than delay them.
@@ -552,7 +560,18 @@ jobs:
     # provides: a pull request drops OSES_DEEP_ONLY and OSES_QUEUE_ONLY on the
     # strength of it. A manual dispatch, a merge queue and a pull request are all
     # in the same position and are all covered by leading with the event name.
-    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    #
+    # "github.event.repository.fork" is the last clause and it is what lets a
+    # fork run this at all. The reasoning above is about *this* repository: a
+    # push to "devel" here is followed by a version bump within the hour, so
+    # the matrix runs on that instead. A fork has no bump coming, so without
+    # this clause a contributor who pushes to their fork's "devel" -- which is
+    # what a fork's default branch is called -- gets a run in which every
+    # single job is skipped, and nothing anywhere says why.
+    if: >-
+      ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel'
+      || startsWith(github.event.head_commit.message, 'Version updated')
+      || github.event.repository.fork }}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       matrix-sandbox: ${{ steps.set-matrix.outputs.matrix-sandbox }}
@@ -576,6 +595,31 @@ jobs:
       # empty value leaves every reader on the release, which is the default
       # every installed PartCAD has.
       image-override: ${{ steps.images.outputs.override }}
+      # Asked for images of its own and unable to publish them; read by
+      # "preflight" so that the lost coverage is reported before the run, not
+      # as a warning inside it.
+      image-degraded: ${{ steps.images.outputs.degraded }}
+      # Whose copy of those images this run is about, empty unless they are
+      # this fork's own. A fork cannot publish into "partcad", so anything it
+      # publishes lands under its own owner -- and a run that went on pulling
+      # "ghcr.io/partcad/..." would build images, push them, and then test the
+      # upstream release's. Read by "partcad_utils.container_image.image_name".
+      #
+      # Gated on "push" and not on "override": a fork running this by hand from
+      # its Actions tab is a "workflow_dispatch", which "container-images" reads
+      # as a release publish -- so it publishes the *release* tag into the
+      # fork's namespace and overrides no tag at all. That run has its own
+      # images and no redirection to find them by, which is the one case the
+      # tag alone cannot express.
+      #
+      # And on "fork", because in this repository "push" is also true for the
+      # version bump and for a branch-image run, and both of those publish to
+      # "partcad" -- where the name in the source is already right.
+      #
+      # Only the owner: the image's own name still comes from "github.repository"
+      # on the build side, so this holds for a fork that kept the repository name
+      # (which is what forking gives you) and not for one that renamed it.
+      image-owner: ${{ steps.images.outputs.push == 'true' && github.event.repository.fork && github.repository_owner || '' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -659,6 +703,68 @@ jobs:
           # the largest single saving there.
           SHARDS_JSON=$(python3 -c "import json, os; print(json.dumps(list(range(1, int(os.environ['BEHAVE_SHARDS']) + 1))))")
           echo 'matrix-behave={"os": '"${OSES_SLIM}"', "python-version": ${{ env.PYTHONS_SLIM }}, "shard": '"$SHARDS_JSON"'}' >> "${GITHUB_OUTPUT}"
+
+  # What this run is going to reach for, checked before it reaches for it.
+  #
+  # Every credential in this workflow is one "partcad/partcad" has and a fork
+  # does not, and a fork that runs this discovers that as a push refused by a
+  # registry half an hour in, on a job whose error names the registry rather
+  # than the setup. This asks the same questions up front and answers them in
+  # terms of what to go and change. See ".github/actions/preflight".
+  #
+  # It gates the two container jobs and nothing else, which is enough: every
+  # job that runs a test already needs both of those, so a missing credential
+  # skips the whole suite through the graph that is already there. The four
+  # lint jobs stay out of it on purpose -- they read the repository and touch
+  # no registry, and there is no reason a fork with no packages write should
+  # lose the one part of CI it can always run.
+  preflight:
+    name: "Prerequisites"
+    needs: set-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # A job-level block REPLACES the workflow's, it does not add to it: every
+      # scope left out becomes "none". So "contents: read" is restated here, and
+      # not restating it is what CodeRabbit caught on this pull request -- with
+      # "contents" at none, "actions/checkout" cannot clone a private
+      # repository, and the job would die before reaching the check. On a
+      # private fork, which is the case this whole action exists for. Every
+      # other credentialed job in these two files pairs the two for this reason.
+      contents: read
+      # And the write this asks the registry about, because a GITHUB_TOKEN is
+      # scoped per job: left at the default, the probe would be measuring a
+      # token nothing else in the run uses. It requests the write; whether the
+      # repository grants it is the question.
+      packages: write
+    outputs:
+      # Forwarded so that a job can ask what this run has rather than reaching
+      # for "secrets" itself, which an "if:" cannot read.
+      ghcr-write: ${{ steps.preflight.outputs.ghcr-write }}
+      ssh-key: ${{ steps.preflight.outputs.ssh-key }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: preflight
+        uses: ./.github/actions/preflight
+        with:
+          # Wanting to publish is the question, not succeeding at it:
+          # "image-push" is already false for the fork that could not, which is
+          # the case this exists to report. See the "degraded" output.
+          needs-ghcr: ${{ needs.set-matrix.outputs.image-push == 'true' || needs.set-matrix.outputs.image-degraded == 'true' }}
+          # A private repository is one whose PartCAD packages may depend on
+          # repositories that are private too, and cloning one needs the key.
+          # A public fork clones public dependencies over https and needs
+          # nothing. See the input's description for why this is the signal.
+          #
+          # An event whose payload carries no "repository" evaluates to the
+          # empty string here, which is not "true" and so does not require the
+          # key. That is the safe direction of the two: the cost is a private
+          # fork's nightly not being told, and the alternative would be a run
+          # blocked over a field that was never there.
+          needs-ssh: ${{ github.event.repository.private }}
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   # cache-preheat:
   #   name: "Update caches"
@@ -880,6 +986,7 @@ jobs:
     # "set-matrix".
     env:
       PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
+      PC_CONTAINER_IMAGE_OWNER: ${{ needs.set-matrix.outputs.image-owner }}
 
     steps:
       - uses: actions/checkout@v7
@@ -983,6 +1090,10 @@ jobs:
     name: "Behave"
     needs:
       - set-matrix
+      # Named although "build-containers" below already implies it, because this
+      # job reads an output of it rather than only depending on it -- see the
+      # SSH agent step.
+      - preflight
       # Both container builds, per the note at the top of "jobs:": no test
       # starts before every image it might run in exists.
       - build-containers
@@ -1021,6 +1132,7 @@ jobs:
     # The images this run built, where it built any. See "Pytest" above.
     env:
       PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
+      PC_CONTAINER_IMAGE_OWNER: ${{ needs.set-matrix.outputs.image-owner }}
 
     steps:
       - uses: actions/checkout@v7
@@ -1043,7 +1155,28 @@ jobs:
         run: Set-Service -Name ssh-agent -StartupType Manual
         shell: pwsh
 
+      # Only where there is a key to load. It used to run unconditionally, and
+      # on a fork -- which has no such secret until somebody adds one -- the
+      # action is handed an empty string and fails the whole job with "The
+      # ssh-private-key argument is empty", forty minutes of setup in and about
+      # the wrong thing.
+      #
+      # What it is for is a dependency that is not public. These suites drive
+      # "pc install", and a PartCAD package may declare a "git" dependency on
+      # any repository -- so a private fork testing its own packages clones its
+      # own private repositories here, and this is the credential that lets it.
+      # The public upstream needs none: its own dependencies are public and
+      # clone over https, which is why the key can be absent without anything
+      # being wrong. ".github/actions/preflight" reports which of the two this
+      # run is, and stops a private repository that has no key rather than
+      # letting it fail inside a scenario.
       - name: Start SSH Agent
+        # Through "preflight" rather than "secrets.SSH_PRIVATE_KEY_RO != ''":
+        # the "secrets" context is not readable from an "if:", and a step's own
+        # "env:" is not readable from that same step's "if:" either. Asking the
+        # one job whose subject is "what does this run have" is also the answer
+        # that already appears in the summary a contributor is reading.
+        if: ${{ needs.preflight.outputs.ssh-key == 'true' }}
         uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
@@ -1165,6 +1298,7 @@ jobs:
     # The images this run built, where it built any. See "Pytest" above.
     env:
       PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
+      PC_CONTAINER_IMAGE_OWNER: ${{ needs.set-matrix.outputs.image-owner }}
 
     steps:
       - uses: actions/checkout@v7
@@ -1370,6 +1504,7 @@ jobs:
     # The images this run built, where it built any. See "Pytest" above.
     env:
       PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
+      PC_CONTAINER_IMAGE_OWNER: ${{ needs.set-matrix.outputs.image-owner }}
 
     steps:
       - uses: actions/checkout@v7
@@ -1477,6 +1612,7 @@ jobs:
     # The images this run built, where it built any. See "Pytest" above.
     env:
       PC_CONTAINER_IMAGE_TAG: ${{ needs.set-matrix.outputs.image-override }}
+      PC_CONTAINER_IMAGE_OWNER: ${{ needs.set-matrix.outputs.image-owner }}
 
     steps:
       - uses: actions/checkout@v7

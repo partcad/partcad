@@ -10,6 +10,19 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
+/**
+ * An object type without the package that declares it.
+ *
+ * A file format a plugin package implements is written as a full resource path
+ * -- `sim-gazebo:world`, `sim-mujoco:mjcf` -- because that is what resolves it,
+ * and the engine scene formats are all of them now: PartCAD itself ships no
+ * simulator and no simulator's scene format. The tree only ever asks *which
+ * format* a scene is, never whose, so it compares the part after the last ':'.
+ */
+export function bareType(objectType: string | undefined): string {
+    return (objectType ?? '').split(':').pop() ?? '';
+}
+
 export const ITEM_TYPE_NONE = 'none';
 export const ITEM_TYPE_PACKAGE = 'package';
 export const ITEM_TYPE_SKETCH = 'sketch';
@@ -138,15 +151,20 @@ export class PartcadItem extends vscode.TreeItem {
             // value is what puts "Open in > ..." and "Open source" on the row,
             // and neither has anything to act on without one.
             //
-            // MuJoCo takes either of the two, because PartCAD converts a world
-            // to MJCF on the way ('pc open --with mujoco'); Gazebo takes only
-            // its own, because nothing converts the other way yet.
+            // Each takes only its own format. Nothing converts between them
+            // here: an engine's scene format is implemented by that engine's
+            // plugin package, and `pc open` is handed a file with no package
+            // around it to reach either implementation through.
+            //
+            // The type is compared bare, because a scene declares one of these
+            // as 'sim-gazebo:world' or 'sim-mujoco:mjcf' -- through the package
+            // that implements it, which is the only spelling that resolves.
             this.contextValue =
                 itemPath === undefined
                     ? 'scene'
-                    : config.type === 'world'
+                    : bareType(config.type) === 'world'
                       ? 'sceneWorld'
-                      : config.type === 'mjcf'
+                      : bareType(config.type) === 'mjcf'
                         ? 'sceneMjcf'
                         : 'sceneWithCode';
             this.command = {

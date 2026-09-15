@@ -19,7 +19,7 @@ import os
 import pytest
 
 import partcad as pc
-from partcad import output, simulation
+from partcad import output, shape, simulation
 
 
 def declaration(**config):
@@ -220,6 +220,49 @@ def test_a_plugin_the_named_package_does_not_declare_says_what_it_does(plugin_ct
 def test_a_package_that_does_not_exist_is_reported(ctx):
     with pytest.raises(Exception, match="is not found"):
         simulation.resolve_plugin(ctx, "//", "//nowhere:mujoco")
+
+
+def test_the_plugin_package_is_where_its_own_scene_format_is_looked_up(tmp_path, monkeypatch):
+    """A simulation's 'format:' may be a file type only the plugin implements.
+
+    MJCF is MuJoCo's own and SDFormat is Gazebo's, and '//builtin/export' writes
+    neither: an engine's scene format travels with that engine's plugin package,
+    beside the simulator that reads it. So the package that declared the
+    simulation is read for the file type as well -- without that, a plugin could
+    name a format that nothing in the graph could resolve.
+    """
+    root = tmp_path / "workspace"
+    root.mkdir()
+    (root / "run_it.py").write_text("output = {'success': True}\n", encoding="utf-8")
+    (root / "write_it.py").write_text("output = {'success': True}\n", encoding="utf-8")
+    (root / "partcad.yaml").write_text(
+        "name: //sim\n"
+        "simulation:\n  toy:\n    path: run_it.py\n    format: toyfmt\n"
+        "    formatOptions:\n      static: false\n"
+        "export:\n  toyfmt:\n    path: write_it.py\n    extension: tf\n",
+        encoding="utf-8",
+    )
+    context = pc.Context(str(root))
+    impl = simulation.resolve_plugin(context, "//", "//:toy")
+    scene = context.get_scene("%s:subject" % output.BUILTIN_SCENE_PACKAGE)
+
+    asked = {}
+
+    async def render_async(self, ctx, format_name, project=None, filepath=None, options_project=None, **kwargs):
+        asked["format"] = format_name
+        asked["options_project"] = options_project
+        asked["kwargs"] = kwargs
+        open(filepath, "w", encoding="utf-8").close()
+
+    monkeypatch.setattr(shape.Shape, "render_async", render_async)
+    written = asyncio.run(simulation._export_scene_async(context, scene, impl, str(tmp_path)))
+
+    # The extension is the plugin's declaration too: '.tf', not '.toyfmt'.
+    assert os.path.basename(written) == "scene.tf"
+    assert asked["format"] == "toyfmt"
+    assert asked["options_project"] is impl.project
+    # And what the plugin said about how to write it comes along.
+    assert asked["kwargs"]["static"] is False
 
 
 #

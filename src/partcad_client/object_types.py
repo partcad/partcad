@@ -143,16 +143,20 @@ ASSY_EXTENSION = "assy"
 # A second question from the one above, for a second kind of application. Blender
 # reads triangles, so what `pc open` has to know about a file it is handed is
 # whether the file holds any. MuJoCo reads a *scene description* and only its
-# own -- so what has to be known there is which description format the file is,
-# and that is what this answers.
+# own -- so what has to be known there is which description format the file is.
+#
+# One entry, because that is all PartCAD itself knows: a scene format belonging
+# to a simulation engine is declared by that engine's plugin package, and a
+# client has no package graph to resolve such a name in. What answers for those
+# is the `open:` entry itself -- a tool that reads one declares its
+# `sceneExtensions`, so `Tool.reads_scene` can tell that the file it was handed
+# already is that format without any table here knowing the format exists.
 #
 # 'assy' is in it and is not convertible ad-hoc (see PACKAGE_ONLY_TYPES below):
 # naming it is what lets the refusal say what the file is rather than report an
 # unknown extension.
 SCENE_TYPE_EXTENSION: Dict[str, str] = {
     "assy": "assy",
-    "world": "world",
-    "mjcf": "xml",
 }
 
 # Object types that only mean anything inside a package, inlined from

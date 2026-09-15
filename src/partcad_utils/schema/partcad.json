@@ -199,7 +199,8 @@
         "ownFormats": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Extensions this application opens whatever they hold, because they are its own" },
         "imports": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "The mesh formats it can read, for one that reads meshes" },
         "meshVia": { "type": "string", "minLength": 1, "description": "What a file that is not a mesh is converted to first" },
-        "sceneType": { "type": "string", "minLength": 1, "description": "The PartCAD scene type it reads, for one that reads a description of an arrangement rather than geometry" }
+        "sceneType": { "type": "string", "minLength": 1, "description": "The PartCAD scene type it reads, for one that reads a description of an arrangement rather than geometry" },
+        "sceneExtensions": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true, "description": "The file extensions 'sceneType' is stored in, with the dot ('.xml'). Declared rather than looked up: an engine's scene format is implemented by the same package this entry comes from, so that package is what says what the format is called on disk" }
       },
       "additionalProperties": true
     },
@@ -1125,6 +1126,11 @@
                   "additionalProperties": false
                 },
                 "manufacturable": { "type": "boolean" },
+                "tolerance": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "How precisely this part has to be made, in millimetres. Only for the part types that take it -- 'step' and 'kicad' -- whose file may state a tolerance of its own; every other type states this as the 'tolerance' parameter instead. What is declared here is what is used; the file is read only when nothing is."
+                },
                 "unless": { "$ref": "#/definitions/unless" },
                 "connect": { "$ref": "#/definitions/connect" },
                 "software": { "$ref": "#/definitions/software-refs" }
@@ -1170,8 +1176,8 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": ["assy", "step", "urdf", "mjcf", "alias", "enrich"],
-                  "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'urdf' a URDF robot description, 'mjcf' a MuJoCo model"
+                  "enum": ["assy", "step", "urdf", "alias", "enrich"],
+                  "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'urdf' a URDF robot description. A format an engine's plugin package implements is not in this list and is named through that package - 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "path": { "type": "string", "minLength": 1 },
@@ -1290,8 +1296,8 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": ["assy", "world", "mjcf", "alias", "enrich"],
-                  "description": "'assy' is an Assembly YAML file read as a scene, which is the same format without the 'how' sections; 'world' is a Gazebo world (SDFormat) file; 'mjcf' is a MuJoCo model, which is declared as an assembly or as a scene depending on what it holds"
+                  "enum": ["assy", "alias", "enrich"],
+                  "description": "'assy' is an Assembly YAML file read as a scene, which is the same format without the 'how' sections. An engine's own scene format is implemented by that engine's plugin package and is named through it - 'sim-gazebo:world' for a Gazebo world (SDFormat), 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "path": { "type": "string", "minLength": 1 },
@@ -1525,6 +1531,10 @@
               "description": "Whether this interface cuts its own thread rather than matching one, so that it may be connected to an interface with a different 'threadStep' or none.",
               "type": "boolean",
               "default": false
+            },
+            "multiConnect": {
+              "description": "Whether one instance of this interface may take more than one item. A stud takes one brick and a bolt hole takes one bolt, so two items connected to the same port is a mistake worth reporting; a shaft is the counter-example, since several parts sit along it. Inherited by the interfaces that inherit this one, and only silence is inherited over: 'multiConnect: false' on a child overrides a parent that allows many, rather than being skipped as unset.",
+              "type": "boolean"
             },
             "inherits":{
               "type": "object",

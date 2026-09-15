@@ -44,12 +44,20 @@ at the path it has here, so one name means the same thing on both sides.
 
 Some read a *scene* and only their own description of one. MuJoCo is that one:
 it reads MJCF, and a Gazebo world handed to it is not a slow way of opening a
-scene, it is a file it cannot read. So the same thing happens for the same
-reason -- the scene is written out as MJCF first, through the very same
-``transcode`` callback with ``kind="scene"``. The two conversions differ in what
-they ask of the file (does it hold triangles, versus which description language
-is it) and in what they convert (a part, versus a scene); everything after that
-is shared, which is why one callback serves both.
+scene, it is a file it cannot read. What has to be decided there is a different
+question -- which description language the file is written in, rather than
+whether it holds triangles -- and it is answered by the tool's own declaration:
+an `open:` entry that names a `sceneType` also names the `sceneExtensions` it is
+stored in, so a file that already is what the application reads goes straight
+over.
+
+One that is not cannot be converted here, and the reason is worth stating
+plainly: an engine's scene format is implemented by that engine's plugin package
+-- MJCF by `partcad/partcad-sim-mujoco`, SDFormat by
+`partcad/partcad-sim-gazebo`, which are also where those `open:` entries come
+from -- and a file handed to `pc open` has no package around it to reach that
+implementation through. So `_transcode_scene` refuses, and says which export
+does work. Only the mesh conversion above still runs, and only for parts.
 
 A containerised GUI needs an X server on the host, which is the one place where
 this cannot paper over the difference between platforms. On Linux the display is
@@ -71,7 +79,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
-from partcad_utils.container_image import image_tag
+from partcad_utils.container_image import image_name, image_tag
 from partcad_utils.workspace import determine_root_path, socket_path
 
 from . import __version__, object_types
@@ -105,6 +113,45 @@ CONTAINER_PREFIX = "partcad-"
 
 class ExternalToolError(Exception):
     """No way to open the file, with a message saying what would fix that."""
+
+
+def _extension_of(path: str) -> str:
+    """The extension of ``path``, lowercased and with its dot kept.
+
+    With the dot, because that is how every extension a tool declares is written
+    -- `ownFormats`, `imports` and `sceneExtensions` alike -- so a comparison
+    needs no stripping at either end.
+    """
+    return os.path.splitext(path)[1].lower()
+
+
+def _export_target(scene_type: str) -> str:
+    """How ``scene_type`` has to be spelled for `pc export -t` to resolve it.
+
+    A format PartCAD implements is asked for by name. One an engine's plugin
+    implements is not PartCAD's to resolve, so the package that declares it has
+    to be named -- and which of the two this is is exactly whether PartCAD has an
+    extension for it.
+    """
+    if scene_type in object_types.SCENE_TYPE_EXTENSION:
+        return scene_type
+    return "<package>:" + scene_type
+
+
+def _bare_type(object_type: Optional[str]) -> Optional[str]:
+    """An object type without the package that declares it.
+
+    'sim-mujoco:mjcf' and 'mjcf' are one format asked for in two places: the
+    first is how an object in some other package declares it, the second is what
+    the package implementing it calls it in its own `open:` entry. Comparing the
+    part after the last ':' is what makes those the same answer.
+
+    None stays None, so that two tools declaring no scene type at all do not
+    come out equal.
+    """
+    if object_type is None:
+        return None
+    return object_type.rsplit(":", 1)[-1].lower()
 
 
 @dataclass(frozen=True)
@@ -187,6 +234,17 @@ class Tool:
     # this asks which description language it is written in, which is a property
     # of the file itself. One tool sets one of the two.
     scene_type: Optional[str] = None
+    # The extensions a file of `scene_type` is stored in, declared here rather
+    # than looked up.
+    #
+    # `partcad_client.object_types` knows the scene formats *PartCAD* has, and an
+    # engine's own is not one of them -- MJCF belongs to
+    # `partcad/partcad-sim-mujoco` and SDFormat to `partcad/partcad-sim-gazebo`,
+    # which is also where the `open:` entry that names it comes from. So the
+    # declaration carries the answer with it: the package that knows the format
+    # is the package that says what it is called on disk, and a client needs no
+    # table of formats it has never heard of to recognise one.
+    scene_extensions: Tuple[str, ...] = ()
 
     @property
     def container_name(self) -> str:
@@ -239,6 +297,39 @@ class Tool:
         # solid: it is converted too, to the one format that always works.
         return extension not in self.imports
 
+    def reads_scene(self, path: str, object_type: Optional[str] = None) -> bool:
+        """Whether ``path`` already is the scene description this application reads.
+
+        Asked of the tool's own declaration first, because the format is very
+        likely the tool's package's own and not one PartCAD has a table for: a
+        declared type that names it settles it, and so does one of the
+        extensions the declaration lists.
+
+        The declared type is compared by its last segment, so that the `mjcf` a
+        plugin's `open:` entry names and the `sim-mujoco:mjcf` the object
+        declaring it is written as are the one format they are.
+
+        A declared type that names *another* format ends it there, and does not
+        fall through to the extension: two scene formats can share one, and a
+        Gazebo world in a `.xml` is exactly the file this application cannot
+        read. What may fall through is a declared type that says nothing about
+        the file -- an `alias`, a part type, a type this release has never heard
+        of -- which is how `readable_scene_type` treats one too.
+        """
+        if object_type:
+            if _bare_type(object_type) == _bare_type(self.scene_type):
+                return True
+            # Whether the declaration named a *format* at all. A qualified name
+            # did by construction: some package declared it. A bare one did when
+            # PartCAD itself has it, which today means 'assy'.
+            if ":" in object_type or object_type.lower() in object_types.SCENE_TYPE_EXTENSION:
+                return False
+        if _extension_of(path) in self.scene_extensions:
+            return True
+        # A format PartCAD itself has -- today that is 'assy', which no tool
+        # reads, but a table entry is still the right answer when there is one.
+        return object_types.readable_scene_type(path, object_type) == self.scene_type
+
     def needs_scene(self, path: str, object_type: Optional[str] = None) -> bool:
         """Whether ``path`` has to be converted into this application's own format.
 
@@ -250,7 +341,7 @@ class Tool:
         """
         if self.scene_type is None:
             return False
-        return object_types.readable_scene_type(path, object_type) != self.scene_type
+        return not self.reads_scene(path, object_type)
 
     def file_for(self, path: str) -> str:
         """The file this application is really given, from the one it was handed.
@@ -297,12 +388,23 @@ DECLARATION_FIELDS = {
     "imports": "imports",
     "meshVia": "mesh_via",
     "sceneType": "scene_type",
+    "sceneExtensions": "scene_extensions",
 }
 
 # The fields that are a sequence, so a declaration's list becomes the tuple the
 # frozen dataclass wants.
 _TUPLE_FIELDS = frozenset(
-    {"binaries", "args", "macos_apps", "windows_globs", "companions", "file_args", "own_formats", "imports"}
+    {
+        "binaries",
+        "args",
+        "macos_apps",
+        "windows_globs",
+        "companions",
+        "file_args",
+        "own_formats",
+        "imports",
+        "scene_extensions",
+    }
 )
 
 
@@ -328,7 +430,20 @@ def tool_from_declaration(name: str, config: dict) -> Tool:
             # `image_tag()`, not the bare version: a CI run that rebuilt the
             # images has to reach *those* rather than the ones the last release
             # published, and that is the one variable which says so.
-            value = str(value).replace("{version}", image_tag(__version__))
+            #
+            # And `image_name()` for the owner, which is the same redirection
+            # one segment to the left. `container-kicad.yml` publishes
+            # `<this repository>-container-kicad`, so in a fork the image is the
+            # fork's -- and `partcad.part_factory_kicad` already follows it. Two
+            # readers of one image, one following the owner and one not, is the
+            # asymmetry that leaves `pc open --with kicad` reaching for a tag
+            # nobody published. Raised by CodeRabbit on #646.
+            #
+            # `image_name()` only ever rewrites images in PartCAD's own
+            # namespace, which is what makes this safe here: this function also
+            # builds tools a *user* declared, and their image is not CI's to
+            # move.
+            value = image_name(str(value).replace("{version}", image_tag(__version__)))
         values[field_name] = value
     return Tool(**values)
 
@@ -606,16 +721,57 @@ def _transcode_scene(
     """Convert ``source`` into the scene description ``spec`` reads, and return it.
 
     The counterpart of `_transcode` for an application that reads an arrangement
-    rather than geometry, and it refuses for its own reasons: a file that is no
-    scene at all cannot become one (a STEP file is a shape, and there is nothing
-    to place it in), and an ASSY file is a set of references to the parts of a
-    package, so there is nothing here to resolve them against.
+    rather than geometry, and it refuses far more often, for a reason that is
+    structural rather than incidental: the format such an application reads
+    belongs to that application's engine, and PartCAD does not implement it.
+    `mjcf` is `partcad/partcad-sim-mujoco`'s and `world` is
+    `partcad/partcad-sim-gazebo`'s -- the same packages the `open:` entries for
+    MuJoCo and Gazebo come from -- so writing one means running that package's
+    exporter, which means a package that imports it. A file handed to `pc open`
+    has no package around it at all.
+
+    So this converts only between formats PartCAD itself has, refuses the rest
+    with the export command that does work, and is in practice a refusal. What
+    it must never do is hand the application a file it cannot read and let it
+    say something of its own.
     """
     source_type = object_types.readable_scene_type(source, object_type)
+    reason = object_types.PACKAGE_ONLY_TYPES.get(source_type or "")
+    if reason is not None:
+        raise ExternalToolError(
+            "%s cannot open %s: %s, so it only means anything inside a package and there is "
+            "nothing here to convert.\n"
+            "Export the scene from its package instead, and open that: pc export -S -t %s -O <dir> <scene>"
+            % (spec.display_name, source, reason, _export_target(spec.scene_type))
+        )
+    # The tool's own format, as PartCAD knows it. Absent for every engine format,
+    # which is the ordinary case and the reason for the message below.
+    extension = object_types.SCENE_TYPE_EXTENSION.get(spec.scene_type)
+    if extension is None:
+        raise ExternalToolError(
+            "%s reads %s, and %s is not one.\n"
+            "PartCAD cannot write %s here: the package that declares %s is what implements it, and a "
+            "file opened on its own has no package to reach that from.\n"
+            "Export the scene from a package that imports it, and open the result:\n"
+            "  pc export -S -t %s -O <dir> <scene>\n"
+            "If %s already is %s, say so with --type ('pc open --type <package>:%s ...'); the VS Code "
+            "extension passes the declared type of the object you clicked."
+            % (
+                spec.display_name,
+                spec.scene_type.upper(),
+                source,
+                spec.scene_type.upper(),
+                spec.scene_type,
+                _export_target(spec.scene_type),
+                source,
+                spec.scene_type.upper(),
+                spec.scene_type,
+            )
+        )
     if source_type is None:
         raise ExternalToolError(
-            "%s reads %s, and %s is not one -- PartCAD can convert a scene into it, and this is not a "
-            "scene file it knows (it reads: %s).\n"
+            "%s reads %s, and PartCAD cannot tell what %s holds -- it is not a scene file it knows "
+            "(it reads: %s).\n"
             "If it is one, say so with --type ('pc open --type ...'); the VS Code extension passes the "
             "declared type of the object you clicked."
             % (
@@ -625,21 +781,12 @@ def _transcode_scene(
                 ", ".join(sorted(object_types.SCENE_TYPE_EXTENSION)),
             )
         )
-    reason = object_types.PACKAGE_ONLY_TYPES.get(source_type)
-    if reason is not None:
-        raise ExternalToolError(
-            "%s cannot open %s: %s, so it only means anything inside a package and there is "
-            "nothing here to convert.\n"
-            "Export the scene from its package instead, and open that: pc export -S -t %s -O <dir> <scene>"
-            % (spec.display_name, source, reason, spec.scene_type)
-        )
     if transcode is None:
         raise ExternalToolError(
             "%s reads %s, and %s is not one. Converting it needs the PartCAD daemon; "
             "run `pc open` rather than calling this directly." % (spec.display_name, spec.scene_type.upper(), source)
         )
 
-    extension = object_types.SCENE_TYPE_EXTENSION[spec.scene_type]
     return _produce(spec, source, source_type, root, spec.scene_type, extension, "scene", transcode, say)
 
 

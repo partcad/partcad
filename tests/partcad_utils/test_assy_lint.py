@@ -297,6 +297,29 @@ def test_the_linter_accepts_every_way_an_interface_declares_parameters(declarati
     assert validate_source(source, get_schema(PARTCAD_SCHEMA)) == []
 
 
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        "threadStep: 0.7\n",
+        'threadStep: "%pitch%"\n    parameters:\n      pitch: 0.7\n',
+        "selfScrew: true\n",
+        "multiConnect: true\n",
+        "multiConnect: false\n",
+    ],
+)
+def test_the_linter_accepts_what_an_interface_says_about_connecting_through_it(declaration):
+    """The other half of the same rule, for what an interface says about a connection.
+
+    'multiConnect' is the one this was written for. 'Interface' has read it since
+    it was added and hands it down a family through '_inherited', and the schema -
+    whose interface body is 'additionalProperties: false' - never listed it. So a
+    package could declare it and work, and failed its own 'pc lint' the moment
+    anybody ran one; the only packages it did not break were those that never did.
+    """
+    source = "interfaces:\n  iface:\n    desc: an interface\n    %s" % declaration
+    assert validate_source(source, get_schema(PARTCAD_SCHEMA)) == []
+
+
 def test_the_linter_still_wants_a_direction_for_a_name_it_does_not_know():
     """The other half of the same rule: only those six may be named bare."""
     source = "interfaces:\n  iface:\n    desc: an interface\n    parameters:\n      - slideAlongTheRail\n"

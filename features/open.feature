@@ -14,10 +14,19 @@ Feature: `pc open` command
     Then the command should exit with a non-zero status code
     And OUTPUT should contain "Unknown application"
     And OUTPUT should contain "freecad"
-    And OUTPUT should contain "gazebo"
     And OUTPUT should contain "kicad"
     And OUTPUT should contain "blender"
-    And OUTPUT should contain "mujoco"
+
+  @failure @pc-open
+  Scenario: A simulator is not known until the package that owns it is imported
+    # `gazebo` and `mujoco` are declared by `partcad/partcad-sim-gazebo` and
+    # `partcad/partcad-sim-mujoco`, beside the scene format, the exporter, the
+    # reader and the simulator for that engine. This workspace imports neither,
+    # so `pc open` has never heard of them -- which is the same answer it gives
+    # for any other application it was not taught, and not a special case.
+    When I run "pc --no-ansi open --with mujoco stack.xml"
+    Then the command should exit with a non-zero status code
+    And OUTPUT should contain "Unknown application"
 
   @failure @pc-open
   Scenario: A file that is not there is reported rather than opened
@@ -36,25 +45,6 @@ Feature: `pc open` command
     Then the command should exit with a non-zero status code
     And STDOUT should contain '"ok": false'
     And STDOUT should contain "No such file"
-
-  @failure @pc-open
-  Scenario: A world file that is not there is reported rather than opened in Gazebo
-    # The scene half of the "Open in..." menu: a '.world' file is what Gazebo
-    # reads, and it is looked for on this machine exactly as a STEP file is.
-    Given a file named "warehouse.world" does not exist
-    When I run "pc --no-ansi open --with gazebo warehouse.world"
-    Then the command should exit with a non-zero status code
-    And OUTPUT should contain "No such file"
-
-  @failure @pc-open
-  Scenario: A model file that is not there is reported rather than opened in MuJoCo
-    # The other simulator in the "Open in..." menu. MuJoCo reads MJCF, so an
-    # '.xml' is handed over as it is and nothing is converted -- which means the
-    # file itself is still the first thing that has to exist.
-    Given a file named "stack.xml" does not exist
-    When I run "pc --no-ansi open --with mujoco stack.xml"
-    Then the command should exit with a non-zero status code
-    And OUTPUT should contain "No such file"
 
   @failure @pc-open
   Scenario: A board that is not there is reported rather than opened in KiCad

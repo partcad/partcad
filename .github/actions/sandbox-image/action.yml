@@ -89,6 +89,26 @@ runs:
         # drift.
         tag_prefix="${PC_CONTAINER_IMAGE_TAG:-${release}}"
 
+        # And whose copy, read the same way and for the same reason. A fork
+        # cannot publish into "partcad", so a run there that built its own
+        # images published them under its own owner; pulling the name out of
+        # the source unchanged would reach for "ghcr.io/partcad/..." and leave
+        # the job testing the upstream release's images while its summary said
+        # it had built its own. `container_image.image_name` is the same
+        # rewrite on the Python side -- owner only, and only for a
+        # "<registry>/<owner>/<name>" reference.
+        if [ -n "${PC_CONTAINER_IMAGE_OWNER:-}" ]; then
+          owner=$(printf '%s' "${PC_CONTAINER_IMAGE_OWNER}" | tr '[:upper:]' '[:lower:]')
+          case "${image}" in
+            */*/*)
+              image="${image%%/*}/${owner}/${image##*/}"
+              ;;
+            *)
+              echo "::warning::${image} is not <registry>/<owner>/<name>; PC_CONTAINER_IMAGE_OWNER ignored"
+              ;;
+          esac
+        fi
+
         # The suffix `docker_image.candidates()` tries first, spelled Docker's
         # way -- see `ARCH_ALIASES`. Only the two architectures CI runs on are
         # named: anything else is a runner nobody has, and guessing a suffix

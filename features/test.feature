@@ -200,6 +200,78 @@ Feature: `pc test` command
     # bought from -- but the software is no longer what is wrong with it.
     Then STDOUT should not contain "cannot be relied on"
 
+  @success @pc-test @pc-test-tolerance
+  Scenario: A STEP part says how precisely it is made, in the declaration or in the file
+    # A 'step' part rejects the 'tolerance' parameter -- a STEP file may hold
+    # many solids -- and answers with a field of its own, or with what its file
+    # already states. Three parts rather than three scenarios: each scenario
+    # takes a temporary $HOME and builds a sandbox of its own, and one "pc test"
+    # over one package proves the same three things for a third of the cost.
+    #
+    #   bracket   declares a tolerance the file does not state
+    #   plain     states none anywhere, which is a demand for perfect precision
+    #   tolerated is tolerated feature by feature, 0.05 on one face and 0.2 on
+    #             another: no single number is true of it, and none is invented
+    #
+    # All three lack a supplier, so all three fail -- on that, which is what
+    # proves the tolerance check let two of them through.
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      parts:
+        bracket:
+          type: step
+          manufacturing:
+            method: subtractive
+          tolerance: 0.1
+        plain:
+          type: step
+          manufacturing:
+            method: subtractive
+        tolerated:
+          type: step
+          manufacturing:
+            method: subtractive
+      """
+    And a file named "bracket.step" with content:
+      """
+      ISO-10303-21;
+      HEADER;
+      ENDSEC;
+      DATA;
+      ENDSEC;
+      END-ISO-10303-21;
+      """
+    And a file named "plain.step" with content:
+      """
+      ISO-10303-21;
+      HEADER;
+      ENDSEC;
+      DATA;
+      ENDSEC;
+      END-ISO-10303-21;
+      """
+    And a file named "tolerated.step" with content:
+      """
+      ISO-10303-21;
+      HEADER;
+      ENDSEC;
+      DATA;
+      #10=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.MILLI.,.METRE.));
+      #200=FLATNESS_TOLERANCE('','',#201,#900);
+      #201=LENGTH_MEASURE_WITH_UNIT(LENGTH_MEASURE(0.05),#10);
+      #210=FLATNESS_TOLERANCE('','',#211,#900);
+      #211=LENGTH_MEASURE_WITH_UNIT(LENGTH_MEASURE(0.2),#10);
+      ENDSEC;
+      END-ISO-10303-21;
+      """
+    When I run "pc test -f cam"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "//:plain: cam: No manufacturing tolerance is specified"
+    And STDOUT should contain "//:bracket: cam: No suppliers found"
+    And STDOUT should contain "//:tolerated: cam: No suppliers found"
+
   @wip
   Scenario: Test with invalid configuration
     Given I have an invalid PartCAD configuration

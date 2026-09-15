@@ -165,7 +165,15 @@ def test_a_partType_reference_is_not_an_error_it_is_just_not_a_format():
 
 
 def test_the_scene_formats_are_the_ones_a_file_can_hold_an_arrangement_in():
-    assert set(object_types.SCENE_TYPE_EXTENSION) == {"assy", "world", "mjcf"}
+    """One, and it is the only one PartCAD implements itself.
+
+    An engine's scene format is its plugin package's -- MJCF is
+    `partcad/partcad-sim-mujoco`'s, SDFormat is `partcad/partcad-sim-gazebo`'s --
+    and a client resolving a name against a table has no package graph to find
+    those in. A tool that reads one says so in its own `open:` entry instead
+    (`sceneExtensions`), which is what `Tool.reads_scene` asks.
+    """
+    assert set(object_types.SCENE_TYPE_EXTENSION) == {"assy"}
 
 
 def test_no_two_scene_types_share_an_extension():
@@ -182,11 +190,14 @@ def test_no_two_scene_types_share_an_extension():
 @pytest.mark.parametrize(
     "path, expected",
     [
-        ("/w/warehouse.world", "world"),
-        ("/w/stack.xml", "mjcf"),
         ("/w/bench.assy", "assy"),
         ("/w/cube.step", None),
         ("/w/cube", None),
+        # An engine's format is not PartCAD's to name, so its extension says
+        # nothing here. `Tool.reads_scene` is what recognises one, out of the
+        # declaration of the application that reads it.
+        ("/w/warehouse.world", None),
+        ("/w/stack.xml", None),
     ],
 )
 def test_the_name_says_which_description_language_it_is(path, expected):
@@ -194,17 +205,26 @@ def test_the_name_says_which_description_language_it_is(path, expected):
 
 
 def test_a_declared_scene_type_settles_it_whatever_the_file_is_called():
-    """'.sdf' is a world to whoever declared it and nothing to a file name."""
-    assert object_types.readable_scene_type("/w/warehouse.sdf", "world") == "world"
-    assert object_types.readable_scene_type("/w/warehouse.sdf") is None
+    """'.txt' is an ASSY to whoever declared it and nothing to a file name."""
+    assert object_types.readable_scene_type("/w/bench.txt", "assy") == "assy"
+    assert object_types.readable_scene_type("/w/bench.txt") is None
 
 
 def test_a_declared_type_that_is_no_scene_format_defers_to_the_file():
-    assert object_types.readable_scene_type("/w/stack.xml", "alias") == "mjcf"
+    assert object_types.readable_scene_type("/w/bench.assy", "alias") == "assy"
+
+
+def test_a_plugin_scene_type_is_not_answered_here_at_all():
+    """Not an omission: it is what makes the `open:` declaration the answer.
+
+    A name this table cannot resolve has to come back None rather than a guess,
+    because guessing is how a Gazebo world would be handed to MuJoCo as if it
+    were a model.
+    """
+    assert object_types.readable_scene_type("/w/stack.xml", "sim-mujoco:mjcf") is None
+    assert object_types.readable_scene_type("/w/warehouse.world", "sim-gazebo:world") is None
 
 
 def test_the_assy_scene_is_the_one_that_cannot_be_converted_on_its_own():
     """It is references to the parts of a package, and there is no package."""
     assert "assy" in object_types.PACKAGE_ONLY_TYPES
-    assert "world" not in object_types.PACKAGE_ONLY_TYPES
-    assert "mjcf" not in object_types.PACKAGE_ONLY_TYPES

@@ -388,54 +388,92 @@ def test_the_result_says_how_the_file_was_opened(part, docker):
 # ---------------------------------------------------------------------------
 
 
+# The `open:` entries the two engine plugins declare, copied here as a package
+# supplies them. They are not in the wheel: `partcad/partcad-sim-gazebo` and
+# `partcad/partcad-sim-mujoco` own the engine, its scene format, the exporter,
+# the reader and this entry alike.
+#
+# The tests below drive the machinery through these rather than through a
+# built-in entry, which is the arrangement that has to keep working -- and a
+# stronger check than the one it replaces, since it proves a declared tool
+# reaches every part of the launcher a shipped one does.
+GAZEBO_DECLARATION = {
+    "displayName": "Gazebo",
+    "image": "gazebosim/gz-harmonic:latest",
+    "binaries": ["gz", "ign", "gazebo"],
+    "binaryArgs": {"gz": ["sim"], "ign": ["gazebo"]},
+    "macosApps": ["Gazebo.app"],
+    "windowsGlobs": ["Gazebo*/bin/gz.exe"],
+    "flatpakId": "org.gazebosim.Gazebo",
+}
+
+MUJOCO_DECLARATION = {
+    "displayName": "MuJoCo",
+    "image": "ghcr.io/google-deepmind/mujoco:latest",
+    "binaries": ["simulate", "mujoco"],
+    "macosApps": ["MuJoCo.app"],
+    "macosExecutable": "Contents/MacOS/simulate",
+    "windowsGlobs": ["MuJoCo*/bin/simulate.exe", "mujoco*/bin/simulate.exe"],
+    "sceneType": "mjcf",
+    "sceneExtensions": [".xml", ".mjcf"],
+}
+
+
+@pytest.fixture
+def engines():
+    """The two engine plugins' applications, declared into this process.
+
+    Exactly what `pc open` does with what the daemon reports a workspace's
+    packages declare, and undone afterwards so that a test which does not ask
+    for them sees the wheel's own table.
+    """
+    previous = dict(external.TOOLS)
+    external.use_tools({"gazebo": GAZEBO_DECLARATION, "mujoco": MUJOCO_DECLARATION})
+    try:
+        yield
+    finally:
+        external.TOOLS.clear()
+        external.TOOLS.update(previous)
+
+
 def test_every_tool_can_be_named_and_has_a_container_of_its_own():
-    # A set: the order is the order of the declarations, and two of these are
-    # about to move into the plugin package for their engine.
-    assert set(external.tool_names()) == {"freecad", "gazebo", "kicad", "blender", "mujoco"}
+    """What the wheel itself ships: no engine, because no engine is PartCAD's."""
+    assert set(external.tool_names()) == {"freecad", "kicad", "blender"}
     names = {external.TOOLS[name].container_name for name in external.tool_names()}
     assert names == {
         "partcad-freecad",
-        "partcad-gazebo",
         "partcad-kicad",
         "partcad-blender",
-        "partcad-mujoco",
     }
 
 
-def test_the_kicad_container_is_the_image_partcad_already_builds():
+def test_an_application_a_package_declares_joins_the_ones_that_ship(engines):
+    """Which is how `pc open --with mujoco` works at all now."""
+    assert set(external.tool_names()) == {"freecad", "kicad", "blender", "gazebo", "mujoco"}
+    assert external.TOOLS["mujoco"].container_name == "partcad-mujoco"
+    assert external.TOOLS["gazebo"].container_name == "partcad-gazebo"
+
+
+def test_the_kicad_container_is_the_image_partcad_already_builds(external_at_release):
     """One KiCad container in the product, not two.
 
     'partcad.part_factory_kicad' pulls the same image, pinned to the same
     release, to run 'kicad-cli' in. Pinning matters here as much as it does
     there: the container carries PartCAD's own environment.
 
-    Asserted of an installed PartCAD, where nothing overrides the tag. CI is
-    not that on a run that rebuilt PartCAD's images: it exports
-    'PC_CONTAINER_IMAGE_TAG' and the 'Pytest' job passes it through, because
-    another test in this suite starts the KiCad sandbox and has to reach the
-    image that run published. This module resolves the tag once, at import, so
-    the variable has to be gone *before* the module reads it -- unsetting it
-    inside the test would leave the constant carrying whatever the suite
-    started with. Hence the reload, twice: once to read it without, once to put
-    the module back the way the rest of this file found it.
+    Asserted of an installed PartCAD, where nothing overrides the tag, which is
+    the whole of what 'external_at_release' arranges -- this module reads the
+    tag once, as it is imported, so the variable has to be gone before the
+    import rather than during the test. The dance used to be written out here;
+    it is in 'tests/conftest.py' because the test that arrived beside it in the
+    'open:' section needs the same thing, and did not have it.
 
     'tests/partcad_utils/test_container_image.py' pins the other direction,
     where the override is set and this module has to follow it.
     """
-    import importlib
-    from unittest import mock
-
     from partcad_client import __version__
-    from partcad_utils import container_image
 
-    with mock.patch.dict(os.environ):
-        os.environ.pop(container_image.ENV_VAR, None)
-        image = importlib.reload(external).TOOLS["kicad"].image
-
-    # Put the module back the way the rest of this file found it, before
-    # anything can fail: these tests hold 'external' by name, and a module left
-    # carrying one test's environment is the next one's mystery.
-    importlib.reload(external)
+    image = external_at_release.TOOLS["kicad"].image
 
     assert image == "ghcr.io/partcad/partcad-container-kicad:" + __version__
 
@@ -457,7 +495,7 @@ def world(tmp_path):
         ("gazebo", []),
     ],
 )
-def test_each_generation_of_gazebo_is_launched_the_way_it_wants(monkeypatch, spawned, world, binary, expected):
+def test_each_generation_of_gazebo_is_launched_the_way_it_wants(monkeypatch, spawned, world, binary, expected, engines):
     """`gz sim`, `ign gazebo` and plain `gazebo` are one application, three front ends."""
     monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/" + name if name == binary else None)
 
@@ -467,7 +505,7 @@ def test_each_generation_of_gazebo_is_launched_the_way_it_wants(monkeypatch, spa
     assert spawned == [["/usr/bin/" + binary] + expected + [str(world)]]
 
 
-def test_gazebo_runs_in_its_own_container_with_the_world_file(world, docker):
+def test_gazebo_runs_in_its_own_container_with_the_world_file(world, docker, engines):
     docker.binaries = ["/usr/bin/gz"]
 
     result = external.open_file(str(world), tool="gazebo", use_docker=True)
@@ -550,7 +588,7 @@ def test_a_launcher_that_is_not_the_program_supplies_its_own_arguments():
     neither should: adding `sim` to a `flatpak run org.gazebosim.Gazebo` would
     hand it to the flatpak's entry point rather than to `gz`.
     """
-    gazebo = external.TOOLS["gazebo"]
+    gazebo = external.tool_from_declaration("gazebo", GAZEBO_DECLARATION)
 
     # The Windows form is spelled with the separator this platform uses, since
     # that is what `native_command()` builds it with there.
@@ -861,7 +899,7 @@ def mjcf(tmp_path):
     return path
 
 
-def test_mujoco_opens_its_own_model_without_converting_anything(monkeypatch, spawned, mjcf, converter):
+def test_mujoco_opens_its_own_model_without_converting_anything(monkeypatch, spawned, mjcf, converter, engines):
     monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/simulate" if name == "simulate" else None)
 
     result = external.open_file(str(mjcf), tool="mujoco", transcode=converter)
@@ -872,27 +910,52 @@ def test_mujoco_opens_its_own_model_without_converting_anything(monkeypatch, spa
     assert converter.calls == []
 
 
-def test_a_world_is_written_out_as_mjcf_first(monkeypatch, spawned, world, converter):
-    """The conversion `pc open --with mujoco` exists for.
+def test_a_world_cannot_be_made_into_a_model_with_no_package_to_do_it(monkeypatch, world, converter, engines):
+    """A Gazebo world handed to MuJoCo is a file MuJoCo cannot read -- and PartCAD
+    cannot make one it can, here.
 
-    A Gazebo world handed to MuJoCo is not a slow way of opening a scene; it is
-    a file MuJoCo cannot read at all.
+    Writing MJCF is `partcad/partcad-sim-mujoco`'s exporter, and reading the
+    world is `partcad/partcad-sim-gazebo`'s reader. An ad-hoc conversion has a
+    throwaway package around the file and no dependency on either, so it cannot
+    run one -- which is why this refuses rather than converting, and says which
+    export does work.
     """
     monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/simulate" if name == "simulate" else None)
 
-    result = external.open_file(str(world), tool="mujoco", transcode=converter)
+    with pytest.raises(external.ExternalToolError) as error:
+        external.open_file(str(world), tool="mujoco", transcode=converter)
 
-    source, source_type, target, target_type = converter.calls[0]
-    assert (source, source_type, target_type) == (str(world), "world", "mjcf")
-    # A scene, not a part: the two conversions differ in what they convert.
-    assert converter.kinds == ["scene"]
-    assert target.endswith(".xml")
-    assert result.path == target
-    assert result.source == str(world)
-    assert spawned == [["/usr/bin/simulate", target]]
+    message = str(error.value)
+    assert "MJCF" in message
+    # The advice has to name a package, because a bare 'mjcf' resolves to
+    # nothing now.
+    assert "pc export -S -t <package>:mjcf" in message
+    # Nothing was attempted: a conversion that cannot work must not be started.
+    assert converter.calls == []
 
 
-def test_an_assy_scene_is_refused_by_name_rather_than_converted(monkeypatch, tmp_path, converter):
+def test_a_model_by_any_name_is_opened_once_its_type_is_declared(monkeypatch, spawned, tmp_path, converter, engines):
+    """The VS Code tree knows the declared type; a name like '.sdf' does not.
+
+    And the declared type arrives qualified -- 'sim-mujoco:mjcf' -- because that
+    is how a package that is not the plugin has to write it. Comparing it with
+    the bare 'mjcf' the plugin's own `open:` entry names is what makes those one
+    format rather than two.
+    """
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    path = tmp_path / "stack.model"
+    path.write_text('<mujoco model="stack"><worldbody/></mujoco>\n')
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/simulate" if name == "simulate" else None)
+
+    result = external.open_file(str(path), tool="mujoco", object_type="sim-mujoco:mjcf", transcode=converter)
+
+    assert result.method == "native"
+    assert result.source is None
+    assert spawned == [["/usr/bin/simulate", str(path)]]
+    assert converter.calls == []
+
+
+def test_an_assy_scene_is_refused_by_name_rather_than_converted(monkeypatch, tmp_path, converter, engines):
     """It is nothing but references to the parts of a package."""
     (tmp_path / "partcad.yaml").write_text("name: test\n")
     path = tmp_path / "bench.assy"
@@ -903,11 +966,11 @@ def test_an_assy_scene_is_refused_by_name_rather_than_converted(monkeypatch, tmp
         external.open_file(str(path), tool="mujoco", transcode=converter)
 
     assert "only means anything inside a package" in str(error.value)
-    assert "pc export -S -t mjcf" in str(error.value)
+    assert "pc export -S -t <package>:mjcf" in str(error.value)
     assert converter.calls == []
 
 
-def test_a_file_that_is_no_scene_at_all_says_so(monkeypatch, part, converter):
+def test_a_file_that_is_no_scene_at_all_says_so(monkeypatch, part, converter, engines):
     monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/simulate" if name == "simulate" else None)
 
     with pytest.raises(external.ExternalToolError) as error:
@@ -917,19 +980,82 @@ def test_a_file_that_is_no_scene_at_all_says_so(monkeypatch, part, converter):
     assert converter.calls == []
 
 
-def test_a_declared_type_says_what_the_scene_file_name_cannot(monkeypatch, spawned, tmp_path, converter):
-    """The VS Code tree knows the declared type; a name like '.sdf' does not."""
+def test_another_engines_format_is_refused_even_in_this_one_s_extension(monkeypatch, tmp_path, converter, engines):
+    """The declared type wins over the file name, and has to.
+
+    Two scene formats can be stored in one extension -- SDFormat and MJCF are
+    both XML -- so a '.xml' says nothing on its own. Reading the extension first
+    would hand MuJoCo a Gazebo world and let it say something of its own, which
+    is the exact failure `_transcode_scene` exists to prevent. Found by
+    CodeRabbit on this PR; the '.sdf' case below did not cover it, because that
+    extension collides with nothing.
+    """
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    path = tmp_path / "warehouse.xml"
+    path.write_text('<sdf version="1.9"><world name="warehouse"/></sdf>\n')
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/simulate" if name == "simulate" else None)
+
+    with pytest.raises(external.ExternalToolError) as error:
+        external.open_file(str(path), tool="mujoco", object_type="sim-gazebo:world", transcode=converter)
+
+    assert "MJCF" in str(error.value)
+    assert converter.calls == []
+
+
+def test_an_assy_in_this_engine_s_extension_is_refused_as_an_assy(monkeypatch, tmp_path, converter, engines):
+    """The same rule for the one scene format PartCAD itself has.
+
+    'assy' is not qualified, so it is not "some package declared it" -- it is in
+    `object_types.SCENE_TYPE_EXTENSION`, which is how a bare name is known to
+    name a format at all. It is also package-only, so the refusal is the ASSY
+    one rather than the general one.
+    """
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    path = tmp_path / "bench.xml"
+    path.write_text("links: []\n")
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/simulate" if name == "simulate" else None)
+
+    with pytest.raises(external.ExternalToolError) as error:
+        external.open_file(str(path), tool="mujoco", object_type="assy", transcode=converter)
+
+    assert "only means anything inside a package" in str(error.value)
+    assert converter.calls == []
+
+
+def test_a_type_that_names_no_format_still_defers_to_the_file(monkeypatch, spawned, tmp_path, converter, engines):
+    """What must NOT be refused: a declared type that says nothing about the file.
+
+    An 'alias' is a reference, not a format, so it cannot contradict the name --
+    the same rule `readable_scene_type` applies. Getting this wrong in the other
+    direction would refuse a file the application reads perfectly well.
+    """
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    path = tmp_path / "stack.xml"
+    path.write_text('<mujoco model="stack"><worldbody/></mujoco>\n')
+    monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/simulate" if name == "simulate" else None)
+
+    result = external.open_file(str(path), tool="mujoco", object_type="alias", transcode=converter)
+
+    assert result.method == "native"
+    assert spawned == [["/usr/bin/simulate", str(path)]]
+    assert converter.calls == []
+
+
+def test_a_declared_type_for_another_engine_is_still_refused(monkeypatch, tmp_path, converter, engines):
+    """Saying what the file is does not make it something MuJoCo reads."""
     (tmp_path / "partcad.yaml").write_text("name: test\n")
     path = tmp_path / "warehouse.sdf"
     path.write_text('<sdf version="1.9"><world name="warehouse"/></sdf>\n')
     monkeypatch.setattr(external.shutil, "which", lambda name: "/usr/bin/simulate" if name == "simulate" else None)
 
-    external.open_file(str(path), tool="mujoco", object_type="world", transcode=converter)
+    with pytest.raises(external.ExternalToolError) as error:
+        external.open_file(str(path), tool="mujoco", object_type="sim-gazebo:world", transcode=converter)
 
-    assert converter.calls[0][1] == "world"
+    assert "MJCF" in str(error.value)
+    assert converter.calls == []
 
 
-def test_mujoco_runs_in_its_own_container_with_the_model(mjcf, docker):
+def test_mujoco_runs_in_its_own_container_with_the_model(mjcf, docker, engines):
     docker.binaries = ["/usr/bin/simulate"]
 
     result = external.open_file(str(mjcf), tool="mujoco", use_docker=True)

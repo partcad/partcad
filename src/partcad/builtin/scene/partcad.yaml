@@ -13,8 +13,10 @@
 #
 # The floor and the light are deliberately not here. They are not part of what
 # a scene says; they are what makes a *simulation* runnable, and every format a
-# scene is handed to a simulator in writes its own (see the `ground_plane` and
-# `light` parameters of the `mjcf` export, and `sun`/`ground_plane` of `world`).
+# scene is handed to a simulator in writes its own. Those formats belong to the
+# engine plugins rather than to this wheel, so the parameters that write them are
+# declared there too -- `light`/`ground_plane` on `sim-mujoco:mjcf` and
+# `sun`/`ground_plane` on `sim-gazebo:world`.
 
 name: //builtin/scene
 desc: |

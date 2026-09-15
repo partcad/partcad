@@ -106,17 +106,28 @@ def test_the_tag_it_publishes_is_the_tag_the_runtime_pulls():
     # `external.py` holds the substitution that resolves its `{version}`. Both
     # halves are checked, because either one alone can drift into naming a tag
     # nobody pulls.
-    kicad_image = "partcad-container-kicad:"
+    kicad_image = "partcad-container-kicad"
     for source in ("src/partcad/part_factory_kicad.py",):
         text = (REPO_ROOT / source).read_text()
         assert kicad_image in text, source
         assert "image_tag(" in text, source
+        # And the owner, which is the same agreement one segment to the left.
+        # A fork cannot publish into "partcad", so a run there publishes under
+        # its own owner and every reader has to follow -- otherwise the run
+        # builds its images, pushes them, and pulls the upstream release's,
+        # which is the "green run that tested the wrong images" this file
+        # exists to prevent, in the one place the tag alone cannot catch it.
+        assert "image_name(" in text, source
 
     declaration = (REPO_ROOT / "src/partcad/builtin/open/partcad.yaml").read_text()
-    assert kicad_image + "{version}" in declaration
+    assert kicad_image + ":{version}" in declaration
     client = (REPO_ROOT / "src/partcad_client/external.py").read_text()
     assert "image_tag(" in client
     assert '"{version}"' in client
+    # And the owner, for the same reason as the factory above: two readers of
+    # one image, one following the owner and one not, is a `pc open` reaching
+    # for a tag nobody published.
+    assert "image_name(" in client
 
 
 def test_whether_it_publishes_is_the_callers_answer_and_not_a_second_one():

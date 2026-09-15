@@ -4,7 +4,7 @@
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.8.80",
+  "version": "0.8.89",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -585,13 +585,6 @@
         "icon": "$(export)"
       },
       {
-        "command": "partcad.exportToWorld",
-        "category": "PartCAD",
-        "group": "Export",
-        "title": "Gazebo world...",
-        "icon": "$(export)"
-      },
-      {
         "command": "partcad.openInFreeCAD",
         "category": "PartCAD",
         "group": "Open in",
@@ -889,10 +882,6 @@
         {
           "command": "partcad.exportToGLTF",
           "when": "view == partcadExplorer"
-        },
-        {
-          "command": "partcad.exportToWorld",
-          "when": "view == partcadExplorer && (viewItem == scene || viewItem == sceneWithCode || viewItem == sceneWorld)"
         }
       ],
       "partcad.submenu.openWith": [

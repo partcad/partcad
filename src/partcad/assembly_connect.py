@@ -175,6 +175,39 @@ class ConnectHold:
         return str(self.interface)
 
 
+def _mating_between(source_interface, target_interface):
+    """The mating that governs this pair of interfaces, or None.
+
+    Declared between the two themselves or between anything either is a drop-in
+    for, which is how it is found when a part implements 'm4-thru-3' and the
+    mating was declared on 'm4-opening'. Everything is read through 'getattr'
+    because this runs against whatever the caller hands it, including the
+    stand-ins a test uses.
+    """
+    project = getattr(source_interface, "project", None)
+    ctx = getattr(project, "ctx", None)
+    if ctx is None or not hasattr(ctx, "get_mate"):
+        return None
+
+    def ends(interface):
+        names = set()
+        full_name = getattr(interface, "full_name", None)
+        if full_name is not None:
+            names.add(full_name)
+        try:
+            names |= set(interface.compatible_with)
+        except Exception:
+            pass
+        return names
+
+    for source_name in ends(source_interface):
+        for target_name in ends(target_interface):
+            mating = ctx.get_mate(source_name, target_name)
+            if mating is not None:
+                return mating
+    return None
+
+
 class ConnectHow:
     """The 'how' section of a 'connect' or 'connectPorts' node.
 
@@ -373,7 +406,12 @@ class ConnectHow:
             ends.append((side, None if step is None else float(step), self_screw))
 
         declared = {side: step for side, step, _ in ends if step is not None}
-        cuts_its_own = any(self_screw for _, _, self_screw in ends)
+        # Either end may cut its own thread, and so may the connection itself:
+        # a screw is self-tapping in the pilot hole it is driven into and in
+        # nothing else, which is a fact about the pairing rather than about
+        # either part, so a package states it on the mating.
+        mating = _mating_between(source_interface, target_interface)
+        cuts_its_own = any(self_screw for _, _, self_screw in ends) or bool(getattr(mating, "self_screw", False))
         if len(set(declared.values())) > 1 and not cuts_its_own:
             self._problem(
                 "the interfaces disagree about 'threadStep' (%s) and neither declares 'selfScrew'"

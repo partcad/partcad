@@ -10,19 +10,28 @@ import rich_click as click
 
 from ...service import run
 
-# The two formats that can express a scene. Like an assembly, a scene is not a
-# single file that can be handed to an exporter: converting one rewrites the
-# package around it, which is why 'pc adhoc convert' has no equivalent.
-SUPPORTED_CONVERT_FORMATS = ["assy", "world"]
+# Deliberately not a 'click.Choice'. A scene converts between 'assy' -- PartCAD's
+# own way of saying where things are -- and any file format that says the same
+# thing, and which formats those are is a fact about the workspace's packages
+# rather than about this command: a Gazebo world and an MJCF model both come
+# from a plugin package now ('sim-gazebo:world', 'sim-mujoco:mjcf'), and a
+# fixed list here could only ever be out of date. The daemon resolves the name
+# against the package graph and says what is wrong with one that does not
+# resolve.
+#
+# Like an assembly, a scene is not a single file that can be handed to an
+# exporter: converting one rewrites the package around it, which is why
+# 'pc adhoc convert' has no equivalent.
 
 
-@click.command(help="Convert scenes between ASSY and Gazebo world files and update their type.")
+@click.command(help="Convert a scene between ASSY and a file format that expresses an arrangement.")
 @click.argument("object_name", type=str, required=True)
 @click.option(
     "-t",
     "--target-format",
-    help="Target conversion format.",
-    type=click.Choice(SUPPORTED_CONVERT_FORMATS),
+    help="Target conversion format: 'assy', or a format a package reads as a scene "
+    "(for example 'sim-gazebo:world' or 'sim-mujoco:mjcf').",
+    type=str,
     required=True,
 )
 @click.option(
@@ -42,10 +51,10 @@ SUPPORTED_CONVERT_FORMATS = ["assy", "world"]
 def cli(cli_ctx, object_name: str, target_format: str, package: str, output_dir: str, dry_run: bool):
     """CLI command to convert a scene to a new format.
 
-    Converting to ``world`` writes the ``.world`` file and a mesh for every
-    distinct shape in the scene. Converting to ``assy`` copies every shape the
-    world places into the package as a part of its own and writes an ``.assy``
-    that places them.
+    Converting to a file format writes that file and a mesh for every distinct
+    shape in the scene. Converting to ``assy`` copies every shape the file
+    places into the package as a part of its own and writes an ``.assy`` that
+    places them.
     """
     run(
         cli_ctx,

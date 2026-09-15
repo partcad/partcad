@@ -146,19 +146,21 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] Automatically maintaining the bill of materials
     - [x] Generating user-friendly visual assembly instructions (`PDF` and `HTML` instruction books)
   - [x] Using `URDF`, with links, joints and physics
-  - [x] Using `MJCF`, the format `MuJoCo` describes a model in
   - [x] Using a `STEP` file that stays the source
 - Scenes (3D) — placed arrangements of objects: a workcell, a table, a simulation world
   - [x] Stating where things are, rather than how they got there
-  - [x] Exporting to a `Gazebo` world (SDFormat), and opening it in Gazebo
-  - [x] Exporting to `MJCF`, and opening it in `MuJoCo`
+  - [x] Reading and writing an engine's own scene format through the package that implements it —
+        [`partcad-sim-gazebo`](https://github.com/partcad/partcad-sim-gazebo) for a `Gazebo` world
+        (SDFormat), [`partcad-sim-mujoco`](https://github.com/partcad/partcad-sim-mujoco) for `MJCF`, each
+        also declaring the reader, the exporter and the `pc open` entry for its engine
 - Simulation — what an object is supposed to do once the world is switched on
   - [x] `simulate:` on a part or an assembly: a scene, where in it the object goes, and the condition that
         says whether it went as it should
   - [x] `pc sim`, which runs it and validates the result
   - [x] Simulation plugins, declared the way export and render implementations are — a scene goes in,
         `before` and `after` come out. The simulator is a package, not part of this wheel:
-        [`partcad-sim-mujoco`](https://github.com/partcad/partcad-sim-mujoco) runs one in `MuJoCo`
+        [`partcad-sim-mujoco`](https://github.com/partcad/partcad-sim-mujoco) runs one in `MuJoCo` and
+        [`partcad-sim-gazebo`](https://github.com/partcad/partcad-sim-gazebo) one in `Gazebo`
   - [x] `mu` on a material, so that what a part is made of decides whether it stands up — written out as
         SDFormat's `<mu>`, URDF's `<mu1>` and MJCF's `friction`
 - Part models (3D)
@@ -198,10 +200,10 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - Object-Oriented Programming approach to maintaining part interfaces and mating information
   - Live preview of 3D models while working in Visual Studio Code, with the bill of materials, the assembly
     instructions and supplier quotes on tabs beside the 3D view
-  - Open an object in the application that made it (`pc open`): `FreeCAD`, `Blender`, `Gazebo`, `MuJoCo`,
-    `KiCad` —
+  - Open an object in the application that made it (`pc open`): `FreeCAD`, `Blender`, `KiCad` — and
+    `Gazebo` or `MuJoCo` from the plugin package for that engine —
     installed locally, or run in a container when it is not; an object `Blender` cannot read is converted to
-    a mesh on the way, and a scene `MuJoCo` cannot read to `MJCF`
+    a mesh on the way
   - Render 2D projections, from any viewing angle (`--view`, or an arbitrary one), with the connection
     ports and interfaces drawn on top if asked
     - [x] `SVG`
@@ -221,8 +223,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `IGES`
     - [x] `glTF`
     - [x] `URDF`
-    - [x] `Gazebo` world (SDFormat)
-    - [x] `MJCF` (MuJoCo)
+    - [x] `Gazebo` world (SDFormat) and `MJCF` (MuJoCo), from the plugin package for that engine
   - Output types a package implements itself, for both `render:` and `export:`
 
 ## Installation

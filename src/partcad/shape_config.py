@@ -7,12 +7,17 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import asyncio
+import math
+import os
 import random
 import string
+import typing
 
 from partcad.shape_config_store import ShapeConfigStore
 
 from . import logging as pc_logging
+from . import tolerance_inspect
 
 
 class _NoDefault:
@@ -29,6 +34,41 @@ class _NoDefault:
 
 
 NO_DEFAULT = _NoDefault()
+
+
+class _NotRead:
+    """Sentinel: a file that has not been read for what it states yet.
+
+    Distinct from None, which is the answer of a file that has been read and
+    states nothing.
+    """
+
+    def __repr__(self) -> str:
+        return "NOT_READ"
+
+
+_NOT_READ = _NotRead()
+
+
+def is_a_length(value) -> bool:
+    """Whether a number is one a manufacturing tolerance can be stated as.
+
+    Finite, not negative, and not a boolean - which is what the schema says
+    ('number', 'minimum: 0') and what nothing enforced while a package was
+    loaded. The three ways past it are all reachable from YAML and all pass
+    'float()': '.nan' and '.inf' convert, and 'True' is an int in Python and
+    converts to 1.0.
+
+    NaN is the one that has to be kept out rather than merely tidied away.
+    'CamTest.tolerance_failure()' takes a NaN to mean "the file tolerances this
+    part feature by feature" and passes it - so a NaN a *declaration* produced
+    would be reported as something no file ever said. Whatever states a
+    tolerance goes through here first, and NaN stays
+    'tolerance_inspect.reduce()'s alone to produce.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return math.isfinite(value) and value >= 0.0
 
 
 def final_config(obj) -> dict:
@@ -62,6 +102,27 @@ class ShapeConfiguration:
     # for every shape whose type contributes none - which today is every shape
     # that is not a part.
     object_type_parameters: dict = {}
+
+    # The manufacturing tolerance this object's declaration stated, as a number,
+    # or None if it stated none. Private because nothing may read it directly:
+    # what a declaration wrote down is one of three answers to "how precisely is
+    # this to be made", and 'get_tolerance()' is the one place that knows which
+    # of them applies. Stamped on by the factory that created the object, like
+    # the two below (see 'PartFactory._create_part').
+    _tolerance: typing.Optional[float] = None
+
+    # Whether the type that produces this shape takes a 'tolerance:' field at
+    # all, and which file format's stated tolerance its file is to be read for.
+    # Both are False/None for every type that does neither, which today is every
+    # type but 'step' and the 'kicad' that inherits it.
+    tolerance_field_accepted: bool = False
+    tolerance_file_format: typing.Optional[str] = None
+
+    # What the file turned out to say, once it has been read, and the sentinel
+    # for "not read yet". A file is read at most once per object: it does not
+    # change under a loaded package, and a STEP file large enough to be worth
+    # caring about is large enough not to want scanned twice.
+    _tolerance_from_file: typing.Any = _NOT_READ
 
     def __init__(self, config: dict) -> None:
         self.config = config
@@ -140,6 +201,107 @@ class ShapeConfiguration:
             return None
         return self.config["parameters"][property]["default"]
 
+    async def get_tolerance(self):
+        """How precisely this object has to be made, or None if it cannot say.
+
+        The one reader of the manufacturing tolerance. There are three places
+        the answer can come from and they are not interchangeable, so nothing
+        outside this reads any of them directly:
+
+        1. The 'tolerance:' field of the declaration, for the types that take
+           one. An author who wrote it down meant it, and it outranks the file:
+           it is written precisely because the file did not say, and a file that
+           later starts saying something else is a change to argue about rather
+           than one to silently adopt.
+        2. What the file itself states, for the types whose format can state it.
+           A STEP file carrying GD&T already says how precisely each feature has
+           to be made, in more detail than one number holds - so a file that
+           tolerances several features differently answers NaN, which means
+           "tolerated, feature by feature" and not "unknown". See
+           'tolerance_inspect.reduce()'.
+        3. The 'tolerance' object-type parameter, for the homogeneous types that
+           accept it, which reads back as its type's default of 0.0 when nothing
+           declared one.
+
+        None is reserved for the object that has no way to answer at all: a type
+        that takes neither the field nor the parameter, and whose file states
+        nothing. It is not the same as 0.0, which is what "nobody said" reads as
+        on a type that could have said - and the manufacturability test reports
+        the two differently, because one is a declaration to fix and the other a
+        part type to think again about.
+
+        Asynchronous because of case 2, which reads a file, and because an
+        object whose file is not there yet ('kicad' builds its STEP, a part with
+        'fileFrom' downloads it) has to be free to answer without one.
+        """
+        if self._tolerance is not None:
+            return self._tolerance
+
+        stated = await self._get_file_tolerance()
+        if stated is not None:
+            return stated
+
+        declared = self.get_object_type_parameter("tolerance")
+        if declared is not None:
+            if not is_a_length(declared):
+                # An infinite or negative parameter, which the coercion above
+                # has no opinion about: 'tolerance' is the one numeric
+                # object-type parameter that is a length, so the rule about what
+                # a length may be lives here rather than there.
+                kind = getattr(self, "kind", "object").capitalize()
+                pc_logging.error(f"{kind} '{self.name}' has a 'tolerance' that is not a length: {declared!r}")
+                return 0.0
+            return declared
+
+        # A type that takes the field and whose file said nothing has said
+        # nothing, which is 0.0 - the same "nobody said" the parameter's default
+        # is, reached the other way.
+        if self.tolerance_field_accepted:
+            return 0.0
+        return None
+
+    async def _get_file_tolerance(self):
+        """What this object's file states about its tolerance, read once.
+
+        The file is prepared first, where the object has a way to prepare one.
+        'Shape.prepare_async()' is "everything that has to happen before this
+        shape's cache key means anything", and a 'fileFrom' download is the
+        whole of it for a file-backed part: without this, a STEP file fetched
+        from a URL would be read before it was there, report that it states
+        nothing, and have the answer cached against a hash of a file that had
+        never been downloaded. It is idempotent and costs nothing for a file the
+        package carries.
+
+        It does not make a 'kicad' part's STEP file appear - that is generated
+        while the part is built, not while it is prepared - and it is not meant
+        to. What kicad-cli writes carries no GD&T for this to find, so the field
+        is that type's answer and the absent file is the right "nothing".
+        """
+        if self.tolerance_file_format is None:
+            return None
+        if self._tolerance_from_file is not _NOT_READ:
+            return self._tolerance_from_file
+
+        prepare = getattr(self, "prepare_async", None)
+        if prepare is not None:
+            try:
+                await prepare()
+            except Exception as e:  # pylint: disable=broad-except
+                # Not this reader's to report: a file that cannot be fetched
+                # fails the object wherever it is next needed, with the reason.
+                # Here it is simply a file that is not there.
+                pc_logging.debug("Could not prepare %s to read its tolerance: %s" % (self.name, e))
+
+        path = getattr(self, "path", None)
+        value = await asyncio.to_thread(tolerance_inspect.of_file, self.tolerance_file_format, path)
+        # Only a file that was there gave an answer worth keeping. A 'kicad'
+        # part's STEP file does not exist until the part is built, and
+        # remembering the "nothing" read before that would outlive the reason
+        # for it.
+        if value is not None or (path and os.path.isfile(path)):
+            self._tolerance_from_file = value
+        return value
+
     def get_object_type_parameter(self, name: str):
         """The value of an object-type parameter, with the type's default applied.
 
@@ -183,6 +345,14 @@ class ShapeConfiguration:
 
         value = declared["default"]
         if isinstance(default, float):
+            # Before 'float()' rather than after: by then 'True' is an ordinary
+            # 1.0 and nothing can tell it from a number somebody wrote. Said
+            # here, of numeric object-type parameters in general, because a
+            # boolean is not a number for any of them.
+            if isinstance(value, bool):
+                kind = getattr(self, "kind", "object").capitalize()
+                pc_logging.error(f"{kind} '{self.name}' has a non-numeric '{name}': {value!r}")
+                return fallback
             try:
                 return float(value)
             except (TypeError, ValueError):

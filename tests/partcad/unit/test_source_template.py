@@ -7,11 +7,17 @@
 """Every file an object is declared by is a Jinja2 template, not only the ASSY one.
 
 An ASSY file has always been rendered before it is parsed, which is what lets
-one file describe a family of assemblies. A URDF, a Gazebo world and an MJCF
-model are declared exactly the same way and had not been, so a package could
-parameterize one kind of arrangement and not the other three. They share the
-implementation now ('AssemblyFactoryFile'), and these are the properties that
-sharing has to keep.
+one file describe a family of assemblies. A file read through an 'import:'
+declaration -- a URDF, or any format a package teaches PartCAD -- is declared
+exactly the same way and had not been, so a package could parameterize one kind
+of arrangement and not the other. They share the implementation now
+('AssemblyFactoryFile'), and these are the properties that sharing has to keep.
+
+The format here is one the *test package* declares, rather than one PartCAD
+ships. That is not incidental: the engine scene formats left the wheel, so a
+package declaring its own reader is the arrangement this has to work for, and
+the one it is now exercised against. The reader is never run -- these tests ask
+what the factory does with the file before anything reads it.
 
 The rendered file goes into PartCAD's own state directory rather than beside the
 original -- rendering is derived data, and instantiating an object must not put
@@ -26,22 +32,37 @@ import pytest
 
 import partcad as pc
 
-MJCF = '<mujoco model="{{ name }}"><worldbody><body name="{{ param_body }}"/></worldbody></mujoco>'
+SCENE = '<world model="{{ name }}"><body name="{{ param_body }}"/></world>'
+
+# Never executed: every test below stops before the reader would run, and the
+# one that goes further stubs the runtime out. It exists because a declaration
+# has to name a file that is there.
+READER = """
+def process(path, request):
+    return {"success": True, "root": {"type": "assembly", "name": "root", "links": []}}
+"""
 
 
 @pytest.fixture
 def package(tmp_path):
-    """A package declaring one MJCF file, with and without parameters."""
+    """A package declaring a format of its own, with and without parameters."""
     root = tmp_path / "workspace"
     root.mkdir()
-    (root / "plain.xml").write_text('<mujoco model="plain"><worldbody/></mujoco>', encoding="utf-8")
-    (root / "template.xml").write_text(MJCF, encoding="utf-8")
+    (root / "reader.py").write_text(READER, encoding="utf-8")
+    (root / "plain.xml").write_text('<world model="plain"/>', encoding="utf-8")
+    (root / "template.xml").write_text(SCENE, encoding="utf-8")
     (root / "partcad.yaml").write_text(
         "name: //t\n"
+        "import:\n"
+        "  demo:\n"
+        "    path: reader.py\n"
+        "    extension: xml\n"
+        "    kinds: [scene]\n"
+        "    noun: model\n"
         "scenes:\n"
-        "  plain:\n    type: mjcf\n    path: plain.xml\n"
+        "  plain:\n    type: demo\n    path: plain.xml\n"
         "  templated:\n"
-        "    type: mjcf\n"
+        "    type: demo\n"
         "    path: template.xml\n"
         "    parameters:\n"
         "      body:\n        type: string\n        default: brick\n",
@@ -55,7 +76,7 @@ def factory_of(project, name, params=None):
 
 
 def test_a_file_with_no_template_in_it_is_the_file_itself(package):
-    """The usual case: a plain URDF stays the file the package points at."""
+    """The usual case: a file with no template in it stays the file itself."""
     factory = factory_of(package, "plain")
     assert factory.rendered_source() == factory.path
 

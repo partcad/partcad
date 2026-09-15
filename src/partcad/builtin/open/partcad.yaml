@@ -37,6 +37,12 @@
 #   - `meshVia`          what a file that is not a mesh is converted to first.
 #   - `sceneType`        the PartCAD scene type it reads, for one that reads a
 #                        description of an arrangement rather than geometry.
+#   - `sceneExtensions`  the extensions that type is stored in. Declared rather
+#                        than looked up: an engine's scene format belongs to the
+#                        same package this entry does, so the package that knows
+#                        the format is the one that says what it is called on
+#                        disk, and `pc open` needs no table of formats PartCAD
+#                        has never heard of to recognise one.
 #
 # A package adds an application of its own by declaring it in its own `open:`
 # section. That is how `gazebo` and `mujoco` reach `pc open`: each belongs to
@@ -151,44 +157,3 @@ open:
                 print('PartCAD: bpy.ops.' + name + ' did not import ' + path + ': ' + str(e))
         else:
             print('PartCAD: this Blender has no importer for ' + (extension or path))
-
-  # The two below are here only until the packages that own them are published:
-  # `gazebo` belongs to `partcad/partcad-sim-gazebo` and `mujoco` to
-  # `partcad/partcad-sim-mujoco`, beside the exporter, the reader and the
-  # simulator for that engine's own scene format.
-
-  gazebo:
-    displayName: Gazebo
-    # The simulator's own image for the current Gazebo. `:latest`, for the
-    # reason FreeCAD's is: a user asking for a container wants the current
-    # Gazebo, and `--docker-image` is the answer for anyone who wants another
-    # one (`osrf/gazebo` for Gazebo Classic, say).
-    image: gazebosim/gz-harmonic:latest
-    # Three generations of one program, newest first: `gz sim` today,
-    # `ign gazebo` in the Ignition years, and `gazebo` for Gazebo Classic.
-    # Whichever the machine has is the one used.
-    binaries: [gz, ign, gazebo]
-    binaryArgs:
-      gz: [sim]
-      ign: [gazebo]
-    macosApps: [Gazebo.app]
-    windowsGlobs: ["Gazebo*/bin/gz.exe"]
-    flatpakId: org.gazebosim.Gazebo
-
-  mujoco:
-    displayName: MuJoCo
-    # DeepMind's own image, `:latest` for the reason every other one here is:
-    # a user asking for a container wants the current MuJoCo, and
-    # `--docker-image` is the answer for anyone who wants another.
-    image: ghcr.io/google-deepmind/mujoco:latest
-    # `simulate` is the viewer the MuJoCo release ships; `mujoco` is what a
-    # distribution package sometimes calls it. Whichever the machine has is the
-    # one used.
-    binaries: [simulate, mujoco]
-    macosApps: [MuJoCo.app]
-    macosExecutable: Contents/MacOS/simulate
-    windowsGlobs: ["MuJoCo*/bin/simulate.exe", "mujoco*/bin/simulate.exe"]
-    # MuJoCo reads MJCF and no other model format. A scene given as anything
-    # else -- a Gazebo world, above all -- is written out as MJCF first, which
-    # is `pc export -t mjcf` and so is the daemon's work.
-    sceneType: mjcf

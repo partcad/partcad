@@ -17,6 +17,7 @@ class Mating:
     target: Interface
     desc: str
     count: int
+    self_screw: bool
 
     source_port_selector: str
     target_port_selector: str
@@ -40,6 +41,13 @@ class Mating:
         self.source = source
         self.target = target
         self.desc = config["desc"] if "desc" in config else ""
+        # Whether a thread gets *cut* by making this connection rather than
+        # matched, which is what lets the two ends carry different threads - or
+        # one of them none at all. Declared here rather than on either
+        # interface because it is true of the pairing and not of the part: a
+        # self-tapping screw cuts its thread in the pilot hole it is driven
+        # into, and cuts nothing on its way through a clearance hole.
+        self.self_screw = bool(config.get("selfScrew", False)) if isinstance(config, dict) else False
 
         if "sourcePortSelector" in config:
             if reverse:

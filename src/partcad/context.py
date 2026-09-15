@@ -16,6 +16,8 @@ import time
 import urllib.parse
 from typing import Any, Optional
 
+from partcad_utils import process_role
+
 from . import consts
 from . import logging as pc_logging
 from . import output
@@ -58,6 +60,37 @@ def _is_within(name: str, parent_name: Optional[str]) -> bool:
     if parent_name is None:
         return True
     return name == parent_name or name.startswith(parent_name.rstrip("/") + "/")
+
+
+# How long the probe waits before concluding that there is no network.
+#
+# The two answers do not cost the same, which is what sets this. Waiting a
+# second longer than necessary costs a second, once, on a command that is about
+# to fetch something over that very network anyway. Concluding "offline" wrongly
+# costs the clone that `is_connected()` gates in `project_factory_git` -- which
+# is not attempted at all, so the package resolves to whatever is on disk and a
+# package that was never fetched is reported as a missing configuration file
+# rather than as a network problem -- and it costs it for the next 300 seconds,
+# which is how long `is_connected()` caches a negative answer.
+#
+# So it is worth waiting. Three seconds was short enough that a macOS CI runner
+# whose HTTPS worked twenty seconds earlier and five minutes later was declared
+# offline in between, taking six behave scenarios and a bundle's example sweep
+# with it.
+PROBE_TIMEOUT = 5.0
+
+# And longer still in a daemon, where every term of that is bigger: it is one
+# process serving every client of the workspace rather than one command
+# answering one person, it re-probes every 60 seconds while online so a slow
+# answer is amortised rather than paid per command, and the 300 seconds it would
+# spend wrongly offline are 300 seconds of every request that needs the network.
+# Nobody is watching a prompt for it either.
+DAEMON_PROBE_TIMEOUT = 10.0
+
+
+def probe_timeout() -> float:
+    """How long this process waits on the probe: see the two constants above."""
+    return DAEMON_PROBE_TIMEOUT if process_role.is_daemon() else PROBE_TIMEOUT
 
 
 def connectivity_probe():
@@ -232,7 +265,7 @@ class Context:
         try:
             # Closed rather than left to the garbage collector: this runs every
             # 60 seconds while online, from a long-lived process.
-            with socket.create_connection((host, port), timeout=3.0):
+            with socket.create_connection((host, port), timeout=probe_timeout()):
                 return True
         except OSError:
             pc_logging.warning("No internet connection. Running in offline mode")
@@ -632,6 +665,47 @@ class Context:
                 import_list = project_path.split("/")
 
             return self._get_project_recursive(project, import_list)
+
+    def get_project_from(self, project, rel_project_path: str) -> Optional[Project]:
+        """A package by path, resolved from another package that is in hand.
+
+        'get_project()' always starts at the root, which it looks up by name in
+        'self.projects' - and a package is not in there until it has finished
+        loading. So a package that has to resolve something *while* it is still
+        loading cannot ask that way: its own root is not registered yet, and a
+        dependency that is perfectly well declared answers None.
+
+        That is not a corner case. A package's objects are created as part of
+        loading it, and an object whose 'type:' names the package that reads its
+        format ('type: sim-gazebo:world') resolves that package right there. Ask
+        through 'get_project()' and every such object is broken on the way in,
+        and works on the second attempt - which is exactly how it behaved.
+
+        Asking from the package doing the asking has neither problem: it is the
+        object rather than a name to look up, and what it wants is its own
+        dependency, which '_get_project_recursive()' reaches from here. The
+        ordinary lookup is still tried first, so a package already loaded, a
+        sibling, and '//builtin' all answer the way they always did.
+        """
+        project_path = self.get_project_abs_path(rel_project_path)
+
+        builtin_project = self._get_builtin_project(project_path)
+        if builtin_project is not None:
+            return builtin_project
+
+        found = self.get_project(project_path)
+        if found is not None or project is None:
+            return found
+
+        with self.lock:
+            if project_path in self.projects:
+                return self.projects[project_path]
+            prefix = project.name if project.name.endswith("/") else project.name + "/"
+            if not project_path.startswith(prefix):
+                # Not below the package that is asking, so there is nothing here
+                # that the ordinary lookup above did not already try.
+                return None
+            return self._get_project_recursive(project, project_path[len(prefix) :].split("/"))
 
     def _get_project_recursive(self, project, import_list: list[str]):
         """Load the dependencies recursively"""

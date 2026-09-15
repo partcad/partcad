@@ -5,24 +5,34 @@
 #
 """Core-side entry point for 'pc convert scene'.
 
-Converts a scene between the two formats that can express one:
+Converts a scene between ``assy`` -- PartCAD's own way of saying where things
+are -- and any *file format* that says the same thing:
 
-  * **to world** - the scene is exported as a Gazebo ``.world`` file
-    (SDFormat) plus a directory of the mesh files it references, and the
-    package's declaration switches to ``type: world``.
+  * **to a file format** - the scene is exported as that format plus a
+    directory of the mesh files it references, and the package's declaration
+    switches to it. A Gazebo world (SDFormat) and an MJCF model are the two
+    such formats today, and both are declared by a plugin package
+    ('partcad/partcad-sim-gazebo' and 'partcad/partcad-sim-mujoco') rather than
+    by PartCAD, so 'pc convert scene -t sim-gazebo:world' is how one is named.
 
-  * **to assy** - every shape the world places becomes a part of the package
-    and the arrangement becomes an ``.assy`` that places them, so the package
-    ends up holding PartCAD's own objects. The declaration switches to
+  * **to assy** - every shape the file places becomes a part of the package and
+    the arrangement becomes an ``.assy`` that places them, so the package ends
+    up holding PartCAD's own objects. The declaration switches to
     ``type: assy``.
+
+Which formats those are is therefore not a list here. It is whatever the
+package graph declares under 'import:' with 'scene' among its 'kinds' - the same
+question 'type:' on a scene asks, answered the same way - so a package that
+teaches PartCAD a new arrangement format can convert to and from it without
+PartCAD having heard of it.
 
 This is the scene counterpart of 'pc convert assembly', and it is deliberately
 the simpler of the two. Converting a URDF assembly to ASSY has to reconcile two
 different models of *connection* - a URDF joint against a pair of PartCAD ports
 - because an assembly says how it is put together. A scene says only where
-things are, and SDFormat's poses are placements just as an ASSY's ``location:``
-is, so nothing has to be invented in either direction: what a world's joints
-say is what a scene does not carry in the first place (see
+things are, and a pose in SDFormat or MJCF is a placement just as an ASSY's
+``location:`` is, so nothing has to be invented in either direction: what a
+world's joints say is what a scene does not carry in the first place (see
 'assembly_factory_imported').
 """
 
@@ -33,11 +43,41 @@ from pathlib import Path
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 from ... import logging as pc_logging
+from ... import output
 from ...project import Project
 from ...utils import resolve_resource_path
 from ..assembly.convert import _location, _section, _yaml, apply_config
 
-SUPPORTED_FORMATS = ("assy", "world")
+# PartCAD's own arrangement format, and the one end of every conversion here.
+# It is not resolved through 'import:' because nothing reads it *in*: it is
+# PartCAD's own objects placed by a PartCAD file, which is the thing the other
+# end is being converted to and from.
+ASSY = "assy"
+
+
+def scene_format(project: Project, format_name: str, role: str):
+    """The 'import:' declaration of a scene file format, or None for 'assy'.
+
+    Raises where the name is neither, and says which of the two things is wrong:
+    a format nobody declares is usually a missing dependency on the plugin that
+    declares it, and one declared for assemblies only is a name that means
+    something else than the caller thought.
+    """
+    if format_name == ASSY:
+        return None
+    impl = output.import_declaration(project.ctx, project, format_name)
+    if impl is None:
+        raise ValueError(
+            "Scenes convert between '%s' and a file format that expresses an arrangement; "
+            "nothing in this package graph declares '%s' as the %s format. A format a plugin "
+            "package provides is named through it, as in 'sim-gazebo:world'." % (ASSY, format_name, role)
+        )
+    if "scene" not in output.import_kinds(impl):
+        raise ValueError(
+            "'%s' is not a scene format: it is declared for %s. A scene is an arrangement of "
+            "products rather than one product." % (format_name, " and ".join(output.import_kinds(impl)))
+        )
+    return impl
 
 
 def _relative_to_package(project: Project, path: Path) -> str:
@@ -53,26 +93,29 @@ def _safe_stem(name: str) -> str:
     return str(name).replace("/", "_").replace("\\", "_") or "shape"
 
 
-def world_to_assy(project: Project, scene_name: str, config: dict, out_dir: Path):
-    """Turn a world scene into an ASSY one, with parts of the package's own.
+def file_to_assy(project: Project, scene_name: str, config: dict, out_dir: Path):
+    """Turn a scene read from a file into an ASSY one, with parts of its own.
 
-    Every shape the world places is copied into ``<scene>/`` inside the package
+    Every shape the file places is copied into ``<scene>/`` inside the package
     and declared as a part of the format it already is - the file is copied
     rather than re-rendered, so no geometry is re-triangulated and what a mesh
-    said stays exactly what it said. What the world stated about a link (its
-    mass, its friction, its colour) travels with the part, in the same
+    said stays exactly what it said. What the arrangement stated about a body
+    (its mass, its friction, its colour) travels with the part, in the same
     ``properties:`` section every other PartCAD object carries it in.
 
-    The arrangement itself becomes an ``.assy`` whose nesting is the world's:
-    one node per model, holding one link per shape, each placed by the pose the
-    world gave it.
+    The arrangement itself becomes an ``.assy`` whose nesting is the file's: one
+    node per model, holding one link per shape, each placed by the pose the file
+    gave it.
+
+    Nothing here knows which format it was. The reader has already turned it
+    into the one tree every reader produces, and that is what is walked.
     """
     scene = project.get_scene(scene_name)
     if scene is None:
         raise ValueError("Scene '%s' not found in '%s'" % (scene_name, project.name))
     factory = getattr(scene, "import_factory", None)
     if factory is None:
-        raise ValueError("Scene '%s' is not a world scene" % scene_name)
+        raise ValueError("Scene '%s' is not read from a file, so there is nothing to convert" % scene_name)
 
     result = asyncio.run(factory.read_async())
     root = result["root"]
@@ -141,13 +184,18 @@ def world_to_assy(project: Project, scene_name: str, config: dict, out_dir: Path
         part_entry(node)
 
     if not parts:
-        raise ValueError("The world scene '%s' has no geometry to convert" % scene_name)
+        raise ValueError("The scene '%s' has no geometry to convert" % scene_name)
 
     assy_path = out_dir / ("%s.assy" % scene_name)
     document = CommentedMap()
     document["name"] = scene_name
-    if result.get("world_name"):
-        document["description"] = "Converted from the Gazebo world '%s'" % result["world_name"]
+    # What the reader called the thing it read, in its own vocabulary: a
+    # 'world_name' from SDFormat, a 'model_name' from MJCF. Whichever it
+    # supplied, and nothing where it supplied neither.
+    for key in ("world_name", "model_name", "robot_name"):
+        if result.get(key):
+            document["description"] = "Converted from '%s'" % result[key]
+            break
     document["links"] = links
     with open(assy_path, "w", encoding="utf-8") as f:
         _yaml().dump(document, f)
@@ -160,22 +208,32 @@ def world_to_assy(project: Project, scene_name: str, config: dict, out_dir: Path
     return {"scenes": {scene_name: scene_config}, "parts": parts}
 
 
-def assy_to_world(project: Project, scene_name: str, config: dict, out_dir: Path):
-    """Export a scene as a Gazebo world file plus the mesh files it references."""
+def assy_to_file(project: Project, scene_name: str, config: dict, out_dir: Path, target_format: str, impl):
+    """Export a scene as an arrangement file plus the meshes it references.
+
+    ``target_format`` is written into the declaration exactly as the caller
+    spelled it, package path and all: that spelling is what the declaration has
+    to resolve through afterwards, and the bare name would only resolve for a
+    format PartCAD ships an implementation of.
+    """
     scene = project.get_scene(scene_name)
     if scene is None:
         raise ValueError("Scene '%s' not found in '%s'" % (scene_name, project.name))
 
-    world_path = out_dir / ("%s.world" % scene_name)
-    world_path.parent.mkdir(parents=True, exist_ok=True)
-    asyncio.run(scene.render_async(project.ctx, "world", project=project, filepath=str(world_path)))
-    if not world_path.exists():
-        raise RuntimeError("Failed to write the world file for '%s'" % scene_name)
+    # The extension the format is stored in, from the declaration that knows it.
+    # Falling back to the bare format name is what every other file type does
+    # where nothing says otherwise.
+    extension = impl.extension(output.split_format(project.name, target_format)[0])
+    file_path = out_dir / ("%s.%s" % (scene_name, extension))
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    asyncio.run(scene.render_async(project.ctx, target_format, project=project, filepath=str(file_path)))
+    if not file_path.exists():
+        raise RuntimeError("Failed to write the '%s' file for '%s'" % (target_format, scene_name))
 
-    scene_config = CommentedMap({"type": "world"})
+    scene_config = CommentedMap({"type": target_format})
     if config.get("desc"):
         scene_config["desc"] = config["desc"]
-    scene_config["path"] = _relative_to_package(project, world_path)
+    scene_config["path"] = _relative_to_package(project, file_path)
 
     return {"scenes": {scene_name: scene_config}}
 
@@ -188,12 +246,6 @@ def convert_scene_action(
     dry_run: bool = False,
 ):
     """Convert a scene to another format and update its declaration."""
-    if target_format not in SUPPORTED_FORMATS:
-        raise ValueError(
-            "Scenes convert between %s; '%s' is not one of them"
-            % (" and ".join(sorted(SUPPORTED_FORMATS)), target_format)
-        )
-
     package_name, scene_name = resolve_resource_path(project.name, object_name)
     if package_name != project.name:
         project = project.ctx.get_project(package_name)
@@ -207,8 +259,14 @@ def convert_scene_action(
     if source_format == target_format:
         pc_logging.info("Scene '%s' is already '%s'; nothing to convert." % (scene_name, target_format))
         return None
-    if source_format not in SUPPORTED_FORMATS:
-        raise ValueError("Scenes of type '%s' cannot be converted" % source_format)
+
+    # Both ends, and in this order: the target is what the caller typed and is
+    # the likelier of the two to be a name nobody declares, so it is the one
+    # worth complaining about first.
+    target_impl = scene_format(project, target_format, "target")
+    scene_format(project, source_format, "source")
+    if target_impl is None and source_format == ASSY:
+        raise ValueError("Scenes convert between '%s' and a file format, not from '%s' to itself" % (ASSY, ASSY))
 
     out_dir = Path(output_dir).resolve() if output_dir else Path(project.config_dir).resolve()
     if dry_run:
@@ -221,10 +279,10 @@ def convert_scene_action(
     pc_logging.info("Converting the scene '%s': %s to %s (%s)" % (scene_name, source_format, target_format, out_dir))
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if target_format == "world":
-        sections = assy_to_world(project, scene_name, config, out_dir)
+    if target_impl is not None:
+        sections = assy_to_file(project, scene_name, config, out_dir, target_format, target_impl)
     else:
-        sections = world_to_assy(project, scene_name, config, out_dir)
+        sections = file_to_assy(project, scene_name, config, out_dir)
 
     apply_config(project, sections)
     pc_logging.info("Conversion of the scene '%s' is completed." % scene_name)

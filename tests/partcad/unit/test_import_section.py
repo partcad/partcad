@@ -176,7 +176,7 @@ def test_an_object_retunes_a_readers_parameter_for_itself(package):
 
 def test_every_builtin_reader_declares_what_it_produces(package):
     """A declaration that forgot 'kinds:' would silently accept both sections."""
-    for format_name in ("urdf", "mjcf", "world"):
+    for format_name in ("urdf",):
         declaration = builtin_import_declaration(format_name)
         assert declaration["kinds"], format_name
         assert set(declaration["kinds"]) <= {"assembly", "scene"}, format_name
@@ -192,6 +192,89 @@ def test_the_builtin_readers_ship_beside_their_declaration():
 
     for format_name, declaration in section.items():
         assert os.path.isfile(os.path.join(root, declaration["path"])), format_name
+
+
+def write_plugin_and_user(root, plugin_dir):
+    """A package that declares a reader, and a separate one that uses it.
+
+    Which is the arrangement the section exists for -- '//builtin/import' is not
+    the only package that may declare a reader -- and the one nothing could
+    exercise while every reader shipped in the wheel.
+    """
+    plugin_dir.mkdir()
+    (plugin_dir / "reader.py").write_text(TRIVIAL_READER, encoding="utf-8")
+    (plugin_dir / "partcad.yaml").write_text(
+        textwrap.dedent("""
+            name: //the-plugin
+            import:
+              demo:
+                path: reader.py
+                extension: demo
+                kinds: [assembly]
+                noun: doodad
+                greeting: hello
+                mesh: %(mesh)s
+                dropped:
+                  everything: "the entire file"
+            """) % {"mesh": CUBE.replace("\\", "/")},
+        encoding="utf-8",
+    )
+    (root / "thing.demo").write_text("nothing here is parsed\n", encoding="utf-8")
+    (root / "partcad.yaml").write_text(
+        textwrap.dedent("""
+            dependencies:
+              reads-demo:
+                type: local
+                path: %(plugin)s
+            assemblies:
+              thing:
+                type: reads-demo:demo
+                path: thing.demo
+            """) % {"plugin": str(plugin_dir).replace("\\", "/")},
+        encoding="utf-8",
+    )
+    return pc.Context(str(root))
+
+
+def test_a_reader_in_another_package_is_named_through_it(package, tmp_path):
+    """'type: reads-demo:demo' -- the spelling a plugin's own README gives."""
+    ctx = write_plugin_and_user(package, tmp_path / "plugin")
+    assembly = ctx.get_project("//").get_assembly("thing")
+
+    assert assembly is not None
+    asyncio.run(assembly.do_instantiate())
+    assert [child.name for child in assembly.children] == ["only"]
+
+
+def test_a_reader_in_another_package_resolves_while_the_package_loads(package, tmp_path, caplog):
+    """Which is when it has to, and is where it used to fail.
+
+    A package's objects are created as part of loading it, so an object whose
+    'type:' names another package resolves that package right then - before the
+    package doing the asking has finished loading and been registered under its
+    own name. Looking it up from the root therefore answered None for a
+    dependency that was declared perfectly well, and the object was recorded as
+    broken on the way in and worked on the second attempt.
+
+    So this asserts on the loading itself rather than on the result: no error,
+    and the object is there the first time it is asked for.
+    """
+    with caplog.at_level("ERROR"):
+        ctx = write_plugin_and_user(package, tmp_path / "plugin")
+        project = ctx.get_project("//")
+
+    assert project.get_assembly("thing") is not None
+    assert [record.message for record in caplog.records] == []
+
+
+def test_a_package_that_does_not_declare_the_reader_it_was_named_for(package, tmp_path):
+    """A path is an answer to "whose reader", so a wrong one is about the package."""
+    ctx = write_plugin_and_user(package, tmp_path / "plugin")
+    project = ctx.get_project("//")
+    project.assembly_configs["thing"]["type"] = "reads-demo:nosuch"
+    project.assemblies.pop("thing", None)
+
+    assert project.get_assembly("thing") is None
 
 
 def test_a_dependency_under_import_is_reported_and_not_migrated(package):

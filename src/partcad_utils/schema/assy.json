@@ -139,7 +139,10 @@
       "properties": {
         "type": { "type": "string", "enum": ["part", "assembly"] },
         "name": { "type": "string", "minLength": 1 },
-        "description": { "type": "string" },
+        "description": {
+          "type": "string",
+          "description": "Free-form text about this node: the item it places, or the sub-assembly a container node declares. Shown in the assembly's generated documents; nothing in PartCAD parses it or acts upon it."
+        },
         "part": { "type": "string", "minLength": 1 },
         "assembly": { "type": "string", "minLength": 1 },
         "package": { "type": "string", "minLength": 1 },

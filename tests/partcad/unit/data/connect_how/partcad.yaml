@@ -1,4 +1,4 @@
-desc: A package to exercise "comment" and "how" in ASSY "connect*" sections
+desc: A package to exercise "description", and "comment"/"how" in ASSY "connect*" sections
 
 sketches:
   m3:
@@ -60,6 +60,11 @@ assemblies:
   connect_how:
     type: assy
     desc: Two screws connected to a plate, with assembly instructions
+  connect_how_undescribed:
+    # The same file, declared by a package that says nothing about it: with no
+    # "desc" here, the documents fall back to the ASSY file's own "description".
+    type: assy
+    path: connect_how.assy
   connect_how_broken:
     type: assy
     desc: |

@@ -1774,7 +1774,9 @@ material and a colour of its own, and naming one for the file would be a claim
 about a part the file itself describes better. ``step`` rejects them, and so
 does ``kicad``, which is a STEP file behind a footprint. What such a part is
 made of belongs under :ref:`properties`, where a shape says what it turned out
-to be rather than what was asked of it.
+to be rather than what was asked of it. How precisely it has to be made is a
+separate question and has an answer of its own, below: see
+:ref:`tolerance-field`.
 
 Every other part type rejects them too, but for a different reason: whether it
 should accept them has not been decided yet, and answering "no" until somebody
@@ -1874,6 +1876,10 @@ visualization, simulation calculations and, if applicable, manufacturing
   what ``pc test`` rejects on a part that is to be manufactured. Give it a real
   value on anything you intend to have made.
 
+  ``step`` and ``kicad`` parts state this as a ``tolerance:`` field instead of
+  as a parameter, and their file may state it for them; see
+  :ref:`tolerance-field`.
+
 If the part has variable MCFTT parameters depending on the surface,
 then either this part must be broken down into multiple parts,
 or the values must be derived from CAD files/scripts (not implemented yet).
@@ -1890,6 +1896,71 @@ say what the part should be made of, and how well, for the provider that will
 make it. They are not a claim about a shape that exists. A part read from a STEP
 file that already states its material does not answer them, and the answer is
 not what an exporter writes into a file. That is :ref:`properties`, below.
+
+.. _tolerance-field:
+
+Tolerance on the types that state it in the file
+------------------------------------------------
+
+``step`` and ``kicad`` reject the ``tolerance`` *parameter*, for the reason
+above, which would leave them with no way to say how precisely a part has to be
+made and nothing to answer :doc:`pc test <cli>` with. They have one, because a
+STEP file has somewhere of its own to say it: AP242 carries the whole of GD&T -
+a plus/minus tolerance on a dimension, a flatness or a position tolerance on a
+feature - so PartCAD reads the file.
+
+Plenty of STEP files carry none of it. For them - and only on the types whose
+file could have carried it - the part declaration takes a ``tolerance:``
+**field** of its own:
+
+.. code-block:: yaml
+
+  parts:
+    bracket:
+      type: step
+      manufacturing:
+        method: subtractive
+      tolerance: 0.1   # millimetres
+
+It is a field rather than a parameter because it asks nothing of the type that
+produces the shape: the file is read the same way whether or not it is there,
+and nothing is built differently for it. It is accepted only on the types that
+take it; declaring it anywhere else is the same per-object error that declaring
+a rejected parameter is, and says ``field`` rather than ``parameter`` so that
+the two are not confused. An ``alias`` or an ``enrich`` may carry it and
+ignores it, like everything else it carries that describes how its source is
+built.
+
+There are then three places a part's tolerance can come from, and PartCAD reads
+them in this order:
+
+1. The ``tolerance:`` field, where the type takes one. It outranks the file: it
+   is written precisely because the file did not say, and a file that later
+   starts saying something else is a change to look at rather than one to adopt
+   silently.
+2. What the file itself states. A file that states one tolerance answers with
+   it, whatever unit it is written in - a file in inches is read as inches.
+3. The ``tolerance`` parameter, for the homogeneous types that accept it, with
+   its default of ``0.0``.
+
+A file that tolerances several features differently has no single tolerance, and
+PartCAD does not invent one: the tightest overstates what most of the part
+needs, the loosest understates what one of its features does, and an average is
+true of nothing. It reads back as ``NaN`` instead, which means *tolerated,
+feature by feature* - and ``pc test`` accepts it. Such a part does say how
+precisely it has to be made, in more detail than one number holds, and the file
+is what goes to the manufacturer.
+
+What ``pc test`` rejects is still only a part that could have said and did not:
+``0.0`` on a type that takes the field or the parameter. A part whose type takes
+neither and whose file states nothing is reported differently again, naming the
+type - that is a fact about the part type rather than about the declaration.
+
+The geometric uncertainty every STEP file carries
+(``UNCERTAINTY_MEASURE_WITH_UNIT``, typically ``1e-07`` mm) is deliberately not
+read. It is the precision the geometry was written to, not a tolerance anybody
+is being held to, and reading it would give every STEP file ever exported a
+manufacturing tolerance no shop can work to.
 
 .. _properties:
 
@@ -2039,8 +2110,9 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 
   assemblies:
     <assembly name>:
-      type: <assy|step|urdf|mjcf>  # Assembly YAML, a STEP file with an assembly structure,
-                                   # a URDF robot description, or a MuJoCo model
+      type: <assy|step|urdf>  # Assembly YAML, a STEP file with an assembly structure,
+                              # or a URDF robot description. A format a plugin package
+                              # implements is named through it: "sim-mujoco:mjcf".
       path: <(optional) the source file path>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
       fileUrl: <(fileFrom=url only) the URL to download the source file from>
@@ -2064,9 +2136,11 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 
 The ``assy`` type is used to define assemblies in `Assembly YAML` format, and
 the ``step`` type reads the structure out of a STEP file (see :ref:`assembly_step`).
-The ``urdf`` and ``mjcf`` types read a robot description as an assembly directly
-(see :doc:`simulation`); ``mjcf`` is also a :ref:`scene <scenes>` type, and the
-section that declares it is what decides which it is.
+The ``urdf`` type reads a robot description as an assembly directly
+(see :doc:`simulation`). A format an engine's plugin package implements is named
+through that package -- ``sim-mujoco:mjcf`` for a MuJoCo model, which is also a
+:ref:`scene <scenes>` type, the section that declares it being what decides which
+it is.
 The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.
 The source file does not have to be a part of the package: ``fileFrom`` and
 ``fileUrl`` pull it from a remote location on first use, exactly as they do for
@@ -2439,7 +2513,9 @@ Declare scenes
 
   scenes:
     <scene name>:
-      type: <assy|world|mjcf>  # Assembly YAML read as a scene, a Gazebo world, or a MuJoCo model
+      type: <assy>  # Assembly YAML read as a scene. An engine's own scene format is
+                    # implemented by that engine's plugin package and named through it:
+                    # "sim-gazebo:world" (a Gazebo world), "sim-mujoco:mjcf" (a MuJoCo model).
       desc: <(optional) textual description>
       path: <(optional) the source file path>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
@@ -2454,7 +2530,8 @@ Declare scenes
       offset: <(optional) OCCT Location object>
       manufacturable: <(optional) false by default; a scene is not a product to be made>
 
-      # 'world' type only
+      # 'sim-gazebo:world' only -- the reader's own parameters, declared by the
+      # package that implements it and passed straight through to it
       ignoreCollision: <(optional) build a link from its visual geometry instead>
       modelPaths: <(optional) roots to resolve 'model://' references against>
 
@@ -2471,7 +2548,7 @@ scene.
       desc: The robot, the fixture and the bin, where they stand on the bench
 
     warehouse:
-      type: world
+      type: sim-gazebo:world
       desc: A Gazebo world, used where it lies
 
 Scenes take parameters, aliases and enriches exactly as assemblies do:
@@ -2488,9 +2565,13 @@ Scenes take parameters, aliases and enriches exactly as assemblies do:
 Gazebo worlds
 -------------
 
-The ``world`` type reads an `SDFormat <http://sdformat.org/>`_ ``.world`` file --
-what Gazebo describes a simulation world in -- as a scene directly, with no
-conversion step. Every model is placed where its ``<pose>`` puts it, every link
+The ``sim-gazebo:world`` type reads an `SDFormat <http://sdformat.org/>`_
+``.world`` file -- what Gazebo describes a simulation world in -- as a scene
+directly, with no conversion step. It is declared by
+`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ rather than
+by PartCAD itself, beside the exporter, the ``pc open`` entry and the simulator
+that share their knowledge of the format, so a package that uses it imports that
+package and names the type through it. Every model is placed where its ``<pose>`` puts it, every link
 where its own pose puts it inside the model, and every shape becomes a part of
 the package named ``<scene>/<model>/<link>``. Those parts are ordinary parts:
 they can be inspected, rendered and exported on their own.
@@ -2507,30 +2588,33 @@ settings and the ground plane are counted and reported rather than passed over
 in silence. ``pc info`` lists what was dropped. See :doc:`simulation` for the
 whole picture.
 
-The reverse direction is the ``world`` export file type:
+The reverse direction is the ``sim-gazebo:world`` export file type, declared by
+the same package:
 
 .. code-block:: shell
 
-  pc export -S -t world :workcell    # writes workcell.world plus its meshes
+  pc export -S -t sim-gazebo:world :workcell    # writes workcell.world plus its meshes
 
 and ``pc convert scene`` moves a scene between the two formats, rewriting the
 package around it:
 
 .. code-block:: shell
 
-  pc convert scene -t assy :warehouse   # the world's shapes become parts of the package
-  pc convert scene -t world :workcell   # the scene becomes a Gazebo world file
+  pc convert scene -t assy :warehouse                # the world's shapes become parts of the package
+  pc convert scene -t sim-gazebo:world :workcell     # the scene becomes a Gazebo world file
 
-``pc import scene warehouse.world`` does the first of those in one step for a
-file the package does not declare yet, leaving the package holding PartCAD's own
-objects. ``pc add scene world warehouse.world`` declares the file where it lies
-instead.
+``pc import scene -t sim-gazebo:world warehouse.world`` does the first of those
+in one step for a file the package does not declare yet, leaving the package
+holding PartCAD's own objects. ``pc add scene sim-gazebo:world warehouse.world``
+declares the file where it lies instead.
 
 MuJoCo models
 -------------
 
-The ``mjcf`` type reads a `MuJoCo <https://mujoco.org/>`_ model as a scene, the
-same way ``world`` reads a Gazebo one: every body is placed where its ``pos``
+The ``sim-mujoco:mjcf`` type reads a `MuJoCo <https://mujoco.org/>`_ model as a
+scene, the same way ``sim-gazebo:world`` reads a Gazebo one. It is declared by
+`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_, for the
+reason the world type is declared by the Gazebo one: every body is placed where its ``pos``
 and orientation put it inside the body that holds it, and every geom becomes a
 part of the package named ``<scene>/<body>``.
 
@@ -2545,27 +2629,27 @@ says so:
 
   assemblies:
     arm:
-      type: mjcf
+      type: sim-mujoco:mjcf
       path: arm.xml        # a product
 
   scenes:
     cell:
-      type: mjcf
+      type: sim-mujoco:mjcf
       path: cell.xml       # an arrangement
 
 It is a best-effort reader in the same way the world reader is: joints,
 actuators, tendons, sensors, lights, cameras, contacts and keyframes are counted
 and reported, and ``pc info`` lists what was dropped. The reverse direction is
-the ``mjcf`` export file type, which writes an ``.xml`` file plus the meshes it
-references:
+the ``sim-mujoco:mjcf`` export file type, which writes an ``.xml`` file plus the
+meshes it references:
 
 .. code-block:: shell
 
-  pc export -S -t mjcf :cell     # a scene
-  pc export -t mjcf :arm         # or an assembly
+  pc export -S -t sim-mujoco:mjcf :cell     # a scene
+  pc export -t sim-mujoco:mjcf :arm         # or an assembly
 
 It is also the format ``pc sim`` hands a scene to MuJoCo in, and the one
-``pc open --with mujoco`` converts to; see :ref:`simulate`.
+``pc open --with mujoco`` expects a file to already be in; see :ref:`simulate`.
 
 .. _import-section:
 
@@ -2573,10 +2657,13 @@ It is also the format ``pc sim`` hands a scene to MuJoCo in, and the one
 Importers
 =========
 
-``urdf``, ``mjcf`` and ``world`` are not object types PartCAD hard-codes. Each
-is one entry of an ``import:`` section -- a declaration saying which script
-reads that format, what its sandbox needs, and which object kinds it may
-produce -- and a package writes one to teach PartCAD a format of its own:
+``urdf``, ``sim-mujoco:mjcf`` and ``sim-gazebo:world`` are not object types
+PartCAD hard-codes. Each is one entry of an ``import:`` section -- a declaration
+saying which script reads that format, what its sandbox needs, and which object
+kinds it may produce -- and a package writes one to teach PartCAD a format of its
+own. That is not a hypothetical: ``urdf`` is the only one of the three PartCAD
+ships, and the other two are entries of exactly this kind in the plugin package
+for their engine.
 
 .. code-block:: yaml
 
@@ -2636,14 +2723,20 @@ anywhere in an index must not fail every command that merely walks past it. That
 package goes on providing everything else it declares; what is lost is exactly
 what the section named.
 
-PartCAD ships three of these, in ``//builtin/import``. ``urdf`` stays there
-because a URDF describes a robot rather than any one engine's world, and ROS,
-MuJoCo, PyBullet and Isaac all read it. ``mjcf`` and ``world`` belong to
+PartCAD ships **one** of these, in ``//builtin/import``: ``urdf``, which stays
+there because a URDF describes a robot rather than any one engine's world, and
+ROS, MuJoCo, PyBullet and Isaac all read it. ``mjcf`` and ``world`` belong to
 `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ and
 `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_
 respectively, beside the exporter and the simulator that share their knowledge
 of the format: reading a format and writing it are one piece of knowledge, and
 this is what lets the pair travel together and be versioned together.
+
+Each of those packages declares the reader, the writer, the simulator and the
+``open:`` entry for its format, and the wheel carries none of them. So
+``type: sim-gazebo:world`` and ``type: sim-mujoco:mjcf`` are the spellings that
+resolve, in a package that imports the plugin; a bare ``type: world`` resolves to
+nothing and says which package to name.
 
 .. _open-section:
 
@@ -2673,9 +2766,12 @@ the same for every tool and happens once, in ``partcad_client.external``.
 
 ``pc open --with democad ./cell.demo`` then works, in a workspace whose packages
 import that one. PartCAD ships five of these in ``//builtin/open`` -- FreeCAD,
-KiCad, Blender, and (until the packages that own them are published) Gazebo and
-MuJoCo. A package's entry replaces a built-in of the same name, which is how the
-plugin for a simulation engine comes to own the application for it.
+KiCad, Blender, and, until the wheel stops carrying them, Gazebo and MuJoCo. A
+package's entry replaces a built-in of the same name, which is how the plugin
+for a simulation engine comes to own the application for it: both
+`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ and
+`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ declare
+theirs, so a workspace that imports either already gets the entry from there.
 
 Three fields are worth dwelling on, because they are how an application that
 cannot read what it was handed still gets to open something. ``companions:``
@@ -3669,6 +3765,44 @@ everything else, and a package that sets ``path`` replaces it.
 ``svg``, ``png``, ``jpeg`` and ``dxf``. Reading their ``partcad.yaml`` is the most direct
 way to see what parameters each file type takes and what a package's own
 implementation should look like.
+
+It also carries ``world`` and ``mjcf`` for the moment, and will not for much
+longer: an engine's own scene format belongs to that engine's plugin package,
+beside the reader and the simulator that share its knowledge of the format.
+Write ``sim-gazebo:world`` and ``sim-mujoco:mjcf`` (see `Naming a file type
+elsewhere`_), which resolve through the plugin and keep working.
+
+Naming a file type elsewhere
+----------------------------
+
+A file type is ordinarily a bare name -- ``step``, ``png`` -- and every package
+with an opinion about it is layered on top of the built-in one. It may also be
+written as a full resource path, which names the package the implementation
+lives in:
+
+.. code-block:: shell
+
+  pc export -t sim-gazebo:world -S warehouse
+
+.. code-block:: yaml
+
+  scenes:
+    warehouse:
+      type: sim-gazebo:world     # the same spelling, for the reader
+      path: warehouse.world
+
+That is the spelling every other section resolved this way already takes --
+``import:``, ``simulation:``, ``pc cae --implementation`` -- and it is here for
+the same reason: a format PartCAD ships no implementation of has no other way to
+be reached. Nothing in ``//builtin/export`` is going to write MJCF or SDFormat,
+so ``pc export -t mjcf`` on a package that never mentioned MJCF has nothing to
+resolve, and ``pc export -t sim-mujoco:mjcf`` has.
+
+The named package goes in as a layer directly above the built-in one rather than
+replacing the lot, because this section also decides where the file goes:
+``output_dir`` and ``prefix`` are the caller's business whoever writes the file.
+So a package that asks for somebody else's exporter still says where the result
+lands, and still re-tunes any parameter it wants to.
 
 ``readme``, ``pdf`` and ``html`` are the outputs ``render:`` accepts that no
 implementation writes: PartCAD assembles them itself out of what the package

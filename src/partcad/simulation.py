@@ -400,11 +400,27 @@ async def _export_scene_async(ctx, scene, impl, directory: str) -> str:
         raise Exception("The simulation '%s' declares no 'format' to hand the scene over in" % impl.format_name)
 
     scene_project = ctx.get_project(scene.project_name)
-    export_impl, _ = scene.output_getopts(ctx, format_name, project=scene_project, output_dir=directory)
+    # The plugin's own package is read for the file type as well, underneath the
+    # scene's. ``format:`` is the plugin saying which file type it reads, and an
+    # engine's own scene format is one the plugin itself implements -- MJCF is
+    # MuJoCo's, SDFormat is Gazebo's, and '//builtin/export' writes neither -- so
+    # the plugin's package is the only place the exporter can be found. It goes
+    # in below the scene's own package rather than above it so that a package
+    # re-tuning the export for its own scenes still wins.
+    export_impl, _ = scene.output_getopts(
+        ctx, format_name, project=scene_project, options_project=impl.project, output_dir=directory
+    )
     path = os.path.join(directory, "scene." + export_impl.extension(format_name))
 
     options = impl.config.get("formatOptions") or {}
-    await scene.render_async(ctx, format_name, project=scene_project, filepath=path, **options)
+    await scene.render_async(
+        ctx,
+        format_name,
+        project=scene_project,
+        options_project=impl.project,
+        filepath=path,
+        **options,
+    )
     if not os.path.isfile(path):
         raise Exception("The scene was not written to %s as '%s'" % (path, format_name))
     return path

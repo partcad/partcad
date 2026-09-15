@@ -2284,6 +2284,14 @@ class Project(project_config.Configuration):
             # need a directory created for each one, which is exactly what
             # PartCAD does not do without '--create-dirs'. They stay reachable
             # and exportable by name; they are simply not part of a bulk render.
+            # A file type named by its full path is not one of the types this
+            # package could have enumerated: it lives in another package, which
+            # is the whole reason for spelling it that way. So it is rendered as
+            # asked rather than looked for in the list below - there is nothing
+            # to look for, and filtering it out is how 'pc export -t
+            # sim-gazebo:world' came to succeed while writing nothing.
+            named_elsewhere = format is not None and output.split_format(self.name, format)[1] is not None
+
             for shape in shapes:
                 shape_cfg = self._output_cfg(shape, options_project)
                 formats = output_formats + [
@@ -2291,9 +2299,11 @@ class Project(project_config.Configuration):
                     for name in output.format_names(shape_cfg)
                     if name not in output_formats and not output.is_document_format(name, shape_cfg)
                 ]
+                if named_elsewhere:
+                    formats = [format]
 
                 for format_name in formats:
-                    if self._should_render_format(format_name, shape_cfg, format, shape.kind):
+                    if named_elsewhere or self._should_render_format(format_name, shape_cfg, format, shape.kind):
                         if not hasattr(shape, "finalized") or shape.finalized:
                             tasks.append(
                                 shape.render_async(

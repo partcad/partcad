@@ -223,3 +223,55 @@ def test_an_unparseable_proxy_leaves_is_connected_answering(monkeypatch):
     ctx.connection_status = {}
     with patch("partcad.context.socket.create_connection", side_effect=OSError):
         assert ctx.is_connected() is False
+
+
+def test_the_probe_waits_five_seconds_in_a_command(monkeypatch):
+    """What an ordinary `pc` invocation gives the network before giving up.
+
+    Asserted on the call rather than by timing one: what is under test is the
+    number PartCAD passes, and reaching a real timeout would put five seconds
+    and the runner's network into a unit test.
+    """
+    monkeypatch.setattr(pc.context.process_role, "_is_daemon", False)
+    ctx = pc.Context("tests/partcad")
+    ctx.connection_status = {}
+
+    with patch("partcad.context.socket.create_connection") as connect:
+        ctx.is_connected()
+
+    assert connect.call_args.kwargs["timeout"] == 5.0
+
+
+def test_the_probe_waits_ten_seconds_in_a_daemon(monkeypatch):
+    """Twice as long where a wrong answer is held on everybody's behalf.
+
+    The daemon is one process serving every client of the workspace, it keeps
+    the answer for the 300 seconds `is_connected()` caches a negative one, and
+    there is no prompt waiting on it.
+    """
+    monkeypatch.setattr(pc.context.process_role, "_is_daemon", True)
+    ctx = pc.Context("tests/partcad")
+    ctx.connection_status = {}
+
+    with patch("partcad.context.socket.create_connection") as connect:
+        ctx.is_connected()
+
+    assert connect.call_args.kwargs["timeout"] == 10.0
+
+
+def test_a_command_is_not_a_daemon_until_something_says_so(monkeypatch):
+    """The flag is set by the process that decided to serve, never guessed.
+
+    `partcad_service_json_rpc.__main__._build_session` is what says it, which
+    `tests/partcad_service_json_rpc/test_main.py` pins; here it is the default
+    that matters, because everything else -- `pc`, a test, the IDE's client --
+    reads it without setting it.
+    """
+    monkeypatch.setattr(pc.context.process_role, "_is_daemon", False)
+    assert pc.context.probe_timeout() == pc.context.PROBE_TIMEOUT
+
+    pc.context.process_role.mark_daemon()
+    assert pc.context.probe_timeout() == pc.context.DAEMON_PROBE_TIMEOUT
+    # Idempotent, and there is no way back other than this test's monkeypatch.
+    pc.context.process_role.mark_daemon()
+    assert pc.context.probe_timeout() == pc.context.DAEMON_PROBE_TIMEOUT
