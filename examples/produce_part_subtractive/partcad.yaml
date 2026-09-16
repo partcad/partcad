@@ -90,7 +90,7 @@ parts:
       method: subtractive
       source: stock_plate
       cnc:
-        direction: -Z
+        toolAxis: -Z
     cam:
       operation: profile
       tool: 6
@@ -114,7 +114,7 @@ parts:
       method: subtractive
       source: stock_plate
       drilling:
-        direction: -Z
+        toolAxis: -Z
     cam:
       tool: 8
       plunge: 150

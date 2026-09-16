@@ -1,3 +1,8 @@
+# The parts below declare 'additive' because these fixtures are about
+# reproducibility and the software a part ships, not about how it is made: the
+# method is scaffolding, and what it has to be is one that needs nothing else
+# declared beside it. 'subtractive' is not that -- it requires the 'source:' it
+# is cut from -- so do not change them back.
 desc: A manufacturable board and the software it ships with
 manufacturable: true
 
@@ -27,7 +32,7 @@ parts:
     path: board.py
     desc: A board that ships an image nothing is wrong with
     manufacturing:
-      method: subtractive
+      method: additive
     parameters:
       tolerance: 0.1
     software:
@@ -38,7 +43,7 @@ parts:
     path: board.py
     desc: The same board, shipping no software at all
     manufacturing:
-      method: subtractive
+      method: additive
     parameters:
       tolerance: 0.1
 
@@ -47,7 +52,7 @@ parts:
     path: board.py
     desc: A board whose image is not what its hash says
     manufacturing:
-      method: subtractive
+      method: additive
     parameters:
       tolerance: 0.1
     software:
@@ -58,7 +63,7 @@ parts:
     path: board.py
     desc: A board whose image nothing identifies
     manufacturing:
-      method: subtractive
+      method: additive
     parameters:
       tolerance: 0.1
     software:
@@ -69,7 +74,7 @@ parts:
     path: board.py
     desc: A board that references software this package does not declare
     manufacturing:
-      method: subtractive
+      method: additive
     parameters:
       tolerance: 0.1
     software:

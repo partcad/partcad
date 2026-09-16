@@ -224,16 +224,20 @@ Feature: `pc test` command
         bracket:
           type: step
           manufacturing:
-            method: subtractive
+            # 'additive' because this scenario is about the tolerance check and
+            # the supplier search, not about how the part is made. 'subtractive'
+            # would drag in the stock it is cut from, which is a second failure
+            # against three parts that are here to demonstrate a different one.
+            method: additive
           tolerance: 0.1
         plain:
           type: step
           manufacturing:
-            method: subtractive
+            method: additive
         tolerated:
           type: step
           manufacturing:
-            method: subtractive
+            method: additive
       """
     And a file named "bracket.step" with content:
       """
@@ -326,13 +330,26 @@ Feature: `pc test` command
       manufacturable: true
 
       parts:
+        stock:
+          type: build123d
+          path: stock.py
         chamfered:
           type: build123d
           path: chamfered.py
           manufacturing:
             method: subtractive
+            source: stock
             laser:
               kerf: 0.2
+      """
+    And a file named "stock.py" with content:
+      """
+      import build123d as bd
+
+      with bd.BuildPart() as result:
+          bd.Box(40, 40, 10)
+
+      show_object(result.part.wrapped, name="stock")
       """
     And a file named "chamfered.py" with content:
       """
@@ -459,8 +476,8 @@ Feature: `pc test` command
       parts:
         blank:
           type: cadquery
-          manufacturing:
-            method: subtractive
+          # No 'manufacturing:' at all: a blank that is bought in rather than
+          # cut declares none, and this scenario is about the bracket.
           parameters:
             tolerance: 0.1
         bracket:

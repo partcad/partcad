@@ -50,6 +50,19 @@ _METHOD_NAMES: dict[int, str] = {value: name for name, value in _METHOD_MAP.item
 # every other reference a part makes.
 SHEET_METAL_REQUIRED = ("source", "instructions")
 
+# What a subtractive part has to say beyond naming the method.
+#
+# The stock it is cut out of. Subtraction is defined by what it starts from --
+# cutting only ever removes material, so a subtractive part is not a shape
+# somebody arrived at, it is what is left of a piece that existed first -- and a
+# declaration that names no stock has not said what the method means. It is
+# required for that reason and not for symmetry with 'sheet_metal': the check
+# has something to check because the declaration has something to claim.
+#
+# A part that is genuinely made from no stock is a part made some other way: it
+# is bought (`vendor`/`sku`), or it is `additive`, or `forming`.
+SUBTRACTIVE_REQUIRED = ("source",)
+
 # The machines a `subtractive` part may be made on, and which one a declaration
 # means.
 #
@@ -75,20 +88,25 @@ MACHINES = (MACHINE_CNC, MACHINE_DRILLING, MACHINE_LASER)
 # 'partcad.cam.KEYS' is one: a key that is not in it is a typo, and a typo that
 # is passed through is an option nobody set being silently defaulted.
 #
-# 'direction' is common to all three, because it is the one thing every
+# 'toolAxis' is common to all three, because it is the one thing every
 # subtractive machine has: the axis the tool, the beam or the drill approaches
 # along. It is what "all cut walls are vertical" is measured against -- vertical
 # meaning parallel to it -- and it is why a part that is cut from the other side
 # is a different part to the machine even though it is the same solid.
+#
+# Not 'direction', which is the one word this configuration cannot afford to
+# reuse: an object's 'cam:' section already has a 'direction' and it means
+# something else entirely (climb or conventional, which way round a contour is
+# cut). Both would reach one implementation in one request.
 MACHINE_KEYS: dict[str, tuple] = {
-    MACHINE_CNC: ("direction",),
-    MACHINE_DRILLING: ("direction",),
+    MACHINE_CNC: ("toolAxis",),
+    MACHINE_DRILLING: ("toolAxis",),
     # 'kerf' is the width the beam itself removes. It belongs to the machine
     # rather than to the route because it is a property of that machine and its
     # material, and because the check that the part fits its stock has to know
     # it: a part cut to its nominal outline comes off a laser half a kerf small
     # all round.
-    MACHINE_LASER: ("direction", "kerf"),
+    MACHINE_LASER: ("toolAxis", "kerf"),
 }
 
 # The machine options that are lengths, and so are read the way every other
@@ -98,11 +116,11 @@ MACHINE_KEYS: dict[str, tuple] = {
 # understand at every layer, and the implementation's business is numbers.
 MACHINE_LENGTH_KEYS = ("kerf",)
 
-# The axis names a 'direction:' may be written as, and the unit vector each
+# The axis names a 'toolAxis:' may be written as, and the unit vector each
 # means. Written as a name rather than as three numbers because these are the
 # only six a machine of this kind works along, and "-Z" is what a machinist
 # says: the tool comes down.
-_DIRECTIONS: dict[str, tuple] = {
+_AXES: dict[str, tuple] = {
     "+x": (1.0, 0.0, 0.0),
     "-x": (-1.0, 0.0, 0.0),
     "+y": (0.0, 1.0, 0.0),
@@ -114,25 +132,25 @@ _DIRECTIONS: dict[str, tuple] = {
 # What a machine works along when the declaration does not say. Down: the part
 # sits on the bed and the tool comes to it from above, which is what all three
 # of these machines do unless somebody has gone out of their way.
-DEFAULT_DIRECTION = "-Z"
+DEFAULT_TOOL_AXIS = "-Z"
 
 
-def direction_vector(name: str) -> tuple:
-    """The unit vector one 'direction:' means.
+def tool_axis_vector(name: str) -> tuple:
+    """The unit vector one 'toolAxis:' means.
 
     Raises:
         ValueError: the name is not one of the six axes. Raised rather than
-            defaulted, because a direction that was meant and misspelt is the
+            defaulted, because an axis that was meant and misspelt is the
             one input here whose wrong value produces a check that passes.
     """
     key = str(name).strip().lower()
-    if key in _DIRECTIONS:
-        return _DIRECTIONS[key]
+    if key in _AXES:
+        return _AXES[key]
     # 'z' and 'Z' read as '+z', which is what somebody writing an axis without a
     # sign means everywhere else.
-    if "+" + key in _DIRECTIONS:
-        return _DIRECTIONS["+" + key]
-    raise ValueError("'%s' is not an axis; write one of %s" % (name, ", ".join(sorted(_DIRECTIONS))))
+    if "+" + key in _AXES:
+        return _AXES["+" + key]
+    raise ValueError("'%s' is not an axis; write one of %s" % (name, ", ".join(sorted(_AXES))))
 
 
 class MachineConfig:
@@ -140,7 +158,7 @@ class MachineConfig:
 
     Attributes:
         kind: which machine, one of 'MACHINES'.
-        direction: the axis it works along, as written.
+        tool_axis: the axis it works along, as written.
         vector: that axis as a unit vector.
         declared: whether the part named this machine, or whether it is the CNC
             default standing in. What the difference buys is that the two
@@ -154,12 +172,12 @@ class MachineConfig:
         self.kind = kind
         self.declared = declared
         self.options = dict(config or {})
-        self.direction = str(self.options.pop("direction", None) or DEFAULT_DIRECTION)
-        self.vector = direction_vector(self.direction)
+        self.tool_axis = str(self.options.pop("toolAxis", None) or DEFAULT_TOOL_AXIS)
+        self.vector = tool_axis_vector(self.tool_axis)
         for key in MACHINE_LENGTH_KEYS:
             if self.options.get(key) is not None:
                 # 'CamConfigError' is a 'ValueError', which is what the caller
-                # already catches to turn a bad direction into a recorded
+                # already catches to turn a bad axis into a recorded
                 # message rather than a package that will not load.
                 self.options[key] = pc_cam.parse_length(self.options[key], "'%s:'" % key)
 
@@ -171,16 +189,16 @@ class MachineConfig:
     def to_data(self) -> dict:
         """This machine as the parameters an implementation is handed.
 
-        The kind and the direction always, because every implementation needs
-        to know what it is writing for and which way is down; the rest as the
-        part wrote it.
+        The kind and the axis always, because every implementation needs to
+        know what it is writing for and which way is down; the rest as the part
+        wrote it.
         """
-        data = {"machine": self.kind, "direction_axis": self.direction, "direction_vector": list(self.vector)}
+        data = {"machine": self.kind, "tool_axis": self.tool_axis, "tool_axis_vector": list(self.vector)}
         data.update({key: value for key, value in self.options.items() if value is not None})
         return data
 
     def __str__(self) -> str:
-        return "MachineConfig(kind=%s, direction=%s)" % (self.kind, self.direction)
+        return "MachineConfig(kind=%s, toolAxis=%s)" % (self.kind, self.tool_axis)
 
 
 class PartConfigManufacturing:
@@ -249,7 +267,7 @@ class PartConfigManufacturing:
         except ValueError as e:
             # Both the axis and the lengths raise ValueError, and each already
             # names the key it is about, so this adds the machine and nothing
-            # else. Naming a key here as well is how "'laser: direction:'
+            # else. Naming a key here as well is how "'laser: toolAxis:'
             # 'laser: kerf:' is not a length" gets written.
             self.machine_error = "'%s:' %s" % (kind, e)
             return None
@@ -265,9 +283,11 @@ class PartConfigManufacturing:
 
         Empty for every method that needs nothing beyond its own name.
         """
-        if self.method != METHOD_SHEET_METAL:
-            return []
-        return [field for field in SHEET_METAL_REQUIRED if not getattr(self, field, None)]
+        required = {
+            METHOD_SHEET_METAL: SHEET_METAL_REQUIRED,
+            METHOD_SUBTRACTIVE: SUBTRACTIVE_REQUIRED,
+        }.get(self.method, ())
+        return [field for field in required if not getattr(self, field, None)]
 
     def _method_string(self) -> str:
         if self.method in _METHOD_NAMES:

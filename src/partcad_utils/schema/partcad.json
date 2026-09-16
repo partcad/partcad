@@ -16,8 +16,8 @@
       "description": "The machine a 'subtractive' part is cut on. Naming one selects it; naming none means a CNC router or mill, which is what every 'subtractive' part meant before machines could be named. Only one may be named, and the machine decides which 'pc test' checks apply and what 'pc cam' writes.",
       "type": "object",
       "properties": {
-        "direction": {
-          "description": "The axis the tool, the beam or the drill approaches along, as one of '+X', '-X', '+Y', '-Y', '+Z' or '-Z'. Defaults to '-Z': the part sits on the bed and the tool comes down to it. It is what 'every cut wall is vertical' is measured against, and what 'pc cam' orients the part by.",
+        "toolAxis": {
+          "description": "The axis the tool, the beam or the drill approaches along, as one of '+X', '-X', '+Y', '-Y', '+Z' or '-Z'. Defaults to '-Z': the part sits on the bed and the tool comes down to it. It is what 'every cut wall is vertical' is measured against, and what 'pc cam' orients the part by. Not to be confused with 'cam: direction:', which says which way round a contour is cut.",
           "type": "string",
           "enum": ["+X", "-X", "+Y", "-Y", "+Z", "-Z", "+x", "-x", "+y", "-y", "+z", "-z", "X", "Y", "Z", "x", "y", "z"]
         }
@@ -28,7 +28,7 @@
       "description": "A laser cutter, whose beam does not tilt: every wall it makes is parallel to its own axis, which 'manufacturability-laser' checks.",
       "type": "object",
       "properties": {
-        "direction": {
+        "toolAxis": {
           "description": "The axis the beam fires along. See 'subtractive-machine'.",
           "type": "string",
           "enum": ["+X", "-X", "+Y", "-Y", "+Z", "-Z", "+x", "-x", "+y", "-y", "+z", "-z", "X", "Y", "Z", "x", "y", "z"]
@@ -1199,11 +1199,23 @@
                   },
                   "required":["method"],
                   "additionalProperties": false,
-                  "not": { "anyOf": [
-                    { "required": ["cnc", "drilling"] },
-                    { "required": ["cnc", "laser"] },
-                    { "required": ["drilling", "laser"] }
-                  ] }
+                  "allOf": [
+                    {
+                      "not": { "anyOf": [
+                        { "required": ["cnc", "drilling"] },
+                        { "required": ["cnc", "laser"] },
+                        { "required": ["drilling", "laser"] }
+                      ] }
+                    },
+                    {
+                      "if": { "properties": { "method": { "const": "subtractive" } }, "required": ["method"] },
+                      "then": { "required": ["source"] }
+                    },
+                    {
+                      "if": { "properties": { "method": { "const": "sheet_metal" } }, "required": ["method"] },
+                      "then": { "required": ["source", "instructions"] }
+                    }
+                  ]
                 },
                 "implements": {
                   "type": "object",

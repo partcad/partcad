@@ -2195,10 +2195,14 @@ mistake and neither implies the other:
   exactly is one whose ``source`` names itself, or a copy of itself, which is
   the mistake a reader of the YAML cannot see.
 
-``source`` is **optional** here, unlike on :ref:`sheet-metal`, and that is
-deliberate: a part cut from stock is completely described by its own geometry,
-so ``method: subtractive`` on its own has always been a legitimate and complete
-declaration. Naming the stock adds a claim, and the claim is what is checked.
+``source`` is **required**, the way :ref:`sheet-metal`'s two fields are, and for
+the same reason: subtraction is defined by what it starts from. A shape somebody
+arrived at is not a subtractive part -- what makes it one is that it is what is
+left of a piece that existed first -- so a declaration naming no stock has not
+said what the method means.
+
+A part genuinely made from no stock is a part made some other way: bought
+(``vendor``/``sku``), ``additive``, or ``forming``.
 
 .. _subtractive-machines:
 
@@ -2216,7 +2220,7 @@ adding its own subsection:
     source: stock_sheet
     laser:
       kerf: 0.15         # what the beam itself removes
-      direction: -Z      # the axis it fires along
+      toolAxis: -Z       # the axis it fires along
 
 +----------------+------------------------------------------------------------+
 | Subsection     | The machine, and what it cannot do                         |
@@ -2238,10 +2242,12 @@ other two can, so it is the answer that is never wrong -- and it is what every
 ``subtractive`` part written before machines could be named already meant. Only
 one may be named.
 
-Every machine takes a ``direction``, which is the axis the tool, the beam or the
+Every machine takes a ``toolAxis``, which is the axis the tool, the beam or the
 drill approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
 or ``-Z``. It defaults to ``-Z``: the part sits on the bed and the tool comes
-down to it. A laser also takes a ``kerf``, the width the beam itself removes,
+down to it. It is **not** ``cam: direction:``, which says which way round a
+contour is cut (climb or conventional) -- the two reach one implementation in
+one request, which is why they do not share a name. A laser also takes a ``kerf``, the width the beam itself removes,
 which is a property of that machine and that material rather than of the job --
 which is why it is declared here and not under ``cam:``.
 
@@ -2295,7 +2301,7 @@ would be a route written for a machine nobody owns.
 
 ``power`` (a laser's S-word) and ``peck`` (how deep a drill goes before clearing
 the swarf) join the other :ref:`cam job keys <cam-section>`. A part declaring a
-``direction`` other than ``-Z`` is rotated into the machine's frame before the
+``toolAxis`` other than ``-Z`` is rotated into the machine's frame before the
 route is written, so the program is in the coordinates the part is fixtured in.
 
 ``examples/produce_part_subtractive`` is the whole of the above in one package:

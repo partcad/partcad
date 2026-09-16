@@ -439,7 +439,7 @@ def test_a_part_that_names_no_machine_is_routed_exactly_as_before(gcode, tmp_pat
     nothing", which is the same claim from the other side.
     """
     _, without = _route(gcode, tmp_path, _panel_with_hole())
-    _, with_default = _route(gcode, tmp_path, _panel_with_hole(), machine="cnc", direction_vector=[0.0, 0.0, -1.0])
+    _, with_default = _route(gcode, tmp_path, _panel_with_hole(), machine="cnc", tool_axis_vector=[0.0, 0.0, -1.0])
     assert without == with_default
 
 
@@ -514,7 +514,7 @@ def test_a_drill_that_is_not_the_size_of_the_hole_is_said_out_loud(gcode, tmp_pa
     assert any("not the diameter of the drill" in warning for warning in result["warnings"])
 
 
-def test_the_machine_axis_turns_the_part_into_the_machines_frame(gcode, tmp_path):
+def test_the_tool_axis_turns_the_part_into_the_machines_frame(gcode, tmp_path):
     """A part cut from the side is the same solid fixtured differently.
 
     Its holes run along X, so a drill working down the Z axis has nothing to
@@ -525,7 +525,7 @@ def test_the_machine_axis_turns_the_part_into_the_machines_frame(gcode, tmp_path
         panel -= b3d.Solid.make_cylinder(3, 60).locate(b3d.Location((-10, y, 3), (0, 90, 0)))
 
     assert "no round hole" in _refusal(gcode, tmp_path, panel, machine="drilling", tool=6.0)
-    result, _ = _route(gcode, tmp_path, panel, machine="drilling", tool=6.0, direction_vector=[1.0, 0.0, 0.0])
+    result, _ = _route(gcode, tmp_path, panel, machine="drilling", tool=6.0, tool_axis_vector=[1.0, 0.0, 0.0])
     assert result["stats"]["holes"] == 2
 
 

@@ -14,20 +14,21 @@ almost any solid can be machined out of a big enough block -- but a relation
 between the part and what it is made *from*. So the part may name that stock,
 and this is where the relation is checked.
 
-Two questions, and the second only where the part answers the first:
+Two questions:
 
 * The part is a solid, the way every manufactured part has to be. That is the
   check as it has always been.
-* Where the part declares a `source:`, the stock strictly contains it: nothing
-  of the part outside the stock, and the stock bigger than the part somewhere.
-  Cutting can only ever remove material, so a part that is not a subset of its
-  stock cannot be made from it however good the machine is.
+* The stock it names strictly contains it: nothing of the part outside the
+  stock, and the stock bigger than the part somewhere. Cutting can only ever
+  remove material, so a part that is not a subset of its stock cannot be made
+  from it however good the machine is.
 
-`source:` is optional here, unlike on `sheet_metal`, and deliberately: a part
-cut from stock is completely described by its own geometry, so `method:
-subtractive` on its own has always been a legitimate and complete declaration
-and is what most parts that carry it say today. Naming the stock adds a claim,
-and a claim is what there is to check.
+`source:` is **required**, the way `sheet_metal`'s two fields are, and for the
+same reason: subtraction is defined by what it starts from. A shape somebody
+arrived at is not a subtractive part -- what makes it one is that it is what is
+left of a piece that existed first -- so a declaration naming no stock has not
+said what the method means. A part genuinely made from no stock is a part made
+some other way: bought, `additive`, or `forming`.
 """
 
 import hashlib
@@ -77,7 +78,7 @@ class ManufacturabilitySubtractiveTest(Test):
         declared = [
             await reference_key(ctx, shape, manufacturing_data.source, "part"),
             "machine:%s" % (machine.kind if machine else manufacturing_data.machine_error or ""),
-            "direction:%s" % (machine.direction if machine else ""),
+            "toolAxis:%s" % (machine.tool_axis if machine else ""),
         ]
         return ".subtractive=" + hashlib.sha256(";".join(declared).encode()).hexdigest()[:16]
 
@@ -90,6 +91,13 @@ class ManufacturabilitySubtractiveTest(Test):
         if manufacturing_data.method != METHOD_SUBTRACTIVE:
             self.debug(shape, "Not applicable")
             return self.TEST_PASSED
+
+        missing = manufacturing_data.missing_fields()
+        if missing:
+            return self.failed(
+                shape,
+                "The subtractive declaration states no %s" % " and no ".join("'%s'" % field for field in missing),
+            )
 
         if manufacturing_data.machine_error:
             # Reported here rather than raised while the package loads: a part
@@ -106,12 +114,6 @@ class ManufacturabilitySubtractiveTest(Test):
             return self.failed(shape, "Failed to get the shape")
         if await free_bounds_count(ctx, envelope) != 0:
             return self.failed(shape, "The shape is not solid")
-
-        if not manufacturing_data.source:
-            # Nothing was claimed beyond the method, so there is nothing further
-            # to check. Not a skip: the question this check asks of every
-            # subtractive part was asked and answered above.
-            return self.passed(shape)
 
         return await self.fits_the_stock(ctx, shape, envelope, manufacturing_data.source)
 

@@ -34,7 +34,7 @@ class ManufacturabilityLaserTest(ManufacturabilityMachineTest):
         """Every face is either a wall along the beam or a face across it."""
         if measured.get("other", 0):
             return self.report_tilted(
-                shape, machine, measured, "A laser cutting along %s cannot make it" % machine.direction
+                shape, machine, measured, "A laser cutting along %s cannot make it" % machine.tool_axis
             )
         if not measured.get("walls", 0):
             # Nothing to cut. A solid block with no wall along the beam is
@@ -43,6 +43,6 @@ class ManufacturabilityLaserTest(ManufacturabilityMachineTest):
             return self.failed(
                 shape,
                 "It has no wall along %s for a laser to cut",
-                machine.direction,
+                machine.tool_axis,
             )
         return self.passed(shape)

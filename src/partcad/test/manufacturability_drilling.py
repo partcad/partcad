@@ -39,21 +39,21 @@ class ManufacturabilityDrillingTest(ManufacturabilityMachineTest):
         """Every wall is along the axis, and every one of them is round."""
         if measured.get("other", 0):
             return self.report_tilted(
-                shape, machine, measured, "A drill working along %s cannot make it" % machine.direction
+                shape, machine, measured, "A drill working along %s cannot make it" % machine.tool_axis
             )
 
         walls = measured.get("walls", 0)
         round_walls = measured.get("round", 0)
         subject = "what it cuts away" if judged_removed else "it"
         if not walls:
-            return self.failed(shape, "There is no hole along %s for a drill to make in %s", machine.direction, subject)
+            return self.failed(shape, "There is no hole along %s for a drill to make in %s", machine.tool_axis, subject)
         if round_walls != walls:
             return self.failed(
                 shape,
                 "A drill only makes round holes, and %d of the %d walls along %s in %s %s not round%s",
                 walls - round_walls,
                 walls,
-                machine.direction,
+                machine.tool_axis,
                 subject,
                 "is" if walls - round_walls == 1 else "are",
                 "" if judged_removed else " (name the stock with 'source:' so the outline is not counted as drilled)",

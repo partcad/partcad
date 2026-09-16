@@ -75,7 +75,7 @@ async def enclosure(ctx, envelope, source_envelope) -> dict:
     return await _analyze(ctx, envelope, "enclosure", source=source_envelope)
 
 
-async def cut_directions(ctx, envelope, direction_vector, source_envelope=None) -> dict:
+async def wall_alignment(ctx, envelope, tool_axis_vector, source_envelope=None) -> dict:
     """How the shape's faces lie relative to the axis a machine works along.
 
     'walls' are the faces parallel to that axis -- the ones a beam or a drill
@@ -86,4 +86,4 @@ async def cut_directions(ctx, envelope, direction_vector, source_envelope=None) 
     so a failure can name what is wrong rather than only how many.
     """
     extra = {} if source_envelope is None else {"source": source_envelope}
-    return await _analyze(ctx, envelope, "cut_directions", direction_vector=list(direction_vector), **extra)
+    return await _analyze(ctx, envelope, "wall_alignment", tool_axis_vector=list(tool_axis_vector), **extra)

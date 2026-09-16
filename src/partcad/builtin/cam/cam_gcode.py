@@ -592,7 +592,7 @@ def _cnc(request, obj, units):
     )
 
 
-def _orient(obj, direction_vector):
+def _orient(obj, tool_axis_vector):
     """The shape as it sits on the machine, with the tool axis pointing down.
 
     Everything below this line works in the machine's own frame: Z is the tool
@@ -606,12 +606,12 @@ def _orient(obj, direction_vector):
     names no machine, or names one that works the usual way down, produces
     exactly the bytes it produced before any of this existed.
     """
-    if not direction_vector:
+    if not tool_axis_vector:
         return obj
-    x, y, z = (float(component) for component in direction_vector)
+    x, y, z = (float(component) for component in tool_axis_vector)
     length = math.sqrt(x * x + y * y + z * z)
     if length <= TOLERANCE:
-        raise Exception("the machine direction is a zero vector")
+        raise Exception("the tool axis is a zero vector")
     x, y, z = x / length, y / length, z / length
 
     # Already pointing down: nothing to do, and nothing to perturb.
@@ -756,7 +756,7 @@ def _holes(obj, tolerance):
     face whose axis is Z. Each becomes one drilled hole at its centre.
 
     Read off the surface type rather than sampled the way
-    'wrapper_manufacturability.cut_directions' does, and the difference is what
+    'wrapper_manufacturability.wall_alignment' does, and the difference is what
     each is for: that one asks whether a wall is something a machine *could*
     make and must not be fooled by an extruded spline, while this one has to
     know a radius and a centre, which only an actual cylinder has.
@@ -922,7 +922,7 @@ def process(path, request):
         obj = _shape(request["wrapped"])
         # Into the machine's frame, where the tool axis is Z, before anything
         # measures the object. The default is the identity (see '_orient').
-        obj = _orient(obj, request.get("direction_vector"))
+        obj = _orient(obj, request.get("tool_axis_vector"))
 
         program, warnings, stats = MACHINES[machine](request, obj, units)
 

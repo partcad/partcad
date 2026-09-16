@@ -13,7 +13,7 @@ more.
 
 The common half of that is one measurement -- how each face of the part lies
 relative to the axis the machine works along -- and it is made once, in
-`wrappers/wrapper_manufacturability.cut_directions`. What differs between the
+`wrappers/wrapper_manufacturability.wall_alignment`. What differs between the
 machines is what they demand of the answer, which is what the two subclasses
 below supply.
 
@@ -37,7 +37,7 @@ class ManufacturabilityMachineTest(Test):
     """One subtractive machine's own limits, asked of the parts that name it.
 
     Subclasses set `machine` to the kind they are about and implement
-    `judge()`, which is handed what `cut_directions` measured.
+    `judge()`, which is handed what `wall_alignment` measured.
     """
 
     # Which machine this check is about, as a part's 'manufacturing:' section
@@ -53,10 +53,10 @@ class ManufacturabilityMachineTest(Test):
     judges_removed: bool = False
 
     async def cache_key_suffix(self, ctx, shape) -> str:
-        """The machine and the axis, neither of which moves the part's hash.
+        """The machine and its axis, neither of which moves the part's hash.
 
         Turning the part over -- the same solid, cut from the other side -- is
-        the whole of what `direction:` says, and it changes the answer: the
+        the whole of what `toolAxis:` says, and it changes the answer: the
         walls that were parallel to the axis are now across it. So the axis is
         in the key, and a part whose direction is corrected re-runs rather than
         being handed the verdict on the direction it replaced.
@@ -64,7 +64,7 @@ class ManufacturabilityMachineTest(Test):
         machine = self._machine_of(shape)
         if machine is None:
             return ""
-        declared = "%s:%s" % (machine.kind, machine.direction)
+        declared = "%s:%s" % (machine.kind, machine.tool_axis)
         return ".%s=" % self.machine + hashlib.sha256(declared.encode()).hexdigest()[:16]
 
     def _machine_of(self, shape):
@@ -111,9 +111,9 @@ class ManufacturabilityMachineTest(Test):
                 else:
                     source_envelope = await source.get_wrapped(ctx)
 
-        from .manufacturability_analysis import cut_directions
+        from .manufacturability_analysis import wall_alignment
 
-        measured = await cut_directions(ctx, envelope, machine.vector, source_envelope)
+        measured = await wall_alignment(ctx, envelope, machine.vector, source_envelope)
         return self.judge(shape, machine, measured, judged_removed=source_envelope is not None)
 
     def judge(self, shape, machine, measured, judged_removed: bool = False) -> bool:
@@ -145,6 +145,6 @@ class ManufacturabilityMachineTest(Test):
             "%s: %d of its faces are neither along %s nor across it%s",
             what,
             measured.get("other", 0),
-            machine.direction,
+            machine.tool_axis,
             detail,
         )

@@ -170,7 +170,7 @@ def enclosure(request):
     }
 
 
-def cut_directions(request):
+def wall_alignment(request):
     """How every face of the subject lies relative to the machine's own axis.
 
     The question all three subtractive machines raise in one form or another: a
@@ -225,10 +225,10 @@ def cut_directions(request):
         # Asked of the removed material, the same plate is exactly what it
         # should be: a couple of round holes.
         shape = _cut(source, shape)
-    axis = request.get("direction_vector") or [0.0, 0.0, -1.0]
+    axis = request.get("tool_axis_vector") or [0.0, 0.0, -1.0]
     length = math.sqrt(sum(component * component for component in axis))
     if length <= 0:
-        raise Exception("the machine direction is a zero vector")
+        raise Exception("the tool axis is a zero vector")
     axis = [component / length for component in axis]
 
     # How far from perpendicular a normal may be and still count as a wall.
@@ -320,7 +320,7 @@ OPERATIONS = {
     "free_bounds": free_bounds,
     "flatness": flatness,
     "enclosure": enclosure,
-    "cut_directions": cut_directions,
+    "wall_alignment": wall_alignment,
 }
 
 

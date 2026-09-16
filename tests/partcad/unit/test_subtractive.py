@@ -14,9 +14,10 @@
         kerf: 0.15
 
 The stock, because cutting only ever removes material, so the part has to be
-what is left of it. And the machine, because a laser's beam does not tilt and a
-drill only goes in and out, so each can produce some of what a router can and no
-more.
+what is left of it -- which is also why naming it is required rather than
+optional: subtraction is defined by what it starts from. And the machine,
+because a laser's beam does not tilt and a drill only goes in and out, so each
+can produce some of what a router can and no more.
 
 The two geometric analyses are exercised against real OCCT geometry here,
 because geometry is what they are about. The checks that drive them are
@@ -43,7 +44,7 @@ from partcad.part_config_manufacturing import (
     MACHINE_LASER,
     METHOD_SUBTRACTIVE,
     PartConfigManufacturing,
-    direction_vector,
+    tool_axis_vector,
 )
 from partcad.test import manufacturability_analysis
 from partcad.test.manufacturability_drilling import ManufacturabilityDrillingTest
@@ -99,22 +100,22 @@ def test_a_machine_takes_only_its_own_options():
     assert "kerff" in data.machine_error
 
 
-def test_a_direction_is_one_of_the_six_axes():
-    assert direction_vector("-Z") == (0.0, 0.0, -1.0)
-    assert direction_vector("+x") == (1.0, 0.0, 0.0)
+def test_a_tool_axis_is_one_of_the_six_axes():
+    assert tool_axis_vector("-Z") == (0.0, 0.0, -1.0)
+    assert tool_axis_vector("+x") == (1.0, 0.0, 0.0)
     # An axis written without a sign is the positive one, as everywhere else.
-    assert direction_vector("Y") == (0.0, 1.0, 0.0)
+    assert tool_axis_vector("Y") == (0.0, 1.0, 0.0)
     with pytest.raises(ValueError):
-        direction_vector("sideways")
+        tool_axis_vector("sideways")
 
 
-def test_a_misspelt_direction_is_recorded_rather_than_defaulted():
+def test_a_misspelt_tool_axis_is_recorded_rather_than_defaulted():
     """The one input here whose wrong value produces a check that passes.
 
     Defaulting it would measure the walls against an axis nobody chose and
     report the answer as though it were about the part.
     """
-    data = _manufacturing(laser={"direction": "up-ish"})
+    data = _manufacturing(laser={"toolAxis": "up-ish"})
     assert data.machine is None
     assert "is not an axis" in data.machine_error
 
@@ -132,10 +133,10 @@ def test_the_machine_is_only_read_for_a_subtractive_part():
 
 
 def test_what_the_machine_hands_an_implementation():
-    data = _manufacturing(laser={"kerf": 0.15, "direction": "+Z"}).machine.to_data()
+    data = _manufacturing(laser={"kerf": 0.15, "toolAxis": "+Z"}).machine.to_data()
     assert data["machine"] == "laser"
-    assert data["direction_axis"] == "+Z"
-    assert data["direction_vector"] == [0.0, 0.0, 1.0]
+    assert data["tool_axis"] == "+Z"
+    assert data["tool_axis_vector"] == [0.0, 0.0, 1.0]
     assert data["kerf"] == pytest.approx(0.15)
 
 
@@ -189,11 +190,11 @@ def test_a_stock_that_is_the_part_removes_nothing():
     assert measured["removed_volume"] == pytest.approx(0.0)
 
 
-def _classify(shape, direction=(0.0, 0.0, -1.0), source=None):
-    request = {"shape": shape, "direction_vector": list(direction)}
+def _classify(shape, tool_axis=(0.0, 0.0, -1.0), source=None):
+    request = {"shape": shape, "tool_axis_vector": list(tool_axis)}
     if source is not None:
         request["source"] = source
-    return wrapper_manufacturability.cut_directions(request)
+    return wrapper_manufacturability.wall_alignment(request)
 
 
 def test_a_box_is_walls_and_caps_and_nothing_else():
@@ -247,17 +248,27 @@ def test_what_a_drill_cut_is_asked_of_the_material_it_removed():
 PACKAGE = {
     "name": "//test",
     "parts": {
-        "stock": {"type": "stl", "manufacturing": {"method": "subtractive"}},
-        "plain": {"type": "stl", "manufacturing": {"method": "subtractive"}},
+        "stock": {"type": "stl"},
+        "plain": {"type": "stl"},
+        "sourceless": {"type": "stl", "manufacturing": {"method": "subtractive"}},
         "from_stock": {"type": "stl", "manufacturing": {"method": "subtractive", "source": "stock"}},
         "from_other_stock": {"type": "stl", "manufacturing": {"method": "subtractive", "source": "plain"}},
         "additive": {"type": "stl", "manufacturing": {"method": "additive"}},
         "formed": {"type": "stl", "manufacturing": {"method": "forming"}},
-        "routed": {"type": "stl", "manufacturing": {"method": "subtractive", "cnc": {}}},
-        "burned": {"type": "stl", "manufacturing": {"method": "subtractive", "laser": {"kerf": 0.2}}},
-        "burned_upward": {"type": "stl", "manufacturing": {"method": "subtractive", "laser": {"direction": "+Z"}}},
-        "drilled": {"type": "stl", "manufacturing": {"method": "subtractive", "drilling": {}}},
-        "confused": {"type": "stl", "manufacturing": {"method": "subtractive", "laser": {}, "drilling": {}}},
+        "routed": {"type": "stl", "manufacturing": {"method": "subtractive", "source": "stock", "cnc": {}}},
+        "burned": {
+            "type": "stl",
+            "manufacturing": {"method": "subtractive", "source": "stock", "laser": {"kerf": 0.2}},
+        },
+        "burned_upward": {
+            "type": "stl",
+            "manufacturing": {"method": "subtractive", "source": "stock", "laser": {"toolAxis": "+Z"}},
+        },
+        "drilled": {"type": "stl", "manufacturing": {"method": "subtractive", "source": "stock", "drilling": {}}},
+        "confused": {
+            "type": "stl",
+            "manufacturing": {"method": "subtractive", "source": "stock", "laser": {}, "drilling": {}},
+        },
     },
 }
 
@@ -282,13 +293,13 @@ def _arrange(monkeypatch, enclosure=None, cut=None, free_bounds=0):
     async def fake_enclosure(ctx, envelope, source_envelope):
         return enclosure or {"part_volume": 1000.0, "outside_volume": 0.0, "removed_volume": 100.0}
 
-    async def fake_cut(ctx, envelope, direction, source_envelope=None):
+    async def fake_cut(ctx, envelope, tool_axis, source_envelope=None):
         return cut or {"walls": 4, "caps": 2, "other": 0, "round": 4, "offenders": []}
 
     monkeypatch.setattr(pc.shape.Shape, "get_wrapped", wrapped)
     monkeypatch.setattr(manufacturability_analysis, "free_bounds_count", fake_free_bounds)
     monkeypatch.setattr(manufacturability_analysis, "enclosure", fake_enclosure)
-    monkeypatch.setattr(manufacturability_analysis, "cut_directions", fake_cut)
+    monkeypatch.setattr(manufacturability_analysis, "wall_alignment", fake_cut)
 
 
 def _verdict(check, ctx, name):
@@ -301,18 +312,30 @@ def test_the_subtractive_check_passes_over_a_part_made_some_other_way(ctx, monke
     assert _verdict(check, ctx, "additive") is check.TEST_PASSED
 
 
-def test_a_subtractive_part_naming_no_stock_is_still_checked_for_being_solid(ctx, monkeypatch):
-    """'source' is optional, so a part without one is not skipped.
+def test_a_subtractive_part_naming_no_stock_is_refused(ctx, monkeypatch, caplog):
+    """Subtraction is defined by what it starts from.
 
-    The question every subtractive part is asked is still asked; what is absent
-    is only the claim the stock would have added.
+    A shape somebody arrived at is not a subtractive part -- what makes it one
+    is being what is left of a piece that existed first -- so a declaration
+    naming no stock has not said what the method means.
     """
     _arrange(monkeypatch)
     check = ManufacturabilitySubtractiveTest()
-    assert _verdict(check, ctx, "plain") is check.TEST_PASSED
+    with caplog.at_level("ERROR"):
+        assert _verdict(check, ctx, "sourceless") is check.TEST_FAILED
+    assert "states no 'source'" in caplog.text
 
-    _arrange(monkeypatch, free_bounds=2)
-    assert _verdict(check, ctx, "plain") is check.TEST_FAILED
+
+def test_what_is_missing_is_read_rather_than_raised_on(ctx):
+    """A part whose section is incomplete is still a part.
+
+    Loading the package must not fail over it -- everything that is not about
+    making the part goes on working -- so the omission is reported by the check,
+    against the one part it belongs to.
+    """
+    part = ctx.get_part("//test:sourceless")
+    assert part is not None
+    assert PartConfiguration.get_manufacturing_data(part).missing_fields() == ["source"]
 
 
 def test_a_part_outside_its_stock_fails(ctx, monkeypatch, caplog):
@@ -392,10 +415,10 @@ def test_a_drill_takes_a_part_whose_every_wall_is_round(ctx, monkeypatch):
     assert _verdict(check, ctx, "drilled") is check.TEST_PASSED
 
 
-def test_the_direction_is_in_the_machine_checks_cache_key(ctx):
+def test_the_tool_axis_is_in_the_machine_checks_cache_key(ctx):
     """Turning the part over is the same solid and a different answer.
 
-    The walls that were along the axis are across it, so a corrected direction
+    The walls that were along the axis are across it, so a corrected axis
     has to re-run rather than be handed the verdict on the one it replaced --
     and 'manufacturing:' is one of the keys a shape's own hash leaves out.
     """

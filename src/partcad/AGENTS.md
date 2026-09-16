@@ -252,19 +252,20 @@ at all).
   neither implies the other -- a part that pokes out cannot be cut from it at all, and a part that fills it
   exactly is one whose `source:` names itself. Measured by `wrapper_manufacturability.enclosure`, which returns
   the four volumes rather than a boolean so a failure can say whether it missed by a rounding error or by a
-  feature. Optional, unlike `sheet_metal`'s: a part cut from stock is completely described by its own geometry,
-  so `method: subtractive` alone has always been a complete declaration, and the tree is full of parts that say
-  exactly that.
+  feature. Required, like `sheet_metal`'s: subtraction is *defined* by what it starts from, so a declaration naming no
+  stock has not said what the method means. That is a breaking change to a method parts already declare, and
+  the fixtures in this tree that carried `subtractive` as scaffolding were moved to `additive` rather than
+  given a stock they do not have -- see the note at the top of each.
 
   The **machine** is named by adding its own subsection -- `cnc:`, `drilling:` or `laser:` -- rather than by a
   `machine:` key, because the three do not take the same options and one namespace would leave nothing to say
   which belongs to which. None of them is CNC: the machine that can make anything the other two can, and what
-  every `subtractive` part written before this meant. `MACHINE_KEYS` is closed for the reason `cam.KEYS` is.
+  every `subtractive` part written before this meant. `MACHINE_KEYS` is closed for the reason `cam.KEYS` is, and the axis is `toolAxis:` rather than `direction:` because an object's `cam:` section already has a `direction` meaning climb or conventional, and both reach one implementation in one request.
 
   The two limited machines get a check each (`manufacturability-laser`, `manufacturability-drilling`), and each
   applies **only to a part that named it** -- a package that has said `method: subtractive` for a year must not
   start failing a check about a laser it does not own, which is what `MachineConfig.declared` is for. Both rest
-  on `wrapper_manufacturability.cut_directions`, which classifies every face against the machine's axis by
+  on `wrapper_manufacturability.wall_alignment`, which classifies every face against the machine's axis by
   **sampling its normal** rather than by reading its surface type: a cylinder is a wall when it is coaxial with
   the axis and a defect when it lies across it, and a spline extruded along the axis is a perfectly good wall no
   type test would accept. Drilling asks one thing more and asks it of a different subject -- the material the
