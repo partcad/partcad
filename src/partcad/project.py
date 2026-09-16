@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import inspect
 import os
 import re
 import threading
@@ -2339,7 +2340,7 @@ class Project(project_config.Configuration):
             # '_output_cfg()', because it also has to take 'export:' and the
             # options package into account.
             render = self.config_obj.get("render") or {}
-            shapes: List[Shape] = self._enumerate_shapes(sketches, interfaces, parts, assemblies, scenes)
+            shapes: List[Shape] = await self._enumerate_shapes_async(sketches, interfaces, parts, assemblies, scenes)
 
             if None in shapes:
                 raise EmptyShapesError
@@ -2351,10 +2352,13 @@ class Project(project_config.Configuration):
 
             # Only the objects the package declares. Building the assemblies
             # below may materialize more parts - a URDF's links become the parts
-            # '<assembly>/<link>' - but those are named with a '/' and so would
-            # need a directory created for each one, which is exactly what
-            # PartCAD does not do without '--create-dirs'. They stay reachable
-            # and exportable by name; they are simply not part of a bulk render.
+            # '<assembly>/<link>' - but the package declares no such part: it
+            # exists once that assembly has been built, so enumerating them
+            # would mean building every assembly here before anything is
+            # rendered. They stay reachable and exportable by name, and one
+            # named that way lands in a sub-directory of its own (see
+            # 'output.name_to_path()'); they are simply not part of a bulk
+            # render.
             # A file type named by its full path is not one of the types this
             # package could have enumerated: it lives in another package, which
             # is the whole reason for spelling it that way. So it is rendered as
@@ -2518,6 +2522,10 @@ class Project(project_config.Configuration):
         return [shape for shape in shapes if pc_cam.declared_config(shape) is not None]
 
     def _enumerate_shapes(self, sketches, interfaces, parts, assemblies, scenes=None):
+        """'_enumerate_shapes_async()' for a caller that owns no event loop."""
+        return asyncio.run(self._enumerate_shapes_async(sketches, interfaces, parts, assemblies, scenes))
+
+    async def _enumerate_shapes_async(self, sketches, interfaces, parts, assemblies, scenes=None):
         def get_keys(section, kind):
             # A section that is present but empty (e.g. `sketches:` with no
             # entries, as `pc init` writes it) parses as None; treat it as {}.
@@ -2547,12 +2555,22 @@ class Project(project_config.Configuration):
         shapes = []
         for kind, names, get in (
             ("sketch", sketches, self.get_sketch),
-            ("part", parts, self.get_part),
+            ("part", parts, self.get_part_async),
             ("assembly", assemblies, self.get_assembly),
             ("scene", scenes, self.get_scene),
         ):
             for name in names or []:
                 shape = get(name)
+                # 'get_part_async()' is a coroutine and the other three getters
+                # are not: a part a URDF or STEP assembly materializes does not
+                # exist until that assembly has been built, and building one is
+                # asynchronous (see 'get_part()', which refuses from a
+                # coroutine, and 'routable_shapes_async()', which awaits for the
+                # same reason). Naming such a part - 'pc export //pkg:robot/base_link'
+                # - is how it is asked for, and it is the one kind of object
+                # here that is not simply looked up.
+                if inspect.isawaitable(shape):
+                    shape = await shape
                 # An object whose type PartCAD retired is not one that failed to
                 # build. 'RetiredTypeException' is softened precisely so that a
                 # command which merely walks such a package does not exit
@@ -2659,8 +2677,13 @@ class Project(project_config.Configuration):
             image_cfg = {}
         prefix = image_cfg.get("prefix", ".")
 
+        # The link the document carries keeps the name's '/' as a '/': it is a
+        # URL a reader of the document follows rather than a path on the machine
+        # that generated it. The file it points at is that same link spelled for
+        # this filesystem, which for a name with a '/' in it is a file in a
+        # sub-directory -- see 'output.name_to_path()'.
         image_path = os.path.join(return_path, prefix, name + extension)
-        test_image_path = os.path.join(prefix, name + extension)
+        test_image_path = os.path.join(prefix, output.name_to_path(name, extension))
         return image_path, test_image_path
 
     def _readme_image(self, name, render_cfg, return_path, config=None):
@@ -2699,8 +2722,10 @@ class Project(project_config.Configuration):
 
         # 'assembly.name' rather than the requested name: a parameterized
         # assembly is known by the name its parameter values resolve to, which is
-        # also the name its images are rendered under.
-        path = os.path.join(output_dir, cfg.get("path", assembly.name + extension))
+        # also the name its images are rendered under. A '/' in it is a
+        # sub-directory, the same way it is for the files the shapes themselves
+        # are written to (see 'output.name_to_path()').
+        path = os.path.join(output_dir, cfg.get("path", output.name_to_path(assembly.name, extension)))
         dir_path = os.path.dirname(path)
         return_path = os.path.relpath(output_dir, dir_path)
         return assembly, path, dir_path, return_path, render_cfg, output_dir
@@ -2725,7 +2750,7 @@ class Project(project_config.Configuration):
         document = await assembly_guide.build_readme_document_async(self, assembly, images, dir_path)
 
         lines = pc_document.render_markdown(document)
-        self.ctx.ensure_dirs_for_file(path)
+        self.ctx.ensure_dirs_for_file(path, assembly.name)
         with open(path, "w") as f:
             f.writelines(map(lambda s: s + "\n", lines))
         return path
@@ -2762,7 +2787,7 @@ class Project(project_config.Configuration):
         async with assembly_guide.guide_document_async(
             self.ctx, self, assembly, format.upper(), dir_path, ignore_manufacturability
         ) as document:
-            self.ctx.ensure_dirs_for_file(path)
+            self.ctx.ensure_dirs_for_file(path, assembly.name)
             if format == "html":
                 with open(path, "w") as f:
                     f.write(pc_document.render_html(document))

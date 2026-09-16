@@ -3684,6 +3684,34 @@ would promise a part it cannot deliver.
 
 The short form ``<file type>: <path>`` is the same as ``prefix: <path>``.
 
+Where the file goes
+-------------------
+
+``prefix`` is the directory the file goes in, relative to the output directory
+(``-O``) or, failing that, to the package. A ``prefix`` that carries an
+extension names the file itself, which is the one way to give an object's output
+a name of its own. Otherwise the file is named after the object, with the
+extension the file type declares.
+
+An object whose name carries a ``/`` is written into a sub-directory of that
+name, and the directories are created on the way. A package may declare an
+object that way itself, and the objects another file materializes are named that
+way whether it did or not -- a STEP assembly's components are the parts
+``<assembly>/<component>``, a URDF's links ``<assembly>/<link>``:
+
+.. code-block:: shell
+
+  pc export -t step -O ./ //pub/examples/partcad/produce_assembly_urdf:robot/wrist
+  # ./robot/wrist.step
+
+The separator in a *name* is always ``/``, whichever operating system reads it,
+so the same command produces the same tree on Linux, macOS and Windows.
+
+Those sub-directories are created whether or not ``-p``/``--create-dirs`` was
+given: a name with a ``/`` in it is a file in a directory however the command
+was invoked. ``--create-dirs`` is what creates the directory *around* them --
+the one ``-O``, ``prefix`` or ``output_dir`` asked for and nobody has made.
+
 Export parameters
 -----------------
 

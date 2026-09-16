@@ -412,6 +412,99 @@ def test_the_output_path_comes_from_the_prefix_and_the_extension(ctx, tmp_path):
     assert path == explicit
 
 
+def test_a_name_with_a_slash_names_a_file_in_a_sub_directory():
+    """'a/b' is the file 'b' in the directory 'a', spelled for this filesystem.
+
+    Which is the only thing it can be: no filesystem takes a '/' in a file name,
+    so the alternative to a sub-directory is not a flat file called 'a/b.step'
+    but no file at all.
+    """
+    assert output.name_to_path("bolt", ".step") == "bolt.step"
+    assert output.name_to_path("robot/base_link", ".step").split(os.sep) == ["robot", "base_link.step"]
+    assert output.name_to_path("world/robot/base_link", ".step").split(os.sep) == [
+        "world",
+        "robot",
+        "base_link.step",
+    ]
+
+    # The suffix belongs to the file and to nothing above it: an analysis writes
+    # '<part>.<analysis>.<extension>' (see 'Shape.analysis_getopts').
+    assert output.name_to_path("robot/base_link", ".fea.vtu").split(os.sep) == ["robot", "base_link.fea.vtu"]
+
+    # The separator in a *name* is '/' whatever the platform, and none of it
+    # survives into the path: a directory called 'robot/base_link' is not
+    # something Windows could read back, which is what makes the tree the same
+    # one there as here.
+    assert output.name_dirs("robot/base_link") == "robot"
+    assert output.name_dirs("world/robot/base_link").split(os.sep) == ["world", "robot"]
+    assert output.name_dirs("bolt") == ""
+
+
+def test_the_output_path_of_a_name_with_a_slash_is_in_a_sub_directory(ctx, tmp_path):
+    """A part declared as '<dir>/<part>' is written into '<dir>'.
+
+    'examples/feature_import' declares its STEP parts that way, and a part a
+    STEP assembly or a URDF materializes is named that way whether the package
+    spelled it out or not.
+    """
+    project, part = _part(ctx, "//feature_import", "AeroAssembly_assy_example/AeroFrame_Cap")
+
+    _, path = part.output_getopts(ctx, "step", project)
+    assert path == os.path.join(project.config_dir, "AeroAssembly_assy_example", "AeroFrame_Cap.step")
+
+    # An output directory is where the sub-directory goes, not something it
+    # replaces.
+    _, path = part.output_getopts(ctx, "step", project, output_dir=str(tmp_path))
+    assert path == os.path.join(str(tmp_path), "AeroAssembly_assy_example", "AeroFrame_Cap.step")
+
+    # A file the caller named is that file, '/' in the object's name or not.
+    explicit = str(tmp_path / "somewhere.step")
+    _, path = part.output_getopts(ctx, "step", project, filepath=explicit)
+    assert path == explicit
+
+
+def test_the_sub_directories_a_name_asks_for_are_created(ctx, tmp_path):
+    """And without '--create-dirs', which is about a directory the user named."""
+    assert not ctx.option_create_dirs
+
+    target = os.path.join(str(tmp_path), "robot", "base_link.step")
+    ctx.ensure_dirs_for_file(target, "robot/base_link")
+    assert os.path.isdir(os.path.dirname(target))
+
+    deeper = os.path.join(str(tmp_path), "world", "robot", "base_link.step")
+    ctx.ensure_dirs_for_file(deeper, "world/robot/base_link")
+    assert os.path.isdir(os.path.dirname(deeper))
+
+
+def test_only_the_sub_directories_the_name_asks_for_are_created(ctx, tmp_path):
+    """Where the output goes is still the user's decision, and still an error."""
+    assert not ctx.option_create_dirs
+
+    # The directory the name's components hang off has to be there already,
+    # exactly as it does for an object whose name has no '/' in it.
+    missing = os.path.join(str(tmp_path), "nowhere", "robot", "base_link.step")
+    ctx.ensure_dirs_for_file(missing, "robot/base_link")
+    assert not os.path.exists(os.path.join(str(tmp_path), "nowhere"))
+
+    # A name that asks for no directory asks for nothing.
+    plain = os.path.join(str(tmp_path), "elsewhere", "bolt.step")
+    ctx.ensure_dirs_for_file(plain, "bolt")
+    assert not os.path.exists(os.path.dirname(plain))
+
+    # Nor is a file the caller named itself second-guessed.
+    named = os.path.join(str(tmp_path), "deep", "somewhere.step")
+    ctx.ensure_dirs_for_file(named, "robot/base_link")
+    assert not os.path.exists(os.path.dirname(named))
+
+    # '--create-dirs' is what creates the rest.
+    ctx.option_create_dirs = True
+    try:
+        ctx.ensure_dirs_for_file(plain, "bolt")
+    finally:
+        ctx.option_create_dirs = False
+    assert os.path.isdir(os.path.dirname(plain))
+
+
 def test_output_dir_is_a_section_setting_not_a_file_type(ctx):
     """'render: output_dir:' configures the section; it is not a format."""
     project, part = _part(ctx, "//produce_part_step", "bolt")

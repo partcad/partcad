@@ -193,6 +193,17 @@ Feature: `pc render` command
       |      --viewport-origin 1,2 |
       |        --viewport-up 0,0,0 |
 
+  # A name with a "/" in it is a projection in a sub-directory of that name,
+  # created on the way -- the same thing `pc export` does with the file it
+  # writes. `feature_import` declares its parts that way in `partcad.yaml`.
+  @type-image
+  Scenario: `pc render` of a part whose name has a "/" in it
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_import -t svg -O ./ :AeroAssembly_assy_example/AeroFrame_Cap"
+    Then the command should exit with a status code of "0"
+    Then a file named "AeroAssembly_assy_example/AeroFrame_Cap.svg" should be created
+    Given a file named "partcad.yaml" does not exist
+    Then STDERR should contain "DONE: Render: //pub/examples/partcad/feature_import:"
+
   @type-guide
   Scenario: `pc render -t pdf` refuses an assembly that is not meant to be built
     When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t pdf -O ./ -a :primitive"
