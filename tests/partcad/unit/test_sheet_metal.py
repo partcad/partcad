@@ -182,8 +182,14 @@ def test_a_cone_is_flat_on_one_side_only():
 
 
 def test_the_analysis_is_asked_for_by_name():
-    """'wrapper_manufacturability' answers more than one question; each says which it is."""
-    assert set(wrapper_manufacturability.OPERATIONS) == {"free_bounds", "flatness"}
+    """'wrapper_manufacturability' answers more than one question; each says which it is.
+
+    The set grows as the manufacturability checks learn to ask more -- the two
+    subtractive ones were added beside these -- so what is pinned here is that
+    the two this module is about are in it and reached by name, not that they
+    are the only ones.
+    """
+    assert {"free_bounds", "flatness"} <= set(wrapper_manufacturability.OPERATIONS)
     assert wrapper_manufacturability.OPERATIONS["free_bounds"](
         {"shape": BRepPrimAPI_MakeBox(1.0, 1.0, 1.0).Shape()}
     ) == {"free_bounds": 0}
