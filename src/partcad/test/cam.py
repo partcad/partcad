@@ -40,6 +40,7 @@ more concrete thing: run the post-processor, and see if a program comes out.
 
 import hashlib
 import json
+import os
 import shutil
 import tempfile
 
@@ -168,6 +169,17 @@ class CamTest(Test):
         # route left beside the package would be the file `pc cam` writes, with
         # nothing to say it came from a test -- see the module docstring.
         output_dir = tempfile.mkdtemp(prefix="partcad-cam-test-")
+        # The route is named after the object, and an object's name may hold a
+        # '/' -- the documented way of grouping objects, and what a package of
+        # machined plates naturally uses. Inside this check's own temporary
+        # directory there is nobody to surprise by creating that subdirectory,
+        # which is why it is made here rather than left to '--create-dirs': that
+        # flag is about the user's output tree and this tree is the check's.
+        # Without it every slash-named object failed the check on a missing file
+        # rather than on anything about its route.
+        subdirectory = os.path.dirname(os.path.join(output_dir, shape.name))
+        if subdirectory != output_dir:
+            os.makedirs(subdirectory, exist_ok=True)
         try:
             result = await shape.route_async(ctx, output_dir=output_dir)
         except pc_cam.CamConfigError as e:

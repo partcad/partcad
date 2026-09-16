@@ -1156,6 +1156,17 @@
                       "type": "string",
                       "minLength": 1,
                       "description": "The sketch that says how the process is carried out. Required by 'sheet_metal', where it holds one line per bend, each annotated with its angle, its inner radius and its direction. A reference to a sketch, which may carry parameters -- 'bends;include=BEND_UP,BEND_DOWN' reads the bend layers of a drawing that also holds the outline."
+                    },
+                    "parameters": {
+                      "type": "object",
+                      "description": "How the process is set up, as named values: what a shop has to be told and the geometry does not carry -- a nozzle diameter, a layer height, an infill, a surface finish. PartCAD does not interpret them; they travel with the part and become a column of its bill of materials.",
+                      "minProperties": 1,
+                      "patternProperties": {
+                        "^[a-zA-Z0-9][a-zA-Z0-9_. -]*$": {
+                          "type": ["string", "number", "boolean"]
+                        }
+                      },
+                      "additionalProperties": false
                     }
                   },
                   "required":["method"],

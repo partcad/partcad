@@ -658,6 +658,22 @@ There are other optional fields that are common to all objects:
 
   Defines the offset to apply to the CAD model when this object is used.
 
+  It **moves the geometry**: what every reader of the shape sees - an export, a
+  render, a route, the part as an assembly places it - is the object at the
+  offset location. That is what makes it the way to state the orientation an
+  object is worked in when that is not the orientation it is drawn in: an
+  ``alias`` of a part, with an ``offset`` that lays it flat and a ``cam:``
+  section, is the same part as a job on a machine (see :doc:`cli`).
+
+  .. note::
+
+     Up to and including 0.8.91 the offset was applied with build123d's
+     ``relocate()``, which re-labels the frame a shape is measured in without
+     moving it, so the field had no effect on any geometry. Shapes built by
+     those releases are cached under the same key as the ones built now, and an
+     ``offset`` reads the same in both; run ``pc system reset`` once after
+     upgrading, or a cached shape will come back unmoved.
+
 - ``cache``: <bool> (default: `True`)
 
   The value `false` indicates the intent to exclude this object from any caching behavior.
@@ -2153,6 +2169,52 @@ together rather than made, and has a single method of its own -- see
 
 A part that is bought rather than made carries ``vendor`` and ``sku`` instead of
 a method.
+
+.. _manufacturing-parameters:
+
+How the process is set up
+-------------------------
+
+A method says *how* a part is made and the geometry says what shape it comes out;
+neither says how the machine is set up to do it. A 3D printed part is printed at
+some nozzle diameter, layer height and infill, and a machined one comes off the
+machine with some surface finish -- facts a shop has to be told, that no STEP
+file holds, and that are the difference between two parts with identical
+geometry. ``manufacturing.parameters`` is where they go:
+
+.. code-block:: yaml
+
+  parts:
+    finger:
+      type: step
+      properties:
+        material: //pub/std/manufacturing/material:abs
+      manufacturing:
+        method: additive
+        parameters:
+          nozzle: 0.4 mm
+          layer height: 0.2 mm
+          infill: 45%
+
+    bracket:
+      type: step
+      manufacturing:
+        method: subtractive
+        parameters:
+          finish: anodized
+      tolerance: 0.02
+
+The names and the values are the author's, and PartCAD does not interpret either:
+what parameters a process has is the process's business, and a schema enumerating
+them would be a list of the ones somebody thought of. They are strings, numbers
+or booleans, they travel with the part, and they are a column of the generated
+bill of materials -- which is the point of declaring them rather than writing
+them in the part's ``desc`` where nothing can read them.
+
+What does *not* belong here is anything with a field of its own. The material is
+a :ref:`property <properties>`, the tolerance is :ref:`its own field
+<tolerance-field>`, and the geometry is the geometry; a ``parameters:`` entry
+repeating one of those is a second place for it to be wrong.
 
 .. _sheet-metal:
 

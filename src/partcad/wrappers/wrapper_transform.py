@@ -25,18 +25,34 @@ import ocp_serialize
 import wrapper_common
 
 
-def _relocate(shape, offset):
-    """Relocate 'shape' by the packed [translation, axis, angle] offset.
+def _offset(shape, offset):
+    """Move 'shape' by the packed [translation, axis, angle] offset.
 
-    Mirrors the build123d relocate() the core used to run in-process, so the
-    accepted 'offset' form is exactly what 'build123d.Location(*offset)' takes.
+    The accepted 'offset' form is exactly what 'build123d.Location(*offset)'
+    takes, which is what the documented ``offset:`` field of an object is
+    written in.
+
+    'moved()', not 'relocate()'. build123d's relocate() keeps the geometry
+    exactly where it is and only re-labels the frame it is measured in, so an
+    object with an ``offset:`` came back at the coordinates it started at: the
+    field had no effect on anything that reads the geometry - an export, a
+    render, a route, a part placed in an assembly. It is what the core used to
+    run in-process, and porting it into this wrapper carried the mistake along
+    with it.
+
+        Solid.make_box(10, 20, 30).relocate(Location([[100, 0, 0], ...]))
+            -> x = [0 .. 10]     # unmoved
+        Solid.make_box(10, 20, 30).moved(Location([[100, 0, 0], ...]))
+            -> x = [100 .. 110]  # what 'offset:' means
+
+    build123d deprecated relocate() for this reason; it warned on every offset
+    PartCAD applied.
     """
     import build123d as b3d
 
     solid = b3d.Solid.make_box(1, 1, 1)
     solid.wrapped = shape
-    solid.relocate(b3d.Location(*offset))
-    return solid.wrapped
+    return solid.moved(b3d.Location(*offset)).wrapped
 
 
 def _scale(shape, factor):
@@ -65,7 +81,7 @@ def _compound(shapes):
 def process(request):
     operation = request.get("operation")
     if operation == "offset":
-        return _relocate(request["shape"], request["offset"])
+        return _offset(request["shape"], request["offset"])
     if operation == "scale":
         return _scale(request["shape"], request["scale"])
     if operation == "compound":
