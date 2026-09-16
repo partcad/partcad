@@ -262,3 +262,46 @@ Feature: `pc cam` command
     When I run "pc --no-ansi test -f cam"
     Then the command should exit with a status code of "1"
     And STDERR should contain "cam: 'cnc:' does not take toool"
+
+  @success @pc-cam @pc-test
+  Scenario: A slash in an object's name is a directory the route check makes for itself
+    # A package of machined plates groups them -- `plates/flange` -- and the route
+    # is named after the object, so the check's own temporary directory needs a
+    # subdirectory for it. `--create-dirs` is about the user's output tree and
+    # there is no `-p` on `pc test`, so without the check making it, every
+    # grouped object failed on a missing file rather than on its route.
+    #
+    # No geometry beyond the one box, and the same box twice: what is under test
+    # is the path the route is written to.
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        stock:
+          type: build123d
+          path: panel.py
+        plates/panel:
+          type: build123d
+          path: panel.py
+          manufacturing:
+            method: subtractive
+            source: stock
+            cnc:
+              diameter: 3 mm
+              feed: 600 mm/min
+              plunge: 200 mm/min
+              safe_z: 5 mm
+              depth_per_pass: 2 mm
+      """
+    And a file named "panel.py" with content:
+      """
+      import build123d as bd
+
+      with bd.BuildPart() as result:
+          bd.Box(40, 30, 6)
+
+      if "show_object" in locals():
+          show_object(result.part.wrapped, name="panel")
+      """
+    When I run "pc --no-ansi test -f cam"
+    Then the command should exit with a status code of "0"
+    And STDERR should not contain "No such file or directory"

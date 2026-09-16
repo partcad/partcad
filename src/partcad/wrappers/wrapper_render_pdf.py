@@ -246,20 +246,40 @@ class Composer:
             # them, and a bill of materials that loses a value on paper alone is
             # worse than one that looks crowded.
             row_widths, row_aligns = fit_row(row, widths, aligns)
+            # A cell may be a picture rather than text - a thumbnail in a parts
+            # list. It is drawn after the text of the row, once the row's height
+            # is known, and it takes no part in the wrapping.
+            pictures = {
+                index: drawing
+                for index, cell in enumerate(row)
+                if isinstance(cell, dict) and (drawing := _load_image(cell.get("path"))) is not None
+            }
             # 'max(..., MIN_WRAP_WIDTH)': a column squeezed down to nothing by a
             # single very long value would otherwise be asked to wrap text into
             # zero width, which no line ever fits into.
             cells = [
-                simpleSplit(str(cell), FONT, BODY_SIZE, max(width - 8, MIN_WRAP_WIDTH)) or [""]
-                for cell, width in zip(row, row_widths)
+                (
+                    [""]
+                    if index in pictures
+                    else simpleSplit(_cell_text(cell), FONT, BODY_SIZE, max(width - 8, MIN_WRAP_WIDTH)) or [""]
+                )
+                for index, (cell, width) in enumerate(zip(row, row_widths))
             ]
             height = max(len(lines) for lines in cells) * BODY_SIZE * LINE_SPACING
+            if pictures:
+                # Room for the tallest picture of the row, scaled into its own
+                # column and capped so that one part cannot take a whole page.
+                height = max(
+                    height,
+                    max(_picture_size(drawing, row_widths[index])[1] for index, drawing in pictures.items()) + 4,
+                )
             if self.y - height < MARGIN:
                 # A table that outgrows the page continues on the next one, under
                 # a repeated header: a column of numbers with no headings on it
                 # is not a bill of materials.
                 self.new_page()
                 draw_header()
+            top = self.y
             for index in range(max(len(lines) for lines in cells)):
                 self.y -= BODY_SIZE * LINE_SPACING
                 self._row(
@@ -268,7 +288,25 @@ class Composer:
                     row_aligns,
                     FONT,
                 )
+            if pictures:
+                self._pictures(pictures, row_widths, top, height)
+                self.y = min(self.y, top - height)
         self.y -= BODY_SIZE
+
+    def _pictures(self, pictures, widths, top, height):
+        """Draw the picture cells of one row, each inside its own column."""
+        offsets = [MARGIN + sum(widths[:index]) for index in range(len(widths))]
+        for index, drawing in pictures.items():
+            width, picture_height = _picture_size(drawing, widths[index])
+            if not width or not picture_height:
+                continue
+            scale = width / drawing.width
+            drawing.scale(scale, scale)
+            drawing.width, drawing.height = width, picture_height
+            # Centred in its column, and hung from the top of the row, so that a
+            # row of one tall picture and several short values reads as one row.
+            x = offsets[index] + (widths[index] - width) / 2
+            renderPDF.draw(drawing, self.canvas, x, top - picture_height - 2)
 
     def _row(self, cells, widths, aligns, font):
         self.canvas.setFont(font, BODY_SIZE)
@@ -281,6 +319,30 @@ class Composer:
             x += width
 
 
+# The tallest a thumbnail is drawn in a table row. A parts list has one per part,
+# and a picture taller than this turns the list into a photo album.
+MAX_CELL_PICTURE = 48
+
+
+def _cell_text(cell):
+    """The text of a table cell, whatever kind of cell it is.
+
+    A picture that could not be read is drawn as what it was of, which is better
+    than a blank column and is what the other two renderers do.
+    """
+    if isinstance(cell, dict):
+        return str(cell.get("alt") or "")
+    return "" if cell is None else str(cell)
+
+
+def _picture_size(drawing, column_width):
+    """How big a thumbnail is drawn in a column of this width."""
+    if not drawing.width or not drawing.height:
+        return 0.0, 0.0
+    scale = min((column_width - 8) / drawing.width, MAX_CELL_PICTURE / drawing.height)
+    return drawing.width * scale, drawing.height * scale
+
+
 def _column_widths(columns, rows, available):
     """Column widths proportional to what each column has to say."""
     natural = []
@@ -288,7 +350,14 @@ def _column_widths(columns, rows, available):
         widest = stringWidth(str(column), FONT_BOLD, BODY_SIZE)
         for row in rows:
             if index < len(row):
-                widest = max(widest, stringWidth(str(row[index]), FONT, BODY_SIZE))
+                cell = row[index]
+                if isinstance(cell, dict):
+                    # A picture column is as wide as a thumbnail, whatever the
+                    # path behind it is: 'str(cell)' would ask for the width of a
+                    # dictionary literal and take the page.
+                    widest = max(widest, MAX_CELL_PICTURE)
+                else:
+                    widest = max(widest, stringWidth(str(cell), FONT, BODY_SIZE))
         natural.append(widest + 12)
 
     total = sum(natural)

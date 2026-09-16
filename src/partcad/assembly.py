@@ -11,6 +11,7 @@ import os
 import tempfile
 import typing
 
+from . import assembly_config_manufacturing as pc_assembly_manufacturing
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, shape_ports
 from . import software as pc_software
@@ -555,11 +556,20 @@ class Assembly(Shape):
         each of them by the package they come from:
 
             {
-                "parts": {"//package": {"name": {"count": 2, "desc": "..."}}},
+                "parts": {"//package": {"name": {"count": 2, "desc": "...",
+                                                 "material": "...", "method": "...",
+                                                 "process": "anodized",
+                                                 "vendor": "...", "sku": "...",
+                                                 "count_per_sku": 1,
+                                                 "source_file": "bracket.step"}}},
                 "assemblies": {...},
                 "software": {"//package": {"name": {"count": 1, "desc": "...",
                                                     "revision": "<commit id>"}}},
             }
+
+        Beside the count, each entry carries what a published bill of materials
+        is read for - see '_bom_line()'. A key nothing declared is None, and the
+        documents drop the column rather than print it empty.
 
         Assemblies embedded in the parent's source file (the nested 'links:' of
         an ASSY file) are not objects of any package, so they are not listed:
@@ -663,10 +673,79 @@ class Assembly(Shape):
         return bom
 
 
+def _bom_line(item) -> dict:
+    """What a bill of materials says about one object besides how many there are.
+
+    A published bill of materials is a table somebody orders and makes things
+    from, so it carries what that takes: what the thing is, what it is made of,
+    how it is made or who it is bought from, and which file its geometry lives
+    in. All of it is already declared - this reads it off the resolved
+    configuration and puts it where the documents can find it.
+
+    'get_final_config()' rather than the object's own config, so that an alias or
+    an enrich reports what it points at: a package that catalogues its purchased
+    parts in one place and aliases them into the assemblies that use them is the
+    ordinary case, and the alias is not where the vendor is written down.
+
+    A value nothing declared comes back as None, which is how a column that no
+    row has anything to say in gets dropped rather than printed empty.
+    """
+    config = item.get_final_config() if hasattr(item, "get_final_config") else getattr(item, "config", {}) or {}
+    line = {"desc": getattr(item, "desc", None)}
+
+    properties = config.get("properties") or {}
+    material = properties.get("material")
+    if not material:
+        # The homogeneous part types take the material as a parameter - what the
+        # part is asked to be made of - and a part read from a file states it as
+        # a property. Either one answers "what is this made of".
+        parameter = (config.get("parameters") or {}).get("material")
+        if isinstance(parameter, dict):
+            material = parameter.get("default")
+        elif isinstance(parameter, str):
+            material = parameter
+    line["material"] = material
+
+    manufacturing = config.get("manufacturing") or {}
+    method = manufacturing.get("method")
+    # An assembly is put together rather than made, and "assy" is the only method
+    # it can have - every assembly carries it, so it says nothing about any one of
+    # them and would be a column of one repeated word.
+    line["method"] = None if method == pc_assembly_manufacturing.METHOD_ASSY else method
+    # What the declaration says about making this part beyond naming the method:
+    # 'manufacturing: desc:', which is where a nozzle diameter, a layer height,
+    # an infill or a surface finish is written - what a shop is told and the
+    # geometry does not carry. PartCAD does not interpret it, and a parts list is
+    # where whoever makes the part reads it.
+    line["process"] = manufacturing.get("desc") or None
+
+    store = item.get_store_data() if hasattr(item, "get_store_data") else None
+    if store is not None:
+        line["vendor"] = store.vendor
+        line["sku"] = store.sku
+        line["count_per_sku"] = store.count_per_sku
+
+    # Where the geometry is, for the objects that are a file. A script, a
+    # parametric instance or an assembly has no such answer and says nothing.
+    line["source_file"] = config.get("path") or config.get("fileUrl")
+
+    # The object itself, for a document that illustrates its bill of materials:
+    # a picture is looked up from the shape's own name and render configuration
+    # (see 'assembly_guide.ImageSource'), which nothing else in this entry
+    # carries. It is the one value here that is not data about the line item, so
+    # anything that serializes a grouped BoM drops it.
+    line["shape"] = item
+
+    return line
+
+
 def _bom_grouped_add(section: dict, item):
     """Account for one more instance of 'item' in a grouped BoM section."""
     entries = section.setdefault(item.project_name, {})
-    entry = entries.setdefault(item.name, {"count": 0, "desc": getattr(item, "desc", None)})
+    entry = entries.get(item.name)
+    if entry is None:
+        entry = dict(_bom_line(item), count=0)
+        entries[item.name] = entry
     entry["count"] += 1
 
 

@@ -34,11 +34,13 @@ from typing import Optional
 
 from . import document as doc
 from . import logging as pc_logging
+from . import material as pc_material
 from .assembly import Assembly
 from .exception import NotAnAssemblyFileError, NotManufacturableError
 from .geom import Location
 from .render import render_cfg_merge
 from .sandbox_lock import process_slots
+from .utils import resolve_resource_path
 
 # How far apart an exploded view pulls the two items of a step, as a fraction of
 # the largest dimension of the two, unless the step says otherwise.
@@ -638,12 +640,120 @@ def exploded_assembly(step: GuideStep) -> Assembly:
 #
 
 
-def bom_blocks(project, grouped, dir_path, level=2) -> list:
+# What a bill of materials says about each item, beside its name and its count,
+# in the order a reader wants it: what it is made of, how it is made and with
+# what settings, how precisely, who it is bought from, and where its geometry is.
+# Each is (heading, key, alignment).
+#
+# A column is printed only where some row has something to say in it, so a
+# package of machined plates gets "Material" and "Method" and no "Vendor", a
+# package of catalogue parts the other way round, and a package that declares
+# none of it gets the three columns this table has always had. That is the whole
+# of the mechanism that lets a generated bill of materials replace a
+# hand-written one: the hand-written table has a column because the parts have
+# the data, and so does this.
+BOM_COLUMNS = (
+    ("Material", "material", "left"),
+    ("Method", "method", "left"),
+    ("Process", "process", "left"),
+    ("Tolerance", "tolerance", "right"),
+    ("Vendor", "vendor", "left"),
+    ("SKU", "sku", "left"),
+    ("File", "source_file", "left"),
+)
+
+
+def _bom_cell(entry, key):
+    """One cell of a bill of materials, as text.
+
+    'count_per_sku' is folded into the SKU rather than given a column of its own:
+    "B0DJQGMQZM (120 per pack)" is what somebody ordering reads, and a column
+    that says "1" for everything but the bagged screws is a column of noise.
+    """
+    value = entry.get(key)
+    if value in (None, ""):
+        return ""
+    if key == "sku":
+        per_sku = entry.get("count_per_sku") or 1
+        if per_sku > 1:
+            return "%s (%d per pack)" % (value, per_sku)
+    if key == "tolerance":
+        return _tolerance_text(value)
+    if key == "source_file":
+        return "`%s`" % value
+    return str(value)
+
+
+def _tolerance_text(value):
+    """How precisely the part has to be made, as a reader of a parts list sees it.
+
+    Three of the four answers 'ShapeConfig.get_tolerance()' gives are worth
+    printing and one is not. A number is a symmetric tolerance on every dimension
+    and is written as one; NaN means the file tolerances each feature separately,
+    which is more than a column holds and so says where to look instead; 0.0
+    means nobody said, and an empty cell is the honest rendering of that - the
+    manufacturability test is what complains about it, not the parts list.
+    """
+    if value is None:
+        return ""
+    if math.isnan(value):
+        return "per feature"
+    if value <= 0.0:
+        return ""
+    return "±%s mm" % ("%.4f" % value).rstrip("0").rstrip(".")
+
+
+def _material_text(project, owner_package, reference):
+    """The material of one line item, as a name rather than as a reference.
+
+    A declaration names a material the way it names anything else, by a
+    reference - '//pub/std/manufacturing/material:aluminium-5052'. That is what
+    resolves it and not what anybody reads, and the material itself carries the
+    name: 'formal' is the short one a drawing is titled with ("PLA"), 'full' the
+    substance ("Polylactic Acid").
+
+    'owner_package' is the package of the part that named it, because the
+    reference may be relative: ':aluminium' means "in my own package", and whose
+    package that is is a fact about the part rather than about the string.
+
+    A reference that resolves to nothing is printed as written. It is a reference
+    to fix, and a parts list that quietly replaced it with a prettier name would
+    hide which one.
+    """
+    ctx = getattr(project, "ctx", None)
+    if ctx is None:
+        return reference
+    package, name = resolve_resource_path(owner_package, reference)
+    _project, material = pc_material.lookup(ctx, "%s:%s" % (package, name), quiet=True)
+    if material is None:
+        return reference
+    return material.formal or material.full or material.name
+
+
+async def _tolerance_of(shape):
+    """How precisely one line item has to be made, or None if it cannot say.
+
+    Asked of the object rather than read off its declaration, because the
+    declaration is only one of the three places the answer can be:
+    'ShapeConfig.get_tolerance()' is the single reader of all three, and reading
+    a file is what makes this a coroutine.
+    """
+    if shape is None or not hasattr(shape, "get_tolerance"):
+        return None
+    return await shape.get_tolerance()
+
+
+async def bom_blocks_async(project, grouped, dir_path, level=2, images: Optional[ImageSource] = None) -> list:
     """The bill of materials, as document blocks.
 
     The same section, whichever document asks for it: every part, every
     sub-assembly and every piece of software the assembly is made of, grouped by
     the package they come from and counted.
+
+    With 'images', each row also carries a picture of the item, which is what a
+    reader of a parts list looks at first. The paginated documents pass none: the
+    instruction book shows every part full width on the page of the step that
+    uses it, and a thumbnail column would be the same pictures again, smaller.
     """
     blocks = []
     for title, column, packages in (
@@ -655,6 +765,57 @@ def bom_blocks(project, grouped, dir_path, level=2) -> list:
         blocks.append(doc.Heading(title, level=level))
         for package_name in sorted(packages.keys()):
             entries = packages[package_name]
+            names = sorted(entries.keys())
+
+            # What the cells say, resolved before the columns are chosen. Two of
+            # them are not in the declaration as they are printed: a material is
+            # a reference until it is looked up, and a tolerance may be stated by
+            # the part's file rather than by its declaration at all.
+            lines = {}
+            for name in names:
+                line = dict(entries[name])
+                if line.get("material"):
+                    line["material"] = _material_text(project, package_name, line["material"])
+                line["tolerance"] = await _tolerance_of(entries[name].get("shape"))
+                lines[name] = line
+
+            # Only the columns that this package's items have something to say
+            # in, in the fixed order above.
+            extra = [
+                (heading, key, align)
+                for heading, key, align in BOM_COLUMNS
+                if any(_bom_cell(lines[name], key) for name in names)
+            ]
+
+            thumbnails = {}
+            if images is not None:
+                for name in names:
+                    shape = entries[name].get("shape")
+                    if shape is None:
+                        continue
+                    image = await images.shape_image_async(shape, alt=name)
+                    if image is not None:
+                        thumbnails[name] = image
+
+            columns = [column]
+            aligns = ["left"]
+            if thumbnails:
+                columns.append("")
+                aligns.append("left")
+            columns += ["Count"] + [heading for heading, _, _ in extra] + ["Description"]
+            aligns += ["right"] + [align for _, _, align in extra] + ["left"]
+
+            rows = []
+            for name in names:
+                entry = lines[name]
+                row = [name]
+                if thumbnails:
+                    row.append(thumbnails.get(name, ""))
+                row.append(entry["count"])
+                row += [_bom_cell(entry, key) for _, key, _ in extra]
+                row.append(entry.get("desc") or "")
+                rows.append(row)
+
             blocks.append(
                 doc.Heading(
                     package_name,
@@ -662,16 +823,7 @@ def bom_blocks(project, grouped, dir_path, level=2) -> list:
                     url=package_document_link(project, package_name, dir_path),
                 )
             )
-            blocks.append(
-                doc.Table(
-                    columns=[column, "Count", "Description"],
-                    aligns=["left", "right", "left"],
-                    rows=[
-                        [name, entries[name]["count"], entries[name].get("desc") or ""]
-                        for name in sorted(entries.keys())
-                    ],
-                )
-            )
+            blocks.append(doc.Table(columns=columns, aligns=aligns, rows=rows))
     blocks += software_blocks(project, grouped.get("software") or {}, dir_path, level=level)
     return blocks
 
@@ -785,7 +937,7 @@ async def build_readme_document_async(project, assembly, images: ImageSource, di
     if image is not None:
         blocks.append(doc.ImageRow([image]))
 
-    blocks += bom_blocks(project, grouped, dir_path)
+    blocks += await bom_blocks_async(project, grouped, dir_path, images=images)
 
     return doc.Document(
         title=assembly.name,
@@ -823,7 +975,7 @@ async def build_guide_document_async(ctx, project, assembly, images: ImageSource
     )
 
     pages = [composed[0]]
-    pages.append(doc.Page(title="Bill of Materials", blocks=_bom_page_blocks(project, grouped, dir_path)))
+    pages.append(doc.Page(title="Bill of Materials", blocks=await _bom_page_blocks(project, grouped, dir_path)))
 
     for section_pages in composed[1:]:
         pages += section_pages
@@ -889,9 +1041,9 @@ async def _title_page(project, assembly, images, sections):
     return doc.Page(title=assembly.name, blocks=blocks)
 
 
-def _bom_page_blocks(project, grouped, dir_path):
+async def _bom_page_blocks(project, grouped, dir_path):
     blocks = [doc.Heading("Bill of Materials", level=1)]
-    blocks += bom_blocks(project, grouped, dir_path, level=2)
+    blocks += await bom_blocks_async(project, grouped, dir_path, level=2)
     return blocks
 
 

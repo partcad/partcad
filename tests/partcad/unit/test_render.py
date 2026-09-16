@@ -157,8 +157,17 @@ def test_assembly_bom_grouped_sub_assemblies():
 
     # 'top' uses '//sub:unit' twice, and each of those is a pair of cubes, on top
     # of the one cube 'top' places itself.
-    assert grouped["assemblies"] == {"//sub": {"unit": {"count": 2, "desc": "A pair of cubes"}}}
-    assert grouped["parts"] == {"//sub": {"cube": {"count": 5, "desc": "A cube"}}}
+    #
+    # Read key by key rather than compared whole: an entry carries everything a
+    # published parts list is read for (see 'assembly._bom_line'), and this test
+    # is about the counting and the grouping. A package that declares none of the
+    # rest leaves those keys None, which is what keeps them out of the documents.
+    assert list(grouped["assemblies"]) == ["//sub"]
+    assert grouped["assemblies"]["//sub"]["unit"]["count"] == 2
+    assert grouped["assemblies"]["//sub"]["unit"]["desc"] == "A pair of cubes"
+    assert list(grouped["parts"]) == ["//sub"]
+    assert grouped["parts"]["//sub"]["cube"]["count"] == 5
+    assert grouped["parts"]["//sub"]["cube"]["desc"] == "A cube"
 
 
 def test_render_assembly_readme_sub_assemblies():
