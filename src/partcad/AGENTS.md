@@ -243,6 +243,44 @@ at all).
   its siblings, `-f cam` selects the route check alone. Renaming a check changes every cached verdict's key,
   so the first `pc test` after this re-runs everything -- once.
 
+- **A subtractive part names what it is cut from and what cuts it** (`part_config_manufacturing.py`,
+  `test/manufacturability_subtractive.py`, `test/manufacturability_machine.py`): `subtractive` was a label until
+  this -- a part declared it and nothing read it. It now carries two claims, and each is checked.
+
+  `source:` is the stock. Cutting only removes material, so the part has to be what is left of it: nothing of it
+  outside the stock, and the stock bigger somewhere. Both halves, because each catches a different mistake and
+  neither implies the other -- a part that pokes out cannot be cut from it at all, and a part that fills it
+  exactly is one whose `source:` names itself. Measured by `wrapper_manufacturability.enclosure`, which returns
+  the four volumes rather than a boolean so a failure can say whether it missed by a rounding error or by a
+  feature. Optional, unlike `sheet_metal`'s: a part cut from stock is completely described by its own geometry,
+  so `method: subtractive` alone has always been a complete declaration, and the tree is full of parts that say
+  exactly that.
+
+  The **machine** is named by adding its own subsection -- `cnc:`, `drilling:` or `laser:` -- rather than by a
+  `machine:` key, because the three do not take the same options and one namespace would leave nothing to say
+  which belongs to which. None of them is CNC: the machine that can make anything the other two can, and what
+  every `subtractive` part written before this meant. `MACHINE_KEYS` is closed for the reason `cam.KEYS` is.
+
+  The two limited machines get a check each (`manufacturability-laser`, `manufacturability-drilling`), and each
+  applies **only to a part that named it** -- a package that has said `method: subtractive` for a year must not
+  start failing a check about a laser it does not own, which is what `MachineConfig.declared` is for. Both rest
+  on `wrapper_manufacturability.cut_directions`, which classifies every face against the machine's axis by
+  **sampling its normal** rather than by reading its surface type: a cylinder is a wall when it is coaxial with
+  the axis and a defect when it lies across it, and a spline extruded along the axis is a perfectly good wall no
+  type test would accept. Drilling asks one thing more and asks it of a different subject -- the material the
+  machine *took away*, which is `source` minus the part -- because a drilled plate's straight sides came with
+  the stock and asking the part's own walls would fail every plate for having them.
+
+  `pc cam` writes for all three from the one `gcode` file type, and which one comes from `manufacturing:` and
+  not from `cam:` (`Shape._route_machine_data`, applied after every other layer so nothing can override it):
+  what a part is made on is a property of the part, and a route for a machine nobody owns is the failure that
+  reaches the shop floor. A part that names no machine produces the bytes it always produced, which is worth
+  keeping true -- `_orient` is the identity for the default `-Z` precisely so that it stays so.
+
+  `examples/produce_part_subtractive` is the whole of it, and its laser-cut `blank` is what the sheet metal
+  example bends -- named across packages, so the piece that goes into the brake is a part whose own making is
+  described rather than one asserted to exist.
+
 - **A sheet metal part names what is bent and how** (`part_config_manufacturing.py`,
   `test/manufacturability_sheet_metal.py`, `wrappers/dxf_metadata.py`): `sheet_metal` is the one manufacturing
   method that is not described by the part alone. The others say how a shape comes out of stock; this one says

@@ -2138,7 +2138,7 @@ The ``manufacturing.method`` field says how a part is made:
 +==================+===========================================================+
 | ``additive``     | Built up, e.g. 3D printed                                 |
 +------------------+-----------------------------------------------------------+
-| ``subtractive``  | Cut away from stock, e.g. machined                        |
+| ``subtractive``  | Cut away from stock -- see :ref:`subtractive`             |
 +------------------+-----------------------------------------------------------+
 | ``forming``      | Shaped without adding or removing material                |
 +------------------+-----------------------------------------------------------+
@@ -2153,6 +2153,155 @@ together rather than made, and has a single method of its own -- see
 
 A part that is bought rather than made carries ``vendor`` and ``sku`` instead of
 a method.
+
+.. _subtractive:
+
+Subtractive
+-----------
+
+``subtractive`` is the method that takes material away: a router, a laser, a
+saw, a drill. What it says about a part is not a property of the part's own
+shape -- almost any solid can be machined out of a big enough block -- but a
+relation between the part and what it is made *from*, and between the part and
+the machine that makes it. Both can be declared, and both are checked.
+
+The stock it is cut from
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+``source`` names the piece the part is cut out of:
+
+.. code-block:: yaml
+
+  parts:
+    stock_plate:
+      type: build123d      # bought, so it declares no method of its own
+      path: stock_plate.py
+
+    bearing_block:
+      type: build123d
+      path: bearing_block.py
+      manufacturing:
+        method: subtractive
+        source: stock_plate
+
+Cutting can only ever remove material, so the part has to be what is left of the
+stock. ``pc test`` asks both halves of that, because each catches a different
+mistake and neither implies the other:
+
+- **Nothing of the part is outside the stock.** A part that pokes out of what it
+  is cut from cannot be made from it however good the machine is -- most often
+  the stock is simply too small, or the part is positioned off it.
+- **The stock is bigger than the part somewhere.** A part that fills its stock
+  exactly is one whose ``source`` names itself, or a copy of itself, which is
+  the mistake a reader of the YAML cannot see.
+
+``source`` is **optional** here, unlike on :ref:`sheet-metal`, and that is
+deliberate: a part cut from stock is completely described by its own geometry,
+so ``method: subtractive`` on its own has always been a legitimate and complete
+declaration. Naming the stock adds a claim, and the claim is what is checked.
+
+.. _subtractive-machines:
+
+The machine it is cut on
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Subtraction is one idea, but the machines that do it are not interchangeable,
+and what they **cannot** do is the useful thing to know. A machine is named by
+adding its own subsection:
+
+.. code-block:: yaml
+
+  manufacturing:
+    method: subtractive
+    source: stock_sheet
+    laser:
+      kerf: 0.15         # what the beam itself removes
+      direction: -Z      # the axis it fires along
+
++----------------+------------------------------------------------------------+
+| Subsection     | The machine, and what it cannot do                         |
++================+============================================================+
+| *(none)*       | A CNC router or mill. It follows any 2.5D path, so there   |
+|                | is nothing it is held to beyond fitting its stock.         |
++----------------+------------------------------------------------------------+
+| ``cnc:``       | The same machine, said out loud.                           |
++----------------+------------------------------------------------------------+
+| ``laser:``     | A laser cutter. Its beam does not tilt, so every wall it   |
+|                | makes is parallel to the axis it fires along.              |
++----------------+------------------------------------------------------------+
+| ``drilling:``  | A drilling machine. It goes in and comes out, so the only  |
+|                | thing it makes is a **round** hole along its own axis.     |
++----------------+------------------------------------------------------------+
+
+Naming none of them means CNC. That is the machine that can make anything the
+other two can, so it is the answer that is never wrong -- and it is what every
+``subtractive`` part written before machines could be named already meant. Only
+one may be named.
+
+Every machine takes a ``direction``, which is the axis the tool, the beam or the
+drill approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
+or ``-Z``. It defaults to ``-Z``: the part sits on the bed and the tool comes
+down to it. A laser also takes a ``kerf``, the width the beam itself removes,
+which is a property of that machine and that material rather than of the job --
+which is why it is declared here and not under ``cam:``.
+
+What ``pc test`` checks
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Beyond the stock, one question per limited machine, and each applies **only to a
+part that named that machine**:
+
+- ``manufacturability-laser`` -- every face of the part is either a wall along
+  the beam or a face across it. A chamfer, a taper, a dome or a fillet rolling
+  over an edge is none of those, and there is no orientation of a beam that
+  produces a surface at an angle to itself.
+- ``manufacturability-drilling`` -- the same, and every wall is round. This one
+  is asked of what the machine **took away** rather than of the part, where the
+  part names a ``source``: a drilled plate's straight sides came with the stock,
+  and asking the part's own walls would fail every plate for having them.
+
+Both are measured by sampling each face's own normal against the axis, not by
+reading its surface type. The type is not the question: a cylinder is a wall
+when it is coaxial with the axis and a defect when it lies across it, and a
+surface extruded along the axis is a perfectly good wall whatever it is made of.
+
+What is deliberately **not** checked is thickness, material or power. A laser
+will cut a 20 mm plate as readily as a 1 mm sheet given enough of it, and how
+much is enough is a property of the machine and the material rather than of the
+design -- so it is not something PartCAD can answer from the geometry, and a
+check that guessed would refuse parts the shop next door cuts every day.
+
+What ``pc cam`` writes
+^^^^^^^^^^^^^^^^^^^^^^
+
+The same ``gcode`` file type produces a different program for each machine, and
+which one it writes for comes from ``manufacturing:`` rather than from ``cam:``
+-- what a part is made on is a property of the part, and a ``cam:`` key for it
+would be a route written for a machine nobody owns.
+
++----------------+------------------------------------------------------------+
+| Machine        | The program                                                |
++================+============================================================+
+| CNC            | Contours offset by the cutter's radius, cut at stepped     |
+|                | depths. ``M3``/``M5`` where a ``speed`` is named.          |
++----------------+------------------------------------------------------------+
+| Laser          | One pass, offset by half the ``kerf``, with the beam gated |
+|                | ``M3 S<power>``/``M5`` around each contour and no Z motion |
+|                | at all. Reads no ``tool`` and no ``depth_per_pass``.       |
++----------------+------------------------------------------------------------+
+| Drilling       | A rapid to each round feature's centre, a plunge and a     |
+|                | retract, broken into steps where ``peck:`` says.           |
++----------------+------------------------------------------------------------+
+
+``power`` (a laser's S-word) and ``peck`` (how deep a drill goes before clearing
+the swarf) join the other :ref:`cam job keys <cam-section>`. A part declaring a
+``direction`` other than ``-Z`` is rotated into the machine's frame before the
+route is written, so the program is in the coordinates the part is fixtured in.
+
+``examples/produce_part_subtractive`` is the whole of the above in one package:
+two stocks, a laser-cut blank and gasket, a routed block whose chamfer is the
+one feature only a router can make, and a drilled plate. The blank is what
+:ref:`sheet-metal` bends.
 
 .. _sheet-metal:
 

@@ -415,3 +415,124 @@ def test_the_stats_report_the_size_of_the_job(gcode, tmp_path):
     assert stats["depth"] == pytest.approx(6.0)
     # Three passes around a 41.5 x 31.5 rectangle is on the order of 440 mm.
     assert stats["cut_length"] > 400.0
+
+
+# --------------------------------------------------------------------------- #
+# The machines other than a router                                            #
+# --------------------------------------------------------------------------- #
+
+
+def _drilled_panel():
+    """A panel with two round holes through it: something a drill can make."""
+    panel = _panel()
+    for x in (10, 30):
+        panel -= b3d.Solid.make_cylinder(3, 12).locate(b3d.Location((x, 15, -3)))
+    return panel
+
+
+def test_a_part_that_names_no_machine_is_routed_exactly_as_before(gcode, tmp_path):
+    """The guarantee the whole machine split rests on.
+
+    `_orient` is the identity for the default `-Z` and the CNC emitter is the
+    old body verbatim, so a part that never heard of machines produces the same
+    bytes it always produced. Asserted here as "declaring the default changes
+    nothing", which is the same claim from the other side.
+    """
+    _, without = _route(gcode, tmp_path, _panel_with_hole())
+    _, with_default = _route(gcode, tmp_path, _panel_with_hole(), machine="cnc", direction_vector=[0.0, 0.0, -1.0])
+    assert without == with_default
+
+
+def test_a_machine_it_does_not_know_is_refused_with_the_set(gcode, tmp_path):
+    assert "cnc" in _refusal(gcode, tmp_path, machine="waterjet")
+
+
+def test_a_laser_cuts_through_in_one_pass_and_never_moves_in_z(gcode, tmp_path):
+    """Three things at once, because they are one fact about the machine.
+
+    A beam has no depth of cut, so there is no stepping; it has no spindle, so
+    there is no `M3 S<rpm>` at the top and no `M5` at the bottom; and it never
+    plunges, so no `G1 Z` appears anywhere.
+    """
+    result, text = _route(gcode, tmp_path, _panel_with_hole(), machine="laser", kerf=0.2, power=60)
+    assert result["stats"]["machine"] == "laser"
+    assert result["stats"]["passes"] == 1
+    assert "G1 Z" not in text
+    # The beam is gated around each contour instead.
+    assert "M3 S60" in text
+    assert text.count("M3 S60") == text.count("M5")
+
+
+def test_a_laser_offsets_by_half_the_kerf(gcode, tmp_path):
+    """What makes the part come out at its nominal size.
+
+    The beam removes a kerf-wide stripe centred on the path, so the path runs
+    half a kerf outside the part -- the same geometry a profile uses, with the
+    beam's half-width in place of the cutter's radius.
+    """
+    _, text = _route(gcode, tmp_path, machine="laser", kerf=0.4)
+    xs = [x for x, _ in _cuts(text)]
+    # The panel is 40 wide from x=0, so the path runs from -0.2 to 40.2.
+    assert min(xs) == pytest.approx(-0.2, abs=1e-6)
+    assert max(xs) == pytest.approx(40.2, abs=1e-6)
+
+
+def test_a_laser_needs_no_cutter_diameter(gcode, tmp_path):
+    """The one parameter a router cannot run without, and a laser does not have."""
+    request = dict(JOB)
+    del request["tool"]
+    request.update({"machine": "laser", "kerf": 0.1, "wrapped": _panel().wrapped})
+    result = gcode.process(str(tmp_path / "route.nc"), request)
+    assert result["success"] is True, result.get("exception")
+
+
+def test_a_drill_goes_to_each_hole_and_makes_no_cutting_moves(gcode, tmp_path):
+    """A drill does not follow a path, so there is nothing to cut along."""
+    result, text = _route(gcode, tmp_path, _drilled_panel(), machine="drilling", tool=6.0)
+    assert result["stats"]["machine"] == "drilling"
+    assert result["stats"]["holes"] == 2
+    assert result["stats"]["cut_length"] == pytest.approx(0.0)
+    # Two centres, each rapid'ed to.
+    assert "G0 X10.000 Y15.000" in text
+    assert "G0 X30.000 Y15.000" in text
+
+
+def test_a_drill_with_nothing_round_to_make_is_refused(gcode, tmp_path):
+    assert "no round hole" in _refusal(gcode, tmp_path, _panel(), machine="drilling")
+
+
+def test_pecking_breaks_the_plunge_into_steps(gcode, tmp_path):
+    """Each step comes back out to the top of the hole, which clears the swarf."""
+    _, once = _route(gcode, tmp_path, _drilled_panel(), machine="drilling", tool=6.0)
+    _, pecked = _route(gcode, tmp_path, _drilled_panel(), machine="drilling", tool=6.0, peck=2.0)
+    assert pecked.count("G1 Z") > once.count("G1 Z")
+
+
+def test_a_drill_that_is_not_the_size_of_the_hole_is_said_out_loud(gcode, tmp_path):
+    """A 5 mm drill does not make a 6 mm hole, and the file cannot say so."""
+    result, _ = _route(gcode, tmp_path, _drilled_panel(), machine="drilling", tool=5.0)
+    assert any("not the diameter of the drill" in warning for warning in result["warnings"])
+
+
+def test_the_machine_axis_turns_the_part_into_the_machines_frame(gcode, tmp_path):
+    """A part cut from the side is the same solid fixtured differently.
+
+    Its holes run along X, so a drill working down the Z axis has nothing to
+    make and one working along X has two.
+    """
+    panel = _panel()
+    for y in (10, 20):
+        panel -= b3d.Solid.make_cylinder(3, 60).locate(b3d.Location((-10, y, 3), (0, 90, 0)))
+
+    assert "no round hole" in _refusal(gcode, tmp_path, panel, machine="drilling", tool=6.0)
+    result, _ = _route(gcode, tmp_path, panel, machine="drilling", tool=6.0, direction_vector=[1.0, 0.0, 0.0])
+    assert result["stats"]["holes"] == 2
+
+
+def test_a_route_is_the_same_bytes_whichever_machine_wrote_it_twice(gcode, tmp_path):
+    """Byte stability is what makes a route something a repository can hold."""
+    for machine, extra in (("laser", {"kerf": 0.2}), ("drilling", {"tool": 6.0})):
+        shape = _panel_with_hole() if machine == "laser" else _drilled_panel()
+        _, first = _route(gcode, tmp_path, shape, machine=machine, **extra)
+        _, second = _route(gcode, tmp_path, shape, machine=machine, **extra)
+        assert first == second, machine
