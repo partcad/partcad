@@ -138,6 +138,14 @@ class SketchFactoryAlias(SketchFactory):
             return wrapped
 
     def get_final_config(self):
+        """The declaration this reference resolves to.
+
+        The source's, whole. The part and assembly references resolve one thing
+        of their own on the way through - the purchasing record, which a
+        reference may restate (see 'PartFactoryAlias.get_final_config') - and
+        there is deliberately no counterpart here: the schema gives 'vendor' and
+        'sku' to parts and assemblies alone, so a sketch has nothing to restate.
+        """
         source = self.ctx._get_sketch(self.source)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")

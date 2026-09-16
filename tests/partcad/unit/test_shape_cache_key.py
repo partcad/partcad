@@ -92,3 +92,17 @@ def test_properties_are_outputs_and_do_not_move_the_key():
     """A part that gains a material has not become a different shape."""
     base = {"name": "part", "type": "step", "path": "a.step"}
     assert _key(base) == _key({**base, "properties": {"material": "steel"}})
+
+
+def test_where_a_part_is_bought_does_not_move_the_key():
+    """All three of the purchasing record, not two of them.
+
+    A bag of 25 is how the same geometry is boxed for sale, so it belongs here
+    beside the vendor and the SKU it was written for. 'count_per_sku' was the
+    one of the three left out, which made declaring a pack size rebuild a part
+    for a number nothing but a bill of materials ever reads.
+    """
+    base = {"name": "part", "type": "step", "path": "a.step"}
+    assert _key(base) == _key({**base, "vendor": "gobilda", "sku": "2803-0004-0002", "count_per_sku": 25})
+    # And two pack sizes of one part are one shape, however they are sold.
+    assert _key({**base, "count_per_sku": 25}) == _key({**base, "count_per_sku": 100})

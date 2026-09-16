@@ -2326,6 +2326,29 @@ pack sizes, declare one part per (vendor, SKU) pair, for example using
       sku: "2803-0004-0002"
       count_per_sku: 25  # sold in bags of 25
 
+    # The same nut, ordered from somewhere else. What it is stays where it is
+    # declared; only what it is bought as is restated here.
+    nut_m4_0_7mm_from_mcmaster:
+      type: alias
+      source: nut_m4_0_7mm
+      vendor: mcmaster
+      sku: "90592A090"
+      count_per_sku: 100
+
+What an object is bought as is the one thing an ``alias`` or an ``enrich`` may
+state of its own: everything else it reports -- where the file is, what it is
+built with, which parameter values it has -- belongs to the declaration it
+resolves to. A reference that names a ``vendor`` or an ``sku`` replaces the
+whole record, ``count_per_sku`` included, because a pack size written for one
+SKU says nothing about another one; an absent ``count_per_sku`` therefore reads
+as ``1``, the same as it would on a part declared outright. A reference that
+names neither is ordering the same thing, so the record stands -- and a
+``count_per_sku`` on its own corrects how many of that same SKU arrive in one.
+
+This travels down a chain: an alias of an alias, and an enrich of an enrich,
+report what the reference in the middle declared rather than only what is at
+the end of the chain.
+
 .. _assemblies:
 
 ==========
