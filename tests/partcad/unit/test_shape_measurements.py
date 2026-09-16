@@ -265,6 +265,37 @@ def test_it_is_read_back_without_pulling_the_geometry(ctx, sandbox):
     assert asyncio.run(second._reported_async(ctx))["Layers"] == STATED["Layers"]
 
 
+def test_it_survives_a_run_with_nowhere_to_cache_it(ctx, sandbox):
+    """'cache: false', or every tier switched off, is not "the file said nothing".
+
+    The envelope's metadata is stripped by 'apply_metadata' and lost again by
+    the wrapper that applies 'offset'/'scale', so the object has to keep what it
+    learnt. Without that, 'pc info' on an uncacheable STEP part reports the file
+    as stating nothing at all.
+    """
+    shape = _ImportedShape()
+    shape.cacheable = False
+    asyncio.run(shape.get_wrapped(ctx))
+
+    # Nothing was written: a miss comes back as the key with no value under it.
+    cached, _ = asyncio.run(ctx.cache_shapes.read_async(shape.hash, [metadata_key("part")]))
+    assert cached.get(metadata_key("part")) is None
+
+    assert asyncio.run(shape.get_cached_metadata_async(ctx)) == STATED
+    assert asyncio.run(shape._reported_async(ctx))["Layers"] == STATED["Layers"]
+
+
+def test_an_alias_answers_with_what_its_source_learnt(ctx, sandbox):
+    """A reference shares its source's cache entry, and its side data with it."""
+    source = _ImportedShape()
+    asyncio.run(source.get_wrapped(ctx))
+
+    alias = _ImportedShape(metadata=None, name="alias")
+    alias.take_side_data_from(source)
+
+    assert asyncio.run(alias.get_cached_metadata_async(ctx)) == STATED
+
+
 def test_a_shape_whose_type_reads_no_file_states_nothing(ctx, sandbox):
     """No entry is written, and a missing one is not a reason to build again."""
     shape = _ImportedShape(metadata=None, name="silent")

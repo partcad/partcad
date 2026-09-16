@@ -259,6 +259,31 @@ def test_a_semicolon_inside_a_string_does_not_end_the_record(tmp_path):
     assert read["Properties"][0]["metadata"] == {"angle": "90"}
 
 
+def test_a_comment_delimiter_inside_a_string_opens_no_comment(tmp_path):
+    """A property whose value mentions a comment is a value, not a hole.
+
+    The comments have to come out before the records are matched, and a scan
+    that did not know it was inside a string would take the middle out of this
+    one.
+    """
+    path = _write(
+        tmp_path,
+        PRODUCT + _property(40, "note", 4, ["DESCRIPTIVE_REPRESENTATION_ITEM('how','use /* draft */ dimensions')"]),
+    )
+
+    assert step_metadata.read(path)["Properties"][0]["metadata"] == {"how": "use /* draft */ dimensions"}
+
+
+def test_the_data_keyword_inside_a_string_does_not_split_the_file(tmp_path):
+    """A header that states 'DATA;' would otherwise cut itself in half."""
+    header = "HEADER;\nFILE_NAME('DATA;','2026-09-16T10:00:00',(''),(''),'','','');\nENDSEC;\n"
+    path = _write(tmp_path, PRODUCT, header=header)
+    read = step_metadata.read(path)
+
+    assert read["File"] == {"name": "DATA;", "timestamp": "2026-09-16T10:00:00"}
+    assert [p["name"] for p in read["Products"]] == ["bracket"]
+
+
 def test_a_comment_where_a_record_would_be(tmp_path):
     """Part 21 allows a comment anywhere, and what is inside one means nothing."""
     path = _write(

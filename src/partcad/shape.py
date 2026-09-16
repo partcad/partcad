@@ -255,6 +255,10 @@ class Shape(ShapeConfiguration):
         # Memory cache
         self._wrapped = None
         self._bounding_box = None
+        # What the file this shape was imported from stated, learnt while
+        # building and kept for the runs that have nowhere to cache it (see
+        # 'get_cached_metadata_async').
+        self._file_metadata = None
 
         # Set by the factory (see ShapeFactory.prepare_async): everything that has
         # to happen before this shape's cache key means anything - 'fileFrom'
@@ -549,6 +553,21 @@ class Shape(ShapeConfiguration):
             if self.components:
                 self.components = [self._component_to_envelope(c) for c in self.components]
 
+            # What the wrapper that read the file put on the envelope beside the
+            # BREP (see 'shape_envelope.KEY_METADATA'), taken off here and not
+            # later, because two things below drop it: 'offset'/'scale' go
+            # through a wrapper that decodes the envelope and encodes a fresh
+            # one, and 'apply_metadata' replaces the outer layer outright.
+            #
+            # Kept on the object as well as cached. The cache entry is what
+            # answers for a shape materialized later, but a shape with 'cache:
+            # false', one that does not own its entry, and a run with every tier
+            # switched off all reach here with the file read and nothing to
+            # store it in - and 'pc info' should still say what the file said.
+            stated = shape.get(shape_envelope.KEY_METADATA) if isinstance(shape, dict) else None
+            if isinstance(stated, dict) and stated:
+                self._file_metadata = stated
+
             # TODO(clairbee): apply 'offset' and 'scale' during instantiation and
             #                 apply to both 'wrapped' and 'components'
             # 'offset'/'scale' are applied in a sandbox (see transform.py) so
@@ -560,11 +579,6 @@ class Shape(ShapeConfiguration):
                     shape = await transform.offset(ctx, shape, self.config["offset"])
                 if "scale" in self.config:
                     shape = await transform.scale(ctx, shape, self.config["scale"])
-
-            # What the wrapper that read the file put on the envelope beside
-            # the BREP, taken off before the outer layer is replaced below
-            # (see 'shape_envelope.KEY_METADATA').
-            stated = shape.get(shape_envelope.KEY_METADATA) if isinstance(shape, dict) else None
 
             # Whatever produced the envelope - a factory, a wrapper, a
             # transform - the outer layer around it is this shape's own. It
@@ -700,6 +714,9 @@ class Shape(ShapeConfiguration):
         """
         for attribute in self.CACHED_SIDE_DATA.values():
             setattr(self, attribute, copy.copy(getattr(source, attribute, None)))
+        # ...and what the file the source was read from stated, which is the
+        # same thing learnt the same way and kept somewhere else.
+        self._file_metadata = copy.copy(getattr(source, "_file_metadata", None))
 
     async def get_cache_value(self, ctx, shape):
         """The value handed to the shape cache under 'self.kind'.
@@ -2540,7 +2557,14 @@ class Shape(ShapeConfiguration):
         None for a shape whose type reads no file, for one built before any of
         this existed, and for a file that stated nothing - all three mean the
         same thing to a reader and none of them is a reason to build again.
+
+        What this object learnt while building comes first, and is the answer
+        for a run that had nowhere to cache it: 'cache: false', a shape that does
+        not own its entry, every tier switched off. The cache entry is what
+        answers on every run after the one that built it.
         """
+        if self._file_metadata:
+            return self._file_metadata
         if not ctx or await self.get_cache_key_async() is None:
             return None
         key = metadata_key(self.kind)

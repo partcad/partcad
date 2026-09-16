@@ -79,11 +79,10 @@ def read(path: str) -> dict:
     verbatim and never translates one format's vocabulary into another's.
     """
     with open(path, "r", encoding="utf-8", errors="replace") as f:
-        text = f.read()
+        text = _without_comments(f.read())
 
-    # Comments mean nothing and may hold anything shaped like a record.
-    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
-    head, _, body = text.partition("DATA;")
+    cut = _outside_strings(text, "DATA;")
+    head, body = (text, "") if cut < 0 else (text[:cut], text[cut + len("DATA;") :])
 
     sections = (
         ("File", _header(head)),
@@ -92,6 +91,60 @@ def read(path: str) -> dict:
         ("Properties", _properties(body)),
     )
     return {name: value for name, value in sections if value}
+
+
+def _without_comments(text: str) -> str:
+    """'text' with its Part 21 comments taken out, string-aware.
+
+    A '/*' inside a quoted string opens nothing, so this walks the strings
+    rather than looking only for the delimiters: a property whose value reads
+    "use /* draft */ dimensions" is a value, not a value with a hole in it.
+    """
+    if "/*" not in text:
+        return text
+
+    kept = []
+    start = 0
+    i = 0
+    while i < len(text):
+        if text[i] == "'":
+            match = _STRING.match(text, i)
+            if match is None:
+                break
+            i = match.end()
+            continue
+        if text.startswith("/*", i):
+            kept.append(text[start:i])
+            end = text.find("*/", i + 2)
+            if end < 0:
+                # Unterminated, so the rest of the file is inside it.
+                return "".join(kept)
+            start = i = end + 2
+            continue
+        i += 1
+    kept.append(text[start:])
+    return "".join(kept)
+
+
+def _outside_strings(text: str, needle: str) -> int:
+    """Where 'needle' first occurs outside a quoted string, or -1.
+
+    'DATA;' is what this is asked for, and a header that states it - a file
+    named 'DATA;' is silly but legal - would otherwise split the file in the
+    middle of the very section being read.
+    """
+    i = 0
+    while i < len(text):
+        if text[i] == "'":
+            match = _STRING.match(text, i)
+            if match is None:
+                return -1
+            i = match.end()
+            continue
+        if text.startswith(needle, i):
+            return i
+        i += 1
+    return -1
 
 
 def _records(body: str, entity: str):
@@ -302,7 +355,7 @@ def _properties(body: str) -> list:
         r"#(\d+)\s*=\s*\(\s*REPRESENTATION_ITEM\s*\(\s*(" + _STRING.pattern + r")\s*\)"
         r".*?MEASURE_WITH_UNIT\s*\(\s*([^,]*?)\s*,",
         body,
-        re.S,
+        re.DOTALL,
     ):
         key = _text(match.group(2))
         if key:

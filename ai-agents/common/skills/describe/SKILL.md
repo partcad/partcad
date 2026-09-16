@@ -40,8 +40,12 @@ instead of storing it.
 the numbers this description is anchored on:
 
 ```sh
-pc --no-ansi info <name> 2>&1 | grep -A 3 -E 'BoundingBox|Volume|Solids'   # add -a / -s for an assembly or a sketch
+pc --no-ansi info <name> 2>&1   # add -a / -s for an assembly or a sketch
 ```
+
+Read all of it. The measurements are the first thing to look for, but the
+sections below are what the design says about itself, and a filter narrow
+enough to catch `BoundingBox` would cut them off.
 
 - **`BoundingBox`** — `min`, `max` and `size` in millimetres. `size` is the
   overall envelope of the design: state it, and give every other dimension in
