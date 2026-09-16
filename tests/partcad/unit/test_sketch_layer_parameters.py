@@ -167,19 +167,23 @@ def test_a_reference_outranks_the_declared_default(tmp_path):
     assert _layers(ctx.get_sketch("//test:bends;include=BEND_UP"), "include") == ["BEND_UP"]
 
 
-def test_a_name_carries_more_than_one_list(tmp_path):
-    """Two parameters, each a list, in one name - the parsing that needs care.
+def test_a_list_in_a_name_reaches_the_factory_as_a_list(tmp_path):
+    """A name holding a comma-separated value, read back as one value.
 
-    A real drawing is read with one of the two filters: the importer takes
-    'include' or 'exclude' and refuses both, which is CadQuery's rule and not
-    this layer's. What is checked here is that a name holding two
-    comma-separated values is read back as two values and not as five
+    The parsing itself is asserted directly below, on
+    'parse_parameterized_name'. What this adds is the whole path: the list
+    survives being written into a name, parsed out of it, and resolved by the
+    factory, and arrives as two layer names rather than as one string or as two
     parameters.
+
+    One filter, because the two are mutually exclusive -- see
+    'test_a_reference_setting_both_filters_is_refused', which is where the pair
+    is asked about.
     """
     ctx = _package(tmp_path, {"bends": {"type": "dxf"}})
-    sketch = ctx.get_sketch("//test:bends;exclude=NOTES,DIMS,include=BEND_UP,BEND_DOWN")
-    assert _layers(sketch, "include") == ["BEND_UP", "BEND_DOWN"]
+    sketch = ctx.get_sketch("//test:bends;exclude=NOTES,DIMS")
     assert _layers(sketch, "exclude") == ["NOTES", "DIMS"]
+    assert SketchFactoryDxf.filters(sketch.config) == ([], ["NOTES", "DIMS"])
 
 
 def test_a_list_value_survives_being_written_as_a_name():
@@ -524,3 +528,66 @@ def test_the_schema_refuses_both_filters_on_one_sketch():
     """
     with pytest.raises(jsonschema.exceptions.ValidationError):
         _validate({"sketches": {"a": {"type": "dxf", "include": ["BEND_UP"], "exclude": ["OUTLINE"]}}})
+
+
+def test_a_reference_setting_both_filters_is_refused(tmp_path):
+    """The rule the schema states, on the path the schema never sees.
+
+    The schema holds it for the two *fields*. It cannot hold it for the two
+    *parameters*: a reference setting them -- 'panel;include=BEND_UP,exclude=OUTLINE'
+    -- is a name, resolved long after the declaration it points at was read,
+    and it is `pc lint` that applies the schema rather than the loader.
+
+    It has to be caught somewhere, because nothing downstream does: CadQuery's
+    importer raises on both, the wire fallback is reached *by* the face import
+    raising, and 'dxf_metadata.is_included' applies both filters rather than
+    objecting to them. Uncaught, a reference asking for both would fall back,
+    be filtered twice, and come back as a perfectly ordinary sketch under a
+    warning about geometry.
+    """
+    with pytest.raises(Exception, match="only one of them says which layers"):
+        SketchFactoryDxf.filters(
+            {
+                "name": "panel",
+                "type": "dxf",
+                "parameters": {
+                    "include": {"default": "BEND_UP"},
+                    "exclude": {"default": "OUTLINE"},
+                },
+            }
+        )
+
+    # And end to end, where the reference is what puts both there.
+    ctx = _package(tmp_path, {"panel": {"type": "dxf", "include": ["BEND_UP"]}})
+    assert ctx.get_project("//test").get_sketch("panel;include=BEND_UP,exclude=OUTLINE") is None
+
+
+def test_a_reference_may_choose_the_other_filter(tmp_path):
+    """Choosing to select by exclusion is choosing, not conflicting.
+
+    A package declares 'include:' and a reference asks for 'exclude=' instead.
+    The reference is deciding how the drawing is read, which is the whole
+    reason the parameter exists -- so the declared 'include' goes rather than
+    being handed to the importer alongside it, which would refuse a reference
+    that said one reasonable thing.
+    """
+    ctx = _package(tmp_path, {"panel": {"type": "dxf", "include": ["BEND_UP"]}})
+    project = ctx.get_project("//test")
+
+    # The declaration on its own is unchanged.
+    assert SketchFactoryDxf.filters(project.get_sketch("panel").config) == (["BEND_UP"], [])
+
+    # A reference choosing the other filter replaces it rather than adding to it.
+    chosen = project.get_sketch("panel;exclude=OUTLINE")
+    assert chosen is not None
+    assert SketchFactoryDxf.filters(chosen.config) == ([], ["OUTLINE"])
+
+
+def test_a_declaration_writing_both_filters_is_refused(tmp_path):
+    """The schema says so, but `pc lint` is what runs the schema.
+
+    A package loaded without ever being linted would otherwise carry the
+    combination all the way to the importer.
+    """
+    ctx = _package(tmp_path, {"panel": {"type": "dxf", "include": ["BEND_UP"], "exclude": ["OUTLINE"]}})
+    assert ctx.get_project("//test").get_sketch("panel") is None

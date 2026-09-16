@@ -59,8 +59,7 @@ class SketchFactoryDxf(SketchFactoryPython):
             if "tolerance" in config:
                 self.tolerance = float(config["tolerance"])
 
-            self.include = self.layers(config, "include")
-            self.exclude = self.layers(config, "exclude")
+            self.include, self.exclude = self.filters(config)
 
             self._create(config)
 
@@ -74,6 +73,9 @@ class SketchFactoryDxf(SketchFactoryPython):
         name is what a reference can set. The parameter wins where it is
         declared, because whoever refers to a sketch is the outer of the two -
         which is how every other parameter override already behaves.
+
+        One filter at a time; 'filters()' is what resolves the pair, and what a
+        caller wanting to know which layers a sketch reads should ask.
         """
         declared = object_type_parameter(
             config,
@@ -85,6 +87,63 @@ class SketchFactoryDxf(SketchFactoryPython):
         if declared:
             return declared
         return as_list(config.get(name))
+
+    @classmethod
+    def filters(cls, config) -> tuple:
+        """Which layers the sketch reads and which it skips, as one decision.
+
+        The two are resolved together because they *are* one decision -- which
+        layers of the drawing this sketch is -- and CadQuery's importer refuses
+        to be given both ('_importDXF': "you may specify either 'include' or
+        'exclude' but not both").
+
+        So a reference setting either of them is making that decision afresh,
+        and the declaration's *other* filter is not carried into it: a package
+        writing 'include: [OUTLINE]' and a reference asking for 'exclude=NOTES'
+        means the reference's exclusion. Carrying the declared 'include' in
+        beside it would hand the importer both and refuse a reference that said
+        one perfectly reasonable thing -- and it would break the rule the
+        parameter exists for, which is that whoever refers to a sketch decides
+        how it is read.
+
+        Both at once is refused, whichever way they arrive. The schema states
+        the rule for the two fields, but it is `pc lint` that applies it rather
+        than the loader, and a reference's parameters never go near it at all.
+        """
+        from_reference = {}
+        for name in ("include", "exclude"):
+            declared = object_type_parameter(
+                config,
+                cls.ACCEPTED_OBJECT_TYPE_PARAMETERS,
+                name,
+                "sketch",
+                config.get("name", ""),
+            )
+            if declared:
+                from_reference[name] = as_list(declared)
+
+        if len(from_reference) == 2:
+            raise Exception(
+                "The sketch '%s' is referred to with both 'include' (%s) and 'exclude' (%s); "
+                "only one of them says which layers of the drawing to read"
+                % (
+                    config.get("name", ""),
+                    ",".join(from_reference["include"]),
+                    ",".join(from_reference["exclude"]),
+                )
+            )
+        if from_reference:
+            # The reference decided it, so the declaration's other filter goes.
+            return from_reference.get("include", []), from_reference.get("exclude", [])
+
+        include, exclude = as_list(config.get("include")), as_list(config.get("exclude"))
+        if include and exclude:
+            raise Exception(
+                "The sketch '%s' declares both 'include' (%s) and 'exclude' (%s); "
+                "only one of them says which layers of the drawing to read"
+                % (config.get("name", ""), ",".join(include), ",".join(exclude))
+            )
+        return include, exclude
 
     async def instantiate(self, sketch):
         await super().instantiate(sketch)

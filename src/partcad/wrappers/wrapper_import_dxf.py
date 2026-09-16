@@ -71,6 +71,15 @@ def as_wires(request):
 
 def process(path, request):
     warning = None
+    if request["include"] and request["exclude"]:
+        # Refused before the import rather than after it, because the import
+        # refuses it too and the 'except' below cannot tell that refusal from a
+        # drawing that would not close: it would fall back to the wires, apply
+        # both filters, and hand back a sketch for a request CadQuery rejected.
+        # 'SketchFactoryDxf' catches this first and says which sketch; this is
+        # the wrapper being right on its own, since the fallback's rule is
+        # meant to be the importer's.
+        raise ValueError("you may specify either 'include' or 'exclude' but not both")
     try:
         try:
             workplane = cq.importers.importDXF(

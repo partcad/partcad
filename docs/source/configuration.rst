@@ -815,7 +815,12 @@ with its own cache entry -- so the two do not have to be rendered twice or kept
 in step by hand.
 
 Layer names are matched **case-insensitively**, and only one of ``include`` and
-``exclude`` may be given -- both are the DXF importer's own rules.
+``exclude`` may be given -- both are the DXF importer's own rules. A reference
+setting either of them is deciding how the drawing is read, so it replaces what
+the declaration said rather than being added to it: a sketch declaring
+``include: [OUTLINE]`` and referred to as ``panel;exclude=NOTES`` is read by
+that exclusion alone. A reference that sets *both* is refused, the way a
+declaration writing both is.
 
 A drawing whose selected layers do not close into faces is imported as the
 **wires** it draws. That is what a drawing of bend lines is: two parallel lines
