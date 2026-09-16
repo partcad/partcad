@@ -215,7 +215,7 @@ section, because it is a property of the object rather than of whoever cuts it
       path: panel.py
       cam:
         operation: profile    # around the outside of it, and inside every hole
-        tool: 6 mm            # the cutter's diameter
+        diameter: 6 mm            # the cutter's diameter
         depth_per_pass: 3 mm
         feed: 2400 mm/min
         speed: 18000 rpm

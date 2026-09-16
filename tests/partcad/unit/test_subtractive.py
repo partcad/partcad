@@ -40,14 +40,14 @@ import partcad as pc
 from partcad.part_config import PartConfiguration
 from partcad.part_config_manufacturing import (
     MACHINE_CNC,
-    MACHINE_DRILLING,
+    MACHINE_DRILL,
     MACHINE_LASER,
     METHOD_SUBTRACTIVE,
     PartConfigManufacturing,
     tool_axis_vector,
 )
 from partcad.test import manufacturability_analysis
-from partcad.test.manufacturability_drilling import ManufacturabilityDrillingTest
+from partcad.test.manufacturability_drill import ManufacturabilityDrillTest
 from partcad.test.manufacturability_laser import ManufacturabilityLaserTest
 from partcad.test.manufacturability_subtractive import ManufacturabilitySubtractiveTest
 
@@ -83,16 +83,37 @@ def test_a_part_that_names_no_machine_is_a_cnc_part():
 
 def test_naming_a_machine_selects_it():
     assert _manufacturing(laser={"kerf": 0.2}).machine.kind == MACHINE_LASER
-    assert _manufacturing(drilling={}).machine.kind == MACHINE_DRILLING
+    assert _manufacturing(drill={}).machine.kind == MACHINE_DRILL
     assert _manufacturing(cnc={}).machine.kind == MACHINE_CNC
     # Named, so the machine-specific checks apply.
     assert _manufacturing(laser={}).machine.declared is True
 
 
-def test_a_part_is_made_on_one_machine():
-    data = _manufacturing(laser={}, drilling={})
+def test_a_part_may_be_made_on_several_machines():
+    """They are alternatives -- ways it could be made, not stages it goes through.
+
+    A part that really is machined in stages is a chain of parts, each naming
+    the previous one as its 'source', because each stage has its own geometry
+    and its own stock. So naming two here is a claim to be checked twice rather
+    than a contradiction to refuse.
+    """
+    data = _manufacturing(laser={}, drill={})
+    assert data.machine_choices() == ["drill", "laser"]
+    assert data.machine_error is None
+    # ...and no default, because nobody else can pick between them.
     assert data.machine is None
-    assert "one machine" in data.machine_error
+    assert data.machine_named("laser").kind == MACHINE_LASER
+
+
+def test_a_machine_takes_only_the_job_keys_it_reads():
+    """The whole point of scoping the job by machine rather than one flat list.
+
+    A laser has no cutter, so a diameter written in its own subsection can only
+    be a mistake -- and one flat namespace had no way to say so.
+    """
+    assert "does not take diameter" in _manufacturing(laser={"diameter": 6}).machine_error
+    # The shared scope is the other reading: "for whichever machine reads one".
+    assert _manufacturing(diameter=6, laser={"kerf": 0.2}).job == {"diameter": 6}
 
 
 def test_a_machine_takes_only_its_own_options():
@@ -277,14 +298,14 @@ PACKAGE = {
             "type": "stl",
             "manufacturing": {"method": "subtractive", "source": "stock", "laser": {"toolAxis": "+Z"}},
         },
-        "drilled": {"type": "stl", "manufacturing": {"method": "subtractive", "source": "stock", "drilling": {}}},
+        "drilled": {"type": "stl", "manufacturing": {"method": "subtractive", "source": "stock", "drill": {}}},
         "drilled_from_other": {
             "type": "stl",
-            "manufacturing": {"method": "subtractive", "source": "plain", "drilling": {}},
+            "manufacturing": {"method": "subtractive", "source": "plain", "drill": {}},
         },
         "confused": {
             "type": "stl",
-            "manufacturing": {"method": "subtractive", "source": "stock", "laser": {}, "drilling": {}},
+            "manufacturing": {"method": "subtractive", "source": "stock", "laser": {}, "drill": {}},
         },
     },
 }
@@ -393,12 +414,17 @@ def test_a_sliver_outside_the_stock_is_within_tolerance(ctx, monkeypatch):
     assert _verdict(check, ctx, "from_stock") is check.TEST_PASSED
 
 
-def test_a_declaration_naming_two_machines_is_reported(ctx, monkeypatch, caplog):
-    _arrange(monkeypatch)
-    check = ManufacturabilitySubtractiveTest()
-    with caplog.at_level("ERROR"):
+def test_a_part_offering_two_machines_is_checked_for_both(ctx, monkeypatch):
+    """Each alternative is a claim, so each is answered.
+
+    'confused' offers a laser and a drill. The measurement given here is a part
+    whose walls are neither round nor along the axis, which neither machine can
+    make -- so both checks fail it, and a part is not let through because one of
+    the two ways it claims to be makeable happens not to be asked about.
+    """
+    _arrange(monkeypatch, cut={"walls": 4, "caps": 2, "other": 3, "round": 0, "offenders": []})
+    for check in (ManufacturabilityLaserTest(), ManufacturabilityDrillTest()):
         assert _verdict(check, ctx, "confused") is check.TEST_FAILED
-    assert "one machine" in caplog.text
 
 
 def test_the_laser_check_only_applies_to_a_part_that_named_a_laser(ctx, monkeypatch):
@@ -430,7 +456,7 @@ def test_a_laser_takes_a_part_whose_every_wall_is_along_the_beam(ctx, monkeypatc
 
 def test_a_drill_refuses_a_wall_that_is_not_round(ctx, monkeypatch, caplog):
     _arrange(monkeypatch, cut={"walls": 6, "caps": 2, "other": 0, "round": 2, "offenders": []})
-    check = ManufacturabilityDrillingTest()
+    check = ManufacturabilityDrillTest()
     with caplog.at_level("ERROR"):
         assert _verdict(check, ctx, "drilled") is check.TEST_FAILED
     assert "round holes" in caplog.text
@@ -438,7 +464,7 @@ def test_a_drill_refuses_a_wall_that_is_not_round(ctx, monkeypatch, caplog):
 
 def test_a_drill_takes_a_part_whose_every_wall_is_round(ctx, monkeypatch):
     _arrange(monkeypatch, cut={"walls": 2, "caps": 4, "other": 0, "round": 2, "offenders": []})
-    check = ManufacturabilityDrillingTest()
+    check = ManufacturabilityDrillTest()
     assert _verdict(check, ctx, "drilled") is check.TEST_PASSED
 
 
@@ -465,7 +491,7 @@ def test_the_drilling_cache_key_follows_the_stock_it_judges(ctx):
     because 'manufacturing:' is one of the keys it leaves out. Without the
     stock in the key a re-dimensioned blank leaves the old verdict standing.
     """
-    check = ManufacturabilityDrillingTest()
+    check = ManufacturabilityDrillTest()
     assert check.judges_removed is True
     one = asyncio.run(check.cache_key_suffix(ctx, ctx.get_part("//test:drilled")))
     other = asyncio.run(check.cache_key_suffix(ctx, ctx.get_part("//test:drilled_from_other")))

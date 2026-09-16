@@ -86,18 +86,24 @@ class ManufacturabilityMachineTest(Test):
         """The machine this part named, where it is the one this check is about.
 
         None for everything else, which is the ordinary case: a sketch, an
-        assembly, a part made some other way, a subtractive part on a different
-        machine, and -- deliberately -- a subtractive part that named no machine
-        at all. See the module docstring for why the default CNC does not count
-        as having named one.
+        assembly, a part made some other way, a subtractive part whose
+        alternatives do not include this machine, and -- deliberately -- a
+        subtractive part that named no machine at all. See the module docstring
+        for why the default CNC does not count as having named one.
+
+        A part may name several machines, and they are alternatives rather than
+        a sequence: each is a claim that the part could be made that way. So
+        every one of them is checked, and a part offering both a laser and a
+        router has to be truly laser-cuttable to pass -- which is the claim it
+        made.
         """
         if not isinstance(shape, Part):
             return None
         manufacturing_data = PartConfiguration.get_manufacturing_data(shape)
         if manufacturing_data.method != METHOD_SUBTRACTIVE:
             return None
-        machine = manufacturing_data.machine
-        if machine is None or not machine.declared or machine.kind != self.machine:
+        machine = manufacturing_data.machine_named(self.machine)
+        if machine is None or not machine.declared:
             return None
         return machine
 

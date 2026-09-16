@@ -21,20 +21,20 @@ responsible for the holes; that is the declaration to write, and
 `manufacturability-subtractive` is what checks it.
 """
 
-from ..part_config_manufacturing import MACHINE_DRILLING
+from ..part_config_manufacturing import MACHINE_DRILL
 from .manufacturability_machine import ManufacturabilityMachineTest
 
 
-class ManufacturabilityDrillingTest(ManufacturabilityMachineTest):
-    machine = MACHINE_DRILLING
+class ManufacturabilityDrillTest(ManufacturabilityMachineTest):
+    machine = MACHINE_DRILL
     # A drill is responsible for the holes and nothing else, so it is judged on
     # what it took out rather than on the part that is left. See
     # 'ManufacturabilityMachineTest.judges_removed'.
     judges_removed = True
 
     def __init__(self) -> None:
-        """Registered under the name '-f manufacturability-drilling' selects."""
-        super().__init__("manufacturability-drilling")
+        """Registered under the name '-f manufacturability-drill' selects."""
+        super().__init__("manufacturability-drill")
 
     def judge(self, shape, machine, measured, judged_removed: bool = False) -> bool:
         """Every wall is along the axis, and every one of them is round."""

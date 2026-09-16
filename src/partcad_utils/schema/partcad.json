@@ -12,31 +12,57 @@
       },
       "additionalProperties": false
     },
-    "subtractive-machine": {
-      "description": "The machine a 'subtractive' part is cut on. Naming one selects it; naming none means a CNC router or mill, which is what every 'subtractive' part meant before machines could be named. Only one may be named, and the machine decides which 'pc test' checks apply and what 'pc cam' writes.",
+    "machine-axis": {
+      "description": "The axis the tool, the beam or the drill approaches along, as one of '+X', '-X', '+Y', '-Y', '+Z' or '-Z'. Defaults to '-Z': the part sits on the bed and the tool comes down to it. It is what 'every cut wall is vertical' is measured against, and what 'pc cam' orients the part by. Not to be confused with 'direction:', which says which way round a contour is cut.",
+      "type": "string",
+      "enum": ["+X", "-X", "+Y", "-Y", "+Z", "-Z", "+x", "-x", "+y", "-y", "+z", "-z", "X", "Y", "Z", "x", "y", "z"]
+    },
+    "subtractive-cnc": {
+      "description": "A CNC router or mill, and everything it needs to cut this part. It follows any 2.5D path, so it is the machine that can make anything the other two can -- and what a 'subtractive' part that names no machine at all is taken to mean.",
       "type": "object",
       "properties": {
-        "toolAxis": {
-          "description": "The axis the tool, the beam or the drill approaches along, as one of '+X', '-X', '+Y', '-Y', '+Z' or '-Z'. Defaults to '-Z': the part sits on the bed and the tool comes down to it. It is what 'every cut wall is vertical' is measured against, and what 'pc cam' orients the part by. Not to be confused with 'cam: direction:', which says which way round a contour is cut.",
-          "type": "string",
-          "enum": ["+X", "-X", "+Y", "-Y", "+Z", "-Z", "+x", "-x", "+y", "-y", "+z", "-z", "X", "Y", "Z", "x", "y", "z"]
-        }
+        "toolAxis": { "$ref": "#/definitions/machine-axis" },
+        "diameter": { "$ref": "#/definitions/cam-length", "description": "The cutter's diameter. Every contour is offset by half of it, so the part comes out at its nominal size" },
+        "depth": { "$ref": "#/definitions/cam-length", "description": "How far down from the top of the object the cut goes. An object that does not say is cut through" },
+        "depth_per_pass": { "$ref": "#/definitions/cam-length", "description": "How deep each pass goes" },
+        "safe_z": { "$ref": "#/definitions/cam-length", "description": "The height rapid moves are made at, above the top of the object" },
+        "feed": { "$ref": "#/definitions/cam-feed", "description": "The cutting feed rate; a bare number is millimeters per minute" },
+        "plunge": { "$ref": "#/definitions/cam-feed", "description": "The feed rate of a downward move; the cutting feed where there is none" },
+        "speed": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }], "description": "The spindle speed in rpm. A spindle nobody commands is one the operator set, so an object that says nothing gets no M3/M5" },
+        "stepover": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "How far each successive ring of a pocket moves in, as a fraction of the cutter's diameter" },
+        "operation": { "type": "string", "enum": ["profile", "pocket", "engrave"], "description": "Which side of the outline the cutter runs on: around the outside of it ('profile'), clearing what is inside it ('pocket'), or along it ('engrave')" },
+        "direction": { "type": "string", "enum": ["climb", "conventional"], "description": "Which way round each contour is cut. 'climb' puts the material on the cutter's right, which leaves the better edge; 'conventional' reverses every path" },
+        "implementation": { "type": "string", "minLength": 1, "description": "Who produces this route, as '<package>:<file type>'" },
+        "desc": { "type": "string", "maxLength": 1000 }
       },
       "additionalProperties": false
     },
     "subtractive-laser": {
-      "description": "A laser cutter, whose beam does not tilt: every wall it makes is parallel to its own axis, which 'manufacturability-laser' checks.",
+      "description": "A laser cutter, whose beam does not tilt: every wall it makes is parallel to its own axis, which 'manufacturability-laser' checks. It takes no 'diameter:' -- a beam has no cutter, and 'kerf:' is what it removes -- and no 'depth:' or 'safe_z:', because it cuts through in one pass and never moves in Z.",
       "type": "object",
       "properties": {
-        "toolAxis": {
-          "description": "The axis the beam fires along. See 'subtractive-machine'.",
-          "type": "string",
-          "enum": ["+X", "-X", "+Y", "-Y", "+Z", "-Z", "+x", "-x", "+y", "-y", "+z", "-z", "X", "Y", "Z", "x", "y", "z"]
-        },
-        "kerf": {
-          "description": "How wide a cut the beam itself removes, as a length ('0.2', '0.2 mm', '0.008 in'). A property of the machine and the material rather than of the job, which is why it is declared here and not under 'cam:'. 'pc cam' offsets every contour by half of it so the part comes out at its nominal size.",
-          "oneOf": [ { "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 } ]
-        }
+        "toolAxis": { "$ref": "#/definitions/machine-axis" },
+        "kerf": { "$ref": "#/definitions/cam-length", "description": "How wide a cut the beam itself removes, as a length ('0.2', '0.2 mm', '0.008 in'). A property of the machine and the material rather than of the job. 'pc cam' offsets every contour by half of it so the part comes out at its nominal size" },
+        "power": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }], "description": "How hard the beam fires, as the S-word its controller reads. A beam nobody commands is gated with a bare M3, which is what a machine whose power is set at the panel wants" },
+        "feed": { "$ref": "#/definitions/cam-feed", "description": "How fast the head travels; a bare number is millimeters per minute" },
+        "direction": { "type": "string", "enum": ["climb", "conventional"], "description": "Which way round each contour is cut" },
+        "implementation": { "type": "string", "minLength": 1, "description": "Who produces this route, as '<package>:<file type>'" },
+        "desc": { "type": "string", "maxLength": 1000 }
+      },
+      "additionalProperties": false
+    },
+    "subtractive-drill": {
+      "description": "A drilling machine. It goes in and comes out, so the only thing it makes is a round hole along its own axis -- which 'manufacturability-drill' checks, of the material taken away rather than of the part left behind. It takes no 'depth:': how deep each hole goes is the geometry's to say, not the job's.",
+      "type": "object",
+      "properties": {
+        "toolAxis": { "$ref": "#/definitions/machine-axis" },
+        "diameter": { "$ref": "#/definitions/cam-length", "description": "The drill in the spindle. Checked against the holes it is sent to, so a bit that is not the size of them is reported rather than run" },
+        "safe_z": { "$ref": "#/definitions/cam-length", "description": "The height rapid moves are made at, above the top of the object" },
+        "peck": { "$ref": "#/definitions/cam-length", "description": "How deep the drill goes before it comes back out to clear the swarf. A hole with none is drilled in one go" },
+        "plunge": { "$ref": "#/definitions/cam-feed", "description": "The feed rate going in" },
+        "speed": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }], "description": "The spindle speed in rpm" },
+        "implementation": { "type": "string", "minLength": 1, "description": "Who produces this route, as '<package>:<file type>'" },
+        "desc": { "type": "string", "maxLength": 1000 }
       },
       "additionalProperties": false
     },
@@ -1193,20 +1219,27 @@
                       "minLength": 1,
                       "description": "The sketch that says how the process is carried out. Required by 'sheet_metal', where it holds one line per bend, each annotated with its angle, its inner radius and its direction. A reference to a sketch, which may carry parameters -- 'bends;include=BEND_UP,BEND_DOWN' reads the bend layers of a drawing that also holds the outline."
                     },
-                    "cnc": { "$ref": "#/definitions/subtractive-machine" },
-                    "drilling": { "$ref": "#/definitions/subtractive-machine" },
-                    "laser": { "$ref": "#/definitions/subtractive-laser" }
+                    "cnc": { "$ref": "#/definitions/subtractive-cnc" },
+                    "drill": { "$ref": "#/definitions/subtractive-drill" },
+                    "laser": { "$ref": "#/definitions/subtractive-laser" },
+                    "diameter": { "$ref": "#/definitions/cam-length", "description": "Shared by every machine named below that reads one: the cutter on a router, the bit in a drill. A laser has none and ignores it" },
+                    "depth": { "$ref": "#/definitions/cam-length", "description": "How far down from the top of the object the cut goes. An object that does not say is cut through" },
+                    "depth_per_pass": { "$ref": "#/definitions/cam-length", "description": "How deep each pass goes" },
+                    "safe_z": { "$ref": "#/definitions/cam-length", "description": "The height rapid moves are made at, above the top of the object" },
+                    "peck": { "$ref": "#/definitions/cam-length", "description": "How deep a drill goes before it comes back out to clear the swarf" },
+                    "kerf": { "$ref": "#/definitions/cam-length", "description": "How wide a cut a beam removes. Only a laser has one" },
+                    "feed": { "$ref": "#/definitions/cam-feed", "description": "The cutting feed rate; a bare number is millimeters per minute" },
+                    "plunge": { "$ref": "#/definitions/cam-feed", "description": "The feed rate of a downward move; the cutting feed where there is none" },
+                    "speed": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }], "description": "The spindle speed in rpm" },
+                    "stepover": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "How far each successive ring of a pocket moves in, as a fraction of the cutter's diameter" },
+                    "power": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }], "description": "How hard a laser fires. Only a laser has one" },
+                    "operation": { "type": "string", "enum": ["profile", "pocket", "engrave"], "description": "Which side of the outline the cutter runs on" },
+                    "direction": { "type": "string", "enum": ["climb", "conventional"], "description": "Which way round each contour is cut" },
+                    "implementation": { "type": "string", "minLength": 1, "description": "Who produces this route, as '<package>:<file type>'" }
                   },
                   "required":["method"],
                   "additionalProperties": false,
                   "allOf": [
-                    {
-                      "not": { "anyOf": [
-                        { "required": ["cnc", "drilling"] },
-                        { "required": ["cnc", "laser"] },
-                        { "required": ["drilling", "laser"] }
-                      ] }
-                    },
                     {
                       "if": { "properties": { "method": { "const": "subtractive" } }, "required": ["method"] },
                       "then": { "required": ["source"] }

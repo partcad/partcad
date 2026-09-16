@@ -2263,7 +2263,7 @@ part that named that machine**:
   the beam or a face across it. A chamfer, a taper, a dome or a fillet rolling
   over an edge is none of those, and there is no orientation of a beam that
   produces a surface at an angle to itself.
-- ``manufacturability-drilling`` -- the same, and every wall is round. This one
+- ``manufacturability-drill`` -- the same, and every wall is round. This one
   is asked of what the machine **took away** rather than of the part, where the
   part names a ``source``: a drilled plate's straight sides came with the stock,
   and asking the part's own walls would fail every plate for having them.
@@ -4329,7 +4329,7 @@ rather than two different things:
       # The object: what is true of this object, and nothing else.
       cam:
         operation: profile
-        tool: 6 mm
+        diameter: 6 mm
 
 ``//builtin/cam`` is underneath both. So a package cutting twenty parts from one
 sheet sets the tool once, and the one part that needs a smaller cutter says so

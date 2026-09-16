@@ -262,7 +262,7 @@ at all).
   which belongs to which. None of them is CNC: the machine that can make anything the other two can, and what
   every `subtractive` part written before this meant. `MACHINE_KEYS` is closed for the reason `cam.KEYS` is, and the axis is `toolAxis:` rather than `direction:` because an object's `cam:` section already has a `direction` meaning climb or conventional, and both reach one implementation in one request.
 
-  The two limited machines get a check each (`manufacturability-laser`, `manufacturability-drilling`), and each
+  The two limited machines get a check each (`manufacturability-laser`, `manufacturability-drill`), and each
   applies **only to a part that named it** -- a package that has said `method: subtractive` for a year must not
   start failing a check about a laser it does not own, which is what `MachineConfig.declared` is for. Both rest
   on `wrapper_manufacturability.wall_alignment`, which classifies every face against the machine's axis by

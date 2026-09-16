@@ -449,7 +449,7 @@ Object commands
           path: panel.py
           cam:
             operation: profile    # around the outside of it
-            tool: 6 mm            # the cutter's diameter
+            diameter: 6 mm            # the cutter's diameter
             depth_per_pass: 3 mm
             feed: 2400 mm/min
             speed: 18000 rpm

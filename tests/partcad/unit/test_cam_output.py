@@ -117,17 +117,24 @@ def test_the_default_implementation_is_the_builtin_one(ctx):
 PACKAGE = textwrap.dedent("""
     name: //cam-test
     parts:
+      stock:
+        type: step
+        path: panel.step
       panel:
         type: step
         path: panel.step
-        cam:
-          tool: 6 mm
+        manufacturing:
+          method: subtractive
+          source: stock
+          diameter: 6 mm
           depth: 18 mm
       lid:
         type: step
         path: panel.step
-        cam:
-          tool: 3 mm
+        manufacturing:
+          method: subtractive
+          source: stock
+          diameter: 3 mm
           implementation: //cam-test:router
       plain:
         type: step
@@ -135,45 +142,43 @@ PACKAGE = textwrap.dedent("""
       broken:
         type: step
         path: panel.step
-        cam:
-          tool: six millimetres
-      stock:
-        type: step
-        path: panel.step
-      burned:
-        type: step
-        path: panel.step
-        cam:
-          tool: 6 mm
-          depth: 18 mm
         manufacturing:
           method: subtractive
           source: stock
+          diameter: six millimetres
+      burned:
+        type: step
+        path: panel.step
+        manufacturing:
+          method: subtractive
+          source: stock
+          diameter: 6 mm
+          depth: 18 mm
           laser:
             kerf: 0.15
       burned_upward:
         type: step
         path: panel.step
-        cam:
-          tool: 6 mm
-          depth: 18 mm
         manufacturing:
           method: subtractive
           source: stock
+          diameter: 6 mm
+          depth: 18 mm
           laser:
             kerf: 0.15
             toolAxis: +Z
       two_machines:
         type: step
         path: panel.step
-        cam:
-          tool: 6 mm
-          depth: 18 mm
         manufacturing:
           method: subtractive
           source: stock
-          laser: {}
-          drilling: {}
+          diameter: 6 mm
+          depth: 18 mm
+          laser:
+            kerf: 0.15
+          drill:
+            peck: 3
     cam:
       gcode:
         feed: 2400
@@ -351,7 +356,7 @@ def test_an_object_with_no_section_says_so_by_name(package):
     part = _part(package, "plain")
     with pytest.raises(cam.CamConfigError) as raised:
         asyncio.run(part.route_async(package))
-    assert "//cam-test:plain declares no 'cam:' section" in str(raised.value)
+    assert "//cam-test:plain says nothing about being cut" in str(raised.value)
 
 
 # --------------------------------------------------------------------------- #
@@ -386,7 +391,7 @@ def test_the_check_is_selected_by_its_own_name():
     assert sorted(name for name in names if name.startswith("manufacturability")) == [
         "manufacturability",
         "manufacturability-additive",
-        "manufacturability-drilling",
+        "manufacturability-drill",
         "manufacturability-forming",
         "manufacturability-laser",
         "manufacturability-sheet-metal",
@@ -513,8 +518,11 @@ def test_a_part_that_named_no_machine_puts_nothing_in_the_request(package):
 
     An implementation handed no machine writes what it has always written, so a
     part with no `manufacturing:` section at all is untouched by any of this.
+    A `subtractive` part that named no machine is a different case: it gets the
+    undeclared CNC, which is what it always meant, and `_orient` is the identity
+    for its `-Z` so the bytes are the same either way.
     """
-    assert _part(package, "panel")._route_machine_data() == {}
+    assert _part(package, "plain")._route_machine_data() == {}
 
 
 def test_the_machine_a_part_named_reaches_the_request(package):
@@ -525,17 +533,35 @@ def test_the_machine_a_part_named_reaches_the_request(package):
     assert data["kerf"] == 0.15
 
 
-def test_a_part_naming_two_machines_is_refused_rather_than_routed_as_cnc(package):
-    """The failure this refusal exists for, and it is not a hypothetical.
+def test_a_part_naming_two_machines_is_asked_which_one(package):
+    """They are alternatives, so there is a choice and nobody else can make it.
 
-    `_read_machine` records such a declaration in `machine_error` and returns
-    no machine -- which is the same answer it gives for a part that named none,
-    and a part that named none routes as CNC. Silently handing a router program
-    to somebody who wrote `laser:` is the one outcome worse than refusing.
+    Defaulting would be the one outcome worse than refusing: a program for a
+    machine the user did not pick, written in the format of one they did not
+    ask for. The sentence names what there is to choose between.
     """
     with pytest.raises(cam.CamConfigError) as raised:
-        _part(package, "two_machines")._route_machine_data()
-    assert "one machine" in str(raised.value)
+        cam.config_of(_part(package, "two_machines"))
+    message = str(raised.value)
+    assert "chosen" in message
+    assert "laser" in message and "drill" in message
+
+
+def test_either_alternative_can_be_asked_for_by_name(package):
+    """Each names its own machine and carries its own parameters."""
+    part = _part(package, "two_machines")
+    assert part._route_machine_data("laser")["machine"] == "laser"
+    assert part._route_machine_data("laser")["kerf"] == pytest.approx(0.15)
+    assert part._route_machine_data("drill")["machine"] == "drill"
+    # The shared scope reaches both; the machine's own scope is its alone.
+    assert cam.config_of(part, "drill").values["peck"] == pytest.approx(3.0)
+    assert cam.config_of(part, "laser").values["diameter"] == pytest.approx(6.0)
+
+
+def test_a_machine_the_part_does_not_name_is_refused(package):
+    with pytest.raises(cam.CamConfigError) as raised:
+        cam.config_of(_part(package, "two_machines"), "cnc")
+    assert "not made on a 'cnc'" in str(raised.value)
 
 
 def test_the_refusal_is_named_with_the_object_it_is_about(package, monkeypatch):
@@ -546,21 +572,11 @@ def test_the_refusal_is_named_with_the_object_it_is_about(package, monkeypatch):
     """
     part = _part(package, "two_machines")
 
-    # The refusal is raised where the machine is read, which is after the shape
-    # is built -- so the shape is stubbed rather than built from the empty
-    # `panel.step` this package carries. What is under test is the naming, not
-    # the STEP reader.
-    async def _wrapped(self, ctx):
-        """Stand in for the STEP reader, which this package has no file for."""
-        return {"name": self.name, "label": self.name, "brep": b"CASCADE Topology V3"}
-
-    monkeypatch.setattr(pc.shape.Shape, "get_wrapped", _wrapped)
-
     with pytest.raises(cam.CamConfigError) as raised:
         asyncio.run(part.route_async(package))
     message = str(raised.value)
     assert message.startswith("//cam-test:two_machines: ")
-    assert "one machine" in message
+    assert "chosen" in message
 
 
 def test_the_machine_is_in_the_cam_checks_cache_key(package):

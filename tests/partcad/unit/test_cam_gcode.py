@@ -91,7 +91,7 @@ def gcode():
 # Individual tests override one key at a time, so what a test is about is the
 # key it names rather than the eight it repeats.
 JOB = {
-    "tool": 3.0,
+    "diameter": 3.0,
     "feed": 600.0,
     "plunge": 200.0,
     "safe_z": 5.0,
@@ -198,7 +198,7 @@ def test_a_move_to_where_the_tool_already_is_is_dropped(gcode):
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("key,word", [("tool", "tool"), ("feed", "feed"), ("safe_z", "safe_z")])
+@pytest.mark.parametrize("key,word", [("diameter", "diameter"), ("feed", "feed"), ("safe_z", "safe_z")])
 def test_a_parameter_it_cannot_guess_is_refused_by_name(gcode, tmp_path, key, word):
     """And the refusal says where to set it, which is the whole of the remedy."""
     message = _refusal(gcode, tmp_path, **{key: None})
@@ -210,7 +210,7 @@ def test_the_cutter_diameter_has_no_default(gcode, tmp_path):
     """The one parameter where a default would be a wrong answer rather than a
     conservative one: a route cut against a diameter nobody chose is wrong by
     exactly the amount nobody noticed."""
-    assert "tool" in _refusal(gcode, tmp_path, tool=None)
+    assert "diameter" in _refusal(gcode, tmp_path, diameter=None)
 
 
 @pytest.mark.parametrize(
@@ -481,7 +481,7 @@ def test_a_laser_offsets_by_half_the_kerf(gcode, tmp_path):
 def test_a_laser_needs_no_cutter_diameter(gcode, tmp_path):
     """The one parameter a router cannot run without, and a laser does not have."""
     request = dict(JOB)
-    del request["tool"]
+    del request["diameter"]
     request.update({"machine": "laser", "kerf": 0.1, "wrapped": _panel().wrapped})
     result = gcode.process(str(tmp_path / "route.nc"), request)
     assert result["success"] is True, result.get("exception")
@@ -489,7 +489,7 @@ def test_a_laser_needs_no_cutter_diameter(gcode, tmp_path):
 
 def test_a_drill_goes_to_each_hole_and_makes_no_cutting_moves(gcode, tmp_path):
     """A drill does not follow a path, so there is nothing to cut along."""
-    result, text = _route(gcode, tmp_path, _drilled_panel(), machine="drilling", tool=6.0)
+    result, text = _route(gcode, tmp_path, _drilled_panel(), machine="drill", diameter=6.0)
     assert result["stats"]["machine"] == "drilling"
     assert result["stats"]["holes"] == 2
     assert result["stats"]["cut_length"] == pytest.approx(0.0)
@@ -500,7 +500,7 @@ def test_a_drill_goes_to_each_hole_and_makes_no_cutting_moves(gcode, tmp_path):
 
 def test_a_drill_with_nothing_round_to_make_is_refused(gcode, tmp_path):
     """A refusal rather than an empty program: a drill with no hole is a mistake."""
-    assert "no round hole" in _refusal(gcode, tmp_path, _panel(), machine="drilling")
+    assert "no round hole" in _refusal(gcode, tmp_path, _panel(), machine="drill")
 
 
 def test_a_round_plate_is_not_one_enormous_hole(gcode, tmp_path):
@@ -512,7 +512,7 @@ def test_a_round_plate_is_not_one_enormous_hole(gcode, tmp_path):
     program that breaks the drill.
     """
     plate = b3d.Solid.make_cylinder(20, 6)
-    assert "no round hole" in _refusal(gcode, tmp_path, plate, machine="drilling")
+    assert "no round hole" in _refusal(gcode, tmp_path, plate, machine="drill")
 
 
 def test_a_boss_standing_on_a_panel_is_not_drilled(gcode, tmp_path):
@@ -526,7 +526,7 @@ def test_a_boss_standing_on_a_panel_is_not_drilled(gcode, tmp_path):
     panel -= b3d.Solid.make_cylinder(3, 12).locate(b3d.Location((10, 15, -3)))
     panel += b3d.Solid.make_cylinder(4, 5).locate(b3d.Location((30, 15, 6)))
 
-    result, text = _route(gcode, tmp_path, panel, machine="drilling", tool=6.0)
+    result, text = _route(gcode, tmp_path, panel, machine="drill", diameter=6.0)
     assert result["stats"]["holes"] == 1
     assert "G0 X10.000 Y15.000" in text
     assert "X30.000" not in text
@@ -534,14 +534,14 @@ def test_a_boss_standing_on_a_panel_is_not_drilled(gcode, tmp_path):
 
 def test_pecking_breaks_the_plunge_into_steps(gcode, tmp_path):
     """Each step comes back out to the top of the hole, which clears the swarf."""
-    _, once = _route(gcode, tmp_path, _drilled_panel(), machine="drilling", tool=6.0)
-    _, pecked = _route(gcode, tmp_path, _drilled_panel(), machine="drilling", tool=6.0, peck=2.0)
+    _, once = _route(gcode, tmp_path, _drilled_panel(), machine="drill", diameter=6.0)
+    _, pecked = _route(gcode, tmp_path, _drilled_panel(), machine="drill", diameter=6.0, peck=2.0)
     assert pecked.count("G1 Z") > once.count("G1 Z")
 
 
 def test_a_drill_that_is_not_the_size_of_the_hole_is_said_out_loud(gcode, tmp_path):
     """A 5 mm drill does not make a 6 mm hole, and the file cannot say so."""
-    result, _ = _route(gcode, tmp_path, _drilled_panel(), machine="drilling", tool=5.0)
+    result, _ = _route(gcode, tmp_path, _drilled_panel(), machine="drill", diameter=5.0)
     assert any("not the diameter of the drill" in warning for warning in result["warnings"])
 
 
@@ -555,14 +555,14 @@ def test_the_tool_axis_turns_the_part_into_the_machines_frame(gcode, tmp_path):
     for y in (10, 20):
         panel -= b3d.Solid.make_cylinder(3, 60).locate(b3d.Location((-10, y, 3), (0, 90, 0)))
 
-    assert "no round hole" in _refusal(gcode, tmp_path, panel, machine="drilling", tool=6.0)
-    result, _ = _route(gcode, tmp_path, panel, machine="drilling", tool=6.0, tool_axis_vector=[1.0, 0.0, 0.0])
+    assert "no round hole" in _refusal(gcode, tmp_path, panel, machine="drill", diameter=6.0)
+    result, _ = _route(gcode, tmp_path, panel, machine="drill", diameter=6.0, tool_axis_vector=[1.0, 0.0, 0.0])
     assert result["stats"]["holes"] == 2
 
 
 def test_a_route_is_the_same_bytes_whichever_machine_wrote_it_twice(gcode, tmp_path):
     """Byte stability is what makes a route something a repository can hold."""
-    for machine, extra in (("laser", {"kerf": 0.2}), ("drilling", {"tool": 6.0})):
+    for machine, extra in (("laser", {"kerf": 0.2}), ("drill", {"diameter": 6.0})):
         shape = _panel_with_hole() if machine == "laser" else _drilled_panel()
         _, first = _route(gcode, tmp_path, shape, machine=machine, **extra)
         _, second = _route(gcode, tmp_path, shape, machine=machine, **extra)

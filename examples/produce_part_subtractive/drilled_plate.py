@@ -3,7 +3,7 @@
 # A drill goes in and comes out, so round holes along one axis are the only
 # thing it makes. The outline of this part is the outline of the stock, because
 # the drill did not cut it - and that is why `source:` matters here more than
-# anywhere else: it is what tells `manufacturability-drilling` to judge the
+# anywhere else: it is what tells `manufacturability-drill` to judge the
 # material taken away rather than the part left behind, so the plate's straight
 # sides are not counted as something a drill was supposed to produce.
 

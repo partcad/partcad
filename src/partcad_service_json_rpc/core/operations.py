@@ -2291,8 +2291,9 @@ def cae_analyze(session, params):
 def cam_route(session, params):
     """Produce the route files of the objects that declare one, and say where they went.
 
-    Backs ``pc cam``. An object declares what is to be cut in its own ``cam:``
-    section (see ``partcad.cam``), and the implementation is whatever
+    Backs ``pc cam``. An object declares what is to be cut in its own
+    ``manufacturing:`` section (see ``partcad.cam``), and the implementation is
+    whatever
     ``implementation`` -- or, failing that, the object's own ``implementation:``,
     or the caller's ``camImplementation`` -- names, as ``<package>:<file type>``.
 
@@ -2322,6 +2323,11 @@ def cam_route(session, params):
     package = package_obj.name
 
     object_name = params.get("object")
+    # Which of an object's machines to write for. None lets each object take the
+    # one it names, and refuses the ones that name several -- the sentence says
+    # which they are, because a default nobody picked is a program for the wrong
+    # machine.
+    machine = params.get("machine")
     if params.get("recursive"):
         packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
     else:
@@ -2336,6 +2342,7 @@ def cam_route(session, params):
                 object_name,
                 sketch=bool(params.get("sketch")),
                 implementation=params.get("implementation") or None,
+                machine=machine,
                 output_dir=params.get("output_dir") or None,
             )
         )
@@ -2370,7 +2377,7 @@ def cam_route(session, params):
     }
 
 
-async def _route_packages_async(pc, ctx, packages, object_name, sketch, implementation, output_dir):
+async def _route_packages_async(pc, ctx, packages, object_name, sketch, implementation, output_dir, machine=None):
     """Route the objects of every package named, reporting each as it lands.
 
     Bounded the way a recursive render is bounded, and for the same reason: what
@@ -2441,7 +2448,7 @@ async def _route_packages_async(pc, ctx, packages, object_name, sketch, implemen
 
     async def route(shape):
         async with at_once:
-            return await shape.route_async(ctx, implementation=implementation, output_dir=output_dir)
+            return await shape.route_async(ctx, implementation=implementation, output_dir=output_dir, machine=machine)
 
     produced = await asyncio.gather(*[route(shape) for shape in shapes], return_exceptions=True)
 

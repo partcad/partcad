@@ -80,13 +80,28 @@ SUBTRACTIVE_REQUIRED = ("source",)
 # anything the other two can, so it is the answer that is never wrong, and it is
 # what every `subtractive` part written before this existed meant.
 MACHINE_CNC = "cnc"
-MACHINE_DRILLING = "drilling"
+MACHINE_DRILL = "drill"
 MACHINE_LASER = "laser"
-MACHINES = (MACHINE_CNC, MACHINE_DRILLING, MACHINE_LASER)
+MACHINES = (MACHINE_CNC, MACHINE_DRILL, MACHINE_LASER)
 
-# What each machine's subsection may hold. A closed set for the reason
-# 'partcad.cam.KEYS' is one: a key that is not in it is a typo, and a typo that
-# is passed through is an option nobody set being silently defaulted.
+# What each machine's subsection may hold, in two halves.
+#
+# 'MACHINE_OWN_KEYS' are the machine itself: the axis it works along, and for a
+# laser the kerf its beam removes. 'MACHINE_JOB_KEYS' are the cut -- the keys
+# that used to live in a separate 'cam:' section, and which now sit beside the
+# machine they are about.
+#
+# The job half is not the same for the three, and that is the point of naming it
+# per machine rather than keeping one flat list. It is derived from what each
+# emitter in '//builtin/cam' actually reads, so a key a machine has no use for
+# is a key that machine refuses:
+#
+# * a laser has no 'diameter:' -- it has no cutter, and 'kerf:' is what it
+#   removes -- and no 'depth:' or 'safe_z:', because it cuts through in one pass
+#   and never moves in Z. One flat namespace could not say any of that, and a
+#   cutter diameter written on a laser was a value silently ignored.
+# * a drill has no 'depth:' (how deep each hole goes is the geometry's to say),
+#   no 'feed:' (it never travels while cutting) and no 'operation:'.
 #
 # 'toolAxis' is common to all three, because it is the one thing every
 # subtractive machine has: the axis the tool, the beam or the drill approaches
@@ -95,26 +110,60 @@ MACHINES = (MACHINE_CNC, MACHINE_DRILLING, MACHINE_LASER)
 # is a different part to the machine even though it is the same solid.
 #
 # Not 'direction', which is the one word this configuration cannot afford to
-# reuse: an object's 'cam:' section already has a 'direction' and it means
-# something else entirely (climb or conventional, which way round a contour is
-# cut). Both would reach one implementation in one request.
-MACHINE_KEYS: dict[str, tuple] = {
+# reuse: it already means climb or conventional, which way round a contour is
+# cut, and both would reach one implementation in one request.
+MACHINE_OWN_KEYS: dict[str, tuple] = {
     MACHINE_CNC: ("toolAxis",),
-    MACHINE_DRILLING: ("toolAxis",),
+    MACHINE_DRILL: ("toolAxis",),
     # 'kerf' is the width the beam itself removes. It belongs to the machine
-    # rather than to the route because it is a property of that machine and its
+    # rather than to the cut because it is a property of that machine and its
     # material, and because the check that the part fits its stock has to know
     # it: a part cut to its nominal outline comes off a laser half a kerf small
     # all round.
     MACHINE_LASER: ("toolAxis", "kerf"),
 }
 
-# The machine options that are lengths, and so are read the way every other
-# length in PartCAD is: a bare number is millimetres, and "0.008 in" is the same
-# kerf said differently. Parsed here rather than left to the implementation for
-# the reason 'partcad.cam.normalize_job' exists -- the spelling is PartCAD's to
-# understand at every layer, and the implementation's business is numbers.
-MACHINE_LENGTH_KEYS = ("kerf",)
+MACHINE_JOB_KEYS: dict[str, tuple] = {
+    MACHINE_CNC: (
+        "diameter",
+        "depth",
+        "depth_per_pass",
+        "safe_z",
+        "feed",
+        "plunge",
+        "speed",
+        "stepover",
+        "operation",
+        "direction",
+    ),
+    MACHINE_LASER: ("power", "feed", "direction"),
+    MACHINE_DRILL: ("diameter", "safe_z", "peck", "plunge", "speed"),
+}
+
+# Two keys every machine takes, because they are about the route rather than
+# about the cut: who writes it, and what it is.
+MACHINE_ROUTE_KEYS = ("implementation", "desc")
+
+
+def machine_keys(kind: str) -> tuple:
+    """Every key one machine's subsection may hold."""
+    return MACHINE_OWN_KEYS[kind] + MACHINE_JOB_KEYS[kind] + MACHINE_ROUTE_KEYS
+
+
+# What may be written directly under 'manufacturing:', shared by every machine
+# the part names. The union of the three job vocabularies, because the shared
+# scope is "for whichever machine reads it": a 'feed:' written here covers the
+# router and the laser and is simply not read by the drill.
+#
+# That is the difference between the two scopes, and it is deliberate. Writing
+# 'diameter:' here is legal and means "the cutter, wherever there is one";
+# writing it under 'laser:' is a mistake, because a laser has no cutter and
+# saying so in its own subsection can only be an error.
+SHARED_JOB_KEYS = tuple(pc_cam.KEYS)
+
+# What the section holds besides a job and a machine: what is being described
+# rather than how it is cut.
+_SECTION_KEYS = ("method", "source", "instructions")
 
 # The axis names a 'toolAxis:' may be written as, and the unit vector each
 # means. Written as a name rather than as three numbers because these are the
@@ -182,27 +231,43 @@ class MachineConfig:
         self.options = dict(config or {})
         self.tool_axis = str(self.options.pop("toolAxis", None) or DEFAULT_TOOL_AXIS)
         self.vector = tool_axis_vector(self.tool_axis)
-        for key in MACHINE_LENGTH_KEYS:
+        # Every value read the way PartCAD reads that kind of value, so "6",
+        # "6 mm" and "0.25 in" are one cutter. 'CamConfigError' is a
+        # 'ValueError', which is what the caller already catches to turn a bad
+        # number into a recorded message rather than a package that will not
+        # load.
+        for key, parse in pc_cam.value_parsers().items():
             if self.options.get(key) is not None:
-                # 'CamConfigError' is a 'ValueError', which is what the caller
-                # already catches to turn a bad axis into a recorded
-                # message rather than a package that will not load.
-                self.options[key] = pc_cam.parse_length(self.options[key], "'%s:'" % key)
+                self.options[key] = parse(self.options[key], "'%s: %s:'" % (kind, key))
 
     def get(self, key: str, default=None):
         """One machine option, or 'default' where the subsection did not say."""
         value = self.options.get(key)
         return default if value is None else value
 
+    def job_options(self) -> dict:
+        """What this subsection said about the *cut*, not about the machine.
+
+        Separated from `to_data` because the two sit at different heights in the
+        request. A job key is the part's own answer and an explicit
+        `route_async(feed=...)` outranks it; the machine's identity outranks
+        everything, because a route written for the wrong machine is the failure
+        that reaches the shop floor.
+        """
+        allowed = MACHINE_JOB_KEYS[self.kind] + MACHINE_ROUTE_KEYS
+        return {key: value for key, value in self.options.items() if key in allowed and value is not None}
+
     def to_data(self) -> dict:
         """This machine as the parameters an implementation is handed.
 
         The kind and the axis always, because every implementation needs to
-        know what it is writing for and which way is down; the rest as the part
-        wrote it.
+        know what it is writing for and which way is down, plus the machine's
+        own properties -- a laser's kerf. Not the job keys: those are
+        `job_options`, and they are merged further down.
         """
         data = {"machine": self.kind, "tool_axis": self.tool_axis, "tool_axis_vector": list(self.vector)}
-        data.update({key: value for key, value in self.options.items() if value is not None})
+        own = MACHINE_OWN_KEYS[self.kind]
+        data.update({key: value for key, value in self.options.items() if key in own and value is not None})
         return data
 
     def __str__(self) -> str:
@@ -239,12 +304,23 @@ class PartConfigManufacturing:
         self.source = manufacturing_config.get("source", None)
         self.instructions = manufacturing_config.get("instructions", None)
         self.machine_error: str | None = None
-        self.machine = self._read_machine(manufacturing_config)
+        # Every machine this part could be made on, by kind. Several is not a
+        # sequence: they are alternatives, and `pc cam` writes a program for the
+        # one that is chosen. A part that really is machined in stages is a
+        # chain of parts, each naming the previous one as its `source`, because
+        # each stage has its own geometry and its own stock.
+        self.machines: dict[str, MachineConfig] = {}
+        # What was written directly under `manufacturing:`, shared by all of
+        # them. Raw: the machine that reads a key is what parses it, so a key
+        # here is parsed once per machine it reaches rather than once for a
+        # machine nobody chose.
+        self.job: dict = {}
+        self._read_machines(manufacturing_config)
 
-    def _read_machine(self, manufacturing_config: dict) -> MachineConfig | None:
-        """Which machine this part is subtracted on, from the subsection naming it.
+    def _read_machines(self, manufacturing_config: dict) -> None:
+        """Which machines this part could be made on, and the job they share.
 
-        None for every method that is not 'subtractive': a machine is what takes
+        Nothing for a method that is not 'subtractive': a machine is what takes
         material away, and nothing else here does.
 
         A bad declaration is *recorded* rather than raised, the same way
@@ -254,41 +330,81 @@ class PartConfigManufacturing:
         check is what reports it, against the one part it belongs to.
         """
         if self.method != METHOD_SUBTRACTIVE:
-            return None
+            return
+
+        shared = {key: value for key, value in manufacturing_config.items() if key in SHARED_JOB_KEYS}
+        unknown = [
+            key
+            for key in manufacturing_config
+            if key not in SHARED_JOB_KEYS and key not in MACHINES and key not in _SECTION_KEYS
+        ]
+        if unknown:
+            self.machine_error = "'manufacturing:' does not take %s" % ", ".join(sorted(unknown))
+            return
+        self.job = shared
 
         named = [kind for kind in MACHINES if kind in manufacturing_config]
-        if len(named) > 1:
-            self.machine_error = "it is made on one machine, but names %s" % " and ".join(
-                "'%s:'" % kind for kind in named
-            )
-            return None
         if not named:
             # The answer that is never wrong, and what every 'subtractive' part
-            # written before machines existed meant.
-            return MachineConfig(MACHINE_CNC, None, declared=False)
+            # written before machines could be named meant: a router does
+            # anything the other two do.
+            machine = self._read_machine(MACHINE_CNC, None, declared=False)
+            if machine is not None:
+                self.machines[MACHINE_CNC] = machine
+            return
 
-        kind = named[0]
-        config = manufacturing_config.get(kind)
+        for kind in named:
+            machine = self._read_machine(kind, manufacturing_config.get(kind))
+            if machine is None:
+                # The first bad subsection is the one reported. A part with two
+                # mistakes in it has one to fix first, and naming both says less
+                # than naming one clearly.
+                self.machines = {}
+                return
+            self.machines[kind] = machine
+
+    def _read_machine(self, kind: str, config, declared: bool = True) -> MachineConfig | None:
+        """One machine subsection, checked against what that machine takes."""
+        allowed = machine_keys(kind)
         if config is not None and not isinstance(config, dict):
             self.machine_error = "'%s:' is not a section: %r" % (kind, config)
             return None
-        unknown = [key for key in (config or {}) if key not in MACHINE_KEYS[kind]]
+        unknown = [key for key in (config or {}) if key not in allowed]
         if unknown:
             self.machine_error = "'%s:' does not take %s; it takes %s" % (
                 kind,
                 ", ".join(sorted(unknown)),
-                ", ".join("'%s:'" % key for key in MACHINE_KEYS[kind]),
+                ", ".join("'%s:'" % key for key in allowed),
             )
             return None
         try:
-            return MachineConfig(kind, config)
+            return MachineConfig(kind, config, declared=declared)
         except ValueError as e:
-            # Both the axis and the lengths raise ValueError, and each already
-            # names the key it is about, so this adds the machine and nothing
-            # else. Naming a key here as well is how "'laser: toolAxis:'
-            # 'laser: kerf:' is not a length" gets written.
+            # Both the axis and the quantities raise ValueError, and each already
+            # names the key it is about, so this adds nothing but the machine.
             self.machine_error = "'%s:' %s" % (kind, e)
             return None
+
+    @property
+    def machine(self) -> MachineConfig | None:
+        """The machine to use when nobody chose one.
+
+        The single alternative where there is one, and None where the part named
+        several -- that is not a default anybody can pick on the part's behalf,
+        and 'pc cam' asks rather than guessing. A part that named none has the
+        undeclared CNC standing in, which is what 'machines' already holds.
+        """
+        if len(self.machines) == 1:
+            return next(iter(self.machines.values()))
+        return None
+
+    def machine_named(self, kind: str) -> MachineConfig | None:
+        """One of this part's alternatives by name, or None where it is not one."""
+        return self.machines.get(kind)
+
+    def machine_choices(self) -> list[str]:
+        """The machines this part says it could be made on, in a stable order."""
+        return [kind for kind in MACHINES if kind in self.machines]
 
     def missing_fields(self) -> list[str]:
         """What this method needs that the declaration does not state.

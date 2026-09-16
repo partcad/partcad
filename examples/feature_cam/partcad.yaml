@@ -50,7 +50,7 @@ parts:
       # an object that does not say is cut through, which for an 18 mm panel is
       # 18 mm in six 3 mm passes.
       operation: profile
-      tool: 6 mm
+      diameter: 6 mm
       speed: 18000 rpm
 
   tray_recess:
@@ -63,7 +63,7 @@ parts:
       # A bigger cutter, because this one is clearing an area rather than
       # following a line, and a shallower pass because it is buried in the
       # first ring of every level.
-      tool: 8 mm
+      diameter: 8 mm
       depth_per_pass: 2 mm
       # Each ring moves in by 40% of the cutter, which is what leaves no ridge
       # between passes with a cutter this size in a material this soft.
@@ -91,7 +91,7 @@ sketches:
       # nothing about where it goes -- which is what a V-bit or a drag knife
       # wants.
       operation: engrave
-      tool: 0.5 mm
+      diameter: 0.5 mm
       # Required here, and only here. A part has a thickness to be cut through
       # and a sketch does not, so how deep to score is something this object has
       # to answer.

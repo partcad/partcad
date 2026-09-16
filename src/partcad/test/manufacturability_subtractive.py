@@ -74,11 +74,17 @@ class ManufacturabilitySubtractiveTest(Test):
         if manufacturing_data.method != METHOD_SUBTRACTIVE:
             return ""
 
-        machine = manufacturing_data.machine
         declared = [
             await reference_key(ctx, shape, manufacturing_data.source, "part"),
-            "machine:%s" % (machine.kind if machine else manufacturing_data.machine_error or ""),
-            "toolAxis:%s" % (machine.tool_axis if machine else ""),
+            # Every alternative, because every one of them is a claim this check
+            # and its siblings answer for: deleting one of two machines has to
+            # re-run rather than keep the verdict the pair earned.
+            "machines:"
+            + ";".join(
+                "%s@%s" % (kind, manufacturing_data.machines[kind].tool_axis)
+                for kind in manufacturing_data.machine_choices()
+            ),
+            "error:%s" % (manufacturing_data.machine_error or ""),
         ]
         return ".subtractive=" + hashlib.sha256(";".join(declared).encode()).hexdigest()[:16]
 

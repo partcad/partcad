@@ -457,7 +457,7 @@ def _cnc(request, obj, units):
     if direction not in ("climb", "conventional"):
         raise Exception("'direction' is 'climb' or 'conventional', not %r" % request.get("direction"))
 
-    tool = _require(request, "tool", "tool")
+    tool = _require(request, "diameter", "diameter")
     radius = tool / 2.0
     feed = _require(request, "feed", "feed")
     plunge = float(request.get("plunge") or feed)
@@ -895,7 +895,7 @@ def _drilling(request, obj, units):
     and a route that quietly produced one would be found out at the bench.
     """
     tolerance = float(request.get("tolerance") or 0.01)
-    tool = _require(request, "tool", "tool")
+    tool = _require(request, "diameter", "diameter")
     plunge = _require(request, "plunge", "plunge")
     safe_clearance = _require(request, "safe_z", "safe_z")
     peck = request.get("peck")
@@ -987,7 +987,7 @@ def _drilling(request, obj, units):
 MACHINES = {
     "cnc": _cnc,
     "laser": _laser,
-    "drilling": _drilling,
+    "drill": _drilling,
 }
 
 

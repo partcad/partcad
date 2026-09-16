@@ -65,7 +65,26 @@ class CamTest(Test):
         """
         if not isinstance(shape, (Part, Sketch)):
             return None
-        return pc_cam.config_of(shape)
+        return pc_cam.config_of(shape, self._machines(shape)[0])
+
+    def _machines(self, shape) -> list:
+        """Which machines this object has to answer for, in a stable order.
+
+        A part may name several, and they are alternatives rather than stages:
+        each is a claim that it could be made that way, so each has to produce a
+        route or the claim is not one the package can stand behind. `[None]`
+        where there is nothing to choose between -- one machine, or none -- and
+        that is the case every object had before alternatives existed, so it
+        routes exactly as it did.
+        """
+        from ..part_config import PartConfiguration
+
+        try:
+            data = PartConfiguration.get_manufacturing_data(shape)
+        except Exception:  # pylint: disable=broad-except
+            return [None]
+        choices = data.machine_choices() if data is not None else []
+        return choices if len(choices) > 1 else [None]
 
     async def cache_key_suffix(self, ctx, shape) -> str:
         """What this test reads beyond the shape, folded into the cache key.
@@ -100,7 +119,8 @@ class CamTest(Test):
 
         parts = [json.dumps(config.to_data(), sort_keys=True)]
         try:
-            parts.append(json.dumps(shape._route_machine_data(), sort_keys=True))
+            for machine in self._machines(shape):
+                parts.append(json.dumps(shape._route_machine_data(machine), sort_keys=True))
         except pc_cam.CamConfigError as e:
             # The machine is named and unreadable, which is now a refusal to
             # route rather than a silent CNC fallback. Keyed like the malformed
@@ -185,7 +205,8 @@ class CamTest(Test):
         # nothing to say it came from a test -- see the module docstring.
         output_dir = tempfile.mkdtemp(prefix="partcad-cam-test-")
         try:
-            result = await shape.route_async(ctx, output_dir=output_dir)
+            for machine in self._machines(shape):
+                result = await shape.route_async(ctx, output_dir=output_dir, machine=machine)
         except pc_cam.CamConfigError as e:
             return self.failed(shape, "%s", e)
         except pc_runtime.SandboxUnavailable as e:

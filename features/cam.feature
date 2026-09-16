@@ -29,7 +29,7 @@ Feature: `pc cam` command
           path: panel.py
           cam:
             operation: profile
-            tool: 6 mm
+            diameter: 6 mm
             depth_per_pass: 6 mm
             feed: 1200 mm/min
             speed: 18000 rpm
@@ -132,7 +132,7 @@ Feature: `pc cam` command
           type: build123d
           path: panel.py
           cam:
-            tool: six millimetres
+            diameter: six millimetres
       """
     And a file named "panel.py" with content:
       """
@@ -159,7 +159,7 @@ Feature: `pc cam` command
           type: build123d
           path: panel.py
           cam:
-            tool: 6 mm
+            diameter: 6 mm
             toool: 3 mm
       """
     And a file named "panel.py" with content:
@@ -187,7 +187,7 @@ Feature: `pc cam` command
           type: build123d
           path: panel.py
           cam:
-            tool: 6 mm
+            diameter: 6 mm
             implementation: //nowhere:gcode
       """
     And a file named "panel.py" with content:
