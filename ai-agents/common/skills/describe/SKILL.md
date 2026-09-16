@@ -55,16 +55,17 @@ pc --no-ansi info <name> 2>&1 | grep -A 3 -E 'BoundingBox|Volume|Solids'   # add
 - A **sketch**, a shell or a wire has no volume, and `pc info` says so by
   leaving `Volume` out. It is flat, so its bounding box is its size.
 
-The rest of what `pc info` prints is worth a look too, and for a part read from
-a file it is where the design's own words are: a STEP file's `Products`,
-`Layers` and `Properties`, a DXF sketch's `Drawing`, `Layers` and
-`Annotations` — including the `angle`, `radius` and `direction` of a sheet
-metal bend. Anything stated there is the design's own and beats a reading off a
+The rest of what `pc info` prints is worth a look too, and for an object read
+from a file it is where the design's own words are: a STEP file's `File`,
+`Products`, `Layers` and `Properties`, a DXF sketch's `Drawing`, `Layers` and
+`Annotations` — including the `angle`, `radius` and `direction` of a sheet metal
+bend. Anything stated there is the design's own and beats a reading off a
 picture.
 
-The first run builds the object, so it is slow; every run after it is a cache
-hit. If it fails — no sandbox, a part that does not build — say so in the report
-and describe the shape from the views alone, without inventing a size.
+The first run builds and measures the object, so it is slow; every run after it
+is a cache hit. If it fails — no sandbox, a part that does not build — say so in
+the report and describe the shape from the views alone, without inventing a
+size.
 
 ## 3. Render three views
 

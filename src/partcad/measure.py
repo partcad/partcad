@@ -72,6 +72,19 @@ async def bbox(ctx, shape, frame: Location = None):
     return await _run(ctx, {"operation": "bbox", "shape": in_frame(shape, frame)})
 
 
+async def measurements(ctx, shape):
+    """How big 'shape' is and how much of it there is, in one sandbox trip.
+
+    ``{"bbox": [xmin, ymin, zmin, xmax, ymax, zmax] | None, "volume": float |
+    None, "solids": int}``, in the shape's own coordinates. 'volume' is None for
+    a shape holding no solid - a sketch, a shell, a wire.
+
+    One call rather than a box and a volume separately: what costs here is the
+    sandbox process, not the arithmetic inside it, and 'pc info' wants both.
+    """
+    return await _run(ctx, {"operation": "measurements", "shape": shape})
+
+
 async def extent_z(ctx, shape, frame: Location = None):
     """The length of 'shape' along the Z axis of 'frame', or None if unmeasurable."""
     box = await bbox(ctx, shape, frame)

@@ -16,24 +16,17 @@ from .sync_threads import threadpool_manager
 class Sketch(Shape):
     path: typing.Optional[str] = None
 
-    # What this drawing says beside the geometry, as two cache entries filled in
-    # as the sketch is built (see 'Shape.CACHED_SIDE_DATA' for how they survive
-    # the cache, and 'wrappers/dxf_metadata.py' for what each holds): what it
-    # says about its own elements, and what it says about itself.
-    CACHED_SIDE_DATA = {"annotations": "annotations", "metadata": "file_metadata"}
+    # What this drawing says about its own elements, beside the geometry: the
+    # 'annotations' cache entry, filled in as the sketch is built (see
+    # 'Shape.CACHED_SIDE_DATA' for how it survives the cache, and
+    # 'wrappers/dxf_metadata.py' for what a record holds).
+    CACHED_SIDE_DATA = {"annotations": "annotations"}
 
     def __init__(self, project_name: str, config: dict = {}) -> None:
-        """A sketch that has said nothing yet, because nothing has built it.
-
-        Both side-data attributes start at their own empty value rather than at
-        None: empty is an answer ("read, and it said nothing") and None is the
-        absence of one, and the cache draws exactly that distinction.
-        """
         super().__init__(project_name, config)
 
         self.kind = "sketch"
         self.annotations = []
-        self.file_metadata = {}
 
     async def get_shape(self, ctx):
         return await threadpool_manager.run_async(self.instantiate, self)
@@ -58,21 +51,3 @@ class Sketch(Shape):
         """
         await self.get_wrapped(ctx)
         return self.annotations or []
-
-    async def get_file_metadata(self, ctx) -> dict:
-        """What the file this sketch was read from says about itself.
-
-        The layers it declares, the application that wrote it, what its numbers
-        are in - see 'wrappers/dxf_metadata.describe'. Carried the same way, and
-        for the same reason, as the annotations beside it: none of it survives
-        the trip into BREP, and a sketch that came out of the cache was never
-        instantiated to be asked.
-
-        It is about the *file* rather than about the sketch, which is what makes
-        it worth carrying separately: a sketch is the layers its filters
-        selected, and the interesting thing about the ones they did not select
-        is that they exist. A sketch type that reads no file - and every type
-        but 'dxf' today - answers with an empty mapping.
-        """
-        await self.get_wrapped(ctx)
-        return self.file_metadata or {}

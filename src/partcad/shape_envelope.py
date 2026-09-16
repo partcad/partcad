@@ -21,7 +21,8 @@ point of the split:
 
 A single shape is '{"name", "label", "brep"}'; an assembly is
 '{"name", "label", "assembly": [...]}'. Either may also carry an optional
-"location" and an optional "properties" (see the keys below).
+"location", an optional "properties" and an optional "metadata" (see the keys
+below).
 Requests/responses are ordinary JSON objects that carry such shape objects
 under keys like "shape" or "wrapped".
 
@@ -67,6 +68,14 @@ KEY_LOCATION = "location"
 # small and everything that identifies an object travels beside its name. Like
 # the placement, it is data the core carries opaquely and never interprets.
 KEY_PROPERTIES = "properties"
+# Optional metadata on a shape object: what the *file* the shape was imported
+# from stated about itself and about its own contents - a STEP file's layers and
+# property sets, a DXF drawing's layers and units. Produced by the wrapper that
+# read the file, because that is the process the file is open in; carried here
+# beside the BREP so nothing downstream has to know which format it came from,
+# and stored in a cache entry of its own (cache_shape.metadata_key). Opaque to
+# the core, exactly like the placement and the properties.
+KEY_METADATA = "metadata"
 
 # The zstd frame header. Sniffed rather than declared in the envelope, so that
 # a payload written without compression stays readable; the one copy of this

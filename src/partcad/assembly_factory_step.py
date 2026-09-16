@@ -47,12 +47,6 @@ from .part_config import PartConfiguration
 
 @telemetry.instrument()
 class AssemblyFactoryStep(AssemblyFactoryFile):
-    # Read for its layers and its properties by 'pc info', the same way the part
-    # type reads the same file. An assembly is where the answer is most worth
-    # having: the properties a STEP file states are hung on its products, and an
-    # assembly is the object that has more than one of them.
-    METADATA_FILE_FORMAT = "step"
-
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitSTEP", source_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config, extension=".step")

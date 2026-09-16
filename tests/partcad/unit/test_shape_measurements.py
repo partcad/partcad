@@ -11,78 +11,149 @@ others, so the only way to know its size is to have built it. That is why they
 are in 'pc info' at all, and why `/pc:describe` starts from them rather than
 from a projection somebody estimated a size off.
 
-The measuring itself is OCCT's and happens in a sandbox, which is not reachable
-from here. What is covered here is what is done with the answer: which keys it
-becomes, that 'size' agrees with the bounds it was worked out from, that the
-tolerance OCCT pads a bounding box by does not reach the reader, and that one
-measurement failing costs 'pc info' that measurement and nothing else.
+The measuring itself is OCCT's and happens in the sandbox
+('wrappers/wrapper_measure.py'), which is not reachable from here. What is
+covered here is everything around it: that the answer is cached in an entry of
+its own under the geometry's hash and the sandbox is not started twice for it,
+that a shape which did not build is not measured and a failure is not
+remembered, and which keys the numbers become for 'pc info'.
+
+The second half of what 'pc info' adds travels the same rails in the other
+direction: what the *file* said, which the wrapper that read it puts on the
+envelope beside the BREP and the core stores in an entry of its own without ever
+looking inside it. That trip is checked here too, because it is the core's half
+of it - the reading itself belongs to 'test_step_metadata' and
+'test_sketch_annotations'.
 """
 
 import asyncio
 
 import pytest
+from cache_config import CacheUserConfig
 
-from partcad.shape import Shape, measured
+import partcad as pc
+from partcad.cache_shape import ShapeCache, measurements_key, metadata_key
+from partcad.shape import Shape
+
+MEASURED = {"bbox": [-1.0, 0.0, 2.0, 9.0, 20.0, 5.0], "volume": 1500.0, "solids": 2}
 
 
 class _Shape(Shape):
-    """The little a measurement needs of a shape, and nothing that builds one."""
+    """A shape that never builds geometry and never reaches a sandbox."""
 
-    def __init__(
-        self,
-        box=(0, 0, 0, 10, 20, 30),
-        solidity=None,
-        unbuilt=False,
-        box_raises=None,
-        solidity_raises=None,
-    ):
-        """A shape that answers the two measurements with whatever it was given.
-
-        The two failures are separate controls on purpose. One switch for both
-        would make "the bounding box failed and the volume did not" impossible
-        to set up - and that is the case worth testing, because an
-        implementation that gave up after the first failure would satisfy a test
-        in which everything fails at once.
-        """
-        super().__init__("//test", {"name": "thing"})
-        self.name = "thing"
-        self._box = box
-        self._solidity = solidity
+    def __init__(self, unbuilt=False, name="thing"):
+        super().__init__("//test", {"name": name})
+        self.name = name
+        self.kind = "part"
         self._unbuilt = unbuilt
-        self._box_raises = box_raises
-        self._solidity_raises = solidity_raises
-        self.asked = 0
+        self.hash.add_string("measurements-test-" + name)
 
     async def get_wrapped(self, ctx):
-        """Something, or nothing for a shape whose script raised."""
-        return None if self._unbuilt else object()
-
-    async def get_bounding_box_async(self, ctx):
-        """The box as OCCT would return it - padded bounds and all."""
-        self.asked += 1
-        if self._box_raises:
-            raise self._box_raises
-        return self._box
-
-    async def get_solidity_async(self, ctx):
-        """What the solidity wrapper reports, or None for a shape holding no solid."""
-        self.asked += 1
-        if self._solidity_raises:
-            raise self._solidity_raises
-        return self._solidity
+        """Something opaque, or nothing for a shape whose script raised."""
+        return None if self._unbuilt else {"brep": b"not looked at"}
 
 
-def _measure(shape):
-    """The measurements as 'pc info' would print them.
+@pytest.fixture
+def ctx(tmp_path):
+    """A context whose shape cache is this test's alone.
 
-    No context is passed: nothing reached from here ever looks at one.
+    The real one lives in the user's state directory and outlives the run, which
+    would make "was this measured again?" a question about every previous run.
     """
-    return asyncio.run(shape.measurements_async(None))
+    (tmp_path / "partcad.yaml").write_text("name: //test\n")
+    context = pc.Context(str(tmp_path))
+    context.cache_shapes = ShapeCache(user_config=CacheUserConfig(tmp_path / "cache"))
+    return context
 
 
-def test_the_bounding_box_is_reported_as_where_it_is_and_how_large():
-    """Three triples: a shape 10 wide starting at -1 is not a shape 10 wide at 0."""
-    info = _measure(_Shape(box=(-1.0, 0.0, 2.0, 9.0, 20.0, 5.0)))
+@pytest.fixture
+def sandbox(monkeypatch):
+    """The sandbox, replaced by something that counts and starts no process."""
+
+    async def measurements(ctx, shape):
+        sandbox.calls += 1
+        if sandbox.raises:
+            raise sandbox.raises
+        return sandbox.result
+
+    sandbox.calls = 0
+    sandbox.raises = None
+    sandbox.result = MEASURED
+    monkeypatch.setattr(pc.shape.measure, "measurements", measurements)
+    return sandbox
+
+
+#
+# The cache entry, which is what makes this affordable to ask
+#
+
+
+def test_the_sandbox_is_asked_once_and_the_answer_is_kept(ctx, sandbox):
+    """Measured on the first ask, read back on every one after it.
+
+    An entry of its own under the geometry's hash: the numbers are derived from
+    the geometry, so they are exactly as valid as the entry they are named
+    after, and reading them back costs a file where measuring costs a process.
+    """
+    first = _Shape()
+    assert asyncio.run(first.get_measurements_async(ctx)) == MEASURED
+    assert sandbox.calls == 1
+
+    # A second object with the same key: what it gets is what the cache holds.
+    second = _Shape()
+    assert asyncio.run(second.get_measurements_async(ctx)) == MEASURED
+    assert sandbox.calls == 1
+
+
+def test_the_entry_is_the_geometry_key_with_a_suffix(ctx, sandbox):
+    """Named after the geometry it describes, and read without pulling it.
+
+    'read_async' is given that key alone, so asking how big a part is never
+    materializes its BREP.
+    """
+    shape = _Shape()
+    asyncio.run(shape.get_measurements_async(ctx))
+
+    key = measurements_key("part")
+    assert key == "part-measure"
+    cached, _ = asyncio.run(ctx.cache_shapes.read_async(shape.hash, [key]))
+    assert cached[key] == MEASURED
+
+
+def test_a_shape_that_did_not_build_is_not_measured(ctx, sandbox):
+    """'pc info' on a part whose script raised is a common thing to do."""
+    shape = _Shape(unbuilt=True)
+
+    assert asyncio.run(shape.get_measurements_async(ctx)) is None
+    assert sandbox.calls == 0
+
+
+def test_a_failure_to_measure_is_reported_and_not_remembered(ctx, sandbox):
+    """About the machine rather than the shape - a sandbox not built yet.
+
+    Caching it would answer every later run with this run's bad luck, so the
+    next ask starts a sandbox again.
+    """
+    sandbox.raises = Exception("no sandbox")
+    assert asyncio.run(_Shape().get_measurements_async(ctx)) is None
+
+    sandbox.raises = None
+    assert asyncio.run(_Shape().get_measurements_async(ctx)) == MEASURED
+    assert sandbox.calls == 2
+
+
+#
+# What 'pc info' makes of the answer
+#
+
+
+def test_the_bounding_box_is_reported_as_where_it_is_and_how_large(ctx, sandbox):
+    """Three triples: a shape 10 wide starting at -1 is not a shape 10 wide at 0.
+
+    'size' is stated rather than left to be subtracted - it is the one of the
+    three anybody reads out loud.
+    """
+    info = asyncio.run(_Shape()._reported_async(ctx))
 
     assert info["BoundingBox"] == {
         "min": [-1.0, 0.0, 2.0],
@@ -91,110 +162,109 @@ def test_the_bounding_box_is_reported_as_where_it_is_and_how_large():
     }
 
 
-def test_the_tolerance_occt_pads_the_box_by_does_not_reach_the_reader():
-    """A 120 mm block measures 120.0000002, and that is OCCT leaving itself room.
-
-    Every other caller of the measurement wants the padding - an exploded view
-    that overlapped by a tolerance would be wrong - so it comes off here and
-    nowhere else.
-    """
-    fuzz = 1e-7
-    info = _measure(_Shape(box=(-fuzz, -fuzz, -fuzz, 120 + fuzz, 40 + fuzz, 2 + fuzz)))
-
-    assert info["BoundingBox"] == {
-        "min": [0.0, 0.0, 0.0],
-        "max": [120.0, 40.0, 2.0],
-        "size": [120.0, 40.0, 2.0],
-    }
-
-
-def test_a_bound_that_rounds_to_zero_from_below_is_not_minus_nought():
-    """It is the same number and it reads as a different one."""
-    assert measured(-1e-9) == 0.0
-    assert str(measured(-1e-9)) == "0.0"
-
-
-def test_the_size_agrees_with_the_bounds_it_was_worked_out_from():
-    """Worked out from the rounded bounds rather than rounded itself.
-
-    Subtracting first and rounding afterwards can leave the three disagreeing by
-    the last digit, and 'size' is the one of them anybody reads out loud.
-    """
-    info = _measure(_Shape(box=(0.1, 0.2, 0.3, 0.30000000000000004, 0.7, 1.0)))
-    box = info["BoundingBox"]
-
-    for axis in range(3):
-        assert box["size"][axis] == pytest.approx(box["max"][axis] - box["min"][axis], abs=1e-9)
-
-
-def test_the_volume_and_how_many_solids_it_is_of():
+def test_the_volume_and_how_many_solids_it_is_of(ctx, sandbox):
     """More than one solid in a part is worth saying: it is deliberate or a bug."""
-    info = _measure(_Shape(solidity={"solids": 2, "volume": 9600.0, "valid": True}))
+    info = asyncio.run(_Shape()._reported_async(ctx))
 
-    assert info["Volume"] == 9600.0
+    assert info["Volume"] == 1500.0
     assert info["Solids"] == 2
 
 
-def test_a_shape_with_no_solid_in_it_has_no_volume_to_report():
+def test_a_shape_with_no_solid_in_it_has_no_volume_to_report(ctx, sandbox):
     """A sketch, a shell, a wire. Nought and "none to speak of" differ."""
-    info = _measure(_Shape(solidity={"solids": 0, "volume": None, "valid": None}))
+    sandbox.result = {"bbox": [0.0, 0.0, 0.0, 10.0, 10.0, 0.0], "volume": None, "solids": 0}
+    info = asyncio.run(_Shape()._reported_async(ctx))
 
     assert "Volume" not in info
     assert "Solids" not in info
-    assert "BoundingBox" in info
+    assert info["BoundingBox"]["size"] == [10.0, 10.0, 0.0]
 
 
-def test_a_volume_that_is_negative_is_reported_as_it_stands():
+def test_a_volume_that_is_negative_is_reported_as_it_stands(ctx, sandbox):
     """Faces oriented inward: a real thing to know, not a sign to drop."""
-    info = _measure(_Shape(solidity={"solids": 1, "volume": -9600.0, "valid": False}))
+    sandbox.result = {"bbox": MEASURED["bbox"], "volume": -1500.0, "solids": 1}
 
-    assert info["Volume"] == -9600.0
-
-
-def test_a_shape_that_did_not_build_is_not_measured():
-    """'pc info' on a part whose script raised is a common thing to do.
-
-    Asked once, rather than left to the two measurements below, which would each
-    start a sandbox to be told the same thing.
-    """
-    shape = _Shape(unbuilt=True)
-
-    assert _measure(shape) == {}
-    assert shape.asked == 0
+    assert asyncio.run(_Shape()._reported_async(ctx))["Volume"] == -1500.0
 
 
-def test_a_failed_bounding_box_does_not_cost_the_volume():
-    """Both are measured in a sandbox, so either can fail on its own.
-
-    Asserted as "the other one is still there" rather than as "the result is
-    empty": an implementation that gave up at the first exception would satisfy
-    the second and lose half of what 'pc info' was asked for.
-    """
-    info = _measure(_Shape(box_raises=Exception("no sandbox"), solidity={"solids": 1, "volume": 9600.0}))
-
-    assert "BoundingBox" not in info
-    assert info["Volume"] == 9600.0
-    assert info["Solids"] == 1
-
-
-def test_a_failed_volume_does_not_cost_the_bounding_box():
-    info = _measure(_Shape(box=(0.0, 0.0, 0.0, 1.0, 2.0, 3.0), solidity_raises=Exception("no sandbox")))
-
-    assert info["BoundingBox"]["size"] == [1.0, 2.0, 3.0]
-    assert "Volume" not in info
-
-
-def test_both_failing_leaves_pc_info_the_rest_of_what_it_reports():
-    """A machine whose sandbox is not built yet measures neither.
-
-    'pc info' still has a part's configuration, its hash and its dependencies to
-    report, which is what it was asked for.
-    """
-    both = Exception("no sandbox")
-
-    assert _measure(_Shape(box_raises=both, solidity_raises=both)) == {}
-
-
-def test_an_empty_bounding_box_is_left_out_rather_than_invented():
+def test_an_empty_bounding_box_is_left_out_rather_than_invented(ctx, sandbox):
     """A shape that built and occupies nothing has no size to state."""
-    assert _measure(_Shape(box=None)) == {}
+    sandbox.result = {"bbox": None, "volume": None, "solids": 0}
+
+    assert asyncio.run(_Shape()._reported_async(ctx)) == {}
+
+
+def test_a_shape_that_cannot_be_measured_costs_pc_info_nothing_else(ctx, sandbox):
+    """It still has a configuration, a hash and its dependencies to report."""
+    sandbox.raises = Exception("no sandbox")
+
+    assert asyncio.run(_Shape()._reported_async(ctx)) == {}
+
+
+#
+# ...and the other half: what the file said, carried on the envelope
+#
+
+
+# Something that is a shape envelope as far as the core is concerned - nothing
+# here ever opens it - and large enough for the file cache to take it.
+BREP = b"CASCADE Topology V3, (c) Open Cascade\n" + b"0" * (1 << 16)
+
+STATED = {"Layers": [{"name": "BEND_UP", "elements": 1}], "Properties": [{"metadata": {"angle": 90.0}}]}
+
+
+class _ImportedShape(Shape):
+    """A shape built by a wrapper that read a file and said what it found."""
+
+    def __init__(self, metadata=STATED, name="imported"):
+        super().__init__("//test", {"name": name})
+        self.name = name
+        self.kind = "part"
+        self._metadata = metadata
+        self.builds = 0
+        self.hash.add_string("metadata-test-" + name)
+
+    async def get_shape(self, ctx):
+        self.builds += 1
+        envelope = {"name": self.name, "label": self.name, "brep": BREP}
+        if self._metadata is not None:
+            envelope["metadata"] = self._metadata
+        return envelope
+
+
+def test_what_the_file_said_is_stored_in_an_entry_of_its_own(ctx, sandbox):
+    """Off the envelope on the way past, into the key named after the geometry.
+
+    The core never looks inside it: the sections are the wrapper's own
+    vocabulary, and which format answered is not a question the core asks.
+    """
+    shape = _ImportedShape()
+    asyncio.run(shape.get_wrapped(ctx))
+
+    key = metadata_key("part")
+    assert key == "part-meta"
+    cached, _ = asyncio.run(ctx.cache_shapes.read_async(shape.hash, [key]))
+    assert cached[key] == STATED
+
+
+def test_it_is_read_back_without_pulling_the_geometry(ctx, sandbox):
+    """Which is the point of the separate entry: 'pc info' wants what was said.
+
+    A second object with the same key gets it without building, and 'pc info'
+    merges the sections in as the wrapper named them.
+    """
+    asyncio.run(_ImportedShape().get_wrapped(ctx))
+
+    second = _ImportedShape()
+    assert asyncio.run(second.get_cached_metadata_async(ctx)) == STATED
+    assert second.builds == 0
+    assert asyncio.run(second._reported_async(ctx))["Layers"] == STATED["Layers"]
+
+
+def test_a_shape_whose_type_reads_no_file_states_nothing(ctx, sandbox):
+    """No entry is written, and a missing one is not a reason to build again."""
+    shape = _ImportedShape(metadata=None, name="silent")
+    asyncio.run(shape.get_wrapped(ctx))
+
+    assert asyncio.run(shape.get_cached_metadata_async(ctx)) is None
+    assert "Layers" not in asyncio.run(shape._reported_async(ctx))

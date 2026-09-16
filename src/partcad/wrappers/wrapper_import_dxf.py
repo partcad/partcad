@@ -24,6 +24,7 @@ import cadquery as cq
 
 sys.path.append(os.path.dirname(__file__))
 import dxf_metadata
+import ocp_serialize
 import wrapper_common
 
 
@@ -100,10 +101,10 @@ def process(path, request):
         # What the drawing says about its own elements, and about itself, which
         # the geometry cannot carry: BREP has nowhere to put an angle written
         # against a line, nor the name of a layer that was filtered out. Read
-        # here, as the file is imported, so that both travel with the sketch
-        # from then on (see 'Sketch.get_annotations' and
-        # 'Sketch.get_file_metadata') and nothing downstream has to know that a
-        # DXF file was ever involved.
+        # here, as the file is imported, so that both travel onwards from here -
+        # the elements with the sketch (see 'Sketch.get_annotations'), the rest
+        # on the envelope below - and nothing downstream has to know that a DXF
+        # file was ever involved.
         #
         # The same layer filters the import above was given, so the annotations
         # describe what is in the sketch rather than what was filtered out of
@@ -114,13 +115,22 @@ def process(path, request):
             include=request["include"],
             exclude=request["exclude"],
         )
+        # What the drawing says about *itself* goes onto the envelope beside the
+        # BREP, under the protocol's own key, so the core stores and reports it
+        # without knowing a DXF was involved (see 'ocp_serialize.KEY_METADATA').
+        # The shape is encoded here rather than left to 'handle_output' because
+        # that is what there is to hang the key on; the name and the label are
+        # the ones the request carried, which is what that step would have
+        # stamped on anyway.
+        shape = ocp_serialize.encode_shape(shape, name=request.get("name"), label=request.get("label"))
+        if read["metadata"]:
+            shape[ocp_serialize.KEY_METADATA] = read["metadata"]
         return {
             "success": True,
             "exception": None,
             "warning": warning,
             "shape": shape,
             "annotations": read["annotations"],
-            "metadata": read["metadata"],
         }
 
     except Exception as e:

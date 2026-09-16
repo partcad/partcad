@@ -21,7 +21,7 @@ import math
 
 import pytest
 
-from partcad import step_p21, tolerance_inspect
+from partcad import tolerance_inspect
 
 MILLIMETRE = "#10=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.MILLI.,.METRE.));"
 
@@ -192,7 +192,7 @@ def test_the_answer_does_not_depend_on_where_the_reads_fall(tmp_path, monkeypatc
     string is over, and a block that guessed wrong would cut the record at a
     semicolon that is really part of its text.
     """
-    monkeypatch.setattr(step_p21, "CHUNK", chunk)
+    monkeypatch.setattr(tolerance_inspect, "CHUNK", chunk)
     path = _write(
         tmp_path,
         "#200=FLATNESS_TOLERANCE('the bracket''s datum; face A','',#201,#900);\n"
@@ -275,7 +275,7 @@ def test_a_comment_delimiter_inside_a_string_opens_no_comment(tmp_path):
 
 @pytest.mark.parametrize("chunk", [1, 3, 9, 64])
 def test_a_comment_split_across_reads(tmp_path, monkeypatch, chunk):
-    monkeypatch.setattr(step_p21, "CHUNK", chunk)
+    monkeypatch.setattr(tolerance_inspect, "CHUNK", chunk)
     path = _write(
         tmp_path,
         "/* a comment long enough to straddle a read; with a semicolon in it */\n" + _flatness(200, "0.05"),

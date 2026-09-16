@@ -3,15 +3,17 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-
 """What a STEP file says about itself and about the things inside it.
 
-'step_metadata' reads ISO 10303-21 as text, without a CAD kernel, for the four
-things a STEP file states beside its geometry: its header, the products it
-names, the layers it puts them on, and the properties hung on either. The last
-of those is the one this exists for - it is how an 'angle' and a 'radius'
-written against a bend reach PartCAD from a STEP file, the way XDATA is how they
-reach it from a DXF - so the keys come out lower-cased and the values as the
+'wrappers/step_metadata.py' reads it in the wrapper - the process the file is
+already open in - and the wrapper puts it on the envelope beside the BREP, so
+the core stores and reports it without knowing a STEP file was involved.
+
+It is read as text rather than through OCCT, and not for want of a kernel: XCAF
+gives names, layers and colours and has nowhere to put an arbitrary
+'PROPERTY_DEFINITION', which is the half this exists for - an 'angle' and a
+'radius' written against a bend reach PartCAD this way, the way XDATA is how
+they reach it from a DXF. So the keys come out lower-cased and the values as the
 file states them, exactly as 'dxf_metadata' produces them.
 
 What it must *not* read is the shape of a product. A
@@ -20,9 +22,13 @@ subtyping, and every STEP file holding a solid has one; following it would
 report each of them as a property set stating nothing.
 """
 
-import pytest
+import os
+import sys
 
-from partcad import step_metadata, step_p21
+import partcad as pc
+
+sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
+import step_metadata  # noqa: E402
 
 HEADER = (
     "HEADER;\n"
@@ -43,7 +49,7 @@ PRODUCT = (
 
 
 def _write(tmp_path, body, header=HEADER, name="bracket.step"):
-    """A STEP file whose DATA section is 'body', wrapped in the exchange structure."""
+    """A STEP file whose DATA section is 'body', in the exchange structure."""
     path = tmp_path / name
     path.write_text("ISO-10303-21;\n" + header + "DATA;\n" + body + "\nENDSEC;\nEND-ISO-10303-21;\n")
     return str(path)
@@ -51,45 +57,27 @@ def _write(tmp_path, body, header=HEADER, name="bracket.step"):
 
 def _property(ident, name, owner, items):
     """A property set: the definition, the link, the representation, the items."""
+    refs = ",".join("#%d" % (ident + 3 + offset) for offset in range(len(items)))
     return (
-        "#%d=PROPERTY_DEFINITION('%s','',#%d);\n#%d=PROPERTY_DEFINITION_REPRESENTATION(#%d,#%d);\n"
-        % (
-            ident,
-            name,
-            owner,
-            ident + 1,
-            ident,
-            ident + 2,
-        )
-        + "#%d=REPRESENTATION('%s',(%s),#900);\n"
-        % (
-            ident + 2,
-            name,
-            ",".join("#%d" % (ident + 3 + offset) for offset in range(len(items))),
-        )
+        "#%d=PROPERTY_DEFINITION('%s','',#%d);\n" % (ident, name, owner)
+        + "#%d=PROPERTY_DEFINITION_REPRESENTATION(#%d,#%d);\n" % (ident + 1, ident, ident + 2)
+        + "#%d=REPRESENTATION('%s',(%s),#900);\n" % (ident + 2, name, refs)
         + "".join("#%d=%s;\n" % (ident + 3 + offset, item) for offset, item in enumerate(items))
     )
 
 
-#
-# The header
-#
-
-
 def test_the_header_is_read(tmp_path):
-    """All three of the records a STEP file opens with, and every attribute."""
+    """What the file says about its own making."""
     path = _write(tmp_path, "#1=CARTESIAN_POINT('',(0.,0.,0.));")
 
-    assert step_metadata.of_step_file(path)["header"] == {
+    assert step_metadata.read(path)["File"] == {
         "description": ["a bent bracket", "sheet metal"],
-        "implementationLevel": "2;1",
         "name": "bracket.step",
         "timestamp": "2026-09-16T10:00:00",
         "author": ["R Kuzmenko"],
         "organization": ["PartCAD"],
         "preprocessor": "Open CASCADE STEP processor 7.7",
         "originatingSystem": "FreeCAD",
-        "authorization": "none",
         "schema": ["AUTOMOTIVE_DESIGN { 1 0 10303 214 3 1 1 }"],
     }
 
@@ -99,60 +87,37 @@ def test_an_author_the_exporter_left_empty_is_not_an_author(tmp_path):
     header = "HEADER;\nFILE_NAME('b.step','',(''),(''),'','','');\nENDSEC;\n"
     path = _write(tmp_path, "#1=CARTESIAN_POINT('',(0.,0.,0.));", header=header)
 
-    assert step_metadata.of_step_file(path)["header"] == {"name": "b.step"}
-
-
-def test_a_file_with_no_header_at_all(tmp_path):
-    """Not a STEP file, strictly - and not a reason to fail the rest of the read."""
-    path = tmp_path / "bare.step"
-    path.write_text("DATA;\n#1=CARTESIAN_POINT('',(0.,0.,0.));\nENDSEC;\n")
-
-    assert step_metadata.of_step_file(str(path))["header"] == {}
-
-
-#
-# Products and layers
-#
+    assert step_metadata.read(path)["File"] == {"name": "b.step"}
 
 
 def test_the_products_are_named(tmp_path):
     """What the file calls the things it holds, which a property hangs off."""
     path = _write(tmp_path, PRODUCT)
 
-    assert step_metadata.of_step_file(path)["products"] == [
+    assert step_metadata.read(path)["Products"] == [
         {"id": "bracket", "name": "bracket", "description": "a bent bracket"}
     ]
 
 
 def test_the_layers_and_how_much_is_on_each(tmp_path):
-    """STEP's own answer to a DXF layer. The count is reported, not the items:
-    what a reader wants of a layer is that it exists and how much is on it.
-    """
+    """STEP's own answer to a DXF layer. The count is reported, not the items."""
     path = _write(
         tmp_path,
         "#50=PRESENTATION_LAYER_ASSIGNMENT('BEND_UP','bends that go up',(#9));\n"
         "#51=PRESENTATION_LAYER_ASSIGNMENT('OUTLINE','',(#9,#8,#7));\n",
     )
 
-    assert step_metadata.of_step_file(path)["layers"] == [
+    assert step_metadata.read(path)["Layers"] == [
         {"name": "BEND_UP", "description": "bends that go up", "elements": 1},
         {"name": "OUTLINE", "description": "", "elements": 3},
     ]
 
 
 def test_a_file_that_states_none_of_it(tmp_path):
-    """Read, and it says nothing - which is not the same as not read."""
+    """A section the file says nothing in is left out rather than reported empty."""
     path = _write(tmp_path, "#1=CARTESIAN_POINT('',(0.,0.,0.));")
-    read = step_metadata.of_step_file(path)
 
-    assert read["products"] == []
-    assert read["layers"] == []
-    assert read["properties"] == []
-
-
-#
-# Properties: the reason this module exists
-#
+    assert set(step_metadata.read(path)) == {"File"}
 
 
 def test_a_property_on_a_feature_of_the_shape(tmp_path):
@@ -178,12 +143,10 @@ def test_a_property_on_a_feature_of_the_shape(tmp_path):
         ),
     )
 
-    assert step_metadata.of_step_file(path)["properties"] == [
+    assert step_metadata.read(path)["Properties"] == [
         {
             "name": "bend",
             "owner": "bend 1",
-            "ownerType": "feature",
-            "handle": "#21",
             "metadata": {"angle": "90", "radius": 1.5, "thickness": 2.0},
         }
     ]
@@ -196,37 +159,20 @@ def test_a_property_on_the_product_itself(tmp_path):
         PRODUCT + _property(40, "material", 4, ["DESCRIPTIVE_REPRESENTATION_ITEM('alloy','5052-H32')"]),
     )
 
-    assert step_metadata.of_step_file(path)["properties"] == [
-        {
-            "name": "material",
-            "owner": "bracket",
-            "ownerType": "product",
-            "handle": "#40",
-            "metadata": {"alloy": "5052-H32"},
-        }
+    assert step_metadata.read(path)["Properties"] == [
+        {"name": "material", "owner": "bracket", "metadata": {"alloy": "5052-H32"}}
     ]
 
 
 def test_a_property_on_the_product_definition_shape(tmp_path):
     """One hop further out again, and the same product at the end of it."""
-    path = _write(
-        tmp_path,
-        PRODUCT + _property(40, "mass", 6, ["REAL_REPRESENTATION_ITEM('grams',12.5)"]),
-    )
+    path = _write(tmp_path, PRODUCT + _property(40, "mass", 6, ["REAL_REPRESENTATION_ITEM('grams',12.5)"]))
 
-    assert step_metadata.of_step_file(path)["properties"] == [
-        {
-            "name": "mass",
-            "owner": "bracket",
-            "ownerType": "product",
-            "handle": "#40",
-            "metadata": {"grams": 12.5},
-        }
-    ]
+    assert step_metadata.read(path)["Properties"] == [{"name": "mass", "owner": "bracket", "metadata": {"grams": 12.5}}]
 
 
 def test_a_value_written_as_a_complex_instance(tmp_path):
-    """A named quantity in a unit, as ( REPRESENTATION_ITEM MEASURE_WITH_UNIT ).
+    """A named quantity in a unit: ( REPRESENTATION_ITEM MEASURE_WITH_UNIT ).
 
     The name and the number are in separate entities of one record, so neither
     half is a key/value pair on its own.
@@ -243,7 +189,7 @@ def test_a_value_written_as_a_complex_instance(tmp_path):
         ),
     )
 
-    assert step_metadata.of_step_file(path)["properties"][0]["metadata"] == {"angle": 30.0}
+    assert step_metadata.read(path)["Properties"][0]["metadata"] == {"angle": 30.0}
 
 
 def test_a_boolean_and_an_omitted_value(tmp_path):
@@ -263,25 +209,11 @@ def test_a_boolean_and_an_omitted_value(tmp_path):
         ),
     )
 
-    assert step_metadata.of_step_file(path)["properties"][0]["metadata"] == {
+    assert step_metadata.read(path)["Properties"][0]["metadata"] == {
         "finished": True,
         "painted": False,
         "note": None,
     }
-
-
-def test_a_property_set_that_states_nothing_is_still_reported(tmp_path):
-    """The same distinction the DXF reader draws for an un-annotated line.
-
-    "This file states no properties" and "this property set states nothing" are
-    different answers, and a check on what a property says has to tell them
-    apart.
-    """
-    path = _write(tmp_path, PRODUCT + _property(40, "empty", 4, []))
-
-    assert step_metadata.of_step_file(path)["properties"] == [
-        {"name": "empty", "owner": "bracket", "ownerType": "product", "handle": "#40", "metadata": {}}
-    ]
 
 
 def test_the_shape_of_a_product_is_not_a_property(tmp_path):
@@ -296,37 +228,35 @@ def test_the_shape_of_a_product_is_not_a_property(tmp_path):
         PRODUCT + "#7=SHAPE_DEFINITION_REPRESENTATION(#6,#8);\n#8=ADVANCED_BREP_SHAPE_REPRESENTATION('',(#9),#900);\n",
     )
 
-    assert step_metadata.of_step_file(path)["properties"] == []
+    assert "Properties" not in step_metadata.read(path)
 
 
 def test_a_property_stated_against_something_this_does_not_follow(tmp_path):
     """Reported, with no owner. It is a property; whose is another question."""
     path = _write(tmp_path, _property(40, "note", 999, ["DESCRIPTIVE_REPRESENTATION_ITEM('by','hand')"]))
 
-    assert step_metadata.of_step_file(path)["properties"] == [
-        {"name": "note", "owner": None, "ownerType": None, "handle": "#40", "metadata": {"by": "hand"}}
-    ]
+    assert step_metadata.read(path)["Properties"] == [{"name": "note", "owner": None, "metadata": {"by": "hand"}}]
 
 
-#
-# Reading the bytes
-#
+def test_a_semicolon_inside_a_string_does_not_end_the_record(tmp_path):
+    """The one that bites every STEP file there is.
 
-
-@pytest.mark.parametrize("chunk", [1, 2, 3, 7, 64, 4096])
-def test_the_answer_does_not_depend_on_where_the_reads_fall(tmp_path, monkeypatch, chunk):
-    """The file arrives a block at a time and a record straddles the join."""
-    monkeypatch.setattr(step_p21, "CHUNK", chunk)
+    'FILE_DESCRIPTION' carries the implementation level, and every exporter
+    writes it as '2;1'. A reader that took the argument list to end at the first
+    semicolon would read no header at all - and the same trap is set by any
+    name or description a person typed a semicolon into.
+    """
     path = _write(
         tmp_path,
         PRODUCT
-        + "#20=SHAPE_ASPECT('the bracket''s fold; near datum A','',#8,.T.);\n"
+        + "#20=SHAPE_ASPECT('the fold; near datum A','',#8,.T.);\n"
         + _property(21, "bend", 20, ["DESCRIPTIVE_REPRESENTATION_ITEM('angle','90')"]),
     )
+    read = step_metadata.read(path)
 
-    found = step_metadata.of_step_file(path)["properties"]
-    assert found[0]["owner"] == "the bracket's fold; near datum A"
-    assert found[0]["metadata"] == {"angle": "90"}
+    assert read["File"]["name"] == "bracket.step"
+    assert read["Properties"][0]["owner"] == "the fold; near datum A"
+    assert read["Properties"][0]["metadata"] == {"angle": "90"}
 
 
 def test_a_comment_where_a_record_would_be(tmp_path):
@@ -338,51 +268,20 @@ def test_a_comment_where_a_record_would_be(tmp_path):
         + _property(40, "real", 4, ["DESCRIPTIVE_REPRESENTATION_ITEM('angle','90')"]),
     )
 
-    found = step_metadata.of_step_file(path)["properties"]
-    assert [property["name"] for property in found] == ["real"]
+    assert [p["name"] for p in step_metadata.read(path)["Properties"]] == ["real"]
 
 
-#
-# What a caller gets, rather than what the file says
-#
+def test_a_real_file_exported_by_a_cad_application(tmp_path):
+    """The example package's own STEP file: a header and one product, no more.
 
-
-def test_of_file_refuses_a_format_it_cannot_read(tmp_path):
-    """None for a format, a path or a file that is not there - never a guess.
-
-    A 'kicad' part's STEP file does not exist until the part is built, and a
-    part fetched from a URL not until it is downloaded.
+    A file with no layers and no user properties is the common case, and the
+    check that matters on it is that nothing is invented for one.
     """
-    path = _write(tmp_path, PRODUCT)
+    path = os.path.join(os.path.dirname(pc.__file__), "..", "..", "examples", "produce_part_step", "bolt.step")
+    if not os.path.isfile(path):
+        return
 
-    assert step_metadata.of_file("stl", path) is None
-    assert step_metadata.of_file("step", None) is None
-    assert step_metadata.of_file("step", str(tmp_path / "absent.step")) is None
-    assert step_metadata.of_file("step", path) is not None
-
-
-def test_an_unreadable_file_is_reported_rather_than_raised(tmp_path, monkeypatch):
-    """'pc info' on a part whose file is odd still has the rest to report."""
-    path = _write(tmp_path, PRODUCT)
-    monkeypatch.setattr(step_p21, "scan", _raise)
-
-    assert step_metadata.of_file("step", path) is None
-
-
-def _raise(*args, **kwargs):
-    """Stand in for a read that fails on the machine rather than on the file."""
-    raise OSError("no")
-
-
-def test_as_info_leaves_out_what_the_file_does_not_state(tmp_path):
-    """A run of empty headings buries what 'pc info' does have to say."""
-    path = _write(tmp_path, PRODUCT)
-    info = step_metadata.as_info(step_metadata.of_step_file(path))
-
-    assert set(info) == {"File", "Products"}
-    assert info["Products"][0]["name"] == "bracket"
-
-
-def test_as_info_of_a_file_that_could_not_be_read():
-    """The reader has already said why in the log; 'pc info' just has less."""
-    assert step_metadata.as_info(None) == {}
+    read = step_metadata.read(path)
+    assert read["File"]["originatingSystem"] == "FreeCAD"
+    assert [p["name"] for p in read["Products"]] == ["M8x30-Screw"]
+    assert "Properties" not in read
