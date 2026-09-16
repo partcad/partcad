@@ -23,6 +23,12 @@ class Sketch(Shape):
     CACHED_SIDE_DATA = {"annotations": "annotations", "metadata": "file_metadata"}
 
     def __init__(self, project_name: str, config: dict = {}) -> None:
+        """A sketch that has said nothing yet, because nothing has built it.
+
+        Both side-data attributes start at their own empty value rather than at
+        None: empty is an answer ("read, and it said nothing") and None is the
+        absence of one, and the cache draws exactly that distinction.
+        """
         super().__init__(project_name, config)
 
         self.kind = "sketch"
