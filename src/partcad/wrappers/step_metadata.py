@@ -135,6 +135,30 @@ def _without_comments(text: str) -> str:
     return "".join(kept)
 
 
+def _match_outside(text: str, pattern: str, start: int = 0):
+    """The first match of 'pattern' in 'text' that is not inside a string.
+
+    The same rule the record scan follows, for the header, which is read by
+    entity name rather than by record: a file whose FILE_DESCRIPTION says it was
+    "exported via FILE_NAME(legacy.step)" states one FILE_NAME, and a plain
+    search finds the sentence first and then reads the header out of it -
+    losing the real one entirely, since only the first match is looked at.
+    """
+    scanner = re.compile(r"'|" + pattern)
+    i = start
+    while True:
+        match = scanner.search(text, i)
+        if match is None:
+            return None
+        if match.group(0) == "'":
+            string = _STRING.match(text, match.start())
+            if string is None:
+                return None
+            i = string.end()
+            continue
+        return match
+
+
 def _outside_strings(text: str, needle: str) -> int:
     """Where 'needle' first occurs outside a quoted string, or -1.
 
@@ -343,7 +367,7 @@ def _header(head: str) -> dict:
     )
     header = {}
     for entity, names in fields:
-        match = re.search(r"\b%s\s*\(" % entity, head)
+        match = _match_outside(head, r"\b%s\s*\(" % entity)
         if match is None:
             continue
         inside = _list_at(head, match.end() - 1)
