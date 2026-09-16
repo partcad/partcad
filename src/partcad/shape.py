@@ -1019,6 +1019,10 @@ class Shape(ShapeConfiguration):
         'bracket.vtu': the analysis is part of what the file is, and a part has
         as many analysis results as it has analyses. Empty for everything else,
         where the file type is already the extension.
+
+        A name with a '/' in it names a file in a sub-directory of wherever the
+        configuration put it -- see 'output.name_to_path()' for why, and
+        'Context.ensure_dirs_for_file()' for who creates it.
         """
         if filepath is not None:
             return filepath
@@ -1035,7 +1039,7 @@ class Shape(ShapeConfiguration):
         # A directory that does not exist yet is still a directory: '--create-dirs'
         # is what creates it, and that happens once the name is known.
         if os.path.isdir(filepath) or not os.path.splitext(filepath)[1]:
-            filepath = os.path.join(filepath, self.name + stem_suffix + extension)
+            filepath = os.path.join(filepath, output.name_to_path(self.name, stem_suffix + extension))
         return filepath
 
     def output_getopts(self, ctx, format_name, project=None, filepath=None, options_project=None, output_dir=None):
@@ -1301,8 +1305,10 @@ class Shape(ShapeConfiguration):
         # Create the output directory for the resolved path (the incoming
         # 'filepath' is None when called from Project.render_async) using the
         # 'ctx' passed in, so direct callers without a project get
-        # '--create-dirs' too.
-        ctx.ensure_dirs_for_file(final_filepath)
+        # '--create-dirs' too. The name goes in with it: a '/' in it is a
+        # sub-directory of wherever the file lands, created whether or not
+        # '--create-dirs' was given.
+        ctx.ensure_dirs_for_file(final_filepath, self.name)
         pc_logging.debug("Rendering: %s:%s for format '%s'" % (self.project_name, self.name, format_name))
 
         script = await self._materialize_output_script(ctx, impl)
@@ -1892,7 +1898,7 @@ class Shape(ShapeConfiguration):
             # next run copies them; giving each run its own path instead would
             # take that name away from everyone who relies on it.
             async with self.locked():
-                ctx.ensure_dirs_for_file(final_filepath)
+                ctx.ensure_dirs_for_file(final_filepath, self.name)
                 # A model is the answer to *this* run, and the path it goes to
                 # is stable -- '<part>.<analysis>.<extension>', beside the
                 # package. So one an earlier run left there would satisfy the
@@ -2106,7 +2112,7 @@ class Shape(ShapeConfiguration):
             # nested 'get_wrapped' and '_run_implementation_async' take the same
             # re-entrant lock without waiting for it.
             async with self.locked():
-                ctx.ensure_dirs_for_file(final_filepath)
+                ctx.ensure_dirs_for_file(final_filepath, self.name)
                 # A route is the answer to *this* run, and the path it goes to
                 # is stable. So one an earlier run left there would satisfy the
                 # check below and be handed back as the new result: last week's
