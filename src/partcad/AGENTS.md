@@ -136,6 +136,20 @@ at all).
   `_validate_output_format()` rejected it before resolving it. Anything else that grows such a list needs the
   same treatment — "which types can I write" is a question a path has already answered.
 
+- **A name with a `/` in it is a file in a sub-directory** (`output.name_to_path`,
+  `Context.ensure_dirs_for_file`): the objects another file materializes are named that way -- a STEP
+  assembly's components are the parts `<assembly>/<component>`, a URDF's links `<assembly>/<link>`, a Gazebo
+  world's `<scene>/<model>/<link>` -- and a package may declare one like that itself
+  (`examples/feature_import`). Every output path built from an object's name splits it there and joins the
+  pieces with `os.path.join`, so the tree is the same one on Windows as on Linux and macOS: the separator in a
+  *name* is always `/`, and no filesystem takes one in a file name.
+
+  The directories are created when the file is written, `--create-dirs` or not. That flag is about a directory
+  the *user* named and has not made -- an output directory -- while these are part of the file's own name; a
+  file the caller named itself (`filepath=`) is still written exactly where it said. `pc export`/`pc render`
+  of such a part is also the one lookup in `Project._enumerate_shapes_async()` that has to be awaited
+  (`get_part_async`): the part does not exist until the object that produces it has been built.
+
 - **Built-in packages** (`./src/partcad/builtin`): PartCAD ships six packages inside itself, reachable from
   every context as `//builtin/export`, `//builtin/render`, `//builtin/import`, `//builtin/open`,
   `//builtin/cam` and `//builtin/scene` (loaded

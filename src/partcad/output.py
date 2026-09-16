@@ -239,6 +239,42 @@ def format_names(section_obj) -> list:
     return [name for name in section_obj if name not in SECTION_KEYS]
 
 
+def name_to_path(name: str, suffix: str = "") -> str:
+    """The file an object's name names, relative to the directory it goes in.
+
+    An object's name may carry '/'. The objects another file materializes are
+    named that way -- a STEP assembly's components are the parts
+    '<assembly>/<component>', a URDF's links '<assembly>/<link>', a Gazebo
+    world's '<scene>/<model>/<link>' -- and a package is free to declare one
+    like that itself, which is what 'examples/feature_import' does.
+
+    Everything up to the last '/' is a directory the file goes in, and only what
+    follows it names the file: no filesystem takes a '/' in a file name, so the
+    alternative is not a flat file called 'a/b.step' but no file at all. The
+    directories are created when the file is written -- see
+    'Context.ensure_dirs_for_file()'.
+
+    The separator in a name is always '/', on every platform: it is part of a
+    name written in 'partcad.yaml' or in somebody else's model file, not a path
+    anybody typed. Splitting on it here and joining with 'os.path.join()' is
+    what makes Windows put the file in the same directory Linux and macOS put it
+    in, rather than in a directory called 'a/b' that only one of the three can
+    read back.
+    """
+    *directories, stem = name.split("/")
+    return os.path.join(*directories, stem + suffix)
+
+
+def name_dirs(name: str) -> str:
+    """The directories an object's name asks for, or '' when it asks for none.
+
+    The counterpart of 'name_to_path()' for the caller that has the path already
+    and needs to know how much of its tail the name is responsible for.
+    """
+    directories = name.split("/")[:-1]
+    return os.path.join(*directories) if directories else ""
+
+
 def is_document_format(format_name: str, section_obj) -> bool:
     """Whether PartCAD assembles this file itself instead of running a script.
 

@@ -450,9 +450,11 @@ def _clone(repo_url, cache_path, git_config, options: CloneOptions, user_config=
         # A commit id can be on any branch, so that search needs the wildcard
         # refspec a clone configures by default.
         remote=None if options.all_branches else _single_branch_remote(user_config),
-        # Honour http.proxy from the config written above and the http_proxy
-        # environment, the way the git command line did through curl. Without
-        # this libgit2 ignores both and talks to the remote directly.
+        # Honour http.proxy from the config written above and, failing that,
+        # HTTPS_PROXY/HTTP_PROXY and NO_PROXY from the environment, the way the
+        # git command line did through curl. Without this libgit2 ignores both
+        # and talks to the remote directly -- which on a machine whose only
+        # route out is a proxy means every import stalls until it times out.
         proxy=True,
     )
 
@@ -464,6 +466,7 @@ def _fetch(repo: pygit2.Repository, revision: str, depth: int = 1, user_config=N
         [revision],
         depth=depth if _supports_shallow(remote.url) else 0,
         callbacks=GitCallbacks(user_config),
+        # As in _clone: the proxy the configuration or the environment names.
         proxy=True,
     )
     return _fetched_commit(repo, revision)
