@@ -249,8 +249,11 @@ at all).
   an existing flat piece went through a brake, so its `manufacturing:` section carries a `source:` (the part
   that is bent) and an `instructions:` (the sketch that says where the bends are), both required and both
   resolved as references against the part's own package. The outline, the holes and the cut-outs belong to the
-  `source`, which is cut flat and so is an ordinary `subtractive` part -- they are deliberately **not**
-  describable inside the sheet metal step, because the process that bends cannot make them.
+  `source`, which is cut flat and so is usually an ordinary `subtractive` part -- they are deliberately
+  **not** describable inside the sheet metal step, because the process that bends cannot make them. `source`
+  is not held to that method, though: what the check asks of it is that it is *flat*, so a bought-in blank
+  declaring no method, a `forming` one sheared to outline, and an `alias` or `enrich` of a part declared
+  elsewhere are all blanks it takes.
 
   `ManufacturabilitySheetMetalTest` asks one question of each half: the blank is flat top and bottom (the
   horizontal plane through its extreme Z meets it in an area rather than at a point --
