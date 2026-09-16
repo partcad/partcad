@@ -42,10 +42,55 @@ def _bbox(shape):
     return [xmin, ymin, zmin, xmax, ymax, zmax]
 
 
+def _volumes(shape):
+    """The volume of each solid in 'shape', largest first.
+
+    Per solid rather than summed, for the reason wrapper_solidity gives: a
+    compound holding one inverted solid and a larger correct one adds up to a
+    positive number, and the inversion disappears into the total. The caller
+    adds them up knowing how many there were.
+    """
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+
+    volumes = []
+    explorer = TopExp_Explorer(shape, TopAbs_SOLID)
+    while explorer.More():
+        props = GProp_GProps()
+        BRepGProp.VolumeProperties_s(explorer.Current(), props)
+        volumes.append(props.Mass())
+        explorer.Next()
+    return sorted(volumes, reverse=True)
+
+
+def _measurements(shape):
+    """Everything 'pc info' reports about a shape's size, in one trip.
+
+    The box and the volume together, because they are asked for together and
+    each of them separately costs a sandbox process: starting one, installing
+    nothing, deserializing the BREP and handing back a handful of floats. The
+    OCCT work itself is the cheap half.
+
+    'volume' is None - rather than 0.0 - for a shape holding no solid at all: a
+    sketch, a shell, a wire. A shape that encloses nothing and a shape that is
+    not the kind of thing that encloses anything are different answers.
+    """
+    volumes = _volumes(shape)
+    return {
+        "bbox": _bbox(shape),
+        "volume": sum(volumes) if volumes else None,
+        "solids": len(volumes),
+    }
+
+
 def process(request):
     operation = request.get("operation")
     if operation == "bbox":
         return _bbox(request["shape"])
+    if operation == "measurements":
+        return _measurements(request["shape"])
     raise ValueError("Unknown measure operation: %r" % (operation,))
 
 

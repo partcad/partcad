@@ -327,6 +327,24 @@ Object commands
 ``pc info``
   Show detailed information about a part, assembly, scene, or software, including its parameters.
 
+  For anything with geometry it also reports what PartCAD **measured** when it built it:
+  ``BoundingBox`` as ``min``, ``max`` and ``size`` in millimetres, and -- for anything holding a solid --
+  its ``Volume`` in cubic millimetres with ``Solids`` saying how many solids that is the volume of. Neither
+  can be read off a declaration: a part is a script, a file or a boolean of two others, and the only way to
+  know how big it is, is to have built it. A sketch, a shell or a wire has a box and no volume; a negative
+  volume means the faces are oriented inward and is reported as it stands.
+
+  For an object read from a **file**, it also reports what the file itself states -- a STEP part or assembly
+  (and a ``kicad`` part, which produces one) its header, products, layers and user-defined properties; a DXF
+  sketch its layers, units and the elements carrying extended data. That last is where a sheet metal bend
+  states its ``angle``, ``radius`` and ``direction``; see :ref:`sketch-annotations` and :ref:`sheet-metal`.
+  Both formats report those pairs the same way, keys lower-cased and values as the file states them, so what
+  reads them need not know which format answered.
+
+  Reporting every layer rather than only the ones a sketch reads is deliberate: a layer filter that matched
+  nothing and a layer that is not in the file both produce a sketch with nothing in it, and this is what
+  tells them apart.
+
 ``pc bom``
   Print the bill of materials of an assembly or a scene: every part it is made of, recursively, with how many of each
   are needed and, where the object says so, the vendor and the SKU to order it by. Use ``-P`` to name the

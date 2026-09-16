@@ -145,6 +145,28 @@ class SketchFactoryDxf(SketchFactoryPython):
             )
         return include, exclude
 
+    def info(self, sketch):
+        """The usual sketch info, plus the elements the drawing annotated.
+
+        What the drawing said about *itself* - its layers, its units, the
+        applications it declares - is not here: the import wrapper put it on the
+        envelope and 'Shape.shape_info' reports it from the cache entry it was
+        stored in, the same way for every file-backed shape. What is left for
+        this factory is the per-element half, which the sketch already carries.
+
+        Only the annotated elements are listed. An un-annotated one is in its
+        layer's tally under ``Layers`` instead, because a drawing of a few
+        thousand lines would otherwise bury what it does say under what it does
+        not -- while an *annotated* element is what somebody asked this question
+        to see. This is where the ``angle``, ``radius`` and ``direction`` of a
+        sheet metal bend line are.
+        """
+        info = super().info(sketch)
+        annotations = [a for a in (sketch.annotations or []) if a.get("metadata")]
+        if annotations:
+            info["Annotations"] = annotations
+        return info
+
     async def instantiate(self, sketch):
         await super().instantiate(sketch)
 
@@ -197,7 +219,9 @@ class SketchFactoryDxf(SketchFactoryPython):
                 # What the drawing said about its own elements, which the
                 # geometry cannot carry (see 'Sketch.get_annotations'). Set on
                 # the sketch rather than returned, because the return value is
-                # the shape; 'Shape.get_wrapped' caches this beside it.
+                # the shape; 'Shape.get_wrapped' caches this beside it. What the
+                # drawing said about *itself* rides the envelope instead - the
+                # wrapper put it there, and nothing here has to handle it.
                 sketch.annotations = result.get("annotations") or []
             except Exception as e:
                 pc_logging.exception("Failed to import the DXF file: %s: %s" % (self.path, e))
