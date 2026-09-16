@@ -83,6 +83,13 @@ class ManufacturabilitySubtractiveTest(Test):
         return ".subtractive=" + hashlib.sha256(";".join(declared).encode()).hexdigest()[:16]
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
+        """The three questions, in the order that makes the report readable.
+
+        What the declaration failed to say, then what it said that cannot be
+        read, then what the geometry shows -- so a part naming no stock is told
+        that rather than being handed a verdict about a shape, and nothing is
+        built for a declaration that was never going to be measured.
+        """
         if not isinstance(shape, Part):
             self.debug(shape, "Not applicable")
             return self.TEST_PASSED

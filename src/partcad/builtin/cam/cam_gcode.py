@@ -749,11 +749,89 @@ def _laser(request, obj, units):
     )
 
 
+def _encloses_material(face, cylinder) -> bool:
+    """Whether the solid is *outside* this cylindrical face -- a hole, not a boss.
+
+    A cylinder on its own says nothing about which side the material is on. The
+    outer wall of a round plate and the wall of a bore through it are the same
+    surface with the same axis and the same radius; what separates them is which
+    way the solid faces, and a drill can only make the second. Without this a
+    round blank is read as one enormous hole and 'drilling' emits a plunge at its
+    centre, into material -- a program that breaks the drill on a part that
+    needed no drilling at all.
+
+    Asked of the geometry rather than of the topology. 'TopAbs_REVERSED' alone
+    does not answer it: the flag says how the face is used in the solid, not
+    where its material is, and reading it without the surface it qualifies gets
+    the answer right only for whichever convention the modeller happened to use.
+    So the outward normal is what is compared -- the sampled surface normal,
+    flipped where the face is reversed, which is what 'outward' means -- against
+    the radial direction from the axis at the same point:
+
+    * pointing back at the axis, the material is outside the cylinder: a hole.
+    * pointing away from it, the material is inside: a boss, or the outside of
+      a round part.
+
+    Sampled on a grid and decided by the majority, for the same reason
+    'wrapper_manufacturability.wall_alignment' samples: one point can land on a
+    seam or a degenerate corner where the normal is undefined. For an exact
+    cylinder every defined sample agrees, so the majority is unanimous and the
+    grid is only there to guarantee it is not empty.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepLProp import BRepLProp_SLProps
+    from OCP.TopAbs import TopAbs_Orientation
+
+    surface = BRepAdaptor_Surface(face.wrapped)
+    u0, u1 = surface.FirstUParameter(), surface.LastUParameter()
+    v0, v1 = surface.FirstVParameter(), surface.LastVParameter()
+    if not all(map(math.isfinite, (u0, u1, v0, v1))):
+        return False
+
+    # What 'outward' means: OCCT's surface normal is the parameterization's, and
+    # a face the solid uses reversed has its material on the other side of it.
+    flip = -1.0 if face.wrapped.Orientation() == TopAbs_Orientation.TopAbs_REVERSED else 1.0
+    location = cylinder.Location()
+
+    steps = 3
+    props = BRepLProp_SLProps(surface, 1, 1e-7)
+    inward = 0
+    outward = 0
+    for i in range(steps):
+        for j in range(steps):
+            u = u0 + (u1 - u0) * (i + 0.5) / steps
+            v = v0 + (v1 - v0) * (j + 0.5) / steps
+            props.SetParameters(u, v)
+            if not props.IsNormalDefined():
+                continue
+            normal = props.Normal()
+            point = props.Value()
+            # The axis is Z by the time this is asked, so the radial direction
+            # is the one in the XY plane and the Z component of the normal is
+            # not part of the question.
+            radial_x = point.X() - location.X()
+            radial_y = point.Y() - location.Y()
+            radius = math.hypot(radial_x, radial_y)
+            if radius <= 1e-9:
+                continue
+            along_radius = flip * (normal.X() * radial_x + normal.Y() * radial_y) / radius
+            if along_radius < 0.0:
+                inward += 1
+            else:
+                outward += 1
+    return inward > outward
+
+
 def _holes(obj, tolerance):
     """Every round hole through the object along Z, as (x, y, diameter, top, bottom).
 
     A drill makes one feature, and this is how it is recognised: a cylindrical
-    face whose axis is Z. Each becomes one drilled hole at its centre.
+    face whose axis is Z and whose material is on the outside of it. Each
+    becomes one drilled hole at its centre.
+
+    Both halves are needed. The first alone takes the outer wall of a round
+    plate, which is a cylinder about Z like any bore -- see '_encloses_material'
+    for what separates them and why the topology's own flag does not.
 
     Read off the surface type rather than sampled the way
     'wrapper_manufacturability.wall_alignment' does, and the difference is what
@@ -775,6 +853,10 @@ def _holes(obj, tolerance):
         cylinder = adaptor.Cylinder()
         axis = cylinder.Axis().Direction()
         if abs(abs(axis.Z()) - 1.0) > 1e-6:
+            continue
+        # ...and the material is outside it, which is what makes it a hole
+        # rather than the outside of a round part or a boss standing on one.
+        if not _encloses_material(face, cylinder):
             continue
         location = cylinder.Location()
         box = face.bounding_box()
@@ -910,6 +992,25 @@ MACHINES = {
 
 
 def process(path, request):
+    """Write the program for this job, and say what it came to.
+
+    The entry point every route implementation has: `Shape._route_run_async`
+    hands it the merged request -- the file type's parameters, the package's
+    `cam:`, the object's own, anything the call passed, and last the machine the
+    part's `manufacturing:` section named -- and the path to write.
+
+    The machine is what decides which program this is, and `MACHINES` is the
+    whole of that branch: a router follows contours at stepped depths, a laser
+    makes one pass with the beam's width offset off it, a drill goes in and out
+    once per hole. `cnc` is the default and its emitter is unchanged, so a part
+    that never heard of machines gets the bytes it always got.
+
+    Returns:
+        A dict the meta-wrapper passes back: `success`, and on success the
+        `stats` the emitter counted and any `warnings` it raised. A refusal is
+        reported as `success: False` with an `exception` rather than raised,
+        because one object's bad job must not abort a run over a package.
+    """
     try:
         units = str(request.get("units") or "mm").lower()
         if units not in ("mm", "in"):

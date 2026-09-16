@@ -2125,6 +2125,24 @@ class Shape(ShapeConfiguration):
         machine is not something a run decides: `pc cam` on a laser-cut part
         produces a laser program on anybody's machine, and the day it does not
         is the day somebody sends a router program to a laser.
+
+        Raises:
+            partcad.cam.CamConfigError: the part named a machine and the naming
+                cannot be read -- two machines at once, a `laser:` that is not a
+                section, a key that machine does not take, an axis that is not
+                one. `route_async` already wraps this call's caller in a `try`
+                that re-raises such an error through `_cam_config_error`, so it
+                is raised bare here and named there.
+
+        It has to *refuse* rather than fall back, and that is the whole reason
+        this is not a `debug` line. `_read_machine` records such a declaration
+        in `machine_error` and returns no machine, which is indistinguishable
+        here from the part that simply named none -- and a part that named none
+        routes as CNC. So a part declaring both `laser:` and `drilling:` would
+        be handed a *router* program, silently, which is exactly the sentence
+        above turned around: the day PartCAD guesses the machine is the day
+        somebody sends a router program to a laser. `pc test` reporting it too
+        is not enough, because nothing makes `pc cam` wait for `pc test`.
         """
         from .part import Part
 
@@ -2135,13 +2153,17 @@ class Shape(ShapeConfiguration):
 
             manufacturing_data = PartConfiguration.get_manufacturing_data(self)
         except Exception as e:  # pylint: disable=broad-except
-            # A section that cannot be read is `pc test`'s to report, against
-            # the part it belongs to. Routing is not the place to raise it: the
-            # route is still the one the object's `cam:` section asked for.
-            pc_logging.debug("%s:%s: could not read the manufacturing section: %s" % (self.project_name, self.name, e))
-            return {}
+            raise pc_cam.CamConfigError("the 'manufacturing:' section could not be read: %s" % e) from e
+        machine_error = getattr(manufacturing_data, "machine_error", None)
+        if machine_error:
+            raise pc_cam.CamConfigError("the 'manufacturing:' section says %s" % machine_error)
         machine = getattr(manufacturing_data, "machine", None)
         if machine is None:
+            # Made some other way, so there is no machine to name and nothing
+            # wrong with that: an implementation handed nothing writes what it
+            # has always written. Only reached with no 'machine_error' above,
+            # which is what separates "no machine" from "a machine nobody can
+            # read".
             return {}
         return machine.to_data()
 

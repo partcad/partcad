@@ -29,7 +29,7 @@ import hashlib
 from ..part import Part
 from ..part_config import PartConfiguration
 from ..part_config_manufacturing import METHOD_SUBTRACTIVE
-from .manufacturability_reference import resolve_reference
+from .manufacturability_reference import reference_key, resolve_reference
 from .test import Test
 
 
@@ -53,19 +53,34 @@ class ManufacturabilityMachineTest(Test):
     judges_removed: bool = False
 
     async def cache_key_suffix(self, ctx, shape) -> str:
-        """The machine and its axis, neither of which moves the part's hash.
+        """The machine, its axis, and -- where one is read -- the stock.
+
+        None of the three moves the part's own hash. `manufacturing:` is one of
+        the keys a shape's hash deliberately leaves out, so everything this
+        check reads out of that section has to be named here or the verdict
+        outlives what it was reached about.
 
         Turning the part over -- the same solid, cut from the other side -- is
         the whole of what `toolAxis:` says, and it changes the answer: the
         walls that were parallel to the axis are now across it. So the axis is
         in the key, and a part whose direction is corrected re-runs rather than
         being handed the verdict on the direction it replaced.
+
+        The stock belongs here for a check that judges what was *removed*: the
+        measurement is then made on the stock minus the part, so it moves when
+        the stock does, and the stock is a different object whose own hash is
+        what says so. A check that judges the part it was handed reads no stock
+        and names none -- putting it in the key regardless would re-run the
+        laser check every time an unrelated blank was re-dimensioned.
         """
         machine = self._machine_of(shape)
         if machine is None:
             return ""
-        declared = "%s:%s" % (machine.kind, machine.tool_axis)
-        return ".%s=" % self.machine + hashlib.sha256(declared.encode()).hexdigest()[:16]
+        declared = ["%s:%s" % (machine.kind, machine.tool_axis)]
+        if self.judges_removed:
+            manufacturing_data = PartConfiguration.get_manufacturing_data(shape)
+            declared.append("source:" + await reference_key(ctx, shape, manufacturing_data.source, "part"))
+        return ".%s=" % self.machine + hashlib.sha256(";".join(declared).encode()).hexdigest()[:16]
 
     def _machine_of(self, shape):
         """The machine this part named, where it is the one this check is about.
@@ -87,6 +102,14 @@ class ManufacturabilityMachineTest(Test):
         return machine
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
+        """Measure how the faces lie against the axis, and let 'judge()' decide.
+
+        What is measured depends on 'judges_removed': the part itself, or the
+        material taken out of the stock to leave it. A check that wants the
+        second and finds no stock measures the part instead and says so through
+        'judged_removed', so the sentence a failure carries names the subject
+        the numbers actually describe.
+        """
         machine = self._machine_of(shape)
         if machine is None:
             self.debug(shape, "Not applicable")

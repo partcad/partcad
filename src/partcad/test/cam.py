@@ -70,8 +70,8 @@ class CamTest(Test):
     async def cache_key_suffix(self, ctx, shape) -> str:
         """What this test reads beyond the shape, folded into the cache key.
 
-        Three things, none of which moves `shape.hash`, and they are the three
-        `CaeTest` folds in for the same reasons:
+        Four things, none of which moves `shape.hash`. The first three are what
+        `CaeTest` folds in, for the same reasons:
 
         * the job, because an object whose tool has just been halved must not be
           answered with the verdict on the old one;
@@ -80,6 +80,14 @@ class CamTest(Test):
           -- the whole layering, not the object's own section alone, because the
           implementing package's defaults are most of what the run is told and a
           package that re-tunes one of them has changed the question.
+
+        And the fourth is the machine, which `_route_machine_data` puts into the
+        request and which therefore decides what is produced -- a laser program
+        rather than a router one, or the same program cut from the other side.
+        It comes from `manufacturing:`, which is one of the keys a shape's hash
+        deliberately leaves out, so without it here a part moved from CNC to
+        laser is handed the pass its router route earned and the laser route is
+        never produced at all.
         """
         try:
             config = self._config(shape)
@@ -91,6 +99,14 @@ class CamTest(Test):
             return ""
 
         parts = [json.dumps(config.to_data(), sort_keys=True)]
+        try:
+            parts.append(json.dumps(shape._route_machine_data(), sort_keys=True))
+        except pc_cam.CamConfigError as e:
+            # The machine is named and unreadable, which is now a refusal to
+            # route rather than a silent CNC fallback. Keyed like the malformed
+            # job above and for the same reason: correcting it has to produce a
+            # fresh run rather than the failure of what it replaced.
+            parts.append("machine-malformed:%s" % e)
         try:
             options_project, format_name = shape._route_implementation(ctx, declared=config.implementation)
             parts.append("%s:%s" % (options_project.name, format_name))

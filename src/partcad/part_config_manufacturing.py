@@ -169,6 +169,14 @@ class MachineConfig:
     """
 
     def __init__(self, kind: str, config: dict | None, declared: bool = True) -> None:
+        """Read one machine subsection.
+
+        Raises:
+            ValueError: the axis is not one of the six, or a length is not a
+                length. Raised rather than recorded because the caller --
+                '_read_machine' -- is what turns either into the 'machine_error'
+                a check reports, and it adds the machine's name on the way.
+        """
         self.kind = kind
         self.declared = declared
         self.options = dict(config or {})
@@ -198,6 +206,7 @@ class MachineConfig:
         return data
 
     def __str__(self) -> str:
+        """The machine and its axis, which are what distinguish two of these."""
         return "MachineConfig(kind=%s, toolAxis=%s)" % (self.kind, self.tool_axis)
 
 
@@ -211,6 +220,15 @@ class PartConfigManufacturing:
     instructions: str | None
 
     def __init__(self, final_config: dict) -> None:
+        """Read a part's 'manufacturing:' section, without refusing any of it.
+
+        Nothing here raises. An unknown method is logged and read as none, and a
+        machine subsection that cannot be made sense of is recorded in
+        'machine_error' -- because loading a package must not fail over one
+        part's declaration, and a part whose manufacturing section is wrong is
+        still a part that can be listed, rendered and exported. What is wrong
+        with it is 'pc test's to report, against the part it belongs to.
+        """
         manufacturing_config = final_config.get("manufacturing", {}) or {}
         method_string = manufacturing_config.get("method", None)
         self.method = _METHOD_MAP.get(method_string, METHOD_NONE)

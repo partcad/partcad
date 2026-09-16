@@ -137,6 +137,43 @@ PACKAGE = textwrap.dedent("""
         path: panel.step
         cam:
           tool: six millimetres
+      stock:
+        type: step
+        path: panel.step
+      burned:
+        type: step
+        path: panel.step
+        cam:
+          tool: 6 mm
+          depth: 18 mm
+        manufacturing:
+          method: subtractive
+          source: stock
+          laser:
+            kerf: 0.15
+      burned_upward:
+        type: step
+        path: panel.step
+        cam:
+          tool: 6 mm
+          depth: 18 mm
+        manufacturing:
+          method: subtractive
+          source: stock
+          laser:
+            kerf: 0.15
+            toolAxis: +Z
+      two_machines:
+        type: step
+        path: panel.step
+        cam:
+          tool: 6 mm
+          depth: 18 mm
+        manufacturing:
+          method: subtractive
+          source: stock
+          laser: {}
+          drilling: {}
     cam:
       gcode:
         feed: 2400
@@ -264,10 +301,21 @@ def test_a_package_run_visits_the_objects_that_declare_a_section(package):
     to visit must not raise on one object's mistake, or a package where one
     part has a typo produces no routes at all instead of nineteen and a report.
     That is why `cam.declared_config()` exists beside `config_of()`.
+
+    `two_machines` is in it for the same reason and a second one: naming the
+    machine unreadably is refused by `route_async`, not by the enumeration --
+    so it is visited, and it reports.
     """
     project = package.get_project("//cam-test")
     routable = asyncio.run(project.routable_shapes_async())
-    assert sorted(shape.name for shape in routable) == ["broken", "lid", "panel"]
+    assert sorted(shape.name for shape in routable) == [
+        "broken",
+        "burned",
+        "burned_upward",
+        "lid",
+        "panel",
+        "two_machines",
+    ]
 
 
 def test_an_object_asked_for_by_name_is_visited_whatever_it_declares(package):
@@ -453,3 +501,92 @@ def test_the_route_a_check_produced_is_not_left_beside_the_package(package, monk
 
     assert seen["output_dir"] not in (None, "")
     assert not os.path.exists(seen["output_dir"]), "the check's temporary directory outlived it"
+
+
+#
+# Which machine the route is for
+#
+
+
+def test_a_part_that_named_no_machine_puts_nothing_in_the_request(package):
+    """The case that must stay exactly as it was.
+
+    An implementation handed no machine writes what it has always written, so a
+    part with no `manufacturing:` section at all is untouched by any of this.
+    """
+    assert _part(package, "panel")._route_machine_data() == {}
+
+
+def test_the_machine_a_part_named_reaches_the_request(package):
+    """The whole of what a declared machine contributes: kind, axis, options."""
+    data = _part(package, "burned")._route_machine_data()
+    assert data["machine"] == "laser"
+    assert data["tool_axis"] == "-Z"
+    assert data["kerf"] == 0.15
+
+
+def test_a_part_naming_two_machines_is_refused_rather_than_routed_as_cnc(package):
+    """The failure this refusal exists for, and it is not a hypothetical.
+
+    `_read_machine` records such a declaration in `machine_error` and returns
+    no machine -- which is the same answer it gives for a part that named none,
+    and a part that named none routes as CNC. Silently handing a router program
+    to somebody who wrote `laser:` is the one outcome worse than refusing.
+    """
+    with pytest.raises(cam.CamConfigError) as raised:
+        _part(package, "two_machines")._route_machine_data()
+    assert "one machine" in str(raised.value)
+
+
+def test_the_refusal_is_named_with_the_object_it_is_about(package, monkeypatch):
+    """`route_async` already wraps this, which is why it is raised bare.
+
+    A run over a package reports one line per object, so the sentence has to
+    carry an address -- see `_cam_config_error`.
+    """
+    part = _part(package, "two_machines")
+
+    # The refusal is raised where the machine is read, which is after the shape
+    # is built -- so the shape is stubbed rather than built from the empty
+    # `panel.step` this package carries. What is under test is the naming, not
+    # the STEP reader.
+    async def _wrapped(self, ctx):
+        """Stand in for the STEP reader, which this package has no file for."""
+        return {"name": self.name, "label": self.name, "brep": b"CASCADE Topology V3"}
+
+    monkeypatch.setattr(pc.shape.Shape, "get_wrapped", _wrapped)
+
+    with pytest.raises(cam.CamConfigError) as raised:
+        asyncio.run(part.route_async(package))
+    message = str(raised.value)
+    assert message.startswith("//cam-test:two_machines: ")
+    assert "one machine" in message
+
+
+def test_the_machine_is_in_the_cam_checks_cache_key(package):
+    """Moving a part from a router to a laser is a different program.
+
+    `manufacturing:` is one of the keys a shape's hash deliberately leaves out,
+    so without this the laser part is handed the pass the router route earned
+    and the laser route is never produced at all.
+    """
+    check = _cam_check()
+    routed = asyncio.run(check.cache_key_suffix(package, _part(package, "panel")))
+    burned = asyncio.run(check.cache_key_suffix(package, _part(package, "burned")))
+    assert routed and burned and routed != burned
+
+
+def test_the_tool_axis_is_in_the_cam_checks_cache_key(package):
+    """The same solid cut from the other side is the other program."""
+    check = _cam_check()
+    down = asyncio.run(check.cache_key_suffix(package, _part(package, "burned")))
+    up = asyncio.run(check.cache_key_suffix(package, _part(package, "burned_upward")))
+    assert down and up and down != up
+
+
+def test_an_unreadable_machine_keys_on_its_own_error(package):
+    """A refusal is a verdict, and correcting it has to produce a fresh run."""
+    check = _cam_check()
+    confused = asyncio.run(check.cache_key_suffix(package, _part(package, "two_machines")))
+    burned = asyncio.run(check.cache_key_suffix(package, _part(package, "burned")))
+    assert confused and confused != burned

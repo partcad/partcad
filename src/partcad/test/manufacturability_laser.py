@@ -28,6 +28,7 @@ class ManufacturabilityLaserTest(ManufacturabilityMachineTest):
     machine = MACHINE_LASER
 
     def __init__(self) -> None:
+        """Registered under the name '-f manufacturability-laser' selects."""
         super().__init__("manufacturability-laser")
 
     def judge(self, shape, machine, measured, judged_removed: bool = False) -> bool:

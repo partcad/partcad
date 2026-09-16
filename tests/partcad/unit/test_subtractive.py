@@ -56,6 +56,7 @@ import wrapper_manufacturability  # noqa: E402
 
 
 def _manufacturing(**section):
+    """A 'manufacturing:' section as the config layer reads it, defaulting to subtractive."""
     section.setdefault("method", "subtractive")
     return PartConfigManufacturing({"manufacturing": section})
 
@@ -146,16 +147,19 @@ def test_what_the_machine_hands_an_implementation():
 
 
 def _box(x, y, z, at=(0.0, 0.0, 0.0)):
+    """A solid box, which is the stock every measurement here starts from."""
     return BRepPrimAPI_MakeBox(gp_Pnt(*at), x, y, z).Shape()
 
 
 def _cut(minuend, subtrahend):
+    """The boolean the checks themselves use: what is left of one solid after another."""
     operation = BRepAlgoAPI_Cut(minuend, subtrahend)
     operation.Build()
     return operation.Shape()
 
 
 def _hole(x, y, radius, at_z=-1.0, height=20.0):
+    """A cylinder along Z, tall enough to go through whatever it is cut from."""
     return BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(x, y, at_z), gp_Dir(0, 0, 1)), radius, height).Shape()
 
 
@@ -191,6 +195,11 @@ def test_a_stock_that_is_the_part_removes_nothing():
 
 
 def _classify(shape, tool_axis=(0.0, 0.0, -1.0), source=None):
+    """Run the real face classifier, against real geometry, in this process.
+
+    'source' selects the other subject: given one, the wrapper classifies what
+    was removed rather than the part that was left.
+    """
     request = {"shape": shape, "tool_axis_vector": list(tool_axis)}
     if source is not None:
         request["source"] = source
@@ -265,6 +274,10 @@ PACKAGE = {
             "manufacturing": {"method": "subtractive", "source": "stock", "laser": {"toolAxis": "+Z"}},
         },
         "drilled": {"type": "stl", "manufacturing": {"method": "subtractive", "source": "stock", "drilling": {}}},
+        "drilled_from_other": {
+            "type": "stl",
+            "manufacturing": {"method": "subtractive", "source": "plain", "drilling": {}},
+        },
         "confused": {
             "type": "stl",
             "manufacturing": {"method": "subtractive", "source": "stock", "laser": {}, "drilling": {}},
@@ -275,6 +288,11 @@ PACKAGE = {
 
 @pytest.fixture
 def ctx(tmp_path):
+    """The fixture package, with an empty file behind every part it declares.
+
+    Empty because nothing here builds geometry from them: the checks are driven
+    with the analyses stubbed, and what a part's file holds never comes up.
+    """
     (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(PACKAGE))
     for name in PACKAGE["parts"]:
         (tmp_path / (name + ".stl")).write_text("")
@@ -285,15 +303,19 @@ def _arrange(monkeypatch, enclosure=None, cut=None, free_bounds=0):
     """Answer what the checks ask, without a sandbox and without geometry."""
 
     async def wrapped(self, ctx):
+        """A shape envelope that is never decoded, because nothing here builds geometry."""
         return {"name": self.name, "label": self.name, "brep": b"CASCADE Topology V3"}
 
     async def fake_free_bounds(ctx, envelope):
+        """How many open edges the solidity question found: 0 is a closed solid."""
         return free_bounds
 
     async def fake_enclosure(ctx, envelope, source_envelope):
+        """What the stock-fit measurement came to, as the caller arranged it."""
         return enclosure or {"part_volume": 1000.0, "outside_volume": 0.0, "removed_volume": 100.0}
 
     async def fake_cut(ctx, envelope, tool_axis, source_envelope=None):
+        """What the face classification came to, as the caller arranged it."""
         return cut or {"walls": 4, "caps": 2, "other": 0, "round": 4, "offenders": []}
 
     monkeypatch.setattr(pc.shape.Shape, "get_wrapped", wrapped)
@@ -303,6 +325,7 @@ def _arrange(monkeypatch, enclosure=None, cut=None, free_bounds=0):
 
 
 def _verdict(check, ctx, name):
+    """Drive one check over one part of the fixture package and return its verdict."""
     return asyncio.run(check.test([], ctx, ctx.get_part("//test:" + name)))
 
 
@@ -428,6 +451,41 @@ def test_the_tool_axis_is_in_the_machine_checks_cache_key(ctx):
     assert down and up and down != up
     # A part this check does not apply to contributes nothing.
     assert asyncio.run(check.cache_key_suffix(ctx, ctx.get_part("//test:routed"))) == ""
+
+
+def test_the_drilling_cache_key_follows_the_stock_it_judges(ctx):
+    """A check that measures what was *removed* has read the stock.
+
+    'judges_removed' makes the measurement stock-minus-part, so the drilling
+    verdict moves when the stock does -- and the part's own hash does not,
+    because 'manufacturing:' is one of the keys it leaves out. Without the
+    stock in the key a re-dimensioned blank leaves the old verdict standing.
+    """
+    check = ManufacturabilityDrillingTest()
+    assert check.judges_removed is True
+    one = asyncio.run(check.cache_key_suffix(ctx, ctx.get_part("//test:drilled")))
+    other = asyncio.run(check.cache_key_suffix(ctx, ctx.get_part("//test:drilled_from_other")))
+    assert one and other and one != other
+
+
+def test_the_laser_cache_key_does_not_follow_a_stock_it_never_reads(ctx):
+    """The other half of the same rule, which is why it is conditional.
+
+    A laser is judged on the part it was handed, so the stock is not an input
+    to its verdict -- and keying on it anyway would re-run every laser check in
+    a package each time an unrelated blank was re-dimensioned.
+    """
+    check = ManufacturabilityLaserTest()
+    assert check.judges_removed is False
+    burned = asyncio.run(check.cache_key_suffix(ctx, ctx.get_part("//test:burned")))
+    assert burned == asyncio.run(
+        check.cache_key_suffix(
+            ctx,
+            ctx.get_part("//test:burned"),
+        )
+    )
+    # The machine and the axis are still what it keys on.
+    assert burned and burned != asyncio.run(check.cache_key_suffix(ctx, ctx.get_part("//test:burned_upward")))
 
 
 def test_the_subtractive_cache_key_follows_the_stock(ctx):

@@ -33,6 +33,7 @@ class ManufacturabilityDrillingTest(ManufacturabilityMachineTest):
     judges_removed = True
 
     def __init__(self) -> None:
+        """Registered under the name '-f manufacturability-drilling' selects."""
         super().__init__("manufacturability-drilling")
 
     def judge(self, shape, machine, measured, judged_removed: bool = False) -> bool:

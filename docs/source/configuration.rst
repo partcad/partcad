@@ -795,12 +795,16 @@ being used for:
       type: dxf       # one drawing: the outline, the bend lines, the notes
 
   parts:
+    sheet:
+      type: step                        # the stock the blank is cut out of
+
     blank:
       type: extrude
       sketch: panel;include=OUTLINE     # the flat pattern
       depth: 2.0
       manufacturing:
         method: subtractive
+        source: sheet
 
     bracket:
       type: step
@@ -2034,8 +2038,6 @@ file could have carried it - the part declaration takes a ``tolerance:``
   parts:
     bracket:
       type: step
-      manufacturing:
-        method: subtractive
       tolerance: 0.1   # millimetres
 
 It is a field rather than a parameter because it asks nothing of the type that
@@ -2352,12 +2354,16 @@ router -- and so is usually an ordinary ``subtractive`` part:
 .. code-block:: yaml
 
   parts:
+    sheet:
+      type: step                # the stock, 2 mm, bought by the sheet
+
     blank:
       type: extrude
       sketch: outline           # the flat pattern, holes and all
       depth: 2.0
       manufacturing:
         method: subtractive     # laser cut, and that is where the holes come from
+        source: sheet
       parameters:
         tolerance: 0.1
 
@@ -4336,11 +4342,18 @@ depth and the feed are the same thing said at a different scope.
 What keeps the two readings of the word unambiguous is that an object's ``cam:``
 takes a **closed** set of keys -- ``operation``, ``direction``, ``tool``,
 ``depth``, ``depth_per_pass``, ``safe_z``, ``feed``, ``plunge``, ``speed``,
-``stepover``, plus ``implementation`` and ``desc`` -- so it can never be read as
-the file-type declaration a package's ``cam:`` section holds. Anything else in it
-is refused with a sentence, which is what turns a typo into an error rather than
-a route cut to a default. See :ref:`pc cam <cam>` for what each key means, which
-units it may be written in, and why ``tool:`` has no default.
+``stepover``, the two that belong to a machine other than a router (``power``
+for a laser and ``peck`` for a drill), plus ``implementation`` and ``desc`` --
+so it can never be read as the file-type declaration a package's ``cam:``
+section holds. Anything else in it is refused with a sentence, which is what
+turns a typo into an error rather than a route cut to a default. See
+:ref:`pc cam <cam>` for what each key means, which units it may be written in,
+and why ``tool:`` has no default.
+
+The list is closed but not machine-specific: a key is refused for not being on
+it, never for being on it and belonging to a machine the part is not made on.
+Which keys a route actually reads is the implementation's business, and
+``//builtin/cam`` ignores the ones its machine has no use for.
 
 Those are the keys that describe the **cut**. A file type's other parameters
 describe the **file** -- ``//builtin/cam``'s ``units``, ``precision``,

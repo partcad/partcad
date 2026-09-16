@@ -272,11 +272,26 @@ at all).
   machine *took away*, which is `source` minus the part -- because a drilled plate's straight sides came with
   the stock and asking the part's own walls would fail every plate for having them.
 
+  The drilling *route* asks the same question a third time and has to answer it from geometry too: `_holes`
+  takes a cylindrical face about the tool axis, and the outer wall of a round plate is one of those. What
+  separates a bore from a boss is which side the material is on, so `_encloses_material` compares the face's
+  outward normal against the radial direction from the axis -- `TopAbs_REVERSED` alone says how a face is used,
+  not where its material is. Without it a round blank is one enormous hole with a plunge at its centre.
+
   `pc cam` writes for all three from the one `gcode` file type, and which one comes from `manufacturing:` and
   not from `cam:` (`Shape._route_machine_data`, applied after every other layer so nothing can override it):
   what a part is made on is a property of the part, and a route for a machine nobody owns is the failure that
   reaches the shop floor. A part that names no machine produces the bytes it always produced, which is worth
-  keeping true -- `_orient` is the identity for the default `-Z` precisely so that it stays so.
+  keeping true -- `_orient` is the identity for the default `-Z` precisely so that it stays so. A part that
+  names one **unreadably** is refused rather than routed: `_read_machine` records that in `machine_error` and
+  returns no machine, which is the same answer it gives for a part that named none, so falling back would hand
+  a router program to somebody who wrote `laser:`. `pc test` reporting it as well is not enough, because
+  nothing makes `pc cam` wait for `pc test`.
+
+  Which machine it is belongs in a cache key wherever it is read -- `manufacturing:` is one of the keys a
+  shape's hash deliberately leaves out, so a part moved from CNC to laser has the same hash and a different
+  program. `CamTest` folds in `_route_machine_data`, and the two machine checks fold in the machine and the
+  axis, plus the `source` for the one that judges what was removed and not for the one that does not.
 
   `examples/produce_part_subtractive` is the whole of it, and its laser-cut `blank` is what the sheet metal
   example bends -- named across packages, so the piece that goes into the brake is a part whose own making is

@@ -444,6 +444,7 @@ def test_a_part_that_names_no_machine_is_routed_exactly_as_before(gcode, tmp_pat
 
 
 def test_a_machine_it_does_not_know_is_refused_with_the_set(gcode, tmp_path):
+    """The refusal names what it does know, so the sentence is actionable."""
     assert "cnc" in _refusal(gcode, tmp_path, machine="waterjet")
 
 
@@ -498,7 +499,37 @@ def test_a_drill_goes_to_each_hole_and_makes_no_cutting_moves(gcode, tmp_path):
 
 
 def test_a_drill_with_nothing_round_to_make_is_refused(gcode, tmp_path):
+    """A refusal rather than an empty program: a drill with no hole is a mistake."""
     assert "no round hole" in _refusal(gcode, tmp_path, _panel(), machine="drilling")
+
+
+def test_a_round_plate_is_not_one_enormous_hole(gcode, tmp_path):
+    """The outer wall of a round part is a cylinder about Z, and not a hole.
+
+    Nothing about the surface distinguishes it from a bore of the same radius --
+    only which side the material is on does. Read as a hole it would put a
+    plunge at the centre of a plate that needed no drilling at all, which is a
+    program that breaks the drill.
+    """
+    plate = b3d.Solid.make_cylinder(20, 6)
+    assert "no round hole" in _refusal(gcode, tmp_path, plate, machine="drilling")
+
+
+def test_a_boss_standing_on_a_panel_is_not_drilled(gcode, tmp_path):
+    """The same mistake where there is also a real hole to get right.
+
+    The panel has one bore and one boss, both cylinders about Z. A drill makes
+    the first and must not be sent at the second -- and the count is what says
+    so, because a route that plunged into the boss would still be a route.
+    """
+    panel = _panel()
+    panel -= b3d.Solid.make_cylinder(3, 12).locate(b3d.Location((10, 15, -3)))
+    panel += b3d.Solid.make_cylinder(4, 5).locate(b3d.Location((30, 15, 6)))
+
+    result, text = _route(gcode, tmp_path, panel, machine="drilling", tool=6.0)
+    assert result["stats"]["holes"] == 1
+    assert "G0 X10.000 Y15.000" in text
+    assert "X30.000" not in text
 
 
 def test_pecking_breaks_the_plunge_into_steps(gcode, tmp_path):
