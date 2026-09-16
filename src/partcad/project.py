@@ -73,6 +73,7 @@ from .document_pdf import render_pdf_async
 from .exception import EmptyShapesError, NeedsUpdateException, ObjectNameTakenError
 from .part import Part
 from .render import render_cfg_merge
+from .shape_config import NO_DEFAULT
 from .utils import (
     format_parameterized_name,
     normalize_resource_path,
@@ -205,6 +206,56 @@ def _readme_cell(text) -> str:
     """A value made safe to put in one cell of a generated markdown table."""
     text = "" if text is None else str(text)
     return text.replace("|", "\\|").replace("\n", "<br/>")
+
+
+def declare_object_type_parameters(factory_name: str, config: dict, params: dict) -> None:
+    """Declare the object-type parameters a reference sets but the object does not.
+
+    An object-type parameter belongs to the *type* rather than to the
+    declaration (see 'factory.accepted_object_type_parameters'), so it is there
+    to be set whether or not the package that wrote the object thought to
+    mention it. Without this, 'bends;include=BEND_UP,BEND_DOWN' would be refused
+    by the two checks below - the object "has no parameters", and then the
+    parameter "is not declared in" it - and a DXF sketch could only be read
+    layer by layer if every combination of layers had been declared in advance,
+    which is the opposite of what a parameter is for.
+
+    Only the names this reference actually sets are declared, and only where the
+    object declares nothing of that name itself: a declaration that is there is
+    the one that carries the 'desc', the 'enum' and the default its author
+    meant. The type's own default goes in as the default, so an unset parameter
+    reads back exactly as it did before anything was declared, and the type
+    witnesses its type ('config.declared_parameter_type').
+
+    A name the type does not contribute is left alone, and is rejected moments
+    later by 'apply_parameter_values' with the message it has always had. That
+    is the point of the registry: every other parameter name is the object's own
+    invention, and inventing a declaration for one would turn a typo into a
+    parameter nothing reads.
+    """
+    accepted = factory.accepted_object_type_parameters(factory_name, config.get("type"))
+    if not accepted:
+        return
+    parameters = config.get("parameters")
+    for name in params:
+        if name not in accepted:
+            continue
+        if isinstance(parameters, dict) and name in parameters:
+            continue
+        if not isinstance(parameters, dict):
+            parameters = {}
+            config["parameters"] = parameters
+        default = accepted[name]
+        # The default is the type's witness of what the parameter is, which is
+        # how it is read everywhere else ('shape_config.object_type_parameter').
+        # A parameter that has none - 'material' and 'color', where absent means
+        # absent - leaves the type unstated, and an unstated type is the one
+        # case 'coerce_parameter_value' takes the value exactly as written:
+        # right for both of them, and better than guessing at a type here.
+        declaration = {"type": pc_config.declared_parameter_type(default)}
+        if default is not NO_DEFAULT:
+            declaration["default"] = default
+        parameters[name] = declaration
 
 
 @telemetry.instrument()
@@ -1368,7 +1419,17 @@ class Project(project_config.Configuration):
                 except Exception as e:
                     self.record_broken_object(factory_name, alias, e)
 
-    def get_sketch(self, sketch_name, func_params=None) -> Optional[sketch.Sketch]:
+    def get_sketch(self, sketch_name, func_params=None, quiet=False) -> Optional[sketch.Sketch]:
+        """The declared sketch, or None.
+
+        'quiet' suppresses the "not found" reporting for a caller that asks
+        after a sketch which may legitimately not be there and says so itself -
+        the sheet metal check resolves its 'instructions' reference twice, once
+        to key its verdict and once to reach the annotations, and a reference
+        that resolves to nothing should be reported once, by the check, and not
+        three times by the resolver underneath it. It is the same flag, for the
+        same reason, that 'get_part' already takes.
+        """
         return self.get_object(
             "sketch",
             Project.SketchLock,
@@ -1379,6 +1440,7 @@ class Project(project_config.Configuration):
             sfa.SketchFactoryAlias,
             sketch_name,
             func_params,
+            quiet=quiet,
         )
 
     def _part_object(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
@@ -1814,11 +1876,19 @@ class Project(project_config.Configuration):
                             clause,
                         )
                     return None
-                pc_logging.error(
-                    "Base object '%s' not found in '%s'",
-                    base_object_name,
-                    self.name,
-                )
+                # Guarded like the 'unless' report just above it, and for the
+                # same reason: a caller that passed 'quiet' has said it will
+                # report a missing object itself. Without this, 'quiet' held
+                # only for an unparameterized name - so 'gone' was silent and
+                # 'gone;width=5' was not, which is the opposite of the rule
+                # this branch exists to keep ("'gone;width=5' has to read the
+                # same way as 'gone'").
+                if not quiet:
+                    pc_logging.error(
+                        "Base object '%s' not found in '%s'",
+                        base_object_name,
+                        self.name,
+                    )
                 return None
             pc_logging.debug("Found the base object: %s" % base_object_name)
 
@@ -1833,6 +1903,7 @@ class Project(project_config.Configuration):
                 return None
 
             config = copy.deepcopy(config)
+            declare_object_type_parameters(factory_name, config, params)
             if ("parameters" not in config or config["parameters"] is None) and (
                 config["type"] not in PARAMETER_PASSING_TYPES
             ):
@@ -2837,6 +2908,28 @@ class Project(project_config.Configuration):
                         lines += columns
                     lines += [""]
 
+        def declared(objects: dict) -> list:
+            """The names of the objects the package declares, in order.
+
+            'self.parts' and the dictionaries beside it hold the parametrized
+            *instances* too: asking for 'panel;include=OUTLINE' creates one and
+            registers it, so a package that declares one sketch can hold three.
+            An instance is not a declaration - it exists because something
+            referred to the base with particular parameter values, and the base
+            is in the README already, with its parameters listed - and nothing
+            renders an image for one, so listing them produced a section with
+            no image and a warning naming a file nobody was going to write.
+
+            Told apart by 'orig_name', which is the name of the declaration an
+            object came from and is its own name for everything the package
+            wrote down (see 'Configuration.normalize' and
+            'Project.get_object'). Asked of the object itself rather than of
+            what it resolves to: an alias reports the source's configuration
+            below, where its 'orig_name' is the source's name and not the
+            alias's.
+            """
+            return sorted(name for name in objects if objects[name].config.get("orig_name", name) == name)
+
         def add_section(name, display_name, shape, render_cfg):
             config = shape.config
 
@@ -2947,7 +3040,7 @@ class Project(project_config.Configuration):
         if self.assemblies and "assemblies" not in exclude:
             lines += ["## Assemblies"]
             lines += [""]
-            shape_names = sorted(self.assemblies.keys())
+            shape_names = declared(self.assemblies)
             for name in shape_names:
                 shape = self.assemblies[name]
                 if shape.config["type"] == "alias":
@@ -2964,7 +3057,7 @@ class Project(project_config.Configuration):
             # where that is true of every part would otherwise get a "## Parts"
             # heading with nothing under it.
             part_lines = []
-            shape_names = sorted(self.parts.keys())
+            shape_names = declared(self.parts)
             for name in shape_names:
                 shape = self.parts[name]
                 if shape.config["type"] == "alias":
@@ -2981,7 +3074,7 @@ class Project(project_config.Configuration):
         if self.interfaces and "interfaces" not in exclude:
             lines += ["## Interfaces"]
             lines += [""]
-            shape_names = sorted(self.interfaces.keys())
+            shape_names = declared(self.interfaces)
             for name in shape_names:
                 shape = self.interfaces[name]
                 lines += add_section(name, name, shape, render_cfg)
@@ -2989,7 +3082,7 @@ class Project(project_config.Configuration):
         if self.sketches and "sketches" not in exclude:
             lines += ["## Sketches"]
             lines += [""]
-            shape_names = sorted(self.sketches.keys())
+            shape_names = declared(self.sketches)
             for name in shape_names:
                 shape = self.sketches[name]
                 lines += add_section(name, name, shape, render_cfg)

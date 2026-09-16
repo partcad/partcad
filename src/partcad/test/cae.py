@@ -59,7 +59,7 @@ class CaeTest(Test):
             return None
         return pc_cae.config_of(shape, self.analysis)
 
-    def cache_key_suffix(self, ctx, shape) -> str:
+    async def cache_key_suffix(self, ctx, shape) -> str:
         """What this test reads beyond the shape, folded into the cache key.
 
         Three things, none of which moves `shape.hash`:

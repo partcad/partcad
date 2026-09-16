@@ -67,7 +67,7 @@ class CamTest(Test):
             return None
         return pc_cam.config_of(shape)
 
-    def cache_key_suffix(self, ctx, shape) -> str:
+    async def cache_key_suffix(self, ctx, shape) -> str:
         """What this test reads beyond the shape, folded into the cache key.
 
         Three things, none of which moves `shape.hash`, and they are the three
