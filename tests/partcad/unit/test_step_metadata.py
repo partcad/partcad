@@ -43,6 +43,7 @@ PRODUCT = (
 
 
 def _write(tmp_path, body, header=HEADER, name="bracket.step"):
+    """A STEP file whose DATA section is 'body', wrapped in the exchange structure."""
     path = tmp_path / name
     path.write_text("ISO-10303-21;\n" + header + "DATA;\n" + body + "\nENDSEC;\nEND-ISO-10303-21;\n")
     return str(path)
@@ -76,6 +77,7 @@ def _property(ident, name, owner, items):
 
 
 def test_the_header_is_read(tmp_path):
+    """All three of the records a STEP file opens with, and every attribute."""
     path = _write(tmp_path, "#1=CARTESIAN_POINT('',(0.,0.,0.));")
 
     assert step_metadata.of_step_file(path)["header"] == {
@@ -101,6 +103,7 @@ def test_an_author_the_exporter_left_empty_is_not_an_author(tmp_path):
 
 
 def test_a_file_with_no_header_at_all(tmp_path):
+    """Not a STEP file, strictly - and not a reason to fail the rest of the read."""
     path = tmp_path / "bare.step"
     path.write_text("DATA;\n#1=CARTESIAN_POINT('',(0.,0.,0.));\nENDSEC;\n")
 
@@ -113,6 +116,7 @@ def test_a_file_with_no_header_at_all(tmp_path):
 
 
 def test_the_products_are_named(tmp_path):
+    """What the file calls the things it holds, which a property hangs off."""
     path = _write(tmp_path, PRODUCT)
 
     assert step_metadata.of_step_file(path)["products"] == [
@@ -121,6 +125,9 @@ def test_the_products_are_named(tmp_path):
 
 
 def test_the_layers_and_how_much_is_on_each(tmp_path):
+    """STEP's own answer to a DXF layer. The count is reported, not the items:
+    what a reader wants of a layer is that it exists and how much is on it.
+    """
     path = _write(
         tmp_path,
         "#50=PRESENTATION_LAYER_ASSIGNMENT('BEND_UP','bends that go up',(#9));\n"
@@ -240,6 +247,7 @@ def test_a_value_written_as_a_complex_instance(tmp_path):
 
 
 def test_a_boolean_and_an_omitted_value(tmp_path):
+    """'.T.'/'.F.' are values; '$' is the absence of one and stays None."""
     path = _write(
         tmp_path,
         PRODUCT
@@ -322,6 +330,7 @@ def test_the_answer_does_not_depend_on_where_the_reads_fall(tmp_path, monkeypatc
 
 
 def test_a_comment_where_a_record_would_be(tmp_path):
+    """Part 21 allows a comment anywhere, and what is inside one means nothing."""
     path = _write(
         tmp_path,
         PRODUCT
@@ -339,6 +348,11 @@ def test_a_comment_where_a_record_would_be(tmp_path):
 
 
 def test_of_file_refuses_a_format_it_cannot_read(tmp_path):
+    """None for a format, a path or a file that is not there - never a guess.
+
+    A 'kicad' part's STEP file does not exist until the part is built, and a
+    part fetched from a URL not until it is downloaded.
+    """
     path = _write(tmp_path, PRODUCT)
 
     assert step_metadata.of_file("stl", path) is None
@@ -356,10 +370,12 @@ def test_an_unreadable_file_is_reported_rather_than_raised(tmp_path, monkeypatch
 
 
 def _raise(*args, **kwargs):
+    """Stand in for a read that fails on the machine rather than on the file."""
     raise OSError("no")
 
 
 def test_as_info_leaves_out_what_the_file_does_not_state(tmp_path):
+    """A run of empty headings buries what 'pc info' does have to say."""
     path = _write(tmp_path, PRODUCT)
     info = step_metadata.as_info(step_metadata.of_step_file(path))
 
@@ -368,4 +384,5 @@ def test_as_info_leaves_out_what_the_file_does_not_state(tmp_path):
 
 
 def test_as_info_of_a_file_that_could_not_be_read():
+    """The reader has already said why in the log; 'pc info' just has less."""
     assert step_metadata.as_info(None) == {}

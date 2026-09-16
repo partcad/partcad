@@ -29,6 +29,7 @@ class _Shape(Shape):
     """The little a measurement needs of a shape, and nothing that builds one."""
 
     def __init__(self, box=(0, 0, 0, 10, 20, 30), solidity=None, unbuilt=False, raises=None):
+        """A shape that answers the two measurements with whatever it was given."""
         super().__init__("//test", {"name": "thing"})
         self.name = "thing"
         self._box = box
@@ -38,15 +39,18 @@ class _Shape(Shape):
         self.asked = 0
 
     async def get_wrapped(self, ctx):
+        """Something, or nothing for a shape whose script raised."""
         return None if self._unbuilt else object()
 
     async def get_bounding_box_async(self, ctx):
+        """The box as OCCT would return it - padded bounds and all."""
         self.asked += 1
         if self._raises:
             raise self._raises
         return self._box
 
     async def get_solidity_async(self, ctx):
+        """What the solidity wrapper reports, or None for a shape holding no solid."""
         self.asked += 1
         if self._raises:
             raise self._raises
@@ -54,10 +58,15 @@ class _Shape(Shape):
 
 
 def _measure(shape):
+    """The measurements as 'pc info' would print them.
+
+    No context is passed: nothing reached from here ever looks at one.
+    """
     return asyncio.run(shape.measurements_async(None))
 
 
-def test_the_bounding_box_is_reported_as_where_it_is_and_how_large(tmp_path):
+def test_the_bounding_box_is_reported_as_where_it_is_and_how_large():
+    """Three triples: a shape 10 wide starting at -1 is not a shape 10 wide at 0."""
     info = _measure(_Shape(box=(-1.0, 0.0, 2.0, 9.0, 20.0, 5.0)))
 
     assert info["BoundingBox"] == {
@@ -104,6 +113,7 @@ def test_the_size_agrees_with_the_bounds_it_was_worked_out_from():
 
 
 def test_the_volume_and_how_many_solids_it_is_of():
+    """More than one solid in a part is worth saying: it is deliberate or a bug."""
     info = _measure(_Shape(solidity={"solids": 2, "volume": 9600.0, "valid": True}))
 
     assert info["Volume"] == 9600.0
@@ -148,4 +158,5 @@ def test_neither_measurement_can_take_the_other_down():
 
 
 def test_an_empty_bounding_box_is_left_out_rather_than_invented():
+    """A shape that built and occupies nothing has no size to state."""
     assert _measure(_Shape(box=None)) == {}

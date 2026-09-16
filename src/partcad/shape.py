@@ -947,6 +947,16 @@ class Shape(ShapeConfiguration):
         asyncio.run(self.show_async(ctx))
 
     def shape_info(self, ctx):
+        """What 'pc info' reports of any shape, whatever kind or type it is.
+
+        What it cost to hold, what it measured, what it is keyed and cached
+        under, and the ports it carries. A factory adds what is particular to
+        its type on top of this (see 'ShapeFactory.info').
+
+        The shape is built first, and has to be: a measurement is of geometry,
+        and the hash of a shape means nothing until the files it is built from
+        are on disk. For a shape built before, that is a cache hit.
+        """
         asyncio.run(self.get_wrapped(ctx))
         info = {}
         info["Memory"] = "%.02f KB" % ((total_size(self) + 1023.0) / 1024.0)

@@ -213,6 +213,7 @@ class _Records:
     """
 
     def __init__(self):
+        """Empty of every record type; 'read_block' is what fills them in."""
         self._products = {}
         self._formations = {}
         self._definitions = {}
@@ -283,8 +284,16 @@ class _Records:
     # One method per record type this reads. Each takes the record's id and its
     # already-split arguments, and each keeps only what something else asks for.
     #
+    # Part 21 names no attribute: a record is a positional argument list, so
+    # every index below is a claim about the schema. Each docstring spells the
+    # entity out as AP242 declares it, with the attribute being read in capitals
+    # -- that is what makes the index checkable without the standard to hand,
+    # and a short argument list is a truncated record rather than a different
+    # entity, so it is dropped rather than read at the wrong offset.
+    #
 
     def _product(self, id, arguments):
+        """PRODUCT(ID, NAME, DESCRIPTION, frame_of_reference)."""
         if len(arguments) < 2:
             return
         self._products[id] = {
@@ -294,31 +303,50 @@ class _Records:
         }
 
     def _formation(self, id, arguments):
+        """PRODUCT_DEFINITION_FORMATION(id, description, OF_PRODUCT[, make_or_buy])."""
         if len(arguments) < 3:
             return
         self._formations[id] = step_p21.reference(arguments[2])
 
     def _definition(self, id, arguments):
+        """PRODUCT_DEFINITION(id, description, FORMATION, frame_of_reference)."""
         if len(arguments) < 3:
             return
         self._definitions[id] = step_p21.reference(arguments[2])
 
     def _definition_shape(self, id, arguments):
+        """PRODUCT_DEFINITION_SHAPE(name, description, DEFINITION).
+
+        A subtype of 'property_definition', and the one every STEP file holding
+        a solid states. It is followed for its owner and never treated as a
+        property set of its own - see 'properties()'.
+        """
         if len(arguments) < 3:
             return
         self._definition_shapes[id] = step_p21.reference(arguments[2])
 
     def _aspect(self, id, arguments):
+        """SHAPE_ASPECT(NAME, description, of_shape, product_definitional).
+
+        One named feature of a shape: what a property about *part* of a part is
+        stated against, and the nearest thing STEP has to a DXF entity.
+        """
         if not arguments:
             return
         self._aspects[id] = step_p21.text(arguments[0])
 
     def _property_definition(self, id, arguments):
+        """PROPERTY_DEFINITION(NAME, description, DEFINITION)."""
         if len(arguments) < 3:
             return
         self._property_definitions[id] = (step_p21.text(arguments[0]), step_p21.reference(arguments[2]))
 
     def _link(self, id, arguments):
+        """PROPERTY_DEFINITION_REPRESENTATION(DEFINITION, USED_REPRESENTATION).
+
+        Kept as a pair rather than resolved here: a STEP file states its records
+        in no particular order, so neither end need have been read yet.
+        """
         if len(arguments) < 2:
             return
         definition = step_p21.reference(arguments[0])
@@ -327,11 +355,13 @@ class _Records:
             self._links.append((definition, representation))
 
     def _representation(self, id, arguments):
+        """REPRESENTATION(NAME, ITEMS, context_of_items)."""
         if len(arguments) < 2:
             return
         self._representations[id] = (step_p21.text(arguments[0]), step_p21.references(arguments[1]))
 
     def _layer(self, id, arguments):
+        """PRESENTATION_LAYER_ASSIGNMENT(NAME, DESCRIPTION, ASSIGNED_ITEMS)."""
         if len(arguments) < 3:
             return
         self._layers.append(
@@ -362,9 +392,16 @@ class _Records:
     #
 
     def products(self):
+        """The products the file names, in the order their records are numbered.
+
+        By id rather than by the order they were read: a block-at-a-time scan
+        reads them in file order, which is the same thing for every file written
+        by an exporter and not something the format promises.
+        """
         return [self._products[id] for id in sorted(self._products)]
 
     def layers(self):
+        """The layers the file declares, in the order it declares them."""
         return list(self._layers)
 
     def properties(self):

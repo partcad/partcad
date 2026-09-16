@@ -300,6 +300,7 @@ def test_the_layers_include_the_ones_this_sketch_does_not_read(tmp_path):
 
 
 def test_a_layer_says_how_much_is_on_it_and_of_what(tmp_path):
+    """Per layer and per entity type, including a layer nothing is drawn on."""
     document = ezdxf.readfile(_drawing(tmp_path))
     by_name = {layer["name"]: layer for layer in dxf_metadata.describe(document)["layers"]}
 
@@ -311,6 +312,7 @@ def test_a_layer_says_how_much_is_on_it_and_of_what(tmp_path):
 
 
 def test_what_the_drawing_says_about_itself(tmp_path):
+    """Which DXF it is, how much it holds, and who could have annotated it."""
     document = ezdxf.readfile(_drawing(tmp_path))
     described = dxf_metadata.describe(document)
 
@@ -361,10 +363,12 @@ class _DescribingSketch(_CountingSketch):
     """A sketch that records what its drawing said about itself, too."""
 
     def __init__(self, project_name, config, annotations, metadata):
+        """Told in advance what its drawing says, since it opens no file."""
         super().__init__(project_name, config, annotations)
         self._metadata = metadata
 
     async def get_shape(self, ctx):
+        """Building is what learns both, which is the whole reason they are cached."""
         shape = await super().get_shape(ctx)
         self.file_metadata = dict(self._metadata)
         return shape
