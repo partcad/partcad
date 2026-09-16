@@ -146,9 +146,26 @@ def _aligns(table: Table):
     return table.aligns or ["left"] * len(table.columns)
 
 
-def _table_cell(text):
-    """A value made safe to put in one cell of a markdown table."""
-    text = "" if text is None else str(text)
+# The size a thumbnail is given inside a table, where a 200px picture would push
+# every other column off the page.
+MARKDOWN_THUMBNAIL_STYLE = "width: auto; height: auto; max-width: 96px; max-height: 96px;"
+
+
+def _table_cell(value):
+    """A value made safe to put in one cell of a markdown table.
+
+    An 'Image' becomes a thumbnail: a bill of materials is read by somebody
+    holding the parts, and the column they look at first is the picture.
+    """
+    if isinstance(value, Image):
+        # 'src' first, like every other picture in a markdown document: the file
+        # is next to the document, and a data URI in a table cell would make the
+        # source unreadable for the sake of a thumbnail.
+        source = value.src or value.file
+        if not source:
+            return ""
+        return '<img src="%s" alt="%s" style="%s">' % (source, value.alt, MARKDOWN_THUMBNAIL_STYLE)
+    text = "" if value is None else str(value)
     return text.replace("|", "\\|").replace("\n", "<br/>")
 
 
@@ -221,6 +238,16 @@ def _html_inline(text: str) -> str:
         position = match.end()
     parts.append(html.escape(text[position:]))
     return "".join(parts)
+
+
+def _html_cell(value) -> str:
+    """One cell of an HTML table: a thumbnail for a picture, escaped text for the rest."""
+    if isinstance(value, Image):
+        source = _image_source(value)
+        if source is None:
+            return ""
+        return '<img src="%s" alt="%s" class="thumbnail">' % (source, html.escape(value.alt))
+    return html.escape("" if value is None else str(value))
 
 
 def _image_source(image: Image) -> Optional[str]:
@@ -327,8 +354,7 @@ def _html_block(block: Block) -> str:
             # thing about the same document.
             row_aligns = list(aligns) + ["left"] * max(0, len(row) - len(aligns))
             cells = "".join(
-                '<td style="text-align: %s">%s</td>' % (align, html.escape("" if cell is None else str(cell)))
-                for cell, align in zip(row, row_aligns)
+                '<td style="text-align: %s">%s</td>' % (align, _html_cell(cell)) for cell, align in zip(row, row_aligns)
             )
             body.append("<tr>%s</tr>" % cells)
         return "<table><thead><tr>%s</tr></thead><tbody>%s</tbody></table>" % (head, "".join(body))
@@ -405,6 +431,18 @@ class _Embedder:
         return {"src": payload, "caption": image.caption, "alt": image.alt}
 
 
+def _cell_to_data(cell, embed: Optional[_Embedder] = None):
+    """One table cell, as the data a renderer downstream is handed.
+
+    A picture stays a picture - the object travels as the same dictionary an
+    'images' block's pictures do, so a renderer that can draw one in a cell
+    draws it and one that cannot has the alt text to fall back on.
+    """
+    if isinstance(cell, Image):
+        return _image_to_data(cell, embed) or ""
+    return "" if cell is None else str(cell)
+
+
 def _image_to_data(image: Image, embed: Optional[_Embedder]) -> Optional[dict]:
     """One picture as plain data, addressed the way the reader can reach it."""
     if embed is None:
@@ -441,7 +479,7 @@ def _block_to_data(block: Block, embed: Optional[_Embedder] = None) -> dict:
             "type": "table",
             "columns": list(block.columns),
             "aligns": _aligns(block),
-            "rows": [["" if cell is None else str(cell) for cell in row] for row in block.rows],
+            "rows": [[_cell_to_data(cell, embed) for cell in row] for row in block.rows],
         }
     if isinstance(block, LinkList):
         return {"type": "links", "items": [list(item) for item in block.items]}
@@ -487,6 +525,7 @@ p.note { font-style: italic; }
 .callout .images img { max-height: 18vh; }
 table { border-collapse: collapse; width: 100%%; margin: 8px 0 16px 0; font-size: .9rem; }
 th, td { border-bottom: 1px solid var(--line); padding: 4px 8px; }
+td img.thumbnail { max-width: 96px; max-height: 96px; width: auto; height: auto; display: block; }
 ul.links { line-height: 1.8; }
 .footer { margin-top: auto; padding-top: 16px; color: var(--muted); font-size: .8rem; text-align: center; }
 .nav { position: fixed; top: 0; height: 100%%; width: 56px; border: none; background: transparent;
