@@ -28,7 +28,7 @@ import requests
 from http_server import serve as _serve
 
 from partcad import project_factory_tar
-from partcad.project_factory_tar import ProjectFactoryTar
+from partcad.project_factory_tar import ProjectFactoryTar, _is_under
 
 ARCHIVE = "pkg.tar.gz"
 
@@ -37,6 +37,9 @@ ARCHIVE = "pkg.tar.gz"
 TREE = {
     "pkg/partcad.yaml": "parts:\n  bolt:\n    type: step\n",
     "pkg/sub/part.step": "ISO-10303-21;\n",
+    # A sibling of the selected subtree whose name starts with its name. A
+    # 'relPath' matched as a plain prefix takes this too.
+    "pkg/submarine/decoy.step": "ISO-10303-21;\n",
 }
 
 # A member name that leaves the directory it is unpacked into. The oldest
@@ -129,12 +132,14 @@ def test_rel_path_selects_one_subtree(served, cache):
     assert os.path.normpath(path).endswith(os.path.join("pkg", "sub"))
     assert open(os.path.join(path, "part.step")).read() == TREE["pkg/sub/part.step"]
 
-    # The file outside the selected subtree was filtered out rather than merely
+    # What is outside the selected subtree was filtered out rather than merely
     # left unreferenced. This is what tells a working filter apart from one
     # that is never applied: the returned path points into the subtree either
     # way, so only what is *beside* it says whether 'relPath' did anything.
-    outside = os.path.join(os.path.dirname(path), "partcad.yaml")
-    assert not os.path.exists(outside)
+    beside = os.path.dirname(path)
+    assert not os.path.exists(os.path.join(beside, "partcad.yaml"))
+    # And 'pkg/submarine' merely starts with 'pkg/sub'; it is not inside it.
+    assert not os.path.exists(os.path.join(beside, "submarine"))
 
 
 def test_a_python_that_cannot_filter_still_extracts(served, cache, monkeypatch):
@@ -290,3 +295,73 @@ def test_a_rename_that_failed_for_any_other_reason_is_not_swallowed(served, cach
     with _serve(served) as url:
         with pytest.raises(OSError):
             _Tar()._download("%s/%s" % (url, ARCHIVE), str(blocked))
+
+
+@pytest.mark.parametrize("can_filter", [True, False], ids=["data_filter", "no_filter_argument"])
+def test_a_member_that_is_not_a_file_is_refused(tmp_path, cache, monkeypatch, can_filter):
+    """A package is files and directories.
+
+    A tarball can also ask for a fifo or a device node, and 'os.mkfifo' needs
+    no privilege at all -- so an archive could leave one sitting in the cache
+    for whatever reads the package next to block on.
+    """
+    root = tmp_path / "served-special"
+    root.mkdir()
+    with tarfile.open(root / ARCHIVE, "w:gz") as tar:
+        info = tarfile.TarInfo("pkg/pipe")
+        info.type = tarfile.FIFOTYPE
+        tar.addfile(info)
+
+    if not can_filter:
+        monkeypatch.setattr(inspect, "getfullargspec", _without_filter)
+
+    with _serve(root) as url:
+        with pytest.raises(RuntimeError):
+            _extract(_Tar(), "%s/%s" % (url, ARCHIVE), cache)
+
+    assert not os.path.exists(cache) or list(cache.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "name, rel_path, selected",
+    [
+        ("pkg/sub", "pkg/sub", True),
+        ("pkg/sub/part.step", "pkg/sub", True),
+        ("pkg/sub/part.step", "pkg/sub/", True),
+        # Merely starts with it. This is the whole reason the check is not a
+        # plain prefix test.
+        ("pkg/submarine/decoy.step", "pkg/sub", False),
+        ("pkg/subbed", "pkg/sub", False),
+        ("pkg/other/part.step", "pkg/sub", False),
+        # A 'relPath' naming the root of the archive selects all of it.
+        ("pkg/partcad.yaml", "/", True),
+    ],
+)
+def test_rel_path_is_matched_at_a_path_boundary(name, rel_path, selected):
+    assert _is_under(name, rel_path) is selected
+
+
+@pytest.mark.parametrize("can_filter", [True, False], ids=["data_filter", "no_filter_argument"])
+def test_a_link_pointing_out_of_the_package_is_refused(tmp_path, cache, monkeypatch, can_filter):
+    """A link's target is a path the archive chose too.
+
+    Nothing is written outside the package by unpacking the link itself -- what
+    it buys is a path inside the package that reads and writes somewhere else,
+    for whatever opens the package afterwards.
+    """
+    root = tmp_path / "served-link"
+    root.mkdir()
+    with tarfile.open(root / ARCHIVE, "w:gz") as tar:
+        info = tarfile.TarInfo("pkg/escape.step")
+        info.type = tarfile.SYMTYPE
+        info.linkname = "../../../../etc/passwd"
+        tar.addfile(info)
+
+    if not can_filter:
+        monkeypatch.setattr(inspect, "getfullargspec", _without_filter)
+
+    with _serve(root) as url:
+        with pytest.raises(RuntimeError):
+            _extract(_Tar(), "%s/%s" % (url, ARCHIVE), cache)
+
+    assert not os.path.exists(cache) or list(cache.iterdir()) == []

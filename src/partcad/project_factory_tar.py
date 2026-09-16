@@ -40,6 +40,20 @@ def _lands_within(destination: str, name: str) -> bool:
     return resolved == destination or resolved.startswith(destination + os.sep)
 
 
+def _is_under(name: str, rel_path: str) -> bool:
+    """Whether the member 'name' is 'rel_path' itself or something inside it.
+
+    The boundary is what makes this more than a prefix test: 'pkg/sub' is a
+    prefix of 'pkg/submarine', so asking for one subtree would quietly unpack
+    its siblings alongside it. Archive member names are always '/'-separated,
+    whatever the machine unpacking them uses.
+    """
+    prefix = rel_path.rstrip("/")
+    if not prefix:
+        return True
+    return name == prefix or name.startswith(prefix + "/")
+
+
 def _safe_members(tar_obj, destination):
     """What 'data_filter' refuses, for the interpreters that predate it.
 
@@ -56,6 +70,13 @@ def _safe_members(tar_obj, destination):
     """
     destination = os.path.abspath(destination)
     for member in tar_obj:
+        # What lands where is only half of it: a tarball can also ask for a
+        # fifo or a device node, and 'os.mkfifo' needs no privilege at all.
+        # A package is files and directories, so this is the same set
+        # 'data_filter' allows.
+        if not (member.isreg() or member.isdir() or member.issym() or member.islnk()):
+            raise tarfile.TarError("'%s' is not a kind of file a package may contain" % member.name)
+
         targets = [member.name]
         if member.islnk() or member.issym():
             targets.append(os.path.join(os.path.dirname(member.name), member.linkname))
@@ -229,6 +250,6 @@ class ProjectFactoryTar(pf.ProjectFactory, TarImportConfiguration):
         which raises rather than returning for a member that would land outside
         'path'.
         """
-        if self.import_rel_path is not None and not member.name.startswith(self.import_rel_path):
+        if self.import_rel_path is not None and not _is_under(member.name, self.import_rel_path):
             return None
         return tarfile.data_filter(member, path)
