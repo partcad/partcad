@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""What a DXF drawing says about its own elements, read out of extended data.
+"""What a DXF drawing says about itself and about its own elements.
 
 A DXF entity may carry *extended data* - XDATA - which is arbitrary application
 data attached to it: the tags an application wrote under its own APPID, in the
@@ -18,7 +18,15 @@ imported, and carried beside the geometry from then on (see
 *a sketch* rather than *a DXF file*: anything that can produce the same
 annotations answers the same questions, whether or not a DXF was involved.
 
-Only ezdxf is imported, and no CAD library, so the annotations can be read - and
+The drawing also says things about *itself* - which layers it has, which
+application wrote it, what its numbers are in - and that is read here too
+('describe()'), on the same trip and for the same reason: it cannot be asked of
+the sketch afterwards, because a sketch is the layers that were selected and the
+question "which layers does this drawing have" is about the ones that were not.
+It is what 'pc info' reports of a DXF sketch, and it is how a layer filter that
+matched nothing is told apart from a layer that is not in the file.
+
+Only ezdxf is imported, and no CAD library, so all of it can be read - and
 tested - without a sandbox.
 """
 
@@ -197,10 +205,19 @@ def read(path: str, include=None, exclude=None) -> list:
     """
     import ezdxf
 
+    return annotations_of(ezdxf.readfile(path), include, exclude)
+
+
+def annotations_of(document, include=None, exclude=None) -> list:
+    """'read()', of a drawing that has already been opened.
+
+    Split out so that one pass over the file answers both questions a caller
+    has of it -- what it says about its elements, and what it says about itself
+    -- rather than opening and parsing a drawing twice to ask them separately.
+    """
     include = list(include or [])
     exclude = list(exclude or [])
 
-    document = ezdxf.readfile(path)
     annotations = []
     for entity in document.modelspace():
         layer = getattr(entity.dxf, "layer", "")
@@ -216,3 +233,158 @@ def read(path: str, include=None, exclude=None) -> list:
             }
         )
     return annotations
+
+
+# What '$INSUNITS' says the drawing is drawn in. DXF states it as a code and
+# nothing else in the file repeats it, so a drawing whose numbers are inches
+# looks exactly like one whose numbers are millimetres until this is read.
+#
+# Spelled out here rather than taken from ezdxf, which has had the table under
+# two different names across the versions a sandbox may install; this is twenty
+# entries that have not changed since DXF R14.
+_UNITS = {
+    0: None,  # Unitless, which is not the same as saying 'mm'.
+    1: "in",
+    2: "ft",
+    3: "mi",
+    4: "mm",
+    5: "cm",
+    6: "m",
+    7: "km",
+    8: "uin",
+    9: "mil",
+    10: "yd",
+    11: "angstrom",
+    12: "nm",
+    13: "um",
+    14: "dm",
+    15: "dam",
+    16: "hm",
+    17: "Gm",
+    18: "au",
+    19: "ly",
+    20: "pc",
+}
+
+
+def read_file(path: str, include=None, exclude=None) -> dict:
+    """Everything this module reads out of one drawing, in one pass over it.
+
+    ``{"metadata": ..., "annotations": ...}`` -- what the drawing says about
+    itself ('describe()') and what it says about its elements ('read()'). One
+    'ezdxf.readfile' serves both, which is the whole reason this exists: the
+    import wrapper wants both and a drawing is not cheap to parse twice.
+    """
+    import ezdxf
+
+    document = ezdxf.readfile(path)
+    return {
+        "metadata": describe(document, include, exclude),
+        "annotations": annotations_of(document, include, exclude),
+    }
+
+
+def describe(document, include=None, exclude=None) -> dict:
+    """What the drawing says about itself, rather than about any one element.
+
+    Five things, and each of them is a question somebody asks of a DXF before
+    they ask anything about its geometry:
+
+    * ``version``/``release`` - which DXF this is ('AC1024', 'R2010'). XDATA is
+      in every version, but what a drawing may carry beside it is not.
+    * ``units`` - what '$INSUNITS' resolves to, or None where it says the
+      drawing is unitless. PartCAD reads a DXF as millimetres whatever it says;
+      this is what the file states, and the two disagreeing is worth being able
+      to see. Note that a file omitting the variable altogether does not read as
+      unitless: ezdxf supplies a default for it while loading and there is no
+      way left to tell the two apart, so what is reported for such a file is
+      that default.
+    * ``appids`` - the applications the file declares. XDATA is written under an
+      APPID, so this is the list of names an annotation could have been written
+      by, and an empty one is a drawing that carries no XDATA at all.
+    * ``layers`` - **every** layer the drawing declares, whether or not this
+      sketch reads it, with how many elements are on each and of which types.
+      That is the difference between a layer filter that selected nothing and a
+      layer that is not in the file - between a typo and an empty layer - which
+      is otherwise invisible: both produce a sketch with nothing in it.
+    * ``elements`` - how many entities the model space holds, all layers
+      together.
+
+    The layer filters are applied to the ``read`` flag and to nothing else. The
+    point of reporting a layer that was filtered out is that it was filtered
+    out.
+    """
+    include = list(include or [])
+    exclude = list(exclude or [])
+
+    layers = {}
+    for name in _declared_layers(document):
+        layers[name] = {
+            "name": name,
+            "read": is_included(name, include, exclude),
+            "elements": 0,
+            "types": {},
+        }
+
+    total = 0
+    for entity in document.modelspace():
+        total += 1
+        name = getattr(entity.dxf, "layer", "") or ""
+        layer = layers.get(name)
+        if layer is None:
+            # An entity on a layer the table does not declare. DXF allows it and
+            # applications write it; a layer that is only mentioned by what is
+            # drawn on it is still a layer this sketch may be reading.
+            layer = layers[name] = {
+                "name": name,
+                "read": is_included(name, include, exclude),
+                "elements": 0,
+                "types": {},
+            }
+        layer["elements"] += 1
+        dxftype = entity.dxftype()
+        layer["types"][dxftype] = layer["types"].get(dxftype, 0) + 1
+
+    return {
+        "version": getattr(document, "dxfversion", None),
+        "release": getattr(document, "acad_release", None),
+        "units": _UNITS.get(_header_var(document, "$INSUNITS")),
+        "appids": _appids(document),
+        "elements": total,
+        "layers": [layers[name] for name in sorted(layers)],
+    }
+
+
+def _declared_layers(document) -> list:
+    """The names in the drawing's layer table, or an empty list if it has none."""
+    try:
+        return [layer.dxf.name for layer in document.layers]
+    except Exception:
+        return []
+
+
+def _appids(document) -> list:
+    """The APPIDs the drawing declares, sorted.
+
+    Reported because an annotation is written under one: a drawing whose table
+    names 'PARTCAD' and one that names nothing say different things about where
+    an 'angle' could have come from. A file whose table cannot be read reports
+    none rather than failing the whole description over it.
+    """
+    try:
+        return sorted(appid.dxf.name for appid in document.appids)
+    except Exception:
+        return []
+
+
+def _header_var(document, name):
+    """One '$'-prefixed header variable, as ezdxf resolves it.
+
+    None only where ezdxf cannot answer at all. It fills a default in for a
+    variable the file omits, so this cannot distinguish a drawing that stated
+    one from a drawing that left it out - see the note in 'describe()'.
+    """
+    try:
+        return document.header.get(name)
+    except Exception:
+        return None

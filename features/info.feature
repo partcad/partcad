@@ -185,6 +185,148 @@ Feature: `pc info` command
     And STDOUT should contain "sample PartCAD package"
 
   @success @pc-info
+  Scenario: `pc info` reports what was measured when the part was built
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        block:
+          type: cadquery
+          path: block.py
+      """
+    And a file named "block.py" with content:
+      """
+      import cadquery as cq
+
+      if __name__ != "__cqgi__":
+          from cq_server.ui import ui, show_object
+
+      show_object(cq.Workplane("front").box(10, 20, 30))
+      """
+    When I run "pc info block"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "BoundingBox"
+    And STDOUT should contain "'size': [10.0, 20.0, 30.0]"
+    And STDOUT should contain "Volume: 6000.0"
+    And STDOUT should contain "Solids: 1"
+
+  @success @pc-info
+  Scenario: `pc info` on a DXF sketch enumerates its layers and its annotations
+    Given a file named "partcad.yaml" with content:
+      """
+      sketches:
+        panel:
+          type: dxf
+          include: [BEND_UP]
+      """
+    And a file named "panel.dxf" with content:
+      """
+      0
+      SECTION
+      2
+      TABLES
+      0
+      TABLE
+      2
+      APPID
+      0
+      APPID
+      2
+      PARTCAD
+      70
+      0
+      0
+      ENDTAB
+      0
+      TABLE
+      2
+      LAYER
+      0
+      LAYER
+      2
+      OUTLINE
+      70
+      0
+      62
+      7
+      6
+      CONTINUOUS
+      0
+      LAYER
+      2
+      BEND_UP
+      70
+      0
+      62
+      1
+      6
+      CONTINUOUS
+      0
+      ENDTAB
+      0
+      ENDSEC
+      0
+      SECTION
+      2
+      ENTITIES
+      0
+      LINE
+      8
+      BEND_UP
+      10
+      0.0
+      20
+      0.0
+      30
+      0.0
+      11
+      10.0
+      21
+      0.0
+      31
+      0.0
+      1001
+      PARTCAD
+      1000
+      angle=90
+      1000
+      radius=1.5
+      1000
+      direction=up
+      0
+      LINE
+      8
+      OUTLINE
+      10
+      0.0
+      20
+      -5.0
+      30
+      0.0
+      11
+      20.0
+      21
+      -5.0
+      31
+      0.0
+      0
+      ENDSEC
+      0
+      EOF
+      """
+    When I run "pc info -s panel"
+    Then the command should exit with a status code of "0"
+    # Every layer the drawing has, and whether this sketch reads it: a filter
+    # that matched nothing and a layer that is not in the file both produce an
+    # empty sketch, and this is what tells them apart.
+    And STDOUT should contain "'name': 'BEND_UP', 'read': True"
+    And STDOUT should contain "'name': 'OUTLINE', 'read': False"
+    # ...and what the bend line says it is.
+    And STDOUT should contain "'angle': '90'"
+    And STDOUT should contain "'radius': '1.5'"
+    And STDOUT should contain "'direction': 'up'"
+    And STDOUT should contain "PARTCAD"
+
+  @success @pc-info
   Scenario: `pc info -i` on a parametrized interface
     Given a file named "partcad.yaml" with content:
       """

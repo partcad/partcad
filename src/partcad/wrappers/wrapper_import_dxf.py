@@ -97,26 +97,30 @@ def process(path, request):
             shape = as_wires(request)
             warning = "no face could be built from the DXF file (%s); imported the wires it draws instead" % e
 
-        # What the drawing says about its own elements, which the geometry
-        # cannot carry: BREP has nowhere to put an angle written against a line.
-        # Read here, as the file is imported, so that it travels with the sketch
-        # from then on (see 'Sketch.get_annotations') and nothing downstream has
-        # to know that a DXF file was ever involved.
+        # What the drawing says about its own elements, and about itself, which
+        # the geometry cannot carry: BREP has nowhere to put an angle written
+        # against a line, nor the name of a layer that was filtered out. Read
+        # here, as the file is imported, so that both travel with the sketch
+        # from then on (see 'Sketch.get_annotations' and
+        # 'Sketch.get_file_metadata') and nothing downstream has to know that a
+        # DXF file was ever involved.
         #
         # The same layer filters the import above was given, so the annotations
         # describe what is in the sketch rather than what was filtered out of
         # it. A drawing that cannot be read a second time is reported rather
         # than passed off as one that annotates nothing.
+        read = dxf_metadata.read_file(
+            request["path"],
+            include=request["include"],
+            exclude=request["exclude"],
+        )
         return {
             "success": True,
             "exception": None,
             "warning": warning,
             "shape": shape,
-            "annotations": dxf_metadata.read(
-                request["path"],
-                include=request["include"],
-                exclude=request["exclude"],
-            ),
+            "annotations": read["annotations"],
+            "metadata": read["metadata"],
         }
 
     except Exception as e:

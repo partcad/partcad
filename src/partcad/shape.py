@@ -141,6 +141,23 @@ TEXT_PART_TYPES = frozenset({"step", "iges", "brep", "obj", "threejs", "svg", "d
 
 SUPPORTED_PART_TYPES = frozenset(LIVE_OBJECT_PART_TYPES | SERIALIZED_PART_TYPES)
 
+# To how many decimal places of a millimetre a measurement is reported (see
+# 'Shape.measurements_async'). A nanometre: below anything any process makes to,
+# and above the tolerance OCCT pads a bounding box by, which is the digit this
+# exists to stop being printed.
+MEASURED_DECIMALS = 6
+
+
+def measured(value: float) -> float:
+    """One measurement as it is reported: rounded, and never minus nought.
+
+    A bound that rounds to zero from below is '-0.0', which is the same number
+    and reads as a different one - "the part starts a shade before the origin" -
+    so it is brought back to the zero it is. Adding nought is what does that,
+    IEEE 754 having exactly one rule about the sum of the two zeroes.
+    """
+    return round(value, MEASURED_DECIMALS) + 0.0
+
 
 # What a shape's configuration says about the shape to a reader, rather than
 # what its geometry is made of. Everything else in the configuration is hashed
@@ -578,7 +595,12 @@ class Shape(ShapeConfiguration):
                         # record: an empty entry is what says the question was
                         # asked and the answer was nothing, which is what the
                         # read above distinguishes from an entry that is absent.
-                        to_cache[key] = getattr(self, attribute, None) or []
+                        # Whatever the attribute holds is written as it stands,
+                        # so that an empty mapping comes back a mapping; an
+                        # empty list stands in only for an attribute that is not
+                        # there at all.
+                        value = getattr(self, attribute, None)
+                        to_cache[key] = [] if value is None else value
                     properties = self._shape_properties()
                     if properties:
                         # Both entries are filled here and nowhere else:
@@ -962,6 +984,7 @@ class Shape(ShapeConfiguration):
         asyncio.run(self.get_wrapped(ctx))
         info = {}
         info["Memory"] = "%.02f KB" % ((total_size(self) + 1023.0) / 1024.0)
+        info.update(asyncio.run(self.measurements_async(ctx)))
 
         if self.with_ports is not None:
             info["Ports"] = self.with_ports.info()
@@ -2475,6 +2498,79 @@ class Shape(ShapeConfiguration):
 
     def get_max_dimension(self, ctx):
         return asyncio.run(self.get_max_dimension_async(ctx))
+
+    async def measurements_async(self, ctx):
+        """How big this shape is and how much of it there is, for 'pc info'.
+
+        Two numbers a reader of a part wants before any other: where it is and
+        how large ('BoundingBox'), and how much material is in it ('Volume').
+        Neither can be read off a declaration -- a part is a script, a file or a
+        boolean of two others, and the only way to know its size is to have
+        built it -- which is exactly why 'pc info' is where they belong, and why
+        a written description of a shape (`/pc:describe`) starts from them
+        rather than from a projection somebody estimated a size off.
+
+        ``BoundingBox`` is axis-aligned and in the shape's own coordinates, as
+        ``min``/``max``/``size`` triples of millimetres. ``size`` is stated
+        rather than left to be subtracted: it is the one of the three anybody
+        reads out loud, and a description that got it wrong by subtracting the
+        wrong pair would be wrong in a way nothing would catch. It is worked out
+        from the rounded bounds rather than rounded itself, so the three always
+        agree with each other.
+
+        Those bounds are rounded, and only here. OCCT pads a bounding box by the
+        shape's own tolerance -- so a 120 mm block measures 120.0000002 mm, and
+        printing that says "this part is two ten-millionths of a millimetre
+        wider than you think" when what it means is "OCCT leaves itself room".
+        The padding is what every *other* caller of 'get_bounding_box_async'
+        wants (an exploded view that overlapped by a tolerance would be wrong);
+        a number somebody reads is not, so this is the one place it comes off.
+
+        ``Volume`` is in cubic millimetres and ``Solids`` is how many solids it
+        is the volume of. Both are left out for a shape that holds no solid at
+        all - a sketch, a shell, a wire - because a volume of zero and no volume
+        to speak of are different things and only one of them is worth printing.
+        A **negative** volume is reported as it stands: it means the faces are
+        oriented inward, which is a real thing to know about a part and not a
+        number to take the modulus of.
+
+        Each half is asked for on its own and neither can take the other down.
+        Both are measured in a sandbox, so either can fail on a machine whose
+        sandbox is not built yet - and 'pc info' still has a part's
+        configuration, its hash and its dependencies to report, which is what it
+        was asked for.
+        """
+        info = {}
+        if await self.get_wrapped(ctx) is None:
+            # Nothing was built, so there is nothing to measure. Asked once here
+            # rather than left to the two calls below, which would each start a
+            # sandbox to be told the same thing - and 'pc info' on a part that
+            # failed to build is a common enough thing to do.
+            return info
+
+        try:
+            box = await self.get_bounding_box_async(ctx)
+        except Exception as e:  # pylint: disable=broad-except
+            pc_logging.debug("Failed to measure the bounding box of '%s': %s" % (self.name, e))
+            box = None
+        if box is not None:
+            low = [measured(value) for value in box[:3]]
+            high = [measured(value) for value in box[3:]]
+            info["BoundingBox"] = {
+                "min": low,
+                "max": high,
+                "size": [measured(high[axis] - low[axis]) for axis in range(3)],
+            }
+
+        try:
+            solidity = await self.get_solidity_async(ctx)
+        except Exception as e:  # pylint: disable=broad-except
+            pc_logging.debug("Failed to measure the volume of '%s': %s" % (self.name, e))
+            solidity = None
+        if solidity is not None and solidity.get("volume") is not None:
+            info["Volume"] = solidity["volume"]
+            info["Solids"] = solidity.get("solids", 0)
+        return info
 
     async def _run_test_async(self, ctx: Context, tests: list | None = None, use_wrapper: bool = False) -> bool:
         if not self.finalized:
