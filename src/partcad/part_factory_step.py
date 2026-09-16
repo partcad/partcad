@@ -35,12 +35,6 @@ class PartFactoryStep(PartFactoryFile):
     ACCEPTS_TOLERANCE_FIELD = True
     TOLERANCE_FILE_FORMAT = "step"
 
-    # Which reader 'pc info' puts the file through, in the same spelling and for
-    # the same reason as the tolerance above: a part type names the *format* of
-    # the file it is read from, so 'kicad' - which produces a STEP file some
-    # other way - is read by the same reader without naming it twice.
-    METADATA_FILE_FORMAT = "step"
-
     lock = threading.Lock()
 
     def __init__(self, ctx, source_project, target_project, config, can_create=False):

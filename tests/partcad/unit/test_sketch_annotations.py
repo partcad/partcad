@@ -13,17 +13,19 @@ on, which is what makes it a property of the *sketch* rather than of the file:
 the day another sketch type states the same thing, nothing that reads it changes.
 
 A drawing also says things about *itself* - which layers it has, what its
-numbers are in, which application wrote it - and that travels the same way, for
-a reason of its own: a sketch is the layers its filters selected, and the
-interesting thing about the ones they did not select is that they exist.
+numbers are in, which application wrote it - and that is read on the same trip,
+for a reason of its own: a sketch is the layers its filters selected, and the
+interesting thing about the ones they did not select is that they exist. It
+travels a different road from here, on the envelope beside the BREP rather than
+on the sketch, so what is checked of it here is the reading alone.
 
 Two halves are checked here, and they are the two the feature is made of:
 
 * the reading - which spellings of XDATA are understood, which elements are
   reported, what the layer filters do to the answer, and what the drawing says
   about itself;
-* the carrying - that both are cached beside the geometry, and that a cache
-  entry written before they existed is rebuilt rather than read back as a
+* the carrying - that the annotations are cached beside the geometry, and that a
+  cache entry written before they existed is rebuilt rather than read back as a
   drawing that annotates nothing.
 
 No CAD library and no sandbox: the reader needs ezdxf alone, and the caching is
@@ -331,7 +333,7 @@ def test_the_units_are_what_the_drawing_states(tmp_path):
     path = str(tmp_path / "inches.dxf")
     document.saveas(path)
 
-    assert dxf_metadata.read_file(path)["metadata"]["units"] == "in"
+    assert dxf_metadata.read_file(path)["metadata"]["Drawing"]["units"] == "in"
 
 
 def test_the_us_survey_units_are_units(tmp_path):
@@ -349,7 +351,7 @@ def test_the_us_survey_units_are_units(tmp_path):
         path = str(tmp_path / ("survey-%d.dxf" % code))
         document.saveas(path)
 
-        assert dxf_metadata.read_file(path)["metadata"]["units"] == name
+        assert dxf_metadata.read_file(path)["metadata"]["Drawing"]["units"] == name
 
 
 def test_a_unit_this_does_not_know_is_not_no_unit(tmp_path):
@@ -364,7 +366,7 @@ def test_a_unit_this_does_not_know_is_not_no_unit(tmp_path):
     path = str(tmp_path / "from-the-future.dxf")
     document.saveas(path)
 
-    assert dxf_metadata.read_file(path)["metadata"]["units"] == "unknown (97)"
+    assert dxf_metadata.read_file(path)["metadata"]["Drawing"]["units"] == "unknown (97)"
 
 
 def test_a_drawing_that_says_it_is_unitless(tmp_path):
@@ -375,7 +377,7 @@ def test_a_drawing_that_says_it_is_unitless(tmp_path):
     path = str(tmp_path / "unitless.dxf")
     document.saveas(path)
 
-    assert dxf_metadata.read_file(path)["metadata"]["units"] is None
+    assert dxf_metadata.read_file(path)["metadata"]["Drawing"]["units"] is None
 
 
 def test_one_pass_over_the_file_answers_both_questions(tmp_path):
@@ -384,51 +386,7 @@ def test_one_pass_over_the_file_answers_both_questions(tmp_path):
     read = dxf_metadata.read_file(path, include=["BEND_UP"])
 
     assert [a["layer"] for a in read["annotations"]] == ["BEND_UP"]
-    assert len(read["metadata"]["layers"]) == len(dxf_metadata.describe(ezdxf.readfile(path))["layers"])
-
-
-#
-# ...and that it survives the trip, the way the annotations do
-#
-
-
-class _DescribingSketch(_CountingSketch):
-    """A sketch that records what its drawing said about itself, too."""
-
-    def __init__(self, project_name, config, annotations, metadata):
-        """Told in advance what its drawing says, since it opens no file."""
-        super().__init__(project_name, config, annotations)
-        self._metadata = metadata
-
-    async def get_shape(self, ctx):
-        """Building is what learns both, which is the whole reason they are cached."""
-        shape = await super().get_shape(ctx)
-        self.file_metadata = dict(self._metadata)
-        return shape
-
-
-def test_the_file_metadata_comes_back_with_the_cached_geometry(ctx):
-    """Cached beside the annotations, and for the same reason.
-
-    A sketch that comes out of the cache is never instantiated, so a layer table
-    that was only ever set while building would be empty for every run but the
-    first - and 'pc info' would say less about a drawing the more it had been
-    used.
-    """
-    metadata = {"units": "mm", "layers": [{"name": "BEND_UP", "read": True, "elements": 1, "types": {"LINE": 1}}]}
-    first = _DescribingSketch("//test", {"name": "described", "type": "dxf"}, [], metadata)
-    first.hash.add_string("annotations-test-described")
-    assert asyncio.run(first.get_file_metadata(ctx)) == metadata
-    assert first.builds == 1
-
-    second = _DescribingSketch("//test", {"name": "described", "type": "dxf"}, [], {})
-    second.hash.add_string("annotations-test-described")
-    assert asyncio.run(second.get_file_metadata(ctx)) == metadata
-    assert second.builds == 0
-
-
-def test_a_sketch_type_that_reads_no_file_says_nothing(ctx):
-    """Every sketch type but 'dxf' today, and an empty mapping is the answer."""
-    sketch = _sketch(ctx, [], name="silent")
-
-    assert asyncio.run(sketch.get_file_metadata(ctx)) == {}
+    # ...and under the headings 'pc info' prints them with, which is the
+    # reader's to choose: the core merges what a wrapper hands it verbatim.
+    assert set(read["metadata"]) == {"Drawing", "Layers"}
+    assert len(read["metadata"]["Layers"]) == len(dxf_metadata.describe(ezdxf.readfile(path))["layers"])

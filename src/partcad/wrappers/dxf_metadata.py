@@ -282,14 +282,26 @@ def read_file(path: str, include=None, exclude=None) -> dict:
     itself ('describe()') and what it says about its elements ('read()'). One
     'ezdxf.readfile' serves both, which is the whole reason this exists: the
     import wrapper wants both and a drawing is not cheap to parse twice.
+
+    The first of those comes back under the headings 'pc info' prints it with,
+    because naming the sections is the reader's job and not the core's: the core
+    merges what a wrapper hands it verbatim, and it has no business translating
+    one format's vocabulary into another's. ``Layers`` is the heading a STEP file
+    uses for the same idea, which is why it is lifted out of ``Drawing`` - the
+    rest of what a DXF states about itself has no counterpart anywhere else.
     """
     import ezdxf
 
     document = ezdxf.readfile(path)
-    return {
-        "metadata": describe(document, include, exclude),
-        "annotations": annotations_of(document, include, exclude),
-    }
+    described = describe(document, include, exclude)
+    layers = described.pop("layers", [])
+
+    metadata = {}
+    if described:
+        metadata["Drawing"] = described
+    if layers:
+        metadata["Layers"] = layers
+    return {"metadata": metadata, "annotations": annotations_of(document, include, exclude)}
 
 
 def describe(document, include=None, exclude=None) -> dict:

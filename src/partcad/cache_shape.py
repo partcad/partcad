@@ -11,7 +11,7 @@ import json
 
 from . import shape_envelope, telemetry
 from .cache import Cache
-from .cache_backend import PROPERTIES_SUFFIX
+from .cache_backend import MEASUREMENTS_SUFFIX, METADATA_SUFFIX, PROPERTIES_SUFFIX
 from .cache_hash import CacheHash
 from .utils import total_size
 
@@ -67,6 +67,34 @@ def properties_key(kind: str) -> str:
     geometry back out of the cache.
     """
     return kind + PROPERTIES_SUFFIX
+
+
+def metadata_key(kind: str) -> str:
+    """The key holding what the *file* the shape came from stated about itself.
+
+    A STEP file's layers and property sets, a DXF drawing's layers and units:
+    read by the wrapper that imports the file, carried back on the envelope
+    beside the BREP, and stored here.
+
+    Beside the geometry for the same reason the properties are, and one more of
+    its own: it is answered without pulling a BREP back out of the cache, which
+    is what 'pc info' wants - it asks what the file said, not what the shape is.
+    A shape type that reads no file never writes this entry, and a missing entry
+    reads as "nothing stated" rather than as a reason to build again.
+    """
+    return kind + METADATA_SUFFIX
+
+
+def measurements_key(kind: str) -> str:
+    """The key holding what the geometry measures: its box, its volume, its solids.
+
+    Unlike the two above this is *derived* from the geometry rather than stated
+    beside it, so it is exactly as valid as the entry it is named after - the
+    same hash covers both, and a shape that rebuilds measures again. It is a
+    separate entry all the same, because the measuring costs a sandbox and the
+    question ("how big is it?") is asked far more often than the BREP is needed.
+    """
+    return kind + MEASUREMENTS_SUFFIX
 
 
 @telemetry.instrument()

@@ -64,7 +64,11 @@ import os
 import re
 
 from . import logging as pc_logging
-from . import step_p21
+
+# How much of the file is read at a time. The scan is a sequence of byte
+# searches over each block, so this trades a little memory for the number of
+# them; a STEP file of any size is read in one pass either way.
+CHUNK = 1 << 20
 
 # What has to appear in a block of records for it to be worth looking at
 # closely. Nearly every record in a STEP file is a point, a curve or a face, and
@@ -73,6 +77,11 @@ from . import step_p21
 # (regular expressions, argument lists) is never reached for it. That is what
 # keeps reading a 500 MB assembly a scan rather than a parse.
 _KEYWORDS = (b"TOLERANCE", b"MEASURE_WITH_UNIT", b"SI_UNIT", b"CONVERSION_BASED_UNIT")
+
+# A Part 21 string: single-quoted, with a doubled quote standing for one inside
+# it. Spelled without an alternation so that a run of ordinary characters has
+# one way to be matched and the engine has nothing to backtrack over.
+_STRING = re.compile(rb"'[^']*(?:''[^']*)*'")
 
 # The three records that have to be found by their id, because something else
 # refers to them. Each is anchored on the '#<id> =' that starts the record and
@@ -88,6 +97,9 @@ _CONVERSION_UNIT = re.compile(rb"#(\d+)\s*=\s*[^;]*?\bCONVERSION_BASED_UNIT\s*\(
 # them: a tolerance is stated in order to be stated.
 _TOLERANCE_VALUE = re.compile(rb"\bTOLERANCE_VALUE\s*\(\s*#(\d+)\s*,\s*#(\d+)\s*\)")
 _GEOMETRIC_TOLERANCE = re.compile(rb"\b[A-Z][A-Z0-9_]*TOLERANCE\s*\(")
+
+# An argument that is a reference to another record, and nothing else.
+_REFERENCE = re.compile(rb"^#(\d+)$")
 
 # The SI prefixes, as the factor each stands for. 'None' is the unprefixed unit
 # itself, which for a length is the metre.
@@ -174,11 +186,20 @@ def of_step_file(path):
     tolerance_values = []
     magnitudes = []
 
-    step_p21.scan(
-        path,
-        _KEYWORDS,
-        lambda block: _read_block(block, measures, units, tolerance_values, magnitudes),
-    )
+    with open(path, "rb") as f:
+        buffer = b""
+        while True:
+            chunk = f.read(CHUNK)
+            if not chunk:
+                break
+            buffer += chunk
+            cut = _boundary(buffer)
+            if cut <= 0:
+                continue
+            head, buffer = buffer[:cut], buffer[cut:]
+            _read_block(head, measures, units, tolerance_values, magnitudes)
+        if buffer:
+            _read_block(buffer, measures, units, tolerance_values, magnitudes)
 
     values = []
     for lower, upper in tolerance_values:
@@ -198,13 +219,129 @@ def of_step_file(path):
 _READERS["step"] = of_step_file
 
 
-def _read_block(block, measures, units, tolerance_values, magnitudes):
-    """Take what a block of whole records says.
+def _boundary(buffer):
+    """How much of 'buffer' is whole records, ending just past the last ';'.
 
-    Only ever handed a block one of '_KEYWORDS' occurs in, with its comments
-    already taken out: 'step_p21.scan' does both, so a file with no GD&T in it
-    never reaches this at all.
+    The file arrives a block at a time and a record straddles the join, so each
+    block is cut back to the last record that ended in it and the rest is
+    carried forward. The cut has to skip the ';' that a Part 21 string may hold
+    -- a tolerance carries a name and a description, both free text -- because
+    cutting inside a record would split it into two halves that each parse as
+    something else, and quietly lose the tolerance it stated.
+
+    'buffer' always begins at a record boundary, which is what lets this start
+    outside a string every time it is called.
+
+    Strings are stepped over by hand rather than with '_STRING', because the
+    question here is asked of text that may stop in the middle of one. A quote
+    at the very end of the buffer is either the end of a string or the first
+    half of the doubled quote that stands for one inside it, and there is no way
+    to tell until the next block arrives - so this stops rather than guessing,
+    and the same bytes are looked at again with more of them to hand.
+
+    Comments are stepped over for the same reason a string is: Part 21 allows
+    '/* ... */' wherever a separator is allowed, and the ';' one may hold ends
+    nothing. Which of the three comes first is what decides how the next stretch
+    is read - a quote inside a comment is not a string, and a '/*' inside a
+    string is not a comment.
     """
+    cut = 0
+    i = 0
+    length = len(buffer)
+    while i < length:
+        quote = buffer.find(b"'", i)
+        semicolon = buffer.find(b";", i)
+        comment = buffer.find(b"/*", i)
+        if semicolon < 0:
+            break
+        if 0 <= quote < semicolon and (comment < 0 or quote < comment):
+            i = _end_of_string(buffer, quote)
+            if i < 0:
+                break
+            continue
+        if 0 <= comment < semicolon:
+            end = buffer.find(b"*/", comment + 2)
+            if end < 0:
+                # The comment has not closed in what has arrived.
+                break
+            i = end + 2
+            continue
+        cut = semicolon + 1
+        i = semicolon + 1
+    return cut
+
+
+def _without_comments(block):
+    """'block' with its Part 21 comments taken out.
+
+    What is inside one means nothing, and every regular expression below would
+    read it as though it did: a comment may hold a semicolon, or text shaped
+    like an entity. Removing them once is cheaper than teaching each pattern to
+    ignore them, and the common case costs a single scan - a block with no '/*'
+    in it is handed straight back.
+
+    A '/*' inside a quoted string opens nothing, which is why this walks the
+    strings rather than looking only for the delimiters.
+    """
+    if block.find(b"/*") < 0:
+        return block
+
+    kept = []
+    start = 0
+    i = 0
+    length = len(block)
+    while i < length:
+        quote = block.find(b"'", i)
+        comment = block.find(b"/*", i)
+        if comment < 0:
+            break
+        if 0 <= quote < comment:
+            end = _end_of_string(block, quote)
+            if end < 0:
+                break
+            i = end
+            continue
+        kept.append(block[start:comment])
+        end = block.find(b"*/", comment + 2)
+        if end < 0:
+            # Unterminated, so the rest of the block is inside it.
+            start = length
+            break
+        start = end + 2
+        i = start
+    kept.append(block[start:])
+    return b"".join(kept)
+
+
+def _end_of_string(buffer, start):
+    """Where the Part 21 string opening at 'start' ends, or -1 if it is cut off."""
+    i = start + 1
+    length = len(buffer)
+    while True:
+        quote = buffer.find(b"'", i)
+        if quote < 0 or quote + 1 >= length:
+            # Unterminated, or terminated by the last byte there is - which may
+            # yet turn out to be the first of a doubled quote.
+            return -1
+        if buffer[quote + 1 : quote + 2] == b"'":
+            i = quote + 2
+            continue
+        return quote + 1
+
+
+def _read_block(block, measures, units, tolerance_values, magnitudes):
+    """Take what a block of whole records says, if it says anything at all.
+
+    The keywords are looked for before the comments are taken out, so that the
+    block a file with no GD&T in it is made of costs one scan rather than two.
+    A block that is interesting only because of what a comment says then pays
+    for a strip and finds nothing, which is the right answer arrived at the
+    slower way round.
+    """
+    if not any(keyword in block for keyword in _KEYWORDS):
+        return
+    block = _without_comments(block)
+
     for match in _MEASURE.finditer(block):
         try:
             value = float(match.group(2))
@@ -248,19 +385,64 @@ def _geometric_magnitude(block, start):
     one with four attributes beginning with a name, a description and the
     magnitude.
     """
-    arguments = step_p21.arguments(block, start)
+    arguments = _arguments(block, start)
     if arguments is None or len(arguments) < 4:
         return None
-    # A tolerance's description is optional in AP242 and a file is free to write
-    # '$' for it rather than an empty string, so insisting on a quote there
-    # would reject a valid record and lose the tolerance it states - silently,
-    # which is the worst way to lose one. The name is allowed the same spelling:
-    # it costs nothing, and what tells a geometric tolerance apart from the
-    # other entities ending in 'TOLERANCE' is the rest of the shape of the list
-    # - four arguments or more, with a reference third.
-    if not step_p21.is_text_or_omitted(arguments[0]) or not step_p21.is_text_or_omitted(arguments[1]):
+    if not _is_text_or_omitted(arguments[0]) or not _is_text_or_omitted(arguments[1]):
         return None
-    return step_p21.reference(arguments[2])
+    reference = _REFERENCE.match(arguments[2])
+    if reference is None:
+        return None
+    return int(reference.group(1))
+
+
+def _is_text_or_omitted(argument):
+    """Whether an argument is a Part 21 string, or the '$' that stands for none.
+
+    A tolerance's description is optional in AP242 and a file is free to write
+    '$' for it rather than an empty string, so insisting on a quote there would
+    reject a valid record and lose the tolerance it states - silently, which is
+    the worst way to lose one. The name is allowed the same spelling: it costs
+    nothing, and what tells a geometric tolerance apart from the other entities
+    ending in 'TOLERANCE' is the rest of the shape of the list - four arguments
+    or more, with a reference third.
+    """
+    return argument == b"$" or argument.startswith(b"'")
+
+
+def _arguments(block, start):
+    """The top-level arguments of the parameter list that opens at 'block[start]'.
+
+    None if it does not close. Reached only for the handful of records that
+    state a tolerance, so this walks the bytes rather than looking for a pattern
+    in them: a nested list and a string may both hold a comma, and a regular
+    expression that got that right would be harder to read than the loop.
+    """
+    arguments = []
+    depth = 0
+    begin = start + 1
+    i = start
+    length = len(block)
+    while i < length:
+        char = block[i : i + 1]
+        if char == b"'":
+            match = _STRING.match(block, i)
+            if match is None:
+                return None
+            i = match.end()
+            continue
+        if char == b"(":
+            depth += 1
+        elif char == b")":
+            depth -= 1
+            if depth == 0:
+                arguments.append(block[begin:i].strip())
+                return arguments
+        elif char == b"," and depth == 1:
+            arguments.append(block[begin:i].strip())
+            begin = i + 1
+        i += 1
+    return None
 
 
 def _length_mm(measure_id, measures, units, seen=None):

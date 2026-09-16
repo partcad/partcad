@@ -22,11 +22,11 @@ from . import cae as pc_cae
 from . import cam as pc_cam
 from . import logging as pc_logging
 from . import material as pc_material
-from . import output, render_overlay
+from . import measure, output, render_overlay
 from . import runtime as pc_runtime
 from . import sandbox_versions, wrapper
 from .cache_hash import CacheHash
-from .cache_shape import properties_key
+from .cache_shape import measurements_key, metadata_key, properties_key
 from .shape_config import ShapeConfiguration
 from .utils import resolve_resource_path, total_size
 
@@ -140,23 +140,6 @@ SERIALIZED_PART_TYPES = (
 TEXT_PART_TYPES = frozenset({"step", "iges", "brep", "obj", "threejs", "svg", "dxf"})
 
 SUPPORTED_PART_TYPES = frozenset(LIVE_OBJECT_PART_TYPES | SERIALIZED_PART_TYPES)
-
-# To how many decimal places of a millimetre a measurement is reported (see
-# 'Shape.measurements_async'). A nanometre: below anything any process makes to,
-# and above the tolerance OCCT pads a bounding box by, which is the digit this
-# exists to stop being printed.
-MEASURED_DECIMALS = 6
-
-
-def measured(value: float) -> float:
-    """One measurement as it is reported: rounded, and never minus nought.
-
-    A bound that rounds to zero from below is '-0.0', which is the same number
-    and reads as a different one - "the part starts a shade before the origin" -
-    so it is brought back to the zero it is. Adding nought is what does that,
-    IEEE 754 having exactly one rule about the sum of the two zeroes.
-    """
-    return round(value, MEASURED_DECIMALS) + 0.0
 
 
 # What a shape's configuration says about the shape to a reader, rather than
@@ -578,6 +561,11 @@ class Shape(ShapeConfiguration):
                 if "scale" in self.config:
                     shape = await transform.scale(ctx, shape, self.config["scale"])
 
+            # What the wrapper that read the file put on the envelope beside
+            # the BREP, taken off before the outer layer is replaced below
+            # (see 'shape_envelope.KEY_METADATA').
+            stated = shape.get(shape_envelope.KEY_METADATA) if isinstance(shape, dict) else None
+
             # Whatever produced the envelope - a factory, a wrapper, a
             # transform - the outer layer around it is this shape's own. It
             # is stamped here rather than left to whoever built the payload,
@@ -595,12 +583,7 @@ class Shape(ShapeConfiguration):
                         # record: an empty entry is what says the question was
                         # asked and the answer was nothing, which is what the
                         # read above distinguishes from an entry that is absent.
-                        # Whatever the attribute holds is written as it stands,
-                        # so that an empty mapping comes back a mapping; an
-                        # empty list stands in only for an attribute that is not
-                        # there at all.
-                        value = getattr(self, attribute, None)
-                        to_cache[key] = [] if value is None else value
+                        to_cache[key] = getattr(self, attribute, None) or []
                     properties = self._shape_properties()
                     if properties:
                         # Both entries are filled here and nowhere else:
@@ -610,6 +593,10 @@ class Shape(ShapeConfiguration):
                         # (see 'get_cached_properties_async()'), and a shape
                         # that reports nothing leaves no entry to read.
                         to_cache[properties_key(self.kind)] = properties
+                    if isinstance(stated, dict) and stated:
+                        # The same arrangement as the properties above, for what
+                        # the *file* said rather than what the declaration does.
+                        to_cache[metadata_key(self.kind)] = stated
                     to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
                     do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
                 else:
@@ -994,7 +981,7 @@ class Shape(ShapeConfiguration):
         asyncio.run(self.get_wrapped(ctx))
         info = {}
         info["Memory"] = "%.02f KB" % ((total_size(self) + 1023.0) / 1024.0)
-        info.update(asyncio.run(self.measurements_async(ctx)))
+        info.update(asyncio.run(self._reported_async(ctx)))
 
         if self.with_ports is not None:
             info["Ports"] = self.with_ports.info()
@@ -2509,78 +2496,115 @@ class Shape(ShapeConfiguration):
     def get_max_dimension(self, ctx):
         return asyncio.run(self.get_max_dimension_async(ctx))
 
-    async def measurements_async(self, ctx):
-        """How big this shape is and how much of it there is, for 'pc info'.
+    async def get_measurements_async(self, ctx):
+        """How big this shape is and how much of it there is, or None.
 
-        Two numbers a reader of a part wants before any other: where it is and
-        how large ('BoundingBox'), and how much material is in it ('Volume').
-        Neither can be read off a declaration -- a part is a script, a file or a
-        boolean of two others, and the only way to know its size is to have
-        built it -- which is exactly why 'pc info' is where they belong, and why
-        a written description of a shape (`/pc:describe`) starts from them
-        rather than from a projection somebody estimated a size off.
+        ``{"bbox": [...] | None, "volume": float | None, "solids": int}`` as
+        'wrappers/wrapper_measure.py' produced it - the box in the shape's own
+        coordinates and without the gap OCCT pads one by, the volume in cubic
+        millimetres, and how many solids that is the volume of. None when the
+        shape did not build or could not be measured.
 
-        ``BoundingBox`` is axis-aligned and in the shape's own coordinates, as
-        ``min``/``max``/``size`` triples of millimetres. ``size`` is stated
-        rather than left to be subtracted: it is the one of the three anybody
-        reads out loud, and a description that got it wrong by subtracting the
-        wrong pair would be wrong in a way nothing would catch. It is worked out
-        from the rounded bounds rather than rounded itself, so the three always
-        agree with each other.
+        Cached in an entry of its own under the geometry's hash (see
+        'cache_shape.measurements_key'), which is what makes this affordable to
+        ask: the numbers are derived from the geometry, so they are exactly as
+        valid as the entry they are named after, and the measuring costs a
+        sandbox process while reading them back costs a file. A shape that
+        rebuilds measures again, because its hash moved.
 
-        Those bounds are rounded, and only here. OCCT pads a bounding box by the
-        shape's own tolerance -- so a 120 mm block measures 120.0000002 mm, and
-        printing that says "this part is two ten-millionths of a millimetre
-        wider than you think" when what it means is "OCCT leaves itself room".
-        The padding is what every *other* caller of 'get_bounding_box_async'
-        wants (an exploded view that overlapped by a tolerance would be wrong);
-        a number somebody reads is not, so this is the one place it comes off.
+        The third accessor of its kind on this class, beside
+        'get_cached_properties_async' and 'get_annotations'; what is different
+        here is that a miss is filled in rather than reported, since unlike
+        those two this can be computed on demand.
+        """
+        key = measurements_key(self.kind)
+        cache_hash = await self.get_cache_key_async()
+        if ctx and cache_hash is not None:
+            cached, _ = await ctx.cache_shapes.read_async(self.hash, [key])
+            measured = cached.get(key)
+            if isinstance(measured, dict):
+                return measured
 
-        ``Volume`` is in cubic millimetres and ``Solids`` is how many solids it
-        is the volume of. Both are left out for a shape that holds no solid at
-        all - a sketch, a shell, a wire - because a volume of zero and no volume
-        to speak of are different things and only one of them is worth printing.
-        A **negative** volume is reported as it stands: it means the faces are
-        oriented inward, which is a real thing to know about a part and not a
-        number to take the modulus of.
+        obj = await self.get_wrapped(ctx)
+        if obj is None:
+            # Nothing was built, so there is nothing to measure - and nothing to
+            # record either: the next run should ask the geometry again rather
+            # than be answered with this failure.
+            return None
 
-        Each half is asked for on its own and neither can take the other down.
-        Both are measured in a sandbox, so either can fail on a machine whose
-        sandbox is not built yet - and 'pc info' still has a part's
-        configuration, its hash and its dependencies to report, which is what it
-        was asked for.
+        with pc_logging.Action("Measure", self.project_name, self.name):
+            try:
+                measured = await measure.measurements(ctx, obj)
+            except Exception as e:  # pylint: disable=broad-except
+                # About the machine rather than the shape - a sandbox that is not
+                # built yet, most often - so it is reported and not cached. 'pc
+                # info' still has the configuration, the hash and the
+                # dependencies to show, which is most of what it was asked for.
+                pc_logging.debug("Failed to measure '%s': %s" % (self.name, e))
+                return None
+
+        if ctx and cache_hash is not None:
+            await ctx.cache_shapes.write_async(self.hash, {key: measured})
+        return measured
+
+    async def _reported_async(self, ctx):
+        """What 'pc info' adds to a shape once the shape itself has been built.
+
+        Two things, and neither of them is in the declaration: what the geometry
+        *measures*, and what the file it came from *stated*.
+
+        ``BoundingBox`` is the measured box as ``min``/``max``/``size`` triples
+        of millimetres. ``size`` is stated rather than left to be subtracted -
+        it is the one of the three anybody reads out loud. ``Volume`` is in
+        cubic millimetres and ``Solids`` is how many solids that is the volume
+        of; both are left out for a shape holding no solid at all, because a
+        volume of zero and no volume to speak of are different things. A
+        negative volume is reported as it stands: the faces are oriented inward,
+        which is worth seeing rather than taking the modulus of.
+
+        What the file stated is merged in **as the wrapper named it**. The
+        sections are a STEP file's or a DXF drawing's own vocabulary, and the
+        core has no business translating one into the other - it did not read
+        the file and does not know which format answered.
         """
         info = {}
-        if await self.get_wrapped(ctx) is None:
-            # Nothing was built, so there is nothing to measure. Asked once here
-            # rather than left to the two calls below, which would each start a
-            # sandbox to be told the same thing - and 'pc info' on a part that
-            # failed to build is a common enough thing to do.
-            return info
 
-        try:
-            box = await self.get_bounding_box_async(ctx)
-        except Exception as e:  # pylint: disable=broad-except
-            pc_logging.debug("Failed to measure the bounding box of '%s': %s" % (self.name, e))
-            box = None
-        if box is not None:
-            low = [measured(value) for value in box[:3]]
-            high = [measured(value) for value in box[3:]]
-            info["BoundingBox"] = {
-                "min": low,
-                "max": high,
-                "size": [measured(high[axis] - low[axis]) for axis in range(3)],
-            }
+        measured = await self.get_measurements_async(ctx)
+        if measured:
+            box = measured.get("bbox")
+            if box:
+                info["BoundingBox"] = {
+                    "min": list(box[:3]),
+                    "max": list(box[3:]),
+                    "size": [box[axis + 3] - box[axis] for axis in range(3)],
+                }
+            if measured.get("volume") is not None:
+                info["Volume"] = measured["volume"]
+                info["Solids"] = measured.get("solids", 0)
 
-        try:
-            solidity = await self.get_solidity_async(ctx)
-        except Exception as e:  # pylint: disable=broad-except
-            pc_logging.debug("Failed to measure the volume of '%s': %s" % (self.name, e))
-            solidity = None
-        if solidity is not None and solidity.get("volume") is not None:
-            info["Volume"] = solidity["volume"]
-            info["Solids"] = solidity.get("solids", 0)
+        stated = await self.get_cached_metadata_async(ctx)
+        if stated:
+            info.update(stated)
         return info
+
+    async def get_cached_metadata_async(self, ctx):
+        """What the file this shape was imported from stated, or None.
+
+        The wrapper that read the file put it on the envelope beside the BREP
+        (see 'shape_envelope.KEY_METADATA'); this is the entry it was stored in
+        (see 'cache_shape.metadata_key'). Read on its own, so asking what a STEP
+        file's layers are does not pull a BREP back out of the cache.
+
+        None for a shape whose type reads no file, for one built before any of
+        this existed, and for a file that stated nothing - all three mean the
+        same thing to a reader and none of them is a reason to build again.
+        """
+        if not ctx or await self.get_cache_key_async() is None:
+            return None
+        key = metadata_key(self.kind)
+        cached, _ = await ctx.cache_shapes.read_async(self.hash, [key])
+        metadata = cached.get(key)
+        return metadata if isinstance(metadata, dict) and metadata else None
 
     async def _run_test_async(self, ctx: Context, tests: list | None = None, use_wrapper: bool = False) -> bool:
         if not self.finalized:

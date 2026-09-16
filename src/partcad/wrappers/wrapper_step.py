@@ -28,6 +28,8 @@ from OCP.TopoDS import (
 )
 
 sys.path.append(os.path.dirname(__file__))
+import ocp_serialize
+import step_metadata
 import wrapper_common
 
 
@@ -59,10 +61,25 @@ def process(path, request):
             "shape": None,
         }
 
+    # What the file states about itself and its contents, read here because this
+    # is the process it is open in, and carried back on the envelope beside the
+    # BREP (see 'ocp_serialize.KEY_METADATA') so the core stores and reports it
+    # without knowing a STEP file was involved. A file that cannot be read this
+    # way still imports: the geometry is the answer that was asked for, and the
+    # metadata is the extra.
+    shape = ocp_serialize.encode_shape(compound, name=request.get("name"), label=request.get("label"))
+    try:
+        metadata = step_metadata.read(path)
+    except Exception as e:  # pylint: disable=broad-except
+        print("Failed to read what '%s' states: %s" % (path, e), file=sys.stderr)
+        metadata = None
+    if metadata:
+        shape[ocp_serialize.KEY_METADATA] = metadata
+
     return {
         "success": True,
         "exception": None,
-        "shape": compound,
+        "shape": shape,
     }
 
 

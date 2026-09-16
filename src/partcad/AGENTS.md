@@ -292,47 +292,12 @@ at all).
   check would act on the difference. This is also what makes sheet metal instructions *a sketch* rather than
   *a DXF file*: `dxf` is the only type that states anything today, and nothing downstream knows that.
 
-  A drawing also says things about **itself**, and that is a second cache entry beside the first
-  (`Sketch.get_file_metadata`, `dxf_metadata.describe`): which DXF it is, what `$INSUNITS` says its numbers
-  are in, the APPIDs it declares, and every layer it has -- with how many elements of which types are on each,
-  and whether this sketch reads it. It is carried separately because it is not about the sketch: a sketch *is*
-  the layers its filters selected, and the interesting thing about the ones they did not select is that they
-  exist. Without it a layer filter that matched nothing and a layer that is not in the file are the same
-  empty sketch. `pc info` is what prints it.
-
-- **A file says what it says, and the bytes already say it** (`step_metadata.py`, `step_p21.py`,
-  `ShapeFactory.file_info`, `METADATA_FILE_FORMAT`): the STEP half of the same idea. A STEP file states a
-  header, its products, its layers (`PRESENTATION_LAYER_ASSIGNMENT`) and *properties* -- a
-  `PROPERTY_DEFINITION` tied by a `PROPERTY_DEFINITION_REPRESENTATION` to a `REPRESENTATION` whose items are
-  the key/value pairs -- and that chain is how an `angle` written against a bend reaches PartCAD from a STEP
-  file, exactly as XDATA is how it reaches PartCAD from a DXF. So both readers lower-case their keys and keep
-  their values as the file states them, and what reads a pair does not have to know which format answered.
-
-  Only the exact entity `PROPERTY_DEFINITION_REPRESENTATION` is followed, never a subtype:
-  `SHAPE_DEFINITION_REPRESENTATION` is one, every STEP file holding a solid states one, and following it
-  would report each solid as a property set holding nothing. Read off the bytes with no CAD kernel, like
-  `tolerance_inspect` (which reads the *same* files for GD&T) and `brep_inspect` -- the Part 21 lexing the two
-  STEP readers share is `step_p21`, in one copy, because two copies of it would not fail when they drifted,
-  they would disagree. `METADATA_FILE_FORMAT` names the *format* rather than the type, the way
-  `TOLERANCE_FILE_FORMAT` does, so `kicad` is read like the STEP file it produces without being named twice.
-
-- **How big it is and how much of it there is** (`Shape.measurements_async`): `pc info` reports a shape's
-  `BoundingBox` and, where it holds a solid, its `Volume` and `Solids`. Neither can be read off a declaration
-  -- a part is a script, a file or a boolean of two others -- so this is the one place they can come from, and
-  it is where `/pc:describe` gets the size it would otherwise estimate off a projection rendered to fit its
-  frame. The bounds are rounded here and nowhere else: OCCT pads a bounding box by the shape's own tolerance,
-  which is what every other caller wants (an exploded view that overlapped by a tolerance would be wrong) and
-  is not what a reader wants to see printed on a 120 mm block.
-
-  One thing had to give for that to be usable at all. CadQuery's DXF importer builds **faces**: it merges
-  each layer's entities into wires and asks each wire for the face it bounds, so a drawing whose lines do not
-  close fails outright -- and a drawing whose lines do not close is exactly what bend instructions are. So
-  `wrapper_import_dxf` keeps the face import as the first answer and falls back to the wires the selected
-  layers draw, with a warning naming what happened, because the other way to reach that fallback is an
-  outline with a gap in it. Every DXF that imports today imports byte-identically; this is a second answer to
-  a question that had none. The fallback mirrors the importer's layer rule (case-insensitive, `include` and
-  `exclude` mutually exclusive) and `dxf_metadata.is_included` applies the same one, so the geometry and the
-  annotations describe one set of elements.
+  A drawing also says things about **itself** - which layers it has, what `$INSUNITS` says its numbers are
+  in, which applications it declares - and that is read on the same trip and travels a different road: not on
+  the sketch but on the **envelope**, beside the BREP (`shape_envelope.KEY_METADATA`), into a cache entry of
+  its own (`cache_shape.metadata_key`). It is carried apart from the annotations because it is about the file
+  rather than about the sketch - a sketch *is* the layers its filters selected, and the interesting thing
+  about the ones they did not select is that they exist. `pc info` is what prints it.
 
   **Which layers of a drawing a sketch reads is an object-type parameter**, not merely a field
   (`sketch_factory.py`, `sketch_factory_dxf.py`, `Project.declare_object_type_parameters`). `include` and
@@ -345,6 +310,37 @@ at all).
   left alone, so a typo stays a typo), and `parse_parameterized_name` treats a comma-separated fragment with
   no `=` as a continuation of the value before it, because a list value has commas in it and a comma is also
   what separates parameters.
+
+- **A file says what it says, and the wrapper is what hears it** (`wrappers/step_metadata.py`,
+  `shape_envelope.KEY_METADATA`, `cache_shape.metadata_key`): the STEP half of the same idea, on the same
+  rails. A STEP file states a header, its products, its layers (`PRESENTATION_LAYER_ASSIGNMENT`) and
+  *properties* - a `PROPERTY_DEFINITION` tied by a `PROPERTY_DEFINITION_REPRESENTATION` to a `REPRESENTATION`
+  whose items are the key/value pairs - and that chain is how an `angle` written against a bend reaches
+  PartCAD from a STEP file, exactly as XDATA is how it reaches PartCAD from a DXF. Both readers lower-case
+  their keys and keep their values as the file states them, so what reads a pair does not have to know which
+  format answered.
+
+  It is read **in the wrapper**, which is the process the file is open in, and it is read as *text* - not for
+  want of a kernel, but because XCAF gives names, layers and colours and has nowhere to put an arbitrary
+  property, which is the half it exists for. OCCT has just parsed the same bytes in the same process, so a
+  second pass over them is the cheap part. Only the exact entity `PROPERTY_DEFINITION_REPRESENTATION` is
+  followed, never a subtype: `SHAPE_DEFINITION_REPRESENTATION` is one, every file holding a solid states one,
+  and following it would report each solid as a property set holding nothing. Note the trap a test names: an
+  argument list cannot be matched up to the next `;`, because every exporter writes `'2;1'` in the header.
+
+  Nothing about any of this is in the core. The core carries the metadata opaquely from the envelope into its
+  cache entry and merges it into `pc info` **as the wrapper named it**, so the sections stay the format's own
+  vocabulary and the core never learns one.
+
+- **How big it is and how much of it there is** (`Shape.get_measurements_async`, `measure.measurements`,
+  `cache_shape.measurements_key`): `pc info` reports a shape's `BoundingBox` and, where it holds a solid, its
+  `Volume` and `Solids`. Neither can be read off a declaration - a part is a script, a file or a boolean of
+  two others - so this is the one place they can come from, and it is where `/pc:describe` gets the size it
+  would otherwise estimate off a projection rendered to fit its frame. One `measurements` operation of
+  `wrapper_measure` answers both, because what costs is the sandbox process rather than the arithmetic in it,
+  and the answer is cached in an entry of its own under the geometry's hash: derived from the geometry, so
+  exactly as valid as the entry it is named after, and read back for the price of a file. That wrapper's
+  `_bbox` drops the gap OCCT pads a box by, so a 120 mm block measures 120.
 
 - **A part is a body, not a skin** (`wrappers/wrapper_common.solidify`, `brep_inspect.py`,
   `test/shell.py`): a shell is a set of faces with nothing said about which side of them is material; a solid
