@@ -120,12 +120,27 @@ def parse_parameterized_name(name: str) -> tuple:
     parameter values, and the one place that knows how to read it. The values
     come back as the strings they were written as; what type each of them is
     belongs to the parameter the object declares (see 'Project.get_object').
+
+    A comma separates one parameter from the next, so a value that holds one -
+    a list, which is what a DXF sketch's layer filters are
+    ('bends;include=BEND_UP,BEND_DOWN') - would otherwise be unwritable. A
+    fragment with no '=' in it therefore continues the value before it rather
+    than starting a parameter of its own. Nothing is given up by that: such a
+    fragment used to parse as a parameter named after the value, with an empty
+    value, which no object has ever declared and which was rejected moments
+    later. It round-trips with 'format_parameterized_name' below, which joins
+    the same way.
     """
     base, _, suffix = name.partition(";")
     parameters = {}
+    last = None
     for pair in suffix.split(",") if suffix else []:
+        if "=" not in pair and last is not None:
+            parameters[last] += "," + pair
+            continue
         parameter, _, value = pair.partition("=")
         parameters[parameter] = value
+        last = parameter
     return base, parameters
 
 

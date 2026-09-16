@@ -20,6 +20,7 @@ import types
 
 import pytest
 
+import partcad.utils as pc_utils
 from partcad_service_json_rpc.core import events, operations
 from partcad_service_json_rpc.core.events import EventEmitter
 from partcad_service_json_rpc.core.session import Session
@@ -2202,3 +2203,38 @@ def test_a_request_that_creates_directories_does_not_leave_the_next_one_doing_so
     assert part.calls[-1]["create_dirs"] is True
     # ...and is off again for whatever the daemon serves next.
     assert session.partcad_ctx.option_create_dirs is False
+
+
+def test_rendering_a_package_that_does_not_resolve_names_it():
+    """A render aimed at a package that is not there, reported as what it is.
+
+    The way in is an object name that carries a package of its own: the render
+    cuts the package out of it, so a name that was mistyped - or mangled by a
+    shell that does not quote the way the writer expected - arrives here rather
+    than being rejected earlier. Reporting it as a usage error names the
+    package; calling 'render_async' on what the lookup returned raised
+    "'NoneType' object has no attribute 'render_async'" and named nothing.
+    """
+    import asyncio
+
+    pc_stub = types.SimpleNamespace(
+        output=types.SimpleNamespace(all_formats=lambda ctx: None),
+        utils=pc_utils,
+    )
+    ctx = types.SimpleNamespace(get_project=lambda name: None)
+
+    with pytest.raises(JsonRpcError) as caught:
+        asyncio.run(
+            operations._render_packages_async(
+                pc_stub,
+                ctx,
+                {"sketch": True},
+                ["//nosuch"],
+                "svg",
+                "./",
+                ":panel",
+                None,
+                False,
+            )
+        )
+    assert "//nosuch" in str(caught.value)

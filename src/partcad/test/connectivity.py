@@ -45,7 +45,7 @@ class ConnectivityTest(Test):
     def __init__(self) -> None:
         super().__init__("connectivity")
 
-    def cache_key_suffix(self, ctx, shape) -> str:
+    async def cache_key_suffix(self, ctx, shape) -> str:
         # Every setting that decides the verdict. Without them a cached pass is
         # read back after the setting that produced it has been turned off.
         config = (shape.config or {}).get("connectivity") or {}

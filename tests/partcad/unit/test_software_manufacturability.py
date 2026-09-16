@@ -167,17 +167,17 @@ def test_the_cache_key_follows_the_software_declaration(ctx):
 
     # A part that ships nothing and fetches nothing keys exactly as it always
     # did, so the cache entries it already has stay valid.
-    assert test.cache_key_suffix(ctx, plain) == ""
+    assert asyncio.run(test.cache_key_suffix(ctx, plain)) == ""
 
     # Two parts pointing at two different declarations key differently...
-    assert test.cache_key_suffix(ctx, board) != test.cache_key_suffix(ctx, mismatched)
+    assert asyncio.run(test.cache_key_suffix(ctx, board)) != asyncio.run(test.cache_key_suffix(ctx, mismatched))
 
     # ...and so do the same part before and after its hash is corrected.
-    before = test.cache_key_suffix(ctx, mismatched)
+    before = asyncio.run(test.cache_key_suffix(ctx, mismatched))
     ctx.get_project("//").get_software("mismatched").config["fileHash"] = (
         ctx.get_project("//").get_software("firmware").config["fileHash"]
     )
-    assert test.cache_key_suffix(ctx, mismatched) != before
+    assert asyncio.run(test.cache_key_suffix(ctx, mismatched)) != before
 
 
 #

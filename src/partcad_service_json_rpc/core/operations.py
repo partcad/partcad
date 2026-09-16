@@ -1597,7 +1597,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.89"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.91"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -2995,6 +2995,16 @@ async def _render_packages_async(
                 else:
                     parts.append(object_in_package)
                 prj = ctx.get_project(package)
+                if prj is None:
+                    # A package that does not resolve, reported as what it is.
+                    # Without this the next line raises "'NoneType' object has
+                    # no attribute 'render_async'", which names neither the
+                    # package nor the request that asked for it. The way in is
+                    # an object name that carries a package of its own -
+                    # 'resolve_resource_path' above cuts the package out of it
+                    # - so a mistyped or shell-mangled name arrives here rather
+                    # than being rejected earlier.
+                    raise JsonRpcError(USAGE_ERROR, "Package '%s' is not found" % package)
                 await prj.render_async(
                     sketches=sketches,
                     interfaces=interfaces,

@@ -264,9 +264,9 @@ def test_the_cache_key_follows_the_declared_file_hash(ctx):
     unpinned = ctx.get_part("//:fetched-unpinned")
 
     # An object that fetches nothing and ships nothing keys as it always did.
-    assert test.cache_key_suffix(ctx, carried) == ""
+    assert asyncio.run(test.cache_key_suffix(ctx, carried)) == ""
 
-    before = test.cache_key_suffix(ctx, unpinned)
+    before = asyncio.run(test.cache_key_suffix(ctx, unpinned))
     assert before != ""
     unpinned.config["fileHash"] = "sha256:" + "0" * 64
-    assert test.cache_key_suffix(ctx, unpinned) != before
+    assert asyncio.run(test.cache_key_suffix(ctx, unpinned)) != before

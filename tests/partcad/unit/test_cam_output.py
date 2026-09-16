@@ -327,7 +327,7 @@ def test_the_check_is_selected_by_its_own_name():
     """`pc test -f` filters by name prefix, and nothing else starts with `cam`.
 
     It is the half of the rename that makes the split usable: `-f
-    manufacturability` selects that check and its three siblings, `-f cam`
+    manufacturability` selects that check and its four siblings, `-f cam`
     selects this one alone.
     """
     from partcad.test.all import tests as all_tests
@@ -339,6 +339,7 @@ def test_the_check_is_selected_by_its_own_name():
         "manufacturability",
         "manufacturability-additive",
         "manufacturability-forming",
+        "manufacturability-sheet-metal",
         "manufacturability-subtractive",
     ]
 
@@ -354,7 +355,7 @@ def test_an_object_that_declares_nothing_is_not_this_check_s_business(package):
     assert check._config(part) is None
     assert asyncio.run(check.test([], package, part)) is check.TEST_PASSED
     # Nothing was asked, so there is nothing to remember about it either.
-    assert check.cache_key_suffix(package, part) == ""
+    assert asyncio.run(check.cache_key_suffix(package, part)) == ""
 
 
 def test_a_malformed_section_fails_the_object_rather_than_crashing(package):
@@ -369,8 +370,8 @@ def test_a_malformed_section_gets_a_cache_key_of_its_own(package):
     """Correcting it has to produce a fresh run rather than the failure of what
     it replaced."""
     check = _cam_check()
-    broken = check.cache_key_suffix(package, _part(package, "broken"))
-    good = check.cache_key_suffix(package, _part(package, "panel"))
+    broken = asyncio.run(check.cache_key_suffix(package, _part(package, "broken")))
+    good = asyncio.run(check.cache_key_suffix(package, _part(package, "panel")))
     assert broken.startswith(".malformed=")
     assert good.startswith(".cam=")
     assert broken != good
@@ -380,8 +381,8 @@ def test_two_different_jobs_are_two_different_questions(package):
     """An object whose tool has just been halved must not be answered with the
     verdict on the old one -- and the job does not move `shape.hash`."""
     check = _cam_check()
-    panel = check.cache_key_suffix(package, _part(package, "panel"))
-    lid = check.cache_key_suffix(package, _part(package, "lid"))
+    panel = asyncio.run(check.cache_key_suffix(package, _part(package, "panel")))
+    lid = asyncio.run(check.cache_key_suffix(package, _part(package, "lid")))
     assert panel != lid
 
 

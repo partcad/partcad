@@ -19,6 +19,7 @@ from .interference import InterferenceTest
 from .manufacturability import ManufacturabilityTest
 from .manufacturability_additive_solid import ManufacturabilityAdditiveSolidTest
 from .manufacturability_forming import ManufacturabilityFormingTest
+from .manufacturability_sheet_metal import ManufacturabilitySheetMetalTest
 from .manufacturability_subtractive import ManufacturabilitySubtractiveTest
 from .shell import ShellTest
 from .solidity import SolidityTest
@@ -44,6 +45,7 @@ def tests(concurrency_cap: int) -> list[Test]:
                 ManufacturabilityAdditiveSolidTest(),
                 ManufacturabilitySubtractiveTest(),
                 ManufacturabilityFormingTest(),
+                ManufacturabilitySheetMetalTest(),
                 ConnectTest(),
                 ConnectivityTest(),
                 DegenerateTest(),

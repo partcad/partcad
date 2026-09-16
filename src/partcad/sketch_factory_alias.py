@@ -129,8 +129,12 @@ class SketchFactoryAlias(SketchFactory):
             # does with whatever a factory returns.
             wrapped = await source.get_wrapped(self.ctx)
             # The pieces a compound reports separately from its own shape,
-            # which the source resolved along with it.
+            # which the source resolved along with it...
             obj.components = copy.copy(source.components)
+            # ...and, for the same reason, whatever else the source learned
+            # while building: a sketch's annotations are what its drawing said,
+            # and an alias to it says the same (see 'Shape.CACHED_SIDE_DATA').
+            obj.take_side_data_from(source)
             return wrapped
 
     def get_final_config(self):
