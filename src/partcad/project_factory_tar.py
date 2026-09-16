@@ -109,7 +109,16 @@ class ProjectFactoryTar(pf.ProjectFactory, TarImportConfiguration):
                     with tarfile.open(fileobj=rx.raw, mode="r:gz") as tar_obj:
                         args = inspect.getfullargspec(tar_obj.extractall)
 
-                        if "filter" in args.args:
+                        # 'filter' is keyword-only, so it is a kwonlyarg and
+                        # never one of 'args': looking for it among the
+                        # positional ones found nothing on every Python that
+                        # has it, and this branch never ran. 'relPath' selected
+                        # nothing and the whole archive was unpacked -- which
+                        # reads as working, because what is returned below is a
+                        # path into the subtree either way. It is still asked
+                        # for rather than assumed, because 3.10 and 3.11 only
+                        # gained it in a patch release (3.10.12, 3.11.4).
+                        if "filter" in args.args or "filter" in args.kwonlyargs:
                             if self.import_rel_path is not None:
                                 filter = lambda member, _: (
                                     member if member.name.startswith(self.import_rel_path) else None
