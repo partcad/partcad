@@ -66,6 +66,32 @@
       },
       "additionalProperties": false
     },
+    "sketch-manufacturing": {
+      "type": "object",
+      "description": "How a machine follows this drawing: which machine, and the job it runs. A sketch has no 'method:' and no 'source:' -- it is not made from anything, it is a path -- so this is the machine subsections and the job keys and nothing else. Scoped the same way a part's is: what is written here is shared by every machine named below, and what is written inside one of them is that machine's own.",
+      "properties": {
+        "cnc": { "$ref": "#/definitions/subtractive-cnc" },
+        "drill": { "$ref": "#/definitions/subtractive-drill" },
+        "laser": { "$ref": "#/definitions/subtractive-laser" },
+        "diameter": { "$ref": "#/definitions/cam-length", "description": "Shared by every machine named that reads one" },
+        "depth": { "$ref": "#/definitions/cam-length", "description": "How deep to score. A sketch has no thickness to be cut through, so this is the one thing it has to answer for itself" },
+        "depth_per_pass": { "$ref": "#/definitions/cam-length" },
+        "safe_z": { "$ref": "#/definitions/cam-length" },
+        "peck": { "$ref": "#/definitions/cam-length" },
+        "kerf": { "$ref": "#/definitions/cam-length" },
+        "feed": { "$ref": "#/definitions/cam-feed" },
+        "plunge": { "$ref": "#/definitions/cam-feed" },
+        "speed": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }] },
+        "stepover": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "power": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }] },
+        "operation": { "type": "string", "enum": ["profile", "pocket", "engrave"] },
+        "direction": { "type": "string", "enum": ["climb", "conventional"] },
+        "implementation": { "type": "string", "minLength": 1 },
+        "desc": { "type": "string", "maxLength": 1000 }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
     "cam-job": {
       "type": "object",
       "description": "What is cut out of this object and how: the operation, the cutter, how deep, and how fast. Every key here is also a parameter of the 'cam:' file type that produces the route, so what an object leaves out its package still answers; a length may carry a unit ('6 mm', '0.25 in') and a bare number is millimeters",
@@ -1197,7 +1223,6 @@
                 "cae": { "$ref": "#/definitions/output-section" },
                 "fea": { "$ref": "#/definitions/cae-analysis" },
                 "cfd": { "$ref": "#/definitions/cae-analysis" },
-                "cam": { "$ref": "#/definitions/cam-job" },
                 "simulate": { "$ref": "#/definitions/simulate" },
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
@@ -1565,7 +1590,7 @@
             "parameters": { "$ref": "#/definitions/shape-parameter"},
             "render": { "$ref": "#/definitions/render" },
             "export": { "$ref": "#/definitions/output-section" },
-            "cam": { "$ref": "#/definitions/cam-job" },
+            "manufacturing": { "$ref": "#/definitions/sketch-manufacturing" },
             "include": {
               "description": "The layers of the drawing to read, as a layer name or a list of them ('dxf' only). Empty or absent means every layer; names are matched case-insensitively, and only one of 'include' and 'exclude' may be given. It is also an object-type parameter of the same name, so a reference may set it instead: 'bends;include=BEND_UP,BEND_DOWN' reads the one sketch two layers at a time, and the parameter outranks this field where both are given.",
               "oneOf": [

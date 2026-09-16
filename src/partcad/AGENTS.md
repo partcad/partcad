@@ -204,12 +204,12 @@ at all).
   program with a release cycle of its own, which is the test `export:`/`render:` pass and a solver does not,
   so `//builtin/cam` ships and `camImplementation` names it by default.
 
-  The object declares the job in a `cam:` section of its own -- the same word as the package-level section,
-  and deliberately so. For CAE the two names differ because boundary conditions and mesh sizes are different
-  kinds of thing; here the tool, the depth and the feed are the file type's parameters *and* the object's
-  statement about itself, so they are one namespace with `//builtin/cam`, the package and the object as its
-  three layers. What keeps that unambiguous is that `cam.KEYS` is a **closed** set: an object's section holds
-  job parameters and nothing else, so it can never be read as a file-type declaration, and a key that is
+  The object declares the job in its **`manufacturing:`** section, beside the method and the machine it
+  belongs to -- so `cam:` means the file-type registry and nothing else. It used to mean both, with the
+  ambiguity managed by keeping the two key sets disjoint; there is nothing left to manage. `//builtin/cam`,
+  the package and the object are still the three layers, and within the object there are two more: what sits
+  directly under `manufacturing:` is shared by every machine it names, and what sits inside a machine's own
+  subsection outranks it. `cam.KEYS` is still a **closed** set, and a key that is
   neither is refused with a sentence rather than passed through.
 
   `cam.py` parses and converts (lengths to millimetres, feeds to millimetres per minute, and both at *every*
@@ -260,7 +260,17 @@ at all).
   The **machine** is named by adding its own subsection -- `cnc:`, `drilling:` or `laser:` -- rather than by a
   `machine:` key, because the three do not take the same options and one namespace would leave nothing to say
   which belongs to which. None of them is CNC: the machine that can make anything the other two can, and what
-  every `subtractive` part written before this meant. `MACHINE_KEYS` is closed for the reason `cam.KEYS` is, and the axis is `toolAxis:` rather than `direction:` because an object's `cam:` section already has a `direction` meaning climb or conventional, and both reach one implementation in one request.
+  every `subtractive` part written before this meant. **Several of them is legal, and they are alternatives** --
+  ways the part could be made rather than stages it goes through, so every one is checked and `pc cam -m`
+  picks which to write for. A part that really is machined in stages is a chain of parts each naming the
+  previous as its `source`, because each stage has its own geometry and its own stock.
+
+  `MACHINE_JOB_KEYS` gives each machine only the keys its emitter actually reads, which is what the flat
+  namespace could not do: a laser has no `diameter:` (it has no cutter -- `kerf:` is what it removes) and no
+  `depth:` or `safe_z:`; a drill has no `depth:`, `feed:` or `operation:`. Writing one of those in that
+  machine's own subsection is an error naming what it does take; writing it in the shared scope is fine and
+  simply not read. The axis is `toolAxis:` rather than `direction:` because `direction` already means climb or
+  conventional, and both would reach one implementation in one request.
 
   The two limited machines get a check each (`manufacturability-laser`, `manufacturability-drill`), and each
   applies **only to a part that named it** -- a package that has said `method: subtractive` for a year must not
@@ -278,8 +288,9 @@ at all).
   outward normal against the radial direction from the axis -- `TopAbs_REVERSED` alone says how a face is used,
   not where its material is. Without it a round blank is one enormous hole with a plunge at its centre.
 
-  `pc cam` writes for all three from the one `gcode` file type, and which one comes from `manufacturing:` and
-  not from `cam:` (`Shape._route_machine_data`, applied after every other layer so nothing can override it):
+  `pc cam` writes for all three from the one `gcode` file type, and which one is the part's own statement
+  rather than a job parameter anybody may re-tune (`Shape._route_machine_data`, applied after every other
+  layer so nothing can override it, and `-m` chooses only between the machines the part itself named):
   what a part is made on is a property of the part, and a route for a machine nobody owns is the failure that
   reaches the shop floor. A part that names no machine produces the bytes it always produced, which is worth
   keeping true -- `_orient` is the identity for the default `-Z` precisely so that it stays so. A part that

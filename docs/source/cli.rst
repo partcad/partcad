@@ -441,18 +441,38 @@ Object commands
   An assembly and a scene are not routed at all -- an assembly is put together rather than cut, and a scene is
   an arrangement of things that were each cut on their own.
 
-  The object says what is cut out of it, and how, in a ``cam:`` section of its own::
+  The object says what is cut out of it, and how, in the ``manufacturing:``
+  section that already says how it is made -- beside the machine it belongs to::
 
       parts:
+        stock:
+          type: build123d
+          path: sheet.py
+
         panel:
           type: build123d
           path: panel.py
-          cam:
-            operation: profile    # around the outside of it
-            diameter: 6 mm            # the cutter's diameter
-            depth_per_pass: 3 mm
-            feed: 2400 mm/min
-            speed: 18000 rpm
+          manufacturing:
+            method: subtractive
+            source: stock
+            cnc:
+              operation: profile  # around the outside of it
+              diameter: 6 mm      # the cutter
+              depth_per_pass: 3 mm
+              feed: 2400 mm/min
+              speed: 18000 rpm
+
+  A key written directly under ``manufacturing:`` is shared by every machine the
+  part names; one written inside a machine's own subsection is that machine's
+  and outranks it. A part may name several -- ``cnc:``, ``laser:``, ``drill:``
+  -- and they are **alternatives**, ways it could be made rather than stages it
+  goes through, so ``--machine`` picks which to write for and the programs land
+  beside each other as ``panel.laser.nc`` and ``panel.cnc.nc``. A part that
+  really is machined in stages is a chain of parts, each naming the previous one
+  as its ``source``.
+
+  A *sketch* has one of these sections too, with no ``method:`` in it: a drawing
+  is not made from anything, it is a path a machine follows.
 
   ``operation:`` says which side of the outline the tool runs on. ``profile`` goes around the outside of the
   material and around the inside of every hole, so the object survives at its nominal size -- and cuts the

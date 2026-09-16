@@ -295,6 +295,14 @@ class PartConfigManufacturing:
         with it is 'pc test's to report, against the part it belongs to.
         """
         manufacturing_config = final_config.get("manufacturing", {}) or {}
+        # Whether the object said anything at all, which is not the same as
+        # whether it named a method. A *sketch* that is engraved or scored has a
+        # `manufacturing:` section and no method in it: a drawing is not made,
+        # it is a path a machine follows, so there is no stock for it to be cut
+        # from and nothing for `method:` to say. An object with no section at
+        # all is the other case entirely, and gets no machine -- which is what
+        # keeps an implementation handed nothing writing what it always wrote.
+        self.declared_section = bool(manufacturing_config)
         method_string = manufacturing_config.get("method", None)
         self.method = _METHOD_MAP.get(method_string, METHOD_NONE)
         if self.method == METHOD_NONE and method_string is not None:
@@ -329,7 +337,7 @@ class PartConfigManufacturing:
         part, and everything that is not about making it goes on working. The
         check is what reports it, against the one part it belongs to.
         """
-        if self.method != METHOD_SUBTRACTIVE:
+        if self.method != METHOD_SUBTRACTIVE and not (self.declared_section and self.method == METHOD_NONE):
             return
 
         shared = {key: value for key, value in manufacturing_config.items() if key in SHARED_JOB_KEYS}

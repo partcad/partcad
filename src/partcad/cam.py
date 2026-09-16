@@ -21,52 +21,68 @@ of its own) in its own `cam:` section.
 
 The job is not part of that configuration in the sense that matters. What is cut
 and how deep is a property of **the object** -- a panel is 18 mm thick and has
-to be cut through whoever routes it -- so an object declares it in a section of
-its own::
+to be cut through whoever routes it -- so the object states it, in the section
+that already says how it is made::
 
     parts:
       panel:
         type: build123d
         path: panel.py
-        cam:
-          operation: profile     # around the outside of it
-        diameter: 6 mm         # the cutter
-          depth: 18 mm           # how far down from the top of the shape
-          depth_per_pass: 6 mm
-          feed: 1200             # mm/min
-          plunge: 300            # mm/min
-          speed: 18000           # rpm
-          safe_z: 5 mm
+        manufacturing:
+          method: subtractive
+          source: sheet          # the stock it comes out of
+          cnc:
+            operation: profile   # around the outside of it
+            diameter: 6 mm       # the cutter
+            depth: 18 mm         # how far down from the top of the shape
+            depth_per_pass: 6 mm
+            feed: 1200           # mm/min
+            plunge: 300          # mm/min
+            speed: 18000         # rpm
+            safe_z: 5 mm
 
-**That section is the object's opt-in**, and it is the whole of it: `pc cam` with
-no object named produces a route for every object of the package that declares
-one, and for nothing else. An object with no `cam:` section is not a failure and
-is not reported as one -- most objects are never cut on this machine.
+**Saying something about being cut is the object's opt-in**, and it is the whole
+of it: `pc cam` with no object named produces a route for every object of the
+package that does, and for nothing else. An object that says nothing is not a
+failure and is not reported as one -- most objects are never cut on this
+machine. `declares_job` is that question, asked without judging the answer.
 
-Why the object's section is called `cam:` too, when CAE splits the two names
-(`cae:` for the implementations, `fea:`/`cfd:` for what the part declares): for
-CAE the two are different kinds of thing, because boundary conditions belong to
-the part and the mesh size and the material model belong to whoever solves it.
-Here the *job* half of them is the same kind of thing. The tool, the depth and
-the feed are the implementation's parameters *and* the part's statement about
-itself, and which layer they come from is a question of scope rather than of
-kind -- a package cutting twenty parts from one sheet sets the tool once, under
-the file type in its own `cam:` section, and a part that needs a smaller one says
-so in its own. So they are one namespace with the ordinary layering over it, and
-the object's section is the topmost layer.
+There are two scopes, and the difference between them is the point of having
+two. What is written directly under `manufacturing:` is shared by every machine
+the object names; what is written inside a machine's own subsection is that
+machine's and outranks the shared value. So a part that could be cut either way
+says `feed: 1800` once and lets the laser say `power: 85` for itself.
+
+Each machine takes only the keys it actually reads, which is what a single flat
+namespace could not express. A laser has no `diameter:` -- it has no cutter, and
+`kerf:` is what it removes -- so writing one in `laser:` is an error naming what
+a laser does take, rather than a value silently ignored. A drill has no `depth:`
+and no `feed:`; a part is free to write either in the shared scope, where it
+simply is not read by a machine that has no use for it.
+
+An object may name **several** machines. They are alternatives -- ways it could
+be made -- rather than stages it goes through, so `pc cam` writes for one of
+them and asks which where there is a choice. A part that really is machined in
+stages is a chain of parts, each naming the previous one as its `source`,
+because each stage has its own geometry and its own stock.
+
+A *sketch* has one of these sections too, and no `method:` in it: a drawing is
+not made from anything, it is a path a machine follows. What it does have is a
+`depth:`, and uniquely so -- a part has a thickness to be cut through and a
+sketch does not, so how deep to score is the one thing it has to answer.
 
 What an object may *not* set is the half that describes the file rather than the
 cut -- `//builtin/cam`'s `units`, `precision`, `tolerance` and `comments`, and
 whatever an implementation PartCAD has never seen calls its own. Those stay with
-the file type. The reason is `KEYS` below: an object's section is checked against
-a list, and a list can only hold what PartCAD knows the name of, so the closed
-set is what buys the error message. A package sets those for its objects.
+the file type, in a package's `cam:` section. The reason is `KEYS` below: a
+section is checked against a list, and a list can only hold what PartCAD knows
+the name of, so the closed set is what buys the error message.
 
-What keeps that from being ambiguous is that the keys below are a **closed set**:
-an object's `cam:` may hold a job parameter and nothing else, so it can never be
-read as the file-type declaration a package's `cam:` section holds. A key that is
-neither is refused rather than passed through, which is what turns a typo into a
-sentence instead of a route cut to a default.
+That split is also why the word `cam:` now means exactly one thing. It used to
+mean two -- the file types a package declares, and the job an object declared --
+and the ambiguity was managed by keeping the two key sets disjoint. The job
+lives in `manufacturing:` now, beside the method and the machine it belongs to,
+so `cam:` is the implementation registry and nothing else.
 
 `partcad.test.manufacturability` is the neighbouring idea and not this one: it
 is the `pc test` check that asks whether an object can be made or bought at all

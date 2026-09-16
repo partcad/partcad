@@ -24,15 +24,21 @@ Feature: `pc cam` command
     Given a file named "partcad.yaml" with content:
       """
       parts:
+        stock:
+          type: build123d
+          path: panel.py
         panel:
           type: build123d
           path: panel.py
-          cam:
-            operation: profile
-            diameter: 6 mm
-            depth_per_pass: 6 mm
-            feed: 1200 mm/min
-            speed: 18000 rpm
+          manufacturing:
+            method: subtractive
+            source: stock
+            cnc:
+              operation: profile
+              diameter: 6 mm
+              depth_per_pass: 6 mm
+              feed: 1200 mm/min
+              speed: 18000 rpm
         spacer:
           type: build123d
           path: panel.py
@@ -128,11 +134,17 @@ Feature: `pc cam` command
     Given a file named "partcad.yaml" with content:
       """
       parts:
+        stock:
+          type: build123d
+          path: panel.py
         panel:
           type: build123d
           path: panel.py
-          cam:
-            diameter: six millimetres
+          manufacturing:
+            method: subtractive
+            source: stock
+            cnc:
+              diameter: six millimetres
       """
     And a file named "panel.py" with content:
       """
@@ -155,12 +167,18 @@ Feature: `pc cam` command
     Given a file named "partcad.yaml" with content:
       """
       parts:
+        stock:
+          type: build123d
+          path: panel.py
         panel:
           type: build123d
           path: panel.py
-          cam:
-            diameter: 6 mm
-            toool: 3 mm
+          manufacturing:
+            method: subtractive
+            source: stock
+            cnc:
+              diameter: 6 mm
+              toool: 3 mm
       """
     And a file named "panel.py" with content:
       """
@@ -183,12 +201,18 @@ Feature: `pc cam` command
     Given a file named "partcad.yaml" with content:
       """
       parts:
+        stock:
+          type: build123d
+          path: panel.py
         panel:
           type: build123d
           path: panel.py
-          cam:
-            diameter: 6 mm
-            implementation: //nowhere:gcode
+          manufacturing:
+            method: subtractive
+            source: stock
+            cnc:
+              diameter: 6 mm
+              implementation: //nowhere:gcode
       """
     And a file named "panel.py" with content:
       """
@@ -213,11 +237,17 @@ Feature: `pc cam` command
     Given a file named "partcad.yaml" with content:
       """
       parts:
+        stock:
+          type: build123d
+          path: panel.py
         panel:
           type: build123d
           path: panel.py
-          cam:
-            toool: 3 mm
+          manufacturing:
+            method: subtractive
+            source: stock
+            cnc:
+              toool: 3 mm
       """
     And a file named "panel.py" with content:
       """

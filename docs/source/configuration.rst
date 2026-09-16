@@ -2247,11 +2247,11 @@ one may be named.
 Every machine takes a ``toolAxis``, which is the axis the tool, the beam or the
 drill approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
 or ``-Z``. It defaults to ``-Z``: the part sits on the bed and the tool comes
-down to it. It is **not** ``cam: direction:``, which says which way round a
+down to it. It is **not** ``direction:``, which says which way round a
 contour is cut (climb or conventional) -- the two reach one implementation in
 one request, which is why they do not share a name. A laser also takes a ``kerf``, the width the beam itself removes,
 which is a property of that machine and that material rather than of the job --
-which is why it is declared here and not under ``cam:``.
+which is why it is a property of the machine rather than of the cut.
 
 What ``pc test`` checks
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -2283,8 +2283,8 @@ What ``pc cam`` writes
 ^^^^^^^^^^^^^^^^^^^^^^
 
 The same ``gcode`` file type produces a different program for each machine, and
-which one it writes for comes from ``manufacturing:`` rather than from ``cam:``
--- what a part is made on is a property of the part, and a ``cam:`` key for it
+which one it writes for is the part's own statement rather than a job parameter
+-- what a part is made on is a property of the part, and a re-tunable key for it
 would be a route written for a machine nobody owns.
 
 +----------------+------------------------------------------------------------+
@@ -4309,10 +4309,10 @@ and the rest of the closed list below -- are also keys an object may set for
 itself.** Nothing else is: not the parameters that describe the file rather than
 the cut, and not a parameter a third-party implementation invented, however
 squarely it describes the cut. PartCAD cannot check a name it has never heard of
-against a list, which is why the list is closed and why the two paragraphs after
-the example spell out what is on it. That shared job half is what makes this
-section and the object's own ``cam:`` section three layers of one namespace
-rather than two different things:
+against a list, which is why the list is closed and why the paragraphs after the
+example spell out what is on it. That shared job half is what makes this section
+and the object's own declaration layers of one namespace rather than two
+different things:
 
 .. code-block:: yaml
 
@@ -4323,37 +4323,65 @@ rather than two different things:
       safe_z: 8 mm
 
   parts:
+    stock:
+      type: build123d
+      path: sheet.py
+
     panel:
       type: build123d
       path: panel.py
-      # The object: what is true of this object, and nothing else.
-      cam:
-        operation: profile
-        diameter: 6 mm
+      # The object: what is true of this object, and nothing else. It goes in
+      # the section that already says how the part is made, beside the machine
+      # it belongs to.
+      manufacturing:
+        method: subtractive
+        source: stock
+        cnc:
+          operation: profile
+          diameter: 6 mm
 
 ``//builtin/cam`` is underneath both. So a package cutting twenty parts from one
-sheet sets the tool once, and the one part that needs a smaller cutter says so
-for itself. It is deliberately not the ``cae:``/``fea:`` split, where the
-implementation's parameters and what the part declares are named separately:
-there they are different kinds of thing -- boundary conditions belong to the
-part and the mesh size belongs to whoever solves it -- and here the tool, the
-depth and the feed are the same thing said at a different scope.
+sheet sets the feed once, and the one part that needs a smaller cutter says so
+for itself.
 
-What keeps the two readings of the word unambiguous is that an object's ``cam:``
-takes a **closed** set of keys -- ``operation``, ``direction``, ``tool``,
-``depth``, ``depth_per_pass``, ``safe_z``, ``feed``, ``plunge``, ``speed``,
-``stepover``, the two that belong to a machine other than a router (``power``
-for a laser and ``peck`` for a drill), plus ``implementation`` and ``desc`` --
-so it can never be read as the file-type declaration a package's ``cam:``
-section holds. Anything else in it is refused with a sentence, which is what
-turns a typo into an error rather than a route cut to a default. See
-:ref:`pc cam <cam>` for what each key means, which units it may be written in,
-and why ``tool:`` has no default.
+The object's half lives in ``manufacturing:`` and not in a ``cam:`` section of
+its own, and that is what makes the word mean one thing. It used to mean two --
+the file types a package declares, and the job an object declared -- with the
+ambiguity managed by keeping the two key sets disjoint. Now ``cam:`` is the
+implementation registry and nothing else, and the job sits where the rest of
+"how this is made" already was.
 
-The list is closed but not machine-specific: a key is refused for not being on
-it, never for being on it and belonging to a machine the part is not made on.
-Which keys a route actually reads is the implementation's business, and
-``//builtin/cam`` ignores the ones its machine has no use for.
+Within the object there are two scopes, and the difference is the point of
+having two. What is written directly under ``manufacturing:`` is shared by every
+machine the part names; what is written inside a machine's own subsection is
+that machine's, and outranks the shared value:
+
+.. code-block:: yaml
+
+  manufacturing:
+    method: subtractive
+    source: stock
+    feed: 1800            # whichever machine cuts it
+    laser:
+      kerf: 0.15
+      power: 85           # the laser's own
+    cnc:
+      diameter: 3
+      depth: 2
+
+**Each machine takes only the keys it reads.** A laser has no ``diameter:`` --
+it has no cutter, and ``kerf:`` is what it removes -- and no ``depth:`` or
+``safe_z:``, because it cuts through in one pass and never moves in Z. A drill
+has no ``depth:`` (how deep each hole goes is the geometry's to say), no
+``feed:`` and no ``operation:``. Writing one of those inside that machine's own
+subsection is refused with a sentence naming what it does take; writing it in
+the shared scope is perfectly legal and simply not read by a machine that has no
+use for it.
+
+That distinction is the one a single flat list could not draw. ``tool:`` used to
+be one key meaning three things, and a cutter diameter written on a laser-cut
+part was a value silently ignored. It is ``diameter:`` now, it lives beside the
+machine it belongs to, and on a laser it is an error.
 
 Those are the keys that describe the **cut**. A file type's other parameters
 describe the **file** -- ``//builtin/cam``'s ``units``, ``precision``,
