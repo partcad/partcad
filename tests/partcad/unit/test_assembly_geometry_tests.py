@@ -210,11 +210,11 @@ def test_a_pair_is_named_without_saying_where_in_the_tree_it_sits():
 def test_the_cache_key_moves_when_the_thresholds_do():
     """A verdict reached under one threshold must not be read back under another."""
     test = InterferenceTest()
-    loose = test.cache_key_suffix(None, _Assembly(config={"interference": {"minVolume": 1.0}}))
-    strict = test.cache_key_suffix(None, _Assembly(config={"interference": {"minVolume": 0.1}}))
+    loose = asyncio.run(test.cache_key_suffix(None, _Assembly(config={"interference": {"minVolume": 1.0}})))
+    strict = asyncio.run(test.cache_key_suffix(None, _Assembly(config={"interference": {"minVolume": 0.1}})))
     assert loose != strict
-    ignoring = test.cache_key_suffix(None, _Assembly(config={"interference": {"ignore": [["a", "b"]]}}))
-    assert ignoring != test.cache_key_suffix(None, _Assembly())
+    ignoring = asyncio.run(test.cache_key_suffix(None, _Assembly(config={"interference": {"ignore": [["a", "b"]]}})))
+    assert ignoring != asyncio.run(test.cache_key_suffix(None, _Assembly()))
 
 
 # --- the request the core sends the wrapper ---------------------------------
@@ -282,8 +282,8 @@ def test_an_indeterminate_pair_is_not_reported_as_no_overlap(caplog):
 
 def test_the_interference_cache_key_covers_skip_as_well_as_the_thresholds():
     test = InterferenceTest()
-    assert test.cache_key_suffix(None, _Assembly()) != test.cache_key_suffix(
-        None, _Assembly(config={"interference": {"skip": True}})
+    assert asyncio.run(test.cache_key_suffix(None, _Assembly())) != asyncio.run(
+        test.cache_key_suffix(None, _Assembly(config={"interference": {"skip": True}}))
     )
 
 

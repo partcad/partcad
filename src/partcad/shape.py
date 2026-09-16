@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 import os
 import sys
 import tempfile
@@ -202,6 +203,22 @@ class Shape(ShapeConfiguration):
     # shape: None | OCP.TopoDS.TopoDS_Solid
 
     errors: list[str]
+
+    # Extra cache entries a kind of shape carries beside its geometry, mapped to
+    # the attribute each is held in. Empty for every kind but a sketch, which
+    # carries what its drawing said about its own elements (see
+    # 'Sketch.get_annotations'): BREP has nowhere to put that, and re-reading
+    # the source file is exactly what the cache exists to avoid.
+    #
+    # They are entries of their own rather than something folded into the
+    # geometry, for the reason 'cache_shape.properties_key()' gives: an entry of
+    # its own is written, read and missed on its own. Missed matters here, and
+    # is why a cached shape whose side data is absent is built again rather than
+    # answered with nothing: the geometry of a sketch cached before any of this
+    # existed is perfectly valid and its key has not moved, so "no annotations
+    # were recorded" would otherwise read as "this drawing annotates nothing" -
+    # which is a different answer, and the one a check would act on.
+    CACHED_SIDE_DATA: dict = {}
 
     def __init__(self, project_name: str, config: dict) -> None:
         super().__init__(config)
@@ -496,16 +513,24 @@ class Shape(ShapeConfiguration):
             if is_cacheable:
                 cache_hash = self.hash
                 if cache_hash:
-                    keys_to_read = [self.kind, "cmps"]
+                    keys_to_read = [self.kind, "cmps", *self.CACHED_SIDE_DATA]
                     cached, to_cache_in_memory = await ctx.cache_shapes.read_async(
                         cache_hash, keys_to_read, self.get_cache_metadata()
                     )
-                    if to_cache_in_memory.get(self.kind, False):
-                        self._wrapped = cached[self.kind]
-                    if to_cache_in_memory.get("cmps", False):
-                        self.components = cached["cmps"]
-                    if self.kind in cached and cached[self.kind] is not None:
-                        return cached[self.kind]
+                    # An entry that is absent is an entry that was never
+                    # written, which is not the same as one that was written
+                    # empty: see CACHED_SIDE_DATA. Such a hit is not usable, so
+                    # nothing is taken from it and the shape is built.
+                    side_data_complete = all(cached.get(key) is not None for key in self.CACHED_SIDE_DATA)
+                    if side_data_complete:
+                        for key, attribute in self.CACHED_SIDE_DATA.items():
+                            setattr(self, attribute, cached[key])
+                        if to_cache_in_memory.get(self.kind, False):
+                            self._wrapped = cached[self.kind]
+                        if to_cache_in_memory.get("cmps", False):
+                            self.components = cached["cmps"]
+                        if self.kind in cached and cached[self.kind] is not None:
+                            return cached[self.kind]
                 else:
                     if self.cache:
                         pc_logging.warning(f"No cache hash for shape: {self.name}")
@@ -548,6 +573,12 @@ class Shape(ShapeConfiguration):
                     to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
                     if self.components and len(self.components) > 0:
                         to_cache["cmps"] = self.components
+                    for key, attribute in self.CACHED_SIDE_DATA.items():
+                        # Unconditionally, including when there is nothing to
+                        # record: an empty entry is what says the question was
+                        # asked and the answer was nothing, which is what the
+                        # read above distinguishes from an entry that is absent.
+                        to_cache[key] = getattr(self, attribute, None) or []
                     properties = self._shape_properties()
                     if properties:
                         # Both entries are filled here and nowhere else:
@@ -648,6 +679,18 @@ class Shape(ShapeConfiguration):
         if isinstance(component, list):
             return [self._component_to_envelope(item) for item in component]
         return self._to_envelope(component)
+
+    def take_side_data_from(self, source) -> None:
+        """Adopt the extra cache entries of the object this one points at.
+
+        A reference shares the cache entry of its source (see
+        'take_cache_key_from'), so the two have to answer the same - and the
+        source is what builds, and so what learns, whatever CACHED_SIDE_DATA
+        holds. Called once the source has been materialized, beside the copy of
+        its components that happens for the same reason.
+        """
+        for attribute in self.CACHED_SIDE_DATA.values():
+            setattr(self, attribute, copy.copy(getattr(source, attribute, None)))
 
     async def get_cache_value(self, ctx, shape):
         """The value handed to the shape cache under 'self.kind'.

@@ -110,6 +110,9 @@ Feature: `pc inspect` command
   Examples: Part: build123d
     | package | part |
     | /produce_part_build123d_primitive | cube |
+    | /produce_part_sheet_metal | angle_down |
+    | /produce_part_sheet_metal | angle_up |
+    | /produce_part_sheet_metal | bracket |
 
   @sdf
   Examples: Part: sdf
@@ -133,6 +136,7 @@ Feature: `pc inspect` command
     | /produce_part_extrude | clock |
     | /produce_part_extrude | cylinder |
     | /produce_part_extrude | dxf |
+    | /produce_part_sheet_metal | blank |
 
   @openscad
   Examples: Part: OpenSCAD

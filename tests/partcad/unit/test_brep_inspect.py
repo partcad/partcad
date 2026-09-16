@@ -241,8 +241,8 @@ def test_a_part_cannot_exclude_itself():
 
     # ...and nothing a package writes moves the key the verdict is stored under.
     test = ShellTest()
-    assert test.cache_key_suffix(None, _Shape(None)) == ""
-    assert test.cache_key_suffix(None, _Shape(None, config={"shell": {"skip": True}})) == ""
+    assert asyncio.run(test.cache_key_suffix(None, _Shape(None))) == ""
+    assert asyncio.run(test.cache_key_suffix(None, _Shape(None, config={"shell": {"skip": True}}))) == ""
 
 
 def test_a_shape_that_did_not_build_is_the_cad_checks_to_report():

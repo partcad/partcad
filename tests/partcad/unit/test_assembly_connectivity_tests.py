@@ -285,20 +285,20 @@ def test_the_settings_that_decide_a_verdict_are_in_its_cache_key():
     suffix, and shape.hash carries none of these settings - so a suffix that
     omits them hands back the answer from before they were changed."""
     conn = ConnectivityTest()
-    assert conn.cache_key_suffix(None, _Assembly()) != conn.cache_key_suffix(
-        None, _Assembly(config={"connectivity": {"allowDuplicates": True}})
+    assert asyncio.run(conn.cache_key_suffix(None, _Assembly())) != asyncio.run(
+        conn.cache_key_suffix(None, _Assembly(config={"connectivity": {"allowDuplicates": True}}))
     )
-    assert conn.cache_key_suffix(None, _Assembly()) != conn.cache_key_suffix(
-        None, _Assembly(config={"connectivity": {"requireAnchored": False}})
+    assert asyncio.run(conn.cache_key_suffix(None, _Assembly())) != asyncio.run(
+        conn.cache_key_suffix(None, _Assembly(config={"connectivity": {"requireAnchored": False}}))
     )
-    assert conn.cache_key_suffix(None, _Assembly()) != conn.cache_key_suffix(
-        None, _Assembly(config={"connectivity": {"skip": True}})
+    assert asyncio.run(conn.cache_key_suffix(None, _Assembly())) != asyncio.run(
+        conn.cache_key_suffix(None, _Assembly(config={"connectivity": {"skip": True}}))
     )
     # 'solidity' has nothing in its key: it reads the geometry and takes no
     # settings, so there is nothing a package can change that moves the answer.
     sol = SolidityTest()
-    assert sol.cache_key_suffix(None, _Shape()) == ""
-    assert sol.cache_key_suffix(None, _Shape(config={"solidity": {"skip": True}})) == ""
+    assert asyncio.run(sol.cache_key_suffix(None, _Shape())) == ""
+    assert asyncio.run(sol.cache_key_suffix(None, _Shape(config={"solidity": {"skip": True}}))) == ""
 
 
 def test_a_verdict_that_turned_on_the_machine_is_not_remembered():

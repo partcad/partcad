@@ -6,6 +6,49 @@ Feature: `pc render` command
     Given I have temporary $HOME in "/tmp/sandbox/home"
     Given a file named "partcad.yaml" does not exist
 
+  @success @pc-render @pc-render-parametrized
+  Scenario: Each reading of one drawing renders to a file of its own
+    # A sketch read with particular parameter values is an object of its own -
+    # 'examples/produce_part_sheet_metal' holds one DXF with two bend lines on
+    # two layers, and three parts read it: one folded at each line, and one
+    # folded at both - and the file each reading is written to is named after
+    # it, parameters and all. Both ';' and '=' are legal in a filename
+    # everywhere PartCAD runs; '/' and ':' are the ones that are not, and
+    # neither can appear in an object name.
+    #
+    # What this rules out is the two ways it could go wrong: a reading that
+    # writes nothing, and readings that write over each other or over the
+    # projection of the drawing itself.
+    # Written with the multi-line form and *double* quotes on purpose. A
+    # parameterized name holds ';', which a POSIX shell reads as a command
+    # separator, so it has to be quoted -- and these commands run through
+    # 'subprocess.run(shell=True)', which is 'cmd.exe' on Windows, where "'"
+    # quotes nothing and would be passed through as part of the name. The
+    # object would then begin "'" rather than ':', 'resolve_resource_path'
+    # would cut the package at the ':' after it, and the render would be asked
+    # for a package named "'".
+    When I run command
+      """
+      pc --no-ansi -p $PARTCAD_ROOT/examples render --package //produce_part_sheet_metal -t svg -O ./ -s ":panel;include=BEND_UP"
+      """
+    Then the command should exit with a status code of "0"
+    When I run command
+      """
+      pc --no-ansi -p $PARTCAD_ROOT/examples render --package //produce_part_sheet_metal -t svg -O ./ -s ":panel;include=BEND_DOWN"
+      """
+    Then the command should exit with a status code of "0"
+    When I run command
+      """
+      pc --no-ansi -p $PARTCAD_ROOT/examples render --package //produce_part_sheet_metal -t svg -O ./ -s ":panel;include=BEND_UP,BEND_DOWN"
+      """
+    Then the command should exit with a status code of "0"
+    Then a file named "panel;include=BEND_UP.svg" should be created
+    And a file named "panel;include=BEND_DOWN.svg" should be created
+    And a file named "panel;include=BEND_UP,BEND_DOWN.svg" should be created
+    # Nobody asked for the drawing itself, and nothing wrote it: a reading that
+    # lost its parameters on the way to a filename would have landed here.
+    And a file named "panel.svg" should not exist
+
   Scenario Outline: `pc render` command
     When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t <type> -O ./ -a :logo_embedded"
     Then the command should exit with a status code of "0"
