@@ -9,7 +9,7 @@
 
 from . import factory, sandbox_versions
 from . import software as pc_software
-from . import telemetry
+from . import step_metadata, telemetry
 from .file_factory import FileFactory
 from .port import WithPorts
 
@@ -23,6 +23,16 @@ class ShapeFactory(factory.Factory):
     # this factory produces its shape without a sandbox at all - an alias, an
     # enrich, an assembly - and so has no environment to cache under.
     PYTHON_SANDBOX_VERSION: str | None = None
+
+    # The format of the file this factory reads, for the formats 'step_metadata'
+    # knows how to read metadata out of. None - which is nearly every factory -
+    # means there is no file to ask, or nothing here that can read it, and the
+    # shape's info is what it always was.
+    #
+    # Named as a *format* rather than as a type, for the same reason
+    # 'TOLERANCE_FILE_FORMAT' is: 'kicad' produces a STEP file some other way
+    # and is read like one, without having to be named a second time.
+    METADATA_FILE_FORMAT: str | None = None
 
     def __init__(self, ctx, project, config) -> None:
         super().__init__()
@@ -99,4 +109,26 @@ class ShapeFactory(factory.Factory):
         if "importUrl" in self.project.config_obj and self.project.config_obj["importUrl"] is not None:
             info["ImportUrl"] = self.project.config_obj["importUrl"]
         info["Path"] = self.project.name
+        info.update(self.file_info())
         return info
+
+    def file_info(self) -> dict:
+        """What the file this shape is read from states about itself.
+
+        Its layers, the products it names, and the properties hung on those -
+        see 'step_metadata'. Empty for a factory that declares no
+        'METADATA_FILE_FORMAT', for one whose file is not on disk yet, and for a
+        file that states none of it.
+
+        Read here rather than carried on the shape, because none of it is a
+        property of the shape: a part read out of a STEP file is one solid out
+        of a file that may name twenty, and what the file says about the other
+        nineteen is still what 'pc info' on that file's part should show. The
+        file is on disk by the time this is asked - 'shape_info' has already
+        built the shape - and reading it is a scan over bytes with no CAD kernel
+        behind it.
+        """
+        if self.METADATA_FILE_FORMAT is None:
+            return {}
+        metadata = step_metadata.of_file(self.METADATA_FILE_FORMAT, getattr(self, "path", None))
+        return step_metadata.as_info(metadata)

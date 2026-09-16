@@ -12,12 +12,18 @@ imported ('wrappers/dxf_metadata.py') and carried beside the geometry from then
 on, which is what makes it a property of the *sketch* rather than of the file:
 the day another sketch type states the same thing, nothing that reads it changes.
 
+A drawing also says things about *itself* - which layers it has, what its
+numbers are in, which application wrote it - and that travels the same way, for
+a reason of its own: a sketch is the layers its filters selected, and the
+interesting thing about the ones they did not select is that they exist.
+
 Two halves are checked here, and they are the two the feature is made of:
 
 * the reading - which spellings of XDATA are understood, which elements are
-  reported, and what the layer filters do to the answer;
-* the carrying - that the annotations are cached beside the geometry, and that a
-  cache entry written before they existed is rebuilt rather than read back as a
+  reported, what the layer filters do to the answer, and what the drawing says
+  about itself;
+* the carrying - that both are cached beside the geometry, and that a cache
+  entry written before they existed is rebuilt rather than read back as a
   drawing that annotates nothing.
 
 No CAD library and no sandbox: the reader needs ezdxf alone, and the caching is
@@ -271,3 +277,121 @@ def test_geometry_cached_before_annotations_existed_is_built_again(ctx):
     again = _sketch(ctx, annotations, name="legacy")
     assert asyncio.run(again.get_annotations(ctx)) == annotations
     assert again.builds == 0
+
+
+#
+# What the drawing says about itself, rather than about any of its elements
+#
+
+
+def test_the_layers_include_the_ones_this_sketch_does_not_read(tmp_path):
+    """The point of reporting a layer that was filtered out is that it exists.
+
+    A layer filter that matched nothing and a layer that is not in the file both
+    produce a sketch with nothing in it, and this is what tells them apart.
+    """
+    document = ezdxf.readfile(_drawing(tmp_path))
+    described = dxf_metadata.describe(document, include=["BEND_UP"])
+    by_name = {layer["name"]: layer for layer in described["layers"]}
+
+    assert by_name["BEND_UP"]["read"] is True
+    assert by_name["BEND_DOWN"]["read"] is False
+    assert by_name["OUTLINE"]["read"] is False
+
+
+def test_a_layer_says_how_much_is_on_it_and_of_what(tmp_path):
+    document = ezdxf.readfile(_drawing(tmp_path))
+    by_name = {layer["name"]: layer for layer in dxf_metadata.describe(document)["layers"]}
+
+    assert by_name["BEND_UP"]["elements"] == 1
+    assert by_name["BEND_UP"]["types"] == {"LINE": 1}
+    assert by_name["OUTLINE"]["types"] == {"LWPOLYLINE": 1}
+    # Declared by the table and drawn on by nothing, which is still a layer.
+    assert by_name["0"]["elements"] == 0
+
+
+def test_what_the_drawing_says_about_itself(tmp_path):
+    document = ezdxf.readfile(_drawing(tmp_path))
+    described = dxf_metadata.describe(document)
+
+    assert described["release"] == "R2010"
+    assert described["elements"] == 3
+    # XDATA is written under an APPID, so the ones the file declares are the
+    # names an annotation could have come from.
+    assert "PARTCAD" in described["appids"]
+
+
+def test_the_units_are_what_the_drawing_states(tmp_path):
+    """PartCAD reads a DXF as millimetres; what the file says is worth seeing."""
+    document = ezdxf.new("R2010")
+    document.header["$INSUNITS"] = 1
+    document.modelspace().add_line((0, 0), (1, 0))
+    path = str(tmp_path / "inches.dxf")
+    document.saveas(path)
+
+    assert dxf_metadata.read_file(path)["metadata"]["units"] == "in"
+
+
+def test_a_drawing_that_says_it_is_unitless(tmp_path):
+    """'unitless' is not 'millimetres', and reporting it as one would be a guess."""
+    document = ezdxf.new("R2010")
+    document.header["$INSUNITS"] = 0
+    document.modelspace().add_line((0, 0), (1, 0))
+    path = str(tmp_path / "unitless.dxf")
+    document.saveas(path)
+
+    assert dxf_metadata.read_file(path)["metadata"]["units"] is None
+
+
+def test_one_pass_over_the_file_answers_both_questions(tmp_path):
+    """'read_file' is 'describe' and 'read' of one opening of the drawing."""
+    path = _drawing(tmp_path)
+    read = dxf_metadata.read_file(path, include=["BEND_UP"])
+
+    assert [a["layer"] for a in read["annotations"]] == ["BEND_UP"]
+    assert len(read["metadata"]["layers"]) == len(dxf_metadata.describe(ezdxf.readfile(path))["layers"])
+
+
+#
+# ...and that it survives the trip, the way the annotations do
+#
+
+
+class _DescribingSketch(_CountingSketch):
+    """A sketch that records what its drawing said about itself, too."""
+
+    def __init__(self, project_name, config, annotations, metadata):
+        super().__init__(project_name, config, annotations)
+        self._metadata = metadata
+
+    async def get_shape(self, ctx):
+        shape = await super().get_shape(ctx)
+        self.file_metadata = dict(self._metadata)
+        return shape
+
+
+def test_the_file_metadata_comes_back_with_the_cached_geometry(ctx):
+    """Cached beside the annotations, and for the same reason.
+
+    A sketch that comes out of the cache is never instantiated, so a layer table
+    that was only ever set while building would be empty for every run but the
+    first - and 'pc info' would say less about a drawing the more it had been
+    used.
+    """
+    metadata = {"units": "mm", "layers": [{"name": "BEND_UP", "read": True, "elements": 1, "types": {"LINE": 1}}]}
+    first = _DescribingSketch("//test", {"name": "described", "type": "dxf"}, [], metadata)
+    first.hash.add_string("annotations-test-described")
+    assert asyncio.run(first.get_file_metadata(ctx)) == metadata
+    assert first.builds == 1
+
+    second = _DescribingSketch("//test", {"name": "described", "type": "dxf"}, [], {})
+    second.hash.add_string("annotations-test-described")
+    assert asyncio.run(second.get_file_metadata(ctx)) == metadata
+    assert second.builds == 0
+
+
+def test_a_sketch_type_that_reads_no_file_says_nothing(ctx):
+    """Every sketch type but 'dxf' today, and an empty mapping is the answer."""
+    sketch = _sketch(ctx, [], name="silent")
+
+    assert asyncio.run(sketch.get_file_metadata(ctx)) == {}

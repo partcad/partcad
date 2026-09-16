@@ -145,6 +145,47 @@ class SketchFactoryDxf(SketchFactoryPython):
             )
         return include, exclude
 
+    def info(self, sketch):
+        """The usual sketch info, plus everything the drawing states.
+
+        Three things, and each of them answers a question the geometry cannot:
+
+        * ``Drawing`` - which DXF this is, what its numbers are in, and which
+          applications it declares. Read off the file rather than off the
+          sketch, because a sketch is millimetres by the time it exists and a
+          drawing that states inches is a drawing somebody needs to know about.
+        * ``Layers`` - **every** layer the file declares, with how many elements
+          are on each, of which types, and whether this sketch reads it. A layer
+          filter that matched nothing and a layer that is not in the file both
+          produce an empty sketch, and this is what tells them apart.
+        * ``Annotations`` - one record per element that carries extended data:
+          its type, its layer, its handle and the key/value pairs. This is where
+          the ``angle``, ``radius`` and ``direction`` of a sheet metal bend line
+          are, and reading them here is the same reading
+          ``manufacturability-sheet-metal`` acts on.
+
+        Only the annotated elements are listed. An un-annotated one is reported
+        in its layer's tally instead, because a drawing of a few thousand lines
+        would otherwise bury what it does say under what it does not -- while
+        an *annotated* element is what somebody asked this question to see.
+
+        Nothing is read here: the sketch carries both, and 'shape_info' has
+        already built it (which is a cache hit for a sketch built before).
+        """
+        info = super().info(sketch)
+
+        drawing = dict(sketch.file_metadata or {})
+        layers = drawing.pop("layers", [])
+        if drawing:
+            info["Drawing"] = drawing
+        if layers:
+            info["Layers"] = layers
+
+        annotations = [a for a in (sketch.annotations or []) if a.get("metadata")]
+        if annotations:
+            info["Annotations"] = annotations
+        return info
+
     async def instantiate(self, sketch):
         await super().instantiate(sketch)
 
@@ -194,11 +235,13 @@ class SketchFactoryDxf(SketchFactoryPython):
                     pc_logging.warning("%s: %s" % (self.path, result["warning"]))
 
                 shape = result["shape"]
-                # What the drawing said about its own elements, which the
-                # geometry cannot carry (see 'Sketch.get_annotations'). Set on
-                # the sketch rather than returned, because the return value is
-                # the shape; 'Shape.get_wrapped' caches this beside it.
+                # What the drawing said about its own elements and about itself,
+                # neither of which the geometry can carry (see
+                # 'Sketch.get_annotations' and 'Sketch.get_file_metadata'). Set
+                # on the sketch rather than returned, because the return value
+                # is the shape; 'Shape.get_wrapped' caches both beside it.
                 sketch.annotations = result.get("annotations") or []
+                sketch.file_metadata = result.get("metadata") or {}
             except Exception as e:
                 pc_logging.exception("Failed to import the DXF file: %s: %s" % (self.path, e))
                 shape = None

@@ -278,6 +278,38 @@ at all).
   check would act on the difference. This is also what makes sheet metal instructions *a sketch* rather than
   *a DXF file*: `dxf` is the only type that states anything today, and nothing downstream knows that.
 
+  A drawing also says things about **itself**, and that is a second cache entry beside the first
+  (`Sketch.get_file_metadata`, `dxf_metadata.describe`): which DXF it is, what `$INSUNITS` says its numbers
+  are in, the APPIDs it declares, and every layer it has -- with how many elements of which types are on each,
+  and whether this sketch reads it. It is carried separately because it is not about the sketch: a sketch *is*
+  the layers its filters selected, and the interesting thing about the ones they did not select is that they
+  exist. Without it a layer filter that matched nothing and a layer that is not in the file are the same
+  empty sketch. `pc info` is what prints it.
+
+- **A file says what it says, and the bytes already say it** (`step_metadata.py`, `step_p21.py`,
+  `ShapeFactory.file_info`, `METADATA_FILE_FORMAT`): the STEP half of the same idea. A STEP file states a
+  header, its products, its layers (`PRESENTATION_LAYER_ASSIGNMENT`) and *properties* -- a
+  `PROPERTY_DEFINITION` tied by a `PROPERTY_DEFINITION_REPRESENTATION` to a `REPRESENTATION` whose items are
+  the key/value pairs -- and that chain is how an `angle` written against a bend reaches PartCAD from a STEP
+  file, exactly as XDATA is how it reaches PartCAD from a DXF. So both readers lower-case their keys and keep
+  their values as the file states them, and what reads a pair does not have to know which format answered.
+
+  Only the exact entity `PROPERTY_DEFINITION_REPRESENTATION` is followed, never a subtype:
+  `SHAPE_DEFINITION_REPRESENTATION` is one, every STEP file holding a solid states one, and following it
+  would report each solid as a property set holding nothing. Read off the bytes with no CAD kernel, like
+  `tolerance_inspect` (which reads the *same* files for GD&T) and `brep_inspect` -- the Part 21 lexing the two
+  STEP readers share is `step_p21`, in one copy, because two copies of it would not fail when they drifted,
+  they would disagree. `METADATA_FILE_FORMAT` names the *format* rather than the type, the way
+  `TOLERANCE_FILE_FORMAT` does, so `kicad` is read like the STEP file it produces without being named twice.
+
+- **How big it is and how much of it there is** (`Shape.measurements_async`): `pc info` reports a shape's
+  `BoundingBox` and, where it holds a solid, its `Volume` and `Solids`. Neither can be read off a declaration
+  -- a part is a script, a file or a boolean of two others -- so this is the one place they can come from, and
+  it is where `/pc:describe` gets the size it would otherwise estimate off a projection rendered to fit its
+  frame. The bounds are rounded here and nowhere else: OCCT pads a bounding box by the shape's own tolerance,
+  which is what every other caller wants (an exploded view that overlapped by a tolerance would be wrong) and
+  is not what a reader wants to see printed on a 120 mm block.
+
   One thing had to give for that to be usable at all. CadQuery's DXF importer builds **faces**: it merges
   each layer's entities into wires and asks each wire for the face it bounds, so a drawing whose lines do not
   close fails outright -- and a drawing whose lines do not close is exactly what bend instructions are. So
