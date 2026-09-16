@@ -179,6 +179,11 @@ def _reference(argument):
 
 
 def _number(argument):
+    """An argument read as a float, or None if it is not written as one.
+
+    A reference, a list and an enumeration all land here and all come back None:
+    none of them is the number a measure or a real was supposed to hold.
+    """
     try:
         return float(argument)
     except (TypeError, ValueError):
