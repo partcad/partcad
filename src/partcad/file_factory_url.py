@@ -38,7 +38,16 @@ class FileFactoryUrl(FileFactory):
         if dirs != "" and not os.path.exists(dirs):
             os.makedirs(dirs)
 
-        async with aiohttp.ClientSession() as session:
+        # 'trust_env' is what makes aiohttp read HTTPS_PROXY/HTTP_PROXY and
+        # NO_PROXY out of the environment. It is off by default, which makes
+        # this the one downloader in PartCAD that ignores them: libgit2 is
+        # asked for the same thing explicitly (project_factory_git._clone
+        # passes proxy=True) and 'requests' does it on its own (the tar
+        # transport). On a machine whose only route out is a proxy that
+        # difference is invisible until it bites -- the package's git and tar
+        # imports succeed and every 'fileFrom: url' download hangs until it
+        # times out, with nothing saying why.
+        async with aiohttp.ClientSession(trust_env=True) as session:
             r = await session.get(self.url)
             # A 404 answers with a page, not with nothing. Without this the body
             # of that page is written out as the file, and everything downstream
