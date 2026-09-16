@@ -14,8 +14,8 @@ from a projection somebody estimated a size off.
 The measuring itself is OCCT's and happens in a sandbox, which is not reachable
 from here. What is covered here is what is done with the answer: which keys it
 becomes, that 'size' agrees with the bounds it was worked out from, that the
-tolerance OCCT pads a bounding box by does not reach the reader, and that a
-shape which cannot be measured costs 'pc info' nothing but those two keys.
+tolerance OCCT pads a bounding box by does not reach the reader, and that one
+measurement failing costs 'pc info' that measurement and nothing else.
 """
 
 import asyncio
@@ -28,14 +28,29 @@ from partcad.shape import Shape, measured
 class _Shape(Shape):
     """The little a measurement needs of a shape, and nothing that builds one."""
 
-    def __init__(self, box=(0, 0, 0, 10, 20, 30), solidity=None, unbuilt=False, raises=None):
-        """A shape that answers the two measurements with whatever it was given."""
+    def __init__(
+        self,
+        box=(0, 0, 0, 10, 20, 30),
+        solidity=None,
+        unbuilt=False,
+        box_raises=None,
+        solidity_raises=None,
+    ):
+        """A shape that answers the two measurements with whatever it was given.
+
+        The two failures are separate controls on purpose. One switch for both
+        would make "the bounding box failed and the volume did not" impossible
+        to set up - and that is the case worth testing, because an
+        implementation that gave up after the first failure would satisfy a test
+        in which everything fails at once.
+        """
         super().__init__("//test", {"name": "thing"})
         self.name = "thing"
         self._box = box
         self._solidity = solidity
         self._unbuilt = unbuilt
-        self._raises = raises
+        self._box_raises = box_raises
+        self._solidity_raises = solidity_raises
         self.asked = 0
 
     async def get_wrapped(self, ctx):
@@ -45,15 +60,15 @@ class _Shape(Shape):
     async def get_bounding_box_async(self, ctx):
         """The box as OCCT would return it - padded bounds and all."""
         self.asked += 1
-        if self._raises:
-            raise self._raises
+        if self._box_raises:
+            raise self._box_raises
         return self._box
 
     async def get_solidity_async(self, ctx):
         """What the solidity wrapper reports, or None for a shape holding no solid."""
         self.asked += 1
-        if self._raises:
-            raise self._raises
+        if self._solidity_raises:
+            raise self._solidity_raises
         return self._solidity
 
 
@@ -148,13 +163,36 @@ def test_a_shape_that_did_not_build_is_not_measured():
     assert shape.asked == 0
 
 
-def test_neither_measurement_can_take_the_other_down():
+def test_a_failed_bounding_box_does_not_cost_the_volume():
     """Both are measured in a sandbox, so either can fail on its own.
+
+    Asserted as "the other one is still there" rather than as "the result is
+    empty": an implementation that gave up at the first exception would satisfy
+    the second and lose half of what 'pc info' was asked for.
+    """
+    info = _measure(_Shape(box_raises=Exception("no sandbox"), solidity={"solids": 1, "volume": 9600.0}))
+
+    assert "BoundingBox" not in info
+    assert info["Volume"] == 9600.0
+    assert info["Solids"] == 1
+
+
+def test_a_failed_volume_does_not_cost_the_bounding_box():
+    info = _measure(_Shape(box=(0.0, 0.0, 0.0, 1.0, 2.0, 3.0), solidity_raises=Exception("no sandbox")))
+
+    assert info["BoundingBox"]["size"] == [1.0, 2.0, 3.0]
+    assert "Volume" not in info
+
+
+def test_both_failing_leaves_pc_info_the_rest_of_what_it_reports():
+    """A machine whose sandbox is not built yet measures neither.
 
     'pc info' still has a part's configuration, its hash and its dependencies to
     report, which is what it was asked for.
     """
-    assert _measure(_Shape(raises=Exception("no sandbox"))) == {}
+    both = Exception("no sandbox")
+
+    assert _measure(_Shape(box_raises=both, solidity_raises=both)) == {}
 
 
 def test_an_empty_bounding_box_is_left_out_rather_than_invented():

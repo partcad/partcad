@@ -132,10 +132,14 @@ From the measurements, the images and the configured `desc`/`requirements`,
 write a description for a reader who has a mechanical-engineering / CAD
 background but cannot see it:
 
-- **State the bounding size and the volume.** Every description names the
-  overall envelope in millimetres and, for a part, how much material is in it —
-  those are measurements rather than impressions, and they are what tells a
-  reader whether this is a bracket or a building.
+- **State every measurement §2 produced, and say so when it produced none.**
+  The overall envelope in millimetres, and for a part how much material is in
+  it: those are measurements rather than impressions, and they are what tells a
+  reader whether this is a bracket or a building. Where `pc info` gave no such
+  number — a sketch, which has no volume; a part that would not build; a machine
+  with no sandbox — write that the measurement was unavailable. Saying so costs
+  a clause; the alternative is a figure you made up, which is the one thing this
+  skill exists to prevent.
 - Describe both the overall shape and the dimensions; make no assumptions and
   add as much concrete detail as the renders and config support.
 - Prefer a measured or stated dimension over one you judged from a projection:

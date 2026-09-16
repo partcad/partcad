@@ -334,6 +334,39 @@ def test_the_units_are_what_the_drawing_states(tmp_path):
     assert dxf_metadata.read_file(path)["metadata"]["units"] == "in"
 
 
+def test_the_us_survey_units_are_units(tmp_path):
+    """Codes 21-24, which AutoCAD added long after the first twenty.
+
+    A code the table does not have used to come back as None, which is what a
+    drawing that states it is *unitless* comes back as - so a survey drawing
+    read as having no units at all, which is a wrong answer rather than a
+    missing one.
+    """
+    for code, name in ((21, "us-ft"), (22, "us-in"), (23, "us-yd"), (24, "us-mi")):
+        document = ezdxf.new("R2010")
+        document.header["$INSUNITS"] = code
+        document.modelspace().add_line((0, 0), (1, 0))
+        path = str(tmp_path / ("survey-%d.dxf" % code))
+        document.saveas(path)
+
+        assert dxf_metadata.read_file(path)["metadata"]["units"] == name
+
+
+def test_a_unit_this_does_not_know_is_not_no_unit(tmp_path):
+    """DXF has gained units before and will again, and the two must not merge.
+
+    Reported as the code it is, so a drawing read by a PartCAD that predates its
+    unit says something a reader can act on rather than reading as unitless.
+    """
+    document = ezdxf.new("R2010")
+    document.header["$INSUNITS"] = 97
+    document.modelspace().add_line((0, 0), (1, 0))
+    path = str(tmp_path / "from-the-future.dxf")
+    document.saveas(path)
+
+    assert dxf_metadata.read_file(path)["metadata"]["units"] == "unknown (97)"
+
+
 def test_a_drawing_that_says_it_is_unitless(tmp_path):
     """'unitless' is not 'millimetres', and reporting it as one would be a guess."""
     document = ezdxf.new("R2010")
