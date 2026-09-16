@@ -269,6 +269,10 @@ PACKAGE = {
             "type": "stl",
             "manufacturing": {"method": "subtractive", "source": "stock", "laser": {"kerf": 0.2}},
         },
+        "burned_from_other_stock": {
+            "type": "stl",
+            "manufacturing": {"method": "subtractive", "source": "plain", "laser": {"kerf": 0.2}},
+        },
         "burned_upward": {
             "type": "stl",
             "manufacturing": {"method": "subtractive", "source": "stock", "laser": {"toolAxis": "+Z"}},
@@ -477,15 +481,15 @@ def test_the_laser_cache_key_does_not_follow_a_stock_it_never_reads(ctx):
     """
     check = ManufacturabilityLaserTest()
     assert check.judges_removed is False
+    # Two laser parts differing in nothing but the stock they name, which is
+    # what makes this assertion able to fail: comparing one part with itself
+    # holds for any implementation at all.
     burned = asyncio.run(check.cache_key_suffix(ctx, ctx.get_part("//test:burned")))
-    assert burned == asyncio.run(
-        check.cache_key_suffix(
-            ctx,
-            ctx.get_part("//test:burned"),
-        )
-    )
-    # The machine and the axis are still what it keys on.
-    assert burned and burned != asyncio.run(check.cache_key_suffix(ctx, ctx.get_part("//test:burned_upward")))
+    from_other = asyncio.run(check.cache_key_suffix(ctx, ctx.get_part("//test:burned_from_other_stock")))
+    assert burned and burned == from_other
+    # The machine and the axis are still what it does key on, so this is
+    # insensitivity to one input rather than a key that says nothing.
+    assert burned != asyncio.run(check.cache_key_suffix(ctx, ctx.get_part("//test:burned_upward")))
 
 
 def test_the_subtractive_cache_key_follows_the_stock(ctx):
