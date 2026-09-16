@@ -240,10 +240,14 @@ def annotations_of(document, include=None, exclude=None) -> list:
 # looks exactly like one whose numbers are millimetres until this is read.
 #
 # Spelled out here rather than taken from ezdxf, which has had the table under
-# two different names across the versions a sandbox may install; this is twenty
-# entries that have not changed since DXF R14.
+# two different names across the versions a sandbox may install.
+#
+# 0 is not in the table: it is the code for *unitless*, which '_units()' answers
+# with None because a drawing that says it has no units has said something, and
+# what it said is not a unit. 21-24 are the US survey units, which AutoCAD added
+# long after the other twenty; they are here because a code this does not know
+# must not come out looking like a code that means nothing - see '_units()'.
 _UNITS = {
-    0: None,  # Unitless, which is not the same as saying 'mm'.
     1: "in",
     2: "ft",
     3: "mi",
@@ -264,6 +268,10 @@ _UNITS = {
     18: "au",
     19: "ly",
     20: "pc",
+    21: "us-ft",
+    22: "us-in",
+    23: "us-yd",
+    24: "us-mi",
 }
 
 
@@ -292,8 +300,9 @@ def describe(document, include=None, exclude=None) -> dict:
 
     * ``version``/``release`` - which DXF this is ('AC1024', 'R2010'). XDATA is
       in every version, but what a drawing may carry beside it is not.
-    * ``units`` - what '$INSUNITS' resolves to, or None where it says the
-      drawing is unitless. PartCAD reads a DXF as millimetres whatever it says;
+    * ``units`` - what '$INSUNITS' resolves to ('_units()'): a name, None where
+      it says the drawing is unitless, or "unknown (<code>)" for a unit DXF has
+      gained since. PartCAD reads a DXF as millimetres whatever it says;
       this is what the file states, and the two disagreeing is worth being able
       to see. Note that a file omitting the variable altogether does not read as
       unitless: ezdxf supplies a default for it while loading and there is no
@@ -348,11 +357,30 @@ def describe(document, include=None, exclude=None) -> dict:
     return {
         "version": getattr(document, "dxfversion", None),
         "release": getattr(document, "acad_release", None),
-        "units": _UNITS.get(_header_var(document, "$INSUNITS")),
+        "units": _units(_header_var(document, "$INSUNITS")),
         "appids": _appids(document),
         "elements": total,
         "layers": [layers[name] for name in sorted(layers)],
     }
+
+
+def _units(code):
+    """What a '$INSUNITS' code is the name of, or None where it names no unit.
+
+    Three answers, and the third is why this is a function rather than a lookup:
+
+    * a **name** for a code in the table;
+    * **None** for 0, which is the code for "unitless" - the drawing has said
+      something, and what it said is that its numbers are not in anything;
+    * **"unknown (<code>)"** for a code the table does not have. DXF has gained
+      units before (21-24, the US survey units, arrived long after the first
+      twenty) and will again, and a plain 'dict.get' answers a future code with
+      the None that means unitless - which is not "this reader is behind", it is
+      a wrong answer wearing the same clothes as a right one.
+    """
+    if code is None or code == 0:
+        return None
+    return _UNITS.get(code, "unknown (%s)" % code)
 
 
 def _declared_layers(document) -> list:
