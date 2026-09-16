@@ -43,6 +43,7 @@ from cache_config import CacheUserConfig
 import partcad as pc
 from partcad.cache_shape import ShapeCache
 from partcad.sketch import Sketch
+from partcad.sketch_factory_dxf import SketchFactoryDxf
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 import dxf_metadata  # noqa: E402
@@ -390,3 +391,59 @@ def test_one_pass_over_the_file_answers_both_questions(tmp_path):
     # reader's to choose: the core merges what a wrapper hands it verbatim.
     assert set(read["metadata"]) == {"Drawing", "Layers"}
     assert len(read["metadata"]["Layers"]) == len(dxf_metadata.describe(ezdxf.readfile(path))["layers"])
+
+
+#
+# ...and what the factory makes of them for 'pc info'
+#
+
+
+class _Runtime:
+    """The sandbox as 'SketchFactoryPython.info' reports it: two strings."""
+
+    version = "3.12"
+    path = "/nowhere"
+
+
+class _InfoSketch:
+    """A sketch that has annotations and nothing else worth reporting."""
+
+    def __init__(self, annotations):
+        self.annotations = annotations
+
+    def shape_info(self, ctx):
+        """What the shape itself contributes, which this factory only adds to."""
+        return {"Kind": "sketch"}
+
+
+def _info(annotations):
+    """'SketchFactoryDxf.info' over a sketch carrying 'annotations'."""
+    factory = object.__new__(SketchFactoryDxf)
+    factory.ctx = None
+    factory.runtime = _Runtime()
+    return SketchFactoryDxf.info(factory, _InfoSketch(annotations))
+
+
+def test_the_annotated_elements_are_what_pc_info_lists(tmp_path):
+    """The per-element half: an 'angle' and a 'radius' against a bend line.
+
+    What the drawing said about *itself* is not here - the wrapper put that on
+    the envelope and the core reports it from its own cache entry - so this
+    factory is only ever adding the elements the sketch already carries.
+    """
+    bend = {"layer": "BEND_UP", "metadata": {"angle": 90.0, "radius": 1.5}}
+    info = _info([bend, {"layer": "CUT", "metadata": {}}])
+
+    assert info["Annotations"] == [bend]
+
+
+def test_a_drawing_that_annotated_nothing_gets_no_heading_at_all():
+    """An empty 'Annotations' would read as a drawing that was asked and said
+    nothing, which is not the same as one where the question does not arise."""
+    assert "Annotations" not in _info([])
+    assert "Annotations" not in _info(None)
+
+
+def test_what_the_sketch_itself_reports_is_kept():
+    """The factory adds to 'shape_info' rather than standing in for it."""
+    assert _info([])["Kind"] == "sketch"
