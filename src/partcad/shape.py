@@ -27,7 +27,7 @@ from . import sandbox_versions, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from .shape_config import ShapeConfiguration
-from .utils import total_size
+from .utils import resolve_resource_path, total_size
 
 if TYPE_CHECKING:
     from partcad.context import Context
@@ -592,6 +592,40 @@ class Shape(ShapeConfiguration):
         properties = {key: value for key, value in properties.items() if value not in (None, {}, [], "")}
         return properties or None
 
+    def material_reference(self) -> Optional[str]:
+        """What this shape says it is made of, as it was written, or None.
+
+        A *name* - '//pub/std/manufacturing/material/metal:al-5052-h32', or
+        ':aluminium' for one catalogued in the shape's own package - and not
+        yet a thing anything can be asked of. 'get_material()' below is what
+        turns it into one.
+        """
+        properties = self._shape_properties() or {}
+        reference = properties.get("material")
+        return reference if isinstance(reference, str) and reference else None
+
+    def get_material(self, ctx, quiet: bool = True):
+        """The material this shape is made of, or None if it names none.
+
+        Resolved against the package that owns *this shape*, exactly as
+        'material.physics_by_shape()' resolves it on the far side of an export:
+        ':aluminium' means "in my own package", and whose package that is is a
+        fact about the shape that wrote the reference rather than about the
+        string. Two packages may each catalogue an 'aluminium' of their own and
+        each get theirs.
+
+        Quiet by default, because the callers are the ones that report a
+        reference nobody answers to in their own way - 'shape_info()' below puts
+        it in the answer rather than in the log - and because a shape with no
+        material at all is the ordinary case rather than a mistake.
+        """
+        reference = self.material_reference()
+        if reference is None or ctx is None:
+            return None
+        package, name = resolve_resource_path(self.project_name, reference)
+        _project, found = pc_material.lookup(ctx, "%s:%s" % (package, name), quiet=quiet)
+        return found
+
     async def get_cached_properties_async(self, ctx):
         """What the cache recorded beside this shape's geometry, or None.
 
@@ -888,6 +922,24 @@ class Shape(ShapeConfiguration):
 
         if self.with_ports is not None:
             info["Ports"] = self.with_ports.info()
+
+        # What the shape is made of, as the facts rather than as the name. The
+        # configuration printed beside this already shows the reference, and the
+        # question somebody running 'pc info' on a part is asking is what that
+        # reference means: the density its mass came from, the friction a
+        # simulation of it used, what the substance is good and bad at.
+        material_reference = self.material_reference()
+        if material_reference is not None:
+            material = self.get_material(ctx)
+            info["Material"] = (
+                material.material_info()
+                if material is not None
+                # A reference nothing answers to is reported as it was written
+                # rather than dropped: it is the most useful thing that can be
+                # said about what this is made of, and the reason no mass and no
+                # friction came from it.
+                else {"Name": material_reference, "Errors": ["The material is not found"]}
+            )
 
         info["Hash"] = self.hash.get()
         if self.environment_cache_key is not None:
