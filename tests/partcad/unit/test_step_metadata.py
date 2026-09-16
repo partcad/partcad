@@ -90,6 +90,30 @@ def test_an_author_the_exporter_left_empty_is_not_an_author(tmp_path):
     assert step_metadata.read(path)["File"] == {"name": "b.step"}
 
 
+def test_a_header_entity_named_inside_a_string_is_not_the_header(tmp_path):
+    """Only the first match is read, so a decoy costs the whole record.
+
+    A file whose FILE_DESCRIPTION says it was "exported via FILE_NAME(x)" states
+    one FILE_NAME. Searched without regard for strings, the sentence is found
+    first and the real record is never looked at - so the name, the timestamp
+    and the author all come back empty rather than wrong, which is harder to
+    notice.
+    """
+    header = (
+        "HEADER;\n"
+        "FILE_DESCRIPTION(('exported via FILE_NAME(legacy.step)'),'2;1');\n"
+        "FILE_NAME('bracket.step','2026-09-16T10:00:00',('R Kuzmenko'),('PartCAD'),'occt','FreeCAD','none');\n"
+        "FILE_SCHEMA(('AP242'));\n"
+        "ENDSEC;\n"
+    )
+    path = _write(tmp_path, "#1=CARTESIAN_POINT('',(0.,0.,0.));", header=header)
+
+    read = step_metadata.read(path)["File"]
+    assert read["name"] == "bracket.step"
+    assert read["author"] == ["R Kuzmenko"]
+    assert read["description"] == ["exported via FILE_NAME(legacy.step)"]
+
+
 def test_the_products_are_named(tmp_path):
     """What the file calls the things it holds, which a property hangs off."""
     path = _write(tmp_path, PRODUCT)
