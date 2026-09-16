@@ -192,6 +192,74 @@ def test_a_value_written_as_a_complex_instance(tmp_path):
     assert step_metadata.read(path)["Properties"][0]["metadata"] == {"angle": 30.0}
 
 
+def test_a_complex_item_reads_only_its_own_record(tmp_path):
+    """A part carrying no measure must not reach forward and take the next one's.
+
+    Both halves of a complex instance are looked for inside that one record.
+    Matched across the file instead - which is what any unanchored gap between
+    the two does, however lazy - a bend stating a 'direction' and a 'radius'
+    reported the radius' number under 'direction', and then lost the radius
+    entirely, the match having consumed the record that stated it.
+    """
+    path = _write(
+        tmp_path,
+        PRODUCT
+        + "#20=SHAPE_ASPECT('bend 1','',#8,.T.);\n"
+        + _property(
+            21,
+            "bend",
+            20,
+            [
+                "(REPRESENTATION_ITEM('direction')DESCRIPTIVE_REPRESENTATION_ITEM('up'))",
+                "(REPRESENTATION_ITEM('radius')MEASURE_WITH_UNIT(LENGTH_MEASURE(1.5),#12))",
+            ],
+        ),
+    )
+
+    assert step_metadata.read(path)["Properties"][0]["metadata"] == {"direction": "up", "radius": 1.5}
+
+
+def test_each_complex_item_keeps_its_own_measure(tmp_path):
+    """Two in a row, so neither can be answered by the other's number."""
+    path = _write(
+        tmp_path,
+        PRODUCT
+        + "#20=SHAPE_ASPECT('bend 1','',#8,.T.);\n"
+        + _property(
+            21,
+            "bend",
+            20,
+            [
+                "(REPRESENTATION_ITEM('angle')MEASURE_WITH_UNIT(PLANE_ANGLE_MEASURE(90.0),#12))",
+                "(REPRESENTATION_ITEM('radius')MEASURE_WITH_UNIT(LENGTH_MEASURE(1.5),#12))",
+            ],
+        ),
+    )
+
+    assert step_metadata.read(path)["Properties"][0]["metadata"] == {"angle": 90.0, "radius": 1.5}
+
+
+def test_a_record_written_inside_a_quoted_value_is_text(tmp_path):
+    """'#99=PRODUCT(' in a value names nothing; a scan that took it for a record
+    would invent one, and a bracket in a value is a bracket rather than a list."""
+    path = _write(
+        tmp_path,
+        PRODUCT
+        + "#20=SHAPE_ASPECT('bend 1','',#8,.T.);\n"
+        + _property(
+            21,
+            "note",
+            20,
+            ["(REPRESENTATION_ITEM('note')DESCRIPTIVE_REPRESENTATION_ITEM('see #99=PRODUCT( and 3(a)'))"],
+        ),
+    )
+
+    read = step_metadata.read(path)
+    assert read["Properties"][0]["metadata"] == {"note": "see #99=PRODUCT( and 3(a)"}
+    # ...and the invented record is not among the products either.
+    assert [product["name"] for product in read["Products"]] == ["bracket"]
+
+
 def test_a_boolean_and_an_omitted_value(tmp_path):
     """'.T.'/'.F.' are values; '$' is the absence of one and stays None."""
     path = _write(

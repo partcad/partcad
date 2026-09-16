@@ -52,6 +52,14 @@ _STRING = re.compile(r"'[^']*(?:''[^']*)*'")
 # the first semicolon would read no header at all.
 _RECORD = r"#(\d+)\s*=\s*%s\s*\("
 
+# What '_scan()' jumps to: the next quote, or the next record start. A record
+# with no entity name before its list is a *complex* one, which is how a file
+# states a named quantity in a unit -- see '_properties()'.
+_NEXT = re.compile(r"'|#(\d+)\s*=\s*([A-Za-z_][A-Za-z0-9_]*)?\s*\(")
+
+# What '_parts()' jumps to inside one complex record: a quote, or a part name.
+_PART = re.compile(r"'|\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+
 # A value, as the three ways a representation item states one: a string, a
 # measure wrapped around its number, or a bare number.
 _MEASURE = re.compile(r"^[A-Z][A-Z0-9_]*_MEASURE\s*\(\s*([^()]*?)\s*\)$", re.I)
@@ -84,11 +92,12 @@ def read(path: str) -> dict:
     cut = _outside_strings(text, "DATA;")
     head, body = (text, "") if cut < 0 else (text[:cut], text[cut + len("DATA;") :])
 
+    records = list(_scan(body))
     sections = (
         ("File", _header(head)),
-        ("Products", _products(body)),
-        ("Layers", _layers(body)),
-        ("Properties", _properties(body)),
+        ("Products", _products(records)),
+        ("Layers", _layers(records)),
+        ("Properties", _properties(records)),
     )
     return {name: value for name, value in sections if value}
 
@@ -147,12 +156,79 @@ def _outside_strings(text: str, needle: str) -> int:
     return -1
 
 
-def _records(body: str, entity: str):
-    """Every '#id = ENTITY(...)' record of one entity type, as (id, arguments)."""
-    for match in re.finditer(_RECORD % entity, body):
-        inside = _list_at(body, match.end() - 1)
-        if inside is not None:
-            yield int(match.group(1)), _arguments(inside)
+def _scan(body: str):
+    """Every record in 'body', once, as (id, entity, inside).
+
+    'entity' is the name between the '=' and the parameter list, upper-cased -
+    and the empty string for a *complex* record, '#30=( A(..) B(..) )', which
+    names its parts inside instead.
+
+    One pass for the whole file rather than one per entity type, because each
+    caller below wants a different handful of them and a file is large. The
+    walk jumps between quotes and record starts with a regular expression
+    rather than reading every character, so being string-aware costs nothing
+    over the scan this replaced: a record start written inside a quoted string
+    is text, and a reader that took it for a record would invent one.
+    """
+    i = 0
+    while True:
+        match = _NEXT.search(body, i)
+        if match is None:
+            return
+        if match.group(0) == "'":
+            string = _STRING.match(body, match.start())
+            if string is None:
+                return
+            i = string.end()
+            continue
+        opening = match.end() - 1
+        inside = _list_at(body, opening)
+        if inside is None:
+            return
+        yield int(match.group(1)), (match.group(2) or "").upper(), inside
+        i = opening + len(inside) + 2
+
+
+def _parts(inside: str):
+    """The 'NAME(...)' parts of a complex record, as (name, arguments).
+
+    '( REPRESENTATION_ITEM('radius') MEASURE_WITH_UNIT(LENGTH_MEASURE(1.5),#5) )'
+    is two parts, and each part's arguments are walked rather than matched for
+    the reason every list here is: a quoted value may hold a bracket, and
+    'DESCRIPTIVE_REPRESENTATION_ITEM('see 3(a)')' is one argument, not a
+    malformed two. A name nested inside a part's own arguments is skipped with
+    them, so 'LENGTH_MEASURE' above is never taken for a part of the record.
+    """
+    i = 0
+    while True:
+        match = _PART.search(inside, i)
+        if match is None:
+            return
+        if match.group(0) == "'":
+            string = _STRING.match(inside, match.start())
+            if string is None:
+                return
+            i = string.end()
+            continue
+        opening = match.end() - 1
+        arguments = _list_at(inside, opening)
+        if arguments is None:
+            return
+        yield match.group(1).upper(), arguments
+        i = opening + len(arguments) + 2
+
+
+def _records(records: list, entity: str):
+    """The scanned records whose entity matches 'entity', as (id, arguments).
+
+    'entity' is a pattern rather than a name, because one caller wants every
+    '...REPRESENTATION' there is. It is matched whole: 'PROPERTY_DEFINITION'
+    must not also answer for 'PROPERTY_DEFINITION_REPRESENTATION'.
+    """
+    pattern = re.compile(entity)
+    for id, name, inside in records:
+        if name and pattern.fullmatch(name):
+            yield id, _arguments(inside)
 
 
 def _list_at(text: str, opening: int):
@@ -288,10 +364,10 @@ def _header(head: str) -> dict:
     return header
 
 
-def _products(body: str) -> list:
+def _products(records: list) -> list:
     """PRODUCT(ID, NAME, DESCRIPTION, frame_of_reference) - what the file holds."""
     products = []
-    for _, arguments in _records(body, "PRODUCT"):
+    for _, arguments in _records(records, "PRODUCT"):
         if len(arguments) < 2:
             continue
         products.append(
@@ -304,7 +380,7 @@ def _products(body: str) -> list:
     return products
 
 
-def _layers(body: str) -> list:
+def _layers(records: list) -> list:
     """PRESENTATION_LAYER_ASSIGNMENT(NAME, DESCRIPTION, ASSIGNED_ITEMS).
 
     STEP's own answer to a DXF layer. How many items are on it is reported
@@ -312,7 +388,7 @@ def _layers(body: str) -> list:
     how much is on it.
     """
     layers = []
-    for _, arguments in _records(body, "PRESENTATION_LAYER_ASSIGNMENT"):
+    for _, arguments in _records(records, "PRESENTATION_LAYER_ASSIGNMENT"):
         if len(arguments) < 3:
             continue
         layers.append(
@@ -325,7 +401,7 @@ def _layers(body: str) -> list:
     return layers
 
 
-def _properties(body: str) -> list:
+def _properties(records: list) -> list:
     """The user-defined key/value pairs the file hangs on its contents.
 
     Four records deep - the definition, the link, the representation, the items
@@ -333,38 +409,58 @@ def _properties(body: str) -> list:
     collected before any of it is joined up.
     """
     definitions = {}
-    for id, arguments in _records(body, "PROPERTY_DEFINITION"):
+    for id, arguments in _records(records, "PROPERTY_DEFINITION"):
         if len(arguments) >= 3:
             definitions[id] = (_text(arguments[0]), _reference(arguments[2]))
 
     representations = {}
-    for id, arguments in _records(body, "[A-Z0-9_]*REPRESENTATION"):
+    for id, arguments in _records(records, "[A-Z0-9_]*REPRESENTATION"):
         if len(arguments) >= 2:
             representations[id] = [int(ref) for ref in re.findall(r"#(\d+)", arguments[1])]
 
     items = {}
     for entity in _ITEMS:
-        for id, arguments in _records(body, entity):
+        for id, arguments in _records(records, entity):
             key = _text(arguments[0]) if arguments else None
             if key:
                 items[id] = (key.strip().lower(), _value(arguments[1]) if len(arguments) > 1 else None)
     # "( REPRESENTATION_ITEM('radius') MEASURE_WITH_UNIT(LENGTH_MEASURE(1.5),#5) )":
     # the name and the number in separate entities of one record, which is how a
     # file states a named quantity in a unit. Neither half is a pair on its own.
-    for match in re.finditer(
-        r"#(\d+)\s*=\s*\(\s*REPRESENTATION_ITEM\s*\(\s*(" + _STRING.pattern + r")\s*\)"
-        r".*?MEASURE_WITH_UNIT\s*\(\s*([^,]*?)\s*,",
-        body,
-        re.DOTALL,
-    ):
-        key = _text(match.group(2))
+    #
+    # Both halves are looked for **inside that one record** and nowhere else.
+    # Read across the file instead - which is what a '.*?' between the two does,
+    # however lazy it is - a part that carries no measure of its own reaches
+    # forward and takes the next record's, so a bend stating a 'direction' and a
+    # 'radius' reports the radius' number under 'direction' and then loses the
+    # radius, the match having consumed the record that stated it.
+    for id, name, inside in records:
+        if name:
+            continue
+        key = None
+        value = None
+        for part, arguments in _parts(inside):
+            fields = _arguments(arguments)
+            if not fields:
+                continue
+            if part == "REPRESENTATION_ITEM":
+                key = _text(fields[0])
+            elif part == "MEASURE_WITH_UNIT":
+                # The number and the unit it is in; the unit is a reference to
+                # a record this does not follow, so only the number is read.
+                value = _value(fields[0])
+            elif part in _ITEMS and value is None:
+                # No unit: the value is this part's lone argument, the key
+                # having come from 'REPRESENTATION_ITEM' rather than from the
+                # first argument as it does in a record of one entity.
+                value = _value(fields[0])
         if key:
-            items[int(match.group(1))] = (key.strip().lower(), _value(match.group(3)))
+            items[id] = (key.strip().lower(), value)
 
-    owners = _owners(body)
+    owners = _owners(records)
 
     properties = []
-    for _, arguments in _records(body, "PROPERTY_DEFINITION_REPRESENTATION"):
+    for _, arguments in _records(records, "PROPERTY_DEFINITION_REPRESENTATION"):
         if len(arguments) < 2:
             continue
         definition = definitions.get(_reference(arguments[0]))
@@ -382,7 +478,7 @@ def _properties(body: str) -> list:
     return properties
 
 
-def _owners(body: str) -> dict:
+def _owners(records: list) -> dict:
     """What each record a property can be stated against is called.
 
     A 'SHAPE_ASPECT' is one named feature of a shape - where a property about
@@ -391,28 +487,28 @@ def _owners(body: str) -> dict:
     end of them.
     """
     names = {}
-    for id, arguments in _records(body, "SHAPE_ASPECT"):
+    for id, arguments in _records(records, "SHAPE_ASPECT"):
         if arguments:
             names[id] = _text(arguments[0])
 
     products = {}
-    for id, arguments in _records(body, "PRODUCT"):
+    for id, arguments in _records(records, "PRODUCT"):
         if len(arguments) >= 2:
             products[id] = _text(arguments[1]) or _text(arguments[0])
 
     formations = {}
     for entity in ("PRODUCT_DEFINITION_FORMATION_WITH_SPECIFIED_SOURCE", "PRODUCT_DEFINITION_FORMATION"):
-        for id, arguments in _records(body, entity):
+        for id, arguments in _records(records, entity):
             if len(arguments) >= 3:
                 formations[id] = products.get(_reference(arguments[2]))
 
     definitions = {}
-    for id, arguments in _records(body, "PRODUCT_DEFINITION"):
+    for id, arguments in _records(records, "PRODUCT_DEFINITION"):
         if len(arguments) >= 3:
             definitions[id] = formations.get(_reference(arguments[2]))
     names.update({id: name for id, name in definitions.items() if name})
 
-    for id, arguments in _records(body, "PRODUCT_DEFINITION_SHAPE"):
+    for id, arguments in _records(records, "PRODUCT_DEFINITION_SHAPE"):
         if len(arguments) >= 3:
             name = definitions.get(_reference(arguments[2]))
             if name:
