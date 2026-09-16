@@ -157,8 +157,11 @@ command_groups = [
             "render",
             # Beside `export` and `render` because that is what it is: the third
             # thing a script produces from a shape, configured in a section of
-            # `partcad.yaml` of the same shape as theirs.
+            # `partcad.yaml` of the same shape as theirs. `cam` is the fourth,
+            # and sits here for the same reason -- it produces the program a
+            # machine cuts the shape with.
             "cae",
+            "cam",
         ],
     },
     {

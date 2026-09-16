@@ -99,6 +99,10 @@ from . import plugin  # noqa: F401
 # anyway because 'shape' imports it, and that is exactly the dependency the
 # 'plugin' line above exists not to have.
 from . import cae  # noqa: F401
+
+# And 'partcad.cam', for the same reason: it is what the daemon's 'cam.route'
+# operation reaches a route through, and what 'Shape.route_async()' reads.
+from . import cam  # noqa: F401
 from .ai_agents import install_agent_skills
 from .assembly import Assembly
 from .assembly_connect import ConnectHold, ConnectHow

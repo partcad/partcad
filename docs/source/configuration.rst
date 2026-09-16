@@ -574,7 +574,7 @@ Reproducibility and manufacturability
 Manufacturing is repetition: the run after this one has to produce the same
 thing, so everything that goes into a product has to be gettable a second time
 and be the same thing. There are three ways an object can promise that, and the
-``cam`` check of ``pc test`` fails one that offers none of them:
+``manufacturability`` check of ``pc test`` fails one that offers none of them:
 
 - **It is bought.** A ``vendor`` and an ``sku`` name a thing to order, and
   ordering it again is what "the same again" means for it -- whatever file the
@@ -592,9 +592,9 @@ materials that names it worthless.
 
 .. code-block:: text
 
-  Test failed: //robot:bracket: cam: It is not reproducible: it is fetched with
-  'fileFrom: url', declares no 'fileHash', and names no vendor and SKU to order
-  it by, so nothing says which one it is
+  Test failed: //robot:bracket: manufacturability: It is not reproducible: it is
+  fetched with 'fileFrom: url', declares no 'fileHash', and names no vendor and
+  SKU to order it by, so nothing says which one it is
 
 The rule is about being *identified*, not about being available -- the file may
 download perfectly well and still be a different file than it was last month.
@@ -2765,10 +2765,9 @@ the same for every tool and happens once, in ``partcad_client.external``.
       sceneType: demo                    # it reads this scene type and no other
 
 ``pc open --with democad ./cell.demo`` then works, in a workspace whose packages
-import that one. PartCAD ships five of these in ``//builtin/open`` -- FreeCAD,
-KiCad, Blender, and, until the wheel stops carrying them, Gazebo and MuJoCo. A
-package's entry replaces a built-in of the same name, which is how the plugin
-for a simulation engine comes to own the application for it: both
+import that one. PartCAD ships three of these in ``//builtin/open`` -- FreeCAD,
+KiCad and Blender. A package's entry replaces a built-in of the same name, which
+is how the plugin for a simulation engine comes to own the application for it: both
 `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ and
 `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ declare
 theirs, so a workspace that imports either already gets the entry from there.
@@ -3160,7 +3159,7 @@ Manufacturability
 -----------------
 
 A board nobody can flash is not a board anybody can make. So the manufacturing
-test (``pc test``, the ``cam`` check) asks the same question of a part's
+test (``pc test``, the ``manufacturability`` check) asks the same question of a part's
 ``software`` that it asks of everything else the part needs, and the part fails
 unless all of it holds:
 
@@ -3753,12 +3752,17 @@ run -- and says which of the two would fix it.
 Built-in implementations
 ------------------------
 
-The formats PartCAD ships are not special-cased anywhere: they are declared in
-exactly the form above by two packages that live inside the ``partcad``
-installation and that every context can reach, ``//builtin/export`` and
-``//builtin/render``. They are the bottom layer of the configuration, so a
+The export and render formats PartCAD ships are not special-cased anywhere: they
+are declared in exactly the form above by two packages that live inside the
+``partcad`` installation and that every context can reach, ``//builtin/export``
+and ``//builtin/render``. They are the bottom layer of the configuration, so a
 package that sets a single parameter keeps the built-in implementation for
 everything else, and a package that sets ``path`` replaces it.
+
+Two of the other sections ship one the same way: ``//builtin/cam`` declares the
+``gcode`` file type ``pc cam`` writes (see :ref:`pc cam <cam>`), and
+``//builtin/open`` declares the applications ``pc open`` starts. ``cae:`` is the
+one that ships nothing, because PartCAD implements no solver.
 
 ``//builtin/export`` implements ``step``, ``brep``, ``stl``, ``3mf``, ``obj``,
 ``gltf``, ``iges``, ``threejs`` and ``urdf``. ``//builtin/render`` implements
@@ -3766,11 +3770,10 @@ everything else, and a package that sets ``path`` replaces it.
 way to see what parameters each file type takes and what a package's own
 implementation should look like.
 
-It also carries ``world`` and ``mjcf`` for the moment, and will not for much
-longer: an engine's own scene format belongs to that engine's plugin package,
-beside the reader and the simulator that share its knowledge of the format.
-Write ``sim-gazebo:world`` and ``sim-mujoco:mjcf`` (see `Naming a file type
-elsewhere`_), which resolve through the plugin and keep working.
+It carries neither ``world`` nor ``mjcf``: an engine's own scene format belongs
+to that engine's plugin package, beside the reader and the simulator that share
+its knowledge of the format. Write ``sim-gazebo:world`` and ``sim-mujoco:mjcf``
+(see `Naming a file type elsewhere`_), which resolve through the plugin.
 
 Naming a file type elsewhere
 ----------------------------
@@ -3872,6 +3875,94 @@ What the analysis is *given* is the part's own ``fea:``/``cfd:`` section, which
 is a property of the part rather than of whoever analyses it; see
 :ref:`pc cae <cae>` for how ``fix:`` and ``load:`` are written and what units
 they are in.
+
+.. _cam-section:
+
+Routes
+------
+
+``cam:`` is a fourth section of the same shape, and it is where a route -- the
+program a machine cuts an object with -- is implemented. Its file types are what
+:ref:`pc cam <cam>` produces, and every field means what it means above:
+
+.. code-block:: yaml
+
+  cam:
+    gcode:
+      path: post_gcode.py
+      extension: nc           # required: PartCAD has no default to guess at
+      feed: 2400              # a parameter of this implementation ...
+      depth_per_pass: 3       # ... and of every object it routes
+
+Two things are different from ``export:`` and ``render:``, and one thing is
+different from ``cae:``:
+
+* **There is a built-in package**, unlike ``cae:``. A route is arithmetic on the
+  object's own outline rather than somebody else's program with a release cycle
+  of its own, which is the test ``export:`` and ``render:`` already pass and a
+  solver does not -- so PartCAD ships ``//builtin/cam``, whose ``gcode`` file
+  type is what ``camImplementation`` names by default. Nothing has to be
+  installed for ``pc cam`` to work.
+* **There is no fallback section.** A route is not a file another CAD tool opens
+  as a part, so a ``gcode`` declared under ``render:`` is a render format that
+  happens to be called ``gcode``, and neither section stands in for the other.
+* **``extension`` is required**, for the reason it is required of an analysis:
+  what a controller reads is the implementation's decision.
+
+The file it writes is named after the object alone -- ``panel.nc`` -- because an
+object has one route at a time and the extension already says what the file is.
+
+**The parameters PartCAD knows by name -- the job: the tool, the depth, the feed
+and the rest of the closed list below -- are also keys an object may set for
+itself.** Nothing else is: not the parameters that describe the file rather than
+the cut, and not a parameter a third-party implementation invented, however
+squarely it describes the cut. PartCAD cannot check a name it has never heard of
+against a list, which is why the list is closed and why the two paragraphs after
+the example spell out what is on it. That shared job half is what makes this
+section and the object's own ``cam:`` section three layers of one namespace
+rather than two different things:
+
+.. code-block:: yaml
+
+  # The package: what this shop does, for every object in it.
+  cam:
+    gcode:
+      feed: 2400 mm/min
+      safe_z: 8 mm
+
+  parts:
+    panel:
+      type: build123d
+      path: panel.py
+      # The object: what is true of this object, and nothing else.
+      cam:
+        operation: profile
+        tool: 6 mm
+
+``//builtin/cam`` is underneath both. So a package cutting twenty parts from one
+sheet sets the tool once, and the one part that needs a smaller cutter says so
+for itself. It is deliberately not the ``cae:``/``fea:`` split, where the
+implementation's parameters and what the part declares are named separately:
+there they are different kinds of thing -- boundary conditions belong to the
+part and the mesh size belongs to whoever solves it -- and here the tool, the
+depth and the feed are the same thing said at a different scope.
+
+What keeps the two readings of the word unambiguous is that an object's ``cam:``
+takes a **closed** set of keys -- ``operation``, ``direction``, ``tool``,
+``depth``, ``depth_per_pass``, ``safe_z``, ``feed``, ``plunge``, ``speed``,
+``stepover``, plus ``implementation`` and ``desc`` -- so it can never be read as
+the file-type declaration a package's ``cam:`` section holds. Anything else in it
+is refused with a sentence, which is what turns a typo into an error rather than
+a route cut to a default. See :ref:`pc cam <cam>` for what each key means, which
+units it may be written in, and why ``tool:`` has no default.
+
+Those are the keys that describe the **cut**. A file type's other parameters
+describe the **file** -- ``//builtin/cam``'s ``units``, ``precision``,
+``tolerance`` and ``comments`` -- and are set here or by a package rather than by
+an object. The line is not tidiness: an object's section is checked against a
+list, a list can only hold what PartCAD knows the name of, and PartCAD cannot
+know the parameters of an implementation somebody else writes. So a package sets
+those for its objects, and the closed set is what buys the error message.
 
 Drawing the ports and the interfaces
 ------------------------------------

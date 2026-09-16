@@ -72,6 +72,7 @@ These examples showcase particular PartCAD features:
 - [Import parts or assemblies (with optional format conversion)](./feature_import)
 - [Interfaces and mating](./feature_interface)
 - [Engineering analysis (FEA and CFD), against cases whose answer is known](./feature_cae)
+- [Route files: the program a machine cuts an object with](./feature_cam)
 - [Simulate a part or an assembly, validate what happened, and let the material decide it](./feature_simulate)
 - [Part enrichment](./feature_enrich)
 - [Parts built by a part type the package defines itself](./produce_part_wrapper)

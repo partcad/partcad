@@ -2384,6 +2384,68 @@ class Project(project_config.Configuration):
                 names.append(shape.name)
         return names
 
+    async def routable_shapes_async(self, sketches=None, parts=None) -> list:
+        """The objects of this package that declare a route, in a fixed order.
+
+        Only sketches and parts. An assembly is put together rather than cut,
+        and a scene is an arrangement of things that were each cut on their own,
+        so neither has an outline a machine could follow -- and offering to
+        route one would answer a question the object cannot be asked.
+
+        Naming objects asks about those and nothing else, which is what
+        `pc cam <object>` resolves to; naming none asks about the whole package.
+        An object that declares no `cam:` section is left out silently: most
+        objects are never cut, and a package where three of forty are is the
+        ordinary case rather than thirty-seven warnings.
+
+        Sorted by name, because what a package produces should not depend on the
+        order a mapping happened to be read in.
+        """
+        from . import cam as pc_cam
+
+        if self.skipped:
+            # A skipped package's declarations are still in 'config_obj' --
+            # nothing rewrites the file -- so enumerating them would resolve
+            # every one to None. The same guard 'render_async()' opens with.
+            return []
+
+        named = bool(sketches or parts)
+        if not named:
+            sketches = [
+                name
+                for name in (self.config_obj.get("sketches") or {})
+                if self.get_skipped_object_clause("sketch", name) is None
+            ]
+            parts = [
+                name
+                for name in (self.config_obj.get("parts") or {})
+                if self.get_skipped_object_clause("part", name) is None
+            ]
+
+        # A name that resolves to nothing is dropped and not reported here: the
+        # getters already say "Object 'x' not found in '//package'", naming the
+        # package as well, and a second line saying the same thing less
+        # precisely is two errors for one typo.
+        shapes = []
+        for name in sorted(sketches or []):
+            shape = self.get_sketch(name)
+            if shape is not None:
+                shapes.append(shape)
+        for name in sorted(parts or []):
+            # Awaited rather than 'get_part()': a part a URDF or STEP assembly
+            # materializes does not exist until that assembly has been built.
+            # See 'get_part_async()', and the same note in the test operation.
+            shape = await self.get_part_async(name)
+            if shape is not None:
+                shapes.append(shape)
+
+        if named:
+            # Asked about by name, so it is routed whatever it declares: the
+            # refusal an object with no 'cam:' section earns belongs to
+            # 'Shape.route_async()', which says which object and which section.
+            return shapes
+        return [shape for shape in shapes if pc_cam.declared_config(shape) is not None]
+
     def _enumerate_shapes(self, sketches, interfaces, parts, assemblies, scenes=None):
         def get_keys(section, kind):
             # A section that is present but empty (e.g. `sketches:` with no

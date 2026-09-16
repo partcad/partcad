@@ -53,8 +53,9 @@ at all).
 
 - **Admission limits**: `threadsMax` also caps how many tests and how many linting checks run at once, and both
   go through `concurrency.ReentrantGate` rather than a bare `asyncio.Semaphore`. A check may run the other
-  checks itself -- `CamTest` runs the whole suite over everything an assembly is procured from, from inside the
-  call the gate has already admitted -- so nested work is charged to the permit its caller already holds. A
+  checks itself -- `ManufacturabilityTest` runs the whole suite over everything an assembly is procured from,
+  from inside the call the gate has already admitted -- so nested work is charged to the permit its caller
+  already holds. A
   semaphore counts it as a new arrival instead, and once as many callers as the limit are each waiting on a
   nested call, every permit is held by somebody waiting for one and the loop stops for good. That is what hung
   `pc test -r`, and with it the daemon serving it. The gate keeps one semaphore per event loop for the same
@@ -88,8 +89,9 @@ at all).
   something else. Every assembly's bill of materials then lists that software with the commit its package was
   read at (`revision.py`), because a firmware image, unlike a bracket, is a different file once its package
   publishes again. `lint/software.py` is what keeps that answerable: a file the package does not carry has to
-  declare a `fileHash`, and `CamTest.software_failure()` enforces the same rule where it bites -- a board nobody
-  can flash is not a board anybody can make, so a part fails the manufacturing test when its software does not
+  declare a `fileHash`, and `ManufacturabilityTest.software_failure()` enforces the same rule where it bites
+  -- a board nobody can flash is not a board anybody can make, so a part fails the manufacturing test when its
+  software does not
   resolve, cannot be fetched, or does not match its `fileHash`.
 
   `pc add` writes a `fileHash` by itself where it can: given a URL rather than a path it fetches the file once
@@ -101,8 +103,9 @@ at all).
   and pins the *bytes* of any file a package fetches rather than carries, so it belongs to `file_factory.py`,
   which refuses a download that does not hash to it (and deletes what it refused, or the next run would skip
   the download and reuse it). It is optional in the declaration and required for reproducibility:
-  `unreproducible_reason()` is the one statement of that rule, and `CamTest.reproducibility_failure()` is what
-  makes a fetched-but-unpinned object fail the manufacturing test -- manufacturing is repetition, and a file
+  `unreproducible_reason()` is the one statement of that rule, and
+  `ManufacturabilityTest.reproducibility_failure()` is what makes a fetched-but-unpinned object fail the
+  manufacturing test -- manufacturing is repetition, and a file
   that may be a different file tomorrow cannot be made again. There are three ways out and any one will do: a
   `vendor` and an `sku` (ordering the same SKU again is what "the same again" means for a bought thing), a
   file the package carries, or a `fileHash`. Only parts and assemblies can take the first -- the schema gives
@@ -133,11 +136,11 @@ at all).
   `_validate_output_format()` rejected it before resolving it. Anything else that grows such a list needs the
   same treatment — "which types can I write" is a question a path has already answered.
 
-- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships five packages inside itself, reachable from
-  every context as `//builtin/export`, `//builtin/render`, `//builtin/import`, `//builtin/open` and
-  `//builtin/scene` (loaded
-  on demand by `Context.get_project`, see `output.py`). The first two declare implementations — the file
-  types `pc export` and `pc render` write — in
+- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships six packages inside itself, reachable from
+  every context as `//builtin/export`, `//builtin/render`, `//builtin/import`, `//builtin/open`,
+  `//builtin/cam` and `//builtin/scene` (loaded
+  on demand by `Context.get_project`, see `output.py`). All but the last declare implementations — the file
+  types `pc export`, `pc render`, `pc import`, `pc open` and `pc cam` write — in
   exactly the form a user's package declares one: a `path` to a script, its `pythonRequirements`, and the
   parameters. So adding a
   format, changing its defaults or changing which dependencies it needs is an edit to `builtin/*/partcad.yaml`, not
@@ -193,6 +196,52 @@ at all).
   installed. Installing CalculiX therefore changes no key, and a remembered failure would go on failing a part
   that now analyses perfectly well. `CaeTest` is the only test that reaches that state, and the flag exists
   for it.
+
+- **Routes** (`./src/partcad/cam.py`, `Shape.route_async()`, `./src/partcad/builtin/cam/`):
+  `pc cam` is a fourth output section, `cam:`, resolved by the very code that resolves the other three, and
+  out of `output.SECTIONS` for the reason `cae:` is. It differs from `cae:` in one thing that matters: it
+  **has a built-in package**. A route is arithmetic on the object's own outline rather than somebody else's
+  program with a release cycle of its own, which is the test `export:`/`render:` pass and a solver does not,
+  so `//builtin/cam` ships and `camImplementation` names it by default.
+
+  The object declares the job in a `cam:` section of its own -- the same word as the package-level section,
+  and deliberately so. For CAE the two names differ because boundary conditions and mesh sizes are different
+  kinds of thing; here the tool, the depth and the feed are the file type's parameters *and* the object's
+  statement about itself, so they are one namespace with `//builtin/cam`, the package and the object as its
+  three layers. What keeps that unambiguous is that `cam.KEYS` is a **closed** set: an object's section holds
+  job parameters and nothing else, so it can never be read as a file-type declaration, and a key that is
+  neither is refused with a sentence rather than passed through.
+
+  `cam.py` parses and converts (lengths to millimetres, feeds to millimetres per minute, and both at *every*
+  layer through `normalize_job()` -- a `2400 mm/min` written by the package is as much PartCAD's to understand
+  as one written on the object). Like `cae.py` it imports nothing from `partcad`, which is what lets it be
+  tested without a sandbox. It requires nothing, on purpose: "a route needs a cutter diameter" is
+  `//builtin/cam`'s statement about itself, not PartCAD's about a plugin it has never seen.
+
+  The section is also the object's **opt-in**, and `Project.routable_shapes_async()` is where that is read:
+  `pc cam` with no object named visits every sketch and part that declares one and passes over the rest
+  silently, which is why `cam.declared_config()` exists beside `config_of()` -- deciding what to visit must
+  not raise on a neighbour's broken section. Sketches and parts only; an assembly is put together rather than
+  cut.
+
+  Coming back, the implementation reports **stats** beside the file it wrote, the way a `cae:` one reports
+  findings, and `wrapper_export.py` passes them through without interpreting them: what is worth counting
+  differs between a router and a wire EDM.
+
+  `pc test` runs it as the `cam` check (`./src/partcad/test/cam.py`), which is `CaeTest`'s shape over
+  `route_async()`: the same gate (declare the section or the check does not apply), the same cache key
+  (the job, the implementation, and its resolved options), the same refusal to call a failure a skip. One
+  thing differs, and it is where the file goes: an analysis keeps its model beside the package because the
+  model is the answer somebody asked for, while a route a *check* produced is a by-product that would be
+  indistinguishable from the one `pc cam` writes -- so the check routes into a temporary directory and
+  deletes it.
+
+  **The check that used to be called `cam` is `manufacturability`** (`./src/partcad/test/manufacturability.py`
+  and its three method-specific siblings). It asks whether an object can be made or bought at all; this one
+  asks whether the program that makes it can be produced. One word answered both until `pc cam` existed. `-f`
+  filters by name prefix, which is what makes the split clean: `-f manufacturability` selects that check and
+  its siblings, `-f cam` selects the route check alone. Renaming a check changes every cached verdict's key,
+  so the first `pc test` after this re-runs everything -- once.
 
 - **A part is a body, not a skin** (`wrappers/wrapper_common.solidify`, `brep_inspect.py`,
   `test/shell.py`): a shell is a set of faces with nothing said about which side of them is material; a solid

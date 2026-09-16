@@ -227,3 +227,49 @@ def test_a_git_dependency_with_no_name_is_listed_by_its_alias(tmp_path):
         lines = f.read().splitlines()
 
     assert "### [sim-mujoco](https://github.com/partcad/partcad-sim-mujoco.git)" in lines
+
+
+def test_the_synchronous_render_forwards_its_arguments_by_name(monkeypatch):
+    """`Shape.render()` must not hand `render_async()` its arguments by position.
+
+    The two signatures are written out separately, and `render_async` grew an
+    `options_project` parameter *between* `options_package` and `output_dir`
+    (#643). A positional forwarding then re-addressed everything after it: a
+    caller naming `output_dir=` had that directory delivered as the options
+    package, which `_output_getopts()` reads `.config_obj` off, and `overlay`
+    delivered as the output directory. Nothing caught it, because no test named
+    `output_dir=` on the synchronous call.
+
+    So this asserts the forwarding itself rather than a rendered file: it is the
+    signatures agreeing that is at stake, and that is a question with an answer
+    even where no CAD sandbox can be built.
+    """
+    seen = {}
+
+    async def fake_render_async(self, ctx, format_name, **kwargs):
+        seen.update(kwargs)
+        seen["format_name"] = format_name
+
+    monkeypatch.setattr(pc.shape.Shape, "render_async", fake_render_async)
+
+    shape = pc.shape.Shape.__new__(pc.shape.Shape)
+    shape.render(
+        "ctx",
+        "svg",
+        project="project",
+        filepath="filepath",
+        options_package="options-package",
+        output_dir="output-dir",
+        overlay="overlay",
+    )
+
+    # By name, every one of them -- nothing arrived in a neighbour's slot.
+    assert seen == {
+        "format_name": "svg",
+        "project": "project",
+        "filepath": "filepath",
+        "options_package": "options-package",
+        "options_project": None,
+        "output_dir": "output-dir",
+        "overlay": "overlay",
+    }

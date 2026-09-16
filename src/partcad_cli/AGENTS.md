@@ -49,6 +49,14 @@ in a script. Both subcommands are the same operation with the analysis as an arg
 holds the options and the body, the way `click/viewport.py` holds the three that `pc render` and
 `pc adhoc render` share, so the two commands are a name and a docstring each and cannot drift apart.
 
+**`pc cam` is a daemon command too, and it is the one that is package-level.** A route reads the package graph
+and drives a CAD wrapper, like an analysis. What differs is what "no argument" means: `pc cae fea` is asked of
+one part, while `pc cam` with nothing named produces a route for every sketch and part of the package that
+declares a `cam:` section -- so the enumeration lives on the daemon (`Project.routable_shapes_async()`), and
+what stays in the client is the exit code and `--json`. It exits non-zero if any object it was *asked about*
+produced no route, and reports every one of them rather than stopping at the first: a route is a file, and an
+object whose section is wrong must not cost the other nineteen theirs.
+
 **`pc lint` sits on both sides of the line, one mode each.** `pc lint [-P/-r]` checks a *package*: which
 packages, resolved how, with which files, is the package graph, so it is a thin daemon client like any other.
 `pc lint --file` checks the *files named on the command line*, in this process: an ASSY file and a

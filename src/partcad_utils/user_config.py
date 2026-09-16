@@ -313,6 +313,7 @@ OPTION_KEYS = (
     "useDockerKicad",
     "caeFeaImplementation",
     "caeCfdImplementation",
+    "camImplementation",
     "tags",
 )
 
@@ -356,6 +357,14 @@ DEFAULT_CAE_IMPLEMENTATIONS = {
     "fea": "//pub/feature/cae/calculix:fea",
     "cfd": "//pub/feature/cae/calculix:cfd",
 }
+
+# Which implementation produces a route when nothing says otherwise. Unlike the
+# two above this one *is* built into 'partcad': a route is arithmetic on the
+# object's own outline rather than somebody else's program, so PartCAD ships it
+# (see 'partcad.output.BUILTIN_PACKAGES'). The option exists all the same,
+# because which post-processor a shop's machine reads is that shop's answer and
+# not PartCAD's.
+DEFAULT_CAM_IMPLEMENTATION = "//builtin/cam:gcode"
 
 
 class UserConfig(vyper.Vyper):
@@ -1081,6 +1090,23 @@ class UserConfig(vyper.Vyper):
         # worse answer than the default one.
         self.cae_fea_implementation = self.get_string("caeFeaImplementation") or DEFAULT_CAE_IMPLEMENTATIONS["fea"]
         self.cae_cfd_implementation = self.get_string("caeCfdImplementation") or DEFAULT_CAE_IMPLEMENTATIONS["cfd"]
+
+        # option: camImplementation
+        # description: which implementation produces a route for "pc cam", as
+        #              "<package>:<file type>"
+        # values: <string>
+        # default: //builtin/cam:gcode
+        #
+        # Unlike the two above there *is* a built-in to fall back on, and the
+        # default names it. What this option is for is the machine at the other
+        # end: a controller that wants a dialect of its own, or a shop with a
+        # post-processor it already trusts, is a package declaring a file type
+        # in its own 'cam:' section and this option pointing at it. A run
+        # overrides it with "pc cam --implementation", and an object with
+        # "implementation:" in its own 'cam:' section.
+        self.set_default("camImplementation", DEFAULT_CAM_IMPLEMENTATION)
+        self.bind_env("camImplementation", "PC_CAM_IMPLEMENTATION")
+        self.cam_implementation = self.get_string("camImplementation") or DEFAULT_CAM_IMPLEMENTATION
 
     def cae_implementation(self, analysis: str) -> str:
         """Which implementation runs one analysis, by its name ("fea"/"cfd").

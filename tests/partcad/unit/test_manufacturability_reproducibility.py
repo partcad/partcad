@@ -24,7 +24,7 @@ import pytest
 import partcad as pc
 from partcad.file_factory import FileHashError, declared_hash, is_package_file, unreproducible_reason
 from partcad.file_factory_plugin import FileFactoryPlugin
-from partcad.test import cam
+from partcad.test import manufacturability
 from partcad.test.test import Test
 
 DATA = "tests/partcad/unit/data/cam_reproducibility"
@@ -71,7 +71,7 @@ def _run(ctx, name, kind="part"):
     }
     shape = getters[kind]("//:%s" % name)
     assert shape is not None
-    test = cam.CamTest()
+    test = manufacturability.ManufacturabilityTest()
     return test, shape, asyncio.run(test.test([test], ctx, shape))
 
 
@@ -168,7 +168,7 @@ def test_a_part_that_is_not_manufacturable_is_not_asked(ctx):
     """Nothing is required of what nobody said would be made."""
     part = ctx.get_part("//:fetched-unpinned")
     part.is_manufacturable = False
-    test = cam.CamTest()
+    test = manufacturability.ManufacturabilityTest()
     assert asyncio.run(test.test([test], ctx, part)) == Test.TEST_PASSED
 
 
@@ -259,7 +259,7 @@ def test_the_cache_key_follows_the_declared_file_hash(ctx):
     declaration is not that: without this, pinning the download would be
     answered with the cached failure of the declaration that had not.
     """
-    test = cam.CamTest()
+    test = manufacturability.ManufacturabilityTest()
     carried = ctx.get_part("//:carried")
     unpinned = ctx.get_part("//:fetched-unpinned")
 

@@ -12,6 +12,61 @@
       },
       "additionalProperties": false
     },
+    "cam-job": {
+      "type": "object",
+      "description": "What is cut out of this object and how: the operation, the cutter, how deep, and how fast. Every key here is also a parameter of the 'cam:' file type that produces the route, so what an object leaves out its package still answers; a length may carry a unit ('6 mm', '0.25 in') and a bare number is millimeters",
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "implementation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Who produces this route, as '<package>:<file type>'. Overrides the 'camImplementation' user configuration for this object; '-i' on the command line overrides both"
+        },
+        "operation": {
+          "type": "string",
+          "enum": ["profile", "pocket", "engrave"],
+          "description": "Which side of the outline the tool runs on: around the outside of it ('profile'), clearing what is inside it ('pocket'), or along it ('engrave')"
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["climb", "conventional"],
+          "description": "Which way round each contour is cut. 'climb' puts the material on the tool's right, which leaves the better edge; 'conventional' reverses every path"
+        },
+        "tool": { "$ref": "#/definitions/cam-length", "description": "The cutter's diameter" },
+        "depth": {
+          "$ref": "#/definitions/cam-length",
+          "description": "How far down from the top of the object the cut goes. An object that does not say is cut through"
+        },
+        "depth_per_pass": { "$ref": "#/definitions/cam-length", "description": "How deep each pass goes" },
+        "safe_z": { "$ref": "#/definitions/cam-length", "description": "The height rapid moves are made at, above the top of the object" },
+        "feed": { "$ref": "#/definitions/cam-feed", "description": "The cutting feed rate; a bare number is millimeters per minute" },
+        "plunge": { "$ref": "#/definitions/cam-feed", "description": "The feed rate of a downward move; the cutting feed where there is none" },
+        "speed": {
+          "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }],
+          "description": "The spindle speed in rpm. A spindle nobody commands is one the operator set, so an object that says nothing gets no M3/M5"
+        },
+        "stepover": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "How far each successive ring of a pocket moves in, as a fraction of the tool diameter"
+        }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "cam-length": {
+      "oneOf": [
+        { "type": "number", "exclusiveMinimum": 0 },
+        { "type": "string", "minLength": 1 }
+      ]
+    },
+    "cam-feed": {
+      "oneOf": [
+        { "type": "number", "exclusiveMinimum": 0 },
+        { "type": "string", "minLength": 1 }
+      ]
+    },
     "cae-analysis": {
       "type": "object",
       "description": "The boundary conditions one analysis is run under. 'fix:' names what is held still, 'load:' what is pulled on; both name interface types this object implements, and 'load' values are a force (or a mass, which is the default reading of a bare number - in kilograms)",
@@ -935,6 +990,7 @@
     "render": { "$ref": "#/definitions/render" },
     "export": { "$ref": "#/definitions/output-section" },
     "cae": { "$ref": "#/definitions/output-section" },
+    "cam": { "$ref": "#/definitions/output-section" },
     "simulation": { "$ref": "#/definitions/simulation-section" },
     "import": { "$ref": "#/definitions/import-section" },
     "open": { "$ref": "#/definitions/open-section" },
@@ -1071,6 +1127,7 @@
                 "cae": { "$ref": "#/definitions/output-section" },
                 "fea": { "$ref": "#/definitions/cae-analysis" },
                 "cfd": { "$ref": "#/definitions/cae-analysis" },
+                "cam": { "$ref": "#/definitions/cam-job" },
                 "simulate": { "$ref": "#/definitions/simulate" },
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
@@ -1398,6 +1455,7 @@
             "parameters": { "$ref": "#/definitions/shape-parameter"},
             "render": { "$ref": "#/definitions/render" },
             "export": { "$ref": "#/definitions/output-section" },
+            "cam": { "$ref": "#/definitions/cam-job" },
             "include":{
               "oneOf": [
                 { "type": "string", "minLength": 1 },

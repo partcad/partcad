@@ -308,6 +308,10 @@ class FakeContext:
         self.item_suppliers = {}
         self.provider_plugins = {}
         self.stats_git_ops = 0
+        # As on a real Context, which sets it in '__init__': a per-request flag
+        # that operations turn on and put back. The fake used not to have it
+        # because the operations only ever assigned it.
+        self.option_create_dirs = False
         self.user_config = FakeUserConfig()
         self.projects = {name: FakeProject(name=name)}
         # As on a real Context: the root package, and the only place the loaded
@@ -2159,3 +2163,42 @@ def test_cae_defaults_answers_for_every_analysis():
         "fea": "//pub/feature/cae/calculix:fea",
         "cfd": "//pub/feature/cae/calculix:cfd",
     }
+
+
+# ---- the create_dirs flag is a per-request setting on a long-lived context --
+
+
+def test_creating_dirs_puts_the_flag_back_even_when_the_request_raises():
+    """`-p` belongs to one request; the context it is set on outlives thousands.
+
+    The daemon holds a context per workspace and keeps it warm, so a flag left
+    on is a flag every later request inherits -- including the ones that never
+    set it and have always refused to create directories.
+    """
+    ctx = types.SimpleNamespace(option_create_dirs=False)
+
+    with operations._creating_dirs(ctx, True):
+        assert ctx.option_create_dirs is True
+    assert ctx.option_create_dirs is False
+
+    with contextlib.suppress(RuntimeError):
+        with operations._creating_dirs(ctx, True):
+            raise RuntimeError("the request failed")
+    assert ctx.option_create_dirs is False
+
+
+def test_a_request_that_creates_directories_does_not_leave_the_next_one_doing_so():
+    """Asked of a real operation rather than of the helper alone.
+
+    `pc export` never sets this flag, so before it was restored a single
+    `pc cae -p` or `pc cam -p` left that daemon writing directories for every
+    export that followed it.
+    """
+    session, part = make_cae_session()
+
+    operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea", "create_dirs": True})
+
+    # It was on while the analysis ran...
+    assert part.calls[-1]["create_dirs"] is True
+    # ...and is off again for whatever the daemon serves next.
+    assert session.partcad_ctx.option_create_dirs is False

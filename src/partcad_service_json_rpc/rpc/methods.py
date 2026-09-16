@@ -47,6 +47,7 @@ _OPERATIONS = {
     "supply.quote": operations.supply_quote,
     "cae.analyze": operations.cae_analyze,
     "cae.defaults": operations.cae_defaults,
+    "cam.route": operations.cam_route,
     "search.objects": operations.search_objects,
     "render.objects": operations.render_objects,
     "convert.object": operations.convert_object,

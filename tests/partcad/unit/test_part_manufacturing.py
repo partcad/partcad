@@ -11,7 +11,7 @@
 import asyncio
 
 import partcad as pc
-from partcad.test import cam  # noqa: F401  # imported to register the CAM test type
+from partcad.test import manufacturability  # noqa: F401  # registers the manufacturability test type
 
 
 def test_part_manufacturing_positive_1():
@@ -21,7 +21,7 @@ def test_part_manufacturing_positive_1():
     assert cylinder is not None
     assert asyncio.run(cylinder.get_wrapped(ctx)) is not None
 
-    test = pc.test.cam.CamTest()
+    test = pc.test.manufacturability.ManufacturabilityTest()
     assert asyncio.run(test.test([test], ctx, cylinder)) is True
 
 
@@ -32,5 +32,5 @@ def test_part_manufacturing_negative_1():
     assert cube is not None
     assert asyncio.run(cube.get_wrapped(ctx)) is not None
 
-    test = pc.test.cam.CamTest()
+    test = pc.test.manufacturability.ManufacturabilityTest()
     assert asyncio.run(test.test([test], ctx, cube)) is True

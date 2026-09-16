@@ -16,7 +16,7 @@ purchasable assembly has a supplier, the way it always has for a part.
 import asyncio
 
 import partcad as pc
-from partcad.test import cam
+from partcad.test import manufacturability
 from partcad.test.test import Test
 
 # The same package the cart tests use: '//sub:unit' is a pair of cubes sold
@@ -69,7 +69,7 @@ def test_walks_the_procurement_bom():
     assert top is not None
 
     recorder = _Recorder()
-    asyncio.run(cam.CamTest().test_assembly([recorder], ctx, top))
+    asyncio.run(manufacturability.ManufacturabilityTest().test_assembly([recorder], ctx, top))
 
     # '//sub:unit' is handed over as itself. Walking 'get_bom()' instead would
     # have listed the cubes inside it and never mentioned the unit at all.
@@ -83,7 +83,7 @@ def test_purchasable_assembly_is_not_taken_apart():
     assert unit is not None
 
     recorder = _Recorder()
-    test = cam.CamTest()
+    test = manufacturability.ManufacturabilityTest()
     assert asyncio.run(test.test([test, recorder], ctx, unit)) == Test.TEST_PASSED
 
     # It has no 'manufacturing' section and its cubes were never asked about:
@@ -97,7 +97,7 @@ def test_purchasable_assembly_without_a_supplier_fails():
     unit = ctx._get_assembly("//sub:unit")
     assert unit is not None
 
-    test = cam.CamTest()
+    test = manufacturability.ManufacturabilityTest()
     assert asyncio.run(test.test([test], ctx, unit)) == Test.TEST_FAILED
 
 
@@ -107,14 +107,14 @@ def test_purchasable_assembly_no_provider_carries_it():
     unit = ctx._get_assembly("//sub:unit")
     assert unit is not None
 
-    test = cam.CamTest()
+    test = manufacturability.ManufacturabilityTest()
     assert asyncio.run(test.test([test], ctx, unit)) == Test.TEST_FAILED
 
 
 def test_supply_failure_names_the_kind():
     """The reason a supplier check failed says what could not be supplied"""
     ctx = _context(available=False)
-    test = cam.CamTest()
+    test = manufacturability.ManufacturabilityTest()
 
     part = ctx._get_part("//sub:bolt")
     assert asyncio.run(test.supply_failure(ctx, part)) == "No suppliers provide the part"
@@ -133,7 +133,7 @@ def test_assembly_nobody_sells_is_still_taken_apart():
     assert frame is not None
 
     recorder = _Recorder()
-    asyncio.run(cam.CamTest().test_assembly([recorder], ctx, frame))
+    asyncio.run(manufacturability.ManufacturabilityTest().test_assembly([recorder], ctx, frame))
 
     # The assembly embedded in 'frame.assy' is not an object of any package, so
     # its contents are what gets tested.

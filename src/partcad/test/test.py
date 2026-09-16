@@ -16,7 +16,7 @@ from ..concurrency import ReentrantGate
 # Shared by every Test, because MAX_CONCURRENT_TESTS is a cap on tests as a
 # whole rather than on any one of them.
 #
-# Re-entrant, and it has to be: 'CamTest.test' runs the whole suite over every
+# Re-entrant, and it has to be: 'ManufacturabilityTest.test' runs the whole suite over every
 # object the assembly under test is procured from, from inside the call this
 # gate has already admitted. Counting those nested runs as new arrivals is what
 # used to wedge 'pc test -r' for good -- with every permit held by a caller
@@ -63,7 +63,7 @@ class Test(ABC):
         before the change.
 
         Empty for a test whose answer is a property of the shape alone; see
-        'CamTest.cache_key_suffix()' for the one that is not.
+        'ManufacturabilityTest.cache_key_suffix()' for the one that is not.
         """
         return ""
 

@@ -18,6 +18,7 @@ import warnings
 from typing import TYPE_CHECKING, Optional
 
 from . import cae as pc_cae
+from . import cam as pc_cam
 from . import logging as pc_logging
 from . import material as pc_material
 from . import output, render_overlay
@@ -1430,12 +1431,30 @@ class Shape(ShapeConfiguration):
         project: Optional[Project] = None,
         filepath=None,
         options_package: Optional[str] = None,
+        options_project: Optional[Project] = None,
         output_dir=None,
         overlay=None,
         **kwargs,
     ) -> None:
+        # By keyword, every one of them. 'render_async' grew an
+        # 'options_project' parameter between 'options_package' and
+        # 'output_dir', and a positional forwarding here handed 'output_dir' to
+        # it and 'overlay' to 'output_dir' - so a caller that named
+        # 'output_dir=' got a string where '_output_getopts' reads
+        # '.config_obj' off a package. Nothing in the signature above can drift
+        # away from the one below while the names are what is passed.
         asyncio.run(
-            self.render_async(ctx, format_name, project, filepath, options_package, output_dir, overlay, **kwargs)
+            self.render_async(
+                ctx,
+                format_name,
+                project=project,
+                filepath=filepath,
+                options_package=options_package,
+                options_project=options_project,
+                output_dir=output_dir,
+                overlay=overlay,
+                **kwargs,
+            )
         )
 
     # ------------------------------------------------------------------ #
@@ -1498,6 +1517,110 @@ class Shape(ShapeConfiguration):
             opts, output_dir, "." + extension, project, filepath, stem_suffix="." + analysis
         )
         return impl, filepath
+
+    def cam_getopts(
+        self,
+        ctx,
+        format_name: str,
+        project=None,
+        filepath=None,
+        options_project=None,
+        output_dir=None,
+    ):
+        """Resolve one route: its implementation, options and output path.
+
+        The counterpart of 'analysis_getopts' for the 'cam:' section, and the
+        same shape as it but for the file's name. An analysis writes
+        'bracket.fea.vtu' because a part has as many results as it has analyses;
+        a route writes 'bracket.nc', with no infix, because the extension
+        already says what the file is and an object has one route at a time. Two
+        file types that both routed the same object would collide -- and they
+        cannot, because which one produces the route is a single answer resolved
+        before this is called.
+
+        There is no default extension to fall back on, for the reason the
+        analysis path has none: what a controller reads is the implementation's
+        decision, and an implementation that does not say is a bug in that
+        package rather than something to guess at on its behalf.
+        """
+        opts, configured_output_dir = self._output_getopts(ctx, format_name, output.CAM, project, options_project)
+        output_dir = output_dir or configured_output_dir
+
+        if filepath is not None and os.path.isdir(filepath):
+            # A directory was passed where a file was expected: it names where
+            # the file goes, not the file.
+            output_dir, filepath = filepath, None
+
+        # With the implementing package, for the reason 'analysis_getopts' fills
+        # it in: something asks about the implementation before it is run, and a
+        # missing project answers "declared nothing" rather than failing.
+        impl = output.Implementation(output.CAM, format_name, opts, project=options_project)
+        extension = impl.extension(None)
+        if not extension:
+            raise Exception(
+                "The '%s' implementation does not say what file it writes: it needs an 'extension:'" % format_name
+            )
+        filepath = self._output_filepath(opts, output_dir, "." + extension, project, filepath)
+        return impl, filepath
+
+    def _route_implementation(self, ctx, implementation=None, declared=None):
+        """Who produces this route: the package and the file type in it.
+
+        The very precedence '_analysis_implementation' documents, over the one
+        thing that differs: the bottom of it is 'camImplementation', and unlike
+        the CAE defaults that one names a package PartCAD ships. So the chain is
+
+        * 'implementation' -- this run's answer, from 'pc cam -i'.
+        * 'declared' -- the object's own, from 'implementation:' in its 'cam:'
+          section. A statement about the object: the post-processor its numbers
+          were written for.
+        * the user configuration ('camImplementation'), which is what makes
+          'pc cam' work in a package that says nothing about machines.
+
+        A relative package name is resolved against whoever said it, which is
+        why the two are handed over separately rather than picked between here.
+        """
+        own = False
+        if not implementation:
+            if declared:
+                implementation, own = declared, True
+            else:
+                # The *context's* configuration, not the process-wide singleton:
+                # a daemon builds its context from the caller's configuration,
+                # and reading the singleton here would route under the daemon's
+                # default. The same reason '_analysis_implementation' gives.
+                implementation = ctx.user_config.cam_implementation
+        implementation = str(implementation).strip()
+        if not implementation:
+            raise Exception("No 'cam' implementation is configured")
+
+        package, separator, format_name = implementation.rpartition(":")
+        if not separator:
+            # A package on its own: the file type is 'gcode', which is what the
+            # built-in package calls its only one and what a package publishing
+            # one route implementation is most likely to call its own.
+            package, format_name = implementation, "gcode"
+        format_name = format_name or "gcode"
+        package = self._resolve_implementing_package(ctx, package, own)
+
+        options_project = ctx.get_project(package)
+        if options_project is None:
+            raise Exception(
+                "The package implementing 'cam' is not found: %s. "
+                "Add it to this package's 'dependencies:', or name another one." % package
+            )
+        if getattr(options_project, "broken", False):
+            # A package that failed to load answers every question about itself
+            # with nothing, so without this the next thing to go wrong is
+            # 'cam_getopts' reporting that the implementation declared no
+            # 'extension:' -- which sends the reader to look at a file that was
+            # never read.
+            raise Exception(
+                "The package implementing 'cam' did not load: %s. "
+                "The reason is reported above; a dependency that could not be fetched is the usual one."
+                % options_project.name
+            )
+        return options_project, format_name
 
     def _resolve_implementing_package(self, ctx, package: str, own: bool) -> str:
         """Make a package name absolute, from the point of view of whoever said it.
@@ -1844,6 +1967,242 @@ class Shape(ShapeConfiguration):
     ) -> dict:
         """`analyze_async` for a caller that has no event loop of its own."""
         return asyncio.run(self.analyze_async(ctx, analysis, implementation, project, filepath, output_dir, **kwargs))
+
+    async def route_async(
+        self,
+        ctx: Context,
+        implementation: Optional[str] = None,
+        project: Optional[Project] = None,
+        filepath=None,
+        output_dir=None,
+        **kwargs,
+    ) -> dict:
+        """Produce the route file this shape declares, and report what it is.
+
+        Args:
+            ctx: Execution context.
+            implementation: '<package>:<file type>' naming who produces it,
+                overriding the user configuration's default for this run.
+            project: The package the object belongs to, whose 'cam:' section
+                re-tunes the implementation's parameters.
+            filepath: The file to write. None resolves it from the
+                configuration and the object's name.
+            output_dir: Where the file goes when 'filepath' does not say.
+            kwargs: Job parameters, overriding what the configuration says.
+
+        Returns:
+            The route file that was written, what it took, and anything the
+            implementation wanted said about it, as plain data.
+
+        Raises:
+            partcad.cam.CamConfigError: the object declares no 'cam:' section,
+                or declares one that cannot be made sense of. Both are answers
+                to the user's question rather than failures, and both are
+                reported as the sentence they carry - which is what lets a run
+                over a whole package tell the objects it skips from the one
+                that is broken.
+            partcad.cam.CamFailed: the implementation was asked and produced no
+                route.
+        """
+        try:
+            config = pc_cam.config_of(self)
+        except pc_cam.CamConfigError as e:
+            # Named, because a run over a package reports one line per object
+            # and "'cam: tool:' is not a length" against forty parts is a
+            # sentence with no address on it. Done here rather than in
+            # 'partcad.cam', which deliberately knows nothing about shapes.
+            raise self._cam_config_error(e) from e
+        if config is None:
+            raise pc_cam.CamConfigError(
+                "%s:%s declares no 'cam:' section, so there is nothing to route" % (self.project_name, self.name)
+            )
+
+        if project is None:
+            project = ctx.get_project(self.project_name)
+        # '-i' first, then what the object declared, then the user
+        # configuration. The object's own answer sits in the middle because it
+        # is a statement about the object -- the post-processor its numbers were
+        # written for -- and the two things that outrank it are the two that are
+        # about this run and this machine.
+        try:
+            options_project, format_name = self._route_implementation(
+                ctx, implementation, declared=config.implementation
+            )
+        except pc_cam.CamConfigError as e:
+            raise self._cam_config_error(e) from e
+        except Exception as e:
+            # Naming who should produce the route is configuration, so failing
+            # to resolve that name is a 'CamConfigError' and not a plain one.
+            # The type is what decides the blast radius: a package-wide run
+            # gathers these, and '_route_packages_async' re-raises anything it
+            # does not recognise -- so an unresolvable implementation used to
+            # abort the whole request and discard the routes already produced
+            # for every other object in the package.
+            raise self._cam_config_error(
+                pc_cam.CamConfigError("the 'cam' implementation could not be resolved: %s" % e)
+            ) from e
+
+        try:
+            return await self._route_run_async(
+                ctx, config, project, options_project, format_name, filepath, output_dir, kwargs
+            )
+        except pc_cam.CamConfigError as e:
+            # The same naming, for the layers underneath the object: a feed the
+            # *package* wrote in a spelling nothing can read is reported against
+            # every object it covers, and each of those reports has to say which
+            # object could not be routed because of it.
+            raise self._cam_config_error(e) from e
+        except pc_runtime.SandboxUnavailable:
+            # Neither is the implementation failing, and neither gets the
+            # report. The first is the object's own section being wrong, which
+            # is answered by editing it; the second is this machine having no
+            # sandbox, so nothing was ever asked.
+            raise
+        except Exception as e:
+            # Everything else is "asked, and no route", and every caller says so
+            # the same way. Written here rather than by each of them because
+            # this is where the implementation's name is known.
+            raise pc_cam.CamFailed(
+                pc_cam.dysfunction_report(
+                    "%s:%s" % (self.project_name, self.name),
+                    "%s:%s" % (options_project.name, format_name),
+                    e,
+                )
+            ) from e
+
+    def _cam_config_error(self, error) -> "pc_cam.CamConfigError":
+        """One `cam:` configuration error, with the object it is about in front.
+
+        Idempotent by construction: it is applied where the error leaves
+        `route_async`, which is once.
+        """
+        return pc_cam.CamConfigError("%s:%s: %s" % (self.project_name, self.name, error))
+
+    async def _route_run_async(
+        self,
+        ctx: Context,
+        config,
+        project: Project,
+        options_project: Project,
+        format_name: str,
+        filepath,
+        output_dir,
+        kwargs: dict,
+    ) -> dict:
+        """'route_async' once it knows what to run and who runs it.
+
+        Split out so that the caller can say what every failure in here means
+        without a ninety-line 'try:' around the part that does the work - the
+        same split 'analyze_async' and '_analysis_run_async' are.
+        """
+        with pc_logging.Action("CAM", self.project_name, self.name):
+            impl, final_filepath = self.cam_getopts(ctx, format_name, project, filepath, options_project, output_dir)
+            final_filepath = os.path.abspath(final_filepath)
+
+            # Clearing the path, writing it and checking it afterwards are one
+            # operation on one file, and the path is derived from the shape --
+            # so a second run over the same shape resolves to the same path and
+            # would otherwise interleave with this one. Held for all three; the
+            # nested 'get_wrapped' and '_run_implementation_async' take the same
+            # re-entrant lock without waiting for it.
+            async with self.locked():
+                ctx.ensure_dirs_for_file(final_filepath)
+                # A route is the answer to *this* run, and the path it goes to
+                # is stable. So one an earlier run left there would satisfy the
+                # check below and be handed back as the new result: last week's
+                # depths under today's tool, with nothing to say they are not
+                # today's. Removed before the implementation is asked, which
+                # makes the file's existence afterwards mean what it is read as
+                # meaning -- the same thing 'analyze_async' does and for the
+                # same reason.
+                if os.path.exists(final_filepath):
+                    os.remove(final_filepath)
+
+                obj = await self.get_wrapped(ctx)
+                if obj is None:
+                    raise Exception("Cannot route '%s': shape is empty" % self.name)
+
+                script = await self._materialize_output_script(ctx, impl)
+                # Handed no kwargs, deliberately: '_output_request' applies them
+                # before the object's own section is merged in, and the object
+                # would then overwrite the very values this call was given.
+                # 'route_async' promises the opposite -- an explicit parameter
+                # is the most specific thing anybody said -- so they go on top,
+                # below.
+                request = await self._output_request(ctx, obj, impl, {})
+                # The object's own job, on top of the file type's parameters:
+                # only what the object actually declared, so that a package that
+                # set a tool for all of its parts still answers for the ones
+                # that did not name one (see 'partcad.cam.CamConfig.to_data').
+                request.update(config.to_data())
+                # And last, what this call was told: 'pc cam' passes none today,
+                # but 'route_async(tool=...)' is the documented way to route one
+                # object against another cutter without editing its section.
+                request.update({key: value for key, value in kwargs.items() if value is not None})
+                # And then every layer of it converted together. The object's
+                # own values are already numbers; the ones the package and
+                # '//builtin/cam' contributed have never been near a parser, and
+                # a '2400 mm/min' written one layer down is as much PartCAD's to
+                # understand as the same words written on the object.
+                request = pc_cam.normalize_job(request)
+
+                result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+
+                if result is None:
+                    raise Exception("The '%s' implementation reported nothing: %s" % (format_name, script))
+                if not result.get("success", False):
+                    raise Exception(
+                        "No route for %s:%s: %s"
+                        % (self.project_name, self.name, result.get("exception", "Unknown error"))
+                    )
+                written = os.path.exists(final_filepath)
+
+        if not written:
+            # The meta-wrapper reports what the script returned and does not look
+            # at the path, so "success" alone is the script's word for it. A
+            # caller acts on 'filepath' -- the CLI prints it, and whoever sends
+            # it to a machine opens it -- so a path to nothing is worse than a
+            # refusal. Sound only because the path was cleared above.
+            raise Exception("The route for %s:%s was not written: %s" % (self.project_name, self.name, final_filepath))
+        for warning in result.get("warnings") or []:
+            pc_logging.warning("%s:%s: %s" % (self.project_name, self.name, warning))
+
+        return {
+            "object": "%s:%s" % (self.project_name, self.name),
+            "implementation": "%s:%s" % (options_project.name, format_name),
+            "filepath": final_filepath,
+            "extension": os.path.splitext(final_filepath)[1].lstrip("."),
+            # Whatever the implementation counted. Reported rather than
+            # interpreted: what is worth knowing about a route differs between a
+            # router and a wire EDM, and a fixed set of keys here would be
+            # PartCAD deciding that on their behalf (see 'cam.route_report').
+            "stats": result.get("stats") or {},
+            "warnings": list(result.get("warnings") or []),
+        }
+
+    def route(
+        self,
+        ctx: Context,
+        implementation: Optional[str] = None,
+        project: Optional[Project] = None,
+        filepath=None,
+        output_dir=None,
+        **kwargs,
+    ) -> dict:
+        """'route_async' for a caller that has no event loop of its own."""
+        # By keyword, for the reason 'render' carries at length: a parameter
+        # added to the middle of 'route_async' would otherwise silently
+        # re-address every argument after it here.
+        return asyncio.run(
+            self.route_async(
+                ctx,
+                implementation=implementation,
+                project=project,
+                filepath=filepath,
+                output_dir=output_dir,
+                **kwargs,
+            )
+        )
 
     async def render_svg_somewhere_async(
         self,

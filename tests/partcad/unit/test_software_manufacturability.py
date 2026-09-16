@@ -20,7 +20,7 @@ import pytest
 
 import partcad as pc
 from partcad.file_factory import parse_hash
-from partcad.test import cam
+from partcad.test import manufacturability
 from partcad.test.test import Test
 
 DATA = "tests/partcad/unit/data/software_cam"
@@ -43,7 +43,7 @@ class _Provider:
 def ctx():
     """A context whose supplier lookup is answered locally.
 
-    'CamTest.test_part()' ends with a supplier query, and this is not the test
+    'ManufacturabilityTest.test_part()' ends with a supplier query, and this is not the test
     for that: without this every part below would fail for the wrong reason.
     """
     ctx = pc.Context(DATA)
@@ -59,13 +59,13 @@ def ctx():
 def _software_failure(ctx, name):
     part = ctx.get_part("//:%s" % name)
     assert part is not None
-    return asyncio.run(cam.CamTest().software_failure(ctx, part))
+    return asyncio.run(manufacturability.ManufacturabilityTest().software_failure(ctx, part))
 
 
 def _test_part(ctx, name):
     part = ctx.get_part("//:%s" % name)
     assert part is not None
-    test = cam.CamTest()
+    test = manufacturability.ManufacturabilityTest()
     return asyncio.run(test.test([test], ctx, part))
 
 
@@ -110,7 +110,7 @@ def test_every_bad_reference_is_reported(ctx):
     """Two wrong hashes should be two messages, not one and a re-run."""
     part = ctx.get_part("//:board")
     part.config["software_resolved"] = ["//:mismatched", "//:nowhere"]
-    failure = asyncio.run(cam.CamTest().software_failure(ctx, part))
+    failure = asyncio.run(manufacturability.ManufacturabilityTest().software_failure(ctx, part))
     assert "//:mismatched" in failure and "//:nowhere" in failure
 
 
@@ -133,10 +133,10 @@ def test_an_assembly_is_held_to_the_same_rule(ctx):
     """An assembly ships software of its own, and it is checked the same way."""
     assembly = ctx._get_assembly("//:device")
     assert assembly is not None
-    assert asyncio.run(cam.CamTest().software_failure(ctx, assembly)) is None
+    assert asyncio.run(manufacturability.ManufacturabilityTest().software_failure(ctx, assembly)) is None
 
     assembly.config["software_resolved"] = ["//:mismatched"]
-    test = cam.CamTest()
+    test = manufacturability.ManufacturabilityTest()
     assert asyncio.run(test.test([test], ctx, assembly)) == Test.TEST_FAILED
 
 
@@ -144,7 +144,7 @@ def test_a_part_that_is_not_manufacturable_is_not_asked(ctx):
     """The whole test short-circuits on 'manufacturable', software included."""
     part = ctx.get_part("//:board-mismatched")
     part.is_manufacturable = False
-    test = cam.CamTest()
+    test = manufacturability.ManufacturabilityTest()
     assert asyncio.run(test.test([test], ctx, part)) == Test.TEST_PASSED
 
 
@@ -160,7 +160,7 @@ def test_the_cache_key_follows_the_software_declaration(ctx):
     without this the cached result of the old declaration would be handed back
     for the new one.
     """
-    test = cam.CamTest()
+    test = manufacturability.ManufacturabilityTest()
     plain = ctx.get_part("//:board-plain")
     board = ctx.get_part("//:board")
     mismatched = ctx.get_part("//:board-mismatched")

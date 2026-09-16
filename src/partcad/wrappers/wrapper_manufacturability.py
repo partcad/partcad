@@ -5,7 +5,7 @@
 #
 
 # This script is executed within the python sandbox environment (python runtime)
-# to run the manufacturability shape analysis the 'pc test' CAM checks need, so
+# to run the shape analysis the 'pc test' manufacturability checks need, so
 # the core process never has to touch a live OCP object. The shape arrives as a
 # BREP envelope and the analysis result goes back as plain data.
 

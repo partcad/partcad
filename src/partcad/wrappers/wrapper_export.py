@@ -35,6 +35,18 @@ answers with the same dict plus one key of its own:
 a 'severity' and a 'where'. An empty one means the analysis found nothing to
 report, which is what "pc test" requires of a part.
 
+A 'cam:' implementation is run through here as well, and is handed the job the
+object declared merged with the file type's own parameters - the tool, the
+depths, the feeds, all of them numbers in millimetres and millimetres per minute
+by the time they arrive (see 'partcad.cam'). It answers with a key of its own
+too:
+
+    output = {"success": True, "stats": {...}}      # wrote the route, and it is this
+
+'stats' is whatever that implementation counted about the route. It is reported
+and never interpreted, so an implementation may put in it whatever a reader of
+its output would want to know.
+
 and reports what happened in one of two ways, whichever suits it:
 
     output = {"success": True}                        # wrote the file
@@ -213,7 +225,15 @@ def process(script, path, request):
     # verdict and two files would let them disagree - and because the IDE's FEA
     # tab is a webview with no file system, so a finding has to arrive as data.
     # Meaningless for an export or a render implementation, which never set it.
-    for key in ("warnings", "unsupported", "findings"):
+    #
+    # 'stats' is the same arrangement for a 'cam:' implementation: what it
+    # counted about the route it wrote - how many passes, how far the tool
+    # travels in the cut - reported beside the file rather than parsed back out
+    # of it. Passed through as the implementation shaped it and never
+    # interpreted here, because what is worth counting differs between a router
+    # and a wire EDM, and a fixed set of keys in this line would be PartCAD
+    # deciding that on their behalf.
+    for key in ("warnings", "unsupported", "findings", "stats"):
         if output.get(key):
             result[key] = output[key]
     return result

@@ -264,7 +264,7 @@ def lookup(ctx, ref: str, quiet: bool = False):
     either way.
 
     'quiet' is for the callers that are not the ones to report it - deciding
-    what a cached test result is keyed on, say ('CamTest.cache_key_suffix'),
+    what a cached test result is keyed on, say ('ManufacturabilityTest.cache_key_suffix'),
     which asks the same question moments before the caller that *will* report
     it and would otherwise say it twice.
     """

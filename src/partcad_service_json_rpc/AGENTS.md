@@ -134,8 +134,8 @@ at all).
 
 Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|assembly|scene|file`,
 `export.part|assembly|scene`, `ai.regenerate|change`, `add.part|assembly|scene`, `package.load|path|refresh`, `init`,
-`list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults`, `test`, `info`, `activate`, and
-`rpc.discover`. Server-to-client
+`list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults`, `cam.route`, `test`, `info`,
+`activate`, and `rpc.discover`. Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,
 `stats`, `terminal`, `execute`, and the `*Done`/lifecycle signals).
 
@@ -157,6 +157,12 @@ with no file system cannot open a path -- and the daemon may not even be on the 
 an analysis is user configuration, not a property of the object on screen, so there is nothing in the object's
 answer to fill it from -- least of all when the answer is the failure of a solver that is not installed, which
 is exactly when the user needs to see what was tried.
+
+`cam.route` runs something too, and it is the one method whose unit is a *package* rather than an object. With
+no `object` it routes every sketch and part that declares a `cam:` section and passes over the rest, so the
+enumeration is here rather than in a client -- and it reports every failure instead of stopping at the first,
+because a route is a file and one object's broken section must not cost the other nineteen theirs. It has no
+`inline` twin: a route is text a machine reads, not something a webview draws.
 
 There is deliberately no prompt in the protocol. A daemon has nobody to ask, and a request that blocks
 waiting for an answer it cannot receive is a hang, not a question -- anything a command needs is either an

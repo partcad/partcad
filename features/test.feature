@@ -39,12 +39,12 @@ Feature: `pc test` command
     When I run "pc test -r"
     Then the command should exit with a status code of "1"
     Then STDOUT should contain "Git operations: 1"
-    Then STDOUT should contain "cam: No suppliers found"
+    Then STDOUT should contain "manufacturability: No suppliers found"
     Then STDOUT should contain "DONE: Test: //"
 
   @success @pc-test @pc-test-reproducibility
   Scenario: A part fetched from a URL and pinned by nothing is not manufacturable
-    # 'cam' only, and nothing is fetched: the declaration alone settles it, so
+    # 'manufacturability' only, and nothing is fetched: the declaration alone settles it, so
     # no geometry is built and no request is made.
     Given a file named "partcad.yaml" with content:
       """
@@ -56,14 +56,14 @@ Feature: `pc test` command
           fileFrom: url
           fileUrl: https://example.com/vendor/bolt.step
       """
-    When I run "pc test -f cam bolt"
+    When I run "pc test -f manufacturability bolt"
     Then the command should exit with a status code of "1"
     And STDOUT should contain "It is not reproducible"
     And STDOUT should contain "declares no 'fileHash'"
 
   @success @pc-test
   Scenario: `pc test -P` looks the object up in the given package
-    # 'cam' only, as above: the declaration alone settles it, so the scenario
+    # 'manufacturability' only, as above: the declaration alone settles it, so the scenario
     # costs nothing to build. What it holds is where 'bolt' was looked for.
     Given a directory named "sub" exists
     And a file named "sub/partcad.yaml" with content:
@@ -82,7 +82,7 @@ Feature: `pc test` command
         sub:
           path: sub
       """
-    When I run "pc test -P //sub -f cam bolt"
+    When I run "pc test -P //sub -f manufacturability bolt"
     Then the command should exit with a status code of "1"
     And STDOUT should contain "declares no 'fileHash'"
 
@@ -99,7 +99,7 @@ Feature: `pc test` command
           fileUrl: https://example.com/vendor/bolt.step
           fileHash: sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
       """
-    When I run "pc test -f cam bolt"
+    When I run "pc test -f manufacturability bolt"
     # It still has no way of being made or bought, so the test still fails --
     # but reproducibility is no longer what is wrong with it.
     Then STDOUT should not contain "not reproducible"
@@ -121,14 +121,15 @@ Feature: `pc test` command
           fileFrom: url
           fileUrl: https://example.com/vendor/bolt.step
       """
-    When I run "pc test -f cam bolt"
+    When I run "pc test -f manufacturability bolt"
     Then STDOUT should not contain "not reproducible"
 
   @success @pc-test @pc-test-software
   Scenario: A board whose image does not match its fileHash is not manufacturable
-    # 'cam' only: the siblings ('cam-additive', 'cam-subtractive', ...) apply to
-    # a part that is made rather than bought, and this one is bought, so nothing
-    # here needs the geometry built.
+    # 'manufacturability' only: the siblings ('manufacturability-additive',
+    # 'manufacturability-subtractive', ...) apply to a part that is made rather
+    # than bought, and this one is bought, so nothing here needs the geometry
+    # built.
     Given a file named "partcad.yaml" with content:
       """
       manufacturable: true
@@ -159,7 +160,7 @@ Feature: `pc test` command
       shape = cq.Workplane("XY").box(40, 25, 1.6)
       show_object(shape)
       """
-    When I run "pc test -f cam board"
+    When I run "pc test -f manufacturability board"
     Then the command should exit with a status code of "1"
     And STDOUT should contain "//:firmware"
     And STDOUT should contain "does not match its 'fileHash'"
@@ -195,7 +196,7 @@ Feature: `pc test` command
       shape = cq.Workplane("XY").box(40, 25, 1.6)
       show_object(shape)
       """
-    When I run "pc test -f cam board"
+    When I run "pc test -f manufacturability board"
     # The package declares no supplier, so the part still has nowhere to be
     # bought from -- but the software is no longer what is wrong with it.
     Then STDOUT should not contain "cannot be relied on"
@@ -266,11 +267,11 @@ Feature: `pc test` command
       ENDSEC;
       END-ISO-10303-21;
       """
-    When I run "pc test -f cam"
+    When I run "pc test -f manufacturability"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "//:plain: cam: No manufacturing tolerance is specified"
-    And STDOUT should contain "//:bracket: cam: No suppliers found"
-    And STDOUT should contain "//:tolerated: cam: No suppliers found"
+    And STDOUT should contain "//:plain: manufacturability: No manufacturing tolerance is specified"
+    And STDOUT should contain "//:bracket: manufacturability: No suppliers found"
+    And STDOUT should contain "//:tolerated: manufacturability: No suppliers found"
 
   @wip
   Scenario: Test with invalid configuration

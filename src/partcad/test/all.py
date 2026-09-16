@@ -10,15 +10,16 @@ import os
 
 from .cad import CadTest
 from .cam import CamTest
-from .cam_additive_solid import CamAdditiveSolidTest
-from .cam_forming import CamFormingTest
-from .cam_subtractive import CamSubtractiveTest
 from .cfd import CfdTest
 from .connect import ConnectTest
 from .connectivity import ConnectivityTest
 from .degenerate import DegenerateTest
 from .fea import FeaTest
 from .interference import InterferenceTest
+from .manufacturability import ManufacturabilityTest
+from .manufacturability_additive_solid import ManufacturabilityAdditiveSolidTest
+from .manufacturability_forming import ManufacturabilityFormingTest
+from .manufacturability_subtractive import ManufacturabilitySubtractiveTest
 from .shell import ShellTest
 from .solidity import SolidityTest
 from .test import Test
@@ -39,10 +40,10 @@ def tests(concurrency_cap: int) -> list[Test]:
         _global_tests.extend(
             [
                 CadTest(),
-                CamTest(),
-                CamAdditiveSolidTest(),
-                CamSubtractiveTest(),
-                CamFormingTest(),
+                ManufacturabilityTest(),
+                ManufacturabilityAdditiveSolidTest(),
+                ManufacturabilitySubtractiveTest(),
+                ManufacturabilityFormingTest(),
                 ConnectTest(),
                 ConnectivityTest(),
                 DegenerateTest(),
@@ -61,9 +62,17 @@ def tests(concurrency_cap: int) -> list[Test]:
                 # meet, so it is the most expensive of the geometry checks and
                 # goes after the ones that are nearly free.
                 InterferenceTest(),
-                # Only ever run for a part that declares the matching section;
-                # see 'test/cae.py'. A package with no 'fea:'/'cfd:' in
-                # it pays nothing for these two being here.
+                # Only ever run for an object that declares the matching
+                # section; see 'test/cae.py' and 'test/cam.py'. A package with
+                # no 'fea:'/'cfd:'/'cam:' in it pays nothing for these three
+                # being here.
+                #
+                # 'cam' is the route -- can this object's post-processor produce
+                # the program a machine cuts it with -- and emphatically not the
+                # 'manufacturability' checks at the top of this list, which ask
+                # whether it can be made or bought at all. That one answered to
+                # the name 'cam' until 'pc cam' existed.
+                CamTest(),
                 FeaTest(),
                 CfdTest(),
             ]

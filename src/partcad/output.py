@@ -69,7 +69,29 @@ SECTIONS = (EXPORT, RENDER)
 # implementation, and neither is a thing a solver can do.
 CAE = "cae"
 ANALYSIS_SECTIONS = (CAE,)
-ALL_SECTIONS = SECTIONS + ANALYSIS_SECTIONS
+
+# The manufacturing section, which is an output section of the same shape again:
+# a file type declared under 'cam:' is produced by a script exactly as an export
+# or a render one is, and 'Implementation' below serves it unchanged. What
+# differs is who asks for it and what the file is - 'pc cam' asks, and what comes
+# back is the program a machine runs (see 'partcad.cam').
+#
+# Out of 'SECTIONS' for the reason 'cae:' is: a route is not a file another CAD
+# tool opens as a part, so offering it to 'pc export -t'/'pc render -t' would
+# offer a file type nothing downstream of those two can read - and falling back
+# to a 'render:' implementation for it would answer a request for a machine
+# program with a drawing.
+#
+# Out of 'ANALYSIS_SECTIONS' too, and that one is not a technicality. An
+# analysis answers a question *about* an object -- and reports findings, which
+# 'pc test' fails on; a route says how to *make* one, and what it reports is how
+# long the job is. Nothing a caller does with the one is what it does with the
+# other, and the two are unalike even in their bottom layer: 'cae:' has no
+# built-in package and this one does (see BUILTIN_PACKAGES).
+CAM = "cam"
+MANUFACTURING_SECTIONS = (CAM,)
+
+ALL_SECTIONS = SECTIONS + ANALYSIS_SECTIONS + MANUFACTURING_SECTIONS
 
 # Another section resolved the same way that produces no output file at all:
 # 'simulation:' declares the plugins 'pc sim' runs a scene through. Out of
@@ -163,6 +185,13 @@ BUILTIN_PACKAGES = {
     RENDER: "//builtin/render",
     IMPORT: "//builtin/import",
     OPEN: "//builtin/open",
+    # Unlike 'cae:', this section has a built-in implementation, and the reason
+    # is the test the other three pass: a route is arithmetic on the object's
+    # own outline, with no third-party program and no release cycle of anybody
+    # else's behind it. So PartCAD ships one the way it ships DXF, and the
+    # default 'camImplementation' names it rather than naming a package a user
+    # has to go and find.
+    CAM: "//builtin/cam",
 }
 # The one built-in package that declares objects rather than implementations:
 # the scene a 'simulate:' that names no scene of its own is run in, whose
@@ -176,6 +205,7 @@ BUILTIN_PATHS = {
     BUILTIN_PACKAGES[RENDER]: os.path.join(BUILTIN_ROOT_PATH, RENDER),
     BUILTIN_PACKAGES[IMPORT]: os.path.join(BUILTIN_ROOT_PATH, IMPORT),
     BUILTIN_PACKAGES[OPEN]: os.path.join(BUILTIN_ROOT_PATH, OPEN),
+    BUILTIN_PACKAGES[CAM]: os.path.join(BUILTIN_ROOT_PATH, CAM),
     BUILTIN_SCENE_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "scene"),
 }
 
@@ -492,9 +522,10 @@ def stamp(config: dict, package_name: str) -> dict:
 def config_sections(section: str) -> tuple:
     """The 'partcad.yaml' sections a file type's configuration is read from.
 
-    'cae:' is read alone. It has no fallback and is nobody's fallback: an
-    analysis is not a file another CAD tool opens, and neither an export nor a
-    render implementation could stand in for one.
+    'cae:' and 'cam:' are each read alone. Neither has a fallback and neither is
+    anybody's: an analysis is not a file another CAD tool opens, a route is a
+    program a machine runs rather than a shape at all, and no export or render
+    implementation could stand in for either.
 
     For the other two, both sections are read either way, and the one that owns
     the file type is read last so that it wins. What the other one provides is a
@@ -520,7 +551,7 @@ def config_sections(section: str) -> tuple:
     'export:' request never falls back to a 'render:' implementation for a
     format that 'render:' owns.
     """
-    if section in (CAE, SIMULATE, IMPORT, OPEN):
+    if section in (CAE, CAM, SIMULATE, IMPORT, OPEN):
         return (section,)
     return (RENDER, EXPORT) if section == EXPORT else (EXPORT, RENDER)
 
@@ -566,6 +597,9 @@ def builtin_project(ctx, section: str):
     'UserConfig.cae_fea_implementation'). Everything downstream therefore has to
     cope with a section whose bottom layer is missing - which is already the case
     for a file type a package declares that '//builtin' has never heard of.
+
+    'cam:' is not that case and has a built-in package like the first three: see
+    BUILTIN_PACKAGES for why a route ships where a solver does not.
     """
     package = BUILTIN_PACKAGES.get(section)
     return ctx.get_project(package) if package else None

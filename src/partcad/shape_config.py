@@ -60,9 +60,9 @@ def is_a_length(value) -> bool:
     converts to 1.0.
 
     NaN is the one that has to be kept out rather than merely tidied away.
-    'CamTest.tolerance_failure()' takes a NaN to mean "the file tolerances this
-    part feature by feature" and passes it - so a NaN a *declaration* produced
-    would be reported as something no file ever said. Whatever states a
+    'ManufacturabilityTest.tolerance_failure()' takes a NaN to mean "the file
+    tolerances this part feature by feature" and passes it - so a NaN a
+    *declaration* produced would be reported as something no file ever said. Whatever states a
     tolerance goes through here first, and NaN stays
     'tolerance_inspect.reduce()'s alone to produce.
     """
