@@ -54,7 +54,7 @@ class Test(ABC):
     def __init__(self, name: str) -> None:
         self.name = name
 
-    def cache_key_suffix(self, ctx, shape) -> str:
+    async def cache_key_suffix(self, ctx, shape) -> str:
         """What this test's result depends on beyond 'shape.hash', as text.
 
         A shape's hash covers what the shape is built from, and a test may read
@@ -64,6 +64,13 @@ class Test(ABC):
 
         Empty for a test whose answer is a property of the shape alone; see
         'ManufacturabilityTest.cache_key_suffix()' for the one that is not.
+
+        Asynchronous because what a test reads is not always text in the
+        declaration in front of it: a verdict about *another* object depends on
+        that object's own cache key, and a shape has no correct key until the
+        files it is built from are on disk (see 'Shape.get_cache_key_async').
+        See 'ManufacturabilitySheetMetalTest.cache_key_suffix()', which is the
+        one that does.
         """
         return ""
 
@@ -79,7 +86,8 @@ class Test(ABC):
             # not part of shape.hash; fold it into the cache key so that flipping
             # the flag invalidates any previously cached result.
             manufacturable = int(bool(getattr(shape, "is_manufacturable", True)))
-            cache_key = f"test.{self.name}.manufacturable={manufacturable}{self.cache_key_suffix(ctx, shape)}"
+            suffix = await self.cache_key_suffix(ctx, shape)
+            cache_key = f"test.{self.name}.manufacturable={manufacturable}{suffix}"
             cached_results = await ctx.cache_tests.read_data_async(shape.hash, [cache_key])
             cached_bytes = cached_results.get(cache_key, [])
             if cached_bytes and len(cached_bytes) != 0:

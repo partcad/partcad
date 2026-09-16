@@ -38,7 +38,7 @@ class InterferenceTest(Test):
     def __init__(self) -> None:
         super().__init__("interference")
 
-    def cache_key_suffix(self, ctx, shape) -> str:
+    async def cache_key_suffix(self, ctx, shape) -> str:
         config = (shape.config or {}).get("interference") or {}
         return ",skip=%s,minVolume=%s,minFraction=%s,ignore=%s" % (
             bool(config.get("skip", False)),

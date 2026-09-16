@@ -273,6 +273,201 @@ Feature: `pc test` command
     And STDOUT should contain "//:bracket: manufacturability: No suppliers found"
     And STDOUT should contain "//:tolerated: manufacturability: No suppliers found"
 
+  @success @pc-test @pc-test-sheet-metal
+  Scenario: A sheet metal part that names neither what is bent nor how
+    # 'sheet_metal' is the one method that is not described by the part alone:
+    # it says that an existing flat piece was put through a brake, so it has to
+    # name the piece and the drawing that says where the bends go. Neither
+    # answers the other, so both are reported.
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      parts:
+        bracket:
+          type: step
+          manufacturing:
+            method: sheet_metal
+          tolerance: 0.1
+      """
+    And a file named "bracket.step" with content:
+      """
+      ISO-10303-21;
+      HEADER;
+      ENDSEC;
+      DATA;
+      ENDSEC;
+      END-ISO-10303-21;
+      """
+    When I run "pc test -f manufacturability-sheet-metal bracket"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "manufacturability-sheet-metal"
+    And STDOUT should contain "states no 'source' and no 'instructions'"
+
+  @success @pc-test @pc-test-sheet-metal
+  Scenario: A sheet metal part whose blank is not there
+    # Nothing is built to find this out: a reference that resolves to nothing is
+    # settled before any geometry is asked for.
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      sketches:
+        bends:
+          type: dxf
+
+      parts:
+        bracket:
+          type: step
+          manufacturing:
+            method: sheet_metal
+            source: blank
+            instructions: bends;include=BEND_UP,BEND_DOWN
+          tolerance: 0.1
+      """
+    And a file named "bracket.step" with content:
+      """
+      ISO-10303-21;
+      HEADER;
+      ENDSEC;
+      DATA;
+      ENDSEC;
+      END-ISO-10303-21;
+      """
+    And a file named "bends.dxf" with content:
+      """
+      """
+    When I run "pc test -f manufacturability-sheet-metal bracket"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "source part 'blank' is not found"
+
+  @success @pc-test @pc-test-sheet-metal
+  Scenario: The sheet metal example passes its own check
+    # End to end, over 'examples/produce_part_sheet_metal': the drawing is a DXF
+    # of a closed outline and two open bend lines, so the blank is extruded from
+    # the outline layer and each part's instructions are read as the wires the
+    # layers it selects draw; the angle, radius and direction of every bend come
+    # out of the file's XDATA; and the blank is measured for being flat on top
+    # and bottom. Three parts are folded from that one blank - at one bend line,
+    # at the other, and at both - so this covers three readings of one drawing
+    # being three sketches.
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples test --package //produce_part_sheet_metal -f manufacturability-sheet-metal"
+    Then the command should exit with a status code of "0"
+    And STDERR should not contain "ERROR:"
+
+  @success @pc-test @pc-test-sheet-metal
+  Scenario: A sheet metal part whose blank is not a flat piece
+    # A sphere touches the plane through its highest point instead of meeting it
+    # in an area, which is the whole of what "flat" means here.
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      sketches:
+        bends:
+          type: dxf
+
+      parts:
+        blank:
+          type: cadquery
+          manufacturing:
+            method: subtractive
+          parameters:
+            tolerance: 0.1
+        bracket:
+          type: cadquery
+          manufacturing:
+            method: sheet_metal
+            source: blank
+            instructions: bends;include=BEND_UP,BEND_DOWN
+          parameters:
+            tolerance: 0.1
+      """
+    And a file named "blank.py" with content:
+      """
+      import cadquery as cq
+
+      show_object(cq.Workplane("XY").sphere(10))
+      """
+    And a file named "bracket.py" with content:
+      """
+      import cadquery as cq
+
+      show_object(cq.Workplane("XY").box(60, 30, 2))
+      """
+    And a file named "bends.dxf" with content:
+      """
+      0
+      SECTION
+      2
+      TABLES
+      0
+      TABLE
+      2
+      APPID
+      0
+      APPID
+      2
+      PARTCAD
+      70
+      0
+      0
+      ENDTAB
+      0
+      ENDSEC
+      0
+      SECTION
+      2
+      ENTITIES
+      0
+      LINE
+      8
+      BEND_UP
+      10
+      0.0
+      20
+      0.0
+      11
+      0.0
+      21
+      30.0
+      1001
+      PARTCAD
+      1000
+      angle=90
+      1000
+      radius=1.5
+      1000
+      direction=up
+      0
+      LINE
+      8
+      BEND_DOWN
+      10
+      40.0
+      20
+      0.0
+      11
+      40.0
+      21
+      30.0
+      1001
+      PARTCAD
+      1000
+      angle=30
+      1000
+      radius=2.0
+      1000
+      direction=down
+      0
+      ENDSEC
+      0
+      EOF
+      """
+    When I run "pc test -f manufacturability-sheet-metal bracket"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "is not flat on the bottom or the top"
+
   @wip
   Scenario: Test with invalid configuration
     Given I have an invalid PartCAD configuration

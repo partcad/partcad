@@ -1,0 +1,96 @@
+desc: >
+  This example demonstrates parts that are made by bending a flat piece of sheet
+  metal. One drawing holds all of it -- the outline the blank is cut to, and the
+  two lines it may be bent along -- and each part says which of those lines it is
+  folded at. Fold the blank at the first, at the second, or at both, and you have
+  three different parts out of one blank and one drawing.
+
+docs:
+  usage: |
+    ```shell
+    pc inspect blank
+    pc inspect angle_up
+    pc inspect angle_down
+    pc inspect bracket
+    pc test -f manufacturability-sheet-metal
+    ```
+
+    Each part's `instructions` are a reading of the one drawing, and each reading
+    is a sketch of its own -- its own geometry, its own cache entry, its own
+    file:
+
+    ```shell
+    pc inspect -s 'panel;include=BEND_UP'
+    pc inspect -s 'panel;include=BEND_DOWN'
+    pc inspect -s 'panel;include=BEND_UP,BEND_DOWN'
+    ```
+
+sketches:
+  panel:
+    type: dxf
+    desc: >
+      The drawing, on three layers. `OUTLINE` is the flat pattern the blank is
+      cut to; `BEND_UP` and `BEND_DOWN` hold one bend line each, annotated in
+      the file's extended data (XDATA) with the angle, the inner radius and the
+      direction of the bend along it. Which layers a reader gets is the
+      `include` parameter's to say, so this is one sketch and not three.
+
+parts:
+  blank:
+    type: extrude
+    sketch: panel;include=OUTLINE
+    depth: 2
+    desc: >
+      The flat piece that goes into the brake, extruded from the outline layer
+      of the drawing. It is cut flat -- laser, waterjet, punch, router -- so its
+      own manufacturing method is `subtractive`: the outline, and any holes and
+      cut-outs a real part would have, are made here and not while it is bent.
+    manufacturing:
+      method: subtractive
+    parameters:
+      tolerance: 0.1
+
+  angle_up:
+    type: build123d
+    desc: >
+      The blank folded at `BEND_UP` alone, into an L with a short leg standing
+      up. `source` names what goes into the brake and `instructions` the one
+      bend line it is folded at.
+    manufacturing:
+      method: sheet_metal
+      source: blank
+      instructions: panel;include=BEND_UP
+    parameters:
+      tolerance: 0.1
+
+  angle_down:
+    type: build123d
+    desc: >
+      The same blank folded at `BEND_DOWN` alone, into an L with a short leg
+      hanging down. Its declaration differs from `angle_up`'s in nothing but
+      which layer its `instructions` select; the two bend lines are in
+      different places, so the parts do not come out alike.
+    manufacturing:
+      method: sheet_metal
+      source: blank
+      instructions: panel;include=BEND_DOWN
+    parameters:
+      tolerance: 0.1
+
+  bracket:
+    type: build123d
+    desc: >
+      The same blank again, folded at both bend lines -- up at the first and
+      down at the second -- into a Z. Nothing about the outline is restated in
+      any of the three: it belongs to the blank, and these declarations are only
+      what the brake does to it.
+    manufacturing:
+      method: sheet_metal
+      source: blank
+      instructions: panel;include=BEND_UP,BEND_DOWN
+    parameters:
+      tolerance: 0.1
+
+render:
+  readme:
+  svg:

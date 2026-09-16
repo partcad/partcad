@@ -20,6 +20,7 @@ No solver and no sandbox: everything here stops at the point where the script
 would be run.
 """
 
+import asyncio
 import importlib.util
 import os
 import sys
@@ -241,12 +242,12 @@ def test_the_cache_key_follows_the_implementations_own_options(package, tmp_path
     verdict from before it was re-tuned.
     """
     monkeypatch.setattr(package.user_config, "cae_fea_implementation", "//cae-test:fea")
-    before = CaeTest(cae.FEA).cache_key_suffix(package, _bracket(package))
+    before = asyncio.run(CaeTest(cae.FEA).cache_key_suffix(package, _bracket(package)))
 
     (tmp_path / "partcad.yaml").write_text(PACKAGE.replace("iterations: 3", "iterations: 9"))
     retuned = pc.Context(str(tmp_path))
     retuned.user_config.cae_fea_implementation = "//cae-test:fea"
-    after = CaeTest(cae.FEA).cache_key_suffix(retuned, retuned.get_part(":bracket"))
+    after = asyncio.run(CaeTest(cae.FEA).cache_key_suffix(retuned, retuned.get_part(":bracket")))
 
     assert before and after and before != after
 
@@ -254,9 +255,9 @@ def test_the_cache_key_follows_the_implementations_own_options(package, tmp_path
 def test_the_cache_key_is_its_own_when_the_implementation_does_not_resolve(package, monkeypatch):
     """An unresolved implementation is its own answer and must not borrow a real one's key."""
     monkeypatch.setattr(package.user_config, "cae_fea_implementation", "//nowhere:fea")
-    key = CaeTest(cae.FEA).cache_key_suffix(package, _bracket(package))
+    key = asyncio.run(CaeTest(cae.FEA).cache_key_suffix(package, _bracket(package)))
     monkeypatch.setattr(package.user_config, "cae_fea_implementation", "//cae-test:fea")
-    assert key != CaeTest(cae.FEA).cache_key_suffix(package, _bracket(package))
+    assert key != asyncio.run(CaeTest(cae.FEA).cache_key_suffix(package, _bracket(package)))
 
 
 def test_the_part_declaration_is_read_as_boundary_conditions(package):
@@ -742,9 +743,9 @@ def test_the_cache_key_follows_the_plugin_the_part_names(package, monkeypatch):
     back for the other.
     """
     part = _bracket(package)
-    before = CaeTest(cae.FEA).cache_key_suffix(package, part)
+    before = asyncio.run(CaeTest(cae.FEA).cache_key_suffix(package, part))
     monkeypatch.setitem(part.config["fea"], "implementation", "//cae-test:plot")
-    assert CaeTest(cae.FEA).cache_key_suffix(package, part) != before
+    assert asyncio.run(CaeTest(cae.FEA).cache_key_suffix(package, part)) != before
 
 
 def test_a_configuration_error_from_the_analysis_reads_as_one(package, monkeypatch, caplog):
@@ -778,16 +779,16 @@ def test_a_malformed_section_fails_the_check_with_its_own_sentence(package, monk
 def test_the_cache_key_of_a_malformed_section_is_its_own(package):
     """Correcting the declaration has to re-run, not re-read the old failure."""
     part = _bracket(package)
-    good = CaeTest(cae.FEA).cache_key_suffix(package, part)
+    good = asyncio.run(CaeTest(cae.FEA).cache_key_suffix(package, part))
     part.config["fea"] = {"load": {"hook": "5 bananas"}}
-    broken = CaeTest(cae.FEA).cache_key_suffix(package, part)
+    broken = asyncio.run(CaeTest(cae.FEA).cache_key_suffix(package, part))
     assert broken.startswith(".malformed=")
     assert broken != good
 
 
 def test_an_undeclared_analysis_adds_nothing_to_the_cache_key(package):
     """A shape this check does not apply to keeps the key it already had."""
-    assert CaeTest(cae.CFD).cache_key_suffix(package, _bracket(package)) == ""
+    assert asyncio.run(CaeTest(cae.CFD).cache_key_suffix(package, _bracket(package))) == ""
 
 
 def test_only_a_part_is_analysed(package):
@@ -796,7 +797,7 @@ def test_only_a_part_is_analysed(package):
     class NotAPart:
         """Anything that is not a `Part` -- an assembly, a sketch, a scene."""
 
-    assert CaeTest(cae.FEA).cache_key_suffix(package, NotAPart()) == ""
+    assert asyncio.run(CaeTest(cae.FEA).cache_key_suffix(package, NotAPart())) == ""
 
 
 # --------------------------------------------------------------------------- #

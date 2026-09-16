@@ -237,11 +237,65 @@ at all).
   deletes it.
 
   **The check that used to be called `cam` is `manufacturability`** (`./src/partcad/test/manufacturability.py`
-  and its three method-specific siblings). It asks whether an object can be made or bought at all; this one
+  and its four method-specific siblings). It asks whether an object can be made or bought at all; this one
   asks whether the program that makes it can be produced. One word answered both until `pc cam` existed. `-f`
   filters by name prefix, which is what makes the split clean: `-f manufacturability` selects that check and
   its siblings, `-f cam` selects the route check alone. Renaming a check changes every cached verdict's key,
   so the first `pc test` after this re-runs everything -- once.
+
+- **A sheet metal part names what is bent and how** (`part_config_manufacturing.py`,
+  `test/manufacturability_sheet_metal.py`, `wrappers/dxf_metadata.py`): `sheet_metal` is the one manufacturing
+  method that is not described by the part alone. The others say how a shape comes out of stock; this one says
+  an existing flat piece went through a brake, so its `manufacturing:` section carries a `source:` (the part
+  that is bent) and an `instructions:` (the sketch that says where the bends are), both required and both
+  resolved as references against the part's own package. The outline, the holes and the cut-outs belong to the
+  `source`, which is cut flat and so is an ordinary `subtractive` part -- they are deliberately **not**
+  describable inside the sheet metal step, because the process that bends cannot make them.
+
+  `ManufacturabilitySheetMetalTest` asks one question of each half: the blank is flat top and bottom (the
+  horizontal plane through its extreme Z meets it in an area rather than at a point --
+  `wrapper_manufacturability.flatness`, which sums the horizontal planar faces at each extreme rather than
+  taking a boolean, since a tolerance deciding whether two planes are the same plane is the very thing being
+  measured), and every bend line states a positive `angle` in degrees, a positive inner `radius`, and a
+  `direction` of up or down. It is the one test whose `cache_key_suffix()` has to *resolve another object* to
+  state what it read -- `manufacturing:` is one of the keys a shape's hash deliberately leaves out, and so is
+  the drawing the instructions come from -- which is why that hook is a coroutine.
+
+  `examples/produce_part_sheet_metal` is the whole of it in one package, and is what the end-to-end
+  `@pc-test-sheet-metal` scenario in `features/test.feature` runs against.
+
+- **A sketch says what its drawing said** (`Sketch.get_annotations`, `Shape.CACHED_SIDE_DATA`,
+  `wrappers/dxf_metadata.py`): BREP has nowhere to put an angle written against a line, and a DXF says exactly
+  that in XDATA. So the import reads it and the sketch carries it: one record per element -- its type, layer,
+  handle, where it is, and the key/value pairs -- keyed to the same layer filters the import was given, so the
+  annotations describe what is *in* the sketch. `CACHED_SIDE_DATA` is what makes it survive, because a sketch
+  that comes out of the cache is never instantiated; it is an entry of its own beside the geometry, and a
+  cached shape whose side data is **absent** is built again rather than answered with nothing -- an empty
+  entry means "read, and it said nothing", while no entry means "written before any of this existed", and a
+  check would act on the difference. This is also what makes sheet metal instructions *a sketch* rather than
+  *a DXF file*: `dxf` is the only type that states anything today, and nothing downstream knows that.
+
+  One thing had to give for that to be usable at all. CadQuery's DXF importer builds **faces**: it merges
+  each layer's entities into wires and asks each wire for the face it bounds, so a drawing whose lines do not
+  close fails outright -- and a drawing whose lines do not close is exactly what bend instructions are. So
+  `wrapper_import_dxf` keeps the face import as the first answer and falls back to the wires the selected
+  layers draw, with a warning naming what happened, because the other way to reach that fallback is an
+  outline with a gap in it. Every DXF that imports today imports byte-identically; this is a second answer to
+  a question that had none. The fallback mirrors the importer's layer rule (case-insensitive, `include` and
+  `exclude` mutually exclusive) and `dxf_metadata.is_included` applies the same one, so the geometry and the
+  annotations describe one set of elements.
+
+  **Which layers of a drawing a sketch reads is an object-type parameter**, not merely a field
+  (`sketch_factory.py`, `sketch_factory_dxf.py`, `Project.declare_object_type_parameters`). `include` and
+  `exclude` are contributed by the `dxf` type the way `material`/`color`/`tolerance` are contributed to a
+  part, with the sketch's own registry of policed names; the top-level fields stay what they always were, as
+  the default. What that buys is a reference setting them -- `bends;include=BEND_UP,BEND_DOWN` -- on a sketch
+  that declares no `parameters:` at all, which is one drawing read as many ways as there are uses for it
+  instead of one declaration per combination of layers. Two pieces make it work: `get_object` declares the
+  accepted names on the object's behalf when a reference sets one (a name the type does **not** contribute is
+  left alone, so a typo stays a typo), and `parse_parameterized_name` treats a comma-separated fragment with
+  no `=` as a continuation of the value before it, because a list value has commas in it and a comma is also
+  what separates parameters.
 
 - **A part is a body, not a skin** (`wrappers/wrapper_common.solidify`, `brep_inspect.py`,
   `test/shell.py`): a shell is a set of faces with nothing said about which side of them is material; a solid

@@ -773,6 +773,117 @@ Such sketches are declared using the following syntax:
       include: <(optional) a layer name or a list of layer names to import>
       exclude: <(optional) a layer name or a list of layer names not to import>
 
+.. _sketch-layers:
+
+Layers, and reading one drawing several ways
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``include`` and ``exclude`` are **object-type parameters**: the ``dxf`` type
+contributes them rather than the author of the sketch inventing them, in the
+same way ``material``, ``color`` and ``tolerance`` are contributed to a part (see
+:ref:`parameters`). Two things follow from that, and both are the point of it.
+
+First, they exist whether or not the declaration mentions them, so whoever
+*refers* to the sketch can set them -- and a reference is the natural place for
+this to be decided, because which layers are wanted depends on what the sketch is
+being used for:
+
+.. code-block:: yaml
+
+  sketches:
+    panel:
+      type: dxf       # one drawing: the outline, the bend lines, the notes
+
+  parts:
+    blank:
+      type: extrude
+      sketch: panel;include=OUTLINE     # the flat pattern
+      depth: 2.0
+      manufacturing:
+        method: subtractive
+
+    bracket:
+      type: step
+      manufacturing:
+        method: sheet_metal
+        source: blank
+        instructions: panel;include=BEND_UP,BEND_DOWN   # the bends, from the same drawing
+
+A list is written with commas in it, as above. Nothing has to be declared in
+advance for either reference to work, and each of them is its own sketch --
+with its own cache entry -- so the two do not have to be rendered twice or kept
+in step by hand.
+
+Layer names are matched **case-insensitively**, and only one of ``include`` and
+``exclude`` may be given -- both are the DXF importer's own rules.
+
+A drawing whose selected layers do not close into faces is imported as the
+**wires** it draws. That is what a drawing of bend lines is: two parallel lines
+across a blank are where it is folded, and a line is open by nature. PartCAD
+says so when it happens, because the other way to arrive there is an outline
+with a gap in it, which is a mistake rather than a drawing of lines.
+
+Second, the fields above are the **default** the reference overrides. They go on
+meaning exactly what they always meant, and a sketch that carries neither reads
+every layer. The long form is available too, for a sketch that wants to describe
+its own default:
+
+.. code-block:: yaml
+
+  sketches:
+    panel:
+      type: dxf
+      parameters:
+        include:
+          desc: The layers this drawing is read from
+          type: array
+          default: [OUTLINE]
+
+Every other sketch type rejects the two names, the way a part type rejects an
+object-type parameter it cannot honour: a layer is something a DXF has, and
+accepting the parameter silently on an SVG would leave a package believing it was
+filtering something.
+
+.. _sketch-annotations:
+
+Annotations
+^^^^^^^^^^^
+
+A DXF entity may carry **extended data** -- XDATA -- which is what an application
+wrote against that entity, in the file, beside the geometry. It is where a
+drawing states what the geometry cannot: two identical lines are a bend up
+through 90 degrees and a bend down through 30, and nothing about the lines says
+which.
+
+PartCAD reads it as the file is imported and carries it beside the geometry from
+then on, so it is a property of the **sketch** rather than of the file it came
+from. That is what lets :ref:`sheet metal instructions <sheet-metal>` be a
+sketch: the check reads what the sketch reports, and a sketch type that learns to
+state the same thing needs no change anywhere else. Today ``dxf`` is the only
+type that states anything, so sheet metal instructions have to be read from a DXF
+in practice -- but not by anything's design.
+
+Both of the usual spellings are read, and either may be used:
+
+.. code-block:: text
+
+  1001 PARTCAD          the APPID, as DXF requires
+  1000 angle=90         a key and its value in one string tag...
+  1000 radius=1.5
+  1000 direction=up
+
+  1001 PARTCAD
+  1000 angle            ...or the name, followed by the value as its own type
+  1040 90.0
+
+Keys are read case-insensitively -- ``ANGLE`` and ``angle`` are one key -- and
+values are kept exactly as the file states them. What is carried per element is
+its DXF type, its layer, its handle, where it is, and those key/value pairs; an
+element with no extended data is still carried, with nothing against it, because
+"this drawing annotates nothing" and "this line was left un-annotated" are
+different answers. The layer filters above apply, so the annotations describe
+what is in the sketch and not what was filtered out of it.
+
 SVG
 ---
 
@@ -2026,6 +2137,8 @@ The ``manufacturing.method`` field says how a part is made:
 +------------------+-----------------------------------------------------------+
 | ``forming``      | Shaped without adding or removing material                |
 +------------------+-----------------------------------------------------------+
+| ``sheet_metal``  | A flat piece bent to shape -- see :ref:`sheet-metal`      |
++------------------+-----------------------------------------------------------+
 | ``pcbBasic``     | A printed circuit board (**not implemented yet**)         |
 +------------------+-----------------------------------------------------------+
 
@@ -2035,6 +2148,119 @@ together rather than made, and has a single method of its own -- see
 
 A part that is bought rather than made carries ``vendor`` and ``sku`` instead of
 a method.
+
+.. _sheet-metal:
+
+Sheet metal
+-----------
+
+``sheet_metal`` is the one method that is not described by the part alone. The
+others say how a shape is produced from stock; this one says that an existing
+flat piece was put through a brake, so it names two things instead:
+
+.. code-block:: yaml
+
+  parts:
+    bracket:
+      type: step
+      manufacturing:
+        method: sheet_metal
+        source: blank                              # the part that is bent
+        instructions: bends;include=BEND_UP,BEND_DOWN   # the sketch that says how
+      tolerance: 0.1
+
+- ``source`` -- **required.** The part that goes into the brake: the flat blank.
+  It is a reference, resolved against this package like every other reference a
+  part makes, and it points at a **part** rather than at a drawing because it is
+  one. It has a thickness, a material, a tolerance, and a manufacturing method of
+  its own.
+
+- ``instructions`` -- **required.** The sketch that says where the bends are and
+  what each of them is. It is a reference to a :ref:`sketch <sketches>`, so it
+  may carry parameters: a drawing that holds the outline *and* the bend lines is
+  read as bends alone with ``;include=BEND_UP,BEND_DOWN``, which is what the
+  DXF layer parameters are for.
+
+The outline belongs to the blank
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The outline of the part, its holes, its slots and its cut-outs are **not** the
+sheet metal process's to make, and must not be described as part of it. They
+belong to the blank, which is usually cut flat -- laser, waterjet, punch,
+router -- and so is usually an ordinary ``subtractive`` part:
+
+.. code-block:: yaml
+
+  parts:
+    blank:
+      type: extrude
+      sketch: outline           # the flat pattern, holes and all
+      depth: 2.0
+      manufacturing:
+        method: subtractive     # laser cut, and that is where the holes come from
+      parameters:
+        tolerance: 0.1
+
+    bracket:
+      type: step
+      manufacturing:
+        method: sheet_metal
+        source: blank
+        instructions: bends;include=BEND_UP,BEND_DOWN
+
+That is how it is made, and so it is how it is written down. A shop cuts the
+flat pattern on one machine and bends it on another, they are quoted, toleranced
+and scheduled separately, and the flat pattern is a thing that exists -- it is
+what arrives at the brake. Describing a hole as part of the bending step would
+put it on the process that cannot make it, and would leave the part with no
+declaration of the process that can.
+
+``subtractive`` is the usual answer rather than a required one: what has to be
+true of a ``source`` is that it is flat, which is what ``pc test`` asks of it. A
+blank that is bought in rather than made has no manufacturing method to declare,
+one sheared or punched to outline is ``forming``, and an ``alias`` or an
+``enrich`` of a part declared elsewhere carries whatever that one says. All of
+them are blanks, and the check takes them.
+
+What ``pc test`` checks
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Two questions, one about each half of the declaration:
+
+- **The blank is flat, top and bottom.** What goes into a brake is a piece of
+  sheet, so the horizontal plane through its highest point and the one through
+  its lowest each meet it in an area rather than touching it at a point. A
+  ``source`` that fails this is not a blank -- most often it is the bent part
+  itself, named by mistake.
+
+- **Every bend line says what kind of bend it is.** Each line of the
+  instructions sketch carries three annotations:
+
+  +-----------------+----------------------------------------------------------+
+  | Annotation      | What it has to be                                        |
+  +=================+==========================================================+
+  | ``angle``       | How far the metal is turned, in degrees. Positive.       |
+  +-----------------+----------------------------------------------------------+
+  | ``radius``      | The **inner** radius of the bend, in millimetres. More   |
+  |                 | than zero -- zero is a fold, not a bend.                 |
+  +-----------------+----------------------------------------------------------+
+  | ``direction``   | ``up`` or ``down``, in either case.                      |
+  +-----------------+----------------------------------------------------------+
+
+  Where they come from is the sketch's business, not this check's: a DXF states
+  them as :ref:`extended data <sketch-annotations>`, and the check reads what the
+  sketch reports rather than the file it was read from.
+
+What is *not* checked is the geometry of the part against those instructions.
+Whether bending the blank as described produces the shape the part declares is a
+question for the day PartCAD bends the blank itself; until then the part is what
+its own type built, and these are the manufacturing inputs beside it.
+
+``examples/produce_part_sheet_metal`` is the whole of the above in one package:
+one DXF holding the flat pattern and two bend lines, a blank extruded from the
+outline layer, and three parts folded from that one blank -- at one bend line,
+at the other, and at both. They differ in nothing but which layers their
+``instructions`` select, which is the case the layer parameters exist for.
 
 .. _procurement:
 
