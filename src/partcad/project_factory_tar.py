@@ -13,12 +13,56 @@ import inspect
 import os
 import shutil
 import tarfile
+import uuid
 
 import requests
 
 from . import project_factory as pf
 from . import telemetry
 from .project_local import ProjectLocal
+
+# What bounds a remote -- or a proxy in front of one -- that accepts the
+# connection and then stops answering. 'requests' has no timeout of its own, so
+# without these an import of a tarball hangs for as long as the peer keeps the
+# socket open, with nothing to say what it is waiting for.
+#
+# These bound *inactivity* rather than the transfer: requests applies them per
+# socket operation, so a large archive on a slow link still arrives. The shape
+# is the one '_apply_git_timeout' gives the git transport -- a short bound on
+# reaching the remote at all, a longer one on it going quiet afterwards.
+CONNECT_TIMEOUT = 60
+READ_TIMEOUT = 180
+
+
+def _lands_within(destination: str, name: str) -> bool:
+    """Whether unpacking 'name' under 'destination' stays under it."""
+    resolved = os.path.abspath(os.path.join(destination, name))
+    return resolved == destination or resolved.startswith(destination + os.sep)
+
+
+def _safe_members(tar_obj, destination):
+    """What 'data_filter' refuses, for the interpreters that predate it.
+
+    Below 3.10.12 and 3.11.4 there is no filter to ask for, so the check is
+    made here: a member is unpacked only if it, and a link's target, land
+    inside 'destination'. Iterating the archive as extraction proceeds is
+    tarfile's own documented way of doing this, and the only one available over
+    a stream.
+
+    A function rather than a method of the factory because the class is
+    '@telemetry.instrument()'ed, and that walks 'vars(cls)' wrapping everything
+    callable -- which a 'staticmethod' object is, without having the '__code__'
+    the wrapper reads.
+    """
+    destination = os.path.abspath(destination)
+    for member in tar_obj:
+        targets = [member.name]
+        if member.islnk() or member.issym():
+            targets.append(os.path.join(os.path.dirname(member.name), member.linkname))
+        for target in targets:
+            if not _lands_within(destination, target):
+                raise tarfile.TarError("'%s' would be unpacked outside the package" % member.name)
+        yield member
 
 
 class TarImportConfiguration:
@@ -79,65 +123,112 @@ class ProjectFactoryTar(pf.ProjectFactory, TarImportConfiguration):
 
         # Check if the tarball is already cached.
         if not os.path.exists(cache_path):
-            # Download and extract. Creating the directory is kept apart from
-            # filling it so that the cleanup below can only ever remove a
-            # directory this attempt created -- never one another thread is
-            # busy filling, which is what an unconditional cleanup here would
-            # do to whichever of two concurrent imports lost the race.
-            try:
-                os.makedirs(cache_path)
-            except OSError as e:
-                raise RuntimeError(f"Failed to download the tarball: {e}")
-
-            try:
-                auth = None
-                if not (self.auth_user is None or self.auth_pass is None):
-                    auth = (self.auth_user, self.auth_pass)
-                # 'requests' reads HTTPS_PROXY/HTTP_PROXY and NO_PROXY out of
-                # the environment on its own, which is how this transport
-                # reaches a remote on a machine whose only route out is a
-                # proxy. Nothing here may pass 'proxies=' or turn 'trust_env'
-                # off without taking that away.
-                with requests.get(tarball_url, stream=True, auth=auth) as rx:
-                    # A proxy that refuses answers with a page, not with
-                    # nothing, and so does a 404. Left unchecked that page is
-                    # what gets handed to tarfile below, which reports "not a
-                    # gzip file" -- a corrupt archive, for what is really a 407
-                    # from the proxy or a URL that has moved.
-                    rx.raise_for_status()
-
-                    with tarfile.open(fileobj=rx.raw, mode="r:gz") as tar_obj:
-                        args = inspect.getfullargspec(tar_obj.extractall)
-
-                        # 'filter' is keyword-only, so it is a kwonlyarg and
-                        # never one of 'args': looking for it among the
-                        # positional ones found nothing on every Python that
-                        # has it, and this branch never ran. 'relPath' selected
-                        # nothing and the whole archive was unpacked -- which
-                        # reads as working, because what is returned below is a
-                        # path into the subtree either way. It is still asked
-                        # for rather than assumed, because 3.10 and 3.11 only
-                        # gained it in a patch release (3.10.12, 3.11.4).
-                        if "filter" in args.args or "filter" in args.kwonlyargs:
-                            if self.import_rel_path is not None:
-                                filter = lambda member, _: (
-                                    member if member.name.startswith(self.import_rel_path) else None
-                                )
-                            else:
-                                filter = lambda member, _: member
-
-                            tar_obj.extractall(cache_path, filter=filter)
-                        else:
-                            tar_obj.extractall(cache_path)
-            except Exception as e:
-                # Whatever this attempt managed to create is taken for a cached
-                # copy by the next one, which then serves an empty directory as
-                # the package and never downloads anything again. A proxy that
-                # refuses once would poison the cache that way for good.
-                shutil.rmtree(cache_path, ignore_errors=True)
-                raise RuntimeError(f"Failed to download the tarball: {e}")
+            self._download(tarball_url, cache_path)
 
         if self.import_rel_path is not None:
             cache_path = os.path.join(cache_path, self.import_rel_path)
 
         return cache_path
+
+    def _download(self, tarball_url, cache_path) -> None:
+        """Fill 'cache_path' from 'tarball_url', or leave nothing behind.
+
+        The archive is unpacked into a directory of this attempt's own and
+        moved into place only once it is complete, because the directory being
+        there is the whole of "this package is already downloaded": there is no
+        lock over the cache and no marker inside it, so whatever is present is
+        used as it stands. Creating it first and filling it afterwards
+        therefore had two ways to serve an empty package for good -- a failure
+        part way through, and a second import that looked while the first was
+        still unpacking. Imports do run concurrently: 'Context' imports
+        projects in a thread pool and locks by project name, while this cache
+        is keyed by URL, so two differently named imports of one archive land
+        here at the same time.
+        """
+        staging = "%s.%d.%s.partial" % (cache_path, os.getpid(), uuid.uuid4().hex[:8])
+
+        try:
+            os.makedirs(staging)
+
+            auth = None
+            if not (self.auth_user is None or self.auth_pass is None):
+                auth = (self.auth_user, self.auth_pass)
+            # 'requests' reads HTTPS_PROXY/HTTP_PROXY and NO_PROXY out of the
+            # environment on its own, which is how this transport reaches a
+            # remote on a machine whose only route out is a proxy. Nothing here
+            # may pass 'proxies=' or turn 'trust_env' off without taking that
+            # away.
+            with requests.get(
+                tarball_url,
+                stream=True,
+                auth=auth,
+                timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+            ) as rx:
+                # A proxy that refuses answers with a page, not with nothing,
+                # and so does a 404. Left unchecked that page is what gets
+                # handed to tarfile below, which reports "not a gzip file" -- a
+                # corrupt archive, for what is really a 407 from the proxy or a
+                # URL that has moved.
+                rx.raise_for_status()
+
+                with tarfile.open(fileobj=rx.raw, mode="r:gz") as tar_obj:
+                    self._extract_all(tar_obj, staging)
+        except Exception as e:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise RuntimeError(f"Failed to download the tarball: {e}")
+
+        try:
+            os.rename(staging, cache_path)
+        except OSError:
+            # Another import of the same archive published first. That is not a
+            # failure -- it is the same URL, so what is there is what this
+            # would have written -- as long as something really is there.
+            # A rename onto a non-empty directory is refused on POSIX and onto
+            # any existing one on Windows, which is what makes this the losing
+            # side of that race rather than a corrupted cache.
+            shutil.rmtree(staging, ignore_errors=True)
+            if not os.path.isdir(cache_path):
+                raise
+
+    def _extract_all(self, tar_obj, destination) -> None:
+        """Unpack 'tar_obj' into 'destination', refusing what would escape it.
+
+        A tarball is a list of paths to write, and nothing stops those paths
+        from being absolute, from climbing out with '..', or from being links
+        that point anywhere at all: an archive can name the files on this
+        machine it would like to overwrite (CVE-2007-4559). Python answers that
+        with extraction filters, and 'data' is the one meant for an archive
+        from elsewhere.
+
+        Passing a filter is what makes asking for it necessary. Python 3.14
+        applies 'data' by default, so an unfiltered 'extractall' is checked
+        there -- and a filter of our own *replaces* that default rather than
+        adding to it. Selecting 'relPath' with a bare lambda would therefore
+        have turned the checking off on exactly the newest interpreters.
+        """
+        args = inspect.getfullargspec(tar_obj.extractall)
+
+        # 'filter' is keyword-only, so it is a kwonlyarg and never one of
+        # 'args': looking for it among the positional ones found nothing on
+        # every Python that has it, and the selection below never ran --
+        # 'relPath' selected nothing and the whole archive was unpacked, which
+        # reads as working because the path handed back points into the subtree
+        # either way. It is still asked for rather than assumed, because 3.10
+        # and 3.11 only gained it in a patch release (3.10.12, 3.11.4), which
+        # is also where 'data_filter' arrived.
+        if hasattr(tarfile, "data_filter") and ("filter" in args.args or "filter" in args.kwonlyargs):
+            tar_obj.extractall(destination, filter=self._member_filter)
+        else:
+            tar_obj.extractall(destination, members=_safe_members(tar_obj, destination))
+
+    def _member_filter(self, member, path):
+        """Which members to unpack, and on what terms.
+
+        'relPath' says which subtree the package is in, so nothing else is
+        written at all; what is left goes through tarfile's own 'data' filter,
+        which raises rather than returning for a member that would land outside
+        'path'.
+        """
+        if self.import_rel_path is not None and not member.name.startswith(self.import_rel_path):
+            return None
+        return tarfile.data_filter(member, path)

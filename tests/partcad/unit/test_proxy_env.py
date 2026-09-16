@@ -43,16 +43,21 @@ FILE_URL = "https://files.example.invalid/bolt.step"
 FILE_HOST = "files.example.invalid"
 
 
-class _TarStub:
-    """What ProjectFactoryTar._extract reads off 'self', and nothing else.
+class _TarStub(ProjectFactoryTar):
+    """The factory with only what the download reads set up.
 
-    Constructing the factory itself would need a context and a package to hang
-    it off; the download is the subject here, so it is called directly.
+    Constructing it properly would need a context and a package to hang it off,
+    and would do the download itself; the download is the subject here, so it
+    is reached directly -- but through the real class, so that the methods it
+    calls are the real ones.
     """
 
     auth_user = None
     auth_pass = None
     import_rel_path = None
+
+    def __init__(self):
+        pass
 
 
 class _FileStub:
@@ -88,7 +93,7 @@ def _clone_through(url, path):
 
 def _extract_through(url, cache_dir):
     with pytest.raises(RuntimeError):
-        ProjectFactoryTar._extract(_TarStub(), url, cache_dir=str(cache_dir))
+        _TarStub()._extract(url, cache_dir=str(cache_dir))
 
 
 def _download_through(url, path):
