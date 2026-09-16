@@ -327,7 +327,7 @@ def test_the_check_is_selected_by_its_own_name():
     """`pc test -f` filters by name prefix, and nothing else starts with `cam`.
 
     It is the half of the rename that makes the split usable: `-f
-    manufacturability` selects that check and its four siblings, `-f cam`
+    manufacturability` selects that check and its six siblings, `-f cam`
     selects this one alone.
     """
     from partcad.test.all import tests as all_tests
@@ -338,7 +338,9 @@ def test_the_check_is_selected_by_its_own_name():
     assert sorted(name for name in names if name.startswith("manufacturability")) == [
         "manufacturability",
         "manufacturability-additive",
+        "manufacturability-drilling",
         "manufacturability-forming",
+        "manufacturability-laser",
         "manufacturability-sheet-metal",
         "manufacturability-subtractive",
     ]

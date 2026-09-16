@@ -120,9 +120,13 @@ DIRECTIONS = (CLIMB, CONVENTIONAL)
 # whatever spelling the configuration used. The file type decides what the file
 # says (`units:` on `//builtin/cam`'s `gcode`), which is a separate question --
 # a route written in inches is still cut to the depth the part declared.
-LENGTH_KEYS = ("tool", "depth", "depth_per_pass", "safe_z")
+LENGTH_KEYS = ("tool", "depth", "depth_per_pass", "safe_z", "peck")
 FEED_KEYS = ("feed", "plunge")
-NUMBER_KEYS = ("speed", "stepover")
+# 'power' is how hard a laser fires, as the fraction or the S-word its
+# controller reads. A job parameter rather than a machine one, unlike 'kerf':
+# the kerf is what that machine and that material do, while the power is chosen
+# per cut, and a thicker part on the same machine is cut harder.
+NUMBER_KEYS = ("speed", "stepover", "power")
 KEYS = LENGTH_KEYS + FEED_KEYS + NUMBER_KEYS + ("operation", "direction", "implementation", "desc")
 
 # Millimetres per unit, lowercased and singular, for every spelling a length may

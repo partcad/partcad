@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from . import cam as pc_cam
 from . import logging as pc_logging
 
 METHOD_NONE: None = None
@@ -49,6 +50,138 @@ _METHOD_NAMES: dict[int, str] = {value: name for name, value in _METHOD_MAP.item
 # every other reference a part makes.
 SHEET_METAL_REQUIRED = ("source", "instructions")
 
+# The machines a `subtractive` part may be made on, and which one a declaration
+# means.
+#
+# Subtraction is one idea -- material is taken away from a piece of stock until
+# what is left is the part -- but the machines that do it are not
+# interchangeable, and what they *cannot* do is the useful thing to know. A
+# router will cut any 2.5D shape; a laser cuts a sheet with a beam that does not
+# tilt; a drill makes round holes and nothing else. So the machine decides which
+# `pc test` check applies and what `pc cam` writes.
+#
+# It is named by adding that machine's own subsection rather than by a `machine:`
+# key, because the machines do not take the same options and a key would leave
+# them all in one namespace with nothing to say which belongs to which. A
+# declaration with none of them is a CNC one: that is the machine that can make
+# anything the other two can, so it is the answer that is never wrong, and it is
+# what every `subtractive` part written before this existed meant.
+MACHINE_CNC = "cnc"
+MACHINE_DRILLING = "drilling"
+MACHINE_LASER = "laser"
+MACHINES = (MACHINE_CNC, MACHINE_DRILLING, MACHINE_LASER)
+
+# What each machine's subsection may hold. A closed set for the reason
+# 'partcad.cam.KEYS' is one: a key that is not in it is a typo, and a typo that
+# is passed through is an option nobody set being silently defaulted.
+#
+# 'direction' is common to all three, because it is the one thing every
+# subtractive machine has: the axis the tool, the beam or the drill approaches
+# along. It is what "all cut walls are vertical" is measured against -- vertical
+# meaning parallel to it -- and it is why a part that is cut from the other side
+# is a different part to the machine even though it is the same solid.
+MACHINE_KEYS: dict[str, tuple] = {
+    MACHINE_CNC: ("direction",),
+    MACHINE_DRILLING: ("direction",),
+    # 'kerf' is the width the beam itself removes. It belongs to the machine
+    # rather than to the route because it is a property of that machine and its
+    # material, and because the check that the part fits its stock has to know
+    # it: a part cut to its nominal outline comes off a laser half a kerf small
+    # all round.
+    MACHINE_LASER: ("direction", "kerf"),
+}
+
+# The machine options that are lengths, and so are read the way every other
+# length in PartCAD is: a bare number is millimetres, and "0.008 in" is the same
+# kerf said differently. Parsed here rather than left to the implementation for
+# the reason 'partcad.cam.normalize_job' exists -- the spelling is PartCAD's to
+# understand at every layer, and the implementation's business is numbers.
+MACHINE_LENGTH_KEYS = ("kerf",)
+
+# The axis names a 'direction:' may be written as, and the unit vector each
+# means. Written as a name rather than as three numbers because these are the
+# only six a machine of this kind works along, and "-Z" is what a machinist
+# says: the tool comes down.
+_DIRECTIONS: dict[str, tuple] = {
+    "+x": (1.0, 0.0, 0.0),
+    "-x": (-1.0, 0.0, 0.0),
+    "+y": (0.0, 1.0, 0.0),
+    "-y": (0.0, -1.0, 0.0),
+    "+z": (0.0, 0.0, 1.0),
+    "-z": (0.0, 0.0, -1.0),
+}
+
+# What a machine works along when the declaration does not say. Down: the part
+# sits on the bed and the tool comes to it from above, which is what all three
+# of these machines do unless somebody has gone out of their way.
+DEFAULT_DIRECTION = "-Z"
+
+
+def direction_vector(name: str) -> tuple:
+    """The unit vector one 'direction:' means.
+
+    Raises:
+        ValueError: the name is not one of the six axes. Raised rather than
+            defaulted, because a direction that was meant and misspelt is the
+            one input here whose wrong value produces a check that passes.
+    """
+    key = str(name).strip().lower()
+    if key in _DIRECTIONS:
+        return _DIRECTIONS[key]
+    # 'z' and 'Z' read as '+z', which is what somebody writing an axis without a
+    # sign means everywhere else.
+    if "+" + key in _DIRECTIONS:
+        return _DIRECTIONS["+" + key]
+    raise ValueError("'%s' is not an axis; write one of %s" % (name, ", ".join(sorted(_DIRECTIONS))))
+
+
+class MachineConfig:
+    """One subtractive machine, as a part declares it.
+
+    Attributes:
+        kind: which machine, one of 'MACHINES'.
+        direction: the axis it works along, as written.
+        vector: that axis as a unit vector.
+        declared: whether the part named this machine, or whether it is the CNC
+            default standing in. What the difference buys is that the two
+            machine-specific checks apply only to a part that asked for them:
+            'manufacturability-laser' must not start failing every subtractive
+            part that has been in a package for a year.
+        options: the rest of what the subsection said, by key.
+    """
+
+    def __init__(self, kind: str, config: dict | None, declared: bool = True) -> None:
+        self.kind = kind
+        self.declared = declared
+        self.options = dict(config or {})
+        self.direction = str(self.options.pop("direction", None) or DEFAULT_DIRECTION)
+        self.vector = direction_vector(self.direction)
+        for key in MACHINE_LENGTH_KEYS:
+            if self.options.get(key) is not None:
+                # 'CamConfigError' is a 'ValueError', which is what the caller
+                # already catches to turn a bad direction into a recorded
+                # message rather than a package that will not load.
+                self.options[key] = pc_cam.parse_length(self.options[key], "'%s:'" % key)
+
+    def get(self, key: str, default=None):
+        """One machine option, or 'default' where the subsection did not say."""
+        value = self.options.get(key)
+        return default if value is None else value
+
+    def to_data(self) -> dict:
+        """This machine as the parameters an implementation is handed.
+
+        The kind and the direction always, because every implementation needs
+        to know what it is writing for and which way is down; the rest as the
+        part wrote it.
+        """
+        data = {"machine": self.kind, "direction_axis": self.direction, "direction_vector": list(self.vector)}
+        data.update({key: value for key, value in self.options.items() if value is not None})
+        return data
+
+    def __str__(self) -> str:
+        return "MachineConfig(kind=%s, direction=%s)" % (self.kind, self.direction)
+
 
 class PartConfigManufacturing:
     method: int | None
@@ -69,6 +202,57 @@ class PartConfigManufacturing:
             )
         self.source = manufacturing_config.get("source", None)
         self.instructions = manufacturing_config.get("instructions", None)
+        self.machine_error: str | None = None
+        self.machine = self._read_machine(manufacturing_config)
+
+    def _read_machine(self, manufacturing_config: dict) -> MachineConfig | None:
+        """Which machine this part is subtracted on, from the subsection naming it.
+
+        None for every method that is not 'subtractive': a machine is what takes
+        material away, and nothing else here does.
+
+        A bad declaration is *recorded* rather than raised, the same way
+        'missing_fields()' is read rather than raised on. Loading a package must
+        not fail over it -- a part whose machine subsection is wrong is still a
+        part, and everything that is not about making it goes on working. The
+        check is what reports it, against the one part it belongs to.
+        """
+        if self.method != METHOD_SUBTRACTIVE:
+            return None
+
+        named = [kind for kind in MACHINES if kind in manufacturing_config]
+        if len(named) > 1:
+            self.machine_error = "it is made on one machine, but names %s" % " and ".join(
+                "'%s:'" % kind for kind in named
+            )
+            return None
+        if not named:
+            # The answer that is never wrong, and what every 'subtractive' part
+            # written before machines existed meant.
+            return MachineConfig(MACHINE_CNC, None, declared=False)
+
+        kind = named[0]
+        config = manufacturing_config.get(kind)
+        if config is not None and not isinstance(config, dict):
+            self.machine_error = "'%s:' is not a section: %r" % (kind, config)
+            return None
+        unknown = [key for key in (config or {}) if key not in MACHINE_KEYS[kind]]
+        if unknown:
+            self.machine_error = "'%s:' does not take %s; it takes %s" % (
+                kind,
+                ", ".join(sorted(unknown)),
+                ", ".join("'%s:'" % key for key in MACHINE_KEYS[kind]),
+            )
+            return None
+        try:
+            return MachineConfig(kind, config)
+        except ValueError as e:
+            # Both the axis and the lengths raise ValueError, and each already
+            # names the key it is about, so this adds the machine and nothing
+            # else. Naming a key here as well is how "'laser: direction:'
+            # 'laser: kerf:' is not a length" gets written.
+            self.machine_error = "'%s:' %s" % (kind, e)
+            return None
 
     def missing_fields(self) -> list[str]:
         """What this method needs that the declaration does not state.

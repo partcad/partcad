@@ -12,6 +12,34 @@
       },
       "additionalProperties": false
     },
+    "subtractive-machine": {
+      "description": "The machine a 'subtractive' part is cut on. Naming one selects it; naming none means a CNC router or mill, which is what every 'subtractive' part meant before machines could be named. Only one may be named, and the machine decides which 'pc test' checks apply and what 'pc cam' writes.",
+      "type": "object",
+      "properties": {
+        "direction": {
+          "description": "The axis the tool, the beam or the drill approaches along, as one of '+X', '-X', '+Y', '-Y', '+Z' or '-Z'. Defaults to '-Z': the part sits on the bed and the tool comes down to it. It is what 'every cut wall is vertical' is measured against, and what 'pc cam' orients the part by.",
+          "type": "string",
+          "enum": ["+X", "-X", "+Y", "-Y", "+Z", "-Z", "+x", "-x", "+y", "-y", "+z", "-z", "X", "Y", "Z", "x", "y", "z"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "subtractive-laser": {
+      "description": "A laser cutter, whose beam does not tilt: every wall it makes is parallel to its own axis, which 'manufacturability-laser' checks.",
+      "type": "object",
+      "properties": {
+        "direction": {
+          "description": "The axis the beam fires along. See 'subtractive-machine'.",
+          "type": "string",
+          "enum": ["+X", "-X", "+Y", "-Y", "+Z", "-Z", "+x", "-x", "+y", "-y", "+z", "-z", "X", "Y", "Z", "x", "y", "z"]
+        },
+        "kerf": {
+          "description": "How wide a cut the beam itself removes, as a length ('0.2', '0.2 mm', '0.008 in'). A property of the machine and the material rather than of the job, which is why it is declared here and not under 'cam:'. 'pc cam' offsets every contour by half of it so the part comes out at its nominal size.",
+          "oneOf": [ { "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 } ]
+        }
+      },
+      "additionalProperties": false
+    },
     "cam-job": {
       "type": "object",
       "description": "What is cut out of this object and how: the operation, the cutter, how deep, and how fast. Every key here is also a parameter of the 'cam:' file type that produces the route, so what an object leaves out its package still answers; a length may carry a unit ('6 mm', '0.25 in') and a bare number is millimeters",
@@ -50,6 +78,14 @@
           "exclusiveMinimum": 0,
           "maximum": 1,
           "description": "How far each successive ring of a pocket moves in, as a fraction of the tool diameter"
+        },
+        "power": {
+          "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }],
+          "description": "How hard a laser fires, as the S-word its controller reads. Only a laser uses it; a beam nobody commands is gated with a bare M3, which is what a machine whose power is set at the panel wants"
+        },
+        "peck": {
+          "$ref": "#/definitions/cam-length",
+          "description": "How deep a drill goes before it comes back out to clear the swarf. Only a drill uses it; a hole with none is drilled in one go"
         }
       },
       "additionalProperties": false,
@@ -1156,10 +1192,18 @@
                       "type": "string",
                       "minLength": 1,
                       "description": "The sketch that says how the process is carried out. Required by 'sheet_metal', where it holds one line per bend, each annotated with its angle, its inner radius and its direction. A reference to a sketch, which may carry parameters -- 'bends;include=BEND_UP,BEND_DOWN' reads the bend layers of a drawing that also holds the outline."
-                    }
+                    },
+                    "cnc": { "$ref": "#/definitions/subtractive-machine" },
+                    "drilling": { "$ref": "#/definitions/subtractive-machine" },
+                    "laser": { "$ref": "#/definitions/subtractive-laser" }
                   },
                   "required":["method"],
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "not": { "anyOf": [
+                    { "required": ["cnc", "drilling"] },
+                    { "required": ["cnc", "laser"] },
+                    { "required": ["drilling", "laser"] }
+                  ] }
                 },
                 "implements": {
                   "type": "object",

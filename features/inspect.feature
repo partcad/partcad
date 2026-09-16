@@ -113,6 +113,12 @@ Feature: `pc inspect` command
     | /produce_part_sheet_metal | angle_down |
     | /produce_part_sheet_metal | angle_up |
     | /produce_part_sheet_metal | bracket |
+    | /produce_part_subtractive | bearing_block |
+    | /produce_part_subtractive | blank |
+    | /produce_part_subtractive | drilled_plate |
+    | /produce_part_subtractive | gasket |
+    | /produce_part_subtractive | stock_plate |
+    | /produce_part_subtractive | stock_sheet |
 
   @sdf
   Examples: Part: sdf
@@ -136,7 +142,6 @@ Feature: `pc inspect` command
     | /produce_part_extrude | clock |
     | /produce_part_extrude | cylinder |
     | /produce_part_extrude | dxf |
-    | /produce_part_sheet_metal | blank |
 
   @openscad
   Examples: Part: OpenSCAD

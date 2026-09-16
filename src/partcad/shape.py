@@ -2113,6 +2113,38 @@ class Shape(ShapeConfiguration):
                 )
             ) from e
 
+    def _route_machine_data(self) -> dict:
+        """Which subtractive machine this shape is made on, for the route.
+
+        Empty for everything that is not a `subtractive` part: an assembly, a
+        sketch, a part made some other way. An implementation that gets nothing
+        writes what it has always written, which is a CNC program -- so a part
+        with no `manufacturing:` section at all is unaffected by any of this.
+
+        Read from the part's own declaration rather than passed in, because the
+        machine is not something a run decides: `pc cam` on a laser-cut part
+        produces a laser program on anybody's machine, and the day it does not
+        is the day somebody sends a router program to a laser.
+        """
+        from .part import Part
+
+        if not isinstance(self, Part):
+            return {}
+        try:
+            from .part_config import PartConfiguration
+
+            manufacturing_data = PartConfiguration.get_manufacturing_data(self)
+        except Exception as e:  # pylint: disable=broad-except
+            # A section that cannot be read is `pc test`'s to report, against
+            # the part it belongs to. Routing is not the place to raise it: the
+            # route is still the one the object's `cam:` section asked for.
+            pc_logging.debug("%s:%s: could not read the manufacturing section: %s" % (self.project_name, self.name, e))
+            return {}
+        machine = getattr(manufacturing_data, "machine", None)
+        if machine is None:
+            return {}
+        return machine.to_data()
+
     def _cam_config_error(self, error) -> "pc_cam.CamConfigError":
         """One `cam:` configuration error, with the object it is about in front.
 
@@ -2182,6 +2214,14 @@ class Shape(ShapeConfiguration):
                 # but 'route_async(tool=...)' is the documented way to route one
                 # object against another cutter without editing its section.
                 request.update({key: value for key, value in kwargs.items() if value is not None})
+                # And last of all, which machine this is cut on. It comes from
+                # the part's 'manufacturing:' section rather than from any of
+                # the three layers above, so it is applied after them and
+                # cannot be overridden by a 'cam:' key: what a part is made on
+                # is a property of the part, not a parameter of the route, and
+                # a route written for a laser by a section that said 'machine'
+                # would be a program for a machine nobody owns.
+                request.update(self._route_machine_data())
                 # And then every layer of it converted together. The object's
                 # own values are already numbers; the ones the package and
                 # '//builtin/cam' contributed have never been near a parser, and
