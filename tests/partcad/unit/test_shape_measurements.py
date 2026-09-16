@@ -42,6 +42,7 @@ class _Shape(Shape):
     """A shape that never builds geometry and never reaches a sandbox."""
 
     def __init__(self, unbuilt=False, name="thing"):
+        """Named per test, so each one keys - and caches - on its own."""
         super().__init__("//test", {"name": name})
         self.name = name
         self.kind = "part"
@@ -71,6 +72,7 @@ def sandbox(monkeypatch):
     """The sandbox, replaced by something that counts and starts no process."""
 
     async def measurements(ctx, shape):
+        """What 'measure.measurements' would have started a process to answer."""
         sandbox.calls += 1
         if sandbox.raises:
             raise sandbox.raises
@@ -217,6 +219,7 @@ class _ImportedShape(Shape):
     """A shape built by a wrapper that read a file and said what it found."""
 
     def __init__(self, metadata=STATED, name="imported"):
+        """'metadata=None' is a shape whose type reads no file at all."""
         super().__init__("//test", {"name": name})
         self.name = name
         self.kind = "part"
@@ -225,6 +228,7 @@ class _ImportedShape(Shape):
         self.hash.add_string("metadata-test-" + name)
 
     async def get_shape(self, ctx):
+        """An envelope shaped as a wrapper hands one back, metadata and all."""
         self.builds += 1
         envelope = {"name": self.name, "label": self.name, "brep": BREP}
         if self._metadata is not None:
