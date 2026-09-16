@@ -11,6 +11,7 @@
 import hashlib
 import inspect
 import os
+import shutil
 import tarfile
 
 import requests
@@ -78,31 +79,53 @@ class ProjectFactoryTar(pf.ProjectFactory, TarImportConfiguration):
 
         # Check if the tarball is already cached.
         if not os.path.exists(cache_path):
-            # Download and extract
+            # Download and extract. Creating the directory is kept apart from
+            # filling it so that the cleanup below can only ever remove a
+            # directory this attempt created -- never one another thread is
+            # busy filling, which is what an unconditional cleanup here would
+            # do to whichever of two concurrent imports lost the race.
             try:
                 os.makedirs(cache_path)
+            except OSError as e:
+                raise RuntimeError(f"Failed to download the tarball: {e}")
 
+            try:
                 auth = None
                 if not (self.auth_user is None or self.auth_pass is None):
                     auth = (self.auth_user, self.auth_pass)
-                with (
-                    requests.get(tarball_url, stream=True, auth=auth) as rx,
-                    tarfile.open(fileobj=rx.raw, mode="r:gz") as tar_obj,
-                ):
-                    args = inspect.getfullargspec(tar_obj.extractall)
+                # 'requests' reads HTTPS_PROXY/HTTP_PROXY and NO_PROXY out of
+                # the environment on its own, which is how this transport
+                # reaches a remote on a machine whose only route out is a
+                # proxy. Nothing here may pass 'proxies=' or turn 'trust_env'
+                # off without taking that away.
+                with requests.get(tarball_url, stream=True, auth=auth) as rx:
+                    # A proxy that refuses answers with a page, not with
+                    # nothing, and so does a 404. Left unchecked that page is
+                    # what gets handed to tarfile below, which reports "not a
+                    # gzip file" -- a corrupt archive, for what is really a 407
+                    # from the proxy or a URL that has moved.
+                    rx.raise_for_status()
 
-                    if "filter" in args.args:
-                        if self.import_rel_path is not None:
-                            filter = lambda member, _: (
-                                member if member.name.startswith(self.import_rel_path) else None
-                            )
+                    with tarfile.open(fileobj=rx.raw, mode="r:gz") as tar_obj:
+                        args = inspect.getfullargspec(tar_obj.extractall)
+
+                        if "filter" in args.args:
+                            if self.import_rel_path is not None:
+                                filter = lambda member, _: (
+                                    member if member.name.startswith(self.import_rel_path) else None
+                                )
+                            else:
+                                filter = lambda member, _: member
+
+                            tar_obj.extractall(cache_path, filter=filter)
                         else:
-                            filter = lambda member, _: member
-
-                        tar_obj.extractall(cache_path, filter=filter)
-                    else:
-                        tar_obj.extractall(cache_path)
+                            tar_obj.extractall(cache_path)
             except Exception as e:
+                # Whatever this attempt managed to create is taken for a cached
+                # copy by the next one, which then serves an empty directory as
+                # the package and never downloads anything again. A proxy that
+                # refuses once would poison the cache that way for good.
+                shutil.rmtree(cache_path, ignore_errors=True)
                 raise RuntimeError(f"Failed to download the tarball: {e}")
 
         if self.import_rel_path is not None:
