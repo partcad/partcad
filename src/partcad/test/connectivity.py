@@ -68,12 +68,12 @@ class ConnectivityTest(Test):
         try:
             await shape.do_instantiate()
         except Exception as e:
-            # An assembly that will not instantiate is the 'cad' test's
-            # business, and this verdict turned on that rather than on the
-            # assembly: do not remember it.
+            # Not a pass: reaching here means this check broke, and a check
+            # that reports success because it fell over is worse than none.
+            # An assembly that genuinely will not instantiate is failed by
+            # 'cad', which runs whether this one does or not.
             test_ctx[self.NOT_CACHEABLE] = True
-            self.debug(shape, "Failed to instantiate: %s" % e)
-            return self.TEST_PASSED
+            return self.failed(shape, "the connectivity check could not be run: %s" % e)
 
         children = list(shape.connected_children())
         problems = []
