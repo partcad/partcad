@@ -769,6 +769,48 @@ Object commands
   grouped by the package they come from and counted). An assembly can also ask for its own document in the
   package configuration, by declaring ``readme`` in its ``render`` section.
 
+  **The bill of materials is what a published parts list has in it.** Beside the name, the count and the
+  description, each line carries what the objects themselves declare, and a column appears only where some
+  line has something to say in it:
+
+  +---------------+------------------------------------------------------------------------------------+
+  | Column        | Read from                                                                          |
+  +===============+====================================================================================+
+  | *(thumbnail)* || The projection the package has rendered of that object, in the markdown document   |
+  |               || only -- the instruction book shows each part full width on its own step page.      |
+  +---------------+------------------------------------------------------------------------------------+
+  | ``Material``  || ``properties: material:``, or the ``material`` parameter on the types that take    |
+  |               || one as an input. Printed as the material's own name -- its ``formal`` one, the     |
+  |               || short one a drawing is titled with -- rather than as the reference that resolves   |
+  |               || it. A reference that resolves to nothing is printed as written.                    |
+  +---------------+------------------------------------------------------------------------------------+
+  | ``Method``    | ``manufacturing: method:`` -- how the thing is made                                |
+  +---------------+------------------------------------------------------------------------------------+
+  | ``Process``   || ``manufacturing: desc:`` -- what the declaration says about making this part       |
+  |               || beyond naming the method: the nozzle, layer height and infill it is printed at,    |
+  |               || the finish it comes off the machine with.                                          |
+  +---------------+------------------------------------------------------------------------------------+
+  | ``Tolerance`` || How precisely the part has to be made, from wherever it is stated: the             |
+  |               || ``tolerance:`` field, the part's own file, or the ``tolerance`` parameter (see     |
+  |               || :ref:`tolerance-field`). A file that tolerances each feature separately says       |
+  |               || ``per feature``; a part that says nothing leaves the cell empty, and ``pc test``   |
+  |               || is what complains about that rather than the parts list.                           |
+  +---------------+------------------------------------------------------------------------------------+
+  | ``Vendor``    | ``vendor:`` -- who it is bought from instead                                       |
+  +---------------+------------------------------------------------------------------------------------+
+  | ``SKU``       | ``sku:``, with ``count_per_sku`` beside it where a pack holds more than one         |
+  +---------------+------------------------------------------------------------------------------------+
+  | ``File``      | ``path:`` or ``fileUrl:`` -- where the geometry of that object is                   |
+  +---------------+------------------------------------------------------------------------------------+
+
+  All of it is read through the resolved configuration, so an ``alias`` or an ``enrich`` reports what it
+  points at: a package that catalogues its purchased parts in one place and aliases them into the assemblies
+  that use them is the ordinary case, and the alias is not where the vendor is written down.
+
+  This is what lets a generated document replace a hand-maintained parts table rather than sit beside one. A
+  hand-written table has a column because the parts have the data; so does this one, and it cannot go out of
+  date with the design, the supplier or a parameter the way the hand-written one does.
+
   Only assemblies that a package declares are listed as sub-assemblies. An assembly embedded in an Assembly
   YAML file's nested ``links:`` section belongs to no package, so it is not listed on its own: the parts it
   holds are counted towards the assembly that embeds it.

@@ -110,6 +110,25 @@ def _panel_with_hole():
     return _panel() - hole
 
 
+def _panel_with_a_filleted_tab():
+    """A panel with a tab on it, filleted where they meet.
+
+    The fillets are the point. Offsetting this outline outward by the tool's
+    radius leaves arcs a few tens of nanometres long where two of the original
+    edges met -- degenerate edges, which every real machined part with a fillet
+    on it can produce and which no amount of tolerance in the route removes,
+    because they are in the geometry before the route is computed.
+    """
+    with b3d.BuildPart() as part:
+        with b3d.BuildSketch() as sketch:
+            b3d.Rectangle(40, 20)
+            with b3d.Locations((0, 14)):
+                b3d.Rectangle(14, 10)
+            b3d.fillet(sketch.vertices(), 4)
+        b3d.extrude(amount=6)
+    return part.part
+
+
 def _route(gcode, tmp_path, shape=None, **overrides):
     """Produce a route and return (result, text), failing loudly if it did not."""
     request = dict(JOB)
@@ -254,6 +273,48 @@ def test_a_profile_runs_outside_the_part_by_the_tool_radius(gcode, tmp_path):
     assert min(xs) == pytest.approx(-1.5, abs=0.01)
     assert max(ys) == pytest.approx(31.5, abs=0.01)
     assert min(ys) == pytest.approx(-1.5, abs=0.01)
+
+
+def test_a_filleted_outline_is_walked_by_its_own_connectivity(gcode, tmp_path):
+    """An offset contour is a path, degenerate edges and all.
+
+    Ordering a contour's edges by projecting each of them back onto it fails on
+    the degenerate arcs that offsetting leaves -- OCCT declines to parametrize a
+    point on an arc that short, and declines with an empty message, so the whole
+    route is lost and nothing says which part of the geometry lost it. The wire's
+    own topological order needs no projection, and this is the geometry that
+    tells the two apart.
+    """
+    result, text = _route(gcode, tmp_path, shape=_panel_with_a_filleted_tab(), operation="profile")
+    xs = [x for x, _y in _cuts(text)]
+    ys = [y for _x, y in _cuts(text)]
+    # Clear of the part on every side by the tool's radius, and no further: the
+    # path is the outline offset by 1.5 mm, not a bounding box.
+    assert min(xs) == pytest.approx(-21.5, abs=0.01)
+    assert max(xs) == pytest.approx(21.5, abs=0.01)
+    assert min(ys) == pytest.approx(-11.5, abs=0.01)
+    assert max(ys) == pytest.approx(20.5, abs=0.01)
+    assert result["stats"]["paths"] == 1
+
+    # Consecutive cutting moves join: a contour walked out of order jumps across
+    # the part between them, which is a gouge rather than an outline.
+    longest = max(math.dist(a, b) for a, b in zip(_cuts(text), _cuts(text)[1:]))
+    assert longest < 40.0
+
+
+def test_a_contour_that_came_out_as_one_curve_needs_no_ordering(gcode):
+    """A closed contour need not be a wire, and an edge has no connectivity.
+
+    `offset_2d` hands back an `Edge` rather than a `Wire` where the offset came
+    out as a single closed curve -- which is what the inside of a small hole
+    offset by the tool's radius is. There is nothing to order there, and asking
+    the wire explorer for it is a type error rather than an empty answer.
+    """
+    circle = b3d.Edge.make_circle(3)
+    assert len(gcode._ordered_edges(circle)) == 1
+    points = gcode._wire_points(circle, 0.01)
+    assert len(points) > 3
+    assert points[0] == points[-1]
 
 
 def test_an_engrave_follows_the_outline_itself(gcode, tmp_path):

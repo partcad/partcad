@@ -164,15 +164,48 @@ def _distance(a, b):
     return math.hypot(a[0] - b[0], a[1] - b[1])
 
 
+def _ordered_edges(wire):
+    """The wire's edges in the order it traverses them, each oriented that way.
+
+    This is what makes the wire a path rather than a set, and it is OCCT's own
+    wire explorer rather than build123d's 'order_edges()' on purpose. That one
+    sorts the edges by where their midpoints fall along the wire, and a contour
+    that came out of 'offset_2d' defeats the projection it sorts by: offsetting
+    leaves degenerate arcs a few tens of nanometres long where two of the
+    original edges met, and the parameter of a point on one of those is
+    something OCCT declines to compute - it raises 'Standard_ConstructionError'
+    with no message at all, so what reaches the user is a route that does not
+    exist and not a word about why. The explorer walks the wire's own
+    topological connectivity instead, which is how the wire was built and needs
+    no projection.
+    """
+    from OCP.BRepTools import BRepTools_WireExplorer
+    from OCP.TopAbs import TopAbs_ShapeEnum
+
+    if wire.wrapped.ShapeType() != TopAbs_ShapeEnum.TopAbs_WIRE:
+        # Not a wire, so there is no connectivity to walk and nothing to order:
+        # 'offset_2d' hands back a single 'Edge' where the contour came out as
+        # one closed curve, which is what the inside of a round hole offset by
+        # the tool's radius is.
+        return wire.edges()
+
+    explorer = BRepTools_WireExplorer(wire.wrapped)
+    edges = []
+    while explorer.More():
+        edges.append(b3d.Edge(explorer.Current()))
+        explorer.Next()
+    return edges
+
+
 def _wire_points(wire, tolerance):
     """One closed wire as the polyline a machine cuts, first point repeated last.
 
-    'order_edges()' is what makes this a path rather than a set: it hands the
-    edges back in the order the wire traverses them, each oriented the way the
-    wire goes through it.
+    The degenerate edges '_ordered_edges()' describes need nothing done about
+    them here: an edge shorter than 'TOLERANCE' contributes a point the previous
+    one already ended at, and that is the point dropped just below.
     """
     points = []
-    for edge in wire.order_edges():
+    for edge in _ordered_edges(wire):
         segment = _edge_points(edge, tolerance)
         if points and _distance(points[-1], segment[0]) <= TOLERANCE:
             # The edges meet, so the shared point is one point and not two.
