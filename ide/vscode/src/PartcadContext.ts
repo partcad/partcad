@@ -30,6 +30,15 @@ type Stats = {
     scenesInstantiated?: number;
 };
 
+/**
+ * What the version cell holds until PartCAD has reported one.
+ *
+ * Not a version, and therefore never a mismatch: the extension is compared
+ * against what the service said, and before the first `info` it has said
+ * nothing.
+ */
+const VERSION_UNKNOWN = 'Loading...';
+
 let saved: {
     stats: Stats;
     version: string;
@@ -50,15 +59,44 @@ let saved: {
         scenes: 0,
         scenesInstantiated: 0,
     },
-    version: 'Loading...',
+    version: VERSION_UNKNOWN,
 };
+
+/**
+ * Whether the PartCAD the service reports is a different release from the one
+ * this extension was published with.
+ *
+ * `dev-tools/bumpversion.toml` moves `ide/vscode/package.json` along with every
+ * other version constant in the repository, so an extension and the PartCAD it
+ * shipped beside state the same string. Anything else means the two come from
+ * different releases -- and the JSON-RPC surface grows methods, so an older
+ * PartCAD answering a newer extension fails in whatever way the method it does
+ * not have happens to fail in. The context view is where that is visible before
+ * it is confusing, hence the red.
+ *
+ * Two non-answers are deliberately not mismatches: the placeholder above, and
+ * an extension version this build could not read at all -- neither is evidence
+ * of disagreement, and colouring them red would cry wolf on every start.
+ */
+export function versionsDiffer(partcadVersion?: string, extensionVersion?: string): boolean {
+    const reported = (partcadVersion ?? '').trim();
+    const expected = (extensionVersion ?? '').trim();
+    if (reported === '' || reported === VERSION_UNKNOWN || expected === '') {
+        return false;
+    }
+    return reported !== expected;
+}
 
 export class PartcadContext implements vscode.WebviewViewProvider {
     public static readonly viewType = 'partcadContext';
 
     private _view?: vscode.WebviewView;
 
-    constructor(private readonly _extensionUri: vscode.Uri) {}
+    constructor(
+        private readonly _extensionUri: vscode.Uri,
+        // The extension's own version, to compare what PartCAD reports against.
+        private readonly _extensionVersion: string,
+    ) {}
 
     public async setStats(stats: Stats, version: string) {
         console.log('setStats');
@@ -102,6 +140,19 @@ export class PartcadContext implements vscode.WebviewViewProvider {
         // Use a nonce to only allow a specific script to be run.
         const nonce = getNonce();
 
+        // A PartCAD that is not this extension's release is called out rather
+        // than merely stated: the number is in the view either way, and nobody
+        // compares it against an extension version they would have to go and
+        // look up. The title says what it is being compared against, because
+        // "this is wrong" without "and here is what was expected" is not
+        // actionable.
+        const mismatch = versionsDiffer(saved.version, this._extensionVersion);
+        const versionClass = mismatch ? 'version mismatch' : 'version';
+        const versionTitle = mismatch
+            ? ` title="PartCAD ${escapeHtml(saved.version)} does not match this extension` +
+              ` (${escapeHtml(this._extensionVersion)}). Update PartCAD, or install the matching extension."`
+            : '';
+
         return `<!DOCTYPE html>
 			<html lang="en">
 			<head>
@@ -125,7 +176,7 @@ export class PartcadContext implements vscode.WebviewViewProvider {
         <table>
         <tr>
         <td>PartCAD:</td>
-        <td id="version" class="version">${saved.version}</td>
+        <td id="version" class="${versionClass}"${versionTitle}>${escapeHtml(saved.version)}</td>
         </tr>
         <tr>
         <td>Package:</td>
@@ -168,6 +219,17 @@ export class PartcadContext implements vscode.WebviewViewProvider {
 			</body>
 			</html>`;
     }
+}
+
+/**
+ * Escape a value for HTML text or for a double-quoted attribute.
+ *
+ * The version arrives from the service rather than from this extension, and the
+ * title attribute above puts it inside quotes, where an unescaped one would end
+ * the attribute.
+ */
+function escapeHtml(value: string): string {
+    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function getNonce() {
