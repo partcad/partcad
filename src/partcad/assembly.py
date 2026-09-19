@@ -37,10 +37,24 @@ class AssemblyChild:
     placed with 'location:', and for assemblies built through 'add()'.
     """
 
-    def __init__(self, item, name=None, location=None, comment=None, how=None, connection=None, description=None):
+    def __init__(
+        self,
+        item,
+        name=None,
+        location=None,
+        comment=None,
+        how=None,
+        connection=None,
+        description=None,
+        located=False,
+    ):
         self.item = item
         self.name = name
         self.location = location
+        # Whether the ASSY file placed this item with 'location:'. Not the same
+        # as 'location is not None', which every item has once it is placed,
+        # connected or not.
+        self.located = located
         # The non-geometric half of the 'connect'/'connectPorts' section that
         # placed this child: free-form context ('comment') and the assembly
         # instructions ('how'). Both are None unless the child was connected.
@@ -285,7 +299,7 @@ class Assembly(Shape):
             problems.extend([(child.name, problem) for problem in child.how.problems])
         return problems
 
-    async def get_interference_async(self, ctx, min_volume=1.0, min_fraction=0.0):
+    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0):
         """The pairs of parts in this assembly whose solids share space.
 
         Returned as {"overlaps": [{"a", "b", "volume"}, ...], "unchecked": [...],
@@ -299,10 +313,10 @@ class Assembly(Shape):
         out is the only way the rest of the answer means anything - and a caller
         that was told nothing would take "no interference" for "checked".
 
-        'min_volume' and 'min_fraction' are what separates a design fault from a
-        design that fits together. Parts meant to go together touch, and meshed
-        geometry touching is numerically noisy, so an overlap smaller than this
-        is not reported.
+        'min_volume' is a floor under the arithmetic: two surfaces that merely
+        touch bound nothing, and a boolean over tessellated faces answers with a
+        sliver rather than with zero. It is not a place to hide an overlap that
+        is meant to be there.
         """
         obj = await self.get_wrapped(ctx)
         if obj is None:

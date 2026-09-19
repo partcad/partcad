@@ -26,6 +26,7 @@ from .manufacturability_subtractive import ManufacturabilitySubtractiveTest
 from .shell import ShellTest
 from .solidity import SolidityTest
 from .test import Test
+from .validity import ValidityTest
 
 _global_tests: list[Test] = []
 
@@ -64,6 +65,9 @@ def tests(concurrency_cap: int) -> list[Test]:
                 # parts those are is what makes the interference result mean
                 # anything.
                 SolidityTest(),
+                # Reports rather than fails: the parts it has most to say about
+                # are ones nothing is functionally wrong with.
+                ValidityTest(),
                 # Realizes the assembly and intersects the pairs whose boxes
                 # meet, so it is the most expensive of the geometry checks and
                 # goes after the ones that are nearly free.

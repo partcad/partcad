@@ -129,7 +129,7 @@ def test_render_assembly_readme():
     assert "| Part | Count | Description |" in lines
     assert "| bone | 2 | Plate used as one of the bones on PartCAD logo |" in lines
     assert "| head_half | 2 | Bracket used as one side of the head on PartCAD logo |" in lines
-    assert "| bolt | 1 | M8x30-screw |" in lines
+    assert "| bolt | 1 | M8x35-screw |" in lines
     # No sub-assembly of this assembly is an object of a package.
     assert "## Sub-Assemblies" not in lines
 

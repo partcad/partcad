@@ -597,7 +597,11 @@ def test_render_assembly_guide_refuses_a_non_manufacturable_assembly():
     prj = ctx.get_project("//produce_assembly_assy")
     output_dir = tempfile.mkdtemp()
 
+    # 'logo_embedded' rather than 'logo': the latter says it is manufacturable
+    # now, being four printed parts and a screw that anybody could put together.
+    # This one places its parts by coordinates and is the example of one nobody
+    # is meant to build.
     with pytest.raises(NotManufacturableError):
-        prj.render_assembly_guide("logo", "pdf", output_dir=output_dir)
+        prj.render_assembly_guide("logo_embedded", "pdf", output_dir=output_dir)
 
-    assert not os.path.exists(os.path.join(output_dir, "logo.pdf"))
+    assert not os.path.exists(os.path.join(output_dir, "logo_embedded.pdf"))

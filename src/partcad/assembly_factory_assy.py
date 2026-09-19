@@ -23,6 +23,23 @@ from .geom import Location
 
 
 @telemetry.instrument()
+def _as_names(value, where=""):
+    """One name, several names, or nothing, as a list either way.
+
+    Anything else is reported and read as nothing. A bare number is not a name
+    and is not iterable either, so taking it as given would end the whole
+    instantiation with a TypeError from inside a list comprehension.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [str(name) for name in value]
+    pc_logging.error("%s: 'interferes' must be a name or a list of them, ignoring: %r" % (where, value))
+    return []
+
+
 class AssemblyFactoryAssy(AssemblyFactoryFile):
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitASSY", source_project.name, config["name"]):
@@ -247,6 +264,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         connect_to_port = None
         connect_to_port_pattern = None
         # "location" is an optional parameter for both parts and assemblies
+        located = "location" in node
         if "location" in node:
             loc = node["location"]
             location = Location((loc[0][0], loc[0][1], loc[0][2]), (loc[1][0], loc[1][1], loc[1][2]), loc[2])
@@ -941,7 +959,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 )
 
         if item is not None:
-            return AssemblyChild(item, name, location, connect_comment, connect_how, connection, description)
+            return AssemblyChild(item, name, location, connect_comment, connect_how, connection, description, located)
         else:
             return None
 
@@ -981,6 +999,18 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             # values: number
             # default: half of the largest dimension of the two items
             "exploded": self._exploded_distance(connect.get("exploded", None), connect_to_name),
+            # option: "interferes"
+            # description: the other items this one also ends up sharing space
+            #              with as this connection is made. A screw is driven
+            #              into the part it is connected to and carries on
+            #              through the ones underneath, cutting its thread in
+            #              those as well; the connection is to one of them and
+            #              the interference is with all of them, and only the
+            #              connection knows which. Read by
+            #              'partcad.test.interference'.
+            # values: an item name, or a list of them
+            # default: none
+            "interferes": _as_names(connect.get("interferes", None), self.name),
         }
         if target_port is not None and target_part_location is not None:
             port_location = target_part_location * target_port.location
