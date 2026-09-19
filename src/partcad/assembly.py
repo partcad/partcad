@@ -299,7 +299,7 @@ class Assembly(Shape):
             problems.extend([(child.name, problem) for problem in child.how.problems])
         return problems
 
-    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0):
+    async def get_interference_async(self, ctx, min_volume=0.05):
         """The pairs of parts in this assembly whose solids share space.
 
         Returned as {"overlaps": [{"a", "b", "volume"}, ...], "unchecked": [...],
@@ -340,7 +340,6 @@ class Assembly(Shape):
                     # at one.
                     "assembly_json": shape_envelope.dumps(obj),
                     "min_volume": min_volume,
-                    "min_fraction": min_fraction,
                 }
             )
 

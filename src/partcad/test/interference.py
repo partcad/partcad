@@ -75,10 +75,9 @@ class InterferenceTest(Test):
 
     async def cache_key_suffix(self, ctx, shape) -> str:
         config = (shape.config or {}).get("interference") or {}
-        return ",skip=%s,minVolume=%s,minFraction=%s" % (
+        return ",skip=%s,minVolume=%s" % (
             bool(config.get("skip", False)),
             config.get("minVolume", DEFAULT_MIN_VOLUME),
-            config.get("minFraction", 0.0),
         )
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
@@ -95,7 +94,6 @@ class InterferenceTest(Test):
             result = await shape.get_interference_async(
                 ctx,
                 min_volume=float(config.get("minVolume", DEFAULT_MIN_VOLUME)),
-                min_fraction=float(config.get("minFraction", 0.0)),
             )
         except Exception as e:
             # Not a pass. An assembly that will not realize returns None below

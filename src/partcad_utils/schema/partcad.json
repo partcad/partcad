@@ -751,12 +751,6 @@
           "description": "Shared volume, in mm^3, below which an overlap is not reported. A rounding tolerance and nothing else: the default of 0.05 is orders of magnitude below any overlap a person would call one, and above the noise of two surfaces that meet exactly.",
           "type": "number",
           "minimum": 0
-        },
-        "minFraction": {
-          "description": "The same floor expressed as a share of the smaller of the two parts, for assemblies whose parts differ enormously in size. An overlap has to clear both.",
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
         }
       },
       "additionalProperties": false

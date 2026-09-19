@@ -121,7 +121,6 @@ def process(path, request):
         # instead of zero; this is above that noise and far below any overlap
         # worth the name.
         min_volume = float(request.get("min_volume", 0.05))
-        min_fraction = float(request.get("min_fraction", 0.0))
 
         # The root's own name is on every part below it and says nothing, so
         # the paths are built from its children down: 'gearbox/shaft', not
@@ -181,10 +180,6 @@ def process(path, request):
                 continue
             if volume < min_volume:
                 continue
-            if min_fraction > 0.0:
-                smaller = min(_volume(shape_a), _volume(shape_b))
-                if smaller > 0.0 and volume / smaller < min_fraction:
-                    continue
             overlaps.append({"a": name_a, "b": name_b, "volume": volume})
 
         overlaps.sort(key=lambda o: -o["volume"])

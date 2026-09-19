@@ -46,10 +46,10 @@ class _Shape:
             raise self._raises
         return self._box
 
-    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0):
+    async def get_interference_async(self, ctx, min_volume=0.05):
         if self._raises:
             raise self._raises
-        self.asked_with = (min_volume, min_fraction)
+        self.asked_with = min_volume
         if self._overlaps is None:
             return None
         return {
@@ -159,9 +159,9 @@ def test_a_part_is_not_checked_against_itself_or_anything_else():
 def test_the_thresholds_reach_the_measurement():
     """They are what separates a design fault from a design that fits together,
     so a package that sets them has to have them honoured."""
-    shape = _Assembly(config={"interference": {"minVolume": 0.5, "minFraction": 0.01}}, overlaps=[])
+    shape = _Assembly(config={"interference": {"minVolume": 0.5}}, overlaps=[])
     _run(InterferenceTest(), shape)
-    assert shape.asked_with == (0.5, 0.01)
+    assert shape.asked_with == 0.5
 
 
 def test_a_pair_meant_to_interfere_is_not_declared_against_the_pair():
@@ -220,8 +220,8 @@ def test_the_cache_key_moves_when_the_thresholds_do():
     loose = asyncio.run(test.cache_key_suffix(None, _Assembly(config={"interference": {"minVolume": 1.0}})))
     strict = asyncio.run(test.cache_key_suffix(None, _Assembly(config={"interference": {"minVolume": 0.1}})))
     assert loose != strict
-    fraction = asyncio.run(test.cache_key_suffix(None, _Assembly(config={"interference": {"minFraction": 0.01}})))
-    assert fraction != asyncio.run(test.cache_key_suffix(None, _Assembly()))
+    skipped = asyncio.run(test.cache_key_suffix(None, _Assembly(config={"interference": {"skip": True}})))
+    assert skipped != asyncio.run(test.cache_key_suffix(None, _Assembly()))
 
 
 # --- the request the core sends the wrapper ---------------------------------
@@ -400,13 +400,13 @@ def test_the_default_floor_is_there_for_arithmetic_and_nothing_else():
 
     shape = _Assembly(overlaps=[])
     _run(InterferenceTest(), shape)
-    assert shape.asked_with[0] == DEFAULT_MIN_VOLUME
+    assert shape.asked_with == DEFAULT_MIN_VOLUME
 
 
 def test_an_assembly_may_ask_for_a_tighter_floor():
     shape = _Assembly(config={"interference": {"minVolume": 0.001}}, overlaps=[])
     _run(InterferenceTest(), shape)
-    assert shape.asked_with[0] == 0.001
+    assert shape.asked_with == 0.001
 
 
 # --- an overlap the joint requires -------------------------------------------
