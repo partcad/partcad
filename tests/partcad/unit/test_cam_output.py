@@ -606,3 +606,57 @@ def test_an_unreadable_machine_keys_on_its_own_error(package):
     confused = asyncio.run(check.cache_key_suffix(package, _part(package, "two_machines")))
     burned = asyncio.run(check.cache_key_suffix(package, _part(package, "burned")))
     assert confused and confused != burned
+
+
+def test_two_alternatives_written_into_one_directory_get_two_files(package, tmp_path, monkeypatch):
+    """`-O routes` must not resolve both machines to one path.
+
+    `cam_getopts()` reads an existing directory as the *output directory* and
+    derives the filename from the object -- the same filename whichever machine
+    was asked for. So a suffix applied only when no path was given at all left
+    `pc cam -O routes -m laser` and `-m cnc` pointing at one file, and since a
+    route deletes the path before writing it, the second one silently replaced
+    the first while the run reported two.
+
+    Stopped at the point the path is settled: what is under test is the name,
+    and running the implementation would need a sandbox this test has no use for.
+    """
+    part = _part(package, "two_machines")
+    seen = []
+
+    def _record(path, name):
+        seen.append(path)
+        raise RuntimeError("stop here")
+
+    monkeypatch.setattr(package, "ensure_dirs_for_file", _record)
+    target = tmp_path / "routes"
+    target.mkdir()
+
+    for machine in ("laser", "drill"):
+        with pytest.raises(Exception):
+            asyncio.run(part.route_async(package, filepath=str(target), machine=machine))
+
+    assert [os.path.basename(path) for path in seen] == ["two_machines.laser.nc", "two_machines.drill.nc"]
+    assert len(set(seen)) == 2
+
+
+def test_a_path_the_caller_named_is_the_path_it_gets(package, tmp_path, monkeypatch):
+    """The other side of it: a file named explicitly is not renamed under the caller.
+
+    `-O` names a directory and PartCAD chooses the filename in it; a `filepath`
+    naming a *file* is the caller having chosen already, and a machine suffix
+    there would be PartCAD overruling them.
+    """
+    part = _part(package, "two_machines")
+    seen = []
+
+    def _record(path, name):
+        seen.append(path)
+        raise RuntimeError("stop here")
+
+    monkeypatch.setattr(package, "ensure_dirs_for_file", _record)
+    named = str(tmp_path / "whatever.nc")
+
+    with pytest.raises(Exception):
+        asyncio.run(part.route_async(package, filepath=named, machine="laser"))
+    assert seen == [named]
