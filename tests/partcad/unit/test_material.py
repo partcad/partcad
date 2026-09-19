@@ -203,3 +203,80 @@ def test_matches_finds_a_material_by_name_and_by_content(root):
     assert pla.matches("Polylactic")
     assert not pla.matches("titanium")
     assert not pla.matches("")
+
+
+#
+# What a shape made of it reports
+#
+# 'properties.material' is a name, and a name is all the configuration 'pc info'
+# prints beside this can show. These are about the other half: resolving that
+# name so that the answer carries the density a mass came from, the friction a
+# simulation used, and what the substance is good and bad at.
+#
+
+
+def _shape(package, properties=None):
+    """A shape with nothing behind it but its configuration.
+
+    'shape_info' builds the shape before reporting on it and there is no
+    geometry here to build - what is under test is read from the configuration,
+    which is where a material is recorded and where it is recorded before
+    anything is built.
+    """
+    config = {"name": "bracket"}
+    if properties is not None:
+        config["properties"] = properties
+    shape = Shape(package, config)
+
+    async def nothing(_ctx=None):
+        return None
+
+    shape.get_wrapped = nothing
+    return shape
+
+
+def test_a_shape_reports_what_it_is_made_of(ctx, root):
+    info = _shape(root.name, {"material": ":pla"}).shape_info(ctx)
+    material = info["Material"]
+    assert material["Formal"] == "PLA"
+    assert material["Full"] == "Polylactic Acid"
+    # Both units, the same way 'pc info' on the material itself reports them.
+    assert "0.00132 g/mm^3" in material["Density"]
+    assert "1.32 g/cm^3" in material["Density"]
+    assert material["Mu"] == "0.35"
+    assert material["Tags"] == "low-cost, biodegradable"
+
+
+def test_a_shape_that_names_no_material_reports_none(ctx, root):
+    # The ordinary case, and not a mistake: most parts say nothing.
+    assert "Material" not in _shape(root.name, {"color": "#8899AA"}).shape_info(ctx)
+    assert "Material" not in _shape(root.name).shape_info(ctx)
+
+
+def test_a_material_nothing_answers_to_is_reported_as_it_was_written(ctx, root):
+    # Not dropped: an unresolved reference is the most useful thing that can be
+    # said about what this is made of, and the reason no mass came from it.
+    info = _shape(root.name, {"material": "//nonesuch:unobtainium"}).shape_info(ctx)
+    assert info["Material"]["Name"] == "//nonesuch:unobtainium"
+    assert info["Material"]["Errors"]
+
+
+def test_the_reference_is_resolved_against_the_package_that_wrote_it(ctx, root):
+    # ':pla' means "in my own package", and whose package that is is a fact
+    # about the shape rather than about the string.
+    assert _shape(root.name, {"material": ":pla"}).get_material(ctx).name == "pla"
+    assert _shape(root.name, {"material": "//:abs"}).get_material(ctx).name == "abs"
+
+
+def test_the_material_reference_is_what_the_shape_wrote(root):
+    assert _shape(root.name, {"material": ":pla"}).material_reference() == ":pla"
+    assert _shape(root.name, {"material": ""}).material_reference() is None
+    assert _shape(root.name, {"color": "#8899AA"}).material_reference() is None
+    assert _shape(root.name).material_reference() is None
+
+
+def test_resolving_a_material_needs_a_context_and_a_reference(ctx, root):
+    # No context to look it up in, and nothing to look up: both are None rather
+    # than an error, because both are ordinary.
+    assert _shape(root.name, {"material": ":pla"}).get_material(None) is None
+    assert _shape(root.name).get_material(ctx) is None

@@ -3228,6 +3228,29 @@ part in one package names a material catalogued in another:
 List what a package catalogues with ``pc list materials`` (and ``-r`` to walk
 the packages it imports).
 
+Standard catalogues
+-------------------
+
+The PartCAD index publishes two families of standard materials, so that a part
+made of something ordinary need not restate any of the above:
+
+- ``//pub/std/manufacturing/material/plastic`` -- polymers: the commodity and
+  printable thermoplastics (``pla``, ``abs``, ``asa``, ``petg``, ``pc``), the
+  engineering ones (``nylon``, ``pa12``, ``pa66-gf30``, ``pom``, ``uhmwpe``),
+  the high-performance ones (``ptfe``, ``peek``, ``pei``, ``pps``), the
+  polymer-matrix composites (``cfrp``, ``gfrp``) and the elastomers (``tpu``,
+  ``nr``, ``nbr``, ``epdm``, ``fkm``, ``silicone``).
+
+- ``//pub/std/manufacturing/material/metal`` -- metals and alloys, named by
+  their standard designation and temper: ``al-5052-h32``, ``al-6061-t6``,
+  ``al-7075-t6``, ``steel-4130``, ``ss-316l``, ``ti-6al-4v``, ``inconel-718``
+  and the rest of what robotics, aviation and automotive parts are made of.
+
+An alloy is named ``<metal>-<designation>-<temper>`` rather than by the bare
+designation for two reasons: ``5052:`` in YAML is the *number* 5052 rather than
+a name, and a temper is part of what was ordered -- 6061-T6 and 6061-O are one
+alloy and not one material to build out of.
+
 .. _software:
 
 ========
