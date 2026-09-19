@@ -20,7 +20,7 @@ Feature: `pc cam` command
   # that needs a real route in one go: several `When I run` steps against one
   # prepared package share the sandbox the first one paid for.
   @success @pc-cam @pc-cam-route
-  Scenario: A part that declares `cam:` is routed, and one that does not is passed over
+  Scenario: A part that says how it is cut is routed, and one that does not is passed over
     Given a file named "partcad.yaml" with content:
       """
       parts:
@@ -85,7 +85,7 @@ Feature: `pc cam` command
     # asking about it -- unlike the silence it earns in a whole-package run.
     When I run "pc --no-ansi cam --json :spacer"
     Then the command should exit with a status code of "1"
-    And STDERR should contain "declares no 'cam:' section"
+    And STDERR should contain "says nothing about being cut"
     # And the array is printed even so. A failure must not swallow the record of
     # what *was* produced -- here there is nothing, but the same path carries
     # the nineteen routes that worked when the twentieth object is misconfigured.
@@ -105,7 +105,7 @@ Feature: `pc cam` command
   # read costs nothing at all. That is what makes them cheap enough to have.
 
   @success @pc-cam
-  Scenario: A package where nothing declares `cam:` says so rather than saying nothing
+  Scenario: A package where nothing says how it is made says so rather than saying nothing
     Given a file named "partcad.yaml" with content:
       """
       parts:
@@ -127,7 +127,7 @@ Feature: `pc cam` command
     Then the command should exit with a status code of "0"
     # Saying nothing would look exactly like a route that went somewhere the
     # user did not notice.
-    And STDERR should contain "declares a 'cam:' section, so no route was produced"
+    And STDERR should contain "declares how it is made, so no route was produced"
 
   @success @pc-cam
   Scenario: A value that cannot be read as a length is refused, by object and by key
@@ -160,7 +160,7 @@ Feature: `pc cam` command
     Then the command should exit with a status code of "1"
     # Named, because a run over a package prints one line per object and a
     # sentence with no address on it is one nobody can act on.
-    And STDERR should contain ":panel: 'cam: tool:' is not a length"
+    And STDERR should contain ":panel: 'cnc: diameter:' is not a length"
 
   @success @pc-cam
   Scenario: A key that is not a job parameter is refused rather than ignored
@@ -194,7 +194,7 @@ Feature: `pc cam` command
     Then the command should exit with a status code of "1"
     # A closed set of keys is what turns a typo into a sentence instead of a
     # route cut to a default nobody chose.
-    And STDERR should contain "'cam:' does not take toool"
+    And STDERR should contain "'cnc:' does not take toool"
 
   @success @pc-cam
   Scenario: An implementation nothing declares is a configuration to correct
@@ -229,7 +229,7 @@ Feature: `pc cam` command
     And STDERR should contain "The package implementing 'cam' is not found"
 
   @success @pc-cam @pc-test
-  Scenario: `pc test -f cam` is the route check and applies only where `cam:` is declared
+  Scenario: `pc test -f cam` is the route check and applies only where a cut is declared
     # The check that used to answer to this name is `manufacturability` now.
     # This one produces the route and sees whether one comes back, so a package
     # that declares no `cam:` anywhere pays nothing for it -- which is what this
@@ -261,4 +261,4 @@ Feature: `pc cam` command
       """
     When I run "pc --no-ansi test -f cam"
     Then the command should exit with a status code of "1"
-    And STDERR should contain "cam: 'cam:' does not take toool"
+    And STDERR should contain "cam: 'cnc:' does not take toool"

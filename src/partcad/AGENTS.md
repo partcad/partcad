@@ -257,7 +257,7 @@ at all).
   the fixtures in this tree that carried `subtractive` as scaffolding were moved to `additive` rather than
   given a stock they do not have -- see the note at the top of each.
 
-  The **machine** is named by adding its own subsection -- `cnc:`, `drilling:` or `laser:` -- rather than by a
+  The **machine** is named by adding its own subsection -- `cnc:`, `drill:` or `laser:` -- rather than by a
   `machine:` key, because the three do not take the same options and one namespace would leave nothing to say
   which belongs to which. None of them is CNC: the machine that can make anything the other two can, and what
   every `subtractive` part written before this meant. **Several of them is legal, and they are alternatives** --

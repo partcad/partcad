@@ -524,12 +524,13 @@ def normalize_job(parameters: dict) -> dict:
     PartCAD has never heard of -- travels untouched, which is what keeps a
     parameter an implementation invented from having to be known here.
 
-    What it deliberately does *not* do is require anything. `tool:` is needed by
-    every implementation PartCAD ships and refused by `//builtin/cam` where it
-    is missing, but "a route needs a cutter diameter" is a statement about that
-    implementation rather than about the concept: PartCAD does not know what the
-    next one cuts with, and a requirement here would be PartCAD answering on its
-    behalf.
+    What it deliberately does *not* do is require anything. `diameter:` is
+    needed by the router and the drill `//builtin/cam` ships and refused by it
+    where it is missing, but "a route needs a cutter diameter" is a statement
+    about that implementation rather than about the concept -- the laser beside
+    them cuts with a beam, which has a `kerf:` and no diameter at all. PartCAD
+    does not know what the next one cuts with, and a requirement here would be
+    PartCAD answering on its behalf.
 
     Raises:
         CamConfigError: a value that cannot be read as the kind of number its
@@ -616,15 +617,25 @@ def declared_config(shape, machine: Optional[str] = None) -> Optional[dict]:
     section while it is still deciding what to visit.
 
     Raises:
-        CamConfigError: the part names several machines and none was chosen, or
-            the one chosen is not among them. Neither is answerable here: a
-            default nobody picked is a program for the wrong machine.
+        CamConfigError: the section could not be read, the part names several
+            machines and none was chosen, or the one chosen is not among them.
+            None of the three is answerable here: a default nobody picked is a
+            program for the wrong machine.
     """
     from .part_config import PartConfiguration
 
     data = PartConfiguration.get_manufacturing_data(shape)
     if data is None:
         return None
+
+    if data.machine_error:
+        # Before anything else, because a section that could not be read leaves
+        # no machine behind and no job -- which is indistinguishable from the
+        # part that declared neither, and that one is skipped in silence. So a
+        # `cnc:` with a typo in it would be passed over rather than reported,
+        # and the user would be told their part says nothing about being cut
+        # while looking straight at the subsection saying how it is.
+        raise CamConfigError(data.machine_error)
 
     chosen = None
     if machine is not None:

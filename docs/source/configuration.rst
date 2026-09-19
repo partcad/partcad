@@ -2235,14 +2235,23 @@ adding its own subsection:
 | ``laser:``     | A laser cutter. Its beam does not tilt, so every wall it   |
 |                | makes is parallel to the axis it fires along.              |
 +----------------+------------------------------------------------------------+
-| ``drilling:``  | A drilling machine. It goes in and comes out, so the only  |
+| ``drill:``     | A drilling machine. It goes in and comes out, so the only  |
 |                | thing it makes is a **round** hole along its own axis.     |
 +----------------+------------------------------------------------------------+
 
 Naming none of them means CNC. That is the machine that can make anything the
 other two can, so it is the answer that is never wrong -- and it is what every
-``subtractive`` part written before machines could be named already meant. Only
-one may be named.
+``subtractive`` part written before machines could be named already meant.
+
+**Several may be named, and they are alternatives rather than stages.** A part
+that declares both ``laser:`` and ``cnc:`` is claiming it could be made either
+way, and ``pc test`` answers for both claims. ``pc cam`` then has to be told
+which one to write for -- ``pc cam -m laser :gasket`` -- because a default
+nobody picked is a program for the wrong machine; the file it writes is named
+after the machine (``gasket.laser.nc``), so the alternatives land beside each
+other rather than one overwriting the other. A part that really is machined in
+*stages* is not this: it is a chain of parts, each naming the previous one as
+its ``source``.
 
 Every machine takes a ``toolAxis``, which is the axis the tool, the beam or the
 drill approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``

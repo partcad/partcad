@@ -2141,7 +2141,8 @@ class Shape(ShapeConfiguration):
         this is not a `debug` line. `_read_machines` records such a declaration
         in `machine_error` and keeps no machine, which is indistinguishable here
         from the part that simply named none -- and a part that named none
-        routes as CNC. So a part whose `laser:` subsection has a typo in it
+        routes as CNC. (`cam.declared_config` refuses first for the same reason,
+        which makes this the backstop; the sentence is the same either way.) So a part whose `laser:` subsection has a typo in it
         would be handed a *router* program, silently. `pc test` reporting it too
         is not enough, because nothing makes `pc cam` wait for `pc test`.
         """
@@ -2157,7 +2158,11 @@ class Shape(ShapeConfiguration):
             raise pc_cam.CamConfigError("the 'manufacturing:' section could not be read: %s" % e) from e
         machine_error = getattr(manufacturing_data, "machine_error", None)
         if machine_error:
-            raise pc_cam.CamConfigError("the 'manufacturing:' section says %s" % machine_error)
+            # A backstop rather than the refusal a user meets: `declared_config`
+            # reads the same field and raises first, on every path that reaches
+            # here. Verbatim and not wrapped, so that the one fault reads as one
+            # sentence whichever of the two spoke it.
+            raise pc_cam.CamConfigError(machine_error)
 
         chosen = manufacturing_data.machine_named(machine) if machine else manufacturing_data.machine
         if chosen is None:
@@ -2197,11 +2202,18 @@ class Shape(ShapeConfiguration):
         """
         with pc_logging.Action("CAM", self.project_name, self.name):
             impl, final_filepath = self.cam_getopts(ctx, format_name, project, filepath, options_project, output_dir)
-            if machine is not None and filepath is None:
+            if machine is not None and (filepath is None or os.path.isdir(filepath)):
                 # 'panel.laser.nc' beside 'panel.drill.nc'. Only when a machine
                 # was chosen, which only happens when the part offered more than
                 # one -- so an object with a single machine keeps the name it
                 # has always had, and a caller that named a path gets that path.
+                #
+                # A directory is not naming a path: 'cam_getopts' has just read
+                # it as the *output_dir* and derived the filename from the
+                # object, which is the same filename for every machine. Asking
+                # the same question it asked is what keeps two alternatives from
+                # resolving to one file -- where the second route deletes the
+                # first before writing itself, and the run reports two.
                 root, extension = os.path.splitext(final_filepath)
                 final_filepath = "%s.%s%s" % (root, machine, extension)
             final_filepath = os.path.abspath(final_filepath)

@@ -16,9 +16,17 @@ Each part's route is written for the machine it declares -- the same file
 type, three different programs:
 
 ```shell
-pc cam -O ./routes blank          # a laser: one pass, kerf offset, M3/M5
-pc cam -O ./routes bearing_block  # a router: contours at stepped depths
-pc cam -O ./routes drilled_plate  # a drill: plunge and retract, per hole
+pc cam -O ./routes blank             # a laser: one pass, kerf offset, M3/M5
+pc cam -O ./routes bearing_block     # a router: contours at stepped depths
+pc cam -O ./routes drilled_plate     # a drill: plunge and retract, per hole
+```
+
+`gasket` says it could be cut either way, so it is asked which -- and the
+two programs land beside each other rather than one overwriting the other:
+
+```shell
+pc cam -O ./routes -m laser gasket   # writes gasket.laser.nc
+pc cam -O ./routes -m cnc gasket     # writes gasket.cnc.nc
 ```
 
 
@@ -27,7 +35,7 @@ pc cam -O ./routes drilled_plate  # a drill: plunge and retract, per hole
 ### bearing_block
 <table><tr>
 <td valign=top><a href="bearing_block.py"><img src="././bearing_block.svg" alt="bearing_block" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
-<td valign=top>What a router does that the other two cannot: a pocket with a flat floor partway down, and a chamfer around the top edge. The chamfer is a wall at 45 degrees to the tool axis, which no beam and no drill produces -- so this part declares `cnc:`, and the laser check does not apply to it.
+<td valign=top>What a router does that the other two cannot: a pocket with a flat floor partway down, and a chamfer around the top edge. The chamfer is a wall at 45 degrees to the tool axis, which no beam and no drill produces -- so this part declares `cnc:` alone, and the laser check does not apply to it.
 </td>
 <td valign=top>Parameters:<br/><ul>
 <li>tolerance: 0.1</li>
@@ -60,7 +68,8 @@ pc cam -O ./routes drilled_plate  # a drill: plunge and retract, per hole
 ### gasket
 <table><tr>
 <td valign=top><a href="gasket.py"><img src="././gasket.svg" alt="gasket" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
-<td valign=top>A laser part with features in it -- a rounded outline, a bore and six bolt holes -- all of them walls the beam can make. Curves cost a laser nothing; what it cannot do is tilt, which is what the chamfer on `bearing_block` needs.
+<td valign=top>A part with features in it -- a rounded outline, a bore and six bolt holes -- all of them walls a beam can make. Curves cost a laser nothing; what it cannot do is tilt, which is what the chamfer on `bearing_block` needs.
+It is also the one part here that says it could be made *either* way. Those are alternatives rather than stages -- `pc cam -m laser gasket` and `pc cam -m cnc gasket` are two programs for the same part, and `pc test` answers for both claims. A part that really is machined in stages is a chain of parts, each naming the previous as its `source`.
 </td>
 <td valign=top>Parameters:<br/><ul>
 <li>tolerance: 0.1</li>

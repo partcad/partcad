@@ -2353,16 +2353,16 @@ def cam_route(session, params):
         if not results and not failures and not object_name:
             # Nothing was wrong and nothing was produced, which is a real answer
             # and one a user acting on an empty command line needs said out
-            # loud: `pc cam` in a package where nothing declares a `cam:`
-            # section otherwise looks exactly like a route that went somewhere
-            # the user did not notice.
+            # loud: `pc cam` in a package where nothing says how it is made
+            # otherwise looks exactly like a route that went somewhere the user
+            # did not notice.
             #
             # Only where no object was named. A name that resolved to nothing
             # has already been reported as the object it is -- which is what the
-            # user typed -- and saying that the package declares no `cam:`
-            # section on top of it answers a question nobody asked, about a
-            # package that may be full of them.
-            pc.logging.info("Nothing in %s declares a 'cam:' section, so no route was produced" % package)
+            # user typed -- and saying that the package declares no
+            # `manufacturing:` section on top of it answers a question nobody
+            # asked, about a package that may be full of them.
+            pc.logging.info("Nothing in %s declares how it is made, so no route was produced" % package)
 
     # The routes that were produced are returned whether or not others failed,
     # and the failure travels beside them as a name rather than as an exception.

@@ -104,7 +104,7 @@ def test_the_job_arrives_as_numbers_whatever_it_was_written_as():
     config = cam.CamConfig(
         {
             "operation": "Profile",
-            "tool": "0.25 in",
+            "diameter": "0.25 in",
             "depth": "18 mm",
             "feed": "60 in/min",
             "speed": "18000 rpm",
@@ -113,7 +113,7 @@ def test_the_job_arrives_as_numbers_whatever_it_was_written_as():
     assert config.operation == cam.PROFILE
     assert config.to_data() == {
         "operation": "profile",
-        "tool": pytest.approx(6.35),
+        "diameter": pytest.approx(6.35),
         "depth": pytest.approx(18.0),
         "feed": pytest.approx(1524.0),
         "speed": pytest.approx(18000.0),
@@ -125,11 +125,11 @@ def test_what_the_object_did_not_say_is_absent_rather_than_defaulted():
 
     This is the whole reason `to_data()` carries only what was declared: a
     package that set a feed for all of its parts under `cam: gcode:` must keep
-    answering for the part that named only a tool. A default written in here
+    answering for the part that named only a diameter. A default written in here
     would silently outrank it, because the object is the topmost layer.
     """
-    data = cam.CamConfig({"tool": 6}).to_data()
-    assert data == {"tool": 6.0}
+    data = cam.CamConfig({"diameter": 6}).to_data()
+    assert data == {"diameter": 6.0}
     assert "feed" not in data
     assert "operation" not in data
 
@@ -137,13 +137,17 @@ def test_what_the_object_did_not_say_is_absent_rather_than_defaulted():
 def test_a_key_that_is_not_a_job_parameter_is_refused():
     """A closed set, so a typo cannot be read as a file-type declaration.
 
-    An object's `cam:` and a package's `cam:` are the same word for two layers
-    of one namespace (see the module docstring of `partcad.cam`). What keeps
-    that unambiguous is this: an object's section holds job parameters and
-    nothing else, so `gcode:` under an object is a mistake with a sentence
-    rather than an implementation nobody asked for.
+    An object declares its job under `manufacturing:` and a package declares
+    who implements one under `cam:` (see the module docstring of `partcad.cam`).
+    What keeps the job side unambiguous is this: it holds job parameters and
+    nothing else, so `gcode:` among them is a mistake with a sentence rather
+    than an implementation nobody asked for.
     """
-    for section in ({"tool": 6, "toool": 3}, {"tool": 6, "gcode": {"path": "x.py"}}, {"tool": 6, "output_dir": "."}):
+    for section in (
+        {"diameter": 6, "toool": 3},
+        {"diameter": 6, "gcode": {"path": "x.py"}},
+        {"diameter": 6, "output_dir": "."},
+    ):
         with pytest.raises(cam.CamConfigError) as raised:
             cam.CamConfig(section)
         assert "does not take" in str(raised.value)
@@ -153,7 +157,7 @@ def test_an_empty_section_is_refused():
     """Opting in and then describing no route is a cut nobody chose.
 
     The file type's defaults could cover it, and that is exactly the reading to
-    refuse -- there is no default tool, and there must not be.
+    refuse -- there is no default cutter diameter, and there must not be.
     """
     for section in ({}, None, "profile", []):
         with pytest.raises(cam.CamConfigError):
@@ -162,20 +166,20 @@ def test_an_empty_section_is_refused():
 
 def test_an_operation_nobody_implements_is_refused():
     with pytest.raises(cam.CamConfigError) as raised:
-        cam.CamConfig({"tool": 6, "operation": "turning"})
+        cam.CamConfig({"diameter": 6, "operation": "turning"})
     assert "profile" in str(raised.value)
 
 
-def test_a_stepover_wider_than_the_tool_is_refused():
+def test_a_stepover_wider_than_the_cutter_is_refused():
     """It parses, it runs, and it leaves a ridge nobody sees until the machine."""
     with pytest.raises(cam.CamConfigError):
-        cam.CamConfig({"tool": 6, "stepover": 1.5})
-    assert cam.CamConfig({"tool": 6, "stepover": 1}).to_data()["stepover"] == pytest.approx(1.0)
+        cam.CamConfig({"diameter": 6, "stepover": 1.5})
+    assert cam.CamConfig({"diameter": 6, "stepover": 1}).to_data()["stepover"] == pytest.approx(1.0)
 
 
 def test_the_implementation_is_carried_but_is_not_a_parameter():
     """Who runs it is acted on before anything is handed over, so it does not travel."""
-    config = cam.CamConfig({"tool": 6, "implementation": " some/package:gcode ", "desc": "the lid"})
+    config = cam.CamConfig({"diameter": 6, "implementation": " some/package:gcode ", "desc": "the lid"})
     assert config.implementation == "some/package:gcode"
     assert config.desc == "the lid"
     assert "implementation" not in config.to_data()
@@ -207,12 +211,24 @@ def test_an_object_with_no_section_is_not_an_error():
     assert cam.declared_config(_Shape({"type": "step"})) is None
 
 
-def test_an_object_with_a_broken_section_is_an_error_only_once_it_is_read():
-    """Deciding what to visit must not raise on a neighbour's broken section."""
-    shape = _Shape({"cam": {"toool": 6}})
-    assert cam.declared_config(shape) == {"toool": 6}
-    with pytest.raises(cam.CamConfigError):
-        cam.config_of(shape)
+def test_an_object_with_a_broken_section_is_visited_and_then_refused():
+    """Deciding what to visit must not judge, and reading it must not fall back.
+
+    Two questions of one broken section, and they need opposite answers.
+    `declares_job` draws up the list `pc cam` will walk, so a `cnc:` with a typo
+    in it has to be *on* that list -- an object nobody visits is an object nobody
+    reports. `declared_config` is the read that precedes writing a file, and
+    there it has to refuse: a section that could not be read leaves no machine
+    behind, which is indistinguishable from the part that named none, and that
+    one routes as CNC. So swallowing it hands a router program to a part whose
+    `laser:` had a typo in it.
+    """
+    shape = _Shape({"manufacturing": {"method": "subtractive", "source": "blank", "cnc": {"toool": 6}}})
+    assert cam.declares_job(shape) is True
+    for read in (cam.declared_config, cam.config_of):
+        with pytest.raises(cam.CamConfigError) as raised:
+            read(shape)
+        assert "does not take toool" in str(raised.value)
 
 
 # --------------------------------------------------------------------------- #
@@ -247,19 +263,20 @@ def test_every_layer_is_converted_and_not_just_the_object():
     assert normalized["something_a_plugin_invented"] == "6 mm"
 
 
-def test_the_merged_job_is_not_required_to_name_a_tool():
+def test_the_merged_job_is_not_required_to_name_a_diameter():
     """ "A route needs a cutter diameter" is the implementation's statement, not PartCAD's.
 
-    `//builtin/cam` refuses a request with no `tool`, and says where to set it.
-    Requiring it here would be PartCAD answering on behalf of an implementation
-    it has never seen -- the next one may cut with a beam.
+    `//builtin/cam` refuses a CNC request with no `diameter`, and says where to
+    set it. Requiring it here would be PartCAD answering on behalf of an
+    implementation it has never seen -- and the laser beside it cuts with a beam,
+    which has a kerf and no diameter at all.
     """
-    assert "tool" not in cam.normalize_job({"feed": 1200})
+    assert "diameter" not in cam.normalize_job({"feed": 1200})
 
 
 def test_normalizing_is_idempotent():
     """The object's own values are already numbers by the time they get here."""
-    once = cam.normalize_job({"tool": "6 mm", "feed": "20 mm/s"})
+    once = cam.normalize_job({"diameter": "6 mm", "feed": "20 mm/s"})
     assert cam.normalize_job(once) == once
 
 
@@ -278,10 +295,10 @@ def test_the_stepover_bound_holds_at_every_layer():
     parsed the number.
     """
     with pytest.raises(cam.CamConfigError) as raised:
-        cam.normalize_job({"tool": 6, "stepover": 1.5})
+        cam.normalize_job({"diameter": 6, "stepover": 1.5})
     assert "cannot exceed 1" in str(raised.value)
     # The bound, not the parse: 1 is the largest stepover that means anything.
-    assert cam.normalize_job({"tool": 6, "stepover": 1})["stepover"] == pytest.approx(1.0)
+    assert cam.normalize_job({"diameter": 6, "stepover": 1})["stepover"] == pytest.approx(1.0)
 
 
 def test_direction_is_a_job_key_and_not_a_file_setting():
@@ -292,7 +309,7 @@ def test_direction_is_a_job_key_and_not_a_file_setting():
     than with `units:` and `precision:`, which describe the file.
     """
     assert "direction" in cam.KEYS
-    config = cam.CamConfig({"tool": 6, "direction": "Conventional"})
+    config = cam.CamConfig({"diameter": 6, "direction": "Conventional"})
     assert config.direction == cam.CONVENTIONAL
     assert config.to_data()["direction"] == "conventional"
     # And at every layer, like the operation beside it.
@@ -301,7 +318,7 @@ def test_direction_is_a_job_key_and_not_a_file_setting():
 
 def test_a_direction_nobody_mills_in_is_refused_at_every_layer():
     for section in (
-        lambda: cam.CamConfig({"tool": 6, "direction": "sideways"}),
+        lambda: cam.CamConfig({"diameter": 6, "direction": "sideways"}),
         lambda: cam.normalize_job({"direction": "sideways"}),
     ):
         with pytest.raises(cam.CamConfigError) as raised:
@@ -319,7 +336,7 @@ def test_what_describes_the_file_is_not_an_object_key():
     for key in ("units", "precision", "tolerance", "comments"):
         assert key not in cam.KEYS
         with pytest.raises(cam.CamConfigError):
-            cam.CamConfig({"tool": 6, key: "whatever"})
+            cam.CamConfig({"diameter": 6, key: "whatever"})
         # They still reach the implementation untouched from the layers that may
         # set them -- `normalize_job` converts what it knows and carries the rest.
         assert cam.normalize_job({key: "whatever"})[key] == "whatever"

@@ -230,7 +230,13 @@ class MachineConfig:
         self.declared = declared
         self.options = dict(config or {})
         self.tool_axis = str(self.options.pop("toolAxis", None) or DEFAULT_TOOL_AXIS)
-        self.vector = tool_axis_vector(self.tool_axis)
+        try:
+            self.vector = tool_axis_vector(self.tool_axis)
+        except ValueError as e:
+            # Named here rather than by the caller, so that every message out of
+            # this class says which machine and which key without the caller
+            # having to guess which of them already did.
+            raise ValueError("'%s: toolAxis:' %s" % (kind, e)) from e
         # Every value read the way PartCAD reads that kind of value, so "6",
         # "6 mm" and "0.25 in" are one cutter. 'CamConfigError' is a
         # 'ValueError', which is what the caller already catches to turn a bad
@@ -388,9 +394,10 @@ class PartConfigManufacturing:
         try:
             return MachineConfig(kind, config, declared=declared)
         except ValueError as e:
-            # Both the axis and the quantities raise ValueError, and each already
-            # names the key it is about, so this adds nothing but the machine.
-            self.machine_error = "'%s:' %s" % (kind, e)
+            # Every message out of 'MachineConfig' already names the machine and
+            # the key, so naming the machine again here is how
+            # "'cnc:' 'cnc: diameter:' is not a length" gets written.
+            self.machine_error = str(e)
             return None
 
     @property

@@ -200,10 +200,17 @@ def test_a_move_to_where_the_tool_already_is_is_dropped(gcode):
 
 @pytest.mark.parametrize("key,word", [("diameter", "diameter"), ("feed", "feed"), ("safe_z", "safe_z")])
 def test_a_parameter_it_cannot_guess_is_refused_by_name(gcode, tmp_path, key, word):
-    """And the refusal says where to set it, which is the whole of the remedy."""
+    """And the refusal says where to set it, which is the whole of the remedy.
+
+    Both scopes, because both are answers: the object's own `manufacturing:`
+    and, for a shop that cuts everything the same way, the package's
+    `cam: <file type>:`. A message naming a section the key is refused in would
+    be worse than no message at all.
+    """
     message = _refusal(gcode, tmp_path, **{key: None})
     assert word in message
-    assert "'cam:' section" in message
+    assert "'manufacturing:' section" in message
+    assert "'cam: <file type>:' section" in message
 
 
 def test_the_cutter_diameter_has_no_default(gcode, tmp_path):
@@ -490,7 +497,7 @@ def test_a_laser_needs_no_cutter_diameter(gcode, tmp_path):
 def test_a_drill_goes_to_each_hole_and_makes_no_cutting_moves(gcode, tmp_path):
     """A drill does not follow a path, so there is nothing to cut along."""
     result, text = _route(gcode, tmp_path, _drilled_panel(), machine="drill", diameter=6.0)
-    assert result["stats"]["machine"] == "drilling"
+    assert result["stats"]["machine"] == "drill"
     assert result["stats"]["holes"] == 2
     assert result["stats"]["cut_length"] == pytest.approx(0.0)
     # Two centres, each rapid'ed to.

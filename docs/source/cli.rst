@@ -427,14 +427,15 @@ Object commands
   object's own outline, offsets it by the radius of the cutter, and cuts it at a series of depths -- a 2.5D
   route, which is what a CNC router does to sheet goods and what a mill does to a plate::
 
-      pc cam                    # every object of this package that declares a `cam:` section
+      pc cam                    # every object of this package that says how it is made
       pc cam :panel             # one of them
       pc cam -s :nameplate      # one that is a sketch
+      pc cam -m laser :gasket   # one that could be made either way, written for the laser
       pc cam -r                 # this package and everything it imports
 
   Unlike ``pc cae``, this is a **package-level** command. An analysis is asked of one part; a route is what a
   package's cut list is made of, so with nothing named ``pc cam`` produces one for every sketch and part of
-  the package that declares a ``cam:`` section and passes over every object that does not, silently. Most
+  the package that says how it is made and passes over every object that does not, silently. Most
   objects are never cut, and a package where three parts of forty are is the ordinary case rather than
   thirty-seven warnings. Naming an object that declares nothing *is* an error: naming one is asking about it,
   and coming back with nothing would look exactly like a route that went somewhere the user did not notice.
@@ -495,16 +496,16 @@ Object commands
 
   ``depth:`` is the one key with a conditional default. An object that does not say is cut **through**, from
   the top of its bounding box to the bottom. A sketch has no thickness to be cut through, so a sketch that
-  does not say how deep to cut is refused. ``tool:`` has no default at all and must not get one: every other
-  parameter has a defensible default, and the diameter of the cutter is the one number that cannot be guessed
-  from the part -- a route produced against a diameter nobody chose is wrong by exactly the amount nobody
-  noticed.
+  does not say how deep to cut is refused. ``diameter:`` has no default at all and must not get one: every
+  other parameter has a defensible default, and the diameter of the cutter is the one number that cannot be
+  guessed from the part -- a route produced against a diameter nobody chose is wrong by exactly the amount
+  nobody noticed.
 
   Every key of that section is also a parameter of the ``cam:`` file type that produces the route, which is
   what makes it three layers of one namespace: ``//builtin/cam`` underneath, then the package's own ``cam:``
-  section, then the object's. So a package cutting twenty parts from one sheet sets the tool once and the one
-  part that needs a smaller cutter says so for itself. The conversion above happens at every layer -- a
-  ``mm/min`` written by the package is understood as surely as one written on the object.
+  section, then the object's ``manufacturing:``. So a package cutting twenty parts from one sheet sets the
+  cutter once and the one part that needs a smaller one says so for itself. The conversion above happens at
+  every layer -- a ``mm/min`` written by the package is understood as surely as one written on the object.
 
   The route is written to ``<object>.<extension>`` -- ``panel.nc`` -- beside the package, or wherever ``-O``
   says. ``--json`` prints what was produced as the array it is: the file, the implementation that wrote it,
@@ -518,7 +519,8 @@ Object commands
   ``//builtin/cam:gcode`` and nothing has to be installed. A controller that wants a dialect of its own is a
   package declaring a file type in its own ``cam:`` section exactly as an export or a render implementation is
   declared in its own (see :ref:`output-files`), named by that option, by an ``implementation:`` in the
-  object's own ``cam:`` section, or by ``-i`` for one run -- in that order of precedence, narrowest last.
+  object's own ``manufacturing:`` section, or by ``-i`` for one run -- in that order of precedence, narrowest
+  last.
 
   What the built-in one writes is plain RS-274 with every curve linearized to within ``tolerance:`` of the
   true curve: an arc word is only an arc while the plane it was written in survives the post-processor, and
@@ -527,7 +529,7 @@ Object commands
   same bytes on any machine.
 
   ``pc test`` runs this as its ``cam`` check, and it is the same code: the check produces the route and passes
-  the object only if one came back. It applies to an object that declares a ``cam:`` section and to nothing
+  the object only if one came back. It applies to an object that says how it is made and to nothing
   else, so a package of bolts pays nothing for it -- the same gate the ``fea`` and ``cfd`` checks have, and
   the same cost model. There is one way to pass: a route was written. A malformed section fails, an
   implementation that cannot be resolved fails, and an implementation that resolved and produced nothing fails

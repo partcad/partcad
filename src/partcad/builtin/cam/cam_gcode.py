@@ -429,8 +429,8 @@ def _require(request, key, what):
     value = request.get(key)
     if value is None:
         raise Exception(
-            "No '%s' is configured. Set it in this object's 'cam:' section, or for every object of the package "
-            "in the package's 'cam: <file type>:' section" % what
+            "No '%s' is configured. Set it in this object's 'manufacturing:' section, or for every object of "
+            "the package in the package's 'cam: <file type>:' section" % what
         )
     return float(value)
 
@@ -484,7 +484,8 @@ def _cnc(request, obj, units):
             # to cut *through*, so how deep to go is not something the object
             # can answer and not something to guess.
             raise Exception(
-                "This object is flat, so there is no thickness to cut through: set 'depth:' in its 'cam:' section"
+                "This object is flat, so there is no thickness to cut through: set 'depth:' in its "
+                "'manufacturing:' section"
             )
         depth = height
     depth = float(depth)
@@ -651,9 +652,9 @@ def _laser(request, obj, units):
     * **The beam is gated rather than spun.** `M3 S<power>`/`M5` around each
       contour, with no spindle to start or stop.
 
-    There is no `tool:` here, and asking for one would be wrong: the cutter
+    There is no `diameter:` here, and asking for one would be wrong: the cutter
     diameter that a router cannot be run without is a thing a laser does not
-    have.
+    have. `laser:` refuses the key outright for that reason.
     """
     tolerance = float(request.get("tolerance") or 0.01)
     feed = _require(request, "feed", "feed")
@@ -890,7 +891,7 @@ def _drilling(request, obj, units):
     the controller says it means, and the moves mean the same thing on all of
     them.
 
-    `tool:` is the drill in the spindle, and it is checked against the holes
+    `diameter:` is the drill in the spindle, and it is checked against the holes
     rather than used to offset anything: a 5 mm drill does not make a 6 mm hole,
     and a route that quietly produced one would be found out at the bench.
     """
@@ -929,7 +930,7 @@ def _drilling(request, obj, units):
     package = request.get("package_name")
     if name:
         program.comment("object: %s" % ("%s:%s" % (package, name) if package else name))
-    program.comment("machine: drilling, %d holes, drill %s" % (len(holes), program.number(tool)))
+    program.comment("machine: drill, %d holes, drill %s" % (len(holes), program.number(tool)))
     program.comment("units: %s" % ("millimeters" if units == "mm" else "inches"))
 
     program.code("G21" if units == "mm" else "G20")
@@ -970,7 +971,7 @@ def _drilling(request, obj, units):
         program,
         warnings,
         {
-            "machine": "drilling",
+            "machine": "drill",
             "operation": "drill",
             "holes": len(holes),
             "passes": 1,

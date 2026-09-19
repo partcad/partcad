@@ -21,7 +21,7 @@
 # implementation somebody else writes. `direction` is on the job side because
 # which way round a contour is cut is a property of how the object is made.
 #
-# There is no default `tool:`, and there must not be. Every other parameter has
+# There is no default `diameter:`, and there must not be. Every other parameter has
 # a defensible default -- a feed that is slow, a pass that is shallow, a
 # clearance that is generous -- but the diameter of the cutter is the one number
 # that cannot be guessed from the part, and a route produced against a diameter
@@ -84,7 +84,7 @@ cam:
     # --- the machines other than a router ---------------------------------
     # The same file type writes for all three. Which one it writes for is not a
     # parameter here and cannot be: it comes from the part's own
-    # `manufacturing:` section (`laser:` or `drilling:`, or neither for a
+    # `manufacturing:` section (`laser:` or `drill:`, or neither for a
     # router), because what a part is made on is a property of the part rather
     # than a setting of the run -- and a route written for a laser by a file
     # type that could be re-pointed would be a program for a machine nobody
