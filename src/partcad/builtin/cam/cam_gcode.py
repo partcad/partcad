@@ -624,13 +624,19 @@ def _orient(obj, tool_axis_vector):
     # six a 'direction:' can name, and an exact quarter turn keeps coordinates
     # exact -- a general formula would put 6.123e-17 into a file that is
     # supposed to be byte-stable.
+    # Each of these takes the declared axis onto -Z, and that is the whole of
+    # what "correct" means here -- checked axis by axis in
+    # 'test_every_tool_axis_is_rotated_onto_minus_z'. Getting the *sign* wrong
+    # still puts the holes along Z, so a through hole and a symmetric part come
+    # out identical either way and only the face the tool enters by differs.
+    # That is why it is a blind hole that catches it.
     if abs(z) > 0.5:
         # +Z: the part is cut from below, so it is turned over.
         rotation = b3d.Rotation(180, 0, 0)
     elif abs(x) > 0.5:
-        rotation = b3d.Rotation(0, -90, 0) if x > 0 else b3d.Rotation(0, 90, 0)
+        rotation = b3d.Rotation(0, 90, 0) if x > 0 else b3d.Rotation(0, -90, 0)
     else:
-        rotation = b3d.Rotation(90, 0, 0) if y > 0 else b3d.Rotation(-90, 0, 0)
+        rotation = b3d.Rotation(-90, 0, 0) if y > 0 else b3d.Rotation(90, 0, 0)
     return rotation * obj
 
 

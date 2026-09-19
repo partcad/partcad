@@ -574,3 +574,67 @@ def test_a_route_is_the_same_bytes_whichever_machine_wrote_it_twice(gcode, tmp_p
         _, first = _route(gcode, tmp_path, shape, machine=machine, **extra)
         _, second = _route(gcode, tmp_path, shape, machine=machine, **extra)
         assert first == second, machine
+
+
+# --------------------------------------------------------------------------- #
+# Which way up the part is fixtured                                           #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "axis",
+    [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)],
+)
+def test_every_tool_axis_is_rotated_onto_minus_z(gcode, axis):
+    """`_orient` has one job, and this is it, asked of all six axes.
+
+    The rest of the file assumes the tool comes down `-Z`: that is what "the top
+    of the object" means, what the contour plane is, and which way a plunge
+    goes. So an axis that lands anywhere else is a route written for a fixturing
+    nobody asked for -- and landing on `+Z` rather than `-Z` is the failure that
+    hides, because the holes are still along Z and only the face the tool enters
+    by is wrong.
+    """
+    import OCP.gp as gp
+
+    oriented = gcode._orient(_panel(), list(float(c) for c in axis))
+    # Where the declared axis itself ends up, under the same transform the
+    # object was given. Read off the Location rather than off a moved vertex,
+    # which does not carry the rotation.
+    moved = gp.gp_Pnt(*[float(c) for c in axis])
+    if oriented is not _panel():  # a rotation was applied, or the identity case
+        location = oriented.location
+        if location is not None:
+            moved.Transform(location.wrapped.Transformation())
+    landed = tuple(round(c, 6) + 0.0 for c in (moved.X(), moved.Y(), moved.Z()))
+    assert landed == (0.0, 0.0, -1.0), "%s landed on %s" % (axis, landed)
+
+
+def _blind_hole_panel():
+    """40 x 30 x 6 with a 5 mm hole 4 mm deep, entered from the **+Z** face.
+
+    Asymmetric on purpose. A through hole cannot tell a route that enters from
+    the top from one that enters from the bottom, so it cannot catch a tool axis
+    whose sign is inverted; this can.
+    """
+    hole = b3d.Solid.make_cylinder(2.5, 4).locate(b3d.Location((20, 15, 2)))
+    return _panel() - hole
+
+
+def test_a_blind_hole_is_drilled_from_the_face_it_opens_on(gcode, tmp_path):
+    """The entry face, not merely the count.
+
+    Counting holes passes whichever way up the part is, which is exactly how an
+    inverted axis survived: the drill would have plunged through 2 mm of solid
+    material to reach the bottom of a hole that opens on the other side.
+    """
+    panel = _blind_hole_panel()
+    result, text = _route(gcode, tmp_path, panel, machine="drill", diameter=5.0, tool_axis_vector=[0.0, 0.0, -1.0])
+    assert result["stats"]["machine"] == "drill"
+    assert result["stats"]["holes"] == 1
+
+    # Every Z the program commands, deepest last. The hole opens at Z6 and its
+    # floor is at Z2, so a route that enters correctly never goes below Z2.
+    depths = [float(word[1:]) for line in text.splitlines() for word in line.split() if word.startswith("Z")]
+    assert depths, "the program commands no Z at all"
+    assert min(depths) >= 2.0 - 0.001, "drilled to Z%.3f, which is through the floor of a blind hole" % min(depths)

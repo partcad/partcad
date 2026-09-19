@@ -2123,10 +2123,19 @@ class Shape(ShapeConfiguration):
     def _route_machine_data(self, machine: Optional[str] = None) -> dict:
         """Which machine this route is written for, as the request says it.
 
-        Empty for everything that is not a `subtractive` part: an assembly, a
-        sketch, a part made some other way. An implementation that gets nothing
-        writes what it has always written, which is a CNC program -- so a part
-        with no `manufacturing:` section at all is unaffected by any of this.
+        Empty for everything that declares no machine: an assembly, a part made
+        some other way, anything with no `manufacturing:` section at all. An
+        implementation that gets nothing writes what it has always written,
+        which is a CNC program -- so such an object is unaffected by any of this.
+
+        **A sketch is asked like anything else.** A drawing declares the section
+        with no `method:` in it -- it is not made out of anything, it is a path a
+        machine follows -- and `_read_machines` reads that case on purpose. So
+        the answer has to come from what the object declared rather than from
+        what class it is: a `not isinstance(self, Part)` here returned `{}` for a
+        sketch that had named a `laser:`, its `machine`, `toolAxis` and `kerf`
+        never reached the request, and the drawing was handed to the *router*
+        emitter -- which asked it for a cutter diameter a beam does not have.
 
         Read from the part's own declaration rather than passed in as a job
         parameter, because the machine is not something a run gets to re-tune:
@@ -2152,10 +2161,6 @@ class Shape(ShapeConfiguration):
         would be handed a *router* program, silently. `pc test` reporting it too
         is not enough, because nothing makes `pc cam` wait for `pc test`.
         """
-        from .part import Part
-
-        if not isinstance(self, Part):
-            return {}
         try:
             from .part_config import PartConfiguration
 

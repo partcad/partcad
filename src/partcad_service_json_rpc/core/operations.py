@@ -2298,8 +2298,9 @@ def cam_route(session, params):
     or the caller's ``camImplementation`` -- names, as ``<package>:<file type>``.
 
     ``object`` routes that one object and refuses if it declares nothing. With no
-    ``object`` every sketch and part of the package that declares a ``cam:``
-    section is routed and everything else is passed over in silence, which is
+    ``object`` every sketch and part of the package that says how it is made --
+    a machine or a job parameter under ``manufacturing:`` -- is routed and
+    everything else is passed over in silence, which is
     what makes the command usable in a package where three parts of forty are
     cut. ``recursive`` does the same through the packages below this one.
 
@@ -2425,8 +2426,8 @@ async def _route_packages_async(pc, ctx, packages, object_name, sketch, implemen
                 unresolved.append("%s:%s" % (target, obj))
             continue
         if obj is None:
-            # The whole package: every sketch and part of it that declares a
-            # 'cam:' section.
+            # The whole package: every sketch and part of it that says how it
+            # is made, under 'manufacturing:'.
             shapes.extend(await prj.routable_shapes_async())
             continue
 
