@@ -91,7 +91,7 @@ def gcode():
 # Individual tests override one key at a time, so what a test is about is the
 # key it names rather than the eight it repeats.
 JOB = {
-    "tool": 3.0,
+    "diameter": 3.0,
     "feed": 600.0,
     "plunge": 200.0,
     "safe_z": 5.0,
@@ -198,19 +198,26 @@ def test_a_move_to_where_the_tool_already_is_is_dropped(gcode):
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("key,word", [("tool", "tool"), ("feed", "feed"), ("safe_z", "safe_z")])
+@pytest.mark.parametrize("key,word", [("diameter", "diameter"), ("feed", "feed"), ("safe_z", "safe_z")])
 def test_a_parameter_it_cannot_guess_is_refused_by_name(gcode, tmp_path, key, word):
-    """And the refusal says where to set it, which is the whole of the remedy."""
+    """And the refusal says where to set it, which is the whole of the remedy.
+
+    Both scopes, because both are answers: the object's own `manufacturing:`
+    and, for a shop that cuts everything the same way, the package's
+    `cam: <file type>:`. A message naming a section the key is refused in would
+    be worse than no message at all.
+    """
     message = _refusal(gcode, tmp_path, **{key: None})
     assert word in message
-    assert "'cam:' section" in message
+    assert "'manufacturing:' section" in message
+    assert "'cam: <file type>:' section" in message
 
 
 def test_the_cutter_diameter_has_no_default(gcode, tmp_path):
     """The one parameter where a default would be a wrong answer rather than a
     conservative one: a route cut against a diameter nobody chose is wrong by
     exactly the amount nobody noticed."""
-    assert "tool" in _refusal(gcode, tmp_path, tool=None)
+    assert "diameter" in _refusal(gcode, tmp_path, diameter=None)
 
 
 @pytest.mark.parametrize(
@@ -415,3 +422,219 @@ def test_the_stats_report_the_size_of_the_job(gcode, tmp_path):
     assert stats["depth"] == pytest.approx(6.0)
     # Three passes around a 41.5 x 31.5 rectangle is on the order of 440 mm.
     assert stats["cut_length"] > 400.0
+
+
+# --------------------------------------------------------------------------- #
+# The machines other than a router                                            #
+# --------------------------------------------------------------------------- #
+
+
+def _drilled_panel():
+    """A panel with two round holes through it: something a drill can make."""
+    panel = _panel()
+    for x in (10, 30):
+        panel -= b3d.Solid.make_cylinder(3, 12).locate(b3d.Location((x, 15, -3)))
+    return panel
+
+
+def test_a_part_that_names_no_machine_is_routed_exactly_as_before(gcode, tmp_path):
+    """The guarantee the whole machine split rests on.
+
+    `_orient` is the identity for the default `-Z` and the CNC emitter is the
+    old body verbatim, so a part that never heard of machines produces the same
+    bytes it always produced. Asserted here as "declaring the default changes
+    nothing", which is the same claim from the other side.
+    """
+    _, without = _route(gcode, tmp_path, _panel_with_hole())
+    _, with_default = _route(gcode, tmp_path, _panel_with_hole(), machine="cnc", tool_axis_vector=[0.0, 0.0, -1.0])
+    assert without == with_default
+
+
+def test_a_machine_it_does_not_know_is_refused_with_the_set(gcode, tmp_path):
+    """The refusal names what it does know, so the sentence is actionable."""
+    assert "cnc" in _refusal(gcode, tmp_path, machine="waterjet")
+
+
+def test_a_laser_cuts_through_in_one_pass_and_never_moves_in_z(gcode, tmp_path):
+    """Three things at once, because they are one fact about the machine.
+
+    A beam has no depth of cut, so there is no stepping; it has no spindle, so
+    there is no `M3 S<rpm>` at the top and no `M5` at the bottom; and it never
+    plunges, so no `G1 Z` appears anywhere.
+    """
+    result, text = _route(gcode, tmp_path, _panel_with_hole(), machine="laser", kerf=0.2, power=60)
+    assert result["stats"]["machine"] == "laser"
+    assert result["stats"]["passes"] == 1
+    assert "G1 Z" not in text
+    # The beam is gated around each contour instead.
+    assert "M3 S60" in text
+    assert text.count("M3 S60") == text.count("M5")
+
+
+def test_a_laser_offsets_by_half_the_kerf(gcode, tmp_path):
+    """What makes the part come out at its nominal size.
+
+    The beam removes a kerf-wide stripe centred on the path, so the path runs
+    half a kerf outside the part -- the same geometry a profile uses, with the
+    beam's half-width in place of the cutter's radius.
+    """
+    _, text = _route(gcode, tmp_path, machine="laser", kerf=0.4)
+    xs = [x for x, _ in _cuts(text)]
+    # The panel is 40 wide from x=0, so the path runs from -0.2 to 40.2.
+    assert min(xs) == pytest.approx(-0.2, abs=1e-6)
+    assert max(xs) == pytest.approx(40.2, abs=1e-6)
+
+
+def test_a_laser_needs_no_cutter_diameter(gcode, tmp_path):
+    """The one parameter a router cannot run without, and a laser does not have."""
+    request = dict(JOB)
+    del request["diameter"]
+    request.update({"machine": "laser", "kerf": 0.1, "wrapped": _panel().wrapped})
+    result = gcode.process(str(tmp_path / "route.nc"), request)
+    assert result["success"] is True, result.get("exception")
+
+
+def test_a_drill_goes_to_each_hole_and_makes_no_cutting_moves(gcode, tmp_path):
+    """A drill does not follow a path, so there is nothing to cut along."""
+    result, text = _route(gcode, tmp_path, _drilled_panel(), machine="drill", diameter=6.0)
+    assert result["stats"]["machine"] == "drill"
+    assert result["stats"]["holes"] == 2
+    assert result["stats"]["cut_length"] == pytest.approx(0.0)
+    # Two centres, each rapid'ed to.
+    assert "G0 X10.000 Y15.000" in text
+    assert "G0 X30.000 Y15.000" in text
+
+
+def test_a_drill_with_nothing_round_to_make_is_refused(gcode, tmp_path):
+    """A refusal rather than an empty program: a drill with no hole is a mistake."""
+    assert "no round hole" in _refusal(gcode, tmp_path, _panel(), machine="drill")
+
+
+def test_a_round_plate_is_not_one_enormous_hole(gcode, tmp_path):
+    """The outer wall of a round part is a cylinder about Z, and not a hole.
+
+    Nothing about the surface distinguishes it from a bore of the same radius --
+    only which side the material is on does. Read as a hole it would put a
+    plunge at the centre of a plate that needed no drilling at all, which is a
+    program that breaks the drill.
+    """
+    plate = b3d.Solid.make_cylinder(20, 6)
+    assert "no round hole" in _refusal(gcode, tmp_path, plate, machine="drill")
+
+
+def test_a_boss_standing_on_a_panel_is_not_drilled(gcode, tmp_path):
+    """The same mistake where there is also a real hole to get right.
+
+    The panel has one bore and one boss, both cylinders about Z. A drill makes
+    the first and must not be sent at the second -- and the count is what says
+    so, because a route that plunged into the boss would still be a route.
+    """
+    panel = _panel()
+    panel -= b3d.Solid.make_cylinder(3, 12).locate(b3d.Location((10, 15, -3)))
+    panel += b3d.Solid.make_cylinder(4, 5).locate(b3d.Location((30, 15, 6)))
+
+    result, text = _route(gcode, tmp_path, panel, machine="drill", diameter=6.0)
+    assert result["stats"]["holes"] == 1
+    assert "G0 X10.000 Y15.000" in text
+    assert "X30.000" not in text
+
+
+def test_pecking_breaks_the_plunge_into_steps(gcode, tmp_path):
+    """Each step comes back out to the top of the hole, which clears the swarf."""
+    _, once = _route(gcode, tmp_path, _drilled_panel(), machine="drill", diameter=6.0)
+    _, pecked = _route(gcode, tmp_path, _drilled_panel(), machine="drill", diameter=6.0, peck=2.0)
+    assert pecked.count("G1 Z") > once.count("G1 Z")
+
+
+def test_a_drill_that_is_not_the_size_of_the_hole_is_said_out_loud(gcode, tmp_path):
+    """A 5 mm drill does not make a 6 mm hole, and the file cannot say so."""
+    result, _ = _route(gcode, tmp_path, _drilled_panel(), machine="drill", diameter=5.0)
+    assert any("not the diameter of the drill" in warning for warning in result["warnings"])
+
+
+def test_the_tool_axis_turns_the_part_into_the_machines_frame(gcode, tmp_path):
+    """A part cut from the side is the same solid fixtured differently.
+
+    Its holes run along X, so a drill working down the Z axis has nothing to
+    make and one working along X has two.
+    """
+    panel = _panel()
+    for y in (10, 20):
+        panel -= b3d.Solid.make_cylinder(3, 60).locate(b3d.Location((-10, y, 3), (0, 90, 0)))
+
+    assert "no round hole" in _refusal(gcode, tmp_path, panel, machine="drill", diameter=6.0)
+    result, _ = _route(gcode, tmp_path, panel, machine="drill", diameter=6.0, tool_axis_vector=[1.0, 0.0, 0.0])
+    assert result["stats"]["holes"] == 2
+
+
+def test_a_route_is_the_same_bytes_whichever_machine_wrote_it_twice(gcode, tmp_path):
+    """Byte stability is what makes a route something a repository can hold."""
+    for machine, extra in (("laser", {"kerf": 0.2}), ("drill", {"diameter": 6.0})):
+        shape = _panel_with_hole() if machine == "laser" else _drilled_panel()
+        _, first = _route(gcode, tmp_path, shape, machine=machine, **extra)
+        _, second = _route(gcode, tmp_path, shape, machine=machine, **extra)
+        assert first == second, machine
+
+
+# --------------------------------------------------------------------------- #
+# Which way up the part is fixtured                                           #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "axis",
+    [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)],
+)
+def test_every_tool_axis_is_rotated_onto_minus_z(gcode, axis):
+    """`_orient` has one job, and this is it, asked of all six axes.
+
+    The rest of the file assumes the tool comes down `-Z`: that is what "the top
+    of the object" means, what the contour plane is, and which way a plunge
+    goes. So an axis that lands anywhere else is a route written for a fixturing
+    nobody asked for -- and landing on `+Z` rather than `-Z` is the failure that
+    hides, because the holes are still along Z and only the face the tool enters
+    by is wrong.
+    """
+    import OCP.gp as gp
+
+    oriented = gcode._orient(_panel(), list(float(c) for c in axis))
+    # Where the declared axis itself ends up, under the same transform the
+    # object was given. Read off the Location rather than off a moved vertex,
+    # which does not carry the rotation.
+    moved = gp.gp_Pnt(*[float(c) for c in axis])
+    if oriented is not _panel():  # a rotation was applied, or the identity case
+        location = oriented.location
+        if location is not None:
+            moved.Transform(location.wrapped.Transformation())
+    landed = tuple(round(c, 6) + 0.0 for c in (moved.X(), moved.Y(), moved.Z()))
+    assert landed == (0.0, 0.0, -1.0), "%s landed on %s" % (axis, landed)
+
+
+def _blind_hole_panel():
+    """40 x 30 x 6 with a 5 mm hole 4 mm deep, entered from the **+Z** face.
+
+    Asymmetric on purpose. A through hole cannot tell a route that enters from
+    the top from one that enters from the bottom, so it cannot catch a tool axis
+    whose sign is inverted; this can.
+    """
+    hole = b3d.Solid.make_cylinder(2.5, 4).locate(b3d.Location((20, 15, 2)))
+    return _panel() - hole
+
+
+def test_a_blind_hole_is_drilled_from_the_face_it_opens_on(gcode, tmp_path):
+    """The entry face, not merely the count.
+
+    Counting holes passes whichever way up the part is, which is exactly how an
+    inverted axis survived: the drill would have plunged through 2 mm of solid
+    material to reach the bottom of a hole that opens on the other side.
+    """
+    panel = _blind_hole_panel()
+    result, text = _route(gcode, tmp_path, panel, machine="drill", diameter=5.0, tool_axis_vector=[0.0, 0.0, -1.0])
+    assert result["stats"]["machine"] == "drill"
+    assert result["stats"]["holes"] == 1
+
+    # Every Z the program commands, deepest last. The hole opens at Z6 and its
+    # floor is at Z2, so a route that enters correctly never goes below Z2.
+    depths = [float(word[1:]) for line in text.splitlines() for word in line.split() if word.startswith("Z")]
+    assert depths, "the program commands no Z at all"
+    assert min(depths) >= 2.0 - 0.001, "drilled to Z%.3f, which is through the floor of a blind hole" % min(depths)

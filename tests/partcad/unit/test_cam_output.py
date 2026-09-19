@@ -117,17 +117,24 @@ def test_the_default_implementation_is_the_builtin_one(ctx):
 PACKAGE = textwrap.dedent("""
     name: //cam-test
     parts:
+      stock:
+        type: step
+        path: panel.step
       panel:
         type: step
         path: panel.step
-        cam:
-          tool: 6 mm
+        manufacturing:
+          method: subtractive
+          source: stock
+          diameter: 6 mm
           depth: 18 mm
       lid:
         type: step
         path: panel.step
-        cam:
-          tool: 3 mm
+        manufacturing:
+          method: subtractive
+          source: stock
+          diameter: 3 mm
           implementation: //cam-test:router
       plain:
         type: step
@@ -135,8 +142,43 @@ PACKAGE = textwrap.dedent("""
       broken:
         type: step
         path: panel.step
-        cam:
-          tool: six millimetres
+        manufacturing:
+          method: subtractive
+          source: stock
+          diameter: six millimetres
+      burned:
+        type: step
+        path: panel.step
+        manufacturing:
+          method: subtractive
+          source: stock
+          diameter: 6 mm
+          depth: 18 mm
+          laser:
+            kerf: 0.15
+      burned_upward:
+        type: step
+        path: panel.step
+        manufacturing:
+          method: subtractive
+          source: stock
+          diameter: 6 mm
+          depth: 18 mm
+          laser:
+            kerf: 0.15
+            toolAxis: +Z
+      two_machines:
+        type: step
+        path: panel.step
+        manufacturing:
+          method: subtractive
+          source: stock
+          diameter: 6 mm
+          depth: 18 mm
+          laser:
+            kerf: 0.15
+          drill:
+            peck: 3
     cam:
       gcode:
         feed: 2400
@@ -264,10 +306,21 @@ def test_a_package_run_visits_the_objects_that_declare_a_section(package):
     to visit must not raise on one object's mistake, or a package where one
     part has a typo produces no routes at all instead of nineteen and a report.
     That is why `cam.declared_config()` exists beside `config_of()`.
+
+    `two_machines` is in it for the same reason and a second one: naming the
+    machine unreadably is refused by `route_async`, not by the enumeration --
+    so it is visited, and it reports.
     """
     project = package.get_project("//cam-test")
     routable = asyncio.run(project.routable_shapes_async())
-    assert sorted(shape.name for shape in routable) == ["broken", "lid", "panel"]
+    assert sorted(shape.name for shape in routable) == [
+        "broken",
+        "burned",
+        "burned_upward",
+        "lid",
+        "panel",
+        "two_machines",
+    ]
 
 
 def test_an_object_asked_for_by_name_is_visited_whatever_it_declares(package):
@@ -303,7 +356,7 @@ def test_an_object_with_no_section_says_so_by_name(package):
     part = _part(package, "plain")
     with pytest.raises(cam.CamConfigError) as raised:
         asyncio.run(part.route_async(package))
-    assert "//cam-test:plain declares no 'cam:' section" in str(raised.value)
+    assert "//cam-test:plain says nothing about being cut" in str(raised.value)
 
 
 # --------------------------------------------------------------------------- #
@@ -327,7 +380,7 @@ def test_the_check_is_selected_by_its_own_name():
     """`pc test -f` filters by name prefix, and nothing else starts with `cam`.
 
     It is the half of the rename that makes the split usable: `-f
-    manufacturability` selects that check and its four siblings, `-f cam`
+    manufacturability` selects that check and its six siblings, `-f cam`
     selects this one alone.
     """
     from partcad.test.all import tests as all_tests
@@ -338,7 +391,9 @@ def test_the_check_is_selected_by_its_own_name():
     assert sorted(name for name in names if name.startswith("manufacturability")) == [
         "manufacturability",
         "manufacturability-additive",
+        "manufacturability-drill",
         "manufacturability-forming",
+        "manufacturability-laser",
         "manufacturability-sheet-metal",
         "manufacturability-subtractive",
     ]
@@ -451,3 +506,157 @@ def test_the_route_a_check_produced_is_not_left_beside_the_package(package, monk
 
     assert seen["output_dir"] not in (None, "")
     assert not os.path.exists(seen["output_dir"]), "the check's temporary directory outlived it"
+
+
+#
+# Which machine the route is for
+#
+
+
+def test_a_part_that_named_no_machine_puts_nothing_in_the_request(package):
+    """The case that must stay exactly as it was.
+
+    An implementation handed no machine writes what it has always written, so a
+    part with no `manufacturing:` section at all is untouched by any of this.
+    A `subtractive` part that named no machine is a different case: it gets the
+    undeclared CNC, which is what it always meant, and `_orient` is the identity
+    for its `-Z` so the bytes are the same either way.
+    """
+    assert _part(package, "plain")._route_machine_data() == {}
+
+
+def test_the_machine_a_part_named_reaches_the_request(package):
+    """The whole of what a declared machine contributes: kind, axis, options."""
+    data = _part(package, "burned")._route_machine_data()
+    assert data["machine"] == "laser"
+    assert data["tool_axis"] == "-Z"
+    assert data["kerf"] == 0.15
+
+
+def test_a_part_naming_two_machines_is_asked_which_one(package):
+    """They are alternatives, so there is a choice and nobody else can make it.
+
+    Defaulting would be the one outcome worse than refusing: a program for a
+    machine the user did not pick, written in the format of one they did not
+    ask for. The sentence names what there is to choose between.
+    """
+    with pytest.raises(cam.CamConfigError) as raised:
+        cam.config_of(_part(package, "two_machines"))
+    message = str(raised.value)
+    assert "chosen" in message
+    assert "laser" in message and "drill" in message
+
+
+def test_either_alternative_can_be_asked_for_by_name(package):
+    """Each names its own machine and carries its own parameters."""
+    part = _part(package, "two_machines")
+    assert part._route_machine_data("laser")["machine"] == "laser"
+    assert part._route_machine_data("laser")["kerf"] == pytest.approx(0.15)
+    assert part._route_machine_data("drill")["machine"] == "drill"
+    # The shared scope reaches both; the machine's own scope is its alone.
+    assert cam.config_of(part, "drill").values["peck"] == pytest.approx(3.0)
+    assert cam.config_of(part, "laser").values["diameter"] == pytest.approx(6.0)
+
+
+def test_a_machine_the_part_does_not_name_is_refused(package):
+    with pytest.raises(cam.CamConfigError) as raised:
+        cam.config_of(_part(package, "two_machines"), "cnc")
+    assert "not made on a 'cnc'" in str(raised.value)
+
+
+def test_the_refusal_is_named_with_the_object_it_is_about(package, monkeypatch):
+    """`route_async` already wraps this, which is why it is raised bare.
+
+    A run over a package reports one line per object, so the sentence has to
+    carry an address -- see `_cam_config_error`.
+    """
+    part = _part(package, "two_machines")
+
+    with pytest.raises(cam.CamConfigError) as raised:
+        asyncio.run(part.route_async(package))
+    message = str(raised.value)
+    assert message.startswith("//cam-test:two_machines: ")
+    assert "chosen" in message
+
+
+def test_the_machine_is_in_the_cam_checks_cache_key(package):
+    """Moving a part from a router to a laser is a different program.
+
+    `manufacturing:` is one of the keys a shape's hash deliberately leaves out,
+    so without this the laser part is handed the pass the router route earned
+    and the laser route is never produced at all.
+    """
+    check = _cam_check()
+    routed = asyncio.run(check.cache_key_suffix(package, _part(package, "panel")))
+    burned = asyncio.run(check.cache_key_suffix(package, _part(package, "burned")))
+    assert routed and burned and routed != burned
+
+
+def test_the_tool_axis_is_in_the_cam_checks_cache_key(package):
+    """The same solid cut from the other side is the other program."""
+    check = _cam_check()
+    down = asyncio.run(check.cache_key_suffix(package, _part(package, "burned")))
+    up = asyncio.run(check.cache_key_suffix(package, _part(package, "burned_upward")))
+    assert down and up and down != up
+
+
+def test_an_unreadable_machine_keys_on_its_own_error(package):
+    """A refusal is a verdict, and correcting it has to produce a fresh run."""
+    check = _cam_check()
+    confused = asyncio.run(check.cache_key_suffix(package, _part(package, "two_machines")))
+    burned = asyncio.run(check.cache_key_suffix(package, _part(package, "burned")))
+    assert confused and confused != burned
+
+
+def test_two_alternatives_written_into_one_directory_get_two_files(package, tmp_path, monkeypatch):
+    """`-O routes` must not resolve both machines to one path.
+
+    `cam_getopts()` reads an existing directory as the *output directory* and
+    derives the filename from the object -- the same filename whichever machine
+    was asked for. So a suffix applied only when no path was given at all left
+    `pc cam -O routes -m laser` and `-m cnc` pointing at one file, and since a
+    route deletes the path before writing it, the second one silently replaced
+    the first while the run reported two.
+
+    Stopped at the point the path is settled: what is under test is the name,
+    and running the implementation would need a sandbox this test has no use for.
+    """
+    part = _part(package, "two_machines")
+    seen = []
+
+    def _record(path, name):
+        seen.append(path)
+        raise RuntimeError("stop here")
+
+    monkeypatch.setattr(package, "ensure_dirs_for_file", _record)
+    target = tmp_path / "routes"
+    target.mkdir()
+
+    for machine in ("laser", "drill"):
+        with pytest.raises(Exception):
+            asyncio.run(part.route_async(package, filepath=str(target), machine=machine))
+
+    assert [os.path.basename(path) for path in seen] == ["two_machines.laser.nc", "two_machines.drill.nc"]
+    assert len(set(seen)) == 2
+
+
+def test_a_path_the_caller_named_is_the_path_it_gets(package, tmp_path, monkeypatch):
+    """The other side of it: a file named explicitly is not renamed under the caller.
+
+    `-O` names a directory and PartCAD chooses the filename in it; a `filepath`
+    naming a *file* is the caller having chosen already, and a machine suffix
+    there would be PartCAD overruling them.
+    """
+    part = _part(package, "two_machines")
+    seen = []
+
+    def _record(path, name):
+        seen.append(path)
+        raise RuntimeError("stop here")
+
+    monkeypatch.setattr(package, "ensure_dirs_for_file", _record)
+    named = str(tmp_path / "whatever.nc")
+
+    with pytest.raises(Exception):
+        asyncio.run(part.route_async(package, filepath=named, machine="laser"))
+    assert seen == [named]

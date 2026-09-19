@@ -80,11 +80,20 @@ def test_both_halves_are_required():
     assert _manufacturing(method="sheet_metal", instructions="bends").missing_fields() == ["source"]
 
 
-def test_another_method_needs_neither():
-    """A part made from stock has nothing to point at, and is not asked to."""
+def test_a_method_that_points_at_nothing_is_asked_for_nothing():
+    """What 'missing_fields()' reports is per method, not a fixed pair.
+
+    'additive' describes a part completely by its own geometry, so there is
+    nothing for it to name. 'subtractive' is the other method defined in terms
+    of another object -- it requires the stock it is cut from -- and it asks for
+    that one field and not for the 'instructions' this module is about.
+    """
+    assert _manufacturing(method="additive").missing_fields() == []
+
     data = _manufacturing(method="subtractive")
     assert data.method == METHOD_SUBTRACTIVE
-    assert data.missing_fields() == []
+    assert data.missing_fields() == ["source"]
+    assert _manufacturing(method="subtractive", source="stock").missing_fields() == []
 
 
 def test_an_unknown_method_is_still_an_unknown_method(caplog):
@@ -182,8 +191,14 @@ def test_a_cone_is_flat_on_one_side_only():
 
 
 def test_the_analysis_is_asked_for_by_name():
-    """'wrapper_manufacturability' answers more than one question; each says which it is."""
-    assert set(wrapper_manufacturability.OPERATIONS) == {"free_bounds", "flatness"}
+    """'wrapper_manufacturability' answers more than one question; each says which it is.
+
+    The set grows as the manufacturability checks learn to ask more -- the two
+    subtractive ones were added beside these -- so what is pinned here is that
+    the two this module is about are in it and reached by name, not that they
+    are the only ones.
+    """
+    assert {"free_bounds", "flatness"} <= set(wrapper_manufacturability.OPERATIONS)
     assert wrapper_manufacturability.OPERATIONS["free_bounds"](
         {"shape": BRepPrimAPI_MakeBox(1.0, 1.0, 1.0).Shape()}
     ) == {"free_bounds": 0}

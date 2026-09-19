@@ -2516,10 +2516,10 @@ class Project(project_config.Configuration):
 
         if named:
             # Asked about by name, so it is routed whatever it declares: the
-            # refusal an object with no 'cam:' section earns belongs to
-            # 'Shape.route_async()', which says which object and which section.
+            # refusal an object that says nothing about being cut earns belongs
+            # to 'Shape.route_async()', which says which object and why.
             return shapes
-        return [shape for shape in shapes if pc_cam.declared_config(shape) is not None]
+        return [shape for shape in shapes if pc_cam.declares_job(shape)]
 
     def _enumerate_shapes(self, sketches, interfaces, parts, assemblies, scenes=None):
         """'_enumerate_shapes_async()' for a caller that owns no event loop."""
