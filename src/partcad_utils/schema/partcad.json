@@ -1222,6 +1222,35 @@
                     {
                       "if": { "properties": { "method": { "const": "sheet_metal" } }, "required": ["method"] },
                       "then": { "required": ["source", "instructions"] }
+                    },
+                    {
+                      "description": "A machine and a job describe taking material away. Only 'subtractive' does that, so the keys that say how it is cut are refused everywhere else rather than accepted and never read.",
+                      "if": {
+                        "properties": { "method": { "not": { "const": "subtractive" } } },
+                        "required": ["method"]
+                      },
+                      "then": {
+                        "properties": {
+                          "cnc": false,
+                          "drill": false,
+                          "laser": false,
+                          "diameter": false,
+                          "depth": false,
+                          "depth_per_pass": false,
+                          "safe_z": false,
+                          "peck": false,
+                          "kerf": false,
+                          "feed": false,
+                          "plunge": false,
+                          "speed": false,
+                          "stepover": false,
+                          "power": false,
+                          "operation": false,
+                          "direction": false,
+                          "implementation": false,
+                          "desc": false
+                        }
+                      }
                     }
                   ]
                 },

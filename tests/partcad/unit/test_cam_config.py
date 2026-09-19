@@ -340,3 +340,53 @@ def test_what_describes_the_file_is_not_an_object_key():
         # They still reach the implementation untouched from the layers that may
         # set them -- `normalize_job` converts what it knows and carries the rest.
         assert cam.normalize_job({key: "whatever"})[key] == "whatever"
+
+
+# --------------------------------------------------------------------------- #
+# Only what cuts has a cut to describe                                        #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "stray",
+    [{"diameter": 6}, {"feed": 1200}, {"cnc": {"diameter": 6}}, {"laser": {"kerf": 0.1}}, {"implementation": "p:gcode"}],
+)
+def test_a_method_that_describes_no_cut_refuses_the_keys_that_do(stray):
+    """`additive` takes no machine and no job, and says so rather than ignoring it.
+
+    Nothing reads a cut from a printed part, so a `diameter:` written on one is
+    a number somebody chose and nothing acts on -- which is the failure the move
+    out of the object's `cam:` section was for, reappearing one level down. A
+    printer has feeds and speeds of its own; the day PartCAD writes a program
+    for one they will be a printer's keys in a printer's subsection rather than
+    a router's read by accident.
+    """
+    section = {"method": "additive"}
+    section.update(stray)
+    shape = _Shape({"manufacturing": section})
+
+    # Visited, because a mistake nobody looks at is a mistake nobody fixes...
+    assert cam.declares_job(shape) is True
+    # ...and then refused, naming the method and the key it does not take.
+    with pytest.raises(cam.CamConfigError) as raised:
+        cam.declared_config(shape)
+    assert "'method: additive' describes no cut" in str(raised.value)
+    assert list(stray)[0] in str(raised.value)
+
+
+def test_the_same_keys_are_read_where_something_does_cut():
+    """The other side of it, so the refusal above cannot be a blanket one."""
+    shape = _Shape(
+        {"manufacturing": {"method": "subtractive", "source": "blank", "feed": 1200, "cnc": {"diameter": 6}}}
+    )
+    assert cam.declared_config(shape) == {"feed": pytest.approx(1200.0), "diameter": pytest.approx(6.0)}
+
+
+def test_a_sketch_cuts_without_declaring_a_method():
+    """A drawing is not made out of anything, so it names no method and no source.
+
+    The one section with no `method:` in it, and the reason the refusal above is
+    written against the method rather than against the absence of one.
+    """
+    shape = _Shape({"manufacturing": {"cnc": {"diameter": 0.5, "depth": 0.4}}})
+    assert cam.declared_config(shape) == {"diameter": pytest.approx(0.5), "depth": pytest.approx(0.4)}

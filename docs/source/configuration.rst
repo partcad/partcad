@@ -2253,6 +2253,16 @@ other rather than one overwriting the other. A part that really is machined in
 *stages* is not this: it is a chain of parts, each naming the previous one as
 its ``source``.
 
+**Only ``subtractive`` has a machine at all**, and the keys that describe a cut
+are refused everywhere else rather than accepted and never read. A ``diameter:``
+on a part that says ``method: additive`` is a number somebody chose and nothing
+acts on, which is the whole reason the job moved out of a section of its own --
+a printer has feeds and speeds too, and the day PartCAD writes a program for one
+they will be a printer's keys under a printer's subsection rather than a
+router's read by accident. A *sketch* is the one section with no ``method:`` in
+it: a drawing is not made out of anything, so it names the machine and the job
+and nothing else.
+
 Every machine takes a ``toolAxis``, which is the axis the tool, the beam or the
 drill approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
 or ``-Z``. It defaults to ``-Z``: the part sits on the bed and the tool comes

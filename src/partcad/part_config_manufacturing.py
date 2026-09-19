@@ -335,7 +335,10 @@ class PartConfigManufacturing:
         """Which machines this part could be made on, and the job they share.
 
         Nothing for a method that is not 'subtractive': a machine is what takes
-        material away, and nothing else here does.
+        material away, and nothing else here does. A sketch is the exception --
+        it declares the section with no 'method:' in it, because a drawing is
+        not made out of anything, and what it says is the path a machine
+        follows.
 
         A bad declaration is *recorded* rather than raised, the same way
         'missing_fields()' is read rather than raised on. Loading a package must
@@ -344,6 +347,19 @@ class PartConfigManufacturing:
         check is what reports it, against the one part it belongs to.
         """
         if self.method != METHOD_SUBTRACTIVE and not (self.declared_section and self.method == METHOD_NONE):
+            # Refused rather than quietly dropped. Nothing here reads a cut from
+            # an 'additive' part, so a 'diameter:' written on one is a number
+            # somebody chose and nothing acts on -- which is the exact failure
+            # the move out of 'cam:' was for, reappearing one level down. A
+            # printed part has feeds and speeds too, and the day PartCAD writes
+            # a program for a printer they will be a printer's keys under a
+            # printer's subsection rather than a router's read by accident.
+            stray = [key for key in manufacturing_config if key in SHARED_JOB_KEYS or key in MACHINES]
+            if stray:
+                self.machine_error = "'method: %s' describes no cut, so it does not take %s" % (
+                    self._method_string(),
+                    ", ".join("'%s:'" % key for key in sorted(stray)),
+                )
             return
 
         shared = {key: value for key, value in manufacturing_config.items() if key in SHARED_JOB_KEYS}

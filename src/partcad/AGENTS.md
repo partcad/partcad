@@ -286,6 +286,13 @@ at all).
   simply not read. The axis is `toolAxis:` rather than `direction:` because `direction` already means climb or
   conventional, and both would reach one implementation in one request.
 
+  `_read_machines` reads none of this for a method that is not `subtractive`, and **refuses** the keys rather
+  than dropping them: nothing takes a cut from an `additive` part, so a `diameter:` on one is a number somebody
+  chose and nothing acts on -- the failure the move out of the object's own `cam:` section was for, one level
+  down. The schema says the same thing as an `if`/`then` on the method, so `pc lint` catches it too. The one
+  section with no `method:` is a **sketch's**: a drawing is not made out of anything, so it declares the machine
+  and the job and nothing else, which is why the gate reads "subtractive, or a declared section with no method".
+
   The two limited machines get a check each (`manufacturability-laser`, `manufacturability-drill`), and each
   applies **only to a part that named it** -- a package that has said `method: subtractive` for a year must not
   start failing a check about a laser it does not own, which is what `MachineConfig.declared` is for. Both rest
