@@ -69,6 +69,15 @@ Which one is running, the standalone build or a wheel?
   the standalone build; a path inside a Python environment is the wheel. Having both installed is supported,
   but only the first on ``PATH`` runs.
 
+Imports hang, or time out reaching a repository the browser can open:
+
+- The network is very likely one where a proxy is the only route out. PartCAD reads ``HTTPS_PROXY``,
+  ``HTTP_PROXY`` and ``NO_PROXY`` for everything it downloads -- git repositories, tarballs and
+  ``fileFrom: url`` files alike -- so exporting them is usually the whole fix. See
+  :ref:`proxy-configuration`.
+- If a fetch fails to verify a certificate rather than hanging, the proxy is re-terminating TLS and its CA
+  is not trusted here. Point ``SSL_CERT_FILE`` and ``REQUESTS_CA_BUNDLE`` at the proxy's CA bundle.
+
 ========================
 PartCAD VSCode Extension
 ========================

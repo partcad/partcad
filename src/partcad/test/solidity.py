@@ -58,13 +58,10 @@ class SolidityTest(Test):
         try:
             result = await shape.get_solidity_async(ctx)
         except Exception as e:
-            # A shape that will not build is what the 'cad' test is for. This
-            # verdict is about the machine rather than the shape, so it must
-            # not be remembered: installing what was missing would not change
-            # the key it would be read back under.
+            # Not a pass. A shape that will not build answers None below and is
+            # the 'cad' test's business; reaching here means this check broke.
             test_ctx[self.NOT_CACHEABLE] = True
-            self.debug(shape, "Failed to check: %s" % e)
-            return self.TEST_PASSED
+            return self.failed(shape, "the solidity check could not be run: %s" % e)
 
         if result is None:
             test_ctx[self.NOT_CACHEABLE] = True
