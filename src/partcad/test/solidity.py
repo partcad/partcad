@@ -90,19 +90,7 @@ class SolidityTest(Test):
                 "wrong." % volume,
             )
 
-        # Not a failure. Plenty of usable geometry is not a valid solid in
-        # OCCT's sense and behaves perfectly well: an LDraw brick is an open
-        # mesh - a stud is a cylinder and a top disc with no bottom, resting on
-        # a face the parent never cuts - so it has hundreds of free boundary
-        # edges and fails IsValid, while two copies of it 100 mm apart
-        # correctly share no volume at all. Failing on validity would condemn
-        # every part of a whole library that works. It is said, once, because
-        # it does narrow what can be relied on.
-        if result.get("valid") is False:
-            self.info(
-                shape,
-                "The shape is a solid the right way out, but not a valid one: "
-                "expect open edges, and check any boolean result against it.",
-            )
-
+        # Whether the solid is *well formed* is a different question, asked by
+        # 'validity' - which reports rather than fails, because the parts it
+        # has most to say about are ones nothing is functionally wrong with.
         return self.passed(shape)

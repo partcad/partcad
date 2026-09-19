@@ -7,6 +7,11 @@
 from ..assembly import Assembly
 from .test import Test
 
+# The floor that separates a boolean's arithmetic noise from a real overlap.
+# Two touching surfaces should answer zero and answer a sliver instead; this is
+# above that and far below anything anyone would call an interference.
+DEFAULT_MIN_VOLUME = 0.05
+
 
 class InterferenceTest(Test):
     """Fail an assembly whose parts share space.
@@ -21,18 +26,48 @@ class InterferenceTest(Test):
     solids - a bracket around a shaft, an L around a corner, anything rotated -
     so they are used only to choose the pairs worth intersecting.
 
-    What counts as sharing space is a threshold rather than 'any volume at all'.
-    Parts meant to go together touch, and meshed geometry touching produces
-    slivers, so an assembly that fits would otherwise fail. The default asks for
-    a cubic millimetre; a package that wants to be stricter or looser can say so:
+    The threshold exists to absorb arithmetic, and nothing else. Two surfaces
+    that merely touch bound no volume between them, but a boolean over
+    tessellated or imperfectly coincident faces answers with a sliver of a few
+    thousandths of a cubic millimetre rather than with zero. The default floor
+    is 0.05 mm^3: orders of magnitude below any overlap a person would call
+    one, and above the noise.
+
+    It is deliberately not a place to put anything else. An overlap that is
+    meant to be there is a property of the joint between those two parts, and is
+    read from that joint.
+
+    Every one of them is read from the joint, and none is declared against the
+    pair. Two parts have exactly one relationship - the 'connect' that joins
+    them - so that is the only place a statement about the two of them can live
+    and still be true when one of them moves, is renamed, or is used elsewhere.
+
+    - an interface that declares 'selfScrew' cuts its own thread wherever it is
+      used, so the two solids occupy the same space where that thread is formed;
+    - a mating that declares 'selfScrew' says it of the pairing, which is the
+      only place it can be said when neither end knows on its own: the same
+      screw cuts its own thread in a pilot hole and cuts nothing in a clearance
+      one;
+    - a mating that declares 'snapIn' says the pairing is made by pushing one
+      past the other rather than screwing it in - a bore onto a thread it is
+      not cut to match, a LEGO stud into an anti-stud. Getting past means
+      passing through, and a model that holds no springs holds them
+      overlapping;
+    - a connection whose 'how' declares either of those says it of this joint
+      alone: an ordinary screw driven into soft material cuts a thread there
+      too, which is a fact about the joint and not about the screw;
+    - a connection's 'interferes' names the further items the same act of
+      joining drives through, which nothing about the connection can imply: a
+      bolt is connected to one part and passes through the three behind it.
+
+    An overlap between two parts joined in any of those ways is expected, and
+    is not reported. Every other overlap between them still is: a screw may
+    bite the bracket it is driven into without also being inside the housing.
 
         assemblies:
           gearbox:
             interference:
-              minVolume: 0.5      # mm^3 of shared space before it is reported
-              minFraction: 0.01   # ...and/or that share of the smaller part
-              ignore:             # pairs that are meant to interfere
-                - [shaft, hub]
+              minVolume: 0.01     # a tighter floor, for geometry that is exact
     """
 
     def __init__(self) -> None:
@@ -40,11 +75,10 @@ class InterferenceTest(Test):
 
     async def cache_key_suffix(self, ctx, shape) -> str:
         config = (shape.config or {}).get("interference") or {}
-        return ",skip=%s,minVolume=%s,minFraction=%s,ignore=%s" % (
+        return ",skip=%s,minVolume=%s,minFraction=%s" % (
             bool(config.get("skip", False)),
-            config.get("minVolume", 1.0),
+            config.get("minVolume", DEFAULT_MIN_VOLUME),
             config.get("minFraction", 0.0),
-            sorted(tuple(sorted(pair)) for pair in config.get("ignore", [])),
         )
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
@@ -60,7 +94,7 @@ class InterferenceTest(Test):
         try:
             result = await shape.get_interference_async(
                 ctx,
-                min_volume=float(config.get("minVolume", 1.0)),
+                min_volume=float(config.get("minVolume", DEFAULT_MIN_VOLUME)),
                 min_fraction=float(config.get("minFraction", 0.0)),
             )
         except Exception as e:
@@ -114,8 +148,8 @@ class InterferenceTest(Test):
 
         overlaps = result.get("overlaps") or []
 
-        ignored = {tuple(sorted(pair)) for pair in config.get("ignore", [])}
-        reported = [o for o in overlaps if not _is_ignored(o, ignored)]
+        expected = await _expected_overlap_pairs(ctx, shape)
+        reported = [o for o in overlaps if not _is_expected(o, expected)]
         if not reported:
             return self.passed(shape)
 
@@ -127,14 +161,69 @@ class InterferenceTest(Test):
         return self.TEST_FAILED
 
 
-def _is_ignored(overlap, ignored):
-    """Whether this pair was declared as one that is meant to interfere.
+async def _expected_overlap_pairs(ctx, shape):
+    """The pairs whose joint requires them to share space.
 
-    A pair is named by the two part names, in either order, and matches a
-    child whose name ends with it - so 'shaft' covers 'gearbox/shaft' without
-    the configuration having to spell out where in the tree it sits.
+    Four ways a joint says so, none of them a property of the assembly: an
+    interface that cuts its own thread wherever it is used, a connection that
+    says this particular screw cuts one, a connection made by snapping one part
+    past a feature on the other, and a connection that names the further items
+    the same act of joining drives through.
+
+    The last one is needed because a connection joins two items and a screw
+    passes through more than two: it is connected to the part its head bears
+    on, and cuts its thread in every part underneath that as well. Nothing
+    about those further items is derivable from the connection, so 'interferes'
+    names them.
     """
-    for a, b in ignored:
+    pairs = set()
+    try:
+        children = list(shape.connected_children())
+    except Exception:
+        return pairs
+    for child in children:
+        connection = child.connection
+        if not connection:
+            continue
+        target = connection.get("target")
+        if target is None or child.name is None:
+            continue
+
+        # The further items this act of joining drives through, whatever made
+        # the joint itself expected.
+        for other in connection.get("interferes") or []:
+            pairs.add(tuple(sorted((child.name, other))))
+
+        how = child.how
+        if how is not None and (getattr(how, "self_screw", False) or getattr(how, "snap_in", False)):
+            pairs.add(tuple(sorted((child.name, target))))
+            continue
+
+        for key in ("with_interface", "to_interface"):
+            if await _cuts_its_own_thread(ctx, connection.get(key)):
+                pairs.add(tuple(sorted((child.name, target))))
+                break
+    return pairs
+
+
+async def _cuts_its_own_thread(ctx, interface_spec):
+    if not interface_spec:
+        return False
+    try:
+        interface = ctx.get_interface(interface_spec)
+    except Exception:
+        return False
+    if interface is None:
+        return False
+    try:
+        return bool(interface.get_self_screw())
+    except Exception:
+        return False
+
+
+def _is_expected(overlap, expected):
+    """Whether this pair is one the joint between them requires."""
+    for a, b in expected:
         names = (overlap["a"], overlap["b"])
         if _matches(names[0], a) and _matches(names[1], b):
             return True

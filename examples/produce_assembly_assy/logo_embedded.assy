@@ -24,7 +24,7 @@ links:
     # On a container node, "description" is what the sub-assembly it declares
     # is: the instruction book puts it on that sub-assembly's own page.
     description: The skull, made of two identical halves.
-    location: [[0,0,25], [1,0,0], 0]
+    location: [[0,0,26.75], [1,0,0], 0]
   - part: bolt
     package: ../produce_part_step
-    location: [[0,0,7.5], [0,0,1], 0]
+    location: [[0,0,31.75], [0,0,1], 0]

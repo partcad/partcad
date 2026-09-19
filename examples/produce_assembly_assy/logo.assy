@@ -1,20 +1,66 @@
+# The PartCAD logo: a skull and crossbones. Four 3D printed PLA plates and one
+# M8 bolt, written in the order somebody would put it together.
+#
+# The bolt is what holds all four, so all four are on the bolt, and each meets
+# it differently: the upper bracket is a clearance hole it passes through, the
+# lower bracket and the lower bone are tapped and take hold of the thread, and
+# the upper bone is a press fit pushed on over the thread between the two.
+#
+# The two tapped holes are 30mm apart - 24 turns of an M8 coarse pitch - because
+# one bolt has one thread and has to find both of them.
 links:
-  - part: bone
-    package: ../produce_part_cadquery_logo
-    name: bone1
-    location: [[0,0,0], [0,0,1], 0]
-  - part: bone
-    package: ../produce_part_cadquery_logo
-    name: bone2
-    location: [[0,0,-2.5], [0,0,1], -90]
   - part: head_half
     package: ../produce_part_cadquery_logo
     name: head_half_1
-    location: [[0,0,27.5], [0,0,1], 0]
-  - part: head_half
-    package: ../produce_part_cadquery_logo
-    name: head_half_2
-    location: [[0,0,25], [0,0,1], -90]
+
   - part: bolt
     package: ../produce_part_step
-    location: [[0,0,7.5], [0,0,1], 0]
+    connect:
+      name: head_half_1
+      comment: Dropped through the upper bracket, which its head bears on
+      toInstance: inner
+      how:
+        pushForceMax: 5.0
+
+  - part: head_half_tapped
+    package: ../produce_part_cadquery_logo
+    name: head_half_2
+    connect:
+      name: bolt
+      comment: >-
+        Screwed onto the bolt until it meets the bracket above it, crossed with
+        it so the two together make the head of the logo.
+      withInstance: inner
+      withParams: {turnZ: 90}
+      toParams: {moveZ: 2.5}
+      how:
+        turnTorqueMax: 12.0
+
+  - part: bone
+    package: ../produce_part_cadquery_logo
+    name: bone1
+    connect:
+      name: bolt
+      comment: >-
+        Pushed onto the thread rather than screwed along it: the bore is the
+        thread's pitch diameter, so the thread bites in half its depth and
+        holds it there. That it shares that space with the bolt is not a fault
+        - '//pub/std/metric/m' says so on the mating, with 'snapIn'.
+      withInstance: top
+      toParams: {moveZ: 30.0}
+      how:
+        pushForceMax: 80.0
+
+  - part: bone_tapped
+    package: ../produce_part_cadquery_logo
+    name: bone2
+    connect:
+      name: bolt
+      comment: >-
+        Screwed on last, up against the bone above it and crossed with it. The
+        bolt ends flush with its underside.
+      withInstance: top
+      withParams: {turnZ: 90}
+      toParams: {moveZ: 32.5}
+      how:
+        turnTorqueMax: 12.0

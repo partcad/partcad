@@ -12,14 +12,16 @@ Package: `//pub/examples/partcad/produce_assembly_assy`
 
 | Part | Count | Description |
 | --- | ---: | --- |
-| bone | 2 | Plate used as one of the bones on PartCAD logo |
-| head_half | 2 | Bracket used as one side of the head on PartCAD logo |
+| bone | 1 | Plate used as one of the bones on PartCAD logo |
+| bone_tapped | 1 | The same plate, tapped M8 so the bolt takes hold in it |
+| head_half | 1 | Bracket used as one side of the head on PartCAD logo |
+| head_half_tapped | 1 | The same bracket, tapped M8 so the bolt takes hold in it |
 
 ### [//pub/examples/partcad/produce_part_step](../produce_part_step/README.md)
 
 | Part | Count | Description |
 | --- | ---: | --- |
-| bolt | 1 | M8x30-screw |
+| bolt | 1 | M8x35-screw |
 
 <br/><br/>
 

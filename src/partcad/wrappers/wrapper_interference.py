@@ -116,11 +116,11 @@ def process(path, request):
             raise Exception("No assembly provided to check")
         obj = json.loads(payload) if isinstance(payload, str) else payload
 
-        # How much shared volume is worth reporting. Parts that are meant to fit
-        # together touch, and meshed geometry touching is numerically noisy, so
-        # a threshold is not a convenience here - it is the difference between
-        # reporting a design fault and reporting that the design fits together.
-        min_volume = float(request.get("min_volume", 1.0))
+        # The floor under the arithmetic. Two surfaces that merely touch bound
+        # no volume, and a boolean over tessellated faces answers with a sliver
+        # instead of zero; this is above that noise and far below any overlap
+        # worth the name.
+        min_volume = float(request.get("min_volume", 0.05))
         min_fraction = float(request.get("min_fraction", 0.0))
 
         # The root's own name is on every part below it and says nothing, so
