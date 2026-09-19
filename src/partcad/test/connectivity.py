@@ -32,6 +32,13 @@ class ConnectivityTest(Test):
     rather than assumed wrong - an assembly may legitimately place everything by
     coordinates - so it only applies once something in the assembly does connect.
 
+    An assembly that says it is manufacturable is held to more than that: no
+    item may be placed by 'location:' at all. Somebody has to physically make
+    this one, and a coordinate does not tell them anything they can act on - it
+    says where a part ends up, not what holds it there. Every item has to name
+    what it is joined to, and the one item everything else hangs from is placed
+    by being first rather than by saying where it is.
+
     Configured per assembly:
 
         assemblies:
@@ -49,10 +56,11 @@ class ConnectivityTest(Test):
         # Every setting that decides the verdict. Without them a cached pass is
         # read back after the setting that produced it has been turned off.
         config = (shape.config or {}).get("connectivity") or {}
-        return ",skip=%s,allowDuplicates=%s,requireAnchored=%s" % (
+        return ",skip=%s,allowDuplicates=%s,requireAnchored=%s,manufacturable=%s" % (
             bool(config.get("skip", False)),
             bool(config.get("allowDuplicates", False)),
             bool(config.get("requireAnchored", True)),
+            bool(getattr(shape, "is_manufacturable", False)),
         )
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
@@ -159,7 +167,7 @@ class ConnectivityTest(Test):
                 yield from self._containers(item)
 
     def _unanchored(self, shape, config):
-        """Items placed by coordinates in a group that otherwise connects.
+        """Items placed by coordinates where something has to hold them.
 
         Per group rather than per assembly, because the exemption is for the
         item the others hang from and every 'links:' list has one. Flattening
@@ -167,10 +175,31 @@ class ConnectivityTest(Test):
         level becomes, and then report the item it wraps - which is the one
         thing that is allowed to be placed by coordinates.
 
-        Only meaningful once something in the group does connect: a group
+        For an assembly that is to be manufactured, 'location:' is reported
+        wherever it appears: see the class docstring. Otherwise it is only
+        meaningful once something in the group does connect, since a group
         written entirely as coordinates is a legitimate way to write one.
         """
         if not config.get("requireAnchored", True):
+            return
+        if getattr(shape, "is_manufacturable", False):
+            for children in self._containers(shape):
+                for index, child in enumerate(children):
+                    if getattr(child, "located", False):
+                        yield (
+                            "'%s' is placed by coordinates, which says where it ends up but not "
+                            "what holds it there - an assembly that is to be made has to connect it" % child.name
+                        )
+                    elif index > 0 and not child.connection:
+                        # Neither 'location:' nor 'connect:' at all, which the
+                        # factory gives an identity placement and no connection.
+                        # Saying nothing puts the item at the origin, which is a
+                        # coordinate like any other - and the only one nobody
+                        # chose.
+                        yield (
+                            "'%s' says neither where it goes nor what holds it - an assembly "
+                            "that is to be made has to connect it" % child.name
+                        )
             return
         for children in self._containers(shape):
             if len(children) < 2:

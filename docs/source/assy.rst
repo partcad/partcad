@@ -152,6 +152,8 @@ and so is the section itself: an omitted field means the default below.
       pushDistance: <(optional) staging distance, in mm, derived from the object by default>
       turnDirection: <(optional) "cw" (clockwise) or "ccw" (counterclockwise), default: "cw">
       turnTorqueMax: <(optional) maximum torque, in N*m, default: 0>
+      snapIn: <(optional) whether the object is pushed past a feature that springs back behind it>
+      selfScrew: <(optional) whether this joint cuts its own thread, default: from the interfaces>
       threadStep: <(optional) axial distance per full turn, in mm, default: 0.00>
       holdWith: <(optional) interface, or list of interfaces, to hold this object by>
       holdWithInstance: <(optional) instance of each interface listed in "holdWith">

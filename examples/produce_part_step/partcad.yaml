@@ -1,17 +1,55 @@
 desc: PartCAD example project to demonstrate parts defined using STEP files.
 
 docs:
+  intro: |
+    ## Tolerance, and what it has to do with buying
+
+    A `step` part takes no `tolerance` parameter, and `pc test` says so in as
+    many words: *the part type 'step' does not accept one*. That is about the
+    file format rather than about the part. A STEP file has a place of its own
+    to carry tolerance, so a second one in `partcad.yaml` would be a second
+    answer to a question the file has already answered - and the two would be
+    free to disagree.
+
+    It is not a statement that a part read from a file has to be bought. A
+    proper STEP file, one that carries its tolerance, describes something that
+    can be made. The bolt here is declared with a `vendor` and an `sku` because
+    a standard fastener is bought, which is a fact about hex bolts and not
+    about STEP.
+
   usage: |
     ```shell
     pc inspect bolt
     ```
+
+# A standard fastener is bought, and the store example is where it is bought
+# from - the same store that stocks what 'feature_interface' is assembled from.
+suppliers:
+  - //pub/examples/partcad/provider_store:myGarage
 
 parts:
   bolt:
     type: step
     aliases:
       - hexhead
-    desc: M8x30-screw
+    desc: M8x35-screw
+    # The origin of the STEP file is the bearing face of the head, with the
+    # shank along -Z, which is where the standard interface expects it.
+    implements:
+      # A bolt, not a screw: it matches a thread that is already there rather
+      # than cutting one, which is what an ISO 4014 hex head fastener does.
+      "//pub/std/metric/m:m-bolt-length;size=8,length=35": [[0, 0, 0], [1, 0, 0], 0]
+    # A standard fastener is bought rather than made, which is what 'vendor' and
+    # 'sku' say. The designation of the standard is what one is ordered by, and
+    # is quoted here in place of any one supplier's part number.
+    #
+    # Nothing about the file type decides that. A 'step' part takes no
+    # 'tolerance' parameter because a STEP file has somewhere of its own to
+    # carry one, not because a part read from a file has to be bought - see the
+    # note in the README.
+    vendor: iso
+    sku: ISO 4014 M8x35
+    url: https://www.iso.org/standard/53625.html
   screw: bolt
   fastener:
     type: alias
