@@ -1163,6 +1163,12 @@
                 "source": { "type": "string", "minLength": 1 },
                 "package": { "type": "string", "minLength": 1 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "images": {
+                  "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
                 "sketch": { "type": "string", "minLength": 1 },
                 "depth": { "type": "number" },
                 "url": { "$ref": "#/definitions/url" },
@@ -1359,6 +1365,12 @@
                   "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'urdf' a URDF robot description. A format an engine's plugin package implements is not in this list and is named through that package - 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
+                "images": {
+                  "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
                 "fileUrl": { "$ref": "#/definitions/url" },
@@ -1572,6 +1584,12 @@
           "properties": {
             "type": { "type": "string", "enum": ["basic", "dxf", "svg", "cadquery", "build123d", "enrich", "alias"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "images": {
+              "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true
+            },
             "unless": { "$ref": "#/definitions/unless" },
             "path": { "type": "string", "minLength": 1 },
             "fileFrom": { "type": "string", "enum": ["url"] },
@@ -1709,6 +1727,12 @@
           "properties": {
             "abstract": { "type": "boolean", "default": false },
             "desc": { "type": "string", "maxLength": 1000 },
+            "images": {
+              "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true
+            },
             "unless": { "$ref": "#/definitions/unless" },
             "path": { "type": "string", "minLength": 1 },
             "alias": {

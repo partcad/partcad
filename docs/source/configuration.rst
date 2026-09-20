@@ -1433,6 +1433,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
     <part name>:
       type: <scad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|extrude|sweep>
       desc: <(optional) textual description>
+      images: <(optional) the images this part was modeled from; see below>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
       fileUrl: <(fileFrom=url only) the URL to download the source file from>
@@ -1513,6 +1514,13 @@ cuts its own. See :doc:`assy`.
 The fields of the ``connect`` section are the defaults for the ``holdWith*`` and
 ``holdTo*`` fields of the ``how`` section of an Assembly YAML
 ``connect``/``connectPorts`` node. See :doc:`assy`.
+
+``images`` names the pictures a part was modeled from -- a technical drawing, a
+photograph, a sketch -- as paths relative to the package. They are what
+``pc render -t readme`` puts beside the part, next to its own rendered image, so
+that a reader of the README sees what the model was made to match. Assemblies,
+sketches and interfaces take the same field, and it says nothing about how the
+object is built: nothing reads these images but the README.
 
 The ``properties`` section says what the shape this part produces is, as opposed
 to ``parameters``, which say what is asked of the type that produces it. See
