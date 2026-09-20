@@ -150,6 +150,49 @@ Feature: `pc bom` command
     And STDOUT should contain '"totalSoftware": 2'
 
   @success @pc-bom
+  Scenario: A line item is ordered by the vendor and SKU it declares of its own
+    # One piece of geometry sold by two vendors is two declarations over one
+    # part, and the second is written as a reference to the first. What it is
+    # bought as is the only thing such a reference restates, and it has to
+    # survive being referenced again.
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        cube:
+          type: cadquery
+          desc: A cube
+          vendor: acme
+          sku: CUBE-1
+          count_per_sku: 10
+        cube_from_other:
+          type: alias
+          source: cube
+          vendor: other
+          sku: OTHER-1
+        cube_from_other_alias:
+          type: alias
+          source: cube_from_other
+
+      assemblies:
+        unit:
+          type: assy
+          desc: A cube bought from somewhere else
+      """
+    And a file named "unit.assy" with content:
+      """
+      links:
+        - part: cube_from_other_alias
+          location: [[0,0,0], [0,0,1], 0]
+      """
+    When I run "pc -q bom --json :unit"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain '"name": "//:cube_from_other_alias"'
+    And STDOUT should contain '"vendor": "other"'
+    And STDOUT should contain '"sku": "OTHER-1"'
+    # The bag of ten belongs to acme's SKU and says nothing about this one.
+    And STDOUT should contain '"count_per_sku": 1'
+
+  @success @pc-bom
   Scenario: A part is not an assembly
     When I run "pc bom :cube"
     Then the command should exit with a non-zero status code

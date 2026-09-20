@@ -13,6 +13,7 @@ import typing
 from . import logging as pc_logging
 from . import part_factory as pf
 from . import telemetry
+from .shape_config_store import resolve_store_properties
 from .utils import format_parameterized_name, get_child_project_path
 
 
@@ -135,10 +136,20 @@ class PartFactoryAlias(pf.PartFactory):
             return wrapped
 
     def get_final_config(self):
+        """The declaration this reference resolves to, as this reference reports it.
+
+        The source's, but for the purchasing record: a reference may name a
+        vendor and an SKU of its own, and that is the one thing about the object
+        it is allowed to restate (see 'resolve_store_properties'). Applied here
+        rather than where the record is read, so that it travels: an alias of an
+        alias, and an enrich of an enrich, resolve through this same method and
+        so see what the reference below them declared rather than only what the
+        object at the end of the chain did.
+        """
         source = self.ctx._get_part(self.source)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")
-        return source.get_final_config()
+        return resolve_store_properties(source.get_final_config(), self.config)
 
     def get_cacheable(self) -> bool:
         # Cacheable once it knows which entry it shares: a reference keys on
