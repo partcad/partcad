@@ -46,6 +46,15 @@ Host commands
 
   - ``pc system status`` — Display the state of the internal data used by PartCAD, including the location of
     the local cache.
+  - ``pc system status config`` — Dump the configuration this installation resolved, with the configuration
+    file, the ``PC_*`` environment and the command line already applied. The same report as ``pc config``,
+    beside the two below so that "what is this machine doing" is one command with three answers.
+  - ``pc system status env`` — Dump the ``PC_*`` environment variables this ``pc`` process was started with.
+    Not the same thing as the report above: the configuration says what an option resolved to, this says what
+    the environment asked for, and they disagree whenever a command-line option won or a value was rejected.
+    A variable whose name says its value authenticates — ``PC_REMOTE_SANDBOX_TOKEN``, or anything else with
+    ``TOKEN``, ``KEY``, ``SECRET``, ``PASSWORD``, ``CREDENTIAL`` or ``AUTH`` between the underscores of its
+    name — is listed but printed as ``<scrubbed>``, so the report stays something you can paste into a bug.
   - ``pc system reset`` — Reset all internal state maintained by PartCAD, for example to clear a corrupted
     cache.
   - ``pc system prune`` — Remove the containers and images PartCAD created for the ``docker`` sandbox.
@@ -86,11 +95,24 @@ Host commands
     once the daemon answers on it, so whoever reads it can connect straight away.
   - ``pc daemon stop`` — Stop the daemon serving this workspace, and say whether one was running.
   - ``pc daemon status`` — Display the state of the internal data the daemon holds.
+  - ``pc daemon status config`` — Dump the configuration the daemon itself resolved, the daemon-side
+    counterpart of ``pc system status config``. The two differ on purpose: a daemon is warm and shared per
+    workspace, so its own configuration is whatever its environment held when something first started it —
+    possibly days ago, possibly from a VS Code window. It is not what your command ran under (that travels
+    with the command, as explained above); it is what the daemon falls back on for a client that sends none.
+  - ``pc daemon status env`` — Dump the ``PC_*`` environment variables the daemon process is running with.
+    This is the one report that cannot be worked out from this side at all, because the daemon inherited the
+    environment of whatever started it. Credentials are scrubbed in the daemon, so the value never reaches
+    the wire.
   - ``pc daemon reset`` — Drop that state. ``--repo-only``, ``--sandbox-only`` and ``--cache-only`` narrow it
     to the cached dependencies, the sandboxed runtime environments, or the filesystem cache respectively;
     without them all of it goes.
   - ``pc daemon set telemetry`` — Set the daemon's telemetry settings (``type``, ``env``, ``sentryDsn``),
     the daemon-side counterpart of ``pc system set``.
+
+  The three ``status`` reports reach the daemon serving this workspace and start one if none is answering yet
+  — there is no reading the configuration or the environment of a process that does not exist. A daemon such
+  a command started is one that inherited *this* shell, so ask when the daemon you mean is already up.
 
   There is no daemon to restart after changing a setting: every command hands the daemon its own resolved user
   configuration, as explained above. Stopping one is for upgrades and for clearing a wedged state.

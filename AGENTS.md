@@ -40,6 +40,11 @@ a CAD addon, or documentation.
   owns it: a copy on each side is a copy that can disagree, and a disagreement is a client silently starting a
   second daemon.
 
+  `config_report` is here for the same reason one level down: it is how a configuration and a `PC_*`
+  environment are *read back* — by `pc config`, by `pc system status config|env`, and by the daemon answering
+  `pc daemon status config|env` for its own side. What it really holds is the redaction, and a redaction rule
+  with a copy per caller is a rule with copies that stop redacting.
+
 * [src/partcad_client](./src/partcad_client):
 
   What a **client** does, and a daemon must not: discovering the daemon serving a workspace and connecting to

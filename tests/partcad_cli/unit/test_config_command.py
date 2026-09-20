@@ -12,12 +12,17 @@ property, because the obvious way to enumerate a configuration ('vars()') sees
 instance attributes and a property is not one.
 """
 
-from partcad_cli.click.commands.config import _resolved
+from partcad_utils.config_report import resolved_options
 from partcad_utils.user_config import UserConfig
+
+# What the command prints, through the function it prints with. That function
+# lives in `partcad_utils` rather than in the command, because `pc system status
+# config` and the daemon's own `daemon.status.config` print the same report and
+# a redaction rule with three copies has two that can stop redacting.
 
 
 def _printed():
-    return dict(_resolved(UserConfig()))
+    return dict(resolved_options(UserConfig()))
 
 
 def test_an_option_kept_as_a_property_is_reported(monkeypatch, tmp_path):
@@ -48,7 +53,7 @@ def test_nothing_private_is_reported(monkeypatch, tmp_path):
 
 def test_each_option_is_reported_once(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    names = [key for key, _value in _resolved(UserConfig())]
+    names = [key for key, _value in resolved_options(UserConfig())]
     assert len(names) == len(set(names))
 
 
