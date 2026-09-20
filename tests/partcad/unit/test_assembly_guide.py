@@ -605,3 +605,77 @@ def test_render_assembly_guide_refuses_a_non_manufacturable_assembly():
         prj.render_assembly_guide("logo_embedded", "pdf", output_dir=output_dir)
 
     assert not os.path.exists(os.path.join(output_dir, "logo_embedded.pdf"))
+
+
+class _FakeAssembly:
+    """Just enough of an assembly for the bill of materials to be looked up by"""
+
+    def __init__(self, name, project_name="//pkg"):
+        self.project_name = project_name
+        self.name = name
+        self.config = {}
+
+
+def _section(name, project_name="//pkg"):
+    return assembly_guide.GuideSection(assembly=_FakeAssembly(name, project_name), name=name)
+
+
+def test_repeat_count_comes_from_the_bill_of_materials():
+    """How many of each sub-assembly to make is what the BOM already counted
+
+    Deriving it again by walking the tree would be a second answer to a
+    question the BOM has answered, free to disagree with the page that prints
+    it.
+    """
+    spire, tower, castle = (_section(n) for n in ("spire", "tower", "castle"))
+    grouped = {"assemblies": {"//pkg": {"spire": {"count": 9}, "tower": {"count": 4}}}}
+
+    assembly_guide.count_sections([spire, tower, castle], grouped)
+
+    assert spire.count == 9
+    assert tower.count == 4
+    # The top level assembly is not in its own bill of materials.
+    assert castle.count == 1
+
+
+def test_repeat_count_of_an_embedded_assembly_is_one():
+    """An assembly embedded in an ASSY file is in no package, so in no BOM"""
+    head = _section("logo_embedded_head")
+
+    assembly_guide.count_sections([head], {"assemblies": {}})
+
+    assert head.count == 1
+
+
+def test_repeat_count_does_not_confuse_two_packages():
+    """Two packages may each declare an assembly of the same name"""
+    mine, theirs = _section("spire", "//mine"), _section("spire", "//theirs")
+    grouped = {"assemblies": {"//mine": {"spire": {"count": 9}}, "//theirs": {"spire": {"count": 2}}}}
+
+    assembly_guide.count_sections([mine, theirs], grouped)
+
+    assert (mine.count, theirs.count) == (9, 2)
+
+
+def test_section_page_says_how_many_of_a_repeated_assembly_to_make():
+    """An assembly used more than once is documented once and asks to be repeated"""
+    section = assembly_guide.GuideSection(assembly=make_assembly("spire"), name="spire", count=9)
+
+    (page,) = asyncio.run(assembly_guide._section_pages(None, section, assembly_guide.ImageSource(), 2))
+
+    texts = [block.text for block in page.blocks if isinstance(block, pc_document.Paragraph)]
+    assert texts == ["The build needs 9 of these. Repeat this section 9 times - the steps are the same every time."]
+    (properties,) = [block for block in page.blocks if isinstance(block, pc_document.Properties)]
+    assert ("Needed", "9") in properties.items
+
+
+def test_section_page_of_a_one_off_assembly_says_nothing_about_repeating_it():
+    """The count is only worth saying when it is not one"""
+    section = assembly_guide.GuideSection(assembly=make_assembly("keep"), name="keep")
+
+    (page,) = asyncio.run(assembly_guide._section_pages(None, section, assembly_guide.ImageSource(), 2))
+
+    texts = [block.text for block in page.blocks if isinstance(block, pc_document.Paragraph)]
+    assert texts == []
+    (properties,) = [block for block in page.blocks if isinstance(block, pc_document.Properties)]
+    assert [name for name, _ in properties.items] == ["Package", "Steps"]

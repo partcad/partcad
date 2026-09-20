@@ -212,22 +212,6 @@ class Shape(ShapeConfiguration):
 
     errors: list[str]
 
-    # Extra cache entries a kind of shape carries beside its geometry, mapped to
-    # the attribute each is held in. Empty for every kind but a sketch, which
-    # carries what its drawing said about its own elements (see
-    # 'Sketch.get_annotations'): BREP has nowhere to put that, and re-reading
-    # the source file is exactly what the cache exists to avoid.
-    #
-    # They are entries of their own rather than something folded into the
-    # geometry, for the reason 'cache_shape.properties_key()' gives: an entry of
-    # its own is written, read and missed on its own. Missed matters here, and
-    # is why a cached shape whose side data is absent is built again rather than
-    # answered with nothing: the geometry of a sketch cached before any of this
-    # existed is perfectly valid and its key has not moved, so "no annotations
-    # were recorded" would otherwise read as "this drawing annotates nothing" -
-    # which is a different answer, and the one a check would act on.
-    CACHED_SIDE_DATA: dict = {}
-
     def __init__(self, project_name: str, config: dict) -> None:
         super().__init__(config)
         self.project_name = project_name
@@ -263,6 +247,12 @@ class Shape(ShapeConfiguration):
         # Memory cache
         self._wrapped = None
         self._bounding_box = None
+        # Everything recorded about this shape's geometry when it was built -
+        # its measurements, and whatever its source stated (see
+        # 'shape_envelope.KEY_METADATA'). Learnt while building or read back
+        # with the geometry, and kept here for the runs that have nowhere to
+        # cache it. See 'get_metadata_async()'.
+        self._metadata = None
 
         # Set by the factory (see ShapeFactory.prepare_async): everything that has
         # to happen before this shape's cache key means anything - 'fileFrom'
@@ -521,24 +511,26 @@ class Shape(ShapeConfiguration):
             if is_cacheable:
                 cache_hash = self.hash
                 if cache_hash:
-                    keys_to_read = [self.kind, "cmps", *self.CACHED_SIDE_DATA]
                     cached, to_cache_in_memory = await ctx.cache_shapes.read_async(
-                        cache_hash, keys_to_read, self.get_cache_metadata()
+                        cache_hash, [self.kind, "cmps"], self.get_cache_metadata()
                     )
-                    # An entry that is absent is an entry that was never
-                    # written, which is not the same as one that was written
-                    # empty: see CACHED_SIDE_DATA. Such a hit is not usable, so
-                    # nothing is taken from it and the shape is built.
-                    side_data_complete = all(cached.get(key) is not None for key in self.CACHED_SIDE_DATA)
-                    if side_data_complete:
-                        for key, attribute in self.CACHED_SIDE_DATA.items():
-                            setattr(self, attribute, cached[key])
-                        if to_cache_in_memory.get(self.kind, False):
-                            self._wrapped = cached[self.kind]
-                        if to_cache_in_memory.get("cmps", False):
-                            self.components = cached["cmps"]
-                        if self.kind in cached and cached[self.kind] is not None:
-                            return cached[self.kind]
+                    # Whatever was recorded about the geometry came back inside
+                    # the same entry as the geometry (see cache_shape.py), so a
+                    # hit is a hit: there is no sibling entry that might be
+                    # missing, and nothing to check for completeness.
+                    #
+                    # Set only on a hit, and to '{}' rather than None when the
+                    # entry recorded nothing: None on this attribute means "not
+                    # known yet" and is what sends 'get_metadata_async()' off to
+                    # build the shape. A miss here has to leave it saying that.
+                    if cached.get(self.kind) is not None:
+                        self._metadata = shape_envelope.metadata_of(cached[self.kind]) or {}
+                    if to_cache_in_memory.get(self.kind, False):
+                        self._wrapped = cached[self.kind]
+                    if to_cache_in_memory.get("cmps", False):
+                        self.components = cached["cmps"]
+                    if self.kind in cached and cached[self.kind] is not None:
+                        return cached[self.kind]
                 else:
                     if self.cache:
                         pc_logging.warning(f"No cache hash for shape: {self.name}")
@@ -557,6 +549,14 @@ class Shape(ShapeConfiguration):
             if self.components:
                 self.components = [self._component_to_envelope(c) for c in self.components]
 
+            # What the wrapper that produced this envelope recorded about it -
+            # the size it measured, and whatever the source file stated (see
+            # 'shape_envelope.KEY_METADATA'). Taken off here and not later
+            # because 'offset'/'scale' below go through a wrapper that decodes
+            # the envelope and encodes a fresh one, which cannot carry forward
+            # what it was never sent.
+            recorded = shape_envelope.metadata_of(shape)
+
             # TODO(clairbee): apply 'offset' and 'scale' during instantiation and
             #                 apply to both 'wrapped' and 'components'
             # 'offset'/'scale' are applied in a sandbox (see transform.py) so
@@ -569,6 +569,24 @@ class Shape(ShapeConfiguration):
                 if "scale" in self.config:
                     shape = await transform.scale(ctx, shape, self.config["scale"])
 
+                # The transform rebuilt the geometry, so the encoder on the far
+                # side measured what came out and the numbers on the way back
+                # are the new ones - which is the point: a part scaled by two is
+                # not the size the file it was read from would suggest. What
+                # that wrapper could not know is what the *source* stated, so
+                # the sections read at import are laid back under the fresh
+                # measurements rather than lost with the envelope they rode in.
+                #
+                # The old measurements are dropped first rather than merged
+                # under. They describe a shape that no longer exists, so if the
+                # far side could not measure what came out, the honest answer is
+                # that this shape's size is unknown - not the size it used to
+                # be, which is the one answer nobody could detect as wrong.
+                recorded = shape_envelope.merge_metadata(
+                    shape_envelope.without_measurements(recorded),
+                    shape_envelope.metadata_of(shape),
+                )
+
             # Whatever produced the envelope - a factory, a wrapper, a
             # transform - the outer layer around it is this shape's own. It
             # is stamped here rather than left to whoever built the payload,
@@ -576,25 +594,36 @@ class Shape(ShapeConfiguration):
             # the cache later carry exactly the same name and label.
             shape = shape_envelope.apply_metadata(shape, self.get_cache_metadata())
 
+            # Kept on the object as well as cached, because the two answer for
+            # different runs. A shape with 'cache: false', one that does not own
+            # its entry, and a run with every tier switched off all reach here
+            # having built the shape and having nowhere to store what that
+            # produced - and 'pc info' should still be able to say how big it is.
+            self._metadata = recorded or {}
+            if recorded:
+                shape = dict(shape)
+                shape[shape_envelope.KEY_METADATA] = recorded
+
             if cache_hash:
                 if is_cacheable and self.owns_cache_entry:
+                    # The geometry and everything recorded about it go into the
+                    # one entry, in the one write, because they were produced
+                    # together and are valid together: the hash that keys the
+                    # entry covers what produced the geometry, so a shape that
+                    # rebuilds measures again and one that does not never needs
+                    # to. Separate entries could be separately present.
                     to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
                     if self.components and len(self.components) > 0:
                         to_cache["cmps"] = self.components
-                    for key, attribute in self.CACHED_SIDE_DATA.items():
-                        # Unconditionally, including when there is nothing to
-                        # record: an empty entry is what says the question was
-                        # asked and the answer was nothing, which is what the
-                        # read above distinguishes from an entry that is absent.
-                        to_cache[key] = getattr(self, attribute, None) or []
                     properties = self._shape_properties()
                     if properties:
-                        # Both entries are filled here and nowhere else:
-                        # this is the one path that has actually
-                        # instantiated the shape, and so the one that knows
-                        # what came out of it. They are materialized apart
-                        # (see 'get_cached_properties_async()'), and a shape
-                        # that reports nothing leaves no entry to read.
+                        # The one thing still kept beside the geometry rather
+                        # than in it, and the reason is that it is *declared*:
+                        # the hash does not cover a 'properties:' section, so
+                        # editing one leaves the geometry entry valid and a copy
+                        # buried inside it would go on answering with the values
+                        # it happened to be written with. See
+                        # 'cache_shape.properties_key()'.
                         to_cache[properties_key(self.kind)] = properties
                     to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
                     do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
@@ -711,10 +740,20 @@ class Shape(ShapeConfiguration):
         if shape is None or shape_envelope.is_shape_envelope(shape):
             return shape
         import ocp_serialize
+        import shape_measure
 
         if name is None and label is None:
             name, label = self._shape_metadata()
-        return shape_envelope.make_shape(ocp_serialize.compressed_brep(shape), name=name, label=label)
+        envelope = shape_envelope.make_shape(ocp_serialize.compressed_brep(shape), name=name, label=label)
+        # Measured here for the same reason a wrapper's shapes are measured as
+        # they are encoded: this is the moment the live object exists, and it is
+        # the last one. An in-process factory is the one producer that does not
+        # go through the sandbox encoder, so without this its shapes would be
+        # the only ones whose size had to be computed all over again later.
+        measured = shape_measure.measurements_or_none(shape)
+        if measured:
+            envelope[shape_envelope.KEY_METADATA] = {shape_envelope.METADATA_MEASUREMENTS: measured}
+        return envelope
 
     def _component_to_envelope(self, component):
         """Normalize a component (or nested list of components) into envelopes."""
@@ -723,16 +762,15 @@ class Shape(ShapeConfiguration):
         return self._to_envelope(component)
 
     def take_side_data_from(self, source) -> None:
-        """Adopt the extra cache entries of the object this one points at.
+        """Adopt what the object this one points at recorded about its geometry.
 
         A reference shares the cache entry of its source (see
         'take_cache_key_from'), so the two have to answer the same - and the
-        source is what builds, and so what learns, whatever CACHED_SIDE_DATA
-        holds. Called once the source has been materialized, beside the copy of
-        its components that happens for the same reason.
+        source is what builds, and so what learns, what the geometry measures
+        and what its file stated. Called once the source has been materialized,
+        beside the copy of its components that happens for the same reason.
         """
-        for attribute in self.CACHED_SIDE_DATA.values():
-            setattr(self, attribute, copy.copy(getattr(source, attribute, None)))
+        self._metadata = copy.deepcopy(getattr(source, "_metadata", None))
 
     async def get_cache_value(self, ctx, shape):
         """The value handed to the shape cache under 'self.kind'.
@@ -967,9 +1005,20 @@ class Shape(ShapeConfiguration):
         asyncio.run(self.show_async(ctx))
 
     def shape_info(self, ctx):
+        """What 'pc info' reports of any shape, whatever kind or type it is.
+
+        What it cost to hold, what it measured, what it is keyed and cached
+        under, and the ports it carries. A factory adds what is particular to
+        its type on top of this (see 'ShapeFactory.info').
+
+        The shape is built first, and has to be: a measurement is of geometry,
+        and the hash of a shape means nothing until the files it is built from
+        are on disk. For a shape built before, that is a cache hit.
+        """
         asyncio.run(self.get_wrapped(ctx))
         info = {}
         info["Memory"] = "%.02f KB" % ((total_size(self) + 1023.0) / 1024.0)
+        info.update(asyncio.run(self._reported_async(ctx)))
 
         if self.with_ports is not None:
             info["Ports"] = self.with_ports.info()
@@ -2084,6 +2133,7 @@ class Shape(ShapeConfiguration):
         project: Optional[Project] = None,
         filepath=None,
         output_dir=None,
+        machine: Optional[str] = None,
         **kwargs,
     ) -> dict:
         """Produce the route file this shape declares, and report what it is.
@@ -2114,7 +2164,7 @@ class Shape(ShapeConfiguration):
                 route.
         """
         try:
-            config = pc_cam.config_of(self)
+            config = pc_cam.config_of(self, machine)
         except pc_cam.CamConfigError as e:
             # Named, because a run over a package reports one line per object
             # and "'cam: tool:' is not a length" against forty parts is a
@@ -2123,7 +2173,7 @@ class Shape(ShapeConfiguration):
             raise self._cam_config_error(e) from e
         if config is None:
             raise pc_cam.CamConfigError(
-                "%s:%s declares no 'cam:' section, so there is nothing to route" % (self.project_name, self.name)
+                "%s:%s says nothing about being cut, so there is nothing to route" % (self.project_name, self.name)
             )
 
         if project is None:
@@ -2153,7 +2203,7 @@ class Shape(ShapeConfiguration):
 
         try:
             return await self._route_run_async(
-                ctx, config, project, options_project, format_name, filepath, output_dir, kwargs
+                ctx, config, project, options_project, format_name, filepath, output_dir, kwargs, machine
             )
         except pc_cam.CamConfigError as e:
             # The same naming, for the layers underneath the object: a feed the
@@ -2179,6 +2229,71 @@ class Shape(ShapeConfiguration):
                 )
             ) from e
 
+    def _route_machine_data(self, machine: Optional[str] = None) -> dict:
+        """Which machine this route is written for, as the request says it.
+
+        Empty for everything that declares no machine: an assembly, a part made
+        some other way, anything with no `manufacturing:` section at all. An
+        implementation that gets nothing writes what it has always written,
+        which is a CNC program -- so such an object is unaffected by any of this.
+
+        **A sketch is asked like anything else.** A drawing declares the section
+        with no `method:` in it -- it is not made out of anything, it is a path a
+        machine follows -- and `_read_machines` reads that case on purpose. So
+        the answer has to come from what the object declared rather than from
+        what class it is: a `not isinstance(self, Part)` here returned `{}` for a
+        sketch that had named a `laser:`, its `machine`, `toolAxis` and `kerf`
+        never reached the request, and the drawing was handed to the *router*
+        emitter -- which asked it for a cutter diameter a beam does not have.
+
+        Read from the part's own declaration rather than passed in as a job
+        parameter, because the machine is not something a run gets to re-tune:
+        `pc cam` on a laser-cut part produces a laser program on anybody's
+        machine, and the day it does not is the day somebody sends a router
+        program to a laser. What a run *may* do is choose between the machines
+        the part itself named, which is what `machine` is.
+
+        Raises:
+            partcad.cam.CamConfigError: the part named a machine and the naming
+                cannot be read -- a `laser:` that is not a section, a key that
+                machine does not take, an axis that is not one. `route_async`
+                already wraps this call's caller in a `try` that re-raises such
+                an error through `_cam_config_error`, so it is raised bare here
+                and named there.
+
+        It has to *refuse* rather than fall back, and that is the whole reason
+        this is not a `debug` line. `_read_machines` records such a declaration
+        in `machine_error` and keeps no machine, which is indistinguishable here
+        from the part that simply named none -- and a part that named none
+        routes as CNC. (`cam.declared_config` refuses first for the same reason,
+        which makes this the backstop; the sentence is the same either way.) So a part whose `laser:` subsection has a typo in it
+        would be handed a *router* program, silently. `pc test` reporting it too
+        is not enough, because nothing makes `pc cam` wait for `pc test`.
+        """
+        try:
+            from .part_config import PartConfiguration
+
+            manufacturing_data = PartConfiguration.get_manufacturing_data(self)
+        except Exception as e:  # pylint: disable=broad-except
+            raise pc_cam.CamConfigError("the 'manufacturing:' section could not be read: %s" % e) from e
+        machine_error = getattr(manufacturing_data, "machine_error", None)
+        if machine_error:
+            # A backstop rather than the refusal a user meets: `declared_config`
+            # reads the same field and raises first, on every path that reaches
+            # here. Verbatim and not wrapped, so that the one fault reads as one
+            # sentence whichever of the two spoke it.
+            raise pc_cam.CamConfigError(machine_error)
+
+        chosen = manufacturing_data.machine_named(machine) if machine else manufacturing_data.machine
+        if chosen is None:
+            # Made some other way, so there is no machine to name and nothing
+            # wrong with that: an implementation handed nothing writes what it
+            # has always written. A part that named several and had none chosen
+            # never reaches here -- `cam.declared_config` refuses first, where
+            # the sentence can name the choices.
+            return {}
+        return chosen.to_data()
+
     def _cam_config_error(self, error) -> "pc_cam.CamConfigError":
         """One `cam:` configuration error, with the object it is about in front.
 
@@ -2197,6 +2312,7 @@ class Shape(ShapeConfiguration):
         filepath,
         output_dir,
         kwargs: dict,
+        machine: Optional[str] = None,
     ) -> dict:
         """'route_async' once it knows what to run and who runs it.
 
@@ -2206,6 +2322,20 @@ class Shape(ShapeConfiguration):
         """
         with pc_logging.Action("CAM", self.project_name, self.name):
             impl, final_filepath = self.cam_getopts(ctx, format_name, project, filepath, options_project, output_dir)
+            if machine is not None and (filepath is None or os.path.isdir(filepath)):
+                # 'panel.laser.nc' beside 'panel.drill.nc'. Only when a machine
+                # was chosen, which only happens when the part offered more than
+                # one -- so an object with a single machine keeps the name it
+                # has always had, and a caller that named a path gets that path.
+                #
+                # A directory is not naming a path: 'cam_getopts' has just read
+                # it as the *output_dir* and derived the filename from the
+                # object, which is the same filename for every machine. Asking
+                # the same question it asked is what keeps two alternatives from
+                # resolving to one file -- where the second route deletes the
+                # first before writing itself, and the run reports two.
+                root, extension = os.path.splitext(final_filepath)
+                final_filepath = "%s.%s%s" % (root, machine, extension)
             final_filepath = os.path.abspath(final_filepath)
 
             # Clearing the path, writing it and checking it afterwards are one
@@ -2248,6 +2378,14 @@ class Shape(ShapeConfiguration):
                 # but 'route_async(tool=...)' is the documented way to route one
                 # object against another cutter without editing its section.
                 request.update({key: value for key, value in kwargs.items() if value is not None})
+                # And last of all, which machine this is cut on. It comes from
+                # the part's 'manufacturing:' section rather than from any of
+                # the three layers above, so it is applied after them and
+                # cannot be overridden by a 'cam:' key: what a part is made on
+                # is a property of the part, not a parameter of the route, and
+                # a route written for a laser by a section that said 'machine'
+                # would be a program for a machine nobody owns.
+                request.update(self._route_machine_data(machine))
                 # And then every layer of it converted together. The object's
                 # own values are already numbers; the ones the package and
                 # '//builtin/cam' contributed have never been near a parser, and
@@ -2483,6 +2621,122 @@ class Shape(ShapeConfiguration):
 
     def get_max_dimension(self, ctx):
         return asyncio.run(self.get_max_dimension_async(ctx))
+
+    async def get_metadata_async(self, ctx):
+        """Everything recorded about this shape when it was built, or None.
+
+        The three sections 'shape_envelope' defines - what the geometry
+        measures, what its source stated about its elements, what that source
+        stated about itself - as one dict, exactly as the wrapper that built the
+        shape produced them.
+
+        Materializing the shape is what produces this, and materializing it from
+        the cache is what reads it back: the metadata lives in the same cache
+        entry as the geometry, so a hit carries both and there is no second
+        lookup to make and no second entry to be missing. That is the whole
+        reason this is cheap enough to ask for.
+
+        'None' for a shape that recorded nothing - one that did not build, or
+        one whose geometry could not be measured. A reader cannot tell those
+        apart and should not: all of them mean "nothing to report".
+
+        Internally the two *are* told apart, because they decide different
+        things: 'None' on the attribute means nobody has looked yet and is what
+        sends this to build the shape, while an empty dict means the shape has
+        been materialized and recorded nothing. Without that an object with
+        nothing to report would rebuild on every ask.
+        """
+        if self._metadata is None:
+            await self.get_wrapped(ctx)
+        return self._metadata or None
+
+    async def get_measurements_async(self, ctx):
+        """How big this shape is and how much of it there is, or None.
+
+        ``{"bbox": [...] | None, "volume": float | None, "solids": int}`` - the
+        box in the shape's own coordinates and without the gap OCCT pads one by,
+        the volume in cubic millimetres, and how many solids that is the volume
+        of.
+
+        Measured as the shape was *built*, in the process that held the live
+        geometry, and carried here in the envelope's metadata. Nothing is
+        computed on demand: by the time anybody asks, either the shape has been
+        built - in which case the numbers came back with it - or it has not, in
+        which case building it is what produces them, and that is the same work
+        as answering any other question about it.
+        """
+        metadata = await self.get_metadata_async(ctx)
+        return shape_envelope.metadata_section(metadata, shape_envelope.METADATA_MEASUREMENTS)
+
+    async def get_annotations_async(self, ctx) -> list:
+        """What this shape's source said about its individual elements.
+
+        One opaque record per element, as the importing wrapper read them. A
+        DXF states these as XDATA against a line, which is where the angle and
+        the radius of a sheet metal bend come from; a source that states nothing
+        of the kind yields an empty list.
+
+        The records are the source's own vocabulary and are never read into
+        here. What asks the real question is a manufacturing check, and it has
+        no business knowing which format answered.
+        """
+        metadata = await self.get_metadata_async(ctx)
+        return shape_envelope.metadata_section(metadata, shape_envelope.METADATA_ANNOTATIONS) or []
+
+    async def _reported_async(self, ctx):
+        """What 'pc info' adds to a shape once the shape itself has been built.
+
+        All of it comes out of the one metadata dict the shape was built with,
+        and it is reported in two registers:
+
+        The measurements are the generic half and are named here, because they
+        are the same three numbers for every shape whatever produced it.
+        ``BoundingBox`` is the measured box as ``min``/``max``/``size`` triples
+        of millimetres. ``size`` is stated rather than left to be subtracted -
+        it is the one of the three anybody reads out loud. ``Volume`` is in
+        cubic millimetres and ``Solids`` is how many solids that is the volume
+        of; both are left out for a shape holding no solid at all, because a
+        volume of zero and no volume to speak of are different things. A
+        negative volume is reported as it stands: the faces are oriented inward,
+        which is worth seeing rather than taking the modulus of.
+
+        Everything else is merged in **as the wrapper named it**. The sections
+        are a STEP file's or a DXF drawing's own vocabulary, and the core has no
+        business translating one into the other - it did not read the file and
+        does not know which format answered.
+        """
+        info = {}
+
+        metadata = await self.get_metadata_async(ctx)
+        if not metadata:
+            return info
+
+        measured = shape_envelope.metadata_section(metadata, shape_envelope.METADATA_MEASUREMENTS)
+        if measured:
+            box = measured.get(shape_envelope.METADATA_BBOX)
+            if box:
+                info["BoundingBox"] = {
+                    "min": list(box[:3]),
+                    "max": list(box[3:]),
+                    "size": [box[axis + 3] - box[axis] for axis in range(3)],
+                }
+            if measured.get(shape_envelope.METADATA_VOLUME) is not None:
+                info["Volume"] = measured[shape_envelope.METADATA_VOLUME]
+                info["Solids"] = measured.get(shape_envelope.METADATA_SOLIDS, 0)
+
+        sections = shape_envelope.metadata_section(metadata, shape_envelope.METADATA_SECTIONS)
+        if sections:
+            info.update(sections)
+
+        # The per-element records are deliberately *not* reported from here.
+        # They are carried for 'get_annotations_async()', whose caller is a
+        # manufacturing check that needs every element including the ones
+        # nothing was written against. Deciding which of them are worth showing
+        # a reader means reading into a record, and what a record holds is the
+        # producing wrapper's vocabulary - so the wrapper reports the ones worth
+        # showing under a heading of its own, in 'sections' above, and this
+        # stays unable to tell a bend angle from a layer name.
+        return info
 
     async def _run_test_async(self, ctx: Context, tests: list | None = None, use_wrapper: bool = False) -> bool:
         if not self.finalized:

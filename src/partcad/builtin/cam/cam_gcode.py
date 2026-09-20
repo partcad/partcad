@@ -429,171 +429,615 @@ def _require(request, key, what):
     value = request.get(key)
     if value is None:
         raise Exception(
-            "No '%s' is configured. Set it in this object's 'cam:' section, or for every object of the package "
-            "in the package's 'cam: <file type>:' section" % what
+            "No '%s' is configured. Set it in this object's 'manufacturing:' section, or for every object of "
+            "the package in the package's 'cam: <file type>:' section" % what
         )
     return float(value)
 
 
+def _cnc(request, obj, units):
+    """The route a CNC router or mill cuts: contours, offset, at stepped depths.
+
+    What `pc cam` has always written, and what a `subtractive` part that names
+    no machine still gets -- unchanged, byte for byte, which is the point.
+    """
+    # Every default below is written as 'or <default>' rather than as the
+    # second argument of 'get'. A layer that declares a key with nothing
+    # under it ('stepover:' on its own) parses as None, and None is a value
+    # 'get' hands back happily and 'float()' dies on - so a package that
+    # blanks a parameter would otherwise take down every object it covers
+    # rather than falling back to what it blanked. 'comments' is the one
+    # exception, because 'false' is a real answer there and 'or' would
+    # overrule it.
+    operation = str(request.get("operation") or "profile").lower()
+    if operation not in ("profile", "pocket", "engrave"):
+        raise Exception("'operation' is 'profile', 'pocket' or 'engrave', not %r" % request.get("operation"))
+
+    direction = str(request.get("direction") or "climb").lower()
+    if direction not in ("climb", "conventional"):
+        raise Exception("'direction' is 'climb' or 'conventional', not %r" % request.get("direction"))
+
+    tool = _require(request, "diameter", "diameter")
+    radius = tool / 2.0
+    feed = _require(request, "feed", "feed")
+    plunge = float(request.get("plunge") or feed)
+    # A clearance, not a coordinate: how far *above the top of the object*
+    # the tool travels between contours. The absolute height it becomes is
+    # computed once the object's own top is known, below. Writing it out as
+    # an absolute Z instead would be right only for an object whose top
+    # happens to sit at Z0 and a crash into the work for every other one.
+    safe_clearance = _require(request, "safe_z", "safe_z")
+    depth_per_pass = _require(request, "depth_per_pass", "depth_per_pass")
+    stepover = float(request.get("stepover") or 0.5) * tool
+    tolerance = float(request.get("tolerance") or 0.01)
+    speed = request.get("speed")
+
+    box = obj.bounding_box()
+    top = box.max.Z
+    height = box.max.Z - box.min.Z
+
+    warnings = []
+    depth = request.get("depth")
+    if depth is None:
+        if height <= TOLERANCE:
+            # A sketch, or anything else with no thickness. There is nothing
+            # to cut *through*, so how deep to go is not something the object
+            # can answer and not something to guess.
+            raise Exception(
+                "This object is flat, so there is no thickness to cut through: set 'depth:' in its "
+                "'manufacturing:' section"
+            )
+        depth = height
+    depth = float(depth)
+    if depth > height + TOLERANCE and height > TOLERANCE:
+        warnings.append(
+            "the cut is %.3f mm deep and the object is %.3f mm thick, so it goes %.3f mm past the bottom of it"
+            % (depth, height, depth - height)
+        )
+
+    if height <= TOLERANCE:
+        # Flat: the faces are the outline, and there is nothing to section.
+        faces = _planar_faces(obj)
+    else:
+        inset = max(depth * SECTION_INSET, TOLERANCE)
+        bottom_of_cut = max(top - depth + inset, box.min.Z + inset)
+        faces = _faces_at(obj, bottom_of_cut)
+        top_faces = _faces_at(obj, top - inset)
+        if faces and top_faces:
+            bottom_area = sum(face.area for face in faces)
+            top_area = sum(face.area for face in top_faces)
+            largest = max(bottom_area, top_area)
+            if largest > 0 and abs(top_area - bottom_area) / largest > PRISMATIC_TOLERANCE:
+                warnings.append(
+                    "the outline changes over the depth of the cut (%.1f mm2 at the top, %.1f mm2 at the bottom); "
+                    "this route follows the one at the bottom" % (top_area, bottom_area)
+                )
+
+    if not faces:
+        raise Exception("This object has no outline to cut: its cross-section at the bottom of the cut is empty")
+
+    if operation == "profile":
+        wires = _profile_paths(faces, radius, tolerance)
+    elif operation == "pocket":
+        wires = _pocket_paths(faces, radius, stepover, tolerance)
+    else:
+        wires = _engrave_paths(faces)
+
+    paths = []
+    for wire, inside, group in wires:
+        points = _wire_points(wire, tolerance)
+        if len(points) < 3:
+            continue
+        # Climb means the material on the tool's right: clockwise around the
+        # outside of the part, anticlockwise around the inside of a hole or
+        # a pocket. Conventional is the other way round, both times.
+        clockwise = (direction == "climb") != bool(inside)
+        paths.append((_oriented(points, clockwise), inside, group))
+    if not paths:
+        raise Exception("This object's outline produced no cutting path")
+
+    passes = max(1, int(math.ceil(depth / depth_per_pass - 1e-9)))
+    depths = [top - min(depth, depth_per_pass * (index + 1)) for index in range(passes)]
+    safe_height = top + safe_clearance
+
+    comments = request.get("comments")
+    program = Program(units, request.get("precision") or 3, True if comments is None else bool(comments))
+    program.comment("PartCAD route")
+    name = request.get("shape_name")
+    package = request.get("package_name")
+    if name:
+        program.comment("object: %s" % ("%s:%s" % (package, name) if package else name))
+    program.comment(
+        "operation: %s %s, tool %s, depth %s in %d passes"
+        % (operation, direction, program.number(tool), program.number(depth), passes)
+    )
+    program.comment("units: %s" % ("millimeters" if units == "mm" else "inches"))
+
+    program.code("G21" if units == "mm" else "G20")
+    program.code("G90")
+    program.code("G17")
+    program.code("G94")
+    if speed:
+        program.code("M3 S%d" % int(float(speed)))
+    program.rapid_z(safe_height)
+
+    for points, _inside, _group in _sorted_paths(paths):
+        program.rapid_xy(points[0])
+        for z in depths:
+            program.plunge(z, plunge)
+            first = True
+            for point in points[1:]:
+                # Still 'first' until a move is actually written: a dropped
+                # one must not consume the pass's feed word (see 'cut_to').
+                if program.cut_to(point, feed if first else None):
+                    first = False
+            # Back at the start of the contour, which is where the next
+            # pass plunges from - so there is nothing to move before it.
+        program.rapid_z(safe_height)
+
+    if speed:
+        program.code("M5")
+    program.code("M30")
+
+    return (
+        program,
+        warnings,
+        {
+            "machine": "cnc",
+            "operation": operation,
+            "paths": len(paths),
+            "passes": passes,
+            "depth": depth,
+            "cut_length": program.cut_length,
+        },
+    )
+
+
+def _orient(obj, tool_axis_vector):
+    """The shape as it sits on the machine, with the tool axis pointing down.
+
+    Everything below this line works in the machine's own frame: Z is the tool
+    axis, G17 is the plane the contours are in, and "the top of the object" is
+    its highest Z. A part that declares it is cut along some other axis is not a
+    different problem -- it is the same part fixtured differently -- so it is
+    rotated into that frame once, here, and the rest of the file needs to know
+    nothing about it.
+
+    The default '-Z' is the identity, deliberately and testably: a part that
+    names no machine, or names one that works the usual way down, produces
+    exactly the bytes it produced before any of this existed.
+    """
+    if not tool_axis_vector:
+        return obj
+    x, y, z = (float(component) for component in tool_axis_vector)
+    length = math.sqrt(x * x + y * y + z * z)
+    if length <= TOLERANCE:
+        raise Exception("the tool axis is a zero vector")
+    x, y, z = x / length, y / length, z / length
+
+    # Already pointing down: nothing to do, and nothing to perturb.
+    if abs(x) <= TOLERANCE and abs(y) <= TOLERANCE and z < 0:
+        return obj
+
+    # The rotation that takes the declared axis onto -Z. Written as the six
+    # axis cases rather than as a general rotation because these are the only
+    # six a 'direction:' can name, and an exact quarter turn keeps coordinates
+    # exact -- a general formula would put 6.123e-17 into a file that is
+    # supposed to be byte-stable.
+    # Each of these takes the declared axis onto -Z, and that is the whole of
+    # what "correct" means here -- checked axis by axis in
+    # 'test_every_tool_axis_is_rotated_onto_minus_z'. Getting the *sign* wrong
+    # still puts the holes along Z, so a through hole and a symmetric part come
+    # out identical either way and only the face the tool enters by differs.
+    # That is why it is a blind hole that catches it.
+    if abs(z) > 0.5:
+        # +Z: the part is cut from below, so it is turned over.
+        rotation = b3d.Rotation(180, 0, 0)
+    elif abs(x) > 0.5:
+        rotation = b3d.Rotation(0, 90, 0) if x > 0 else b3d.Rotation(0, -90, 0)
+    else:
+        rotation = b3d.Rotation(-90, 0, 0) if y > 0 else b3d.Rotation(90, 0, 0)
+    return rotation * obj
+
+
+def _laser(request, obj, units):
+    """The route a laser cutter follows: one pass, offset by half the kerf.
+
+    A laser is not a cutter that happens to be thin. It differs from a router in
+    three ways that the file has to reflect rather than approximate:
+
+    * **It cuts through in one pass.** There is no depth stepping and no plunge,
+      so `depth_per_pass` and `plunge` mean nothing here and are not read. The
+      head stays at its focus height and the whole program is one Z.
+    * **Its width is the kerf, not a tool diameter.** The offset that makes the
+      part come out at its nominal size is half the kerf, and the kerf is a
+      property of the machine and the material rather than of the job -- which
+      is why it is declared in `manufacturing: laser:` and not in `cam:`. A part
+      that names no kerf is cut on its outline, which is what a machine with a
+      negligible one wants.
+    * **The beam is gated rather than spun.** `M3 S<power>`/`M5` around each
+      contour, with no spindle to start or stop.
+
+    There is no `diameter:` here, and asking for one would be wrong: the cutter
+    diameter that a router cannot be run without is a thing a laser does not
+    have. `laser:` refuses the key outright for that reason.
+    """
+    tolerance = float(request.get("tolerance") or 0.01)
+    feed = _require(request, "feed", "feed")
+    power = request.get("power")
+    kerf = float(request.get("kerf") or 0.0)
+    if kerf < 0:
+        raise Exception("'kerf' cannot be negative: %r" % request.get("kerf"))
+
+    box = obj.bounding_box()
+    top = box.max.Z
+    height = box.max.Z - box.min.Z
+
+    warnings = []
+    if height <= TOLERANCE:
+        faces = _planar_faces(obj)
+    else:
+        # The outline halfway down. A laser's beam is very nearly parallel, so
+        # the part it produces has the one cross-section all the way through --
+        # and a part whose section changes is one this machine cannot make. The
+        # check that says so is 'manufacturability-laser'; here the middle is
+        # simply the most representative single answer.
+        faces = _faces_at(obj, top - height / 2.0)
+        top_faces = _faces_at(obj, top - max(height * SECTION_INSET, TOLERANCE))
+        if faces and top_faces:
+            middle_area = sum(face.area for face in faces)
+            top_area = sum(face.area for face in top_faces)
+            largest = max(middle_area, top_area)
+            if largest > 0 and abs(top_area - middle_area) / largest > PRISMATIC_TOLERANCE:
+                warnings.append(
+                    "the outline changes over the thickness (%.1f mm2 at the top, %.1f mm2 halfway down); "
+                    "a laser cuts one section through, so this route follows the middle one" % (top_area, middle_area)
+                )
+    if not faces:
+        raise Exception("This object has no outline to cut: its cross-section is empty")
+
+    # The same geometry a profile uses, with the beam's half-width in place of
+    # the cutter's radius: outward around the part, inward around every hole.
+    wires = _profile_paths(faces, kerf / 2.0, tolerance)
+
+    direction = str(request.get("direction") or "climb").lower()
+    if direction not in ("climb", "conventional"):
+        raise Exception("'direction' is 'climb' or 'conventional', not %r" % request.get("direction"))
+
+    paths = []
+    for wire, inside, group in wires:
+        points = _wire_points(wire, tolerance)
+        if len(points) < 3:
+            continue
+        clockwise = (direction == "climb") != bool(inside)
+        paths.append((_oriented(points, clockwise), inside, group))
+    if not paths:
+        raise Exception("This object's outline produced no cutting path")
+
+    comments = request.get("comments")
+    program = Program(units, request.get("precision") or 3, True if comments is None else bool(comments))
+    program.comment("PartCAD route")
+    name = request.get("shape_name")
+    package = request.get("package_name")
+    if name:
+        program.comment("object: %s" % ("%s:%s" % (package, name) if package else name))
+    program.comment("machine: laser, kerf %s, through %s" % (program.number(kerf), program.number(height)))
+    program.comment("units: %s" % ("millimeters" if units == "mm" else "inches"))
+
+    program.code("G21" if units == "mm" else "G20")
+    program.code("G90")
+    program.code("G17")
+    program.code("G94")
+
+    for points, _inside, _group in _sorted_paths(paths):
+        program.rapid_xy(points[0])
+        # The beam is off while it travels and on while it cuts, which is the
+        # whole of a laser's Z axis.
+        program.code("M3 S%d" % int(float(power)) if power else "M3")
+        first = True
+        for point in points[1:]:
+            if program.cut_to(point, feed if first else None):
+                first = False
+        program.code("M5")
+
+    program.code("M30")
+
+    return (
+        program,
+        warnings,
+        {
+            "machine": "laser",
+            "operation": "cut",
+            "paths": len(paths),
+            "passes": 1,
+            "depth": height,
+            "cut_length": program.cut_length,
+        },
+    )
+
+
+def _encloses_material(face, cylinder) -> bool:
+    """Whether the solid is *outside* this cylindrical face -- a hole, not a boss.
+
+    A cylinder on its own says nothing about which side the material is on. The
+    outer wall of a round plate and the wall of a bore through it are the same
+    surface with the same axis and the same radius; what separates them is which
+    way the solid faces, and a drill can only make the second. Without this a
+    round blank is read as one enormous hole and 'drilling' emits a plunge at its
+    centre, into material -- a program that breaks the drill on a part that
+    needed no drilling at all.
+
+    Asked of the geometry rather than of the topology. 'TopAbs_REVERSED' alone
+    does not answer it: the flag says how the face is used in the solid, not
+    where its material is, and reading it without the surface it qualifies gets
+    the answer right only for whichever convention the modeller happened to use.
+    So the outward normal is what is compared -- the sampled surface normal,
+    flipped where the face is reversed, which is what 'outward' means -- against
+    the radial direction from the axis at the same point:
+
+    * pointing back at the axis, the material is outside the cylinder: a hole.
+    * pointing away from it, the material is inside: a boss, or the outside of
+      a round part.
+
+    Sampled on a grid and decided by the majority, for the same reason
+    'wrapper_manufacturability.wall_alignment' samples: one point can land on a
+    seam or a degenerate corner where the normal is undefined. For an exact
+    cylinder every defined sample agrees, so the majority is unanimous and the
+    grid is only there to guarantee it is not empty.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepLProp import BRepLProp_SLProps
+    from OCP.TopAbs import TopAbs_Orientation
+
+    surface = BRepAdaptor_Surface(face.wrapped)
+    u0, u1 = surface.FirstUParameter(), surface.LastUParameter()
+    v0, v1 = surface.FirstVParameter(), surface.LastVParameter()
+    if not all(map(math.isfinite, (u0, u1, v0, v1))):
+        return False
+
+    # What 'outward' means: OCCT's surface normal is the parameterization's, and
+    # a face the solid uses reversed has its material on the other side of it.
+    flip = -1.0 if face.wrapped.Orientation() == TopAbs_Orientation.TopAbs_REVERSED else 1.0
+    location = cylinder.Location()
+
+    steps = 3
+    props = BRepLProp_SLProps(surface, 1, 1e-7)
+    inward = 0
+    outward = 0
+    for i in range(steps):
+        for j in range(steps):
+            u = u0 + (u1 - u0) * (i + 0.5) / steps
+            v = v0 + (v1 - v0) * (j + 0.5) / steps
+            props.SetParameters(u, v)
+            if not props.IsNormalDefined():
+                continue
+            normal = props.Normal()
+            point = props.Value()
+            # The axis is Z by the time this is asked, so the radial direction
+            # is the one in the XY plane and the Z component of the normal is
+            # not part of the question.
+            radial_x = point.X() - location.X()
+            radial_y = point.Y() - location.Y()
+            radius = math.hypot(radial_x, radial_y)
+            if radius <= 1e-9:
+                continue
+            along_radius = flip * (normal.X() * radial_x + normal.Y() * radial_y) / radius
+            if along_radius < 0.0:
+                inward += 1
+            else:
+                outward += 1
+    return inward > outward
+
+
+def _holes(obj, tolerance):
+    """Every round hole through the object along Z, as (x, y, diameter, top, bottom).
+
+    A drill makes one feature, and this is how it is recognised: a cylindrical
+    face whose axis is Z and whose material is on the outside of it. Each
+    becomes one drilled hole at its centre.
+
+    Both halves are needed. The first alone takes the outer wall of a round
+    plate, which is a cylinder about Z like any bore -- see '_encloses_material'
+    for what separates them and why the topology's own flag does not.
+
+    Read off the surface type rather than sampled the way
+    'wrapper_manufacturability.wall_alignment' does, and the difference is what
+    each is for: that one asks whether a wall is something a machine *could*
+    make and must not be fooled by an extruded spline, while this one has to
+    know a radius and a centre, which only an actual cylinder has.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_SurfaceType
+
+    holes = {}
+    for face in obj.faces():
+        # Asked of the OCCT surface rather than of build123d's wrapper: the
+        # radius and the axis are what this needs, and only the adaptor carries
+        # them.
+        adaptor = BRepAdaptor_Surface(face.wrapped)
+        if adaptor.GetType() != GeomAbs_SurfaceType.GeomAbs_Cylinder:
+            continue
+        cylinder = adaptor.Cylinder()
+        axis = cylinder.Axis().Direction()
+        if abs(abs(axis.Z()) - 1.0) > 1e-6:
+            continue
+        # ...and the material is outside it, which is what makes it a hole
+        # rather than the outside of a round part or a boss standing on one.
+        if not _encloses_material(face, cylinder):
+            continue
+        location = cylinder.Location()
+        box = face.bounding_box()
+        # Rounded into a key so that the two half-cylinders OCCT often splits a
+        # hole into become one hole rather than two coincident ones.
+        key = (
+            round(location.X() / max(tolerance, 1e-6)),
+            round(location.Y() / max(tolerance, 1e-6)),
+            round(cylinder.Radius() / max(tolerance, 1e-6)),
+        )
+        existing = holes.get(key)
+        if existing is None:
+            holes[key] = [location.X(), location.Y(), cylinder.Radius() * 2.0, box.max.Z, box.min.Z]
+        else:
+            existing[3] = max(existing[3], box.max.Z)
+            existing[4] = min(existing[4], box.min.Z)
+    # Sorted so the file is the same on every run and the machine travels
+    # predictably: by Y then X, which is how a bed is read.
+    return sorted((tuple(hole) for hole in holes.values()), key=lambda hole: (hole[1], hole[0]))
+
+
+def _drilling(request, obj, units):
+    """The route a drilling machine follows: plunge, retract, once per hole.
+
+    A drill does not follow a path at all, so nothing here is a contour. It goes
+    to a centre, goes in, and comes out; `peck:` breaks that into steps for a
+    deep hole, which is what clears the swarf.
+
+    Written as explicit G0/G1 moves rather than as G81/G83 canned cycles, for
+    the reason this file emits G1 rather than G2/G3: a canned cycle means what
+    the controller says it means, and the moves mean the same thing on all of
+    them.
+
+    `diameter:` is the drill in the spindle, and it is checked against the holes
+    rather than used to offset anything: a 5 mm drill does not make a 6 mm hole,
+    and a route that quietly produced one would be found out at the bench.
+    """
+    tolerance = float(request.get("tolerance") or 0.01)
+    tool = _require(request, "diameter", "diameter")
+    plunge = _require(request, "plunge", "plunge")
+    safe_clearance = _require(request, "safe_z", "safe_z")
+    peck = request.get("peck")
+    speed = request.get("speed")
+
+    box = obj.bounding_box()
+    top = box.max.Z
+
+    holes = _holes(obj, tolerance)
+    if not holes:
+        raise Exception("This object has no round hole along the drilling axis, so there is nothing to drill")
+
+    warnings = []
+    mismatched = [hole for hole in holes if abs(hole[2] - tool) > tolerance]
+    if mismatched:
+        warnings.append(
+            "%d of the %d holes are not the diameter of the drill (%.3f mm): %s. "
+            "They are drilled at the centre anyway, at the size the drill actually is"
+            % (
+                len(mismatched),
+                len(holes),
+                tool,
+                ", ".join(sorted({"%.3f mm" % hole[2] for hole in mismatched})),
+            )
+        )
+
+    comments = request.get("comments")
+    program = Program(units, request.get("precision") or 3, True if comments is None else bool(comments))
+    program.comment("PartCAD route")
+    name = request.get("shape_name")
+    package = request.get("package_name")
+    if name:
+        program.comment("object: %s" % ("%s:%s" % (package, name) if package else name))
+    program.comment("machine: drill, %d holes, drill %s" % (len(holes), program.number(tool)))
+    program.comment("units: %s" % ("millimeters" if units == "mm" else "inches"))
+
+    program.code("G21" if units == "mm" else "G20")
+    program.code("G90")
+    program.code("G17")
+    program.code("G94")
+    if speed:
+        program.code("M3 S%d" % int(float(speed)))
+
+    safe_height = top + safe_clearance
+    program.rapid_z(safe_height)
+
+    deepest = 0.0
+    for x, y, diameter, hole_top, hole_bottom in holes:
+        program.rapid_xy((x, y))
+        program.rapid_z(hole_top)
+        depth = hole_top - hole_bottom
+        deepest = max(deepest, depth)
+        steps = [hole_bottom]
+        if peck:
+            step = float(peck)
+            if step > 0:
+                count = max(1, int(math.ceil(depth / step - 1e-9)))
+                steps = [hole_top - min(depth, step * (index + 1)) for index in range(count)]
+        for z in steps:
+            program.plunge(z, plunge)
+            if len(steps) > 1:
+                # Out to the top of the hole between pecks, which is what
+                # carries the swarf out with it.
+                program.rapid_z(hole_top)
+        program.rapid_z(safe_height)
+
+    if speed:
+        program.code("M5")
+    program.code("M30")
+
+    return (
+        program,
+        warnings,
+        {
+            "machine": "drill",
+            "operation": "drill",
+            "holes": len(holes),
+            "passes": 1,
+            "depth": deepest,
+            "cut_length": program.cut_length,
+        },
+    )
+
+
+# Which emitter writes the program, by the machine the part says it is made on.
+# A part that says nothing is a CNC part: that is what every object routed
+# before machines existed meant, and it is the machine that can make anything
+# the other two can.
+MACHINES = {
+    "cnc": _cnc,
+    "laser": _laser,
+    "drill": _drilling,
+}
+
+
 def process(path, request):
+    """Write the program for this job, and say what it came to.
+
+    The entry point every route implementation has: `Shape._route_run_async`
+    hands it the merged request -- the file type's parameters, the package's
+    `cam:`, the object's own, anything the call passed, and last the machine the
+    part's `manufacturing:` section named -- and the path to write.
+
+    The machine is what decides which program this is, and `MACHINES` is the
+    whole of that branch: a router follows contours at stepped depths, a laser
+    makes one pass with the beam's width offset off it, a drill goes in and out
+    once per hole. `cnc` is the default and its emitter is unchanged, so a part
+    that never heard of machines gets the bytes it always got.
+
+    Returns:
+        A dict the meta-wrapper passes back: `success`, and on success the
+        `stats` the emitter counted and any `warnings` it raised. A refusal is
+        reported as `success: False` with an `exception` rather than raised,
+        because one object's bad job must not abort a run over a package.
+    """
     try:
-        # Every default below is written as 'or <default>' rather than as the
-        # second argument of 'get'. A layer that declares a key with nothing
-        # under it ('stepover:' on its own) parses as None, and None is a value
-        # 'get' hands back happily and 'float()' dies on - so a package that
-        # blanks a parameter would otherwise take down every object it covers
-        # rather than falling back to what it blanked. 'comments' is the one
-        # exception, because 'false' is a real answer there and 'or' would
-        # overrule it.
         units = str(request.get("units") or "mm").lower()
         if units not in ("mm", "in"):
             raise Exception("'units' is 'mm' or 'in', not %r" % request.get("units"))
 
-        operation = str(request.get("operation") or "profile").lower()
-        if operation not in ("profile", "pocket", "engrave"):
-            raise Exception("'operation' is 'profile', 'pocket' or 'engrave', not %r" % request.get("operation"))
-
-        direction = str(request.get("direction") or "climb").lower()
-        if direction not in ("climb", "conventional"):
-            raise Exception("'direction' is 'climb' or 'conventional', not %r" % request.get("direction"))
-
-        tool = _require(request, "tool", "tool")
-        radius = tool / 2.0
-        feed = _require(request, "feed", "feed")
-        plunge = float(request.get("plunge") or feed)
-        # A clearance, not a coordinate: how far *above the top of the object*
-        # the tool travels between contours. The absolute height it becomes is
-        # computed once the object's own top is known, below. Writing it out as
-        # an absolute Z instead would be right only for an object whose top
-        # happens to sit at Z0 and a crash into the work for every other one.
-        safe_clearance = _require(request, "safe_z", "safe_z")
-        depth_per_pass = _require(request, "depth_per_pass", "depth_per_pass")
-        stepover = float(request.get("stepover") or 0.5) * tool
-        tolerance = float(request.get("tolerance") or 0.01)
-        speed = request.get("speed")
+        machine = str(request.get("machine") or "cnc").lower()
+        if machine not in MACHINES:
+            raise Exception("'machine' is one of %s, not %r" % (", ".join(sorted(MACHINES)), request.get("machine")))
 
         obj = _shape(request["wrapped"])
-        box = obj.bounding_box()
-        top = box.max.Z
-        height = box.max.Z - box.min.Z
+        # Into the machine's frame, where the tool axis is Z, before anything
+        # measures the object. The default is the identity (see '_orient').
+        obj = _orient(obj, request.get("tool_axis_vector"))
 
-        warnings = []
-        depth = request.get("depth")
-        if depth is None:
-            if height <= TOLERANCE:
-                # A sketch, or anything else with no thickness. There is nothing
-                # to cut *through*, so how deep to go is not something the object
-                # can answer and not something to guess.
-                raise Exception(
-                    "This object is flat, so there is no thickness to cut through: set 'depth:' in its 'cam:' section"
-                )
-            depth = height
-        depth = float(depth)
-        if depth > height + TOLERANCE and height > TOLERANCE:
-            warnings.append(
-                "the cut is %.3f mm deep and the object is %.3f mm thick, so it goes %.3f mm past the bottom of it"
-                % (depth, height, depth - height)
-            )
-
-        if height <= TOLERANCE:
-            # Flat: the faces are the outline, and there is nothing to section.
-            faces = _planar_faces(obj)
-        else:
-            inset = max(depth * SECTION_INSET, TOLERANCE)
-            bottom_of_cut = max(top - depth + inset, box.min.Z + inset)
-            faces = _faces_at(obj, bottom_of_cut)
-            top_faces = _faces_at(obj, top - inset)
-            if faces and top_faces:
-                bottom_area = sum(face.area for face in faces)
-                top_area = sum(face.area for face in top_faces)
-                largest = max(bottom_area, top_area)
-                if largest > 0 and abs(top_area - bottom_area) / largest > PRISMATIC_TOLERANCE:
-                    warnings.append(
-                        "the outline changes over the depth of the cut (%.1f mm2 at the top, %.1f mm2 at the bottom); "
-                        "this route follows the one at the bottom" % (top_area, bottom_area)
-                    )
-
-        if not faces:
-            raise Exception("This object has no outline to cut: its cross-section at the bottom of the cut is empty")
-
-        if operation == "profile":
-            wires = _profile_paths(faces, radius, tolerance)
-        elif operation == "pocket":
-            wires = _pocket_paths(faces, radius, stepover, tolerance)
-        else:
-            wires = _engrave_paths(faces)
-
-        paths = []
-        for wire, inside, group in wires:
-            points = _wire_points(wire, tolerance)
-            if len(points) < 3:
-                continue
-            # Climb means the material on the tool's right: clockwise around the
-            # outside of the part, anticlockwise around the inside of a hole or
-            # a pocket. Conventional is the other way round, both times.
-            clockwise = (direction == "climb") != bool(inside)
-            paths.append((_oriented(points, clockwise), inside, group))
-        if not paths:
-            raise Exception("This object's outline produced no cutting path")
-
-        passes = max(1, int(math.ceil(depth / depth_per_pass - 1e-9)))
-        depths = [top - min(depth, depth_per_pass * (index + 1)) for index in range(passes)]
-        safe_height = top + safe_clearance
-
-        comments = request.get("comments")
-        program = Program(units, request.get("precision") or 3, True if comments is None else bool(comments))
-        program.comment("PartCAD route")
-        name = request.get("shape_name")
-        package = request.get("package_name")
-        if name:
-            program.comment("object: %s" % ("%s:%s" % (package, name) if package else name))
-        program.comment(
-            "operation: %s %s, tool %s, depth %s in %d passes"
-            % (operation, direction, program.number(tool), program.number(depth), passes)
-        )
-        program.comment("units: %s" % ("millimeters" if units == "mm" else "inches"))
-
-        program.code("G21" if units == "mm" else "G20")
-        program.code("G90")
-        program.code("G17")
-        program.code("G94")
-        if speed:
-            program.code("M3 S%d" % int(float(speed)))
-        program.rapid_z(safe_height)
-
-        for points, _inside, _group in _sorted_paths(paths):
-            program.rapid_xy(points[0])
-            for z in depths:
-                program.plunge(z, plunge)
-                first = True
-                for point in points[1:]:
-                    # Still 'first' until a move is actually written: a dropped
-                    # one must not consume the pass's feed word (see 'cut_to').
-                    if program.cut_to(point, feed if first else None):
-                        first = False
-                # Back at the start of the contour, which is where the next
-                # pass plunges from - so there is nothing to move before it.
-            program.rapid_z(safe_height)
-
-        if speed:
-            program.code("M5")
-        program.code("M30")
+        program, warnings, stats = MACHINES[machine](request, obj, units)
 
         with open(path, "w", newline="\n") as f:
             f.write(program.text())
 
-        return {
-            "success": True,
-            "exception": None,
-            "warnings": warnings,
-            "stats": {
-                "operation": operation,
-                "paths": len(paths),
-                "passes": passes,
-                "depth": depth,
-                "cut_length": program.cut_length,
-            },
-        }
+        return {"success": True, "exception": None, "warnings": warnings, "stats": stats}
 
     except Exception as e:
         wrapper_common.handle_exception(e)

@@ -84,6 +84,18 @@ Host commands
 
   - ``pc system status`` — Display the state of the internal data used by PartCAD, including the location of
     the local cache.
+  - ``pc system status config`` — Dump the configuration this installation resolved, with the configuration
+    file, the ``PC_*`` environment and the command line already applied. The same report as ``pc config``,
+    beside the two below so that "what is this machine doing" is one command with three answers. An option
+    whose value is a secret says only whether it is set; a ``git.auth`` entry keeps its host, username and
+    key path and loses its password and passphrase; and the ``user`` section is reported as which of its
+    fields are configured, never as the name and addresses in them.
+  - ``pc system status env`` — Dump the ``PC_*`` environment variables this ``pc`` process was started with.
+    Not the same thing as the report above: the configuration says what an option resolved to, this says what
+    the environment asked for, and they disagree whenever a command-line option won or a value was rejected.
+    A variable whose name says its value authenticates — ``PC_REMOTE_SANDBOX_TOKEN``, or anything else with
+    ``TOKEN``, ``KEY``, ``SECRET``, ``PASSWORD``, ``CREDENTIAL`` or ``AUTH`` between the underscores of its
+    name — is listed but printed as ``<scrubbed>``, so the report stays something you can paste into a bug.
   - ``pc system reset`` — Reset all internal state maintained by PartCAD, for example to clear a corrupted
     cache.
   - ``pc system prune`` — Remove the containers and images PartCAD created for the ``docker`` sandbox.
@@ -124,11 +136,26 @@ Host commands
     once the daemon answers on it, so whoever reads it can connect straight away.
   - ``pc daemon stop`` — Stop the daemon serving this workspace, and say whether one was running.
   - ``pc daemon status`` — Display the state of the internal data the daemon holds.
+  - ``pc daemon status config`` — Dump the configuration the daemon itself resolved, the daemon-side
+    counterpart of ``pc system status config``. The two differ on purpose: a daemon is warm and shared per
+    workspace, so its own configuration is whatever its environment held when something first started it —
+    possibly days ago, possibly from a VS Code window. It is not what your command ran under (that travels
+    with the command, as explained above); it is what the daemon falls back on for a client that sends none.
+  - ``pc daemon status env`` — Dump the ``PC_*`` environment variables the daemon process is running with.
+    On POSIX this is the one report that cannot be worked out from this side at all, because the shared
+    socket daemon inherited the environment of whatever started it. On Windows the client connects to a
+    one-shot stdio service spawned as its own child rather than to the named-pipe daemon, so the answer is
+    usually the same as ``pc system status env`` — still the environment of the process doing the work, just
+    not a different one. Credentials are scrubbed on the far side, so the value never reaches the wire.
   - ``pc daemon reset`` — Drop that state. ``--repo-only``, ``--sandbox-only`` and ``--cache-only`` narrow it
     to the cached dependencies, the sandboxed runtime environments, or the filesystem cache respectively;
     without them all of it goes.
   - ``pc daemon set telemetry`` — Set the daemon's telemetry settings (``type``, ``env``, ``sentryDsn``),
     the daemon-side counterpart of ``pc system set``.
+
+  The three ``status`` reports reach the daemon serving this workspace and start one if none is answering yet
+  — there is no reading the configuration or the environment of a process that does not exist. A daemon such
+  a command started is one that inherited *this* shell, so ask when the daemon you mean is already up.
 
   There is no daemon to restart after changing a setting: every command hands the daemon its own resolved user
   configuration, as explained above. Stopping one is for upgrades and for clearing a wedged state.
@@ -381,6 +408,24 @@ Object commands
   shows. A reference nothing answers to is reported as it was written, with the error, which is why no
   mass and no friction came from it. See :ref:`materials`.
 
+  For anything with geometry it also reports what PartCAD **measured** when it built it:
+  ``BoundingBox`` as ``min``, ``max`` and ``size`` in millimetres, and -- for anything holding a solid --
+  its ``Volume`` in cubic millimetres with ``Solids`` saying how many solids that is the volume of. Neither
+  can be read off a declaration: a part is a script, a file or a boolean of two others, and the only way to
+  know how big it is, is to have built it. A sketch, a shell or a wire has a box and no volume; a negative
+  volume means the faces are oriented inward and is reported as it stands.
+
+  For an object read from a **file**, it also reports what the file itself states -- a STEP part or assembly
+  (and a ``kicad`` part, which produces one) its header, products, layers and user-defined properties; a DXF
+  sketch its layers, units and the elements carrying extended data. That last is where a sheet metal bend
+  states its ``angle``, ``radius`` and ``direction``; see :ref:`sketch-annotations` and :ref:`sheet-metal`.
+  Both formats report those pairs the same way, keys lower-cased and values as the file states them, so what
+  reads them need not know which format answered.
+
+  Reporting every layer rather than only the ones a sketch reads is deliberate: a layer filter that matched
+  nothing and a layer that is not in the file both produce a sketch with nothing in it, and this is what
+  tells them apart.
+
 ``pc bom``
   Print the bill of materials of an assembly or a scene: every part it is made of, recursively, with how many of each
   are needed and, where the object says so, the vendor and the SKU to order it by. Use ``-P`` to name the
@@ -481,33 +526,54 @@ Object commands
   object's own outline, offsets it by the radius of the cutter, and cuts it at a series of depths -- a 2.5D
   route, which is what a CNC router does to sheet goods and what a mill does to a plate::
 
-      pc cam                    # every object of this package that declares a `cam:` section
+      pc cam                    # every object of this package that says how it is made
       pc cam :panel             # one of them
       pc cam -s :nameplate      # one that is a sketch
+      pc cam -m laser :gasket   # one that could be made either way, written for the laser
       pc cam -P ...             # this package and everything it imports
       pc cam ...:panel          # every panel from here down
 
   Unlike ``pc cae``, this is a **package-level** command. An analysis is asked of one part; a route is what a
   package's cut list is made of, so with nothing named ``pc cam`` produces one for every sketch and part of
-  the package that declares a ``cam:`` section and passes over every object that does not, silently. Most
+  the package that says how it is made and passes over every object that does not, silently. Most
   objects are never cut, and a package where three parts of forty are is the ordinary case rather than
   thirty-seven warnings. Naming an object that declares nothing *is* an error: naming one is asking about it,
   and coming back with nothing would look exactly like a route that went somewhere the user did not notice.
   An assembly and a scene are not routed at all -- an assembly is put together rather than cut, and a scene is
   an arrangement of things that were each cut on their own.
 
-  The object says what is cut out of it, and how, in a ``cam:`` section of its own::
+  The object says what is cut out of it, and how, in the ``manufacturing:``
+  section that already says how it is made -- beside the machine it belongs to::
 
       parts:
+        stock:
+          type: build123d
+          path: sheet.py
+
         panel:
           type: build123d
           path: panel.py
-          cam:
-            operation: profile    # around the outside of it
-            tool: 6 mm            # the cutter's diameter
-            depth_per_pass: 3 mm
-            feed: 2400 mm/min
-            speed: 18000 rpm
+          manufacturing:
+            method: subtractive
+            source: stock
+            cnc:
+              operation: profile  # around the outside of it
+              diameter: 6 mm      # the cutter
+              depth_per_pass: 3 mm
+              feed: 2400 mm/min
+              speed: 18000 rpm
+
+  A key written directly under ``manufacturing:`` is shared by every machine the
+  part names; one written inside a machine's own subsection is that machine's
+  and outranks it. A part may name several -- ``cnc:``, ``laser:``, ``drill:``
+  -- and they are **alternatives**, ways it could be made rather than stages it
+  goes through, so ``--machine`` picks which to write for and the programs land
+  beside each other as ``panel.laser.nc`` and ``panel.cnc.nc``. A part that
+  really is machined in stages is a chain of parts, each naming the previous one
+  as its ``source``.
+
+  A *sketch* has one of these sections too, with no ``method:`` in it: a drawing
+  is not made from anything, it is a path a machine follows.
 
   ``operation:`` says which side of the outline the tool runs on. ``profile`` goes around the outside of the
   material and around the inside of every hole, so the object survives at its nominal size -- and cuts the
@@ -530,16 +596,16 @@ Object commands
 
   ``depth:`` is the one key with a conditional default. An object that does not say is cut **through**, from
   the top of its bounding box to the bottom. A sketch has no thickness to be cut through, so a sketch that
-  does not say how deep to cut is refused. ``tool:`` has no default at all and must not get one: every other
-  parameter has a defensible default, and the diameter of the cutter is the one number that cannot be guessed
-  from the part -- a route produced against a diameter nobody chose is wrong by exactly the amount nobody
-  noticed.
+  does not say how deep to cut is refused. ``diameter:`` has no default at all and must not get one: every
+  other parameter has a defensible default, and the diameter of the cutter is the one number that cannot be
+  guessed from the part -- a route produced against a diameter nobody chose is wrong by exactly the amount
+  nobody noticed.
 
   Every key of that section is also a parameter of the ``cam:`` file type that produces the route, which is
   what makes it three layers of one namespace: ``//builtin/cam`` underneath, then the package's own ``cam:``
-  section, then the object's. So a package cutting twenty parts from one sheet sets the tool once and the one
-  part that needs a smaller cutter says so for itself. The conversion above happens at every layer -- a
-  ``mm/min`` written by the package is understood as surely as one written on the object.
+  section, then the object's ``manufacturing:``. So a package cutting twenty parts from one sheet sets the
+  cutter once and the one part that needs a smaller one says so for itself. The conversion above happens at
+  every layer -- a ``mm/min`` written by the package is understood as surely as one written on the object.
 
   The route is written to ``<object>.<extension>`` -- ``panel.nc`` -- beside the package, or wherever ``-O``
   says. ``--json`` prints what was produced as the array it is: the file, the implementation that wrote it,
@@ -553,7 +619,8 @@ Object commands
   ``//builtin/cam:gcode`` and nothing has to be installed. A controller that wants a dialect of its own is a
   package declaring a file type in its own ``cam:`` section exactly as an export or a render implementation is
   declared in its own (see :ref:`output-files`), named by that option, by an ``implementation:`` in the
-  object's own ``cam:`` section, or by ``-i`` for one run -- in that order of precedence, narrowest last.
+  object's own ``manufacturing:`` section, or by ``-i`` for one run -- in that order of precedence, narrowest
+  last.
 
   What the built-in one writes is plain RS-274 with every curve linearized to within ``tolerance:`` of the
   true curve: an arc word is only an arc while the plane it was written in survives the post-processor, and
@@ -562,7 +629,7 @@ Object commands
   same bytes on any machine.
 
   ``pc test`` runs this as its ``cam`` check, and it is the same code: the check produces the route and passes
-  the object only if one came back. It applies to an object that declares a ``cam:`` section and to nothing
+  the object only if one came back. It applies to an object that says how it is made and to nothing
   else, so a package of bolts pays nothing for it -- the same gate the ``fea`` and ``cfd`` checks have, and
   the same cost model. There is one way to pass: a route was written. A malformed section fails, an
   implementation that cannot be resolved fails, and an implementation that resolved and produced nothing fails

@@ -258,9 +258,12 @@ def test_requiring_an_anchor_can_be_turned_off():
     assert _run(ConnectivityTest(), _Assembly(children, config=config), ctx=_Ctx())
 
 
-def test_a_whole_assembly_can_opt_out():
+def test_a_rule_is_turned_off_one_at_a_time_rather_than_all_at_once():
+    """There is no blanket opt-out. A package says which rule does not apply to
+    it - 'allowDuplicates', 'requireAnchored' - so what it has turned off is
+    written down and the rest of the check still runs."""
     brick = _Item("brick")
-    config = {"connectivity": {"skip": True}}
+    config = {"connectivity": {"allowDuplicates": True}}
     assert _run(ConnectivityTest(), _Assembly([_Child("a", brick, HERE), _Child("b", brick, HERE)], config=config))
 
 
@@ -298,14 +301,11 @@ def test_the_settings_that_decide_a_verdict_are_in_its_cache_key():
     assert asyncio.run(conn.cache_key_suffix(None, _Assembly())) != asyncio.run(
         conn.cache_key_suffix(None, _Assembly(config={"connectivity": {"requireAnchored": False}}))
     )
-    assert asyncio.run(conn.cache_key_suffix(None, _Assembly())) != asyncio.run(
-        conn.cache_key_suffix(None, _Assembly(config={"connectivity": {"skip": True}}))
-    )
     # 'solidity' has nothing in its key: it reads the geometry and takes no
     # settings, so there is nothing a package can change that moves the answer.
     sol = SolidityTest()
     assert asyncio.run(sol.cache_key_suffix(None, _Shape())) == ""
-    assert asyncio.run(sol.cache_key_suffix(None, _Shape(config={"solidity": {"skip": True}}))) == ""
+    assert asyncio.run(sol.cache_key_suffix(None, _Shape(config={"solidity": {"anything": True}}))) == ""
 
 
 def test_a_check_that_cannot_run_is_failed_and_not_remembered():
@@ -490,14 +490,17 @@ def test_an_assembly_is_checked_through_its_parts_here_too(_validity_classes):
     assert verdict
 
 
-def test_it_can_be_silenced_per_object(_validity_classes, caplog):
+def test_it_cannot_be_silenced_and_does_not_need_to_be(_validity_classes, caplog):
+    """'validity' only ever reported - it has never failed anything - so there
+    was nothing for a 'skip' to protect a package from, and it takes no
+    settings at all now."""
     import logging
 
     shape = _Shape(config={"validity": {"skip": True}}, solidity={"solids": 1, "volume": 1.0, "valid": False})
     with caplog.at_level(logging.INFO):
         verdict, _ = _validity(shape)
     assert verdict
-    assert "not a well formed one" not in caplog.text
+    assert "not a well formed one" in caplog.text
 
 
 def test_a_check_that_breaks_says_so_without_failing(_validity_classes, caplog):

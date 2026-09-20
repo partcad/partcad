@@ -115,9 +115,9 @@ that machine's installation. Still unmigrated: `supply/*`,
 `add sketch`, `add dep`.
 
 `pc daemon ...` is the other side of that pair, command for command: `daemon start|stop` manage the process,
-while **`daemon status`**, **`daemon reset`** and **`daemon set telemetry ...`** are the daemon-side
-counterparts of the `pc system` commands of the same name — they report and change the daemon's own internal
-state directory and configuration, not the client's. The two coincide today, because the daemon runs on the
+while **`daemon status`** (with its `config` and `env` subcommands), **`daemon reset`** and **`daemon set
+telemetry ...`** are the daemon-side counterparts of the `pc system` commands of the same name — they report
+and change the daemon's own internal state directory and configuration, not the client's. The two coincide today, because the daemon runs on the
 same machine; they will not once a daemon can be remote, which is why both halves exist. `daemon reset` clears
 the daemon's state directory and the warm contexts that reference it. It runs unconditionally, because the caller has already decided and a
 background daemon has nobody to ask for confirmation; a destructive confirmation, when one is wanted, belongs
@@ -160,6 +160,30 @@ The daemon keeps the configuration each warm context was built from (`session.co
 rebuilds the context when a caller's differs, because a package graph resolved under one configuration cannot
 answer for another. A client that sends no configuration — the VS Code extension, which configures the daemon
 once through its launch arguments — keeps getting the daemon's own.
+
+**`pc system status` and `pc daemon status` each have three answers, and the pair of them is how you tell the
+two sides apart.** Bare, each reports the internal data on its own machine. `... status config` reports the
+configuration that side resolved, and `... status env` the `PC_*` variables that side's process was started
+with. All six print through `partcad_utils.config_report`, which is where the redaction rules live: a
+configuration option that is a secret is named there one by one, and an environment variable is scrubbed when
+its name carries an auth word between underscores (`TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL`, `AUTH`
+— not `DSN`, and the module says why). Two options are reported by *shape* rather than by value, because
+"is it set" is the wrong answer for both: `git.auth` keeps the host, username and key path that say *which*
+credential and drops the password and passphrase, and the `user` section keeps only which of its fields are
+configured — it is personally identifiable information in its entirety, and `PIIConfig` fills in two of its
+keys unconditionally, so a truthiness test would claim a name and an address were on file for a machine that
+has never been told any. Two copies of a redaction rule are one copy that stops redacting, which
+is why the daemon does not have its own; the daemon also scrubs before logging, so a value the client has no
+business holding never reaches the wire.
+
+The daemon's `config` answer is deliberately *not* the configuration your command ran under — that one travels
+with every `context.create`, as this section says above. It is the daemon's own, resolved from its own
+environment whenever something first started it, which is what a client sending no configuration gets. The
+`env` answer is the one thing the client cannot reconstruct at all — on POSIX. On Windows `connect()` serves
+the request from a one-shot stdio child of the client rather than from the named-pipe daemon, so both answers
+describe a process that inherited the caller's environment; the command still reports whatever process did the
+work, which is what it promises. `tests/partcad_cli/unit/test_status.py` asserts each half on its own platform,
+having first asserted the POSIX half on both and failed on Windows for exactly that reason.
 
 PartCAD **never prompts** for anything mid-operation. Credentials for private Git dependencies are configured
 upfront under `git.auth` in the user configuration, and `GitCallbacks` fails with a message naming that setting

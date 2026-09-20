@@ -201,7 +201,8 @@ Route files
 ============
 
 An object can say what is cut out of it and how, and ``pc cam`` writes the
-program a machine does it with. The job lives on the object, in a ``cam:``
+program a machine does it with. The job lives on the object, in its
+``manufacturing:``
 section, because it is a property of the object rather than of whoever cuts it
 -- a panel is 18 mm thick and has to be cut through whichever router is asked:
 
@@ -213,14 +214,17 @@ section, because it is a property of the object rather than of whoever cuts it
     panel:
       type: build123d
       path: panel.py
-      cam:
-        operation: profile    # around the outside of it, and inside every hole
-        tool: 6 mm            # the cutter's diameter
-        depth_per_pass: 3 mm
-        feed: 2400 mm/min
-        speed: 18000 rpm
+      manufacturing:
+        method: subtractive
+        source: sheet         # the stock it is cut out of
+        cnc:
+          operation: profile  # around the outside of it, and inside every hole
+          diameter: 6 mm      # the cutter
+          depth_per_pass: 3 mm
+          feed: 2400 mm/min
+          speed: 18000 rpm
 
-That section is the object's **opt-in**, and the whole of it. ``pc cam`` with
+Saying something about being cut is the object's **opt-in**, and the whole of it. ``pc cam`` with
 nothing named produces a route for every sketch and part of the package that
 declares one and passes over every object that does not, silently -- most
 objects are never cut, and a package where three parts of forty are is the
@@ -238,7 +242,8 @@ own ``implementation:``, or by ``-i`` for one run.
 
 Every key of the object's section is also a parameter of that file type, which
 makes the two of them three layers of one namespace: the built-in package
-underneath, the package's own ``cam:`` section, then the object's. A package
+underneath, the package's own ``cam:`` section, then the object's
+``manufacturing:``. A package
 cutting twenty parts from one sheet sets the tool once; the one part that needs
 a smaller cutter says so for itself. Lengths, feeds and speeds may each carry a
 unit and are converted at every layer, so a ``mm/min`` written by the package is

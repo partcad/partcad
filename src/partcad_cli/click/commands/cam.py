@@ -71,16 +71,29 @@ from ..service import run
     is_flag=True,
     show_envvar=True,
 )
+@click.option(
+    "-m",
+    "--machine",
+    help="Which of the machines an object names to write for: 'cnc', 'laser' or 'drill'. "
+    "Needed only by an object that names more than one, since they are alternatives",
+    type=str,
+    show_envvar=True,
+)
 @click.argument("object", type=str, required=False)  # The object to route; all of them by default
 @click.pass_obj
-def cli(cli_ctx, package, implementation, output_dir, create_dirs, recursive, sketch, as_json, object):
+def cli(cli_ctx, package, implementation, output_dir, create_dirs, recursive, sketch, as_json, machine, object):
     """Produce the program a machine cuts these objects with.
 
     With no object named this is a *package-level* command, which is what
     separates it from `pc cae fea`: an analysis is asked of one part, while a
     route is what a package's cut list is made of, and the objects that have one
-    are exactly the objects that declare a `cam:` section. Everything else in
-    the package is passed over without a word.
+    are exactly the objects whose `manufacturing:` section says something about
+    being cut. Everything else in the package is passed over without a word.
+
+    An object may name several machines. They are *alternatives* -- ways it
+    could be made, not stages it goes through -- so one of them is chosen per
+    run with `--machine`, and a part that really is machined in stages is a
+    chain of parts each naming the previous one as its `source`.
 
     The report is printed by the daemon through PartCAD logging, exactly as
     `pc cae` prints its findings, so that what a user sees does not depend on
@@ -100,6 +113,7 @@ def cli(cli_ctx, package, implementation, output_dir, create_dirs, recursive, sk
             "create_dirs": create_dirs,
             "recursive": recursive,
             "sketch": sketch,
+            "machine": machine,
             "json": as_json,
         },
         needs_context=True,

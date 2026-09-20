@@ -1,3 +1,8 @@
+# The parts below declare 'additive' because these fixtures are about
+# reproducibility and the software a part ships, not about how it is made: the
+# method is scaffolding, and what it has to be is one that needs nothing else
+# declared beside it. 'subtractive' is not that -- it requires the 'source:' it
+# is cut from -- so do not change them back.
 desc: Manufacturable parts, one of them read from a file nothing identifies
 manufacturable: true
 
@@ -8,7 +13,7 @@ parts:
     path: board.py
     desc: A board whose script is in this package
     manufacturing:
-      method: subtractive
+      method: additive
     parameters:
       tolerance: 0.1
 
@@ -21,7 +26,7 @@ parts:
     fileHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
     desc: A board whose script is fetched, and pinned
     manufacturing:
-      method: subtractive
+      method: additive
     parameters:
       tolerance: 0.1
 
@@ -34,7 +39,7 @@ parts:
     fileUrl: https://example.com/vendor/board.py
     desc: A board whose script is fetched, and identified by nothing
     manufacturing:
-      method: subtractive
+      method: additive
     parameters:
       tolerance: 0.1
 
@@ -60,7 +65,7 @@ parts:
     vendor: partcad
     desc: A board with a vendor and no SKU
     manufacturing:
-      method: subtractive
+      method: additive
     parameters:
       tolerance: 0.1
 

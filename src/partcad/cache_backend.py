@@ -44,6 +44,16 @@ SIZED_KEYS = ("shape", "sketch", "part", "assembly", "cmps")
 # exempts. The window is there to keep trivial *geometry* out.
 PROPERTIES_SUFFIX = "-props"
 
+# Every key that is named after a geometry key without holding geometry, as one
+# tuple. A new one added to this list is a new one the size window stops
+# applying to, which is the whole of what 'accepts' needs to know.
+#
+# There used to be two more, for what a shape measures and for what its source
+# file stated. Both are now inside the geometry's own entry rather than beside
+# it (see the header of cache_shape.py), which is why they are gone rather than
+# renamed: there is no separate key left to exempt.
+NON_GEOMETRY_SUFFIXES = (PROPERTIES_SUFFIX,)
+
 
 class CacheBackend:
     """One storage tier: flat names in, bytes out.
@@ -69,7 +79,7 @@ class CacheBackend:
 
     def accepts(self, key: str, size: int) -> bool:
         """Whether an entry of this size belongs in this tier."""
-        if not key.startswith(SIZED_KEYS) or key.endswith(PROPERTIES_SUFFIX):
+        if not key.startswith(SIZED_KEYS) or key.endswith(NON_GEOMETRY_SUFFIXES):
             return True
         # One-byte entries are how a test result is stored, and they are exempt
         # from the minimum: the point of the minimum is to keep small geometry

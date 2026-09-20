@@ -13,6 +13,7 @@ There are many ways to produce a PartCAD model that can be consumed by others.
   - [Build123d scripts](./produce_sketch_build123d/)
   - [Parts (3D shapes) using 2D sketch and extrude](./produce_part_extrude/)
   - [Parts (3D shapes) using 2D sketch and sweep](./produce_part_sweep/)
+  - [Subtractive: parts cut out of stock, on a router, a laser and a drill](./produce_part_subtractive/)
   - [Sheet metal: one blank, and the drawing that says where each part is bent](./produce_part_sheet_metal/)
 
 - Import parts defined using Python CAD frameworks:

@@ -193,12 +193,13 @@ class SketchFactoryDxf(SketchFactoryPython):
                     # what an outline with a gap in it is not.
                     pc_logging.warning("%s: %s" % (self.path, result["warning"]))
 
+                # Everything the drawing said - about its own elements and
+                # about itself - rides the envelope the wrapper returned, and
+                # nothing here has to handle it. That is what keeps this factory
+                # free of any knowledge of what a DXF states: it asks for a
+                # shape and gets one, and what came with it is carried, cached
+                # and reported by machinery that does not know a DXF exists.
                 shape = result["shape"]
-                # What the drawing said about its own elements, which the
-                # geometry cannot carry (see 'Sketch.get_annotations'). Set on
-                # the sketch rather than returned, because the return value is
-                # the shape; 'Shape.get_wrapped' caches this beside it.
-                sketch.annotations = result.get("annotations") or []
             except Exception as e:
                 pc_logging.exception("Failed to import the DXF file: %s: %s" % (self.path, e))
                 shape = None

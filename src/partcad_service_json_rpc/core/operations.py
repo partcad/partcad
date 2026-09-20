@@ -26,6 +26,7 @@ import yaml
 from packaging.specifiers import SpecifierSet
 
 from partcad_utils import conda as pc_conda
+from partcad_utils import config_report
 from partcad_utils.utils import directory_size_mb, split_recursive_object
 
 from ..rpc.dispatcher import JsonRpcError
@@ -1475,6 +1476,53 @@ def daemon_status(session, params):
     return None
 
 
+def daemon_status_config(session, params):
+    """Report the daemon's own effective configuration.
+
+    The daemon-side counterpart of `pc system status config`. The two differ on
+    purpose: a daemon is warm and shared per workspace, so this is whatever its
+    environment held when something first started it -- which is exactly why a
+    caller's configuration travels with every `context.create` and is what the
+    work is actually done under. This is the fallback that a client sending none
+    gets, and the thing to read when a command behaved as though it had been
+    invoked somewhere else.
+
+    Secrets are taken out here, on the daemon, so that a value the client has no
+    business holding never reaches the wire.
+    """
+    pc = session.ensure_partcad()
+    with pc.logging.Process("StatusConfig", "global"):
+        config_path = pc.user_config.get_config_path()
+        if not os.path.exists(config_path):
+            config_path += " (absent)"
+        pc.logging.info("Configuration file: %s" % config_path)
+        for key, value in config_report.resolved_options(pc.user_config):
+            pc.logging.info("%s: %s" % (key, value))
+    return None
+
+
+def daemon_status_env(session, params):
+    """Report the `PC_*` environment variables the daemon runs with.
+
+    The daemon-side counterpart of `pc system status env`, and the report that
+    cannot be worked out from the client at all: the daemon inherited the
+    environment of whatever started it -- a shell, an editor, a previous day's
+    session -- and nothing on the client side has a copy of it.
+
+    `os.environ` rather than anything the configuration remembers: the question
+    is what this process was handed, including the variables PartCAD binds no
+    option to and the ones it does not recognise at all.
+    """
+    pc = session.ensure_partcad()
+    with pc.logging.Process("StatusEnv", "global"):
+        reported = list(config_report.environment())
+        if not reported:
+            pc.logging.info("No %s* environment variables are set" % config_report.ENV_PREFIX)
+        for name, value in reported:
+            pc.logging.info("%s=%s" % (name, value))
+    return None
+
+
 def daemon_set_telemetry(session, params):
     """Set a telemetry setting in the daemon's own configuration.
 
@@ -1779,7 +1827,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.103"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.109"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -2473,14 +2521,16 @@ def cae_analyze(session, params):
 def cam_route(session, params):
     """Produce the route files of the objects that declare one, and say where they went.
 
-    Backs ``pc cam``. An object declares what is to be cut in its own ``cam:``
-    section (see ``partcad.cam``), and the implementation is whatever
+    Backs ``pc cam``. An object declares what is to be cut in its own
+    ``manufacturing:`` section (see ``partcad.cam``), and the implementation is
+    whatever
     ``implementation`` -- or, failing that, the object's own ``implementation:``,
     or the caller's ``camImplementation`` -- names, as ``<package>:<file type>``.
 
     ``object`` routes that one object and refuses if it declares nothing. With no
-    ``object`` every sketch and part of the package that declares a ``cam:``
-    section is routed and everything else is passed over in silence, which is
+    ``object`` every sketch and part of the package that says how it is made --
+    a machine or a job parameter under ``manufacturing:`` -- is routed and
+    everything else is passed over in silence, which is
     what makes the command usable in a package where three parts of forty are
     cut. ``recursive`` does the same through the packages below this one.
 
@@ -2504,6 +2554,11 @@ def cam_route(session, params):
         return None
     package = package_obj.name
 
+    # Which of an object's machines to write for. None lets each object take the
+    # one it names, and refuses the ones that name several -- the sentence says
+    # which they are, because a default nobody picked is a program for the wrong
+    # machine.
+    machine = params.get("machine")
     if recursive:
         packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
     else:
@@ -2532,6 +2587,7 @@ def cam_route(session, params):
                 object_name,
                 sketch=bool(params.get("sketch")),
                 implementation=params.get("implementation") or None,
+                machine=machine,
                 output_dir=params.get("output_dir") or None,
                 quiet_misses=bool(recursive and object_name),
             )
@@ -2543,16 +2599,16 @@ def cam_route(session, params):
         if not results and not failures and not object_name:
             # Nothing was wrong and nothing was produced, which is a real answer
             # and one a user acting on an empty command line needs said out
-            # loud: `pc cam` in a package where nothing declares a `cam:`
-            # section otherwise looks exactly like a route that went somewhere
-            # the user did not notice.
+            # loud: `pc cam` in a package where nothing says how it is made
+            # otherwise looks exactly like a route that went somewhere the user
+            # did not notice.
             #
             # Only where no object was named. A name that resolved to nothing
             # has already been reported as the object it is -- which is what the
-            # user typed -- and saying that the package declares no `cam:`
-            # section on top of it answers a question nobody asked, about a
-            # package that may be full of them.
-            pc.logging.info("Nothing in %s declares a 'cam:' section, so no route was produced" % package)
+            # user typed -- and saying that the package declares no
+            # `manufacturing:` section on top of it answers a question nobody
+            # asked, about a package that may be full of them.
+            pc.logging.info("Nothing in %s declares how it is made, so no route was produced" % package)
 
     # The routes that were produced are returned whether or not others failed,
     # and the failure travels beside them as a name rather than as an exception.
@@ -2567,7 +2623,9 @@ def cam_route(session, params):
     }
 
 
-async def _route_packages_async(pc, ctx, packages, object_name, sketch, implementation, output_dir, quiet_misses=False):
+async def _route_packages_async(
+    pc, ctx, packages, object_name, sketch, implementation, output_dir, machine=None, quiet_misses=False
+):
     """Route the objects of every package named, reporting each as it lands.
 
     Bounded the way a recursive render is bounded, and for the same reason: what
@@ -2579,9 +2637,9 @@ async def _route_packages_async(pc, ctx, packages, object_name, sketch, implemen
     and reports.
 
     ``quiet_misses`` is a walk of a subtree for one name ('...:panel'). There a
-    package that has the object but declares no ``cam:`` section for it has not
-    failed to route anything -- it was never asked -- so it goes unreported, and
-    only a walk that routed nothing at all is the failure.
+    package that has the object but does not say how it is made has not failed
+    to route anything -- it was never asked -- so it goes unreported, and only a
+    walk that routed nothing at all is the failure.
     """
     import asyncio
 
@@ -2620,8 +2678,8 @@ async def _route_packages_async(pc, ctx, packages, object_name, sketch, implemen
                 unresolved.append("%s:%s" % (target, obj))
             continue
         if obj is None:
-            # The whole package: every sketch and part of it that declares a
-            # 'cam:' section.
+            # The whole package: every sketch and part of it that says how it
+            # is made, under 'manufacturing:'.
             shapes.extend(await prj.routable_shapes_async())
             continue
 
@@ -2649,7 +2707,7 @@ async def _route_packages_async(pc, ctx, packages, object_name, sketch, implemen
 
     async def route(shape):
         async with at_once:
-            return await shape.route_async(ctx, implementation=implementation, output_dir=output_dir)
+            return await shape.route_async(ctx, implementation=implementation, output_dir=output_dir, machine=machine)
 
     produced = await asyncio.gather(*[route(shape) for shape in shapes], return_exceptions=True)
 

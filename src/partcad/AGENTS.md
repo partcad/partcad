@@ -218,12 +218,12 @@ at all).
   program with a release cycle of its own, which is the test `export:`/`render:` pass and a solver does not,
   so `//builtin/cam` ships and `camImplementation` names it by default.
 
-  The object declares the job in a `cam:` section of its own -- the same word as the package-level section,
-  and deliberately so. For CAE the two names differ because boundary conditions and mesh sizes are different
-  kinds of thing; here the tool, the depth and the feed are the file type's parameters *and* the object's
-  statement about itself, so they are one namespace with `//builtin/cam`, the package and the object as its
-  three layers. What keeps that unambiguous is that `cam.KEYS` is a **closed** set: an object's section holds
-  job parameters and nothing else, so it can never be read as a file-type declaration, and a key that is
+  The object declares the job in its **`manufacturing:`** section, beside the method and the machine it
+  belongs to -- so `cam:` means the file-type registry and nothing else. It used to mean both, with the
+  ambiguity managed by keeping the two key sets disjoint; there is nothing left to manage. `//builtin/cam`,
+  the package and the object are still the three layers, and within the object there are two more: what sits
+  directly under `manufacturing:` is shared by every machine it names, and what sits inside a machine's own
+  subsection outranks it. `cam.KEYS` is still a **closed** set, and a key that is
   neither is refused with a sentence rather than passed through.
 
   `cam.py` parses and converts (lengths to millimetres, feeds to millimetres per minute, and both at *every*
@@ -257,6 +257,78 @@ at all).
   its siblings, `-f cam` selects the route check alone. Renaming a check changes every cached verdict's key,
   so the first `pc test` after this re-runs everything -- once.
 
+- **A subtractive part names what it is cut from and what cuts it** (`part_config_manufacturing.py`,
+  `test/manufacturability_subtractive.py`, `test/manufacturability_machine.py`): `subtractive` was a label until
+  this -- a part declared it and nothing read it. It now carries two claims, and each is checked.
+
+  `source:` is the stock. Cutting only removes material, so the part has to be what is left of it: nothing of it
+  outside the stock, and the stock bigger somewhere. Both halves, because each catches a different mistake and
+  neither implies the other -- a part that pokes out cannot be cut from it at all, and a part that fills it
+  exactly is one whose `source:` names itself. Measured by `wrapper_manufacturability.enclosure`, which returns
+  the four volumes rather than a boolean so a failure can say whether it missed by a rounding error or by a
+  feature. Required, like `sheet_metal`'s: subtraction is *defined* by what it starts from, so a declaration naming no
+  stock has not said what the method means. That is a breaking change to a method parts already declare, and
+  the fixtures in this tree that carried `subtractive` as scaffolding were moved to `additive` rather than
+  given a stock they do not have -- see the note at the top of each.
+
+  The **machine** is named by adding its own subsection -- `cnc:`, `drill:` or `laser:` -- rather than by a
+  `machine:` key, because the three do not take the same options and one namespace would leave nothing to say
+  which belongs to which. None of them is CNC: the machine that can make anything the other two can, and what
+  every `subtractive` part written before this meant. **Several of them is legal, and they are alternatives** --
+  ways the part could be made rather than stages it goes through, so every one is checked and `pc cam -m`
+  picks which to write for. A part that really is machined in stages is a chain of parts each naming the
+  previous as its `source`, because each stage has its own geometry and its own stock.
+
+  `MACHINE_JOB_KEYS` gives each machine only the keys its emitter actually reads, which is what the flat
+  namespace could not do: a laser has no `diameter:` (it has no cutter -- `kerf:` is what it removes) and no
+  `depth:` or `safe_z:`; a drill has no `depth:`, `feed:` or `operation:`. Writing one of those in that
+  machine's own subsection is an error naming what it does take; writing it in the shared scope is fine and
+  simply not read. The axis is `toolAxis:` rather than `direction:` because `direction` already means climb or
+  conventional, and both would reach one implementation in one request.
+
+  `_read_machines` reads none of this for a method that is not `subtractive`, and **refuses** the keys rather
+  than dropping them: nothing takes a cut from an `additive` part, so a `diameter:` on one is a number somebody
+  chose and nothing acts on -- the failure the move out of the object's own `cam:` section was for, one level
+  down. The schema says the same thing as an `if`/`then` on the method, so `pc lint` catches it too. The one
+  section with no `method:` is a **sketch's**: a drawing is not made out of anything, so it declares the machine
+  and the job and nothing else, which is why the gate reads "subtractive, or a declared section with no method".
+
+  The two limited machines get a check each (`manufacturability-laser`, `manufacturability-drill`), and each
+  applies **only to a part that named it** -- a package that has said `method: subtractive` for a year must not
+  start failing a check about a laser it does not own, which is what `MachineConfig.declared` is for. Both rest
+  on `wrapper_manufacturability.wall_alignment`, which classifies every face against the machine's axis by
+  **sampling its normal** rather than by reading its surface type: a cylinder is a wall when it is coaxial with
+  the axis and a defect when it lies across it, and a spline extruded along the axis is a perfectly good wall no
+  type test would accept. Drilling asks one thing more and asks it of a different subject -- the material the
+  machine *took away*, which is `source` minus the part -- because a drilled plate's straight sides came with
+  the stock and asking the part's own walls would fail every plate for having them.
+
+  The drilling *route* asks the same question a third time and has to answer it from geometry too: `_holes`
+  takes a cylindrical face about the tool axis, and the outer wall of a round plate is one of those. What
+  separates a bore from a boss is which side the material is on, so `_encloses_material` compares the face's
+  outward normal against the radial direction from the axis -- `TopAbs_REVERSED` alone says how a face is used,
+  not where its material is. Without it a round blank is one enormous hole with a plunge at its centre.
+
+  `pc cam` writes for all three from the one `gcode` file type, and which one is the part's own statement
+  rather than a job parameter anybody may re-tune (`Shape._route_machine_data`, applied after every other
+  layer so nothing can override it, and `-m` chooses only between the machines the part itself named):
+  what a part is made on is a property of the part, and a route for a machine nobody owns is the failure that
+  reaches the shop floor. A part that names no machine produces the bytes it always produced, which is worth
+  keeping true -- `_orient` is the identity for the default `-Z` precisely so that it stays so. A part that
+  names one **unreadably** is refused rather than routed: `_read_machine` records that in `machine_error` and
+  returns no machine, which is the same answer it gives for a part that named none, so falling back would hand
+  a router program to somebody who wrote `laser:`. `pc test` reporting it as well is not enough, because
+  nothing makes `pc cam` wait for `pc test`.
+
+  Which machine it is belongs in a cache key wherever it is read -- `manufacturing:` is one of the keys a
+  shape's hash deliberately leaves out, so a part moved from CNC to laser has the same hash and a different
+  program. `CamTest` folds in `_route_machine_data`, and the two machine checks fold in the machine and the
+  axis, plus the `source` for the one that judges what was removed and not for the one that does not.
+
+  `examples/produce_part_subtractive` is the whole of it, and its laser-cut `blank` is what the sheet metal
+  example bends -- named across packages, so the piece that goes into the brake is a part whose own making is
+  described rather than one asserted to exist.
+
 - **A sheet metal part names what is bent and how** (`part_config_manufacturing.py`,
   `test/manufacturability_sheet_metal.py`, `wrappers/dxf_metadata.py`): `sheet_metal` is the one manufacturing
   method that is not described by the part alone. The others say how a shape comes out of stock; this one says
@@ -281,26 +353,24 @@ at all).
   `examples/produce_part_sheet_metal` is the whole of it in one package, and is what the end-to-end
   `@pc-test-sheet-metal` scenario in `features/test.feature` runs against.
 
-- **A sketch says what its drawing said** (`Sketch.get_annotations`, `Shape.CACHED_SIDE_DATA`,
+- **A sketch says what its drawing said** (`Sketch.get_annotations`, `shape_envelope.METADATA_ANNOTATIONS`,
   `wrappers/dxf_metadata.py`): BREP has nowhere to put an angle written against a line, and a DXF says exactly
-  that in XDATA. So the import reads it and the sketch carries it: one record per element -- its type, layer,
-  handle, where it is, and the key/value pairs -- keyed to the same layer filters the import was given, so the
-  annotations describe what is *in* the sketch. `CACHED_SIDE_DATA` is what makes it survive, because a sketch
-  that comes out of the cache is never instantiated; it is an entry of its own beside the geometry, and a
-  cached shape whose side data is **absent** is built again rather than answered with nothing -- an empty
-  entry means "read, and it said nothing", while no entry means "written before any of this existed", and a
-  check would act on the difference. This is also what makes sheet metal instructions *a sketch* rather than
-  *a DXF file*: `dxf` is the only type that states anything today, and nothing downstream knows that.
+  that in XDATA. So the import reads it and it rides back on the **envelope**: one record per element -- its
+  type, layer, handle, where it is, and the key/value pairs -- keyed to the same layer filters the import was
+  given, so the annotations describe what is *in* the sketch. This is what makes sheet metal instructions *a
+  sketch* rather than *a DXF file*: `dxf` is the only type that states anything today, and nothing downstream
+  knows that.
 
-  One thing had to give for that to be usable at all. CadQuery's DXF importer builds **faces**: it merges
-  each layer's entities into wires and asks each wire for the face it bounds, so a drawing whose lines do not
-  close fails outright -- and a drawing whose lines do not close is exactly what bend instructions are. So
-  `wrapper_import_dxf` keeps the face import as the first answer and falls back to the wires the selected
-  layers draw, with a warning naming what happened, because the other way to reach that fallback is an
-  outline with a gap in it. Every DXF that imports today imports byte-identically; this is a second answer to
-  a question that had none. The fallback mirrors the importer's layer rule (case-insensitive, `include` and
-  `exclude` mutually exclusive) and `dxf_metadata.is_included` applies the same one, so the geometry and the
-  annotations describe one set of elements.
+  A drawing also says things about **itself** - which layers it has, what `$INSUNITS` says its numbers are
+  in, which applications it declares - and that is read on the same trip and travels the same road, under
+  `METADATA_SECTIONS` rather than `METADATA_ANNOTATIONS`. The two are separate sections because they are read
+  differently and not because they arrive differently: a sketch *is* the layers its filters selected, and the
+  interesting thing about the ones they did not select is that they exist. `pc info` is what prints it.
+
+  Which annotated elements are worth **showing** is decided in `dxf_metadata`, not in the core, and lands in
+  `sections` under a heading of its own. Picking them out means knowing that a record has a `metadata` key and
+  that an empty one means un-annotated, which is DXF's vocabulary; the full list travels on untouched, because
+  a check that every bend line states its angle has to see the lines that do not.
 
   **Which layers of a drawing a sketch reads is an object-type parameter**, not merely a field
   (`sketch_factory.py`, `sketch_factory_dxf.py`, `Project.declare_object_type_parameters`). `include` and
@@ -313,6 +383,44 @@ at all).
   left alone, so a typo stays a typo), and `parse_parameterized_name` treats a comma-separated fragment with
   no `=` as a continuation of the value before it, because a list value has commas in it and a comma is also
   what separates parameters.
+
+- **A file says what it says, and the wrapper is what hears it** (`wrappers/step_metadata.py`,
+  `shape_envelope.KEY_METADATA`): the STEP half of the same idea, on the same rails. A STEP file states a header, its products, its layers (`PRESENTATION_LAYER_ASSIGNMENT`) and
+  *properties* - a `PROPERTY_DEFINITION` tied by a `PROPERTY_DEFINITION_REPRESENTATION` to a `REPRESENTATION`
+  whose items are the key/value pairs - and that chain is how an `angle` written against a bend reaches
+  PartCAD from a STEP file, exactly as XDATA is how it reaches PartCAD from a DXF. Both readers lower-case
+  their keys and keep their values as the file states them, so what reads a pair does not have to know which
+  format answered.
+
+  It is read **in the wrapper**, which is the process the file is open in, and it is read as *text* - not for
+  want of a kernel, but because XCAF gives names, layers and colours and has nowhere to put an arbitrary
+  property, which is the half it exists for. OCCT has just parsed the same bytes in the same process, so a
+  second pass over them is the cheap part. Only the exact entity `PROPERTY_DEFINITION_REPRESENTATION` is
+  followed, never a subtype: `SHAPE_DEFINITION_REPRESENTATION` is one, every file holding a solid states one,
+  and following it would report each solid as a property set holding nothing. Note the trap a test names: an
+  argument list cannot be matched up to the next `;`, because every exporter writes `'2;1'` in the header.
+
+  Nothing about any of this is in the core. The core carries the metadata opaquely from the envelope into its
+  cache entry and merges it into `pc info` **as the wrapper named it**, so the sections stay the format's own
+  vocabulary and the core never learns one.
+
+- **How big it is and how much of it there is** (`shape_measure.py`, `ocp_serialize.encode_shape`,
+  `Shape.get_measurements_async`): `pc info` reports a shape's `BoundingBox` and, where it holds a solid, its
+  `Volume` and `Solids`. Neither can be read off a declaration - a part is a script, a file or a boolean of
+  two others - so building it is the only way to know, and it is where `/pc:describe` gets the size it would
+  otherwise estimate off a projection rendered to fit its frame.
+
+  It is measured **as the shape is encoded**, in the process that built the geometry, and comes back in the
+  envelope's `measurements` section. Every wrapper that returns a shape returns it through `encode_shape`, so
+  every wrapper produces this without knowing it does; the core's one in-process encoder (`Shape._to_envelope`,
+  for the factories that still build a live shape) does the same thing for the same reason. The arithmetic is
+  over geometry that is already in memory and already being traversed to write its BREP, so it costs a
+  traversal rather than a process. Measuring later would mean a fresh sandbox, the BREP shipped into it and
+  deserialized, to compute what was free at build time. `shape_measure.bbox` drops the gap OCCT pads a box by,
+  so a 120 mm block measures 120.
+
+  `wrapper_measure` still exists for the one caller that measures something it did not build:
+  `measure.bbox(frame=...)`, which re-measures a shape in a **port's** frame rather than its own.
 
 - **A part is a body, not a skin** (`wrappers/wrapper_common.solidify`, `brep_inspect.py`,
   `test/shell.py`): a shell is a set of faces with nothing said about which side of them is material; a solid

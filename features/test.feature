@@ -224,16 +224,20 @@ Feature: `pc test` command
         bracket:
           type: step
           manufacturing:
-            method: subtractive
+            # 'additive' because this scenario is about the tolerance check and
+            # the supplier search, not about how the part is made. 'subtractive'
+            # would drag in the stock it is cut from, which is a second failure
+            # against three parts that are here to demonstrate a different one.
+            method: additive
           tolerance: 0.1
         plain:
           type: step
           manufacturing:
-            method: subtractive
+            method: additive
         tolerated:
           type: step
           manufacturing:
-            method: subtractive
+            method: additive
       """
     And a file named "bracket.step" with content:
       """
@@ -272,6 +276,108 @@ Feature: `pc test` command
     And STDOUT should contain "//:plain: manufacturability: No manufacturing tolerance is specified"
     And STDOUT should contain "//:bracket: manufacturability: No suppliers found"
     And STDOUT should contain "//:tolerated: manufacturability: No suppliers found"
+
+  @success @pc-test @pc-test-subtractive
+  Scenario: A subtractive part that does not fit the stock it names
+    # Cutting only ever removes material, so a part larger than what it is cut
+    # from cannot be made however good the machine is.
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      parts:
+        stock:
+          type: build123d
+          path: stock.py
+        part:
+          type: build123d
+          path: part.py
+          manufacturing:
+            method: subtractive
+            source: stock
+      """
+    And a file named "stock.py" with content:
+      """
+      import build123d as bd
+
+      with bd.BuildPart() as result:
+          bd.Box(40, 40, 10)
+
+      show_object(result.part.wrapped, name="stock")
+      """
+    And a file named "part.py" with content:
+      """
+      import build123d as bd
+
+      with bd.BuildPart() as result:
+          bd.Box(60, 40, 10)
+
+      show_object(result.part.wrapped, name="part")
+      """
+    When I run "pc test -f manufacturability-subtractive part"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "manufacturability-subtractive"
+    And STDOUT should contain "outside"
+
+  @success @pc-test @pc-test-subtractive
+  Scenario: A laser is asked for a wall it cannot cut
+    # A beam that does not tilt makes walls parallel to itself and nothing
+    # else, so the chamfer on the top edge is the one feature it cannot
+    # produce. The same solid on a router is unremarkable, which is why the
+    # check applies only to a part that named the machine.
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      parts:
+        stock:
+          type: build123d
+          path: stock.py
+        chamfered:
+          type: build123d
+          path: chamfered.py
+          manufacturing:
+            method: subtractive
+            source: stock
+            laser:
+              kerf: 0.2
+      """
+    And a file named "stock.py" with content:
+      """
+      import build123d as bd
+
+      with bd.BuildPart() as result:
+          bd.Box(40, 40, 10)
+
+      show_object(result.part.wrapped, name="stock")
+      """
+    And a file named "chamfered.py" with content:
+      """
+      import build123d as bd
+
+      with bd.BuildPart() as result:
+          bd.Box(40, 40, 10)
+          bd.chamfer(result.faces().sort_by(bd.Axis.Z)[-1].edges(), length=2)
+
+      show_object(result.part.wrapped, name="chamfered")
+      """
+    When I run "pc test -f manufacturability-laser chamfered"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "manufacturability-laser"
+    And STDOUT should contain "cannot make it"
+
+  @success @pc-test @pc-test-subtractive
+  Scenario: The example package passes every manufacturability check
+    # End to end, against the checked-in example: two stocks, two laser parts,
+    # a routed block whose chamfer only a router can make, and a drilled plate
+    # whose straight sides came with its stock. Each part names the machine it
+    # is made on, so between them they exercise all three.
+    When I run command
+      """
+      pc --no-ansi -p $PARTCAD_ROOT/examples test --package //produce_part_subtractive -f manufacturability
+      """
+    Then the command should exit with a status code of "0"
+    And STDERR should not contain "ERROR:"
 
   @success @pc-test @pc-test-sheet-metal
   Scenario: A sheet metal part that names neither what is bent nor how
@@ -370,8 +476,8 @@ Feature: `pc test` command
       parts:
         blank:
           type: cadquery
-          manufacturing:
-            method: subtractive
+          # No 'manufacturing:' at all: a blank that is bought in rather than
+          # cut declares none, and this scenario is about the bracket.
           parameters:
             tolerance: 0.1
         bracket:
