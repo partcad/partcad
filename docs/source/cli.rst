@@ -31,6 +31,16 @@ that copy rather than from the configuration it was started with. So ``pc --deve
 says even when a daemon has been running since before you set it, and there is no daemon to restart after
 changing a setting.
 
+An assembly is built out of other assemblies, and the daemon builds those **one at a time, each in a request of
+its own**. So asking for an assembly whose sub-assemblies have not been built yet prints a line naming them::
+
+    Building these sub-assemblies first: //pub/examples/partcad/produce_assembly_assy:primitive
+
+and then builds each one before building what you asked for. You will see a ``DONE:`` line per step rather than
+one for the whole thing; nothing is built twice, since each one is cached as it is finished. This is why an
+assembly that takes many minutes no longer has to fit into a single request, and it is entirely automatic --
+there is nothing to turn on and no command of your own to run.
+
 .. _recursive-names:
 
 **********************************

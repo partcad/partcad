@@ -26,7 +26,7 @@ import yaml
 from packaging.specifiers import SpecifierSet
 
 from partcad_utils import conda as pc_conda
-from partcad_utils import config_report
+from partcad_utils import config_report, staging
 from partcad_utils.utils import directory_size_mb, split_recursive_object
 
 from ..rpc.dispatcher import JsonRpcError
@@ -48,6 +48,11 @@ USAGE_ERROR = -32002
 # what is wanted: an unrecognised code becomes a click.ClickException carrying
 # the message, printed as it stands and exiting 1.
 ANALYSIS_FAILED = -32003
+# "Not yet -- build these first", the answer the first phase of an assembly
+# build gives when the assembly places sub-assemblies that are not cached yet.
+# Imported rather than spelled out: the client acts on it, so the two ends read
+# it from one place (see partcad_utils.staging).
+RETRY_LATER = staging.RETRY_LATER
 
 
 def _ctx(session, params):
@@ -225,6 +230,128 @@ def _root_config_path(ctx) -> str:
     return root.config_path
 
 
+# ---- two-phase assembly builds ---------------------------------------------
+
+
+def _stage_subassemblies(session, ctx, assembly) -> None:
+    """Phase one: refuse to build this assembly while its parts are not ready.
+
+    Reads what the assembly places and asks which of those assemblies are not
+    cached yet. None, and the caller goes on to build it, which is the usual
+    case and costs one declaration read. Some, and nothing is built here:
+    :data:`RETRY_LATER` goes back naming them, the client builds each one
+    through ``assembly.instantiate`` and asks again (see
+    ``partcad_utils.staging``).
+
+    An assembly this daemon has already built on request is never named again,
+    whatever the cache says about it now. That is what bounds the exchange: an
+    entry too large to keep in memory and too large for a cache tier to accept
+    would otherwise be reported as missing forever, and the client would stage
+    it forever. Reported once, built once, and then built inline like anything
+    else -- slower than it should be, but an answer.
+    """
+    import asyncio
+
+    if assembly is None:
+        return
+    pending = [sub for sub in asyncio.run(assembly.get_uncached_subassemblies_async(ctx)) if sub not in session.staged]
+    if not pending:
+        return
+
+    items = [{"package": sub.project_name, "name": sub.name, staging.KIND: sub.kind} for sub in pending]
+    # Said rather than logged quietly: it is the reason the client is about to
+    # make several requests where it made one, and without it the exchange
+    # looks like nothing happening.
+    session.partcad.logging.info(
+        "Building these sub-assemblies first: %s" % ", ".join(staging.identity(item) for item in items)
+    )
+    raise JsonRpcError(RETRY_LATER, staging.error_message(items), staging.error_data(items))
+
+
+def _stage_named_object(session, ctx, pc, params, package, object_name, recursive) -> None:
+    """Stage the object a single-object output request names.
+
+    What is staged here is the *shape being instantiated*, which happens before
+    an output file of any kind can be written from it and is the same work
+    whichever kind that is. Whether the file this request ends in is an export
+    or a render is a property of the file type rather than of this request (see
+    'partcad.output.section_of'), and it does not reach this far: by the time
+    anything is built, the question is only whether the geometry exists.
+
+    Staged only for one *named* object, and only an assembly or a scene -- the
+    two kinds that are built out of other objects. A part, a sketch or an
+    interface is built from its own files, so there is nothing to build first.
+    A request whose unit is a package is left alone: what it would have to name
+    is everything it is about to build, and it already says where it has got
+    to, object by object, as it goes. That is what ``recursive`` says, and it
+    is the caller's answer rather than a flag read again here -- a walk is also
+    asked for by a ``...`` on either name (see ``_request``), and reading the
+    flag alone would take ``...:frame`` for one object and stage whichever
+    package happened to be selected.
+
+    Called after the output format has been checked, so that an unknown file
+    type is still refused before anything is built rather than after.
+    """
+    if object_name is None or recursive:
+        return
+    kind = _object_kind(params)
+    if kind == "scene":
+        getter = ctx.get_scene
+    elif kind == "assembly":
+        getter = ctx.get_assembly
+    else:
+        # A sketch, an interface or a part: built out of its own files.
+        return
+    # The object may name a package of its own, which is the one that produces
+    # it whatever '--package' selected.
+    owner, name = pc.utils.resolve_resource_path(package, object_name)
+    _stage_subassemblies(session, ctx, getter(_qualified(owner, name)))
+
+
+def instantiate_assembly(session, params):
+    """Build an assembly on the daemon, leaving the result in its cache.
+
+    What a client calls to get a sub-assembly out of the way before asking for
+    the assembly that places it (see ``partcad_utils.staging``). With
+    ``cacheOnly`` -- which is how the client always calls it -- the geometry
+    stays here: the response says the assembly was built and nothing more.
+    Without it, the result is also shown in the connected viewer, which is the
+    one thing "send it over" means for an assembly.
+
+    ``kind`` tells an assembly from a scene, which is built the same way out of
+    the same files but registered apart by the package that declares it. It
+    comes back from the first phase with the entry it belongs to, so a client
+    never has to decide what it is looking at.
+
+    Two-phase like any other assembly request: an assembly whose own
+    sub-assemblies are not ready answers ``RETRY_LATER`` in its turn, and the
+    client recurses.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    package, name = params["package"], params["name"]
+    kind = params.get(staging.KIND) or staging.KIND_ASSEMBLY
+    path = _qualified(package, name)
+    with session.partcad.logging.Process("Instantiate", package, name):
+        getter = ctx.get_scene if kind == "scene" else ctx.get_assembly
+        assembly = getter(path, params.get("params"))
+        if assembly is None:
+            raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+        _stage_subassemblies(session, ctx, assembly)
+        asyncio.run(assembly.get_wrapped(ctx))
+        # Only now, and whatever the cache did with it: this daemon has built
+        # it, so it never goes back on the list of things to build first.
+        session.staged.add(assembly)
+        if not params.get(staging.CACHE_ONLY, True):
+            assembly.show(ctx)
+    # What was built, said the way it was asked for. Not "assembly": this
+    # method builds a scene under exactly the same name.
+    return {"object": path, staging.KIND: kind, "instantiated": True}
+
+
 # ---- inspection ------------------------------------------------------------
 
 
@@ -279,6 +406,7 @@ def inspect_assembly(session, params):
     with session.partcad.logging.Process("Inspect", package, name):
         assembly = ctx.get_assembly(_qualified(package, name), params.get("params"))
         if assembly:
+            _stage_subassemblies(session, ctx, assembly)
             assembly.show()
     session.emitter.signal(events.SHOW_PART_DONE)
     return None
@@ -293,6 +421,9 @@ def inspect_scene(session, params):
     with session.partcad.logging.Process("Inspect", package, name):
         scene = ctx.get_scene(_qualified(package, name), params.get("params"))
         if scene:
+            # A scene is an assembly and is placed out of assemblies, so it is
+            # staged like one.
+            _stage_subassemblies(session, ctx, scene)
             scene.show()
     session.emitter.signal(events.SHOW_PART_DONE)
     return None
@@ -409,6 +540,7 @@ def export_assembly(session, params):
     with session.partcad.logging.Process("Export", package, name):
         assembly = ctx.get_assembly(_qualified(package, name), params.get("params"))
         if assembly:
+            _stage_subassemblies(session, ctx, assembly)
             assembly.render(ctx, params["type"], filepath=params["path"])
     session.emitter.signal(events.EXPORT_PART_DONE)
     return None
@@ -423,6 +555,7 @@ def export_scene(session, params):
     with session.partcad.logging.Process("Export", package, name):
         scene = ctx.get_scene(_qualified(package, name), params.get("params"))
         if scene:
+            _stage_subassemblies(session, ctx, scene)
             scene.render(ctx, params["type"], filepath=params["path"])
     session.emitter.signal(events.EXPORT_PART_DONE)
     return None
@@ -1590,6 +1723,9 @@ def inspect_object(session, params):
         # rather than assumed to be the selected one.
         package, object_name = pc.utils.resolve_resource_path(package, object_name)
         path = _qualified(package, object_name)
+        # Whether what is asked for is built out of other assemblies, and so
+        # goes through the two-phase build below.
+        assembled = bool(params.get("assembly") or params.get("scene"))
         if params.get("assembly"):
             obj = ctx.get_assembly(path, params=param_dict)
         elif params.get("scene"):
@@ -1610,6 +1746,11 @@ def inspect_object(session, params):
             summary = obj.get_summary(ctx.get_project(package))
             pc.logging.info("Summary: %s" % summary)
             return {"summary": summary}
+        if assembled:
+            # After the verbal answer above, which is read off the declaration
+            # and builds nothing: there is nothing to stage for a question the
+            # daemon answers without instantiating anything.
+            _stage_subassemblies(session, ctx, obj)
         obj.show(ctx)
     return None
 
@@ -3121,6 +3262,7 @@ def render_objects(session, params):
     ):
         try:
             _render_objects(
+                session,
                 pc,
                 ctx,
                 params,
@@ -3143,6 +3285,7 @@ def render_objects(session, params):
 
 
 def _render_objects(
+    session,
     pc,
     ctx,
     params,
@@ -3184,6 +3327,7 @@ def _render_objects(
     if options_package:
         validated_packages.append(options_package)
     _validate_output_format(pc, ctx, fmt, validated_packages)
+    _stage_named_object(session, ctx, pc, params, package, object_name, recursive)
 
     asyncio.run(
         _render_packages_async(

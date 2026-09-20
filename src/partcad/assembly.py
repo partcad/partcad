@@ -98,6 +98,53 @@ class Assembly(Shape):
         # self.children contains all child parts and assemblies before they turn into 'self.shape'
         self.children = []
 
+        # Set by the factory (see AssemblyFactory._create): which assemblies
+        # this one is built out of, without building any of them. None for an
+        # assembly nobody declared - one put together in Python with 'add()' -
+        # which has no declaration to read them out of.
+        self._subassemblies = None
+
+    async def get_subassemblies_async(self) -> list["Assembly"]:
+        """The assemblies this one places, resolved but not built.
+
+        What a declaration points at, read from the declaration: an ASSY file's
+        'assembly:' links, the object an alias or an enrich stands for. Not the
+        parts, and not the sub-assemblies of the sub-assemblies - each of those
+        answers the same question about itself, which is what makes an assembly
+        tree walkable one level at a time.
+
+        Prepared first, because that is what resolves the references: a link
+        may name a package nothing has loaded yet, and an enrich does not know
+        which instance it points at until the parameter values have reached it.
+        """
+        await self.prepare_async()
+        if self._subassemblies is None:
+            return []
+        return await self._subassemblies(self)
+
+    async def get_uncached_subassemblies_async(self, ctx) -> list["Assembly"]:
+        """The distinct assemblies this one places that would have to be built.
+
+        The first phase of building an assembly in two: what is already cached
+        (or already in memory) costs nothing to use, so what is left is the
+        work this assembly is really about to do, one entry per assembly however
+        many times it is placed.
+
+        An assembly that links to itself is left out of its own list - the
+        recursion is reported where it is built, not here.
+        """
+        found = {}
+        for sub in await self.get_subassemblies_async():
+            # The kind is part of what identifies one: a package may declare an
+            # assembly and a scene of one name, and they are two objects.
+            key = (sub.kind, sub.project_name, sub.name)
+            if sub is self or key in found:
+                continue
+            if await sub.is_cached_async(ctx):
+                continue
+            found[key] = sub
+        return list(found.values())
+
     def get_async_instantiate_lock(self) -> asyncio.Lock:
         """The task lock 'do_instantiate' serializes on, one per thread.
 

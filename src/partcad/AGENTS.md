@@ -51,6 +51,20 @@ at all).
   it waits for its parts, and each of those takes a thread from the constrained one -- assemblies waiting there
   is how enough of them at once run it out of threads, every one waiting for a part with nowhere left to run.
 
+- **What an assembly places, without building it** (`Assembly.get_subassemblies_async`,
+  `get_uncached_subassemblies_async`, `Shape.is_cached_async`, `Cache.contains_data_async`): the assemblies a
+  declaration points at, read from the declaration -- an ASSY file's `assembly:` links, the object an alias or
+  an enrich stands for -- and then filtered down to the ones that are not in memory and not in the cache. It
+  answers "what would building this actually do?" without doing any of it, which is what lets the daemon split
+  an assembly build into one request per assembly (see `src/partcad_service_json_rpc/AGENTS.md`).
+
+  The cost is why it is usable at all: a declaration read, and a `stat()` (or a `HEAD`, on the object store
+  tier) per entry. `contains_data_async` is an existence check rather than a read for exactly that reason --
+  what it is asked about is a whole assembly, and pulling one back only to drop it is the expensive half of
+  asking. A factory says what its format references by overriding `AssemblyFactory.subassemblies_async`; the
+  default is none, which is the right answer for a format that holds geometry rather than references (STEP, a
+  URDF, a mesh).
+
 - **Admission limits**: `threadsMax` also caps how many tests and how many linting checks run at once, and both
   go through `concurrency.ReentrantGate` rather than a bare `asyncio.Semaphore`. A check may run the other
   checks itself -- `ManufacturabilityTest` runs the whole suite over everything an assembly is procured from,

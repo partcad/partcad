@@ -93,6 +93,24 @@ class S3CacheBackend(PooledCacheBackend):
             results = await asyncio.gather(*[asyncio.create_task(task_item(name)) for name in names])
         return {name: data for name, data in results if data is not None}
 
+    async def _contains_async(self, names: list[str]) -> dict[str, bool]:
+        # HEAD, not GET: this tier is the furthest away and the one a shape is
+        # biggest on, so downloading an object to find out that it is there is
+        # exactly what an existence check exists to avoid.
+        async with self.connected() as (_, client):
+
+            async def task_item(name: str):
+                try:
+                    response = await client.head_object(Bucket=self.bucket, Key=self._key(name))
+                except Exception as e:
+                    if not _is_miss(e):
+                        pc_logging.debug("cache: %s: failed to check '%s': %s" % (self.name, name, e))
+                    return name, False
+                return name, int(response.get("ContentLength", 0)) > 0
+
+            results = await asyncio.gather(*[asyncio.create_task(task_item(name)) for name in names])
+        return dict(results)
+
     async def _write_async(self, items: dict[str, bytes]) -> dict[str, bool]:
         async with self.connected() as (_, client):
 

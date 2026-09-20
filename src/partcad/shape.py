@@ -457,6 +457,30 @@ class Shape(ShapeConfiguration):
     def get_cache_key(self) -> Optional[str]:
         return asyncio.run(self.get_cache_key_async())
 
+    async def is_cached_async(self, ctx) -> bool:
+        """Whether this shape can be had without building it.
+
+        True when it is already in this process's memory, and otherwise when
+        the cache holds the one entry 'get_wrapped()' materializes it from.
+        One entry is the whole of it: whatever was recorded about the geometry
+        travels inside that entry (see cache_shape.py), so a hit is a hit and
+        there is no sibling entry that might be missing. The components beside
+        it are not asked after for the same reason 'get_wrapped()' does not
+        insist on them - a shape that has none is cached exactly as completely
+        as one that has.
+
+        Asked of the tiers rather than read out of them, so that answering it
+        for a large assembly costs a stat() rather than the assembly. A shape
+        that is not cacheable at all is never "cached" by this: it is either in
+        memory or it has to be built.
+        """
+        if self._wrapped is not None:
+            return True
+        if not ctx or await self.get_cache_key_async() is None:
+            return False
+        present = await ctx.cache_shapes.contains_data_async(self.hash, [self.kind])
+        return present.get(self.kind, False)
+
     async def take_cache_key_from(self, source: "Shape") -> None:
         """Key this shape on the shape it points at, plus what it adds to it.
 

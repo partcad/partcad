@@ -1,0 +1,31 @@
+links:
+  # The same instance twice over: one thing to build, not two.
+  - assembly: unit
+    name: unit1
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - assembly: unit
+    name: unit2
+    location: [[0, 0, 10], [0, 0, 1], 0]
+
+  # Another instance of the same assembly, which is a second thing to build.
+  - assembly: unit
+    name: unit_wide
+    params:
+      gap: 4.0
+    location: [[0, 0, 20], [0, 0, 1], 0]
+
+  # A container node: the sub-assembly it declares is assembled here and is
+  # nobody's to ask for by name, but what it links to is placed all the same.
+  - links:
+      - assembly: unit
+        name: nested
+        location: [[0, 0, 0], [0, 0, 1], 0]
+      - part: cube
+        name: loose
+        location: [[0, 0, 5], [0, 0, 1], 0]
+    name: cluster
+    location: [[0, 0, 30], [0, 0, 1], 0]
+
+  - part: cube
+    name: base
+    location: [[0, 0, 40], [0, 0, 1], 0]

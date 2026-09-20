@@ -157,6 +157,42 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             return
         await item.prepare_async()
 
+    async def subassemblies_async(self, assembly) -> list:
+        """The assemblies this file links to, resolved but not built.
+
+        The same links 'prepare_node_async()' walks, kept rather than prepared:
+        the nodes naming an 'assembly', in the order the file names them. A
+        container node ('links:' of its own) is walked into rather than
+        collected - the sub-assembly it declares is assembled here, out of what
+        it links to, and is not an object anybody can ask for by name.
+
+        A link that does not resolve is left out: this decides what to build
+        first, and naming what is missing is the build's to do (see
+        'handle_node').
+        """
+        found = []
+        self.collect_subassemblies(self.read_assy(), found)
+        return found
+
+    def collect_subassemblies(self, node, found: list) -> None:
+        """Walk one node of the file, appending the assemblies it links to."""
+        if isinstance(node, list):
+            for item in node:
+                self.collect_subassemblies(item, found)
+            return
+        if not isinstance(node, dict):
+            return
+
+        if "links" in node and node["links"] is not None:
+            self.collect_subassemblies(node["links"], found)
+            return
+
+        if "assembly" not in node:
+            return
+        item = self.ctx._get_assembly(self.node_object_name(node, "assembly"), self.node_params(node))
+        if item is not None:
+            found.append(item)
+
     def instantiate(self, assembly):
         # # This method is best executed on a thread but the current Python version
         # # might not be good enough to do that.
