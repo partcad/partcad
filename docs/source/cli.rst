@@ -104,9 +104,11 @@ Host commands
     possibly days ago, possibly from a VS Code window. It is not what your command ran under (that travels
     with the command, as explained above); it is what the daemon falls back on for a client that sends none.
   - ``pc daemon status env`` — Dump the ``PC_*`` environment variables the daemon process is running with.
-    This is the one report that cannot be worked out from this side at all, because the daemon inherited the
-    environment of whatever started it. Credentials are scrubbed in the daemon, so the value never reaches
-    the wire.
+    On POSIX this is the one report that cannot be worked out from this side at all, because the shared
+    socket daemon inherited the environment of whatever started it. On Windows the client connects to a
+    one-shot stdio service spawned as its own child rather than to the named-pipe daemon, so the answer is
+    usually the same as ``pc system status env`` — still the environment of the process doing the work, just
+    not a different one. Credentials are scrubbed on the far side, so the value never reaches the wire.
   - ``pc daemon reset`` — Drop that state. ``--repo-only``, ``--sandbox-only`` and ``--cache-only`` narrow it
     to the cached dependencies, the sandboxed runtime environments, or the filesystem cache respectively;
     without them all of it goes.

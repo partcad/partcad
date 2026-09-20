@@ -18,6 +18,7 @@ each of which exists in both places.
 """
 
 import logging
+import os
 import re
 from collections.abc import Iterator
 
@@ -119,13 +120,27 @@ def test_system_status_env_reports_the_partcad_environment(
     assert "s3cr3t-do-not-print" not in result.output
 
 
-def test_daemon_status_env_reports_the_daemons_own_environment(click_runner: Iterator[CliRunner]) -> None:
-    """The daemon's environment, which is the one report the client cannot fake.
+def test_daemon_status_env_reports_the_environment_of_whatever_answered(
+    click_runner: Iterator[CliRunner],
+) -> None:
+    """The environment of the process that served the request, whichever that is.
 
-    A daemon inherits whatever started it -- another shell, an editor, a
-    previous day -- so this asserts only that the command completes over the
-    whole path. What it must *not* do is answer with the client's environment,
-    which the variable set here would show up in.
+    What the command promises is not "an environment that differs from mine" --
+    it is "the environment of the process doing the work". Which process that is
+    depends on the platform, and so does the right assertion:
+
+    * On POSIX the request goes to the shared per-workspace socket daemon, a
+      detached process holding whatever environment started it. A variable set
+      only here never reaches it, and that difference is the whole reason
+      `pc daemon status env` exists.
+    * On Windows `partcad_client.client.connect()` does not use the named-pipe
+      daemon; it spawns a one-shot stdio service as a *child of this process*,
+      which inherits this environment. The variable is then genuinely in the
+      environment of the process that answered, so reporting it is correct
+      rather than a leak.
+
+    Asserting the POSIX half everywhere is what this test did first, and it
+    failed on `Pytest (windows-2022, 3.14)` for exactly the second reason.
     """
     result = click_runner.invoke(
         cli,
@@ -135,4 +150,7 @@ def test_daemon_status_env_reports_the_daemons_own_environment(click_runner: Ite
     logging.debug("result.output: %s", result.output)
 
     assert result.exit_code == 0
-    assert "PC_STATUS_TEST_CLIENT_ONLY" not in result.output
+    if os.name == "nt":
+        assert "PC_STATUS_TEST_CLIENT_ONLY=client" in result.output
+    else:
+        assert "PC_STATUS_TEST_CLIENT_ONLY" not in result.output

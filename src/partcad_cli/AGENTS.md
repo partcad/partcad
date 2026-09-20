@@ -164,7 +164,11 @@ business holding never reaches the wire.
 The daemon's `config` answer is deliberately *not* the configuration your command ran under — that one travels
 with every `context.create`, as this section says above. It is the daemon's own, resolved from its own
 environment whenever something first started it, which is what a client sending no configuration gets. The
-`env` answer is the one thing the client cannot reconstruct at all.
+`env` answer is the one thing the client cannot reconstruct at all — on POSIX. On Windows `connect()` serves
+the request from a one-shot stdio child of the client rather than from the named-pipe daemon, so both answers
+describe a process that inherited the caller's environment; the command still reports whatever process did the
+work, which is what it promises. `tests/partcad_cli/unit/test_status.py` asserts each half on its own platform,
+having first asserted the POSIX half on both and failed on Windows for exactly that reason.
 
 PartCAD **never prompts** for anything mid-operation. Credentials for private Git dependencies are configured
 upfront under `git.auth` in the user configuration, and `GitCallbacks` fails with a message naming that setting
