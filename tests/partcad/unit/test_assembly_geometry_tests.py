@@ -179,10 +179,29 @@ def test_a_pair_meant_to_interfere_is_not_declared_against_the_pair():
     assert not _run(InterferenceTest(), _Assembly(config=config, overlaps=overlaps))
 
 
-def test_a_whole_assembly_can_opt_out():
-    config = {"interference": {"skip": True}}
-    overlaps = [{"a": "a", "b": "b", "volume": 1e6}]
-    assert _run(InterferenceTest(), _Assembly(config=config, overlaps=overlaps))
+def test_an_assembly_nobody_is_making_is_told_rather_than_failed(caplog):
+    """'manufacturable: false' is the whole of the opt-out now.
+
+    An object that says nobody is building it is a record of something - an
+    import kept as it arrived, a model of a part somebody else makes. Editing
+    it until the checks are happy destroys the record; turning the check off
+    loses the finding. It is told what it contains, and it is not failed.
+    """
+    import logging
+
+    overlaps = [{"a": "a", "b": "b", "volume": 1000000.0}]
+    asm = _Assembly(overlaps=overlaps)
+    asm.is_manufacturable = False
+    with caplog.at_level(logging.WARNING):
+        assert _run(InterferenceTest(), asm)
+    assert "share 1000000.000 mm^3" in caplog.text
+
+
+def test_an_assembly_that_is_being_made_still_fails():
+    overlaps = [{"a": "a", "b": "b", "volume": 1000000.0}]
+    asm = _Assembly(overlaps=overlaps)
+    asm.is_manufacturable = True
+    assert not _run(InterferenceTest(), asm)
 
 
 def test_an_expected_pair_is_named_in_either_order():
@@ -337,10 +356,10 @@ def test_an_indeterminate_pair_is_not_reported_as_no_overlap(caplog):
     assert "shaft" in caplog.text
 
 
-def test_the_interference_cache_key_covers_skip_as_well_as_the_thresholds():
+def test_the_interference_cache_key_covers_whether_it_is_being_made():
     test = InterferenceTest()
     assert asyncio.run(test.cache_key_suffix(None, _Assembly())) != asyncio.run(
-        test.cache_key_suffix(None, _Assembly(config={"interference": {"skip": True}}))
+        test.cache_key_suffix(None, _made(False))
     )
 
 
@@ -441,6 +460,13 @@ class _Child:
         self.name = name
         self.connection = connection
         self.how = how
+
+
+def _made(flag):
+    """An assembly that says whether anybody is building it."""
+    asm = _Assembly()
+    asm.is_manufacturable = flag
+    return asm
 
 
 class _ConnectedAssembly(_Assembly):

@@ -40,10 +40,15 @@ a CAD addon, or documentation.
   owns it: a copy on each side is a copy that can disagree, and a disagreement is a client silently starting a
   second daemon.
 
-  `staging` is there for the same reason and is the other thing the two ends have to agree on: an assembly is
-  built in two phases, and a daemon that finds sub-assemblies nobody has built yet does no work and answers
-  "not yet — build these first", naming them. A client that reads that from a different copy of the rule
-  reports the daemon's "ask me again" to the user as a failure.
+  `config_report` is here for the same reason one level down: it is how a configuration and a `PC_*`
+  environment are *read back* — by `pc config`, by `pc system status config|env`, and by the daemon answering
+  `pc daemon status config|env` for its own side. What it really holds is the redaction, and a redaction rule
+  with a copy per caller is a rule with copies that stop redacting.
+
+  `staging` is there for the same reason again, and is the other thing the two ends have to agree on: an
+  assembly is built in two phases, and a daemon that finds sub-assemblies nobody has built yet does no work
+  and answers "not yet — build these first", naming them. A client that reads that from a different copy of
+  the rule reports the daemon's "ask me again" to the user as a failure.
 
 * [src/partcad_client](./src/partcad_client):
 

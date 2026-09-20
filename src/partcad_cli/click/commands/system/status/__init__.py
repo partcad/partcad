@@ -21,7 +21,25 @@ from partcad_cli.click.cli_context import CliContext
 from partcad_utils import conda as pc_conda
 from partcad_utils.utils import directory_size_mb
 
+from .. import SystemCommands
+
 path = user_config.internal_state_dir
+
+
+class StatusCommands(SystemCommands):
+    """The subcommands of `pc system status`, loaded from the directory beside this file.
+
+    `pc system status` reports the internal data -- the caches, the sandboxes,
+    the disk they take. `config` and `env` report the other two things somebody
+    diagnosing this machine reaches for: what the configuration resolved to, and
+    what the process environment said. All three are one command because they
+    answer one question, "what is this installation actually doing", and because
+    each has a `pc daemon status ...` counterpart that answers it for the other
+    side of the daemon boundary.
+    """
+
+    COMMANDS_FOLDER_PATH = os.path.join(SystemCommands.COMMANDS_FOLDER_PATH, "status")
+    COMMANDS_PACKAGE_NAME = SystemCommands.COMMANDS_PACKAGE_NAME + ".status"
 
 
 def get_total(context):
@@ -79,9 +97,31 @@ def get_conda(context):
     otel_context.detach(token)
 
 
-@click.command(help="Display the state of internal data used by PartCAD")
-@click.pass_obj
-def cli(cli_ctx: CliContext) -> None:
+# 'invoke_without_command' (and the 'no_args_is_help' that follows from it,
+# spelled out because 'Loader.parse_args' reads it) is what keeps a bare
+# `pc system status` printing the report it always printed, now that the command
+# has grown subcommands. A group that only ever printed its own help would be a
+# silent behaviour change for every script and every docs page that runs it.
+@click.command(
+    cls=StatusCommands,
+    invoke_without_command=True,
+    no_args_is_help=False,
+    help="Display the state of internal data used by PartCAD",
+)
+@click.pass_context
+def cli(ctx: click.Context) -> None:
+    """What PartCAD has put on this machine, and what it costs in disk.
+
+    The group's own report, and the one of the three that is about neither the
+    configuration nor the environment: where the internal state directory is,
+    which tags this host answers an `unless:` with, and how much each cache,
+    sandbox and package store has grown to. `config` and `env` beside it answer
+    the other two questions somebody diagnosing this installation asks.
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+
+    cli_ctx: CliContext = ctx.obj
     with pc.telemetry.set_context(cli_ctx.otel_context):
         with pc.logging.Process("Status", "global"):
 

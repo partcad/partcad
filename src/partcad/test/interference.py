@@ -75,8 +75,8 @@ class InterferenceTest(Test):
 
     async def cache_key_suffix(self, ctx, shape) -> str:
         config = (shape.config or {}).get("interference") or {}
-        return ",skip=%s,minVolume=%s,minFraction=%s" % (
-            bool(config.get("skip", False)),
+        return ",manufacturable=%s,minVolume=%s,minFraction=%s" % (
+            bool(getattr(shape, "is_manufacturable", True)),
             config.get("minVolume", DEFAULT_MIN_VOLUME),
             config.get("minFraction", 0.0),
         )
@@ -87,9 +87,6 @@ class InterferenceTest(Test):
             return self.TEST_PASSED
 
         config = (shape.config or {}).get("interference") or {}
-        if config.get("skip", False):
-            self.debug(shape, "Skipped by configuration")
-            return self.TEST_PASSED
 
         try:
             result = await shape.get_interference_async(
@@ -153,12 +150,18 @@ class InterferenceTest(Test):
         if not reported:
             return self.passed(shape)
 
+        # An assembly that says it is not manufacturable is a record of
+        # something rather than something being built - an import kept as it
+        # arrived, a model of what somebody else makes. It is still told what
+        # it contains; it is not failed for it. See 'Test.warned'.
+        say = self.failed if getattr(shape, "is_manufacturable", True) else self.warned
+        verdict = self.TEST_PASSED
         for overlap in reported:
-            self.failed(
+            verdict = say(
                 shape,
                 "'%s' and '%s' share %.3f mm^3" % (overlap["a"], overlap["b"], overlap["volume"]),
             )
-        return self.TEST_FAILED
+        return verdict
 
 
 async def _expected_overlap_pairs(ctx, shape):

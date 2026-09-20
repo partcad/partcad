@@ -4,7 +4,6 @@ This example demonstrates parts that are made by bending a flat piece of sheet m
 
 ## Usage
 ```shell
-pc inspect blank
 pc inspect angle_up
 pc inspect angle_down
 pc inspect bracket
@@ -38,18 +37,7 @@ pc inspect -s 'panel;include=BEND_UP,BEND_DOWN'
 ### angle_up
 <table><tr>
 <td valign=top><a href="angle_up.py"><img src="././angle_up.svg" alt="angle_up" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
-<td valign=top>The blank folded at `BEND_UP` alone, into an L with a short leg standing up. `source` names what goes into the brake and `instructions` the one bend line it is folded at.
-</td>
-<td valign=top>Parameters:<br/><ul>
-<li>tolerance: 0.1</li>
-</ul>
-</td>
-</tr></table>
-
-### blank
-<table><tr>
-<td valign=top><a href="blank.extrude"><img src="././blank.svg" alt="blank" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
-<td valign=top>The flat piece that goes into the brake, extruded from the outline layer of the drawing. It is cut flat -- laser, waterjet, punch, router -- so its own manufacturing method is `subtractive`: the outline, and any holes and cut-outs a real part would have, are made here and not while it is bent.
+<td valign=top>The blank folded at `BEND_UP` alone, into an L with a short leg standing up. `source` names what goes into the brake -- the laser-cut strip from `produce_part_subtractive`, which is where making that piece is described -- and `instructions` the one bend line it is folded at.
 </td>
 <td valign=top>Parameters:<br/><ul>
 <li>tolerance: 0.1</li>

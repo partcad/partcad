@@ -56,8 +56,7 @@ class ConnectivityTest(Test):
         # Every setting that decides the verdict. Without them a cached pass is
         # read back after the setting that produced it has been turned off.
         config = (shape.config or {}).get("connectivity") or {}
-        return ",skip=%s,allowDuplicates=%s,requireAnchored=%s,manufacturable=%s" % (
-            bool(config.get("skip", False)),
+        return ",allowDuplicates=%s,requireAnchored=%s,manufacturable=%s" % (
             bool(config.get("allowDuplicates", False)),
             bool(config.get("requireAnchored", True)),
             bool(getattr(shape, "is_manufacturable", False)),
@@ -69,9 +68,6 @@ class ConnectivityTest(Test):
             return self.TEST_PASSED
 
         config = (shape.config or {}).get("connectivity") or {}
-        if config.get("skip", False):
-            self.debug(shape, "Skipped by configuration")
-            return self.TEST_PASSED
 
         try:
             await shape.do_instantiate()

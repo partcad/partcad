@@ -32,7 +32,7 @@
 
 [project]
 name = "partcad"
-version = "0.8.103"
+version = "0.8.112"
 description = "Package manager for CAD models and a modelling framework"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "sdf", "cad", "design", "openscad", "step", "stl"]
@@ -194,6 +194,19 @@ pythonpath = [
 # what the pytest job measures. That is already how it behaved; naming the
 # config only changes `branch`.
 #
+# The seventh entry is a path rather than a name, and it has to be: `wrappers/`
+# is deliberately not a package -- the sandbox puts the directory on `sys.path`
+# and imports its modules top-level, which is how the tests reach them too. A
+# `source` naming the package `partcad` resolves its files by walking
+# `__init__.py`, and that chain stops at a directory that has none, so every
+# wrapper read as outside the source tree and was not traced at all: absent from
+# the report rather than nought in it. No other suite makes up for it, because a
+# wrapper does its real work in the sandbox's *own* interpreter, which nothing
+# runs under `coverage` -- so behave driving `pc` end to end records the core
+# calling out and nothing of what ran. A wrapper's unit tests are the only
+# measurement of it there can be, and they counted for nothing. That is the same
+# defect as the five missing package names above, one level down.
+#
 # Keep the list here, above the string -- `addopts` is a TOML string, so a '#'
 # line inside it is passed to pytest as an argument rather than ignored.
 addopts = """
@@ -208,6 +221,7 @@ addopts = """
     --cov=partcad_ide_client
     --cov=partcad_service_json_rpc
     --cov=partcad_utils
+    --cov=src/partcad/wrappers
     --durations-min=1.0
     --durations=0
     --html=pytest-results/report.html

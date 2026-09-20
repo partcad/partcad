@@ -21,7 +21,8 @@ point of the split:
 
 A single shape is '{"name", "label", "brep"}'; an assembly is
 '{"name", "label", "assembly": [...]}'. Either may also carry an optional
-"location" and an optional "properties" (see the keys below).
+"location", an optional "properties" and an optional "metadata" (see the keys
+below).
 Requests/responses are ordinary JSON objects that carry such shape objects
 under keys like "shape" or "wrapped".
 
@@ -67,6 +68,46 @@ KEY_LOCATION = "location"
 # small and everything that identifies an object travels beside its name. Like
 # the placement, it is data the core carries opaquely and never interprets.
 KEY_PROPERTIES = "properties"
+# Optional metadata on a shape object: everything learnt about the shape by
+# whatever produced it, at the moment it was produced. This is *the* channel for
+# such knowledge - there is no second one - and it travels beside the BREP, is
+# stored with the BREP, and comes back with the BREP.
+#
+# It rides here rather than being fetched later because the process that built
+# the geometry is the only one that cheaply has it: the importing wrapper has
+# the file open, and the encoding wrapper has the live OCCT shape in hand. Once
+# either has exited, learning any of this again costs re-reading the file or
+# starting a fresh sandbox and shipping the geometry back into it.
+KEY_METADATA = "metadata"
+
+# The three sections of that metadata. The core knows these three names and
+# nothing below them - it stores them, hands them back, and reports them; it
+# never asks which file format produced one.
+#
+#   measurements - what the geometry measures: its bounding box, its volume, how
+#                  many solids that is the volume of. The one generic section:
+#                  it is derived from the geometry itself rather than stated by
+#                  any file, so it exists for every shape and its shape is fixed
+#                  (see METADATA_BBOX and friends). Produced by the codec that
+#                  encodes the shape, which is the code holding the live object.
+#   annotations  - what the source said about the shape's individual elements,
+#                  one opaque record per element. A DXF states these as XDATA
+#                  against a line; the angle and radius of a sheet metal bend
+#                  are here. A list the core carries and never reads into.
+#   sections     - what the source said about *itself*: a STEP file's header and
+#                  property sets, a DXF drawing's layers and units. Keyed by the
+#                  producing wrapper's own vocabulary, and wholly opaque - the
+#                  core reports these keys exactly as it was given them.
+METADATA_MEASUREMENTS = "measurements"
+METADATA_ANNOTATIONS = "annotations"
+METADATA_SECTIONS = "sections"
+
+# The fixed shape of the 'measurements' section. Named here, in the codec both
+# ends share, so that the sandbox that fills it in and the core that reports it
+# cannot come to disagree about a spelling.
+METADATA_BBOX = "bbox"
+METADATA_VOLUME = "volume"
+METADATA_SOLIDS = "solids"
 
 # The zstd frame header. Sniffed rather than declared in the envelope, so that
 # a payload written without compression stays readable; the one copy of this
@@ -185,6 +226,72 @@ def payload_key(obj):
     return None
 
 
+def metadata_of(obj):
+    """The metadata an envelope carries, or None.
+
+    'None' rather than an empty dict, because "nothing was recorded" and "the
+    producer looked and found nothing" are different answers and only the
+    second one is worth reporting.
+    """
+    if not isinstance(obj, dict):
+        return None
+    metadata = obj.get(KEY_METADATA)
+    return metadata if isinstance(metadata, dict) and metadata else None
+
+
+def metadata_section(metadata, section):
+    """One section of a metadata dict, or None if it is absent or empty."""
+    if not isinstance(metadata, dict):
+        return None
+    value = metadata.get(section)
+    return value if value else None
+
+
+def make_metadata(measurements=None, annotations=None, sections=None):
+    """A metadata dict holding whichever of the three sections has content.
+
+    Empty sections are left out rather than written as empty, so that an
+    envelope which learnt nothing carries no metadata at all and the absence is
+    the answer.
+    """
+    metadata = {}
+    if measurements:
+        metadata[METADATA_MEASUREMENTS] = measurements
+    if annotations:
+        metadata[METADATA_ANNOTATIONS] = list(annotations)
+    if sections:
+        metadata[METADATA_SECTIONS] = dict(sections)
+    return metadata
+
+
+def without_measurements(metadata):
+    """'metadata' with its measurements section removed.
+
+    For the one caller that has to: a shape that has just been transformed
+    carries sections that are still true of it and measurements that are not,
+    and merging fresh numbers over the old ones silently keeps the old ones when
+    there are no fresh numbers to merge.
+    """
+    return {key: value for key, value in (metadata or {}).items() if key != METADATA_MEASUREMENTS}
+
+
+def merge_metadata(base, overlay):
+    """'base' with 'overlay''s sections laid over it, section by section.
+
+    Used where a shape passes through a second wrapper after the one that
+    imported it: 'offset'/'scale' rebuild the geometry, so the measurements that
+    come back are the new ones and must win, while the sections and annotations
+    the importing wrapper read are still true of the object and must survive.
+    A section present in 'overlay' replaces the one in 'base' outright; a
+    section absent from it is left alone.
+    """
+    merged = dict(base or {})
+    for section, value in (overlay or {}).items():
+        if value:
+            merged[section] = value
+    return merged
+
+
 def strip_metadata(obj):
     """Return 'obj' with the outer layer taken off the envelopes it is made of.
 
@@ -198,17 +305,33 @@ def strip_metadata(obj):
     Only the envelope 'obj' itself is - or the ones a list of them holds - are
     stripped. The children nested inside an assembly keep their own outer
     layers: those describe the assembly's structure, not the assembly.
+
+    KEY_METADATA is **not** part of the outer layer and stays. The outer layer
+    answers "which object is this", which is exactly what objects sharing one
+    geometry disagree about; the metadata answers "what is this geometry and
+    what was known about it when it was made", which they agree about by
+    definition - they share the geometry it describes.
     """
     if isinstance(obj, list):
         return [strip_metadata(item) for item in obj]
     key = payload_key(obj)
     if key is None:
         return obj
-    return {key: obj[key]}
+    stripped = {key: obj[key]}
+    metadata = metadata_of(obj)
+    if metadata:
+        stripped[KEY_METADATA] = metadata
+    return stripped
 
 
 def apply_metadata(obj, metadata):
-    """Inverse of 'strip_metadata()': wrap 'metadata' around the payloads in 'obj'."""
+    """Inverse of 'strip_metadata()': wrap 'metadata' around the payloads in 'obj'.
+
+    Whatever KEY_METADATA the payload already carries is kept, for the reason
+    'strip_metadata()' gives: it came out of the cache entry with the geometry
+    and describes the geometry, while the outer layer being applied here is this
+    particular object's.
+    """
     if isinstance(obj, list):
         return [apply_metadata(item, metadata) for item in obj]
     key = payload_key(obj)
@@ -216,6 +339,9 @@ def apply_metadata(obj, metadata):
         return obj
     wrapped = dict(metadata or {})
     wrapped[key] = obj[key]
+    own = metadata_of(obj)
+    if own:
+        wrapped[KEY_METADATA] = own
     return wrapped
 
 

@@ -67,6 +67,8 @@ _OPERATIONS = {
     "lint.run": operations.lint_run,
     "daemon.reset": operations.daemon_reset,
     "daemon.status": operations.daemon_status,
+    "daemon.status.config": operations.daemon_status_config,
+    "daemon.status.env": operations.daemon_status_env,
     "daemon.set.telemetry": operations.daemon_set_telemetry,
     "test": operations.test,
     "info": operations.info,

@@ -416,13 +416,12 @@ assemblies:
   # resolved in 'AeroAssembly_corrected'. They are not overlaps any joint means
   # to have, so there is nothing here for 'selfScrew', 'snapIn' or 'interferes'
   # to say, and 'minVolume' would be lying about two of them: at 90.231 mm^3 and
-  # 12.997 mm^3 they are interferences by any measure. The check is skipped
-  # instead, which says what is true - this object is not being held to it.
+  # 12.997 mm^3 they are interferences by any measure. Nothing is declared:
+  # 'manufacturable: false' is the whole of it, and the check reports the three
+  # as warnings rather than failing an object nobody is building.
   AeroAssembly_assy_example/AeroAssembly:
     type: assy
     manufacturable: false
-    interference:
-      skip: true
     desc: >-
       Stage 1, import. The unedited record of 'AeroAssembly.step', three
       interferences and all: a record rather than a design.

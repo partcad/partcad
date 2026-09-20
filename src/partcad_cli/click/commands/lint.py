@@ -45,14 +45,14 @@ from ..service import run
     type=str,
     default="",
     show_envvar=True,
-    help="Package to retrieve the object from",
+    help="Package to retrieve the object from ('<package>...' for that package and every package below it)",
 )
 @click.option(
     "--recursive",
     "-r",
     is_flag=True,
     show_envvar=True,
-    help="Recursively performs lint checks on all imported packages",
+    help="Recursively performs lint checks on all imported packages (older spelling of '<package>...')",
 )
 @click.option(
     "--filter",

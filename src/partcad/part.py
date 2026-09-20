@@ -14,7 +14,7 @@ from .shape import Shape
 from .sync_threads import threadpool_manager
 
 
-@telemetry.instrument(exclude=["ref_inc"])
+@telemetry.instrument()
 class Part(Shape):
     path: typing.Optional[str] = None
     url: typing.Optional[str] = None

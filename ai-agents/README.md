@@ -226,12 +226,17 @@ The plugin folder is named `claude`, but the command namespace comes from
   `pc export` has no `adhoc` form because `pc adhoc convert` already is it.
 - **`/pc:describe <object>`** — writes a narratable description of an existing
   part, assembly, or sketch, and stores it in the object's `summary:`.
-  Reproduces the retired built-in AI shape-summary. It renders **three views**
+  Reproduces the retired built-in AI shape-summary. It starts from what PartCAD
+  measured — `pc info` reports a shape's bounding box, and its volume and solid
+  count wherever there are solids to have one, an assembly included; a sketch, a
+  shell or a wire has a size but no volume — because a projection is rendered to
+  fit its frame and so says nothing about whether the part is 20 mm across or
+  200. Then it renders **three views**
   (`front`, `top`, `iso`) rather than one, since a single projection hides
   everything behind it — and for a part it also asks
   `//pub/feature/render/draftwright` (through `pc render -e`) for a dimensioned
-  technical drawing, so the numbers in the description are read off the drawing
-  instead of estimated from pixels.
+  technical drawing, so every number in the description is one that was measured
+  or stated rather than estimated from pixels.
 - **`/pc:add-interfaces <part>`** — adds `interfaces`, ports and `implements:`
   to an existing part so PartCAD can mate it by connection rather than by
   hand-placed coordinates. The agent works the port positions out of the
@@ -242,8 +247,9 @@ The plugin folder is named `claude`, but the command namespace comes from
 - **`/pc:search <query>`** — finds existing parts and assemblies in the catalog
   whose name, description, or source matches the query (`pc search parts` /
   `pc search assemblies`), lists the matches, and can inspect or render a chosen
-  one. Searches the local package by default; `-r` widens to every imported
-  package (the public registry and dependencies).
+  one. Searches the local package by default; a `...` suffix on the package
+  (`-P //...`) widens to every imported package (the public registry and
+  dependencies).
 
 ## Local use (Claude)
 

@@ -39,10 +39,18 @@ The daemon owns two things its clients do not, and both decide what belongs on w
 A command stays in the client only when its inputs and outputs are the *client's own* state, which cannot cross
 the wire: `init` (bootstraps a workspace before any package exists), `config` (prints the client's resolved
 `user_config`, including its `--threads-max`/`PC_*` overrides), `healthcheck` (diagnoses the client host),
-`daemon start|stop`, and `system telemetry clear|info`. File paths are not a reason to stay local: a client
-sends an absolute path, `Project._validate_path` rejects anything outside the package, and `Project.rel_path`
-reports it back relative to the package that owns it — so the output does not depend on anyone's working
-directory.
+`daemon start|stop`, `system status ...` and `system telemetry clear|info`. File paths are not a reason to
+stay local: a client sends an absolute path, `Project._validate_path` rejects anything outside the package, and
+`Project.rel_path` reports it back relative to the package that owns it — so the output does not depend on
+anyone's working directory.
+
+`system status`, `system status config` and `system status env` each have a daemon-side twin — `daemon.status`,
+`daemon.status.config`, `daemon.status.env` — because the answers differ: the daemon's internal state
+directory, the configuration it resolved from its *own* environment when something first started it, and that
+environment itself, which is the one thing a client cannot reconstruct. None of them is the configuration a
+caller's command runs under; that travels with every `context.create` and is rebuilt per request. All three
+print through `partcad_utils.config_report`, which is also where the redaction lives — the daemon scrubs a
+credential before logging it, so a value the client has no business holding never reaches the wire.
 
 ## Layout
 
@@ -211,6 +219,32 @@ building the object it names.
 There is deliberately no prompt in the protocol. A daemon has nobody to ask, and a request that blocks
 waiting for an answer it cannot receive is a hang, not a question -- anything a command needs is either an
 argument or configured upfront in the user configuration (see `git.auth` for private Git dependencies).
+
+### `package`, `object` and the `...` suffix
+
+A `package` ending in `...` -- and an `object` whose package half ends in one, `...:bolt` or
+`//pub/examples...:bolt` -- means that package **and every package below it**, which is what the `recursive`
+parameter has always meant. It is read **here**, by `operations._request()`, and not by the CLI: the CLI is one
+of three clients, and a syntax each of them parsed for itself is a syntax they would each get slightly wrong.
+`partcad_utils.utils.split_recursive_object()` is the one implementation, in `partcad_utils` because the
+answer must not depend on a CAD kernel being importable.
+
+So an operation that takes a package reads it as `selected, object_name, recursive = _request(params)` rather
+than off `params` directly, and `recursive` is true when *either* spelling asked for it. Two consequences worth
+knowing:
+
+* The suffix can say **where** the walk starts, which the flag cannot, and an object name carrying one wins
+  over `package` -- the rule a fully qualified `//package:name` already follows.
+* A walk over a *named* object asks every package of the subtree for its own object of that name and passes
+  over the ones that declare none (`_targets()`, over `Project.declares_object()`, which reads the declaration
+  and builds nothing). Only a walk that found it nowhere is a failure, reported once by `_nowhere()`. Without
+  that filter a name like `bolt` fails in every package that has no bolt -- and a render of such a package
+  raises `EmptyShapesError`, which used to end the whole run.
+
+An operation whose answer is about **one** object -- `bom`, `assembly.guide`, `cae.analyze`, `supply.quote`,
+`inspect.object`, `convert.object` -- calls `_refuse_recursion()` and says so, rather than guessing between a
+merged answer and a sequence of them. Adding recursion to one of those is a decision about what its result
+becomes, not a parsing change.
 
 ## Commit
 

@@ -274,6 +274,11 @@ class GuideSection:
     # it is the only item whose 'description' has nowhere else to go.
     base_name: Optional[str] = None
     base_description: Optional[str] = None
+    # How many of this assembly the whole build needs. An assembly used more
+    # than once is documented once, so this is what says it has to be made
+    # again - and it counts the copies of whatever uses it too, since four
+    # towers with a spire each need four spires.
+    count: int = 1
 
 
 async def collect_sections_async(ctx, assembly) -> list:
@@ -287,6 +292,25 @@ async def collect_sections_async(ctx, assembly) -> list:
     seen = set()
     await _collect_section(ctx, assembly, sections, seen, top=True)
     return sections
+
+
+def count_sections(sections, grouped) -> None:
+    """Tell each section how many of its assembly the build needs.
+
+    From the bill of materials, which has counted them already: a BOM is a
+    count of what goes into the thing, and an assembly used four times goes
+    into it four times. Deriving it again by walking the tree would be a second
+    answer to a question that already has one, free to disagree with the BOM
+    printed two pages earlier.
+
+    An assembly embedded in the 'links:' of an ASSY file belongs to no package
+    and so is in no BOM; it is documented where it appears and built once.
+    """
+    counts = grouped.get("assemblies") or {}
+    for section in sections:
+        entry = (counts.get(section.assembly.project_name) or {}).get(section.assembly.name)
+        if entry:
+            section.count = entry.get("count", 1)
 
 
 def collect_sections(ctx, assembly) -> list:
@@ -673,6 +697,7 @@ async def build_guide_document_async(ctx, project, assembly, images: ImageSource
     """
     sections = await collect_sections_async(ctx, assembly)
     grouped = await assembly.get_bom_grouped_async(ctx)
+    count_sections(sections, grouped)
 
     pages = [await _title_page(project, assembly, images, sections)]
     pages.append(doc.Page(title="Bill of Materials", blocks=_bom_page_blocks(project, grouped, dir_path)))
@@ -756,14 +781,20 @@ async def _section_pages(project, section: GuideSection, images: ImageSource, se
         blocks.append(doc.ImageRow([image], height=0.5))
 
     blocks += _prose_blocks(getattr(section.assembly, "desc", None))
-    blocks.append(
-        doc.Properties(
-            [
-                ("Package", section.assembly.project_name),
-                ("Steps", str(len(section.steps))),
-            ]
+    properties = [
+        ("Package", section.assembly.project_name),
+        ("Steps", str(len(section.steps))),
+    ]
+    if section.count > 1:
+        properties.append(("Needed", "%d" % section.count))
+    blocks.append(doc.Properties(properties))
+    if section.count > 1:
+        blocks.append(
+            doc.Paragraph(
+                "The build needs %d of these. Repeat this section %d times - the steps are the same every time."
+                % (section.count, section.count)
+            )
         )
-    )
     if section.top and section_count > 1:
         blocks.append(doc.Paragraph("Assemble the sub-assemblies documented above before starting on this one."))
     if section.base_name:

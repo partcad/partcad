@@ -641,6 +641,36 @@ class Project(project_config.Configuration):
     def object_names(self, kind: str) -> list:
         return list(self.object_configs(kind).keys())
 
+    def declares_object(self, kind: str, name: str) -> bool:
+        """Whether this package has an object of that kind under that name to offer.
+
+        The question a recursive run asks of every package it walks: an
+        unqualified object name means "the one in this package, if it has one",
+        and a package that has none is passed over rather than reported. Only a
+        run that found none anywhere is an error -- which is what makes
+        '//pub/examples...:bolt' usable over a tree where three packages of
+        forty declare a bolt.
+
+        Cheap by construction: the declaration is read, nothing is built and
+        nothing is instantiated. Asking each package for the object instead
+        would build it, and would log a "not found" for each of the
+        thirty-seven that do not have one.
+
+        Parameters are the caller's, not part of the name an object is declared
+        under, so they are cut off before looking.
+        """
+        base, _ = parse_parameterized_name(name)
+        if self.object_config(kind, base) is not None:
+            return True
+        if kind == "part" and "/" in base:
+            # A part an assembly materializes -- '<assembly>/<link>' of a URDF
+            # or of a STEP assembly -- is declared nowhere: it exists once that
+            # assembly has been built. It is still nameable, and naming one is
+            # how it is asked for, so the package that declares the assembly it
+            # comes out of is the package that has it.
+            return self.object_config("assembly", base.split("/")[0]) is not None
+        return False
+
     # Hooks for plugin-backed packages. Never reached for a local package,
     # whose '_object_configs' are all populated at construction.
     def _enumerate_object_configs(self, kind: str) -> dict:
@@ -2516,10 +2546,10 @@ class Project(project_config.Configuration):
 
         if named:
             # Asked about by name, so it is routed whatever it declares: the
-            # refusal an object with no 'cam:' section earns belongs to
-            # 'Shape.route_async()', which says which object and which section.
+            # refusal an object that says nothing about being cut earns belongs
+            # to 'Shape.route_async()', which says which object and why.
             return shapes
-        return [shape for shape in shapes if pc_cam.declared_config(shape) is not None]
+        return [shape for shape in shapes if pc_cam.declares_job(shape)]
 
     def _enumerate_shapes(self, sketches, interfaces, parts, assemblies, scenes=None):
         """'_enumerate_shapes_async()' for a caller that owns no event loop."""

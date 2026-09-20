@@ -5,9 +5,16 @@
 #
 
 # This script is executed within the python sandbox environment (python runtime)
-# to measure geometry, so the core process never has to touch a live OCP object
-# to do it. The shape arrives in the request as BREP (see ocp_serialize), already
-# placed at whatever location the envelope carried, and only numbers go back.
+# to measure geometry the core did not build, so the core process never has to
+# touch a live OCP object to do it. The shape arrives in the request as BREP (see
+# ocp_serialize), already placed at whatever location the envelope carried, and
+# only numbers go back.
+#
+# A shape's own size does NOT come through here: it is measured as the shape is
+# encoded, in the process that built it, and travels in the envelope's metadata
+# (see 'ocp_serialize.encode_shape'). What is left for this wrapper is the one
+# question that cannot be answered then - how large a shape is in *another*
+# object's frame, which is what 'measure.bbox(frame=...)' asks for a port.
 
 import os
 import sys
@@ -18,34 +25,24 @@ import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
 import ocp_serialize  # noqa: F401,E402
+import shape_measure  # noqa: E402
 import wrapper_common  # noqa: E402
 
-
-def _bbox(shape):
-    """The axis-aligned bounding box of 'shape' as [xmin, ymin, zmin, xmax, ymax, zmax].
-
-    The shape arrives already placed by the envelope's location, so the box is
-    in whatever frame the caller asked for. 'None' is returned for an empty
-    shape, which has no box to speak of.
-    """
-    from OCP.Bnd import Bnd_Box
-    from OCP.BRepBndLib import BRepBndLib
-
-    box = Bnd_Box()
-    BRepBndLib.Add_s(shape, box)
-    if box.IsVoid():
-        return None
-    # Bnd_Box.Get() reports the box grown by its gap; drop the gap so that the
-    # numbers are the shape's own extent.
-    box.SetGap(0.0)
-    xmin, ymin, zmin, xmax, ymax, zmax = box.Get()
-    return [xmin, ymin, zmin, xmax, ymax, zmax]
+# One implementation of each, in the module the *encoder* also calls, so that a
+# size measured here and a size measured as a shape was built cannot disagree.
+# Re-exported under the names this module has always used: they are what the
+# unit tests exercise, and what 'process()' below dispatches to.
+_bbox = shape_measure.bbox
+_volumes = shape_measure.volumes
+_measurements = shape_measure.measurements
 
 
 def process(request):
     operation = request.get("operation")
     if operation == "bbox":
         return _bbox(request["shape"])
+    if operation == "measurements":
+        return _measurements(request["shape"])
     raise ValueError("Unknown measure operation: %r" % (operation,))
 
 

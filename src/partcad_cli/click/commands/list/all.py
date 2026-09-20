@@ -24,10 +24,12 @@ from .software import cli as list_software
     "-r",
     "--recursive",
     is_flag=True,
-    help="Recursively process all imported packages",
+    help="Recursively process all imported packages (older spelling of '<package>...')",
     show_envvar=True,
 )
-@click.command(help="List all available parts, assemblies and scenes")
+@click.command(
+    help="List all available parts, assemblies and scenes. PACKAGE may end in '...' to reach every package below it",
+)
 @click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
 def cli(cli_ctx: CliContext, recursive: bool, package: str) -> None:

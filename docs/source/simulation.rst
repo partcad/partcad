@@ -554,7 +554,7 @@ is one simulation, and states four things:
              ) < 2.0
 
 ``pc sim`` runs them -- one object, or everything a package declares, or
-everything a package tree declares with ``-r`` -- and exits non-zero when a
+everything a package tree declares with ``-P <package>...`` -- and exits non-zero when a
 validation does not hold. ``--json`` prints the whole of what each plugin
 reported. ``examples/feature_simulate`` has three assemblies of two blocks each:
 two identical but for 18 millimetres, and two identical but for the material.
