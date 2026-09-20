@@ -21,6 +21,39 @@ The status of PartCAD context can be evaluated using the ``system status`` comma
 Pay attention to any exception or error message produced by the
 ``status`` command.
 
+The same command has two more reports, for the two things that most often turn
+out to be the answer -- what the configuration actually resolved to, and what
+the environment actually said:
+
+  .. code-block:: shell
+
+    pc system status config
+    pc system status env
+
+They are worth reading together. The first says what an option resolved to once
+the configuration file, the ``PC_*`` environment and the command line had all
+been applied; the second says what the environment asked for. They disagree
+whenever a command-line option won, a variable was misspelled, or a value was
+rejected -- which covers most of the cases where somebody runs either of them.
+Variables whose names say they carry a credential are listed but printed as
+``<scrubbed>``, so the output is something you can attach to a bug report.
+
+If the work is being done by a daemon -- which it is for most commands -- ask
+the daemon the same two questions:
+
+  .. code-block:: shell
+
+    pc daemon status
+    pc daemon status config
+    pc daemon status env
+
+A daemon is warm and shared per workspace, so the configuration and environment
+it reports are whatever its own environment held when something first started
+it, possibly days ago and possibly from a VS Code window. Your command does not
+run under them -- every command hands the daemon its own resolved configuration
+-- but the daemon's own copy is what it falls back on, and the environment it
+inherited is not something this side can reconstruct any other way.
+
 Health Check
 ------------
 

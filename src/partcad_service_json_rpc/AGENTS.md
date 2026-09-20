@@ -39,10 +39,18 @@ The daemon owns two things its clients do not, and both decide what belongs on w
 A command stays in the client only when its inputs and outputs are the *client's own* state, which cannot cross
 the wire: `init` (bootstraps a workspace before any package exists), `config` (prints the client's resolved
 `user_config`, including its `--threads-max`/`PC_*` overrides), `healthcheck` (diagnoses the client host),
-`daemon start|stop`, and `system telemetry clear|info`. File paths are not a reason to stay local: a client
-sends an absolute path, `Project._validate_path` rejects anything outside the package, and `Project.rel_path`
-reports it back relative to the package that owns it — so the output does not depend on anyone's working
-directory.
+`daemon start|stop`, `system status ...` and `system telemetry clear|info`. File paths are not a reason to
+stay local: a client sends an absolute path, `Project._validate_path` rejects anything outside the package, and
+`Project.rel_path` reports it back relative to the package that owns it — so the output does not depend on
+anyone's working directory.
+
+`system status`, `system status config` and `system status env` each have a daemon-side twin — `daemon.status`,
+`daemon.status.config`, `daemon.status.env` — because the answers differ: the daemon's internal state
+directory, the configuration it resolved from its *own* environment when something first started it, and that
+environment itself, which is the one thing a client cannot reconstruct. None of them is the configuration a
+caller's command runs under; that travels with every `context.create` and is rebuilt per request. All three
+print through `partcad_utils.config_report`, which is also where the redaction lives — the daemon scrubs a
+credential before logging it, so a value the client has no business holding never reaches the wire.
 
 ## Layout
 

@@ -26,6 +26,7 @@ import yaml
 from packaging.specifiers import SpecifierSet
 
 from partcad_utils import conda as pc_conda
+from partcad_utils import config_report
 from partcad_utils.utils import directory_size_mb
 
 from ..rpc.dispatcher import JsonRpcError
@@ -1293,6 +1294,53 @@ def daemon_status(session, params):
             pc.logging.info(
                 "Conda package cache size: %.2fMB" % directory_size_mb(os.path.join(root, pc_conda.ROOT_PREFIX_SUBDIR))
             )
+    return None
+
+
+def daemon_status_config(session, params):
+    """Report the daemon's own effective configuration.
+
+    The daemon-side counterpart of `pc system status config`. The two differ on
+    purpose: a daemon is warm and shared per workspace, so this is whatever its
+    environment held when something first started it -- which is exactly why a
+    caller's configuration travels with every `context.create` and is what the
+    work is actually done under. This is the fallback that a client sending none
+    gets, and the thing to read when a command behaved as though it had been
+    invoked somewhere else.
+
+    Secrets are taken out here, on the daemon, so that a value the client has no
+    business holding never reaches the wire.
+    """
+    pc = session.ensure_partcad()
+    with pc.logging.Process("StatusConfig", "global"):
+        config_path = pc.user_config.get_config_path()
+        if not os.path.exists(config_path):
+            config_path += " (absent)"
+        pc.logging.info("Configuration file: %s" % config_path)
+        for key, value in config_report.resolved_options(pc.user_config):
+            pc.logging.info("%s: %s" % (key, value))
+    return None
+
+
+def daemon_status_env(session, params):
+    """Report the `PC_*` environment variables the daemon runs with.
+
+    The daemon-side counterpart of `pc system status env`, and the report that
+    cannot be worked out from the client at all: the daemon inherited the
+    environment of whatever started it -- a shell, an editor, a previous day's
+    session -- and nothing on the client side has a copy of it.
+
+    `os.environ` rather than anything the configuration remembers: the question
+    is what this process was handed, including the variables PartCAD binds no
+    option to and the ones it does not recognise at all.
+    """
+    pc = session.ensure_partcad()
+    with pc.logging.Process("StatusEnv", "global"):
+        reported = list(config_report.environment())
+        if not reported:
+            pc.logging.info("No %s* environment variables are set" % config_report.ENV_PREFIX)
+        for name, value in reported:
+            pc.logging.info("%s=%s" % (name, value))
     return None
 
 

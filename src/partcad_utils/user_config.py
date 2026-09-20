@@ -423,6 +423,19 @@ class UserConfig(vyper.Vyper):
         return os.path.join(home, ".partcad")
 
     @staticmethod
+    def get_config_path():
+        """The configuration file itself: the first of the layers '__init__' resolves.
+
+        Next to the directory above rather than derived from it at each call
+        site, for the reason 'get_generated_id_path' below gives: a path spelled
+        twice is a path that can be read from one place and written to another.
+        A report of what the configuration resolved to has to name this file,
+        and naming a different one would make the report a lie exactly when
+        somebody is using it to find out why an option did not take.
+        """
+        return os.path.join(UserConfig.get_config_dir(), "config.yaml")
+
+    @staticmethod
     def get_cache_dir():
         return os.path.join(Path.home(), ".cache", "partcad")
 
@@ -492,10 +505,7 @@ class UserConfig(vyper.Vyper):
 
         cfg_dir = UserConfig.get_config_dir()
         os.makedirs(cfg_dir, exist_ok=True)
-        config_path = os.path.join(
-            cfg_dir,
-            "config.yaml",
-        )
+        config_path = UserConfig.get_config_path()
         if os.path.exists(config_path):
             try:
                 with open(config_path, "r") as f:
