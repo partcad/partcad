@@ -354,6 +354,94 @@ def _interface_shapes(request):
     return shapes
 
 
+# How finely a shape is triangulated before it is projected, as a fraction of
+# its own size. The projection is of the triangulation, so this is what decides
+# how smooth a curved silhouette comes out; 1/2000 of the object puts the error
+# well under one pixel of a 512-pixel drawing, which is as true as a picture
+# can be.
+MESH_DEFLECTION = 5e-4
+
+# The floor under it, in millimetres, so that a part measured in microns is not
+# asked for a triangulation finer than the kernel's own tolerance.
+MIN_MESH_DEFLECTION = 1e-4
+
+
+def _projector(origin, up, look_at):
+    """The camera 'project_to_viewport' would have built, out of the same three
+    values - see '_camera_axes', which orthogonalizes 'up' the same way."""
+    from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt
+    from OCP.HLRAlgo import HLRAlgo_Projector
+
+    direction = (b3d.Vector(origin) - b3d.Vector(look_at)).normalized()
+    camera = gp_Ax2()
+    camera.SetAxis(gp_Ax1(gp_Pnt(*origin), gp_Dir(*direction.to_tuple())))
+    camera.SetYDirection(gp_Dir(*b3d.Vector(up).normalized().to_tuple()))
+    return HLRAlgo_Projector(camera)
+
+
+def _deflection(shape):
+    """How finely to triangulate this shape, from how big it is."""
+    try:
+        box = b3d.Shape(shape).bounding_box()
+        size = max(box.size)
+    except Exception:
+        size = 0.0
+    return max(size * MESH_DEFLECTION, MIN_MESH_DEFLECTION)
+
+
+def project(shape, origin, up, look_at):
+    """The visible edges of 'shape' seen from 'origin', as build123d edges.
+
+    This is 'Shape.project_to_viewport' with the polygonal hidden-line
+    algorithm in place of the exact one. build123d's method uses
+    'HLRBRep_Algo', and every released OCCT has an out-of-bounds read in the
+    rejection table that algorithm sorts its edge crossings in
+    ('TableauRejection::Set' tests the row index after dereferencing it, so a
+    row whose sentinel has just been used up is read one element past its
+    allocation). It is a real fault on every projection; whether it reaches
+    unmapped memory and takes the process down with SIGSEGV depends on where
+    the row happened to land, which makes it a coin flip on a model with enough
+    edges. It is fixed on OCCT master and in no release.
+
+    'HLRBRep_PolyAlgo' does not use that table at all. It also finishes a large
+    assembly in seconds rather than minutes, in a fraction of the memory,
+    because it works on the triangulation rather than the exact surfaces. What
+    it costs is that a curved silhouette is faceted rather than exact - which
+    'MESH_DEFLECTION' keeps below a pixel, and which is no cost at all for a
+    shape that was a mesh to begin with.
+    """
+    from OCP.BRepMesh import BRepMesh_IncrementalMesh
+    from OCP.HLRBRep import HLRBRep_PolyAlgo, HLRBRep_PolyHLRToShape
+    from OCP.TopAbs import TopAbs_ShapeEnum
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    wrapped = shape.wrapped if hasattr(shape, "wrapped") else shape
+    BRepMesh_IncrementalMesh(wrapped, _deflection(wrapped)).Perform()
+
+    algo = HLRBRep_PolyAlgo()
+    algo.Load(wrapped)
+    algo.Projector(_projector(origin, up, look_at))
+    algo.Update()
+
+    to_shape = HLRBRep_PolyHLRToShape()
+    to_shape.Update(algo)
+
+    edges = []
+    # What is drawn: the sharp edges that face the camera, the smooth ones that
+    # are a crease rather than a corner, and the outlines of curved surfaces,
+    # which belong to no edge of the model at all and are the whole reason a
+    # cylinder reads as a cylinder.
+    for compound in (to_shape.VCompound(), to_shape.Rg1LineVCompound(), to_shape.OutLineVCompound()):
+        if compound is None or compound.IsNull():
+            continue
+        explorer = TopExp_Explorer(compound, TopAbs_ShapeEnum.TopAbs_EDGE)
+        while explorer.More():
+            edges.append(b3d.Edge(TopoDS.Edge_s(explorer.Current())))
+            explorer.Next()
+    return edges
+
+
 def _add_projected(exporter, layer, shapes, origin, up, look_at):
     """Project 'shapes' the way the object itself was projected, and draw them.
 
@@ -374,12 +462,7 @@ def _add_projected(exporter, layer, shapes, origin, up, look_at):
         compound.wrapped = ocp_serialize.compound_of(
             shape.wrapped if hasattr(shape, "wrapped") else shape for shape in shapes
         )
-        projected = compound.project_to_viewport(
-            viewport_origin=origin,
-            viewport_up=up,
-            look_at=look_at,
-        )[0]
-        exporter.add_shape(projected, layer=layer)
+        exporter.add_shape(project(compound, origin, up, look_at), layer=layer)
     except Exception as e:
         wrapper_common.handle_exception(e)
 
@@ -400,11 +483,7 @@ def process(path, request):
         # it - so anything projected separately and drawn on top has to be given
         # the same one or it lands somewhere else on the page.
         look_at = b3d_obj.center().to_tuple()
-        visible, _hidden = b3d_obj.project_to_viewport(
-            viewport_origin=origin,
-            viewport_up=up,
-            look_at=look_at,
-        )
+        visible = project(b3d_obj, origin, up, look_at)
         max_dimension = max(*b3d.Compound(children=visible).bounding_box().size)
         if max_dimension == 0:
             max_dimension = 4
