@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <svg width="512.9999999998mm" height="308.9201435677mm" viewBox="-42.5092709471 -25.5983822299 85.0185418942 51.1967644598" version="1.1" xmlns="http://www.w3.org/2000/svg">
   <g transform="scale(1,-1)" stroke-linecap="round">
-    <g fill="none" stroke="rgb(64,192,64)" stroke-width="0.16572815184059714" id="Visible">
+    <g fill="none" stroke="rgb(64,192,64)" stroke-width="0.16572815184059703" id="Visible">
       <line x1="-3.0589133207" y1="0.0687040335" x2="-2.5413417716" y2="0.4466236298" />
       <line x1="-3.1088257017" y1="0.0069059351" x2="-3.0589133207" y2="0.0687040335" />
       <line x1="2.684808106" y1="0.3588286125" x2="3.1113631723" y2="0.0071162002" />
