@@ -141,7 +141,7 @@ A **relative** package name here -- ``calculix:fea`` rather than
 that name, and is resolved from the package the declaration is written in. That
 is not where a name a *user* types is resolved from: ``pc cae fea -i
 calculix:fea`` means the ``calculix`` beside the user, like every other name a
-command line carries. The difference matters under ``pc test -r`` over a tree of
+command line carries. The difference matters under ``pc test -P //...`` over a tree of
 packages, which runs with the tree's root current while every part in it sits one
 or more packages below.
 

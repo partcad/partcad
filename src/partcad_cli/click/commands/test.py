@@ -13,21 +13,27 @@ import rich_click as click
 from ..service import run
 
 
-@click.command(help="Run tests on a part, assembly, or scene")
+@click.command(
+    help=(
+        "Run tests on a part, assembly, or scene. "
+        "OBJECT may be written '...:<name>' to mean every object of that name in this "
+        "package and in every package below it"
+    ),
+)
 @click.option(
     "--package",
     "-P",
     type=str,
     default="",
     show_envvar=True,
-    help="Package to retrieve the object from",
+    help="Package to retrieve the object from ('<package>...' for that package and every package below it)",
 )
 @click.option(
     "--recursive",
     "-r",
     is_flag=True,
     show_envvar=True,
-    help="Recursively test all imported packages",
+    help="Recursively test all imported packages (older spelling of '<package>...')",
 )
 @click.option(
     "--filter",

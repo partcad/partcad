@@ -27,21 +27,27 @@ import rich_click as click
 from ..service import run
 
 
-@click.command(help="Run the simulations declared by a part or an assembly")
+@click.command(
+    help=(
+        "Run the simulations declared by a part or an assembly. "
+        "OBJECT may be written '...:<name>' to mean every object of that name in this "
+        "package and in every package below it"
+    ),
+)
 @click.option(
     "--package",
     "-P",
     type=str,
     default="",
     show_envvar=True,
-    help="Package to retrieve the object from",
+    help="Package to retrieve the object from ('<package>...' for that package and every package below it)",
 )
 @click.option(
     "--recursive",
     "-r",
     is_flag=True,
     show_envvar=True,
-    help="Recursively simulate the objects of all imported packages",
+    help="Recursively simulate the objects of all imported packages (older spelling of '<package>...')",
 )
 @click.option(
     "--assembly",

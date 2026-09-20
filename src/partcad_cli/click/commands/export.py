@@ -11,7 +11,13 @@ import rich_click as click
 from ..service import run
 
 
-@click.command(help="Export 3D view of parts, assemblies, or scenes in the package")
+@click.command(
+    help=(
+        "Export 3D view of parts, assemblies, or scenes in the package. "
+        "OBJECT may be written '...:<name>' to mean every object of that name in this "
+        "package and in every package below it"
+    ),
+)
 @click.option(
     "-p",
     "--create-dirs",
@@ -36,7 +42,7 @@ from ..service import run
 @click.option(
     "-P",
     "--package",
-    help="Package to retrieve the object from",
+    help="Package to retrieve the object from ('<package>...' for that package and every package below it)",
     type=str,
 )
 @click.option(
@@ -48,7 +54,7 @@ from ..service import run
 @click.option(
     "-r",
     "--recursive",
-    help="Recursively test all imported packages",
+    help="Recursively test all imported packages (older spelling of '<package>...')",
     is_flag=True,
 )
 @click.option(

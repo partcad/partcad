@@ -27,7 +27,7 @@ from packaging.specifiers import SpecifierSet
 
 from partcad_utils import conda as pc_conda
 from partcad_utils import config_report
-from partcad_utils.utils import directory_size_mb
+from partcad_utils.utils import directory_size_mb, split_recursive_object
 
 from ..rpc.dispatcher import JsonRpcError
 from . import events
@@ -75,6 +75,111 @@ def _qualified(package: str, name: str) -> str:
     return package + ":" + name
 
 
+def _request(params, default="."):
+    """The package, the object and whether the request reaches below that package.
+
+    ``-r`` and a ``...`` suffix on a package name are the same request written
+    two ways, and either turns recursion on: ``//pub/examples...`` is
+    ``-P //pub/examples -r``, and ``...:bolt`` is every bolt from here down.
+    The suffix can also say *where* the walk starts, which a flag cannot, so an
+    object name carrying one selects the subtree -- exactly as a fully
+    qualified object name already selects a package over ``--package``.
+
+    Every operation that takes a package goes through this, so that one
+    spelling cannot come to mean one thing to ``pc list`` and another to
+    ``pc render``. ``default`` is what the operation reads an absent package
+    as, which is not the same everywhere (``pc search`` walks from the root,
+    ``pc lint`` from the current package).
+    """
+    package, object_name, recursive = split_recursive_object(
+        params.get("package") if params.get("package") else default,
+        params.get("object"),
+    )
+    return package, object_name, recursive or bool(params.get("recursive"))
+
+
+def _object_kind(params) -> str:
+    """Which kind of object the flags of a request name.
+
+    The same five flags on every command that takes an object, read in the same
+    order, so that ``pc render -s`` and ``pc test -s`` cannot disagree about
+    what ``-s`` selects. A part is what an object is when nothing says
+    otherwise.
+    """
+    for kind in ("sketch", "interface", "assembly", "scene"):
+        if params.get(kind):
+            return kind
+    return "part"
+
+
+def _targets(ctx, pc, packages, object_name, kind):
+    """The ``(package, object)`` pairs that a named object resolves to, where it exists.
+
+    What a recursive run over a named object is: each package of the subtree is
+    asked for its own object of that name, and the ones that have none are
+    passed over in silence. Reporting them would mean thirty-seven "bolt is not
+    found" lines and a non-zero exit for a tree in which three packages have a
+    bolt, which is the opposite of what asking for ``...:bolt`` means.
+
+    Deduplicated, because a name that carries a package of its own
+    (``//elsewhere:bolt``) resolves to the same pair whichever package it was
+    reached from -- one target rather than forty.
+
+    An empty result is the one failure this has: the object is nowhere in the
+    subtree, and the caller says so once.
+    """
+    targets = []
+    seen = set()
+    for package in packages:
+        target, name = pc.utils.resolve_resource_path(package, object_name)
+        if (target, name) in seen:
+            continue
+        seen.add((target, name))
+        prj = ctx.get_project(target)
+        if prj is None or not prj.declares_object(kind, name):
+            continue
+        targets.append((target, name))
+    return targets
+
+
+def _nowhere_message(object_name, package) -> str:
+    """The one failure a walk over a named object can have, in words.
+
+    One sentence, said once, wherever the walk was made from -- rather than the
+    per-package "is not found" that a subtree of forty packages would otherwise
+    produce thirty-seven of.
+    """
+    return "%s is not found in %s or in any package below it" % (object_name, package)
+
+
+def _nowhere(pc, object_name, package) -> None:
+    """Report that failure through the log, the way each operation reports its own."""
+    pc.logging.error(_nowhere_message(object_name, package))
+
+
+def _refuse_recursion(params) -> None:
+    """Refuse a ``...`` on an operation whose answer is about one object.
+
+    A bill of materials, an assembly instruction book, a CAE model, a quote, a
+    viewer window and a converted declaration are each one thing about one
+    object, so there is no obvious meaning for "all of them" to have: one
+    merged answer and a sequence of answers are both defensible, and guessing
+    between them is worse than saying so.
+
+    Said outright rather than left to happen. Without this the suffix reaches
+    ``resolve_resource_path``, which turns ``...`` into a ``*`` naming no
+    package at all, and the user is told that ``//*:frame`` is not found --
+    about a request nobody made.
+    """
+    _, _, recursive = _request(params)
+    if recursive:
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "'...' asks about a whole subtree of packages; this command answers about one object. "
+            "Name the object without the '...'.",
+        )
+
+
 def _resolve_object(ctx, pc, params):
     """The ``(package, name)`` of the object a request names.
 
@@ -83,10 +188,14 @@ def _resolve_object(ctx, pc, params):
     produced there, whatever ``--package`` said. Returns ``None`` when the
     selected package is not loaded, having said so, the way every other
     context-aware operation reports it.
+
+    *One* object, so the operations that resolve through this are exactly the
+    ones a ``...`` has no meaning for; see ``_refuse_recursion``.
     """
     object_name = params.get("object")
     if not object_name:
         raise JsonRpcError(USAGE_ERROR, "No object is given")
+    _refuse_recursion(params)
 
     package = ctx.resolve_package_path(params.get("package") or ".")
     package_obj = ctx.get_project(package)
@@ -674,8 +783,7 @@ def info_object(session, params):
         return None
     pc = session.partcad
 
-    package = params.get("package")
-    object_name = params.get("object")
+    selected, object_name, recursive = _request(params, None)
     # '-p <name>=<value>' arrives as a list of strings; every accessor below
     # takes a mapping. Built here rather than passed through, because a list
     # reaches 'Project.get_object' as something it cannot merge.
@@ -685,51 +793,80 @@ def info_object(session, params):
             key, value = kv.split("=", 1)
             param_dict[key] = value
 
+    package_name = ctx.resolve_package_path(selected)
+    package_obj = ctx.get_project(package_name)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package_name)
+        return None
+    package_name = package_obj.name
+
     if object_name is None:
-        package_name = ctx.resolve_package_path(package)
-        package_obj = ctx.get_project(package_name)
-        if not package_obj:
-            pc.logging.error("Package %s is not found" % package_name)
+        # '//pub/examples...' with no object: the package and every package
+        # below it, each reported as this reports one.
+        if recursive:
+            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package_name, has_stuff=False)]
+        else:
+            packages = [package_name]
+        for name in packages:
+            project = ctx.get_project(name)
+            if project is None:
+                continue
+            if recursive:
+                pc.logging.info("PACKAGE: %s" % name)
+            for k, v in project.info().items():
+                pc.logging.info("INFO: %s: %s" % (k, pformat(v)))
+        return None
+
+    # 'pc info' has no '-r' of its own; '...' is how it is asked for one, which
+    # is the whole reason the recursion is written on the package rather than
+    # spelled as a flag on every command that could want it.
+    kind = "software" if params.get("software") else _object_kind(params)
+    if recursive:
+        packages = [p["name"] for p in ctx.get_all_packages(parent_name=package_name, has_stuff=False)]
+        targets = _targets(ctx, pc, packages, object_name, kind)
+        if not targets:
+            _nowhere(pc, object_name, package_name)
             return None
-        for k, v in package_obj.info().items():
-            pc.logging.info("INFO: %s: %s" % (k, pformat(v)))
-        return None
-
-    # Resolve the object against the package '--package' names, not against the
-    # current one: 'get_current_project_path()' as the base drops the flag for
-    # every object name that does not carry a '//package:' prefix of its own,
-    # which is the ordinary way to spell one. A name that does carry a prefix
-    # still wins over the flag -- that is what '_resolve_object' documents, and
-    # what the no-object branch above already does with the same flag.
-    resolved = _resolve_object(ctx, pc, params)
-    if resolved is None:
-        return None
-    package, object_name = resolved
-    path = _qualified(package, object_name)
-
-    if params.get("assembly"):
-        obj = ctx.get_assembly(path, params=param_dict)
-    elif params.get("scene"):
-        obj = ctx.get_scene(path, params=param_dict)
-    elif params.get("interface"):
-        obj = ctx.get_interface(path, params=param_dict)
-    elif params.get("sketch"):
-        obj = ctx.get_sketch(path, params=param_dict)
-    elif params.get("software"):
-        # Resolved through the package rather than through a context accessor:
-        # software is not a shape, and none of what 'ctx.get_*' does for one -
-        # parameters, instantiation, the shape cache - applies to a file.
-        project = ctx.get_project(package)
-        obj = project.get_software(object_name) if project is not None else None
     else:
-        obj = ctx.get_part(path, params=param_dict)
+        # Resolve the object against the package '--package' names, not against
+        # the current one: 'get_current_project_path()' as the base drops the
+        # flag for every object name that does not carry a '//package:' prefix
+        # of its own, which is the ordinary way to spell one. A name that does
+        # carry a prefix still wins over the flag.
+        targets = [pc.utils.resolve_resource_path(package_name, object_name)]
 
-    if obj is None:
-        pc.logging.error("Object %s not found" % path)
-    else:
-        pc.logging.info("CONFIGURATION: %s" % pformat(obj.config))
-        for k, v in obj.info().items():
-            pc.logging.info("INFO: %s: %s" % (k, pformat(v)))
+    for package, name in targets:
+        path = _qualified(package, name)
+
+        if kind == "assembly":
+            obj = ctx.get_assembly(path, params=param_dict)
+        elif kind == "scene":
+            obj = ctx.get_scene(path, params=param_dict)
+        elif kind == "interface":
+            obj = ctx.get_interface(path, params=param_dict)
+        elif kind == "sketch":
+            obj = ctx.get_sketch(path, params=param_dict)
+        elif kind == "software":
+            # Resolved through the package rather than through a context
+            # accessor: software is not a shape, and none of what 'ctx.get_*'
+            # does for one - parameters, instantiation, the shape cache -
+            # applies to a file.
+            project = ctx.get_project(package)
+            obj = project.get_software(name) if project is not None else None
+        else:
+            obj = ctx.get_part(path, params=param_dict)
+
+        if obj is None:
+            pc.logging.error("Object %s not found" % path)
+        else:
+            if recursive:
+                # Which of the objects that answered to the name this is. One
+                # report needs no heading; several run into each other without
+                # one.
+                pc.logging.info("OBJECT: %s" % path)
+            pc.logging.info("CONFIGURATION: %s" % pformat(obj.config))
+            for k, v in obj.info().items():
+                pc.logging.info("INFO: %s: %s" % (k, pformat(v)))
     return None
 
 
@@ -1009,7 +1146,8 @@ def test_run(session, params):
     if ctx is None:
         return None
     pc = session.partcad
-    package = ctx.resolve_package_path(params.get("package") or ".")
+    selected, object_name, recursive = _request(params)
+    package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
     if not package_obj:
         pc.logging.error("Package %s is not found" % package)
@@ -1017,13 +1155,25 @@ def test_run(session, params):
     package = package_obj.name
 
     with pc.logging.Process("Test", package):
-        if params.get("recursive"):
+        if recursive:
             all_packages = ctx.get_all_packages(parent_name=package)
             if ctx.stats_git_ops:
                 pc.logging.info("Git operations: %s" % ctx.stats_git_ops)
             packages = [p["name"] for p in all_packages]
         else:
             packages = [package]
+
+        if recursive and object_name:
+            # Only the packages that have such an object. Without this, testing
+            # one object over a subtree reports it missing from every package
+            # that does not declare it -- which for a name like 'bolt' is most
+            # of them, and is not what asking for every bolt means.
+            targets = _targets(ctx, pc, packages, object_name, _object_kind(params))
+            if not targets:
+                _nowhere(pc, object_name, package)
+                return None
+            packages = [target for target, _ in targets]
+
         asyncio.run(
             _test_async(
                 ctx,
@@ -1034,7 +1184,7 @@ def test_run(session, params):
                 params.get("interface"),
                 params.get("assembly"),
                 params.get("scene"),
-                params.get("object"),
+                object_name,
             )
         )
     return None
@@ -1064,7 +1214,8 @@ def lint_run(session, params):
     if ctx is None:
         return None
     pc = session.partcad
-    package = ctx.resolve_package_path(params.get("package") or "")
+    selected, _, recursive = _request(params, "")
+    package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
     if not package_obj:
         pc.logging.error("Package %s is not found" % package)
@@ -1072,7 +1223,7 @@ def lint_run(session, params):
     package = package_obj.name
 
     with pc.logging.Process("Lint", package):
-        if params.get("recursive"):
+        if recursive:
             all_packages = ctx.get_all_packages(parent_name=package)
             if ctx.stats_git_ops:
                 pc.logging.info("Git operations: %s" % ctx.stats_git_ops)
@@ -1097,20 +1248,33 @@ async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_na
 
     targets = []
     if object_name:
-        package, name = pc.utils.resolve_resource_path(ctx.get_current_project_path(), object_name)
-        prj = ctx.get_project(package)
-        if prj is None:
-            raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package)
-        if is_assembly:
-            shape, kind = prj.get_assembly(name), "assembly"
-        else:
-            # Awaited, not 'get_part()': this is a coroutine, and a part a URDF,
-            # MJCF or STEP assembly produces has to have that assembly built
-            # before it exists. See 'Project.get_part_async()'.
-            shape, kind = await prj.get_part_async(name), "part"
-        if shape is None:
-            raise JsonRpcError(USAGE_ERROR, "%s is not found" % object_name)
-        targets.append((kind, shape))
+        scheduled = set()
+        for package in packages:
+            # Resolved against the package being simulated, not against the
+            # current one: 'get_current_project_path()' as the base drops
+            # '--package' for every object name without a '//package:' prefix of
+            # its own, and on a recursive run it resolves every iteration to
+            # that same current package. The resolution a recursive test and a
+            # recursive render already do -- and a '//elsewhere:name' that
+            # resolves to one pair from every package is one simulation rather
+            # than one per package.
+            target, name = pc.utils.resolve_resource_path(package, object_name)
+            if (target, name) in scheduled:
+                continue
+            scheduled.add((target, name))
+            prj = ctx.get_project(target)
+            if prj is None:
+                raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % target)
+            if is_assembly:
+                shape, kind = prj.get_assembly(name), "assembly"
+            else:
+                # Awaited, not 'get_part()': this is a coroutine, and a part a URDF,
+                # MJCF or STEP assembly produces has to have that assembly built
+                # before it exists. See 'Project.get_part_async()'.
+                shape, kind = await prj.get_part_async(name), "part"
+            if shape is None:
+                raise JsonRpcError(USAGE_ERROR, "%s is not found" % _qualified(target, name))
+            targets.append((kind, shape))
     else:
         for package in packages:
             prj = ctx.get_project(package)
@@ -1136,7 +1300,8 @@ def simulate_run(session, params):
     if ctx is None:
         return None
     pc = session.partcad
-    package = ctx.resolve_package_path(params.get("package") or ".")
+    selected, object_name, recursive = _request(params)
+    package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
     if not package_obj:
         pc.logging.error("Package %s is not found" % package)
@@ -1144,17 +1309,31 @@ def simulate_run(session, params):
     package = package_obj.name
 
     with pc.logging.Process("Simulate", package):
-        if params.get("recursive"):
+        if recursive:
             all_packages = ctx.get_all_packages(parent_name=package)
             packages = [p["name"] for p in all_packages]
         else:
             packages = [package]
+
+        if recursive and object_name:
+            # Only the packages that have such an object, so that walking a
+            # subtree for one name is the simulations of the objects that
+            # answer to it rather than a failure per package that does not.
+            kind = "assembly" if params.get("assembly") else "part"
+            targets = _targets(ctx, pc, packages, object_name, kind)
+            if not targets:
+                # A usage error, the way naming one object that does not exist
+                # already is ('_simulate_async' raises the same for it): what
+                # was asked for is not there, and nothing was run.
+                raise JsonRpcError(USAGE_ERROR, _nowhere_message(object_name, package))
+            packages = [target for target, _ in targets]
+
         results = asyncio.run(
             _simulate_async(
                 ctx,
                 pc,
                 packages,
-                params.get("object"),
+                object_name,
                 params.get("assembly"),
                 params.get("filter"),
             )
@@ -1165,7 +1344,7 @@ def simulate_run(session, params):
     # identical here - an empty result list - and only the request tells them
     # apart, so it is the request that is consulted. Without this, 'pc sim -a'
     # on a name that does not exist reports success and exits 0.
-    asked_for = [params.get("object"), params.get("assembly"), params.get("filter")]
+    asked_for = [object_name, params.get("assembly"), params.get("filter")]
     named_one = any(value for value in asked_for)
 
     unmatched = False
@@ -1381,6 +1560,8 @@ def inspect_object(session, params):
     if ctx is None:
         return None
     pc = session.partcad
+    # One object: the viewer shows a shape, and a verbal summary describes one.
+    _refuse_recursion(params)
     package = ctx.resolve_package_path(params.get("package"))
     package_obj = ctx.get_project(package)
     if not package_obj:
@@ -1577,7 +1758,8 @@ def install(session, params):
     if ctx is None:
         return None
     pc = session.partcad
-    package = ctx.resolve_package_path(params.get("package") or ".")
+    selected, _, recursive = _request(params)
+    package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
     if not package_obj:
         # A package the caller named by hand and that does not exist: a usage
@@ -1599,7 +1781,7 @@ def install(session, params):
         if ctx.stats_git_ops:
             session.emitter.info("Git operations: %s" % ctx.stats_git_ops)
 
-        if params.get("recursive"):
+        if recursive:
             # A '/' has to follow the prefix, or '//sub' would also select the
             # unrelated sibling '//subwidget'.
             prefix = package if package.endswith("/") else package + "/"
@@ -1792,9 +1974,9 @@ def list_objects(session, params):
         return None
     pc = session.partcad
     kind = params.get("kind", "parts")
-    recursive = params.get("recursive", False)
+    selected, _, recursive = _request(params)
 
-    package = ctx.resolve_package_path(params.get("package", "."))
+    package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
     if not package_obj:
         pc.logging.error("Package %s is not found" % package)
@@ -1844,8 +2026,8 @@ def list_packages(session, params):
     if ctx is None:
         return None
     pc = session.partcad
-    recursive = params.get("recursive", False)
-    package = ctx.resolve_package_path(params.get("package", "."))
+    selected, _, recursive = _request(params)
+    package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
     if not package_obj:
         pc.logging.error("Package %s is not found" % package)
@@ -1887,8 +2069,8 @@ def list_providers(session, params):
     if ctx is None:
         return None
     pc = session.partcad
-    recursive = params.get("recursive", False)
-    package = ctx.resolve_package_path(params.get("package", "."))
+    selected, _, recursive = _request(params)
+    package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
     if not package_obj:
         pc.logging.error("Package %s is not found" % package)
@@ -1939,8 +2121,8 @@ def list_mates(session, params):
     if ctx is None:
         return None
     pc = session.partcad
-    recursive = params.get("recursive", False)
-    package = ctx.resolve_package_path(params.get("package", "."))
+    selected, _, recursive = _request(params)
+    package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
     if not package_obj:
         pc.logging.error("Package %s is not found" % package)
@@ -2364,23 +2546,37 @@ def cam_route(session, params):
         return None
     pc = session.partcad
 
-    package = ctx.resolve_package_path(params.get("package") or ".")
+    selected, object_name, recursive = _request(params)
+    package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
     if not package_obj:
         pc.logging.error("Package %s is not found" % package)
         return None
     package = package_obj.name
 
-    object_name = params.get("object")
     # Which of an object's machines to write for. None lets each object take the
     # one it names, and refuses the ones that name several -- the sentence says
     # which they are, because a default nobody picked is a program for the wrong
     # machine.
     machine = params.get("machine")
-    if params.get("recursive"):
+    if recursive:
         packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
     else:
         packages = [package]
+
+    if recursive and object_name:
+        # Only the packages that have such an object. A package of the subtree
+        # that declares no object of that name has not failed to route one, and
+        # counting it as a failure is what would make '...:panel' over a tree
+        # exit non-zero for every tree but the one where every package has a
+        # panel.
+        targets = _targets(ctx, pc, packages, object_name, "sketch" if params.get("sketch") else "part")
+        if not targets:
+            _nowhere(pc, object_name, package)
+            # Named among the failures as it was written, not qualified with the
+            # package the walk started from: it is in none of them.
+            return {"routes": [], "failed": [object_name]}
+        packages = [target for target, _ in targets]
 
     with pc.logging.Process("CAM", package), _creating_dirs(ctx, params.get("create_dirs", False)):
         results, failures = asyncio.run(
@@ -2393,6 +2589,7 @@ def cam_route(session, params):
                 implementation=params.get("implementation") or None,
                 machine=machine,
                 output_dir=params.get("output_dir") or None,
+                quiet_misses=bool(recursive and object_name),
             )
         )
 
@@ -2426,7 +2623,9 @@ def cam_route(session, params):
     }
 
 
-async def _route_packages_async(pc, ctx, packages, object_name, sketch, implementation, output_dir, machine=None):
+async def _route_packages_async(
+    pc, ctx, packages, object_name, sketch, implementation, output_dir, machine=None, quiet_misses=False
+):
     """Route the objects of every package named, reporting each as it lands.
 
     Bounded the way a recursive render is bounded, and for the same reason: what
@@ -2436,6 +2635,11 @@ async def _route_packages_async(pc, ctx, packages, object_name, sketch, implemen
     Nothing is cancelled when one object fails. A route is a file, and a package
     interrupted half way through writing them is worse than one that finishes
     and reports.
+
+    ``quiet_misses`` is a walk of a subtree for one name ('...:panel'). There a
+    package that has the object but does not say how it is made has not failed
+    to route anything -- it was never asked -- so it goes unreported, and only a
+    walk that routed nothing at all is the failure.
     """
     import asyncio
 
@@ -2489,9 +2693,15 @@ async def _route_packages_async(pc, ctx, packages, object_name, sketch, implemen
             # it a typo came back as an empty *success*, and a caller reading
             # the result rather than the log -- the IDE, or anything piping
             # `--json` -- saw a package where nothing needed routing.
-            unresolved.append("%s:%s" % (target, obj))
+            if not quiet_misses:
+                unresolved.append("%s:%s" % (target, obj))
             continue
         shapes.extend(named)
+
+    if quiet_misses and not shapes:
+        # A walk of the subtree that routed nothing: the name is the one thing
+        # that was asked about, so it is the one thing reported, once.
+        unresolved.append(object_name)
 
     at_once = asyncio.Semaphore(max(1, process_slots.count))
 
@@ -2732,9 +2942,9 @@ def search_objects(session, params):
         return None
     pc = session.partcad
     kind = params.get("kind", "parts")
-    recursive = params.get("recursive", False)
+    selected, _, recursive = _request(params, "//")
     keyword = params.get("keyword", "")
-    package = ctx.resolve_package_path(params.get("package", "//"))
+    package = ctx.resolve_package_path(selected)
 
     from partcad.actions.package import search_packages
     from partcad.actions.shape import (
@@ -2862,7 +3072,8 @@ def render_objects(session, params):
     if ctx is None:
         return None
     pc = session.partcad
-    package = ctx.resolve_package_path(params.get("package") or ".")
+    selected, object_name, recursive = _request(params)
+    package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
     if not package_obj:
         pc.logging.error("Package %s is not found" % package)
@@ -2871,7 +3082,6 @@ def render_objects(session, params):
 
     fmt = params.get("format")
     output_dir = params.get("output_dir")
-    object_name = params.get("object")
     ignore_manufacturability = params.get("ignore_manufacturability", False)
     options_package = params.get("options_package")
     if options_package:
@@ -2922,6 +3132,7 @@ def render_objects(session, params):
                 ignore_manufacturability,
                 overlay,
                 render_opts,
+                recursive,
             )
         except AssemblyDocumentError as e:
             # Asking for an assembly instruction book of something that has no
@@ -2943,14 +3154,27 @@ def _render_objects(
     ignore_manufacturability,
     overlay=None,
     render_opts=None,
+    recursive=False,
 ):
     """The body of 'render_objects', once the request has been made sense of."""
     import asyncio
 
-    if params.get("recursive"):
+    if recursive:
         packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
     else:
         packages = [package]
+
+    if recursive and object_name is not None:
+        # Only the packages that have such an object. A package of the subtree
+        # that declares none was not asked to render one, and asking it anyway
+        # ends the whole run: 'Project.render_async()' raises 'EmptyShapesError'
+        # for a name it cannot resolve, so one package without a 'bolt' used to
+        # cost every other package its render.
+        targets = _targets(ctx, pc, packages, object_name, _object_kind(params))
+        if not targets:
+            _nowhere(pc, object_name, package)
+            return
+        packages = [target for target, _ in targets]
 
     # An object named as '<package>:<name>' is produced by that package, not
     # by the one '--package' selected, so its file types count as known too.
@@ -3092,6 +3316,11 @@ def convert_object(session, params):
     target_format = params.get("target_format")
     output_dir = params.get("output_dir")
     dry_run = params.get("dry_run", False)
+
+    # One object, and rewriting a declaration at that. The object arrives as
+    # 'object_name' here rather than as 'object', so the check is given the
+    # name under the key it reads.
+    _refuse_recursion({"package": params.get("package"), "object": object_name})
 
     if kind in ("part", "assembly", "scene"):
         package = ctx.resolve_package_path(params.get("package") or ".")

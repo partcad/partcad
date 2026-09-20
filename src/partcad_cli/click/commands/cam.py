@@ -11,11 +11,17 @@ import rich_click as click
 from ..service import run
 
 
-@click.command(help="Produce the route files of the objects that declare a 'cam:' section")
+@click.command(
+    help=(
+        "Produce the route files of the objects that declare a 'cam:' section. "
+        "OBJECT may be written '...:<name>' to mean every object of that name in this "
+        "package and in every package below it"
+    ),
+)
 @click.option(
     "-P",
     "--package",
-    help="Package to retrieve the object from",
+    help="Package to retrieve the object from ('<package>...' for that package and every package below it)",
     type=str,
     show_envvar=True,
 )
@@ -47,7 +53,7 @@ from ..service import run
 @click.option(
     "-r",
     "--recursive",
-    help="Produce the routes of all imported packages too",
+    help="Produce the routes of all imported packages too (older spelling of '<package>...')",
     is_flag=True,
     show_envvar=True,
 )

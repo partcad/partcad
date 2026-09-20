@@ -125,7 +125,22 @@ in the client, before the call. (The daemon and the CLI share a machine today, s
 coincide; they will not once a daemon can be remote, which is why the commands are separate. `daemon reset`
 carries a TODO to gate it behind access control before that happens.)
 
-## Whose user configuration the daemon works under
+## `...`: the package name that means "and everything below it"
+
+`//pub/examples...` is that package and every package below it — the same request `-r` makes, written where
+the package is named. It works on an object name too, in front of the `:`: `pc render ...:bolt` is every bolt
+from here down, and `//pub/examples...:bolt` is every bolt of that subtree whatever `-P` said. `-r` is kept
+and still means what it meant; the documentation is written with `...`.
+
+**A command does not parse it.** The package and object arguments go over the wire as the user typed them, and
+`operations._request()` on the daemon reads both spellings into one answer — see "`package`, `object` and the
+`...` suffix" in [`partcad_service_json_rpc/AGENTS.md`](../partcad_service_json_rpc/AGENTS.md). There are three
+clients of that daemon, and a syntax each of them parsed for itself is a syntax they would each get slightly
+wrong. So adding the suffix to a command is a `--help` string here and, where the command has none yet, a
+`recursive` branch there.
+
+Two commands keep a `-r` that is **not** this: `pc supply find` and `pc supply quote`, where `-r` means "break
+every assembly down to its parts" and has nothing to do with the package graph. Do not fold those in.
 
 The client's whenever the client sends one — as of the moment the command ran. `service.py::run` resolves the
 CLI's own `user_config` (file + `PC_*` environment + command line) and sends a copy of it,
