@@ -605,3 +605,85 @@ def test_render_assembly_guide_refuses_a_non_manufacturable_assembly():
         prj.render_assembly_guide("logo_embedded", "pdf", output_dir=output_dir)
 
     assert not os.path.exists(os.path.join(output_dir, "logo_embedded.pdf"))
+
+
+class _FakeAssembly:
+    """Just enough of an assembly for '_assembly_key' to tell two of them apart"""
+
+    def __init__(self, name):
+        self.project_name = "//pkg"
+        self.name = name
+        self.config = {}
+
+
+def _section(name):
+    return assembly_guide.GuideSection(assembly=_FakeAssembly(name), name=name)
+
+
+def test_repeat_count_multiplies_through_the_sub_assemblies():
+    """An assembly used by one that is itself used four times is needed four times
+
+    The guide documents a repeated assembly once, so the count is the only
+    thing that says how many to make - and it has to carry down the tree: four
+    towers with a spire each need four spires, not one.
+    """
+    spire, tower, wall, castle = (_section(n) for n in ("spire", "tower", "wall", "castle"))
+    # Children first, top last - the order '_collect_section' appends in.
+    sections = [spire, tower, wall, castle]
+    key = assembly_guide._assembly_key
+    uses = {
+        key(castle.assembly): {key(tower.assembly): 4, key(wall.assembly): 3},
+        key(tower.assembly): {key(spire.assembly): 1},
+        key(wall.assembly): {},
+        key(spire.assembly): {},
+    }
+
+    assembly_guide._count_sections(sections, uses)
+
+    assert castle.count == 1
+    assert tower.count == 4
+    assert wall.count == 3
+    assert spire.count == 4
+
+
+def test_repeat_count_adds_up_the_several_places_one_is_used():
+    """An assembly reached by more than one route is needed for each of them"""
+    cone, tower, keep, castle = (_section(n) for n in ("cone", "tower", "keep", "castle"))
+    sections = [cone, tower, keep, castle]
+    key = assembly_guide._assembly_key
+    uses = {
+        key(castle.assembly): {key(tower.assembly): 4, key(keep.assembly): 1},
+        key(tower.assembly): {key(cone.assembly): 2},
+        key(keep.assembly): {key(cone.assembly): 1},
+        key(cone.assembly): {},
+    }
+
+    assembly_guide._count_sections(sections, uses)
+
+    assert tower.count == 4
+    assert keep.count == 1
+    assert cone.count == 4 * 2 + 1
+
+
+def test_section_page_says_how_many_of_a_repeated_assembly_to_make():
+    """An assembly used more than once is documented once and asks to be repeated"""
+    section = assembly_guide.GuideSection(assembly=make_assembly("spire"), name="spire", count=9)
+
+    (page,) = asyncio.run(assembly_guide._section_pages(None, section, assembly_guide.ImageSource(), 2))
+
+    texts = [block.text for block in page.blocks if isinstance(block, pc_document.Paragraph)]
+    assert texts == ["The build needs 9 of these. Repeat this section 9 times - the steps are the same every time."]
+    (properties,) = [block for block in page.blocks if isinstance(block, pc_document.Properties)]
+    assert ("Needed", "9") in properties.items
+
+
+def test_section_page_of_a_one_off_assembly_says_nothing_about_repeating_it():
+    """The count is only worth saying when it is not one"""
+    section = assembly_guide.GuideSection(assembly=make_assembly("keep"), name="keep")
+
+    (page,) = asyncio.run(assembly_guide._section_pages(None, section, assembly_guide.ImageSource(), 2))
+
+    texts = [block.text for block in page.blocks if isinstance(block, pc_document.Paragraph)]
+    assert texts == []
+    (properties,) = [block for block in page.blocks if isinstance(block, pc_document.Properties)]
+    assert [name for name, _ in properties.items] == ["Package", "Steps"]
