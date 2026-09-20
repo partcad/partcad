@@ -327,6 +327,12 @@ Object commands
 ``pc info``
   Show detailed information about a part, assembly, scene, or software, including its parameters.
 
+  Where the object says what it is made of, the material it names is resolved and reported as
+  ``Material`` — the formal and full names, the density both ways round, the coefficient of friction and
+  the tags the catalogue states — rather than as the bare reference the configuration beside it already
+  shows. A reference nothing answers to is reported as it was written, with the error, which is why no
+  mass and no friction came from it. See :ref:`materials`.
+
 ``pc bom``
   Print the bill of materials of an assembly or a scene: every part it is made of, recursively, with how many of each
   are needed and, where the object says so, the vendor and the SKU to order it by. Use ``-P`` to name the
