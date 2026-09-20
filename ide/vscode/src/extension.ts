@@ -1046,7 +1046,12 @@ location: [[100, 0, 0], [0, 0, 1], 0]
     await partcadViewerServer.start();
 
     /* Instantiate the context viewer */
-    partcadContext = new PartcadContext(context.extensionUri);
+    // The extension's own version comes along, so that the view can say when the
+    // PartCAD it is talking to is not the release this extension shipped with.
+    // `context.extension` is undefined in no supported host, but the version is
+    // read defensively all the same: a missing one is compared against nothing
+    // rather than reported as a mismatch against the empty string.
+    partcadContext = new PartcadContext(context.extensionUri, context.extension?.packageJSON?.version ?? '');
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(PartcadContext.viewType, partcadContext, {
             // webviewOptions: { retainContextWhenHidden: true },
