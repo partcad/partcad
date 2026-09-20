@@ -18,15 +18,17 @@ pc cam
 	pocket, 4 pass(es), 8.000 mm deep, 18428.9 mm of cutting moves
 ```
 
-Three objects were routed. This package declares four.
+Three objects were routed. This package declares five.
 
-## An object opts in by declaring `cam:`, and that is the whole of the opt-in
+## An object opts in by saying how it is made, and that is the whole of the opt-in
 
 `pc cam` with nothing named produces a route for every sketch and part of the
-package that declares a `cam:` section, and passes over every object that does
-not — silently. `spacer` in `partcad.yaml` is here to be passed over: it is an
-ordinary part, identical to `panel` but for the missing section, and a run over
-this package neither routes it nor complains about it.
+package whose `manufacturing:` section names a machine or a job parameter, and
+passes over every object that does not — silently. `spacer` in `partcad.yaml` is
+here to be passed over: it is an ordinary part, identical to `panel` but for the
+missing section, and a run over this package neither routes it nor complains
+about it. `stock` is passed over for the same reason — it is the sheet the other
+two are cut *out of*, bought rather than made.
 
 That silence is deliberate. Most objects are never cut, and a package where
 three parts of forty are is the ordinary case rather than thirty-seven warnings.
@@ -37,7 +39,7 @@ pc cam :spacer
 ```
 
 ```
-ERROR: ...:spacer declares no 'cam:' section, so there is nothing to route
+ERROR: ...:spacer says nothing about being cut, so there is nothing to route
 ```
 
 — because naming an object is asking about that object, and coming back with
@@ -68,14 +70,14 @@ first means the finished wall is cut by a tool engaged on one side rather than
 buried in a slot. `tray_recess.nc` starts at `X-31.200 Y1.200`, which is the
 last ring that still has anything left of it, and works outward.
 
-**`engrave` ignores the tool's diameter**, because a V-bit and a drag knife have
-no radius to compensate for. It is the one operation whose path is the object's
-own geometry.
+**`engrave` ignores the cutter's diameter**, because a V-bit and a drag knife
+have no radius to compensate for. It is the one operation whose path is the
+object's own geometry.
 
 ## What is configured where
 
-The tool, the depths and the feeds are one namespace with three layers, and the
-narrower layer wins:
+The cutter, the depths and the feeds are one namespace with three layers, and
+the narrower layer wins:
 
 1. `//builtin/cam`, which PartCAD ships — a slow feed, a shallow pass, a
    generous clearance, and `direction: climb`.
@@ -85,19 +87,44 @@ narrower layer wins:
    `safe_z:` is a **clearance above the top of the object**, not an absolute
    height: the panel's top is at Z18, so its rapids are at `Z26.000` while the
    nameplate's — a sketch at Z0 — are at `Z8.000`.
-3. the object's own `cam:` section — what is true of that object, and nothing
-   else. `panel` names a tool and a spindle speed; `tray_recess` also names a
-   shallower pass and a stepover, because it is clearing an area rather than
-   following a line.
+3. the object's own `manufacturing:` section — what is true of that object, and
+   nothing else. `panel` names a cutter diameter and a spindle speed;
+   `tray_recess` also names a shallower pass and a stepover, because it is
+   clearing an area rather than following a line.
 
-So a package cutting twenty parts from one sheet says `tool: 6 mm` once, and the
-one part that needs a smaller cutter says so for itself.
+So a package cutting twenty parts from one sheet says `diameter: 6 mm` once, and
+the one part that needs a smaller cutter says so for itself.
 
-**`tool:` has no default, and must not get one.** Every other parameter has a
+**`diameter:` has no default, and must not get one.** Every other parameter has a
 defensible default; the diameter of the cutter is the one number that cannot be
 guessed from the part, and a route produced against a diameter nobody chose is
 wrong by exactly the amount nobody noticed. A request that reaches the
 implementation without one is refused and says where to set it.
+
+### Two scopes inside that third layer
+
+The object's section has a scope of its own, and it is the reason the machine is
+named rather than assumed. A key written directly under `manufacturing:` is
+shared by every machine the object names; a key written inside a machine's own
+subsection — `cnc:`, `laser:`, `drill:` — belongs to that machine and outranks
+the shared one. `nameplate` below uses both: its `speed:` is shared, everything
+about the cut is under `cnc:`.
+
+Naming several machines is naming **alternatives**, not stages: it says the
+object could be made either way, `pc test` answers for both claims, and `pc cam`
+has to be told which to write for —
+
+```shell
+pc cam -m laser :gasket   # writes gasket.laser.nc
+pc cam -m cnc   :gasket   # writes gasket.cnc.nc
+```
+
+— because a default nobody picked is a program for the wrong machine. The two
+files land beside each other rather than one overwriting the other. An object
+that really is machined in *stages* is a chain of objects, each naming the
+previous one as its `source:`. (No object here names more than one machine;
+[`produce_part_subtractive`](../produce_part_subtractive/) has the one that
+does.)
 
 **Units are read, not assumed.** A length may be written `6`, `6 mm`, `0.25 in`
 or `0.25"`, a feed `2400`, `2400 mm/min`, `40 mm/s` or `60 in/min`, a speed
@@ -111,6 +138,13 @@ part 18 mm thick is cut 18 mm deep whether the program says `G21` or `G20`.
 cut **through** — from the top of its bounding box to the bottom, which for
 `panel` is 18 mm in six 3 mm passes. A sketch has no thickness to be cut through,
 so `nameplate` has to say how deep to score and is refused if it does not.
+
+**A sketch's section has no `method:` and no `source:`.** A drawing is not made
+out of anything — it is a path a machine follows — so `nameplate` declares the
+machine and the job and nothing else. A *part* that says `method: subtractive`
+does have to name the `source:` it is cut from, which is what `stock` is here
+for, and what `pc test -f manufacturability` checks the part actually fits
+inside.
 
 ## What comes out
 
@@ -178,9 +212,9 @@ material the route would have to leave, and leaving it means knowing where the
 rings must stop rather than where they run out. An outline with a hole in it is
 refused rather than cut through — cut the island as a `profile` of its own.
 
-**A hole smaller than the tool is refused** too, rather than skipped: there is no
-path around the inside of it, and a hole silently missing from a route is worse
-than a route that does not exist.
+**A hole smaller than the cutter is refused** too, rather than skipped: there is
+no path around the inside of it, and a hole silently missing from a route is
+worse than a route that does not exist.
 
 **There is no lead-in, no tab and no ramp.** The tool plunges straight down at
 the start of each contour and the part is free at the end of the last pass. For
@@ -196,12 +230,15 @@ controller that wants another is a package declaring a file type in its own
 ## Running it
 
 ```shell
-# every object of this package that declares a `cam:` section
+# every object of this package that says how it is made
 pc cam
 
 # one of them; `-s` when it is a sketch rather than a part
 pc cam :panel
 pc cam -s :nameplate
+
+# one that names more than one machine, written for the one you pick
+pc cam -m laser :gasket
 
 # this package and everything it imports
 pc cam -r
@@ -255,12 +292,14 @@ pc test -f cam
 
 The check produces the route and passes the object only if one came back. It is
 the same code this command runs, so the two cannot disagree about an object, and
-it applies to an object that declares a `cam:` section and to nothing else — so
-`spacer` is not applicable and a package of bolts pays nothing for it.
+it applies to an object that says how it is made and to nothing else — so
+`spacer` is not applicable and a package of bolts pays nothing for it. An object
+naming several machines is checked once per machine, because each of them is a
+separate claim.
 
 There is one way to pass: a route was written. A malformed section fails, an
 implementation that cannot be resolved fails, and an implementation that
-resolved and produced nothing fails — a tool bigger than the hole it was asked
+resolved and produced nothing fails — a cutter bigger than the hole it was asked
 to cut, an outline the offset consumed. A machine that cannot provision a
 sandbox at all is the one thing it does not hold against the object: nothing was
 ever asked there, so it skips, loudly, and does not remember the skip.

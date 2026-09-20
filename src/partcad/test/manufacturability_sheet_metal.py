@@ -37,7 +37,7 @@ from .. import logging as pc_logging
 from ..part import Part
 from ..part_config import PartConfiguration
 from ..part_config_manufacturing import METHOD_SHEET_METAL
-from ..utils import resolve_resource_path
+from .manufacturability_reference import resolve_reference
 from .test import Test
 
 # The annotation keys a bend line has to carry, and what each has to be.
@@ -244,30 +244,11 @@ class ManufacturabilitySheetMetalTest(Test):
     async def _resolve(self, ctx, shape, reference: str, kind: str):
         """The object a 'manufacturing:' reference names, or None.
 
-        Resolved against the package the part is declared in, like every other
-        reference a part makes, so that a bend sketch beside the part is named
-        by its bare name. A reference may carry parameters - the layer filters
-        of the instructions sketch usually do - and 'get_sketch'/'get_part' read
-        them, which is the whole reason the filters are parameters.
+        The rule is shared with the other checks that read another object; see
+        'manufacturability_reference.resolve_reference', which is where it
+        lives and why.
         """
-        project_name, object_name = resolve_resource_path(shape.project_name, reference)
-        project = ctx.get_project(project_name)
-        if project is None:
-            pc_logging.debug("Package '%s' not found" % project_name)
-            return None
-        if kind == "sketch":
-            return project.get_sketch(object_name, quiet=True)
-        # The asynchronous accessor, because every caller of this is a
-        # coroutine and 'get_part()' says so in as many words: materializing a
-        # *derived* part - one an assembly produces rather than the package
-        # declaring it, a STEP component or a URDF link - instantiates that
-        # assembly, which is asynchronous, and the synchronous accessor drives
-        # it with 'asyncio.run()'. On a thread that already has a loop that
-        # raises rather than building, so a sheet metal part whose blank is
-        # derived would fail the check with a RuntimeError about the loop
-        # instead of being measured. A declared part resolves the same either
-        # way; this costs nothing and covers the case that does not.
-        return await project.get_part_async(object_name, quiet=True)
+        return await resolve_reference(ctx, shape, reference, kind)
 
     async def blank_is_flat(self, ctx, shape, reference: str) -> bool:
         """Whether what goes into the brake is a flat piece of sheet.

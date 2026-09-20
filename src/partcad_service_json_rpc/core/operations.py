@@ -2339,14 +2339,16 @@ def cae_analyze(session, params):
 def cam_route(session, params):
     """Produce the route files of the objects that declare one, and say where they went.
 
-    Backs ``pc cam``. An object declares what is to be cut in its own ``cam:``
-    section (see ``partcad.cam``), and the implementation is whatever
+    Backs ``pc cam``. An object declares what is to be cut in its own
+    ``manufacturing:`` section (see ``partcad.cam``), and the implementation is
+    whatever
     ``implementation`` -- or, failing that, the object's own ``implementation:``,
     or the caller's ``camImplementation`` -- names, as ``<package>:<file type>``.
 
     ``object`` routes that one object and refuses if it declares nothing. With no
-    ``object`` every sketch and part of the package that declares a ``cam:``
-    section is routed and everything else is passed over in silence, which is
+    ``object`` every sketch and part of the package that says how it is made --
+    a machine or a job parameter under ``manufacturing:`` -- is routed and
+    everything else is passed over in silence, which is
     what makes the command usable in a package where three parts of forty are
     cut. ``recursive`` does the same through the packages below this one.
 
@@ -2370,6 +2372,11 @@ def cam_route(session, params):
     package = package_obj.name
 
     object_name = params.get("object")
+    # Which of an object's machines to write for. None lets each object take the
+    # one it names, and refuses the ones that name several -- the sentence says
+    # which they are, because a default nobody picked is a program for the wrong
+    # machine.
+    machine = params.get("machine")
     if params.get("recursive"):
         packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
     else:
@@ -2384,6 +2391,7 @@ def cam_route(session, params):
                 object_name,
                 sketch=bool(params.get("sketch")),
                 implementation=params.get("implementation") or None,
+                machine=machine,
                 output_dir=params.get("output_dir") or None,
             )
         )
@@ -2394,16 +2402,16 @@ def cam_route(session, params):
         if not results and not failures and not object_name:
             # Nothing was wrong and nothing was produced, which is a real answer
             # and one a user acting on an empty command line needs said out
-            # loud: `pc cam` in a package where nothing declares a `cam:`
-            # section otherwise looks exactly like a route that went somewhere
-            # the user did not notice.
+            # loud: `pc cam` in a package where nothing says how it is made
+            # otherwise looks exactly like a route that went somewhere the user
+            # did not notice.
             #
             # Only where no object was named. A name that resolved to nothing
             # has already been reported as the object it is -- which is what the
-            # user typed -- and saying that the package declares no `cam:`
-            # section on top of it answers a question nobody asked, about a
-            # package that may be full of them.
-            pc.logging.info("Nothing in %s declares a 'cam:' section, so no route was produced" % package)
+            # user typed -- and saying that the package declares no
+            # `manufacturing:` section on top of it answers a question nobody
+            # asked, about a package that may be full of them.
+            pc.logging.info("Nothing in %s declares how it is made, so no route was produced" % package)
 
     # The routes that were produced are returned whether or not others failed,
     # and the failure travels beside them as a name rather than as an exception.
@@ -2418,7 +2426,7 @@ def cam_route(session, params):
     }
 
 
-async def _route_packages_async(pc, ctx, packages, object_name, sketch, implementation, output_dir):
+async def _route_packages_async(pc, ctx, packages, object_name, sketch, implementation, output_dir, machine=None):
     """Route the objects of every package named, reporting each as it lands.
 
     Bounded the way a recursive render is bounded, and for the same reason: what
@@ -2466,8 +2474,8 @@ async def _route_packages_async(pc, ctx, packages, object_name, sketch, implemen
                 unresolved.append("%s:%s" % (target, obj))
             continue
         if obj is None:
-            # The whole package: every sketch and part of it that declares a
-            # 'cam:' section.
+            # The whole package: every sketch and part of it that says how it
+            # is made, under 'manufacturing:'.
             shapes.extend(await prj.routable_shapes_async())
             continue
 
@@ -2489,7 +2497,7 @@ async def _route_packages_async(pc, ctx, packages, object_name, sketch, implemen
 
     async def route(shape):
         async with at_once:
-            return await shape.route_async(ctx, implementation=implementation, output_dir=output_dir)
+            return await shape.route_async(ctx, implementation=implementation, output_dir=output_dir, machine=machine)
 
     produced = await asyncio.gather(*[route(shape) for shape in shapes], return_exceptions=True)
 

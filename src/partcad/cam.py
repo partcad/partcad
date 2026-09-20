@@ -21,52 +21,68 @@ of its own) in its own `cam:` section.
 
 The job is not part of that configuration in the sense that matters. What is cut
 and how deep is a property of **the object** -- a panel is 18 mm thick and has
-to be cut through whoever routes it -- so an object declares it in a section of
-its own::
+to be cut through whoever routes it -- so the object states it, in the section
+that already says how it is made::
 
     parts:
       panel:
         type: build123d
         path: panel.py
-        cam:
-          operation: profile     # around the outside of it
-          tool: 6 mm             # the cutter's diameter
-          depth: 18 mm           # how far down from the top of the shape
-          depth_per_pass: 6 mm
-          feed: 1200             # mm/min
-          plunge: 300            # mm/min
-          speed: 18000           # rpm
-          safe_z: 5 mm
+        manufacturing:
+          method: subtractive
+          source: sheet          # the stock it comes out of
+          cnc:
+            operation: profile   # around the outside of it
+            diameter: 6 mm       # the cutter
+            depth: 18 mm         # how far down from the top of the shape
+            depth_per_pass: 6 mm
+            feed: 1200           # mm/min
+            plunge: 300          # mm/min
+            speed: 18000         # rpm
+            safe_z: 5 mm
 
-**That section is the object's opt-in**, and it is the whole of it: `pc cam` with
-no object named produces a route for every object of the package that declares
-one, and for nothing else. An object with no `cam:` section is not a failure and
-is not reported as one -- most objects are never cut on this machine.
+**Saying something about being cut is the object's opt-in**, and it is the whole
+of it: `pc cam` with no object named produces a route for every object of the
+package that does, and for nothing else. An object that says nothing is not a
+failure and is not reported as one -- most objects are never cut on this
+machine. `declares_job` is that question, asked without judging the answer.
 
-Why the object's section is called `cam:` too, when CAE splits the two names
-(`cae:` for the implementations, `fea:`/`cfd:` for what the part declares): for
-CAE the two are different kinds of thing, because boundary conditions belong to
-the part and the mesh size and the material model belong to whoever solves it.
-Here the *job* half of them is the same kind of thing. The tool, the depth and
-the feed are the implementation's parameters *and* the part's statement about
-itself, and which layer they come from is a question of scope rather than of
-kind -- a package cutting twenty parts from one sheet sets the tool once, under
-the file type in its own `cam:` section, and a part that needs a smaller one says
-so in its own. So they are one namespace with the ordinary layering over it, and
-the object's section is the topmost layer.
+There are two scopes, and the difference between them is the point of having
+two. What is written directly under `manufacturing:` is shared by every machine
+the object names; what is written inside a machine's own subsection is that
+machine's and outranks the shared value. So a part that could be cut either way
+says `feed: 1800` once and lets the laser say `power: 85` for itself.
+
+Each machine takes only the keys it actually reads, which is what a single flat
+namespace could not express. A laser has no `diameter:` -- it has no cutter, and
+`kerf:` is what it removes -- so writing one in `laser:` is an error naming what
+a laser does take, rather than a value silently ignored. A drill has no `depth:`
+and no `feed:`; a part is free to write either in the shared scope, where it
+simply is not read by a machine that has no use for it.
+
+An object may name **several** machines. They are alternatives -- ways it could
+be made -- rather than stages it goes through, so `pc cam` writes for one of
+them and asks which where there is a choice. A part that really is machined in
+stages is a chain of parts, each naming the previous one as its `source`,
+because each stage has its own geometry and its own stock.
+
+A *sketch* has one of these sections too, and no `method:` in it: a drawing is
+not made from anything, it is a path a machine follows. What it does have is a
+`depth:`, and uniquely so -- a part has a thickness to be cut through and a
+sketch does not, so how deep to score is the one thing it has to answer.
 
 What an object may *not* set is the half that describes the file rather than the
 cut -- `//builtin/cam`'s `units`, `precision`, `tolerance` and `comments`, and
 whatever an implementation PartCAD has never seen calls its own. Those stay with
-the file type. The reason is `KEYS` below: an object's section is checked against
-a list, and a list can only hold what PartCAD knows the name of, so the closed
-set is what buys the error message. A package sets those for its objects.
+the file type, in a package's `cam:` section. The reason is `KEYS` below: a
+section is checked against a list, and a list can only hold what PartCAD knows
+the name of, so the closed set is what buys the error message.
 
-What keeps that from being ambiguous is that the keys below are a **closed set**:
-an object's `cam:` may hold a job parameter and nothing else, so it can never be
-read as the file-type declaration a package's `cam:` section holds. A key that is
-neither is refused rather than passed through, which is what turns a typo into a
-sentence instead of a route cut to a default.
+That split is also why the word `cam:` now means exactly one thing. It used to
+mean two -- the file types a package declares, and the job an object declared --
+and the ambiguity was managed by keeping the two key sets disjoint. The job
+lives in `manufacturing:` now, beside the method and the machine it belongs to,
+so `cam:` is the implementation registry and nothing else.
 
 `partcad.test.manufacturability` is the neighbouring idea and not this one: it
 is the `pc test` check that asks whether an object can be made or bought at all
@@ -120,10 +136,39 @@ DIRECTIONS = (CLIMB, CONVENTIONAL)
 # whatever spelling the configuration used. The file type decides what the file
 # says (`units:` on `//builtin/cam`'s `gcode`), which is a separate question --
 # a route written in inches is still cut to the depth the part declared.
-LENGTH_KEYS = ("tool", "depth", "depth_per_pass", "safe_z")
+# 'kerf' is here with the rest although it describes the machine rather than the
+# cut: once the job and the machine live in one section there is one vocabulary,
+# and a length is read the same way whichever of the two it belongs to. Which
+# keys each machine will *accept* is a separate question, and the one
+# 'part_config_manufacturing.MACHINE_JOB_KEYS' answers.
+LENGTH_KEYS = ("diameter", "depth", "depth_per_pass", "safe_z", "peck", "kerf")
 FEED_KEYS = ("feed", "plunge")
-NUMBER_KEYS = ("speed", "stepover")
+# 'power' is how hard a laser fires, as the fraction or the S-word its
+# controller reads. Chosen per cut rather than fixed by the machine -- a thicker
+# part on the same laser is cut harder -- which is why it is a job parameter and
+# 'kerf' is the machine's own.
+NUMBER_KEYS = ("speed", "stepover", "power")
 KEYS = LENGTH_KEYS + FEED_KEYS + NUMBER_KEYS + ("operation", "direction", "implementation", "desc")
+
+
+def value_parsers() -> dict:
+    """Which parser reads each key, for whoever holds a section of these.
+
+    One table rather than three loops repeated at every call site: the
+    `manufacturing:` section is read in several scopes -- shared, and once per
+    machine the part names -- and each of them wants "6", "6 mm" and "0.25 in"
+    to mean one cutter. The keys whose values are words rather than quantities
+    are absent, because there is nothing to convert about them.
+    """
+    parsers = {}
+    for key in LENGTH_KEYS:
+        parsers[key] = parse_length
+    for key in FEED_KEYS:
+        parsers[key] = parse_feed
+    for key in NUMBER_KEYS:
+        parsers[key] = parse_number
+    return parsers
+
 
 # Millimetres per unit, lowercased and singular, for every spelling a length may
 # carry. Millimetres are the base because that is what CAD works in here and
@@ -355,14 +400,14 @@ class CamConfig:
         self.desc: Optional[str] = None
 
         if config is None:
-            raise CamConfigError("'cam:' is empty")
+            raise CamConfigError("'manufacturing:' declares no job")
         if not isinstance(config, dict):
-            raise CamConfigError("'cam:' is not a section: %r" % (config,))
+            raise CamConfigError("'manufacturing:' is not a section: %r" % (config,))
 
         unknown = [key for key in config if key not in KEYS]
         if unknown:
             raise CamConfigError(
-                "'cam:' does not take %s; it takes %s"
+                "'manufacturing:' does not take %s; it takes %s"
                 % (", ".join(sorted(unknown)), ", ".join("'%s:'" % key for key in KEYS))
             )
         if not config:
@@ -370,7 +415,7 @@ class CamConfig:
             # opted in to being routed and then described no route. The file
             # type's defaults could cover it, and that is exactly the reading to
             # refuse: a depth and a tool nobody chose are a cut nobody meant.
-            raise CamConfigError("'cam:' declares no job; it needs at least a 'tool:'")
+            raise CamConfigError("'manufacturing:' declares no job; it needs at least a 'diameter:'")
 
         self._parse_operation(config.get("operation"))
         self._parse_direction(config.get("direction"))
@@ -378,28 +423,28 @@ class CamConfig:
 
         for key in LENGTH_KEYS:
             if config.get(key) is not None:
-                self.values[key] = parse_length(config[key], "'cam: %s:'" % key)
+                self.values[key] = parse_length(config[key], "'manufacturing: %s:'" % key)
         for key in FEED_KEYS:
             if config.get(key) is not None:
-                self.values[key] = parse_feed(config[key], "'cam: %s:'" % key)
+                self.values[key] = parse_feed(config[key], "'manufacturing: %s:'" % key)
         for key in NUMBER_KEYS:
             if config.get(key) is not None:
-                self.values[key] = parse_number(config[key], "'cam: %s:'" % key)
+                self.values[key] = parse_number(config[key], "'manufacturing: %s:'" % key)
 
         stepover = self.values.get("stepover")
         if stepover is not None and stepover > 1:
-            # A stepover is a fraction of the tool's diameter, so more than one
+            # A stepover is a fraction of the cutter's diameter, so more than one
             # leaves a ridge of uncut material between passes. It parses, it
             # runs, and what comes off the machine is wrong in a way nobody sees
             # until then.
             raise CamConfigError(
-                "'cam: stepover:' is a fraction of the tool diameter, so it cannot exceed 1: %r" % stepover
+                "'manufacturing: stepover:' is a fraction of the tool diameter, so it cannot exceed 1: %r" % stepover
             )
 
         desc = config.get("desc")
         if desc is not None:
             if not isinstance(desc, str):
-                raise CamConfigError("'cam: desc:' is not text: %r" % (desc,))
+                raise CamConfigError("'manufacturing: desc:' is not text: %r" % (desc,))
             self.desc = desc
 
     def _parse_operation(self, operation) -> None:
@@ -479,12 +524,13 @@ def normalize_job(parameters: dict) -> dict:
     PartCAD has never heard of -- travels untouched, which is what keeps a
     parameter an implementation invented from having to be known here.
 
-    What it deliberately does *not* do is require anything. `tool:` is needed by
-    every implementation PartCAD ships and refused by `//builtin/cam` where it
-    is missing, but "a route needs a cutter diameter" is a statement about that
-    implementation rather than about the concept: PartCAD does not know what the
-    next one cuts with, and a requirement here would be PartCAD answering on its
-    behalf.
+    What it deliberately does *not* do is require anything. `diameter:` is
+    needed by the router and the drill `//builtin/cam` ships and refused by it
+    where it is missing, but "a route needs a cutter diameter" is a statement
+    about that implementation rather than about the concept -- the laser beside
+    them cuts with a beam, which has a `kerf:` and no diameter at all. PartCAD
+    does not know what the next one cuts with, and a requirement here would be
+    PartCAD answering on its behalf.
 
     Raises:
         CamConfigError: a value that cannot be read as the kind of number its
@@ -495,13 +541,13 @@ def normalize_job(parameters: dict) -> dict:
     normalized = dict(parameters)
     for key in LENGTH_KEYS:
         if normalized.get(key) is not None:
-            normalized[key] = parse_length(normalized[key], "'cam: %s:'" % key)
+            normalized[key] = parse_length(normalized[key], "'manufacturing: %s:'" % key)
     for key in FEED_KEYS:
         if normalized.get(key) is not None:
-            normalized[key] = parse_feed(normalized[key], "'cam: %s:'" % key)
+            normalized[key] = parse_feed(normalized[key], "'manufacturing: %s:'" % key)
     for key in NUMBER_KEYS:
         if normalized.get(key) is not None:
-            normalized[key] = parse_number(normalized[key], "'cam: %s:'" % key)
+            normalized[key] = parse_number(normalized[key], "'manufacturing: %s:'" % key)
 
     # The same bound `CamConfig` puts on the object's own layer. It belongs at
     # both: a stepover above 1 leaves a ridge of uncut material between passes,
@@ -512,7 +558,7 @@ def normalize_job(parameters: dict) -> dict:
     stepover = normalized.get("stepover")
     if stepover is not None and stepover > 1:
         raise CamConfigError(
-            "'cam: stepover:' is a fraction of the tool diameter, so it cannot exceed 1: %r" % stepover
+            "'manufacturing: stepover:' is a fraction of the tool diameter, so it cannot exceed 1: %r" % stepover
         )
 
     direction = normalized.get("direction")
@@ -533,36 +579,120 @@ def normalize_job(parameters: dict) -> dict:
     return normalized
 
 
-def config_of(shape) -> Optional[CamConfig]:
+def config_of(shape, machine: Optional[str] = None) -> Optional[CamConfig]:
     """The route a shape declares, or None where it declares none.
 
-    None means the shape said nothing at all, which is the ordinary case and not
-    an error: most objects are never cut. A shape that declared the section but
-    got it wrong raises `CamConfigError`, because that is a mistake the user
-    wants to hear about -- and the difference is exactly what lets `pc cam` over
-    a whole package be quiet about the objects it skips and loud about the one
-    that is broken.
+    None means the shape said nothing about being cut, which is the ordinary
+    case and not an error: most objects never go on a machine. A shape that said
+    something and got it wrong raises `CamConfigError`, because that is a
+    mistake the user wants to hear about -- and the difference is exactly what
+    lets `pc cam` over a whole package be quiet about the objects it skips and
+    loud about the one that is broken.
+
+    Args:
+        shape: the object whose `manufacturing:` section is read.
+        machine: which of the machines it names to write for. None takes the
+            one it names, and refuses where it names several -- see
+            `declared_config`.
     """
-    config = declared_config(shape)
+    config = declared_config(shape, machine)
     if config is None:
         return None
     return CamConfig(config)
 
 
-def declared_config(shape) -> Optional[dict]:
-    """A shape's `cam:` section as it was written, or None where there is none.
+def declared_config(shape, machine: Optional[str] = None) -> Optional[dict]:
+    """A shape's job as written, merged for the machine that will cut it.
+
+    Two scopes are merged, and the order between them is the whole point of
+    having two: what is written directly under `manufacturing:` is shared by
+    every machine the part names, and what is written inside a machine's own
+    subsection is that machine's and outranks it. So a part cut either way can
+    say `feed: 1200` once and let the laser say `feed: 2400` for itself.
 
     Split out from `config_of` because two callers want different things from
-    it: one is about to run a route and needs the section parsed, the other is
+    it: one is about to run a route and needs the job parsed, the other is
     deciding which objects of a package to route at all and only needs to know
-    whether there is a section. The second must not raise on a neighbour's
-    broken section while it is still deciding what to visit.
+    whether there is one. The second must not raise on a neighbour's broken
+    section while it is still deciding what to visit.
+
+    Raises:
+        CamConfigError: the section could not be read, the part names several
+            machines and none was chosen, or the one chosen is not among them.
+            None of the three is answerable here: a default nobody picked is a
+            program for the wrong machine.
     """
-    get_final_config = getattr(shape, "get_final_config", None)
-    config = get_final_config() if callable(get_final_config) else getattr(shape, "config", None)
-    if not isinstance(config, dict) or "cam" not in config:
+    from .part_config import PartConfiguration
+
+    data = PartConfiguration.get_manufacturing_data(shape)
+    if data is None:
         return None
-    return config["cam"]
+
+    if data.machine_error:
+        # Before anything else, because a section that could not be read leaves
+        # no machine behind and no job -- which is indistinguishable from the
+        # part that declared neither, and that one is skipped in silence. So a
+        # `cnc:` with a typo in it would be passed over rather than reported,
+        # and the user would be told their part says nothing about being cut
+        # while looking straight at the subsection saying how it is.
+        raise CamConfigError(data.machine_error)
+
+    chosen = None
+    if machine is not None:
+        chosen = data.machine_named(machine)
+        if chosen is None:
+            raise CamConfigError(
+                "it is not made on a '%s'; it names %s"
+                % (machine, ", ".join("'%s'" % kind for kind in data.machine_choices()) or "no machine")
+            )
+    elif len(data.machines) > 1:
+        raise CamConfigError(
+            "it could be made on %s, so one of them has to be chosen"
+            % " or ".join("'%s'" % kind for kind in data.machine_choices())
+        )
+    else:
+        chosen = data.machine
+
+    # The opt-in: an object is routed when it has said something about being
+    # cut, either by naming a machine or by declaring a job parameter. A
+    # `subtractive` part that names neither has described what it is made from
+    # and nothing about the making, so there is no route to write.
+    declared_machine = chosen is not None and chosen.declared
+    if not declared_machine and not data.job:
+        return None
+
+    merged = dict(data.job)
+    if chosen is not None:
+        merged.update(chosen.job_options())
+    return merged or None
+
+
+def declares_job(shape) -> bool:
+    """Whether this object says anything about being cut, without judging it.
+
+    The question `pc cam` over a package asks of every object before it routes
+    any of them, and it has to be answerable for an object whose declaration is
+    wrong -- a part that names two machines, or a `laser:` with a typo in it,
+    is still one this run should visit and report on rather than one it should
+    silently pass over. `declared_config` raises for both, on purpose, because
+    by then a route is actually being written; here there is only a list being
+    drawn up.
+    """
+    from .part_config import PartConfiguration
+
+    try:
+        data = PartConfiguration.get_manufacturing_data(shape)
+    except Exception:  # pylint: disable=broad-except
+        return False
+    if data is None:
+        return False
+    if data.machine_error:
+        # Broken, and therefore visited: the sentence belongs to whoever tries
+        # to route it, against the object it is about.
+        return True
+    if data.job:
+        return True
+    return any(machine.declared for machine in data.machines.values())
 
 
 def dysfunction_report(name: str, implementation: str, error: Exception, remedy: Optional[str] = None) -> str:

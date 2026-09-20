@@ -8,7 +8,6 @@ desc: >
 docs:
   usage: |
     ```shell
-    pc inspect blank
     pc inspect angle_up
     pc inspect angle_down
     pc inspect bracket
@@ -36,29 +35,16 @@ sketches:
       `include` parameter's to say, so this is one sketch and not three.
 
 parts:
-  blank:
-    type: extrude
-    sketch: panel;include=OUTLINE
-    depth: 2
-    desc: >
-      The flat piece that goes into the brake, extruded from the outline layer
-      of the drawing. It is cut flat -- laser, waterjet, punch, router -- so its
-      own manufacturing method is `subtractive`: the outline, and any holes and
-      cut-outs a real part would have, are made here and not while it is bent.
-    manufacturing:
-      method: subtractive
-    parameters:
-      tolerance: 0.1
-
   angle_up:
     type: build123d
     desc: >
       The blank folded at `BEND_UP` alone, into an L with a short leg standing
-      up. `source` names what goes into the brake and `instructions` the one
-      bend line it is folded at.
+      up. `source` names what goes into the brake -- the laser-cut strip from
+      `produce_part_subtractive`, which is where making that piece is described
+      -- and `instructions` the one bend line it is folded at.
     manufacturing:
       method: sheet_metal
-      source: blank
+      source: //pub/examples/partcad/produce_part_subtractive:blank
       instructions: panel;include=BEND_UP
     parameters:
       tolerance: 0.1
@@ -72,7 +58,7 @@ parts:
       different places, so the parts do not come out alike.
     manufacturing:
       method: sheet_metal
-      source: blank
+      source: //pub/examples/partcad/produce_part_subtractive:blank
       instructions: panel;include=BEND_DOWN
     parameters:
       tolerance: 0.1
@@ -86,7 +72,7 @@ parts:
       what the brake does to it.
     manufacturing:
       method: sheet_metal
-      source: blank
+      source: //pub/examples/partcad/produce_part_subtractive:blank
       instructions: panel;include=BEND_UP,BEND_DOWN
     parameters:
       tolerance: 0.1

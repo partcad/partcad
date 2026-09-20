@@ -795,12 +795,16 @@ being used for:
       type: dxf       # one drawing: the outline, the bend lines, the notes
 
   parts:
+    sheet:
+      type: step                        # the stock the blank is cut out of
+
     blank:
       type: extrude
       sketch: panel;include=OUTLINE     # the flat pattern
       depth: 2.0
       manufacturing:
         method: subtractive
+        source: sheet
 
     bracket:
       type: step
@@ -2048,8 +2052,6 @@ file could have carried it - the part declaration takes a ``tolerance:``
   parts:
     bracket:
       type: step
-      manufacturing:
-        method: subtractive
       tolerance: 0.1   # millimetres
 
 It is a field rather than a parameter because it asks nothing of the type that
@@ -2152,7 +2154,7 @@ The ``manufacturing.method`` field says how a part is made:
 +==================+===========================================================+
 | ``additive``     | Built up, e.g. 3D printed                                 |
 +------------------+-----------------------------------------------------------+
-| ``subtractive``  | Cut away from stock, e.g. machined                        |
+| ``subtractive``  | Cut away from stock -- see :ref:`subtractive`             |
 +------------------+-----------------------------------------------------------+
 | ``forming``      | Shaped without adding or removing material                |
 +------------------+-----------------------------------------------------------+
@@ -2167,6 +2169,180 @@ together rather than made, and has a single method of its own -- see
 
 A part that is bought rather than made carries ``vendor`` and ``sku`` instead of
 a method.
+
+.. _subtractive:
+
+Subtractive
+-----------
+
+``subtractive`` is the method that takes material away: a router, a laser, a
+saw, a drill. What it says about a part is not a property of the part's own
+shape -- almost any solid can be machined out of a big enough block -- but a
+relation between the part and what it is made *from*, and between the part and
+the machine that makes it. Both can be declared, and both are checked.
+
+The stock it is cut from
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+``source`` names the piece the part is cut out of:
+
+.. code-block:: yaml
+
+  parts:
+    stock_plate:
+      type: build123d      # bought, so it declares no method of its own
+      path: stock_plate.py
+
+    bearing_block:
+      type: build123d
+      path: bearing_block.py
+      manufacturing:
+        method: subtractive
+        source: stock_plate
+
+Cutting can only ever remove material, so the part has to be what is left of the
+stock. ``pc test`` asks both halves of that, because each catches a different
+mistake and neither implies the other:
+
+- **Nothing of the part is outside the stock.** A part that pokes out of what it
+  is cut from cannot be made from it however good the machine is -- most often
+  the stock is simply too small, or the part is positioned off it.
+- **The stock is bigger than the part somewhere.** A part that fills its stock
+  exactly is one whose ``source`` names itself, or a copy of itself, which is
+  the mistake a reader of the YAML cannot see.
+
+``source`` is **required**, the way :ref:`sheet-metal`'s two fields are, and for
+the same reason: subtraction is defined by what it starts from. A shape somebody
+arrived at is not a subtractive part -- what makes it one is that it is what is
+left of a piece that existed first -- so a declaration naming no stock has not
+said what the method means.
+
+A part genuinely made from no stock is a part made some other way: bought
+(``vendor``/``sku``), ``additive``, or ``forming``.
+
+.. _subtractive-machines:
+
+The machine it is cut on
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Subtraction is one idea, but the machines that do it are not interchangeable,
+and what they **cannot** do is the useful thing to know. A machine is named by
+adding its own subsection:
+
+.. code-block:: yaml
+
+  manufacturing:
+    method: subtractive
+    source: stock_sheet
+    laser:
+      kerf: 0.15         # what the beam itself removes
+      toolAxis: -Z       # the axis it fires along
+
++----------------+------------------------------------------------------------+
+| Subsection     | The machine, and what it cannot do                         |
++================+============================================================+
+| *(none)*       | A CNC router or mill. It follows any 2.5D path, so there   |
+|                | is nothing it is held to beyond fitting its stock.         |
++----------------+------------------------------------------------------------+
+| ``cnc:``       | The same machine, said out loud.                           |
++----------------+------------------------------------------------------------+
+| ``laser:``     | A laser cutter. Its beam does not tilt, so every wall it   |
+|                | makes is parallel to the axis it fires along.              |
++----------------+------------------------------------------------------------+
+| ``drill:``     | A drilling machine. It goes in and comes out, so the only  |
+|                | thing it makes is a **round** hole along its own axis.     |
++----------------+------------------------------------------------------------+
+
+Naming none of them means CNC. That is the machine that can make anything the
+other two can, so it is the answer that is never wrong -- and it is what every
+``subtractive`` part written before machines could be named already meant.
+
+**Several may be named, and they are alternatives rather than stages.** A part
+that declares both ``laser:`` and ``cnc:`` is claiming it could be made either
+way, and ``pc test`` answers for both claims. ``pc cam`` then has to be told
+which one to write for -- ``pc cam -m laser :gasket`` -- because a default
+nobody picked is a program for the wrong machine; the file it writes is named
+after the machine (``gasket.laser.nc``), so the alternatives land beside each
+other rather than one overwriting the other. A part that really is machined in
+*stages* is not this: it is a chain of parts, each naming the previous one as
+its ``source``.
+
+**Only ``subtractive`` has a machine at all**, and the keys that describe a cut
+are refused everywhere else rather than accepted and never read. A ``diameter:``
+on a part that says ``method: additive`` is a number somebody chose and nothing
+acts on, which is the whole reason the job moved out of a section of its own --
+a printer has feeds and speeds too, and the day PartCAD writes a program for one
+they will be a printer's keys under a printer's subsection rather than a
+router's read by accident. A *sketch* is the one section with no ``method:`` in
+it: a drawing is not made out of anything, so it names the machine and the job
+and nothing else.
+
+Every machine takes a ``toolAxis``, which is the axis the tool, the beam or the
+drill approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
+or ``-Z``. It defaults to ``-Z``: the part sits on the bed and the tool comes
+down to it. It is **not** ``direction:``, which says which way round a
+contour is cut (climb or conventional) -- the two reach one implementation in
+one request, which is why they do not share a name. A laser also takes a ``kerf``, the width the beam itself removes,
+which is a property of that machine and that material rather than of the job --
+which is why it is a property of the machine rather than of the cut.
+
+What ``pc test`` checks
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Beyond the stock, one question per limited machine, and each applies **only to a
+part that named that machine**:
+
+- ``manufacturability-laser`` -- every face of the part is either a wall along
+  the beam or a face across it. A chamfer, a taper, a dome or a fillet rolling
+  over an edge is none of those, and there is no orientation of a beam that
+  produces a surface at an angle to itself.
+- ``manufacturability-drill`` -- the same, and every wall is round. This one
+  is asked of what the machine **took away** rather than of the part, where the
+  part names a ``source``: a drilled plate's straight sides came with the stock,
+  and asking the part's own walls would fail every plate for having them.
+
+Both are measured by sampling each face's own normal against the axis, not by
+reading its surface type. The type is not the question: a cylinder is a wall
+when it is coaxial with the axis and a defect when it lies across it, and a
+surface extruded along the axis is a perfectly good wall whatever it is made of.
+
+What is deliberately **not** checked is thickness, material or power. A laser
+will cut a 20 mm plate as readily as a 1 mm sheet given enough of it, and how
+much is enough is a property of the machine and the material rather than of the
+design -- so it is not something PartCAD can answer from the geometry, and a
+check that guessed would refuse parts the shop next door cuts every day.
+
+What ``pc cam`` writes
+^^^^^^^^^^^^^^^^^^^^^^
+
+The same ``gcode`` file type produces a different program for each machine, and
+which one it writes for is the part's own statement rather than a job parameter
+-- what a part is made on is a property of the part, and a re-tunable key for it
+would be a route written for a machine nobody owns.
+
++----------------+------------------------------------------------------------+
+| Machine        | The program                                                |
++================+============================================================+
+| CNC            | Contours offset by the cutter's radius, cut at stepped     |
+|                | depths. ``M3``/``M5`` where a ``speed`` is named.          |
++----------------+------------------------------------------------------------+
+| Laser          | One pass, offset by half the ``kerf``, with the beam gated |
+|                | ``M3 S<power>``/``M5`` around each contour and no Z motion |
+|                | at all. Reads no ``tool`` and no ``depth_per_pass``.       |
++----------------+------------------------------------------------------------+
+| Drilling       | A rapid to each round feature's centre, a plunge and a     |
+|                | retract, broken into steps where ``peck:`` says.           |
++----------------+------------------------------------------------------------+
+
+``power`` (a laser's S-word) and ``peck`` (how deep a drill goes before clearing
+the swarf) join the other :ref:`cam job keys <cam-section>`. A part declaring a
+``toolAxis`` other than ``-Z`` is rotated into the machine's frame before the
+route is written, so the program is in the coordinates the part is fixtured in.
+
+``examples/produce_part_subtractive`` is the whole of the above in one package:
+two stocks, a laser-cut blank and gasket, a routed block whose chamfer is the
+one feature only a router can make, and a drilled plate. The blank is what
+:ref:`sheet-metal` bends.
 
 .. _sheet-metal:
 
@@ -2211,12 +2387,16 @@ router -- and so is usually an ordinary ``subtractive`` part:
 .. code-block:: yaml
 
   parts:
+    sheet:
+      type: step                # the stock, 2 mm, bought by the sheet
+
     blank:
       type: extrude
       sketch: outline           # the flat pattern, holes and all
       depth: 2.0
       manufacturing:
         method: subtractive     # laser cut, and that is where the holes come from
+        source: sheet
       parameters:
         tolerance: 0.1
 
@@ -4236,10 +4416,10 @@ and the rest of the closed list below -- are also keys an object may set for
 itself.** Nothing else is: not the parameters that describe the file rather than
 the cut, and not a parameter a third-party implementation invented, however
 squarely it describes the cut. PartCAD cannot check a name it has never heard of
-against a list, which is why the list is closed and why the two paragraphs after
-the example spell out what is on it. That shared job half is what makes this
-section and the object's own ``cam:`` section three layers of one namespace
-rather than two different things:
+against a list, which is why the list is closed and why the paragraphs after the
+example spell out what is on it. That shared job half is what makes this section
+and the object's own declaration layers of one namespace rather than two
+different things:
 
 .. code-block:: yaml
 
@@ -4250,30 +4430,65 @@ rather than two different things:
       safe_z: 8 mm
 
   parts:
+    stock:
+      type: build123d
+      path: sheet.py
+
     panel:
       type: build123d
       path: panel.py
-      # The object: what is true of this object, and nothing else.
-      cam:
-        operation: profile
-        tool: 6 mm
+      # The object: what is true of this object, and nothing else. It goes in
+      # the section that already says how the part is made, beside the machine
+      # it belongs to.
+      manufacturing:
+        method: subtractive
+        source: stock
+        cnc:
+          operation: profile
+          diameter: 6 mm
 
 ``//builtin/cam`` is underneath both. So a package cutting twenty parts from one
-sheet sets the tool once, and the one part that needs a smaller cutter says so
-for itself. It is deliberately not the ``cae:``/``fea:`` split, where the
-implementation's parameters and what the part declares are named separately:
-there they are different kinds of thing -- boundary conditions belong to the
-part and the mesh size belongs to whoever solves it -- and here the tool, the
-depth and the feed are the same thing said at a different scope.
+sheet sets the feed once, and the one part that needs a smaller cutter says so
+for itself.
 
-What keeps the two readings of the word unambiguous is that an object's ``cam:``
-takes a **closed** set of keys -- ``operation``, ``direction``, ``tool``,
-``depth``, ``depth_per_pass``, ``safe_z``, ``feed``, ``plunge``, ``speed``,
-``stepover``, plus ``implementation`` and ``desc`` -- so it can never be read as
-the file-type declaration a package's ``cam:`` section holds. Anything else in it
-is refused with a sentence, which is what turns a typo into an error rather than
-a route cut to a default. See :ref:`pc cam <cam>` for what each key means, which
-units it may be written in, and why ``tool:`` has no default.
+The object's half lives in ``manufacturing:`` and not in a ``cam:`` section of
+its own, and that is what makes the word mean one thing. It used to mean two --
+the file types a package declares, and the job an object declared -- with the
+ambiguity managed by keeping the two key sets disjoint. Now ``cam:`` is the
+implementation registry and nothing else, and the job sits where the rest of
+"how this is made" already was.
+
+Within the object there are two scopes, and the difference is the point of
+having two. What is written directly under ``manufacturing:`` is shared by every
+machine the part names; what is written inside a machine's own subsection is
+that machine's, and outranks the shared value:
+
+.. code-block:: yaml
+
+  manufacturing:
+    method: subtractive
+    source: stock
+    feed: 1800            # whichever machine cuts it
+    laser:
+      kerf: 0.15
+      power: 85           # the laser's own
+    cnc:
+      diameter: 3
+      depth: 2
+
+**Each machine takes only the keys it reads.** A laser has no ``diameter:`` --
+it has no cutter, and ``kerf:`` is what it removes -- and no ``depth:`` or
+``safe_z:``, because it cuts through in one pass and never moves in Z. A drill
+has no ``depth:`` (how deep each hole goes is the geometry's to say), no
+``feed:`` and no ``operation:``. Writing one of those inside that machine's own
+subsection is refused with a sentence naming what it does take; writing it in
+the shared scope is perfectly legal and simply not read by a machine that has no
+use for it.
+
+That distinction is the one a single flat list could not draw. ``tool:`` used to
+be one key meaning three things, and a cutter diameter written on a laser-cut
+part was a value silently ignored. It is ``diameter:`` now, it lives beside the
+machine it belongs to, and on a laser it is an error.
 
 Those are the keys that describe the **cut**. A file type's other parameters
 describe the **file** -- ``//builtin/cam``'s ``units``, ``precision``,

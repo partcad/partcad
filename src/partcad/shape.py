@@ -2133,6 +2133,7 @@ class Shape(ShapeConfiguration):
         project: Optional[Project] = None,
         filepath=None,
         output_dir=None,
+        machine: Optional[str] = None,
         **kwargs,
     ) -> dict:
         """Produce the route file this shape declares, and report what it is.
@@ -2163,7 +2164,7 @@ class Shape(ShapeConfiguration):
                 route.
         """
         try:
-            config = pc_cam.config_of(self)
+            config = pc_cam.config_of(self, machine)
         except pc_cam.CamConfigError as e:
             # Named, because a run over a package reports one line per object
             # and "'cam: tool:' is not a length" against forty parts is a
@@ -2172,7 +2173,7 @@ class Shape(ShapeConfiguration):
             raise self._cam_config_error(e) from e
         if config is None:
             raise pc_cam.CamConfigError(
-                "%s:%s declares no 'cam:' section, so there is nothing to route" % (self.project_name, self.name)
+                "%s:%s says nothing about being cut, so there is nothing to route" % (self.project_name, self.name)
             )
 
         if project is None:
@@ -2202,7 +2203,7 @@ class Shape(ShapeConfiguration):
 
         try:
             return await self._route_run_async(
-                ctx, config, project, options_project, format_name, filepath, output_dir, kwargs
+                ctx, config, project, options_project, format_name, filepath, output_dir, kwargs, machine
             )
         except pc_cam.CamConfigError as e:
             # The same naming, for the layers underneath the object: a feed the
@@ -2228,6 +2229,71 @@ class Shape(ShapeConfiguration):
                 )
             ) from e
 
+    def _route_machine_data(self, machine: Optional[str] = None) -> dict:
+        """Which machine this route is written for, as the request says it.
+
+        Empty for everything that declares no machine: an assembly, a part made
+        some other way, anything with no `manufacturing:` section at all. An
+        implementation that gets nothing writes what it has always written,
+        which is a CNC program -- so such an object is unaffected by any of this.
+
+        **A sketch is asked like anything else.** A drawing declares the section
+        with no `method:` in it -- it is not made out of anything, it is a path a
+        machine follows -- and `_read_machines` reads that case on purpose. So
+        the answer has to come from what the object declared rather than from
+        what class it is: a `not isinstance(self, Part)` here returned `{}` for a
+        sketch that had named a `laser:`, its `machine`, `toolAxis` and `kerf`
+        never reached the request, and the drawing was handed to the *router*
+        emitter -- which asked it for a cutter diameter a beam does not have.
+
+        Read from the part's own declaration rather than passed in as a job
+        parameter, because the machine is not something a run gets to re-tune:
+        `pc cam` on a laser-cut part produces a laser program on anybody's
+        machine, and the day it does not is the day somebody sends a router
+        program to a laser. What a run *may* do is choose between the machines
+        the part itself named, which is what `machine` is.
+
+        Raises:
+            partcad.cam.CamConfigError: the part named a machine and the naming
+                cannot be read -- a `laser:` that is not a section, a key that
+                machine does not take, an axis that is not one. `route_async`
+                already wraps this call's caller in a `try` that re-raises such
+                an error through `_cam_config_error`, so it is raised bare here
+                and named there.
+
+        It has to *refuse* rather than fall back, and that is the whole reason
+        this is not a `debug` line. `_read_machines` records such a declaration
+        in `machine_error` and keeps no machine, which is indistinguishable here
+        from the part that simply named none -- and a part that named none
+        routes as CNC. (`cam.declared_config` refuses first for the same reason,
+        which makes this the backstop; the sentence is the same either way.) So a part whose `laser:` subsection has a typo in it
+        would be handed a *router* program, silently. `pc test` reporting it too
+        is not enough, because nothing makes `pc cam` wait for `pc test`.
+        """
+        try:
+            from .part_config import PartConfiguration
+
+            manufacturing_data = PartConfiguration.get_manufacturing_data(self)
+        except Exception as e:  # pylint: disable=broad-except
+            raise pc_cam.CamConfigError("the 'manufacturing:' section could not be read: %s" % e) from e
+        machine_error = getattr(manufacturing_data, "machine_error", None)
+        if machine_error:
+            # A backstop rather than the refusal a user meets: `declared_config`
+            # reads the same field and raises first, on every path that reaches
+            # here. Verbatim and not wrapped, so that the one fault reads as one
+            # sentence whichever of the two spoke it.
+            raise pc_cam.CamConfigError(machine_error)
+
+        chosen = manufacturing_data.machine_named(machine) if machine else manufacturing_data.machine
+        if chosen is None:
+            # Made some other way, so there is no machine to name and nothing
+            # wrong with that: an implementation handed nothing writes what it
+            # has always written. A part that named several and had none chosen
+            # never reaches here -- `cam.declared_config` refuses first, where
+            # the sentence can name the choices.
+            return {}
+        return chosen.to_data()
+
     def _cam_config_error(self, error) -> "pc_cam.CamConfigError":
         """One `cam:` configuration error, with the object it is about in front.
 
@@ -2246,6 +2312,7 @@ class Shape(ShapeConfiguration):
         filepath,
         output_dir,
         kwargs: dict,
+        machine: Optional[str] = None,
     ) -> dict:
         """'route_async' once it knows what to run and who runs it.
 
@@ -2255,6 +2322,20 @@ class Shape(ShapeConfiguration):
         """
         with pc_logging.Action("CAM", self.project_name, self.name):
             impl, final_filepath = self.cam_getopts(ctx, format_name, project, filepath, options_project, output_dir)
+            if machine is not None and (filepath is None or os.path.isdir(filepath)):
+                # 'panel.laser.nc' beside 'panel.drill.nc'. Only when a machine
+                # was chosen, which only happens when the part offered more than
+                # one -- so an object with a single machine keeps the name it
+                # has always had, and a caller that named a path gets that path.
+                #
+                # A directory is not naming a path: 'cam_getopts' has just read
+                # it as the *output_dir* and derived the filename from the
+                # object, which is the same filename for every machine. Asking
+                # the same question it asked is what keeps two alternatives from
+                # resolving to one file -- where the second route deletes the
+                # first before writing itself, and the run reports two.
+                root, extension = os.path.splitext(final_filepath)
+                final_filepath = "%s.%s%s" % (root, machine, extension)
             final_filepath = os.path.abspath(final_filepath)
 
             # Clearing the path, writing it and checking it afterwards are one
@@ -2297,6 +2378,14 @@ class Shape(ShapeConfiguration):
                 # but 'route_async(tool=...)' is the documented way to route one
                 # object against another cutter without editing its section.
                 request.update({key: value for key, value in kwargs.items() if value is not None})
+                # And last of all, which machine this is cut on. It comes from
+                # the part's 'manufacturing:' section rather than from any of
+                # the three layers above, so it is applied after them and
+                # cannot be overridden by a 'cam:' key: what a part is made on
+                # is a property of the part, not a parameter of the route, and
+                # a route written for a laser by a section that said 'machine'
+                # would be a program for a machine nobody owns.
+                request.update(self._route_machine_data(machine))
                 # And then every layer of it converted together. The object's
                 # own values are already numbers; the ones the package and
                 # '//builtin/cam' contributed have never been near a parser, and
