@@ -35,12 +35,9 @@ class ValidityTest(Test):
     this, which is the reason it is a check of its own rather than a line in
     one of them.
 
-    Silenced per object where the defects are known and accepted:
-
-        parts:
-          meshed_import:
-            validity:
-              skip: true
+    It takes no settings. Reporting is all it has ever done, so there is
+    nothing here for a package to turn off - what it says about a part whose
+    defects are known and accepted costs that package nothing.
     """
 
     def __init__(self) -> None:

@@ -518,11 +518,15 @@ def test_a_check_that_breaks_says_so_without_failing(_validity_classes, caplog):
     assert ctx.get(ValidityTest.NOT_CACHEABLE) is True
 
 
-def test_skip_moves_the_cache_key():
+def test_nothing_a_package_writes_moves_its_cache_key():
+    """It reads the geometry and takes no settings, so there is nothing a
+    package can write that changes the answer - and nothing for the key to
+    carry."""
     from partcad.test.validity import ValidityTest
 
     t = ValidityTest()
-    assert t.cache_key_suffix(None, _Shape()) != t.cache_key_suffix(None, _Shape(config={"validity": {"skip": True}}))
+    assert asyncio.run(t.cache_key_suffix(None, _Shape())) == ""
+    assert asyncio.run(t.cache_key_suffix(None, _Shape(config={"validity": {"anything": True}}))) == ""
 
 
 # --- an assembly somebody has to actually make ------------------------------
