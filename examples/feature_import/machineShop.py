@@ -1,4 +1,5 @@
-# The shop that mills the eight parts of 'AeroAssembly_connected'.
+# The shop that makes the eight parts of 'AeroAssembly_connected' - seven
+# milled out of 6061 billet, and the cap bent from 6061 strip.
 #
 # A stand-in for a real supplier's API, exactly as 'gcodeWriter.py' in
 # 'examples/provider_manufacturer' is one: it answers out of a table what a real
@@ -6,9 +7,11 @@
 # question a bill of materials depends on - can somebody make this - and the
 # answer comes from 'caps' below.
 #
-# Nothing here is specific to these parts. A shop that mills 6061 plate will
-# mill any of them, which is why the capabilities say what the shop can do
-# rather than listing what it has been asked for.
+# Nothing here is specific to these parts. A shop that works 6061 will take
+# any of them, which is why the capabilities say what the shop can do rather
+# than listing what it has been asked for - and why one table answers for
+# both methods: what 'pc test' asks is whether this material in this format
+# can be had, not which machine it goes on.
 
 from datetime import datetime, timedelta, timezone
 
@@ -26,8 +29,7 @@ if "request" not in globals():
 
 
 if __name__ == "caps":
-    # One material, milled from plate, in the two finishes that need no second
-    # supplier.
+    # One material, in the two finishes that need no second supplier.
     #
     # Every part in this package is 6061, and says so under 'properties:',
     # which is where a part read from a STEP file can say it: a 'step' part's
