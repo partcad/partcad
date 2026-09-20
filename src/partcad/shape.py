@@ -2534,9 +2534,14 @@ class Shape(ShapeConfiguration):
         here is that a miss is filled in rather than reported, since unlike
         those two this can be computed on demand.
         """
-        key = measurements_key(self.kind)
+        # 'kind' is set by Part, Assembly, Sketch and Scene rather than by this
+        # class, so a *bare* Shape has none - and an entry named after one it
+        # does not have is an entry nothing could read back. Such a shape is
+        # still measured if it has geometry; only the caching is skipped.
+        kind = getattr(self, "kind", None)
+        key = measurements_key(kind) if kind else None
         cache_hash = await self.get_cache_key_async()
-        if ctx and cache_hash is not None:
+        if key and ctx and cache_hash is not None:
             cached, _ = await ctx.cache_shapes.read_async(self.hash, [key])
             measured = cached.get(key)
             if isinstance(measured, dict):
@@ -2560,7 +2565,7 @@ class Shape(ShapeConfiguration):
                 pc_logging.debug("Failed to measure '%s': %s" % (self.name, e))
                 return None
 
-        if ctx and cache_hash is not None:
+        if key and ctx and cache_hash is not None:
             await ctx.cache_shapes.write_async(self.hash, {key: measured})
         return measured
 
@@ -2623,9 +2628,10 @@ class Shape(ShapeConfiguration):
         """
         if self._file_metadata:
             return self._file_metadata
-        if not ctx or await self.get_cache_key_async() is None:
+        kind = getattr(self, "kind", None)
+        if not kind or not ctx or await self.get_cache_key_async() is None:
             return None
-        key = metadata_key(self.kind)
+        key = metadata_key(kind)
         cached, _ = await ctx.cache_shapes.read_async(self.hash, [key])
         metadata = cached.get(key)
         return metadata if isinstance(metadata, dict) and metadata else None
