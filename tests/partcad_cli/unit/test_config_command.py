@@ -22,6 +22,7 @@ from partcad_utils.user_config import UserConfig
 
 
 def _printed():
+    """What the command prints, keyed by option name."""
     return dict(resolved_options(UserConfig()))
 
 

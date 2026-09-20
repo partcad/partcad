@@ -48,7 +48,10 @@ Host commands
     the local cache.
   - ``pc system status config`` — Dump the configuration this installation resolved, with the configuration
     file, the ``PC_*`` environment and the command line already applied. The same report as ``pc config``,
-    beside the two below so that "what is this machine doing" is one command with three answers.
+    beside the two below so that "what is this machine doing" is one command with three answers. An option
+    whose value is a secret says only whether it is set; a ``git.auth`` entry keeps its host, username and
+    key path and loses its password and passphrase; and the ``user`` section is reported as which of its
+    fields are configured, never as the name and addresses in them.
   - ``pc system status env`` — Dump the ``PC_*`` environment variables this ``pc`` process was started with.
     Not the same thing as the report above: the configuration says what an option resolved to, this says what
     the environment asked for, and they disagree whenever a command-line option won or a value was rejected.

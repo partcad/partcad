@@ -152,7 +152,12 @@ configuration that side resolved, and `... status env` the `PC_*` variables that
 with. All six print through `partcad_utils.config_report`, which is where the redaction rules live: a
 configuration option that is a secret is named there one by one, and an environment variable is scrubbed when
 its name carries an auth word between underscores (`TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL`, `AUTH`
-— not `DSN`, and the module says why). Two copies of a redaction rule are one copy that stops redacting, which
+— not `DSN`, and the module says why). Two options are reported by *shape* rather than by value, because
+"is it set" is the wrong answer for both: `git.auth` keeps the host, username and key path that say *which*
+credential and drops the password and passphrase, and the `user` section keeps only which of its fields are
+configured — it is personally identifiable information in its entirety, and `PIIConfig` fills in two of its
+keys unconditionally, so a truthiness test would claim a name and an address were on file for a machine that
+has never been told any. Two copies of a redaction rule are one copy that stops redacting, which
 is why the daemon does not have its own; the daemon also scrubs before logging, so a value the client has no
 business holding never reaches the wire.
 

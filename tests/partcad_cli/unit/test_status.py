@@ -70,6 +70,7 @@ EXPECTED_CONFIG = [
 
 
 def _assert_config_report(output: str) -> None:
+    """Assert the lines a `... status config` report owes, on either side."""
     for needle in EXPECTED_CONFIG:
         assert needle in output, f"{needle!r} missing from:\n{output}"
 
@@ -87,6 +88,7 @@ def test_bare_system_status_still_reports_the_internal_data(click_runner: Iterat
 
 
 def test_system_status_config_reports_the_resolved_configuration(click_runner: Iterator[CliRunner]) -> None:
+    """`pc system status config` describes the machine the CLI runs on."""
     result = click_runner.invoke(cli, ["--no-ansi", "system", "status", "config"])
     logging.debug("result.output: %s", result.output)
     assert result.exit_code == 0

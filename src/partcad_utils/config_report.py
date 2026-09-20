@@ -38,6 +38,18 @@ SCRUBBED = "<scrubbed>"
 # place a pattern is right, and the comment there says why.
 SECRET_OPTIONS = ("remote_sandbox_token",)
 
+# The 'user' section is personally identifiable information in its entirety --
+# a name, an email address, a shipping address, a billing address -- so unlike
+# every other option below, none of its values is reportable. What a report can
+# say about it is which fields are configured, which is what somebody asking
+# "why does my BOM have no address on it" actually needs.
+#
+# Not an entry in SECRET_OPTIONS, whose answer is "<set>"/"<not set>": PIIConfig
+# populates 'shippingAddress' and 'billingAddress' whether or not anything was
+# configured, so the section is *always* truthy and "<set>" would be a wrong
+# answer on a machine that has never configured any of it.
+PII_OPTION = "pii_config"
+
 # The fields of a 'git.auth' entry that are credentials, by their configuration
 # names. The entry itself is reported -- which hosts have credentials configured
 # is exactly what somebody debugging a private dependency needs to see, and it
@@ -101,6 +113,8 @@ def option_value(key, value):
         return "<set>" if value else "<not set>"
     if key == "git_auth":
         return _git_auth(value)
+    if key == PII_OPTION:
+        return _fields_only(value)
     return value
 
 
@@ -126,6 +140,28 @@ def _git_auth(value):
             for field, field_value in entry.items()
         }
     return reported
+
+
+def _fields_only(value):
+    """A mapping reported as which of its fields are configured, and nothing else.
+
+    Every value is replaced, one level down as well, so a nested address is not
+    the hole this leaves. A field that resolved to nothing says so rather than
+    being scrubbed: "not configured" is not a thing to hide, and it is usually
+    the answer somebody is looking for.
+    """
+    try:
+        entries = dict(value.to_dict() if hasattr(value, "to_dict") else value)
+    except Exception:  # pylint: disable=broad-except  # pragma: no cover
+        # A shape nothing here recognizes is one nothing here can redact.
+        return SCRUBBED
+    return {field: _field_value(field_value) for field, field_value in entries.items()}
+
+
+def _field_value(value):
+    if isinstance(value, dict):
+        return {field: _field_value(field_value) for field, field_value in value.items()}
+    return SCRUBBED if value else "<not set>"
 
 
 def environment(environ=None):

@@ -110,6 +110,14 @@ def get_conda(context):
 )
 @click.pass_context
 def cli(ctx: click.Context) -> None:
+    """What PartCAD has put on this machine, and what it costs in disk.
+
+    The group's own report, and the one of the three that is about neither the
+    configuration nor the environment: where the internal state directory is,
+    which tags this host answers an `unless:` with, and how much each cache,
+    sandbox and package store has grown to. `config` and `env` beside it answer
+    the other two questions somebody diagnosing this installation asks.
+    """
     if ctx.invoked_subcommand is not None:
         return
 
