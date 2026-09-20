@@ -92,13 +92,19 @@ class ProjectExternalRepository(ProjectPlugin):
         self._served_kinds_parsed = _UNPARSED
         # Objects are instantiated once, lazily, the first time this package's
         # 'parts'/'sketches'/'assemblies' are accessed (see '_lazy_objects').
-        # '_instantiating' is the reentrancy guard so factories can write into
-        # the backing dicts during instantiation without re-triggering it.
+        # Per kind, because the three are asked for separately and instantiating
+        # one says nothing about the others: 'pc list assemblies -r //pub' walks
+        # every package for its assemblies, and a kind-blind guard had each of
+        # those packages instantiate its parts and its sketches to answer.
+        # '_instantiating_kinds' is the reentrancy guard so factories can write
+        # into the backing dicts during instantiation without re-triggering it -
+        # per kind for the same reason, and because an object of one kind may
+        # legitimately resolve an object of another while it is being made.
         self._parts = {}
         self._sketches = {}
         self._assemblies = {}
-        self._objects_instantiated = False
-        self._instantiating = False
+        self._instantiated_kinds: set[str] = set()
+        self._instantiating_kinds: set[str] = set()
         super().__init__(ctx, name, path, config_obj=config_obj, inherited_config=inherited_config)
 
     def request(self, key: str, handler):
@@ -335,37 +341,51 @@ class ProjectExternalRepository(ProjectPlugin):
             return
         await asyncio.gather(*(self.get_data_async("objects/" + kind) for kind in wanted))
 
-    def _instantiate_enumerated(self):
-        """Instantiate this package's enumerated objects into the eager dicts.
+    # How each instantiable kind is created, for '_instantiate_enumerated()'.
+    # A mapping rather than a chain of 'if's so that the properties below, the
+    # guards and this stay one list of kinds instead of three.
+    _INSTANTIATE_BY_KIND = {
+        "sketch": "get_sketch",
+        "part": "get_part",
+        "assembly": "get_assembly",
+    }
 
-        Runs at most once, the first time a consumer reads 'parts'/'sketches'/
-        'assemblies' (see those properties). Each object is created
-        independently and defensively: one that cannot be built (an unsupported
-        type, a file-backed object whose file is absent) is skipped with a
-        warning instead of hiding every other object from a 'list'. Geometry is
-        not built here - only the factories.
+    def _instantiate_enumerated(self, kind: str):
+        """Instantiate this package's enumerated objects of one kind.
+
+        Runs at most once per kind, the first time a consumer reads the
+        matching 'parts'/'sketches'/'assemblies' (see those properties). Each
+        object is created independently and defensively: one that cannot be
+        built (an unsupported type, a file-backed object whose file is absent)
+        is skipped with a warning instead of hiding every other object from a
+        'list'. Geometry is not built here - only the factories.
+
+        One kind, not all three. The kinds are independent: an object of
+        another kind that this one names is resolved by name when it is named
+        ('get_part' and friends instantiate on demand), so nothing here needs
+        its neighbours to have been made first. Making them anyway is what made
+        a recursive listing of one kind pay for all of them - an LDraw category
+        of the public index has some hundreds of parts and no assemblies at
+        all, and 'pc list assemblies -r //pub' instantiated every one of those
+        parts, per category, to report that there were no assemblies.
         """
-        for kind, getter in (
-            ("sketch", self.get_sketch),
-            ("part", self.get_part),
-            ("assembly", self.get_assembly),
-        ):
-            for name in self.object_names(kind):
-                try:
-                    getter(name)
-                except Exception as e:
-                    pc_logging.warning("%s: could not instantiate %s '%s': %s" % (self.name, kind, name, e))
+        getter = getattr(self, self._INSTANTIATE_BY_KIND[kind])
+        for name in self.object_names(kind):
+            try:
+                getter(name)
+            except Exception as e:
+                pc_logging.warning("%s: could not instantiate %s '%s': %s" % (self.name, kind, name, e))
 
-    def _lazy_objects(self):
-        """Instantiate the enumerated objects on first access, once."""
-        if self._objects_instantiated or self._instantiating:
+    def _lazy_objects(self, kind: str):
+        """Instantiate the enumerated objects of 'kind' on first access, once."""
+        if kind in self._instantiated_kinds or kind in self._instantiating_kinds:
             return
-        self._instantiating = True
+        self._instantiating_kinds.add(kind)
         try:
-            self._instantiate_enumerated()
-            self._objects_instantiated = True
+            self._instantiate_enumerated(kind)
+            self._instantiated_kinds.add(kind)
         finally:
-            self._instantiating = False
+            self._instantiating_kinds.discard(kind)
 
     # The eager object dictionaries the synchronous consumers (the CLI 'list'
     # commands, render, export, get_*) read. They are populated lazily, per
@@ -374,7 +394,7 @@ class ProjectExternalRepository(ProjectPlugin):
     # write into the backing dict during instantiation without re-triggering.
     @property
     def parts(self):
-        self._lazy_objects()
+        self._lazy_objects("part")
         return self._parts
 
     @parts.setter
@@ -383,7 +403,7 @@ class ProjectExternalRepository(ProjectPlugin):
 
     @property
     def sketches(self):
-        self._lazy_objects()
+        self._lazy_objects("sketch")
         return self._sketches
 
     @sketches.setter
@@ -392,7 +412,7 @@ class ProjectExternalRepository(ProjectPlugin):
 
     @property
     def assemblies(self):
-        self._lazy_objects()
+        self._lazy_objects("assembly")
         return self._assemblies
 
     @assemblies.setter

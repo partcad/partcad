@@ -455,3 +455,49 @@ def test_an_unreachable_repository_does_not_take_the_listing_down(tmp_path):
     ctx.get_all_packages(has_stuff=True)  # must not raise
     # ...and the package is still readable afterwards, the slow way.
     assert repo.object_count("part") == 0
+
+
+def test_listing_one_kind_does_not_instantiate_the_others():
+    """'pc list assemblies' must not build every part of every package.
+
+    Reading one of the three eager dictionaries used to instantiate all three,
+    so a recursive listing of assemblies over the public index created every
+    LDraw part of every category - hundreds per package, each through the
+    'InitWrapper' factory - to report that those packages hold no assemblies.
+    """
+    ctx = pc.Context("examples")
+    data = {
+        "objects/part": {"bolt": {"type": "step"}, "nut": {"type": "step"}},
+        "objects/sketch": {"outline": {"type": "dxf"}},
+        "objects/assembly": {},
+    }
+    repo, fake = _make_repo(ctx, data)
+
+    assert repo.assemblies == {}
+    # The assemblies were enumerated; the parts and the sketches were not even
+    # asked for, let alone instantiated.
+    assert repo._parts == {} and repo._sketches == {}
+    assert fake.keys == ["objects/assembly"]
+
+
+def test_each_kind_is_instantiated_on_its_own_first_access():
+    """Per kind, and still once per kind."""
+    ctx = pc.Context("examples")
+    data = {
+        "objects/part": {"bolt": {"type": "step"}},
+        "objects/sketch": {},
+        "objects/assembly": {},
+    }
+    repo, fake = _make_repo(ctx, data)
+
+    assert repo.assemblies == {}
+    assert repo._instantiated_kinds == {"assembly"}
+    assert fake.keys == ["objects/assembly"]
+
+    _ = repo.parts
+    assert repo._instantiated_kinds == {"assembly", "part"}
+    assert fake.keys == ["objects/assembly", "objects/part"]
+
+    # Read again: no second enumeration and no second instantiation pass.
+    _ = repo.parts
+    assert fake.keys == ["objects/assembly", "objects/part"]

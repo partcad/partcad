@@ -29,6 +29,35 @@ def init(version: str):
     tracer = telemetry_none.init_none()
 
 
+def collecting() -> bool:
+    """Whether telemetry is to be collected at all in this process.
+
+    The configured 'telemetry.type' - 'pc system set telemetry type none',
+    'telemetry: type: none' in the configuration, or PC_TELEMETRY_TYPE - is what
+    says. It is documented as the way to turn telemetry off (see
+    'docs/source/features.rst') and was written, read back by 'pc system
+    telemetry info' and then never consulted by anything that collects: 'once()'
+    initialized Sentry regardless, and the only thing that ever stopped it was
+    leaving the Sentry DSN empty, which is not what any of the three documented
+    switches does.
+
+    That is not only a setting that did nothing. Instrumentation is not free:
+    every object a package declares is created through a dozen instrumented
+    methods, and each of those is an OpenTelemetry span the Sentry span
+    processor then handles - some 28 spans per part, which is most of the time
+    'pc list -r' spends loading a large catalog. A user who has opted out is
+    paying for spans that were opted out of.
+
+    Anything other than 'none' is a backend to collect with; 'sentry' is the
+    only one implemented, and is the default.
+    """
+    # Imported here rather than at the top: the configuration reads the user's
+    # config file, and this module is imported by everything.
+    from .user_config import user_config
+
+    return user_config.telemetry_config.type != "none"
+
+
 def once():
     global tracer_onced
     if tracer_onced:
@@ -37,14 +66,20 @@ def once():
 
     global tracer
 
-    if not os.getenv("PYTEST_VERSION"):
-        # TODO(clairbee): add suport for alternate telemetry backends
-        tracer = telemetry_sentry.init_sentry(partcad_version)
-    else:
+    if os.getenv("PYTEST_VERSION"):
         # Do not collect telemetry data for pytest as it's mostly short meaningless transactions
         # It is already of type "none"
         # tracer = telemetry_none.init_none()
-        pass
+        return
+
+    if not collecting():
+        # Opted out. Explicitly rather than by leaving 'tracer' as it is: 'once()'
+        # can run before 'init()' has, and 'tracer' is then still None.
+        tracer = telemetry_none.init_none()
+        return
+
+    # TODO(clairbee): add suport for alternate telemetry backends
+    tracer = telemetry_sentry.init_sentry(partcad_version)
 
 
 @asynccontextmanager
