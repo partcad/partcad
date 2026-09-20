@@ -171,3 +171,22 @@ def test_a_joint_may_deny_what_the_pairing_says():
     """'how' is the more specific level, so an explicit 'false' wins."""
     ctx = _Ctx({("a", "b"): _Mate(snap_in=True)})
     assert not _snapped({"snapIn": False}, _Iface("a", ctx=ctx), _Iface("b", ctx=ctx))
+
+
+def test_every_option_how_reads_is_one_how_knows():
+    """'ConnectHow' reports any field it does not recognise as an error, and
+    that error fails the run. So an option it parses but has not been told
+    about is worse than an unsupported one: it works, and says it does not.
+
+    'selfScrew' and 'snapIn' were exactly that - read by '__init__', honoured
+    all the way to the interference check, and reported as unknown on every
+    assembly that used one.
+    """
+    import inspect
+
+    from partcad.assembly_connect import HOW_FIELDS
+
+    source = inspect.getsource(ConnectHow.__init__)
+    for field in ("selfScrew", "snapIn", "threadStep", "turnTorqueMax"):
+        assert '"%s"' % field in source, "%s is not read" % field
+        assert field in HOW_FIELDS, "%s is read but not in HOW_FIELDS" % field
