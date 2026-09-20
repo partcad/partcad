@@ -20,6 +20,7 @@ import docker
 
 from . import logging as pc_logging
 from . import sandbox_lock
+from .process_crash import describe_termination
 from .process_output import decode as decode_output
 from .runtime_json_rpc import RuntimeJsonRpcClient
 
@@ -341,6 +342,11 @@ class Runtime:
         wrapper's sandbox deliberately moves everything that prints onto stderr
         so that it cannot corrupt the response (see wrappers/wrapper_common.py).
         That makes the exit code the only thing that says whether a run worked.
+
+        And when it says the process was killed rather than that it ended, that
+        is said in words rather than left as the bare number the caller would
+        otherwise report: which signal it was, and what that signal is called
+        (see process_crash).
         """
         if stdout:
             pc_logging.debug("Output of %s: %s" % (cmd, stdout))
@@ -371,6 +377,15 @@ class Runtime:
         # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
         if returncode in [3221226356, 3221225477]:
             returncode = 0
+        else:
+            crash = describe_termination(
+                cmd,
+                returncode,
+                where=self.path,
+                silent=not stdout and not stderr,
+            )
+            if crash:
+                stderr = crash if not stderr else stderr.rstrip() + "\n" + crash
         return returncode, stdout, stderr
 
     @staticmethod
@@ -448,6 +463,7 @@ class Runtime:
                     # TODO(clairbee): add timeout
                 )
             returncode = p.returncode
+            return self._finished(cmd, stdout, stderr, returncode)
 
         return self._finished(cmd, stdout, stderr, returncode)
 
@@ -494,5 +510,6 @@ class Runtime:
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
             returncode = p.returncode
+            return self._finished(cmd, stdout, stderr, returncode)
 
         return self._finished(cmd, stdout, stderr, returncode)
