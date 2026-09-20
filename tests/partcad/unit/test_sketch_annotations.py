@@ -33,6 +33,7 @@ exercised through 'Shape.get_wrapped' over a shape that builds nothing.
 """
 
 import asyncio
+import hashlib
 import os
 import sys
 
@@ -41,6 +42,7 @@ import pytest
 from cache_config import CacheUserConfig
 
 import partcad as pc
+from partcad import cache_hash as cache_hash_module
 from partcad import shape_envelope
 from partcad.cache_hash import CacheHash
 from partcad.cache_shape import ShapeCache
@@ -294,6 +296,33 @@ def test_a_sketch_that_says_nothing_records_that_it_said_nothing(ctx):
     assert second.builds == 0
 
 
+def _seeded(version, data):
+    """A cache key as PartCAD of that format version would have computed it."""
+    hasher = hashlib.md5()
+    hasher.update(("partcad-cache-v%d" % version).encode())
+    cache_hash = CacheHash("//test:upgrade", hasher=hasher, cache=True)
+    cache_hash.add_string(data)
+    return cache_hash
+
+
+def test_a_key_is_seeded_with_the_cache_format_version():
+    """The mechanism the upgrade below rests on, asserted against the real thing.
+
+    A hash built the ordinary way has to match one seeded by hand with the
+    *current* version tag, and differ from one seeded with the previous. The
+    first half is what fails if the seeding is ever dropped or mis-spelled -
+    comparing two hand-seeded hashes would only ever prove that md5 tells two
+    inputs apart.
+    """
+    data = "a sketch that was cached before any of this existed"
+
+    ordinary = CacheHash("//test:upgrade", cache=True)
+    ordinary.add_string(data)
+
+    assert ordinary.get() == _seeded(cache_hash_module.VERSION, data).get()
+    assert ordinary.get() != _seeded(cache_hash_module.VERSION - 1, data).get()
+
+
 def test_a_geometry_only_entry_is_never_read_back_as_one_that_recorded_nothing(ctx):
     """The upgrade case, and why it is a cache *version* rather than a check.
 
@@ -303,23 +332,35 @@ def test_a_geometry_only_entry_is_never_read_back_as_one_that_recorded_nothing(c
     manufacturability check acts on; the second is not an answer at all.
 
     Rather than teach every reader to tell them apart, the entry is not read:
-    the cache format version is mixed into every key (see cache_hash.VERSION),
-    so an entry written under the old one is never looked up again. What this
-    asserts is that the old bytes cannot be reached under the new key at all.
+    the version seeds every hash, so what the old run wrote is never looked up
+    again.
     """
-    annotations = [{"type": "LINE", "layer": "BEND_UP", "metadata": {"angle": 90.0}}]
-    sketch = _sketch(ctx, annotations, name="legacy")
+    data = "a sketch that was cached before any of this existed"
+    old = _seeded(cache_hash_module.VERSION - 1, data)
 
     # Exactly what the previous format wrote: the geometry, alone.
-    legacy = CacheHash("//test:legacy-v3")
-    legacy.add_string("annotations-test-legacy")
-    asyncio.run(ctx.cache_shapes.write_async(legacy, {"sketch": {"brep": BREP}}))
+    asyncio.run(ctx.cache_shapes.write_async(old, {"sketch": {"brep": BREP}}))
 
-    # The key this object asks under is not the key those bytes went in under,
-    # so the stale entry cannot answer for it.
-    assert legacy.get() != sketch.hash.get()
-    assert asyncio.run(sketch.get_annotations(ctx)) == annotations
-    assert sketch.builds == 1
+    # It is there under the key it went in under...
+    written, _ = asyncio.run(ctx.cache_shapes.read_async(old, ["sketch"]))
+    assert written["sketch"] is not None
+
+    # ...and unreachable under the one this version asks with, so "recorded
+    # nothing" is never what a reader is told.
+    current = CacheHash("//test:upgrade", cache=True)
+    current.add_string(data)
+    cached, _ = asyncio.run(ctx.cache_shapes.read_async(current, ["sketch"]))
+    assert cached.get("sketch") is None
+
+
+def test_the_cache_version_was_moved_for_this_change(ctx):
+    """The entry format changed, so the version had to, and this says so out loud.
+
+    Without the bump, a v3 entry - geometry and nothing else - would be read
+    back under an unchanged key and reported as a drawing that annotates
+    nothing.
+    """
+    assert cache_hash_module.VERSION >= 4
 
 
 #
