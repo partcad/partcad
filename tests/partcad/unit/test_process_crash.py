@@ -7,6 +7,8 @@
 
 import signal
 
+import pytest
+
 from partcad import process_crash
 
 
@@ -61,6 +63,7 @@ def test_describe_termination_guesses_nothing_when_the_wrapper_spoke():
     assert "cadquery-ocp" not in message
 
 
+@pytest.mark.skipif(not hasattr(signal, "SIGKILL"), reason="Windows has no SIGKILL")
 def test_describe_termination_does_not_blame_the_sandbox_for_a_kill():
     # An out-of-memory kill is not a crash: there is nothing about the
     # sandbox's own build to suspect
@@ -73,3 +76,19 @@ def test_describe_termination_does_not_blame_the_sandbox_for_a_kill():
 def test_describe_termination_says_only_what_it_knows_about_sigterm():
     monkeypatch_free = process_crash.describe_termination(["/sandbox/python"], -int(signal.SIGTERM))
     assert monkeypatch_free == "/sandbox/python was killed by signal 15 (SIGTERM)."
+
+
+def test_a_failure_keeps_both_what_it_said_and_how_it_ended():
+    """A process that spoke and was then killed has told you two things"""
+    detail = process_crash.failure_detail("ERROR: could not build wheel\n", -int(signal.SIGSEGV))
+    assert "could not build wheel" in detail
+    assert "killed by signal 11 (SIGSEGV)" in detail
+
+
+def test_a_failure_that_said_nothing_still_says_how_it_ended():
+    assert process_crash.failure_detail("", -int(signal.SIGSEGV)) == "killed by signal 11 (SIGSEGV)"
+    assert process_crash.failure_detail(None, 2) == "exit code 2"
+
+
+def test_a_failure_that_spoke_and_exited_plainly_reads_as_it_did():
+    assert process_crash.failure_detail("  boom  ", 1) == "boom (exit code 1)"

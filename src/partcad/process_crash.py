@@ -79,6 +79,19 @@ def command_failure(command, returncode) -> str:
     )
 
 
+def failure_detail(stderr, returncode) -> str:
+    """What to say about a failed command: what it said, and how it ended.
+
+    Both, rather than one or the other. A process that writes to stderr and is
+    then killed has said something worth keeping *and* ended in a way worth
+    naming, and reporting the first instead of the second is how "killed by
+    SIGSEGV" turns back into a pip warning with no failure attached to it.
+    """
+    said = (stderr or "").strip()
+    ended = describe_exit_code(returncode)
+    return "%s (%s)" % (said, ended) if said else ended
+
+
 def _faulted(returncode) -> bool:
     """Whether this process died of its own fault rather than being stopped."""
     if returncode in WINDOWS_FAULTS:
