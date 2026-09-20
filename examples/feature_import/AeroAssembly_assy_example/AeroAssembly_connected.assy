@@ -1,0 +1,188 @@
+# Stage 3 of three. 'AeroAssembly.assy' is what 'pc import assembly' read out of
+# 'AeroAssembly.step'; 'AeroAssembly_corrected.assy' is that record with its
+# three defects taken out, still written as eight coordinates; this file is the
+# same eight parts with no coordinate in it at all.
+#
+# Every item but the first says what holds it, what it is held by, and - in
+# 'how:' - what somebody has to do to make that joint. The plate is placed by
+# being first, which is the one placement an assembly that is going to be built
+# is allowed to make (see 'partcad.test.connectivity').
+#
+# The geometry this produces is the geometry 'AeroAssembly_corrected.assy'
+# produces. The ports below sit on the very faces and hole axes those corrected
+# placements put face to face, so connecting through them lands every part where
+# that file puts it: exported and compared solid by solid, the two agree to
+# 4e-10 mm once one difference is taken out, and that difference is the whole
+# assembly moved by (-76.862940, -86.199988, 80.297688) mm - the location that
+# file gives the plate. An assembly that connects everything has its anchor at
+# the origin, because there is nothing left to say where the anchor is, and
+# where a product sits in space is not a property of the product.
+#
+# No two of the eight parts share any volume: the worst of the 28 pairs is
+# 0.000000000 mm^3. That is the same check 'AeroAssembly_corrected' passes, and
+# here it is a failure rather than a note, because this one is going to be made.
+#
+# See 'docs.intro' in ../partcad.yaml for what the three stages are for, and
+# which interfaces these joints use and why.
+name: AeroAssembly_connected
+description: >-
+  The imported AeroAssembly, corrected and then joined: eight milled parts, six
+  M3 bolted joints and a seat, in the order somebody would put them together.
+links:
+  # The fixture. Nothing is connected to it from underneath, so it is what the
+  # other seven hang from, and it is placed by being first rather than by
+  # saying where it is.
+  - part: AeroAssembly_assy_example/AeroFrame_Plate
+    name: AeroFrame_Plate
+    description: >-
+      The plate: two flanges, eight Ø3 clearance holes, and the top face the cap
+      stands on.
+
+  # --- the first frame half ------------------------------------------------
+  #
+  # A half is three parts: a front foot under the plate's front flange, a strut
+  # bolted on top of it, and a rear foot bolted under the far end of the strut.
+  # It has to go together in that order, because each of the three is located by
+  # the one before it.
+  - part: AeroAssembly_assy_example/AeroFrameAssembly_solid2
+    name: AeroFrameAssembly_solid2
+    description: The front foot of the first frame half
+    connect:
+      withInstance: plate-a
+      name: AeroFrame_Plate
+      to: aero-plate-opening
+      toInstance: frame-front-a
+      comment: |
+        Offer the foot up under the plate's front flange and start one bolt -
+        the 'a' hole of the pair - before the other, so the foot can still swing
+        onto the second. Both holes are ISO 273 medium clearance for an M3,
+        3.4mm, so neither threads anything: what holds the joint is the bolt and
+        its nut, which this assembly does not model.
+      how:
+        stage: frame-half-1
+        pushForceMax: 20.0
+        holdWith: aero-foot-opening
+        holdWithInstance: strut-a
+        holdWithForceMin: 5.0
+        holdWithForceMax: 15.0
+
+  - part: AeroAssembly_assy_example/AeroFrameAssembly_solid3
+    name: AeroFrameAssembly_solid3
+    description: The strut of the first frame half
+    connect:
+      withInstance: foot-a
+      withParams:
+        # The strut's flange is not flush with the face it seats on: it stands
+        # 14mm above it, and the bolt spans the channel between the two. That
+        # is what 'aero-strut-opening' widens 'moveZ' for, and it is stated
+        # here because it is a fact about this joint rather than about M3.
+        moveZ: 14
+      name: AeroFrameAssembly_solid2
+      toInstance: strut-a
+      comment: |
+        The strut seats flat on the foot and is bolted to it through the flange
+        14mm above that seat, so the bolt is long enough to cross the channel.
+        Start both bolts before tightening either: the strut is what squares
+        the half up, and it can only do that while it is free to move.
+      how:
+        stage: frame-half-1
+        pushForceMax: 15.0
+
+  - part: AeroAssembly_assy_example/AeroFrameAssembly_solid1
+    name: AeroFrameAssembly_solid1
+    description: The rear foot of the first frame half
+    connect:
+      withInstance: strut-a
+      name: AeroFrameAssembly_solid3
+      toInstance: rear-a
+      toParams:
+        # The same 14mm channel at the far end of the strut.
+        moveZ: 14
+      comment: |
+        The rear foot goes on the far end of the strut, and the two bolts that
+        hold it are the last of this half. It then bears on the underside of the
+        plate's rear flange - bears, and nothing more: the flange's four Ø3
+        holes are 2.5mm away from this foot's two, in the source file and
+        therefore in all three stages, so there is nothing to bolt there. Both
+        patterns are declared on the parts; neither is a joint.
+      how:
+        stage: frame-half-1
+        pushForceMax: 15.0
+
+  # --- the mirrored half ---------------------------------------------------
+  #
+  # The same three steps on the other side of the plate. This is the half the
+  # import put in the wrong place and stage 2 moved; here it is put where its
+  # own bolt pattern puts it, and there is no vector to get right.
+  - part: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid2
+    name: MirrorAeroFrameAssembly_solid2
+    description: The front foot of the mirrored frame half
+    connect:
+      withInstance: plate-a
+      name: AeroFrame_Plate
+      to: aero-plate-opening
+      toInstance: mirror-front-a
+      comment: |
+        The other pair of holes in the same flange. In the import this foot was
+        (7.728713, -3.380867, 2.583602) mm away from them and its own half was
+        2.583602 mm clear of the flange at one end and 12.997 mm^3 inside the
+        plate at the other. Connected rather than placed, it cannot be: the
+        holes are where it goes.
+      how:
+        stage: frame-half-2
+        pushForceMax: 20.0
+        holdWith: aero-foot-opening
+        holdWithInstance: strut-a
+        holdWithForceMin: 5.0
+        holdWithForceMax: 15.0
+
+  - part: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3
+    name: MirrorAeroFrameAssembly_solid3
+    description: The strut of the mirrored frame half
+    connect:
+      withInstance: foot-a
+      withParams:
+        moveZ: 14
+      name: MirrorAeroFrameAssembly_solid2
+      toInstance: strut-a
+      how:
+        stage: frame-half-2
+        pushForceMax: 15.0
+
+  - part: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid1
+    name: MirrorAeroFrameAssembly_solid1
+    description: The rear foot of the mirrored frame half
+    connect:
+      withInstance: strut-a
+      name: MirrorAeroFrameAssembly_solid3
+      toInstance: rear-a
+      toParams:
+        moveZ: 14
+      comment: |
+        The mirror image of the first half's rear foot, down to its two holes
+        being 2.5mm off the flange's four - the other way, which is what says
+        the mismatch is in the design rather than in one instance of it.
+      how:
+        stage: frame-half-2
+        pushForceMax: 15.0
+
+  # --- the cap -------------------------------------------------------------
+  - part: AeroAssembly_assy_example/AeroFrame_Cap
+    name: AeroFrame_Cap
+    description: The cap, which stands on the plate
+    connect:
+      withInstance: plate-a
+      name: AeroFrame_Plate
+      to: aero-cap-seat
+      toInstance: cap-a
+      comment: |
+        The cap is not fastened: it stands on the plate on four feet, and only
+        two of them touch. Its front feet are modelled 0.751923 mm too long for
+        the faces they land on - the defect stage 1 reports as 90.231 mm^3 of
+        metal inside metal - so what is stated here is the pair that does seat,
+        and the rear pair stands 0.751923 mm clear. Shim it there; nothing
+        fastens through it.
+      how:
+        stage: cap
+        # It only has to be set down.
+        pushForceMax: 10.0
