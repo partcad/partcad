@@ -174,7 +174,7 @@ runner. There the container is not a thing to insist on; it is a thing that cann
 to install into the checkout and run everything directly:
 
 ```bash
-./dev-tools/setup-native.sh          # poetry install, OpenSCAD, and what installing outside the container gets wrong
+./dev-tools/setup-native.sh          # git-lfs, poetry install, OpenSCAD, and what installing outside the container gets wrong
 ```
 
 Then drop the `devcontainer exec` prefix from every command below and keep the `poetry run` one.
@@ -183,6 +183,25 @@ That script installs **OpenSCAD** as part of setting up, because PartCAD treats 
 rather than as an optional extra — the standalone bundles carry one, `pc healthcheck` asks after it, and a
 `.scad` part fails without it rather than degrading. It stops if it cannot get one, rather than leaving that
 to be found by a test run half an hour later.
+
+That script also installs **git-lfs** and runs `git lfs install --local`, and that one is not a convenience.
+`.gitattributes` routes every `.png`, `.jpg` and `.svg` through the `lfs` filter, and git resolves a `filter=`
+attribute naming a driver that no config defines by storing the file *verbatim* — no warning, no error,
+nothing in the commit to look at. So committing an image from a machine without git-lfs writes raw bytes at
+a path declared to hold a pointer, and the damage surfaces only on someone else's machine, as `Encountered N
+files that should have been pointers, but weren't` plus N files that `git checkout` cannot clean (git keeps
+cleaning their real bytes into a pointer and comparing that against a raw blob). The four images under
+`examples/feature_render/images/` were committed that way and have since been repaired. Repairing such a file
+is `git add --renormalize <path>` and a commit; the raw blob stays in history, which for a handful of small
+images is not worth a `git lfs migrate` rewrite of a shared branch.
+
+Every exception is written down in `.gitattributes`, with its reason beside it, and most of them are build
+**inputs** — the `.ico`, the `.bmp`s, `logo_128x128.png`, the extension's and the FreeCAD workbench's `.svg`
+icons, the `.svg` sketches two examples *read* as parts. That rule exists because no checkout in
+`.github/workflows` passes `lfs: true`, so anything a build reads back must not be an LFS pointer. Rendered
+output that nothing reads back belongs in LFS. Read the file before adding to that list: not every entry is a
+build input — `produce_sketch_basic` is held out on size instead — and an exemption granted for the wrong
+reason is the kind that is never revisited.
 
 This is still a fallback and not a second supported environment. What it does not give you:
 
