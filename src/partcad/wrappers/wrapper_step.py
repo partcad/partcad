@@ -62,19 +62,26 @@ def process(path, request):
         }
 
     # What the file states about itself and its contents, read here because this
-    # is the process it is open in, and carried back on the envelope beside the
-    # BREP (see 'ocp_serialize.KEY_METADATA') so the core stores and reports it
-    # without knowing a STEP file was involved. A file that cannot be read this
-    # way still imports: the geometry is the answer that was asked for, and the
-    # metadata is the extra.
-    shape = ocp_serialize.encode_shape(compound, name=request.get("name"), label=request.get("label"))
+    # is the process it is open in, and handed to the encoder so that it lands
+    # on the envelope beside the BREP - and, from there, in the same cache entry
+    # as the geometry it describes. It goes in under 'sections', which is the
+    # protocol's name for "the source's own vocabulary": the core stores and
+    # reports these keys without knowing a STEP file was involved.
+    #
+    # A file that cannot be read this way still imports: the geometry is the
+    # answer that was asked for, and this is the extra.
     try:
-        metadata = step_metadata.read(path)
+        sections = step_metadata.read(path)
     except Exception as e:  # pylint: disable=broad-except
         print("Failed to read what '%s' states: %s" % (path, e), file=sys.stderr)
-        metadata = None
-    if metadata:
-        shape[ocp_serialize.KEY_METADATA] = metadata
+        sections = None
+
+    shape = ocp_serialize.encode_shape(
+        compound,
+        name=request.get("name"),
+        label=request.get("label"),
+        metadata={ocp_serialize.METADATA_SECTIONS: sections} if sections else None,
+    )
 
     return {
         "success": True,

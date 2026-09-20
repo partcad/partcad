@@ -44,18 +44,15 @@ SIZED_KEYS = ("shape", "sketch", "part", "assembly", "cmps")
 # exempts. The window is there to keep trivial *geometry* out.
 PROPERTIES_SUFFIX = "-props"
 
-# The same arrangement, for the two things that are learnt *about* the geometry
-# rather than declared beside it: what the file it came from stated
-# ('cache_shape.metadata_key') and what it measures
-# ('cache_shape.measurements_key'). Both are a few numbers or a few strings, and
-# both are exempt from the size window for the same reason the properties are.
-METADATA_SUFFIX = "-meta"
-MEASUREMENTS_SUFFIX = "-measure"
-
-# The suffixes above, as one tuple: every key that is named after a geometry key
-# without holding geometry. A new one added to this list is a new one the size
-# window stops applying to, which is the whole of what 'accepts' needs to know.
-NON_GEOMETRY_SUFFIXES = (PROPERTIES_SUFFIX, METADATA_SUFFIX, MEASUREMENTS_SUFFIX)
+# Every key that is named after a geometry key without holding geometry, as one
+# tuple. A new one added to this list is a new one the size window stops
+# applying to, which is the whole of what 'accepts' needs to know.
+#
+# There used to be two more, for what a shape measures and for what its source
+# file stated. Both are now inside the geometry's own entry rather than beside
+# it (see the header of cache_shape.py), which is why they are gone rather than
+# renamed: there is no separate key left to exempt.
+NON_GEOMETRY_SUFFIXES = (PROPERTIES_SUFFIX,)
 
 
 class CacheBackend:

@@ -179,12 +179,20 @@ KEY_BYTES = "__bytes__"
 # Optional on a shape/assembly object: the placement, as the packed
 # [[tx,ty,tz], [ax,ay,az], angle] form, applied when the object is decoded.
 KEY_LOCATION = "location"
-# Optional on a shape object: what the file this shape was imported from stated
-# about itself - a STEP file's layers and property sets, a DXF drawing's layers
-# and units. Set by the wrapper that read the file, because that is the process
-# the file is open in, and carried through untouched from there (the core's twin
-# of this constant is 'shape_envelope.KEY_METADATA').
+# Optional on a shape object: everything learnt about this shape by whatever
+# produced it, at the moment it was produced. The one channel for such
+# knowledge; the core's twin of this constant, and of the three section names
+# below, is in 'shape_envelope.py', which documents what each section holds.
+#
+# 'measurements' is filled in by 'encode_shape()' below rather than by any
+# individual wrapper: encoding is the one thing every wrapper that returns a
+# shape does, and it is the last moment the live OCCT object exists. The other
+# two are filled in by the wrapper that read the source file, which is the only
+# process that ever has it open.
 KEY_METADATA = "metadata"
+METADATA_MEASUREMENTS = "measurements"
+METADATA_ANNOTATIONS = "annotations"
+METADATA_SECTIONS = "sections"
 
 # What 'BRepTools.Write_s' produces is verbose ASCII, and it is by far the
 # largest thing that either travels the wrapper pipe or lands in the shape
@@ -324,9 +332,55 @@ def compound_of(shapes):
     return result
 
 
-def encode_shape(shape, name=None, label=None) -> dict:
-    """Represent a single shape as {"name", "label", "brep"}, ready for JSON."""
-    return {"name": name, "label": label, KEY_BREP: _brep_b64(shape)}
+def make_metadata(measurements=None, annotations=None, sections=None):
+    """A metadata dict holding whichever of the three sections has content.
+
+    The sandbox-side twin of 'shape_envelope.make_metadata()'. Empty sections
+    are left out rather than written empty, so that a wrapper which looked and
+    found nothing produces no section at all - which is what lets a reader tell
+    "this drawing annotates nothing" from "nobody has looked".
+    """
+    metadata = {}
+    if measurements:
+        metadata[METADATA_MEASUREMENTS] = measurements
+    if annotations:
+        metadata[METADATA_ANNOTATIONS] = list(annotations)
+    if sections:
+        metadata[METADATA_SECTIONS] = dict(sections)
+    return metadata
+
+
+def encode_shape(shape, name=None, label=None, metadata=None) -> dict:
+    """Represent a single shape as {"name", "label", "brep", "metadata"}, ready for JSON.
+
+    The shape is measured on the way through, and the numbers go into the
+    'measurements' section of the envelope's metadata. This is the whole of how
+    a part's size comes to be known: every wrapper that returns a shape returns
+    it through here, this is the last point at which the live OCCT object
+    exists, and the measuring is arithmetic over geometry that is already in
+    memory and already being traversed to write its BREP.
+
+    Measuring anywhere later means a second sandbox process, the BREP shipped
+    back into it and deserialized, to compute what was free here.
+
+    'metadata' is whatever the calling wrapper learnt that the geometry itself
+    cannot answer - the sections a file stated about itself, the annotations it
+    stated against individual elements. It is merged under the measurements
+    rather than over them, because it comes from a wrapper that read a file
+    while the measurements come from the geometry in hand, and on the one key
+    they could share the geometry is the more recent truth.
+    """
+    import shape_measure
+
+    measured = shape_measure.measurements_or_none(shape)
+    combined = dict(metadata or {})
+    if measured:
+        combined[METADATA_MEASUREMENTS] = measured
+
+    encoded = {"name": name, "label": label, KEY_BREP: _brep_b64(shape)}
+    if combined:
+        encoded[KEY_METADATA] = combined
+    return encoded
 
 
 def encode_assembly(children, name=None, label=None) -> dict:
