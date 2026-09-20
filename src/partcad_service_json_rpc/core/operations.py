@@ -225,7 +225,9 @@ def instantiate_assembly(session, params):
         session.staged.add(assembly)
         if not params.get(staging.CACHE_ONLY, True):
             assembly.show(ctx)
-    return {"assembly": path, "instantiated": True}
+    # What was built, said the way it was asked for. Not "assembly": this
+    # method builds a scene under exactly the same name.
+    return {"object": path, staging.KIND: kind, "instantiated": True}
 
 
 # ---- inspection ------------------------------------------------------------

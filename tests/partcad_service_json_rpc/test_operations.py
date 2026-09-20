@@ -1258,7 +1258,7 @@ def test_instantiate_assembly_builds_it_and_sends_back_a_status():
 
     assert assembly.instantiated is True
     # The geometry stays here: what crosses the wire says it was built.
-    assert result == {"assembly": "//sub:unit", "instantiated": True}
+    assert result == {"object": "//sub:unit", staging.KIND: "assembly", "instantiated": True}
     assert assembly.shown is False
 
 
@@ -1290,7 +1290,7 @@ def test_a_scene_is_instantiated_as_a_scene():
     result = operations.instantiate_assembly(session, {"package": "//", "name": "bench", staging.KIND: "scene"})
 
     assert scene.instantiated is True
-    assert result == {"assembly": "//:bench", "instantiated": True}
+    assert result == {"object": "//:bench", staging.KIND: "scene", "instantiated": True}
 
 
 def test_a_scene_alias_names_the_scene_it_points_at():
