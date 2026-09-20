@@ -159,17 +159,25 @@ def _stage_subassemblies(session, ctx, assembly) -> None:
     raise JsonRpcError(RETRY_LATER, staging.error_message(items), staging.error_data(items))
 
 
-def _stage_named_assembly(session, ctx, pc, params, package, object_name) -> None:
-    """Stage a render of one named assembly, the way the other operations do.
+def _stage_named_object(session, ctx, pc, params, package, object_name) -> None:
+    """Stage the object a single-object output request names.
 
-    `pc export` and `pc render` are one operation whose unit is *either* one
-    object or a package, and only the first of those is an assembly build to
-    split in two. A recursive or whole-package render is left alone: what it
-    would have to name is everything it is about to build, and it already says
-    where it has got to, object by object, as it goes.
+    What is staged here is the *shape being instantiated*, which happens before
+    an output file of any kind can be written from it and is the same work
+    whichever kind that is. Whether the file this request ends in is an export
+    or a render is a property of the file type rather than of this request (see
+    'partcad.output.section_of'), and it does not reach this far: by the time
+    anything is built, the question is only whether the geometry exists.
 
-    After the output format has been checked, so that an unknown file type is
-    still refused before anything is built rather than after.
+    Staged only for one *named* object, and only an assembly or a scene -- the
+    two kinds that are built out of other objects. A part, a sketch or an
+    interface is built from its own files, so there is nothing to build first.
+    A request whose unit is a package (recursive or object-less) is left alone:
+    what it would have to name is everything it is about to build, and it
+    already says where it has got to, object by object, as it goes.
+
+    Called after the output format has been checked, so that an unknown file
+    type is still refused before anything is built rather than after.
     """
     if object_name is None or params.get("recursive"):
         return
@@ -3035,7 +3043,7 @@ def _render_objects(
     if options_package:
         validated_packages.append(options_package)
     _validate_output_format(pc, ctx, fmt, validated_packages)
-    _stage_named_assembly(session, ctx, pc, params, package, object_name)
+    _stage_named_object(session, ctx, pc, params, package, object_name)
 
     asyncio.run(
         _render_packages_async(

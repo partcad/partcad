@@ -172,8 +172,10 @@ request that asked for the parent, all of it is one request — for as long as t
 nothing the client can do but wait.
 
 So the operations whose unit is one assembly look before they build: `inspect.assembly`, `export.assembly`,
-their scene counterparts, `inspect.object`, `render.objects` when it names one assembly or scene (which is
-what `pc export -a` and `pc render -a` are), and `assembly.instantiate` itself. The first phase reads the
+their scene counterparts, `inspect.object`, `render.objects` when it names one assembly or scene, and
+`assembly.instantiate` itself. What is staged is the shape being **instantiated**, which is the same work
+whatever is done with it afterwards — shown in the viewer, written as an export file, written as a render —
+so the first phase sits above that distinction and never asks which it is. The first phase reads the
 assembly's declaration and asks which of the assemblies it places are not cached yet
 (`Assembly.get_uncached_subassemblies_async`, which costs a declaration read and a `stat` per entry — never a
 payload). None, and the request proceeds exactly as it always did. Some, and **nothing is
@@ -201,10 +203,10 @@ this gets an error message saying what to build first, which is the most a clien
 given.
 
 What is deliberately *not* staged: `bom`, `assembly.guide` and `supply.quote`, which walk the assembly tree
-without building geometry; a recursive or whole-package `render.objects` and `test.run`, whose unit is a
-package rather than one assembly — what they would have to name is everything they are about to build, and
-they already report where they have got to, object by object, as they go; and `convert.object`, which rewrites
-a declaration rather than building the object it names.
+without building geometry; a `render.objects` or `test.run` whose unit is a package (recursive, or naming no
+object) — what they would have to name is everything they are about to build, and they already report where
+they have got to, object by object, as they go; and `convert.object`, which rewrites a declaration rather than
+building the object it names.
 
 There is deliberately no prompt in the protocol. A daemon has nobody to ask, and a request that blocks
 waiting for an answer it cannot receive is a hang, not a question -- anything a command needs is either an

@@ -1974,7 +1974,7 @@ def test_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch):
 
 
 def _render_session(monkeypatch):
-    """A session whose renders are recorded rather than performed."""
+    """A session whose output files are recorded rather than written."""
     _fake_render_module(monkeypatch, lambda view, origin, up: {})
     session, _ = make_session()
     session.partcad.output = types.SimpleNamespace(
@@ -1994,8 +1994,12 @@ def _render_session(monkeypatch):
     return session, rendered
 
 
-def test_exporting_one_assembly_asks_for_its_subassemblies_first(monkeypatch):
-    """`pc export -a` is this operation, and it is one assembly's build."""
+def test_one_named_assembly_asks_for_its_subassemblies_first(monkeypatch):
+    """One named assembly: its shape has to exist before any file comes out of it.
+
+    This is where `pc export -a` and `pc render -a` both arrive today, and what
+    is staged is neither of those -- it is the instantiation both need first.
+    """
     session, rendered = _render_session(monkeypatch)
     _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
 
@@ -2006,7 +2010,7 @@ def test_exporting_one_assembly_asks_for_its_subassemblies_first(monkeypatch):
     assert rendered == []
 
 
-def test_exporting_a_whole_package_is_not_staged(monkeypatch):
+def test_a_whole_package_is_not_staged(monkeypatch):
     """Its unit is a package: what it would have to name is everything."""
     session, rendered = _render_session(monkeypatch)
     _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
@@ -2016,7 +2020,7 @@ def test_exporting_a_whole_package_is_not_staged(monkeypatch):
     assert rendered, "the package was not rendered"
 
 
-def test_exporting_a_part_is_not_staged(monkeypatch):
+def test_a_named_part_is_not_staged(monkeypatch):
     """A part is built out of its own files, whatever the package holds."""
     session, rendered = _render_session(monkeypatch)
     _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
