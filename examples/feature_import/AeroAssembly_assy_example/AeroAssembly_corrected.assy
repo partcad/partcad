@@ -1,23 +1,35 @@
-# The same eight solids as 'AeroAssembly.assy', placed where they can actually
-# be put together. 'AeroAssembly.assy' is the unedited record of what
-# 'pc import assembly' read out of 'AeroAssembly.step'; this file is that record
-# with its three interferences resolved, and every difference between the two is
-# a placement, commented below. Not one part file differs.
+# Stage 2 of three, and the middle one on purpose.
+#
+# 'AeroAssembly.assy' is the unedited record of what 'pc import assembly' read
+# out of 'AeroAssembly.step'. This file is that record with its three defects
+# taken out: every difference between the two is a placement, and each of them
+# is commented below. Not one part file differs.
+#
+# What it still does not do is say what holds anything. Every item here is
+# placed by 'location:', which states where a part ends up and not what keeps it
+# there - so nothing in this file knows that the front foot is bolted to the
+# flange rather than resting against it, nothing says which part has to be in
+# place before which, and nothing would notice if the plate moved and the seven
+# others did not. That is 'AeroAssembly_connected.assy', stage 3, which carries
+# no coordinate at all.
 #
 # See 'docs.intro' in ../partcad.yaml for what each of the three overlaps turned
-# out to be and why these are the corrections.
-name: AeroAssembly_buildable
+# out to be, why these are the corrections, and what each stage does and does
+# not establish.
+name: AeroAssembly_corrected
 description: >-
   The imported AeroAssembly with its three interferences resolved: the mirrored
-  frame half moved onto the bolt pattern it is meant to bolt to, the cap lifted
-  clear of the plate by the 0.751923 mm its front feet overhang, and every
-  placement written at the precision the STEP file actually holds instead of the
-  five decimals the importer rounds to.
+  frame half moved onto its own footprint, the cap lifted clear of the plate by
+  the 0.751923 mm its front feet overhang, and every placement written at the
+  precision the STEP file actually holds instead of the five decimals the
+  importer rounds to. Every item is still placed by 'location:'.
 links:
   # Unchanged from the import except for the extra digits: this half already
-  # bolted up flush. Its four 3 mm holes are coaxial with the plate's front
-  # flange (x = -102.040610, y = -45.2/-42.2/-30.2/-27.2) and its bolt face is
-  # flat against the flange's underside at z = 69.691086.
+  # sat flush. Its front foot's two 3 mm holes are coaxial with two of the four
+  # in the plate's front flange (x = -102.040610, y = -43.699988 and -28.699988)
+  # and its bolt face is flat against the flange's underside at z = 69.691086;
+  # its rear foot bears on the rear flange, where the hole patterns are 2.5 mm
+  # apart and nothing bolts.
   - type: assembly
     name: AeroFrameAssembly
     links:
@@ -63,15 +75,16 @@ links:
       0.0]
   # Moved by (+7.728713286, -3.380867309, +2.583601940) mm, as one rigid body.
   #
-  # The plate's front flange carries eight 3 mm holes in two mirrored groups of
-  # four, one group per frame half. The half above is bolted through its group;
-  # this one missed the other group by exactly that vector, which left it
-  # 2.583602 mm clear of the flange at solid2 and 12.998 mm^3 inside the plate
-  # at solid1 - a half that is simultaneously floating and buried, which is how
-  # a misplaced instance reads rather than a design.
+  # The plate carries eight 3 mm holes, four in each of its two flanges, and
+  # each flange's four are two mirrored pairs - one pair per frame half. The
+  # half above is bolted through its pair in the front flange; this one missed
+  # the other pair by exactly that vector, which left it 2.583602 mm clear of
+  # the flange at solid2 and 12.998 mm^3 inside the plate at solid1 - a half
+  # that is simultaneously floating and buried, which is how a misplaced
+  # instance reads rather than a design.
   #
-  # The vector is not fitted: it is what puts the four holes on the plate's
-  # four. It equals the plate's own origin offset from the frame's,
+  # The vector is not fitted: it is what puts the front foot's two holes on the
+  # flange's two. It equals the plate's own origin offset from the frame's,
   # (-7.728713286, +0.880867309, -2.583601940), negated, plus 2.5 mm along -y -
   # the exporter had folded the plate's offset into the mirrored branch. After
   # it, every clearance this half has matches its twin's to the ninth decimal:
