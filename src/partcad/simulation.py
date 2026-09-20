@@ -53,6 +53,7 @@ import typing
 
 from . import logging as pc_logging
 from . import output, shape_envelope, wrapper
+from .process_crash import describe_exit_code
 from .utils import resolve_resource_path
 
 # The section of 'partcad.yaml' a part or an assembly declares its simulations in.
@@ -471,7 +472,7 @@ async def _run_plugin_async(ctx, impl, directory: str, scene_file: str, declarat
     # run the runtime just decided to let through. A wrapper that really failed
     # says so in its result, which the 'success' check below reads.
     if exitcode != 0:
-        raise Exception(errors or "the simulation failed with exit code %s" % exitcode)
+        raise Exception(errors or "the simulation failed: %s" % describe_exit_code(exitcode))
 
     if not response_serialized.strip():
         raise Exception("the simulation produced no result")

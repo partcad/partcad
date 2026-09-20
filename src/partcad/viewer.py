@@ -30,6 +30,7 @@ import importlib
 
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, wrapper
+from .process_crash import describe_exit_code
 
 # The tessellation the viewer gets. Coarser than a render's default would be
 # worth: this is an interactive preview that has to cross a socket and load in a
@@ -101,7 +102,7 @@ async def tessellate(ctx, components, name=None, tolerance=None, angular_toleran
         shape_envelope.serialize(request),
     )
     if exitcode != 0 and not errors:
-        errors = "Failed to tessellate the shape for the viewer (exit code %s)" % exitcode
+        errors = "Failed to tessellate the shape for the viewer (%s)" % describe_exit_code(exitcode)
     if errors:
         raise Exception(errors)
 

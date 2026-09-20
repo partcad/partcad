@@ -4,6 +4,7 @@ from . import logging as pc_logging
 from . import shape_envelope, wrapper
 from .exception import PartFactoryError
 from .part_factory_file import PartFactoryFile
+from .process_crash import command_failure
 
 
 class PartFactoryObj(PartFactoryFile):
@@ -50,7 +51,7 @@ class PartFactoryObj(PartFactoryFile):
                 request_serialized,
             )
             if exitcode != 0 and not errors:
-                errors = "Failed to execute command '%s' with exit code %s" % (" ".join(command), exitcode)
+                errors = command_failure(command, exitcode)
             if errors:
                 pc_logging.error(errors)
                 raise Exception(errors)

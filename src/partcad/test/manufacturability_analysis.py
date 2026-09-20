@@ -16,6 +16,7 @@ collision was worth removing.
 """
 
 from .. import sandbox_versions, shape_envelope, wrapper
+from ..process_crash import describe_exit_code
 
 
 async def _analyze(ctx, envelope, op: str, **extra) -> dict:
@@ -37,7 +38,7 @@ async def _analyze(ctx, envelope, op: str, **extra) -> dict:
         [wrapper_path, "manufacturability"], shape_envelope.serialize(request)
     )
     if exitcode != 0 and not errors:
-        errors = "manufacturability analysis failed with exit code %s" % exitcode
+        errors = "manufacturability analysis failed: %s" % describe_exit_code(exitcode)
     if errors:
         raise Exception(errors)
 

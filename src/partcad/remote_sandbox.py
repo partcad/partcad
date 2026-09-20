@@ -29,6 +29,8 @@ pinning is *which* commands are run, in what order, and how often.
 import threading
 from typing import Callable, Optional
 
+from .process_crash import describe_exit_code
+
 # Where the volume is mounted inside every container this service starts. Fixed
 # rather than configurable: the client never sees it, and a path the caller
 # could choose would be a caller choosing where to write inside somebody else's
@@ -129,7 +131,7 @@ class Environments:
         if exitcode != 0:
             raise RuntimeError(
                 "Could not create the remote environment for Python %s in %s: %s"
-                % (version, image, (stderr or "").strip() or "exit code %s" % exitcode)
+                % (version, image, (stderr or "").strip() or describe_exit_code(exitcode))
             )
 
         # What was built, not what was asked for. The version picks the
@@ -155,7 +157,7 @@ class Environments:
         if exitcode != 0:
             raise RuntimeError(
                 "Could not install '%s' into the remote environment for Python %s in %s: %s"
-                % (requirement, version, image, (stderr or "").strip() or "exit code %s" % exitcode)
+                % (requirement, version, image, (stderr or "").strip() or describe_exit_code(exitcode))
             )
 
     def forget(self, image: str) -> None:

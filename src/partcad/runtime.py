@@ -20,6 +20,7 @@ import docker
 
 from . import logging as pc_logging
 from . import sandbox_lock
+from .process_crash import describe_termination
 from .process_output import decode as decode_output
 from .runtime_json_rpc import RuntimeJsonRpcClient
 
@@ -333,7 +334,7 @@ class Runtime:
         returncode = result.get("exit_code")
         return stdout, stderr, int(bool(stderr)) if returncode is None else returncode
 
-    def _finished(self, cmd, stdout, stderr, returncode):
+    def _finished(self, cmd, stdout, stderr, returncode, pid=None, since=None):
         """The triple every run returns, having reported what was written.
 
         Anything on stderr from a command that succeeded is a warning and is
@@ -341,6 +342,11 @@ class Runtime:
         wrapper's sandbox deliberately moves everything that prints onto stderr
         so that it cannot corrupt the response (see wrappers/wrapper_common.py).
         That makes the exit code the only thing that says whether a run worked.
+
+        And when it says the process was killed rather than that it ended, that
+        is said in words rather than left as the bare number the caller would
+        otherwise report -- which signal it was, and where the crash report is
+        (see process_crash).
         """
         if stdout:
             pc_logging.debug("Output of %s: %s" % (cmd, stdout))
@@ -371,6 +377,17 @@ class Runtime:
         # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
         if returncode in [3221226356, 3221225477]:
             returncode = 0
+        else:
+            crash = describe_termination(
+                cmd,
+                returncode,
+                pid=pid,
+                since=since,
+                where=self.path,
+                silent=not stdout and not stderr,
+            )
+            if crash:
+                stderr = crash if not stderr else stderr.rstrip() + "\n" + crash
         return returncode, stdout, stderr
 
     @staticmethod
@@ -431,6 +448,7 @@ class Runtime:
             stdout, stderr, returncode = self._rpc_result(response, output_files)
         else:
             argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
+            started_at = time.time()
             with sandbox_lock.process_slots.slot():
                 p = subprocess.Popen(
                     argv,
@@ -448,6 +466,7 @@ class Runtime:
                     # TODO(clairbee): add timeout
                 )
             returncode = p.returncode
+            return self._finished(cmd, stdout, stderr, returncode, pid=p.pid, since=started_at)
 
         return self._finished(cmd, stdout, stderr, returncode)
 
@@ -478,6 +497,7 @@ class Runtime:
             stdout, stderr, returncode = self._rpc_result(response, output_files)
         else:
             argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
+            started_at = time.time()
             async with sandbox_lock.process_slots.slot_async():
                 p = await asyncio.create_subprocess_exec(
                     *argv,
@@ -494,5 +514,6 @@ class Runtime:
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
             returncode = p.returncode
+            return self._finished(cmd, stdout, stderr, returncode, pid=p.pid, since=started_at)
 
         return self._finished(cmd, stdout, stderr, returncode)
