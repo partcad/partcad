@@ -582,8 +582,6 @@ class PythonRuntime(runtime.Runtime):
                 sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
                 span.set_attribute("cmd", " ".join(sanitized_cmd))
                 argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, self._subprocess_env())
-                # Noted before the spawn so that a crash report written for this
-                # run can be told from one an earlier run left behind.
                 # Bytes rather than text, like 'run_async_onced' beside it: the
                 # output is decoded by 'process_output.decode', which replaces a
                 # byte it cannot read instead of raising on it. Asking Popen for
@@ -634,8 +632,8 @@ class PythonRuntime(runtime.Runtime):
                 # A negative exit code means the interpreter was killed rather
                 # than that it failed, and the caller reports whatever comes
                 # back from here -- left to itself, the raw number, which names
-                # neither the signal nor the crash report the system wrote. So
-                # say it here, once, for every caller.
+                # neither the signal nor the fact that there was one. So say it
+                # here, once, for every caller.
                 #
                 # Saying nothing at all on the way out is the case worth
                 # guessing about: it is what a native crash looks like, and a
@@ -794,8 +792,8 @@ class PythonRuntime(runtime.Runtime):
                 # A negative exit code means the interpreter was killed rather
                 # than that it failed, and the caller reports whatever comes
                 # back from here -- left to itself, the raw number, which names
-                # neither the signal nor the crash report the system wrote. So
-                # say it here, once, for every caller.
+                # neither the signal nor the fact that there was one. So say it
+                # here, once, for every caller.
                 #
                 # Saying nothing at all on the way out is the case worth
                 # guessing about: it is what a native crash looks like, and a

@@ -345,7 +345,7 @@ class Runtime:
 
         And when it says the process was killed rather than that it ended, that
         is said in words rather than left as the bare number the caller would
-        otherwise report -- which signal it was, and where the crash report is
+        otherwise report: which signal it was, and what that signal is called
         (see process_crash).
         """
         if stdout:
