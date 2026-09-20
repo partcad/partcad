@@ -46,16 +46,7 @@ class ValidityTest(Test):
     def __init__(self) -> None:
         super().__init__("validity")
 
-    async def cache_key_suffix(self, ctx, shape) -> str:
-        config = (shape.config or {}).get("validity") or {}
-        return ",skip=%s" % bool(config.get("skip", False))
-
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
-        config = (shape.config or {}).get("validity") or {}
-        if config.get("skip", False):
-            self.debug(shape, "Skipped by configuration")
-            return self.TEST_PASSED
-
         # A sketch is edges, wires and faces; 'well formed solid' is not a
         # question it has an answer to.
         if isinstance(shape, Sketch):
