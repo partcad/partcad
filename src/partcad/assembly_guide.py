@@ -290,32 +290,34 @@ async def collect_sections_async(ctx, assembly) -> list:
     """
     sections = []
     seen = set()
-    uses = {}
-    await _collect_section(ctx, assembly, sections, seen, uses, top=True)
-    _count_sections(sections, uses)
+    await _collect_section(ctx, assembly, sections, seen, top=True)
     return sections
 
 
-def _count_sections(sections, uses):
-    """How many of each assembly the build needs.
+def count_sections(sections, grouped) -> None:
+    """Tell each section how many of its assembly the build needs.
 
-    A section is appended only once every assembly it uses is already in the
-    list, so walking the list backwards reaches an assembly before anything it
-    uses, and a total is complete by the time it is handed on.
+    From the bill of materials, which has counted them already: a BOM is a
+    count of what goes into the thing, and an assembly used four times goes
+    into it four times. Deriving it again by walking the tree would be a second
+    answer to a question that already has one, free to disagree with the BOM
+    printed two pages earlier.
+
+    An assembly embedded in the 'links:' of an ASSY file belongs to no package
+    and so is in no BOM; it is documented where it appears and built once.
     """
-    totals = {}
-    for section in reversed(sections):
-        key = _assembly_key(section.assembly)
-        section.count = totals.get(key, 1)
-        for used, times in uses.get(key, {}).items():
-            totals[used] = totals.get(used, 0) + section.count * times
+    counts = grouped.get("assemblies") or {}
+    for section in sections:
+        entry = (counts.get(section.assembly.project_name) or {}).get(section.assembly.name)
+        if entry:
+            section.count = entry.get("count", 1)
 
 
 def collect_sections(ctx, assembly) -> list:
     return asyncio.run(collect_sections_async(ctx, assembly))
 
 
-async def _collect_section(ctx, assembly, sections, seen, uses, top=False):
+async def _collect_section(ctx, assembly, sections, seen, top=False):
     await assembly.do_instantiate()
 
     key = _assembly_key(assembly)
@@ -324,11 +326,9 @@ async def _collect_section(ctx, assembly, sections, seen, uses, top=False):
     seen.add(key)
 
     content = _step_source(assembly)
-    used = uses.setdefault(key, {})
     for child in content.children:
         if isinstance(child.item, Assembly):
-            used[_assembly_key(child.item)] = used.get(_assembly_key(child.item), 0) + 1
-            await _collect_section(ctx, child.item, sections, seen, uses)
+            await _collect_section(ctx, child.item, sections, seen)
 
     sections.append(await _build_section(ctx, assembly, content, top))
 
@@ -697,6 +697,7 @@ async def build_guide_document_async(ctx, project, assembly, images: ImageSource
     """
     sections = await collect_sections_async(ctx, assembly)
     grouped = await assembly.get_bom_grouped_async(ctx)
+    count_sections(sections, grouped)
 
     pages = [await _title_page(project, assembly, images, sections)]
     pages.append(doc.Page(title="Bill of Materials", blocks=_bom_page_blocks(project, grouped, dir_path)))

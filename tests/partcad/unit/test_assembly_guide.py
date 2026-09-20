@@ -608,61 +608,53 @@ def test_render_assembly_guide_refuses_a_non_manufacturable_assembly():
 
 
 class _FakeAssembly:
-    """Just enough of an assembly for '_assembly_key' to tell two of them apart"""
+    """Just enough of an assembly for the bill of materials to be looked up by"""
 
-    def __init__(self, name):
-        self.project_name = "//pkg"
+    def __init__(self, name, project_name="//pkg"):
+        self.project_name = project_name
         self.name = name
         self.config = {}
 
 
-def _section(name):
-    return assembly_guide.GuideSection(assembly=_FakeAssembly(name), name=name)
+def _section(name, project_name="//pkg"):
+    return assembly_guide.GuideSection(assembly=_FakeAssembly(name, project_name), name=name)
 
 
-def test_repeat_count_multiplies_through_the_sub_assemblies():
-    """An assembly used by one that is itself used four times is needed four times
+def test_repeat_count_comes_from_the_bill_of_materials():
+    """How many of each sub-assembly to make is what the BOM already counted
 
-    The guide documents a repeated assembly once, so the count is the only
-    thing that says how many to make - and it has to carry down the tree: four
-    towers with a spire each need four spires, not one.
+    Deriving it again by walking the tree would be a second answer to a
+    question the BOM has answered, free to disagree with the page that prints
+    it.
     """
-    spire, tower, wall, castle = (_section(n) for n in ("spire", "tower", "wall", "castle"))
-    # Children first, top last - the order '_collect_section' appends in.
-    sections = [spire, tower, wall, castle]
-    key = assembly_guide._assembly_key
-    uses = {
-        key(castle.assembly): {key(tower.assembly): 4, key(wall.assembly): 3},
-        key(tower.assembly): {key(spire.assembly): 1},
-        key(wall.assembly): {},
-        key(spire.assembly): {},
-    }
+    spire, tower, castle = (_section(n) for n in ("spire", "tower", "castle"))
+    grouped = {"assemblies": {"//pkg": {"spire": {"count": 9}, "tower": {"count": 4}}}}
 
-    assembly_guide._count_sections(sections, uses)
+    assembly_guide.count_sections([spire, tower, castle], grouped)
 
+    assert spire.count == 9
+    assert tower.count == 4
+    # The top level assembly is not in its own bill of materials.
     assert castle.count == 1
-    assert tower.count == 4
-    assert wall.count == 3
-    assert spire.count == 4
 
 
-def test_repeat_count_adds_up_the_several_places_one_is_used():
-    """An assembly reached by more than one route is needed for each of them"""
-    cone, tower, keep, castle = (_section(n) for n in ("cone", "tower", "keep", "castle"))
-    sections = [cone, tower, keep, castle]
-    key = assembly_guide._assembly_key
-    uses = {
-        key(castle.assembly): {key(tower.assembly): 4, key(keep.assembly): 1},
-        key(tower.assembly): {key(cone.assembly): 2},
-        key(keep.assembly): {key(cone.assembly): 1},
-        key(cone.assembly): {},
-    }
+def test_repeat_count_of_an_embedded_assembly_is_one():
+    """An assembly embedded in an ASSY file is in no package, so in no BOM"""
+    head = _section("logo_embedded_head")
 
-    assembly_guide._count_sections(sections, uses)
+    assembly_guide.count_sections([head], {"assemblies": {}})
 
-    assert tower.count == 4
-    assert keep.count == 1
-    assert cone.count == 4 * 2 + 1
+    assert head.count == 1
+
+
+def test_repeat_count_does_not_confuse_two_packages():
+    """Two packages may each declare an assembly of the same name"""
+    mine, theirs = _section("spire", "//mine"), _section("spire", "//theirs")
+    grouped = {"assemblies": {"//mine": {"spire": {"count": 9}}, "//theirs": {"spire": {"count": 2}}}}
+
+    assembly_guide.count_sections([mine, theirs], grouped)
+
+    assert (mine.count, theirs.count) == (9, 2)
 
 
 def test_section_page_says_how_many_of_a_repeated_assembly_to_make():
