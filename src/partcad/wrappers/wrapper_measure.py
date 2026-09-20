@@ -5,9 +5,16 @@
 #
 
 # This script is executed within the python sandbox environment (python runtime)
-# to measure geometry, so the core process never has to touch a live OCP object
-# to do it. The shape arrives in the request as BREP (see ocp_serialize), already
-# placed at whatever location the envelope carried, and only numbers go back.
+# to measure geometry the core did not build, so the core process never has to
+# touch a live OCP object to do it. The shape arrives in the request as BREP (see
+# ocp_serialize), already placed at whatever location the envelope carried, and
+# only numbers go back.
+#
+# A shape's own size does NOT come through here: it is measured as the shape is
+# encoded, in the process that built it, and travels in the envelope's metadata
+# (see 'ocp_serialize.encode_shape'). What is left for this wrapper is the one
+# question that cannot be answered then - how large a shape is in *another*
+# object's frame, which is what 'measure.bbox(frame=...)' asks for a port.
 
 import os
 import sys
@@ -18,71 +25,16 @@ import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
 import ocp_serialize  # noqa: F401,E402
+import shape_measure  # noqa: E402
 import wrapper_common  # noqa: E402
 
-
-def _bbox(shape):
-    """The axis-aligned bounding box of 'shape' as [xmin, ymin, zmin, xmax, ymax, zmax].
-
-    The shape arrives already placed by the envelope's location, so the box is
-    in whatever frame the caller asked for. 'None' is returned for an empty
-    shape, which has no box to speak of.
-    """
-    from OCP.Bnd import Bnd_Box
-    from OCP.BRepBndLib import BRepBndLib
-
-    box = Bnd_Box()
-    BRepBndLib.Add_s(shape, box)
-    if box.IsVoid():
-        return None
-    # Bnd_Box.Get() reports the box grown by its gap; drop the gap so that the
-    # numbers are the shape's own extent.
-    box.SetGap(0.0)
-    xmin, ymin, zmin, xmax, ymax, zmax = box.Get()
-    return [xmin, ymin, zmin, xmax, ymax, zmax]
-
-
-def _volumes(shape):
-    """The volume of each solid in 'shape', largest first.
-
-    Per solid rather than summed, for the reason wrapper_solidity gives: a
-    compound holding one inverted solid and a larger correct one adds up to a
-    positive number, and the inversion disappears into the total. The caller
-    adds them up knowing how many there were.
-    """
-    from OCP.BRepGProp import BRepGProp
-    from OCP.GProp import GProp_GProps
-    from OCP.TopAbs import TopAbs_SOLID
-    from OCP.TopExp import TopExp_Explorer
-
-    volumes = []
-    explorer = TopExp_Explorer(shape, TopAbs_SOLID)
-    while explorer.More():
-        props = GProp_GProps()
-        BRepGProp.VolumeProperties_s(explorer.Current(), props)
-        volumes.append(props.Mass())
-        explorer.Next()
-    return sorted(volumes, reverse=True)
-
-
-def _measurements(shape):
-    """Everything 'pc info' reports about a shape's size, in one trip.
-
-    The box and the volume together, because they are asked for together and
-    each of them separately costs a sandbox process: starting one, installing
-    nothing, deserializing the BREP and handing back a handful of floats. The
-    OCCT work itself is the cheap half.
-
-    'volume' is None - rather than 0.0 - for a shape holding no solid at all: a
-    sketch, a shell, a wire. A shape that encloses nothing and a shape that is
-    not the kind of thing that encloses anything are different answers.
-    """
-    volumes = _volumes(shape)
-    return {
-        "bbox": _bbox(shape),
-        "volume": sum(volumes) if volumes else None,
-        "solids": len(volumes),
-    }
+# One implementation of each, in the module the *encoder* also calls, so that a
+# size measured here and a size measured as a shape was built cannot disagree.
+# Re-exported under the names this module has always used: they are what the
+# unit tests exercise, and what 'process()' below dispatches to.
+_bbox = shape_measure.bbox
+_volumes = shape_measure.volumes
+_measurements = shape_measure.measurements
 
 
 def process(request):

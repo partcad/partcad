@@ -281,23 +281,24 @@ at all).
   `examples/produce_part_sheet_metal` is the whole of it in one package, and is what the end-to-end
   `@pc-test-sheet-metal` scenario in `features/test.feature` runs against.
 
-- **A sketch says what its drawing said** (`Sketch.get_annotations`, `Shape.CACHED_SIDE_DATA`,
+- **A sketch says what its drawing said** (`Sketch.get_annotations`, `shape_envelope.METADATA_ANNOTATIONS`,
   `wrappers/dxf_metadata.py`): BREP has nowhere to put an angle written against a line, and a DXF says exactly
-  that in XDATA. So the import reads it and the sketch carries it: one record per element -- its type, layer,
-  handle, where it is, and the key/value pairs -- keyed to the same layer filters the import was given, so the
-  annotations describe what is *in* the sketch. `CACHED_SIDE_DATA` is what makes it survive, because a sketch
-  that comes out of the cache is never instantiated; it is an entry of its own beside the geometry, and a
-  cached shape whose side data is **absent** is built again rather than answered with nothing -- an empty
-  entry means "read, and it said nothing", while no entry means "written before any of this existed", and a
-  check would act on the difference. This is also what makes sheet metal instructions *a sketch* rather than
-  *a DXF file*: `dxf` is the only type that states anything today, and nothing downstream knows that.
+  that in XDATA. So the import reads it and it rides back on the **envelope**: one record per element -- its
+  type, layer, handle, where it is, and the key/value pairs -- keyed to the same layer filters the import was
+  given, so the annotations describe what is *in* the sketch. This is what makes sheet metal instructions *a
+  sketch* rather than *a DXF file*: `dxf` is the only type that states anything today, and nothing downstream
+  knows that.
 
   A drawing also says things about **itself** - which layers it has, what `$INSUNITS` says its numbers are
-  in, which applications it declares - and that is read on the same trip and travels a different road: not on
-  the sketch but on the **envelope**, beside the BREP (`shape_envelope.KEY_METADATA`), into a cache entry of
-  its own (`cache_shape.metadata_key`). It is carried apart from the annotations because it is about the file
-  rather than about the sketch - a sketch *is* the layers its filters selected, and the interesting thing
-  about the ones they did not select is that they exist. `pc info` is what prints it.
+  in, which applications it declares - and that is read on the same trip and travels the same road, under
+  `METADATA_SECTIONS` rather than `METADATA_ANNOTATIONS`. The two are separate sections because they are read
+  differently and not because they arrive differently: a sketch *is* the layers its filters selected, and the
+  interesting thing about the ones they did not select is that they exist. `pc info` is what prints it.
+
+  Which annotated elements are worth **showing** is decided in `dxf_metadata`, not in the core, and lands in
+  `sections` under a heading of its own. Picking them out means knowing that a record has a `metadata` key and
+  that an empty one means un-annotated, which is DXF's vocabulary; the full list travels on untouched, because
+  a check that every bend line states its angle has to see the lines that do not.
 
   **Which layers of a drawing a sketch reads is an object-type parameter**, not merely a field
   (`sketch_factory.py`, `sketch_factory_dxf.py`, `Project.declare_object_type_parameters`). `include` and
@@ -312,8 +313,7 @@ at all).
   what separates parameters.
 
 - **A file says what it says, and the wrapper is what hears it** (`wrappers/step_metadata.py`,
-  `shape_envelope.KEY_METADATA`, `cache_shape.metadata_key`): the STEP half of the same idea, on the same
-  rails. A STEP file states a header, its products, its layers (`PRESENTATION_LAYER_ASSIGNMENT`) and
+  `shape_envelope.KEY_METADATA`): the STEP half of the same idea, on the same rails. A STEP file states a header, its products, its layers (`PRESENTATION_LAYER_ASSIGNMENT`) and
   *properties* - a `PROPERTY_DEFINITION` tied by a `PROPERTY_DEFINITION_REPRESENTATION` to a `REPRESENTATION`
   whose items are the key/value pairs - and that chain is how an `angle` written against a bend reaches
   PartCAD from a STEP file, exactly as XDATA is how it reaches PartCAD from a DXF. Both readers lower-case
@@ -332,15 +332,23 @@ at all).
   cache entry and merges it into `pc info` **as the wrapper named it**, so the sections stay the format's own
   vocabulary and the core never learns one.
 
-- **How big it is and how much of it there is** (`Shape.get_measurements_async`, `measure.measurements`,
-  `cache_shape.measurements_key`): `pc info` reports a shape's `BoundingBox` and, where it holds a solid, its
+- **How big it is and how much of it there is** (`shape_measure.py`, `ocp_serialize.encode_shape`,
+  `Shape.get_measurements_async`): `pc info` reports a shape's `BoundingBox` and, where it holds a solid, its
   `Volume` and `Solids`. Neither can be read off a declaration - a part is a script, a file or a boolean of
-  two others - so this is the one place they can come from, and it is where `/pc:describe` gets the size it
-  would otherwise estimate off a projection rendered to fit its frame. One `measurements` operation of
-  `wrapper_measure` answers both, because what costs is the sandbox process rather than the arithmetic in it,
-  and the answer is cached in an entry of its own under the geometry's hash: derived from the geometry, so
-  exactly as valid as the entry it is named after, and read back for the price of a file. That wrapper's
-  `_bbox` drops the gap OCCT pads a box by, so a 120 mm block measures 120.
+  two others - so building it is the only way to know, and it is where `/pc:describe` gets the size it would
+  otherwise estimate off a projection rendered to fit its frame.
+
+  It is measured **as the shape is encoded**, in the process that built the geometry, and comes back in the
+  envelope's `measurements` section. Every wrapper that returns a shape returns it through `encode_shape`, so
+  every wrapper produces this without knowing it does; the core's one in-process encoder (`Shape._to_envelope`,
+  for the factories that still build a live shape) does the same thing for the same reason. The arithmetic is
+  over geometry that is already in memory and already being traversed to write its BREP, so it costs a
+  traversal rather than a process. Measuring later would mean a fresh sandbox, the BREP shipped into it and
+  deserialized, to compute what was free at build time. `shape_measure.bbox` drops the gap OCCT pads a box by,
+  so a 120 mm block measures 120.
+
+  `wrapper_measure` still exists for the one caller that measures something it did not build:
+  `measure.bbox(frame=...)`, which re-measures a shape in a **port's** frame rather than its own.
 
 - **A part is a body, not a skin** (`wrappers/wrapper_common.solidify`, `brep_inspect.py`,
   `test/shell.py`): a shell is a set of faces with nothing said about which side of them is material; a solid

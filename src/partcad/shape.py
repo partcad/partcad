@@ -22,11 +22,11 @@ from . import cae as pc_cae
 from . import cam as pc_cam
 from . import logging as pc_logging
 from . import material as pc_material
-from . import measure, output, render_overlay
+from . import output, render_overlay
 from . import runtime as pc_runtime
 from . import sandbox_versions, wrapper
 from .cache_hash import CacheHash
-from .cache_shape import measurements_key, metadata_key, properties_key
+from .cache_shape import properties_key
 from .shape_config import ShapeConfiguration
 from .utils import resolve_resource_path, total_size
 
@@ -212,22 +212,6 @@ class Shape(ShapeConfiguration):
 
     errors: list[str]
 
-    # Extra cache entries a kind of shape carries beside its geometry, mapped to
-    # the attribute each is held in. Empty for every kind but a sketch, which
-    # carries what its drawing said about its own elements (see
-    # 'Sketch.get_annotations'): BREP has nowhere to put that, and re-reading
-    # the source file is exactly what the cache exists to avoid.
-    #
-    # They are entries of their own rather than something folded into the
-    # geometry, for the reason 'cache_shape.properties_key()' gives: an entry of
-    # its own is written, read and missed on its own. Missed matters here, and
-    # is why a cached shape whose side data is absent is built again rather than
-    # answered with nothing: the geometry of a sketch cached before any of this
-    # existed is perfectly valid and its key has not moved, so "no annotations
-    # were recorded" would otherwise read as "this drawing annotates nothing" -
-    # which is a different answer, and the one a check would act on.
-    CACHED_SIDE_DATA: dict = {}
-
     def __init__(self, project_name: str, config: dict) -> None:
         super().__init__(config)
         self.project_name = project_name
@@ -263,10 +247,12 @@ class Shape(ShapeConfiguration):
         # Memory cache
         self._wrapped = None
         self._bounding_box = None
-        # What the file this shape was imported from stated, learnt while
-        # building and kept for the runs that have nowhere to cache it (see
-        # 'get_cached_metadata_async').
-        self._file_metadata = None
+        # Everything recorded about this shape's geometry when it was built -
+        # its measurements, and whatever its source stated (see
+        # 'shape_envelope.KEY_METADATA'). Learnt while building or read back
+        # with the geometry, and kept here for the runs that have nowhere to
+        # cache it. See 'get_metadata_async()'.
+        self._metadata = None
 
         # Set by the factory (see ShapeFactory.prepare_async): everything that has
         # to happen before this shape's cache key means anything - 'fileFrom'
@@ -525,24 +511,26 @@ class Shape(ShapeConfiguration):
             if is_cacheable:
                 cache_hash = self.hash
                 if cache_hash:
-                    keys_to_read = [self.kind, "cmps", *self.CACHED_SIDE_DATA]
                     cached, to_cache_in_memory = await ctx.cache_shapes.read_async(
-                        cache_hash, keys_to_read, self.get_cache_metadata()
+                        cache_hash, [self.kind, "cmps"], self.get_cache_metadata()
                     )
-                    # An entry that is absent is an entry that was never
-                    # written, which is not the same as one that was written
-                    # empty: see CACHED_SIDE_DATA. Such a hit is not usable, so
-                    # nothing is taken from it and the shape is built.
-                    side_data_complete = all(cached.get(key) is not None for key in self.CACHED_SIDE_DATA)
-                    if side_data_complete:
-                        for key, attribute in self.CACHED_SIDE_DATA.items():
-                            setattr(self, attribute, cached[key])
-                        if to_cache_in_memory.get(self.kind, False):
-                            self._wrapped = cached[self.kind]
-                        if to_cache_in_memory.get("cmps", False):
-                            self.components = cached["cmps"]
-                        if self.kind in cached and cached[self.kind] is not None:
-                            return cached[self.kind]
+                    # Whatever was recorded about the geometry came back inside
+                    # the same entry as the geometry (see cache_shape.py), so a
+                    # hit is a hit: there is no sibling entry that might be
+                    # missing, and nothing to check for completeness.
+                    #
+                    # Set only on a hit, and to '{}' rather than None when the
+                    # entry recorded nothing: None on this attribute means "not
+                    # known yet" and is what sends 'get_metadata_async()' off to
+                    # build the shape. A miss here has to leave it saying that.
+                    if cached.get(self.kind) is not None:
+                        self._metadata = shape_envelope.metadata_of(cached[self.kind]) or {}
+                    if to_cache_in_memory.get(self.kind, False):
+                        self._wrapped = cached[self.kind]
+                    if to_cache_in_memory.get("cmps", False):
+                        self.components = cached["cmps"]
+                    if self.kind in cached and cached[self.kind] is not None:
+                        return cached[self.kind]
                 else:
                     if self.cache:
                         pc_logging.warning(f"No cache hash for shape: {self.name}")
@@ -561,20 +549,13 @@ class Shape(ShapeConfiguration):
             if self.components:
                 self.components = [self._component_to_envelope(c) for c in self.components]
 
-            # What the wrapper that read the file put on the envelope beside the
-            # BREP (see 'shape_envelope.KEY_METADATA'), taken off here and not
-            # later, because two things below drop it: 'offset'/'scale' go
-            # through a wrapper that decodes the envelope and encodes a fresh
-            # one, and 'apply_metadata' replaces the outer layer outright.
-            #
-            # Kept on the object as well as cached. The cache entry is what
-            # answers for a shape materialized later, but a shape with 'cache:
-            # false', one that does not own its entry, and a run with every tier
-            # switched off all reach here with the file read and nothing to
-            # store it in - and 'pc info' should still say what the file said.
-            stated = shape.get(shape_envelope.KEY_METADATA) if isinstance(shape, dict) else None
-            if isinstance(stated, dict) and stated:
-                self._file_metadata = stated
+            # What the wrapper that produced this envelope recorded about it -
+            # the size it measured, and whatever the source file stated (see
+            # 'shape_envelope.KEY_METADATA'). Taken off here and not later
+            # because 'offset'/'scale' below go through a wrapper that decodes
+            # the envelope and encodes a fresh one, which cannot carry forward
+            # what it was never sent.
+            recorded = shape_envelope.metadata_of(shape)
 
             # TODO(clairbee): apply 'offset' and 'scale' during instantiation and
             #                 apply to both 'wrapped' and 'components'
@@ -588,6 +569,24 @@ class Shape(ShapeConfiguration):
                 if "scale" in self.config:
                     shape = await transform.scale(ctx, shape, self.config["scale"])
 
+                # The transform rebuilt the geometry, so the encoder on the far
+                # side measured what came out and the numbers on the way back
+                # are the new ones - which is the point: a part scaled by two is
+                # not the size the file it was read from would suggest. What
+                # that wrapper could not know is what the *source* stated, so
+                # the sections read at import are laid back under the fresh
+                # measurements rather than lost with the envelope they rode in.
+                #
+                # The old measurements are dropped first rather than merged
+                # under. They describe a shape that no longer exists, so if the
+                # far side could not measure what came out, the honest answer is
+                # that this shape's size is unknown - not the size it used to
+                # be, which is the one answer nobody could detect as wrong.
+                recorded = shape_envelope.merge_metadata(
+                    shape_envelope.without_measurements(recorded),
+                    shape_envelope.metadata_of(shape),
+                )
+
             # Whatever produced the envelope - a factory, a wrapper, a
             # transform - the outer layer around it is this shape's own. It
             # is stamped here rather than left to whoever built the payload,
@@ -595,30 +594,37 @@ class Shape(ShapeConfiguration):
             # the cache later carry exactly the same name and label.
             shape = shape_envelope.apply_metadata(shape, self.get_cache_metadata())
 
+            # Kept on the object as well as cached, because the two answer for
+            # different runs. A shape with 'cache: false', one that does not own
+            # its entry, and a run with every tier switched off all reach here
+            # having built the shape and having nowhere to store what that
+            # produced - and 'pc info' should still be able to say how big it is.
+            self._metadata = recorded or {}
+            if recorded:
+                shape = dict(shape)
+                shape[shape_envelope.KEY_METADATA] = recorded
+
             if cache_hash:
                 if is_cacheable and self.owns_cache_entry:
+                    # The geometry and everything recorded about it go into the
+                    # one entry, in the one write, because they were produced
+                    # together and are valid together: the hash that keys the
+                    # entry covers what produced the geometry, so a shape that
+                    # rebuilds measures again and one that does not never needs
+                    # to. Separate entries could be separately present.
                     to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
                     if self.components and len(self.components) > 0:
                         to_cache["cmps"] = self.components
-                    for key, attribute in self.CACHED_SIDE_DATA.items():
-                        # Unconditionally, including when there is nothing to
-                        # record: an empty entry is what says the question was
-                        # asked and the answer was nothing, which is what the
-                        # read above distinguishes from an entry that is absent.
-                        to_cache[key] = getattr(self, attribute, None) or []
                     properties = self._shape_properties()
                     if properties:
-                        # Both entries are filled here and nowhere else:
-                        # this is the one path that has actually
-                        # instantiated the shape, and so the one that knows
-                        # what came out of it. They are materialized apart
-                        # (see 'get_cached_properties_async()'), and a shape
-                        # that reports nothing leaves no entry to read.
+                        # The one thing still kept beside the geometry rather
+                        # than in it, and the reason is that it is *declared*:
+                        # the hash does not cover a 'properties:' section, so
+                        # editing one leaves the geometry entry valid and a copy
+                        # buried inside it would go on answering with the values
+                        # it happened to be written with. See
+                        # 'cache_shape.properties_key()'.
                         to_cache[properties_key(self.kind)] = properties
-                    if isinstance(stated, dict) and stated:
-                        # The same arrangement as the properties above, for what
-                        # the *file* said rather than what the declaration does.
-                        to_cache[metadata_key(self.kind)] = stated
                     to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
                     do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
                 else:
@@ -734,10 +740,20 @@ class Shape(ShapeConfiguration):
         if shape is None or shape_envelope.is_shape_envelope(shape):
             return shape
         import ocp_serialize
+        import shape_measure
 
         if name is None and label is None:
             name, label = self._shape_metadata()
-        return shape_envelope.make_shape(ocp_serialize.compressed_brep(shape), name=name, label=label)
+        envelope = shape_envelope.make_shape(ocp_serialize.compressed_brep(shape), name=name, label=label)
+        # Measured here for the same reason a wrapper's shapes are measured as
+        # they are encoded: this is the moment the live object exists, and it is
+        # the last one. An in-process factory is the one producer that does not
+        # go through the sandbox encoder, so without this its shapes would be
+        # the only ones whose size had to be computed all over again later.
+        measured = shape_measure.measurements_or_none(shape)
+        if measured:
+            envelope[shape_envelope.KEY_METADATA] = {shape_envelope.METADATA_MEASUREMENTS: measured}
+        return envelope
 
     def _component_to_envelope(self, component):
         """Normalize a component (or nested list of components) into envelopes."""
@@ -746,19 +762,15 @@ class Shape(ShapeConfiguration):
         return self._to_envelope(component)
 
     def take_side_data_from(self, source) -> None:
-        """Adopt the extra cache entries of the object this one points at.
+        """Adopt what the object this one points at recorded about its geometry.
 
         A reference shares the cache entry of its source (see
         'take_cache_key_from'), so the two have to answer the same - and the
-        source is what builds, and so what learns, whatever CACHED_SIDE_DATA
-        holds. Called once the source has been materialized, beside the copy of
-        its components that happens for the same reason.
+        source is what builds, and so what learns, what the geometry measures
+        and what its file stated. Called once the source has been materialized,
+        beside the copy of its components that happens for the same reason.
         """
-        for attribute in self.CACHED_SIDE_DATA.values():
-            setattr(self, attribute, copy.copy(getattr(source, attribute, None)))
-        # ...and what the file the source was read from stated, which is the
-        # same thing learnt the same way and kept somewhere else.
-        self._file_metadata = copy.copy(getattr(source, "_file_metadata", None))
+        self._metadata = copy.deepcopy(getattr(source, "_metadata", None))
 
     async def get_cache_value(self, ctx, shape):
         """The value handed to the shape cache under 'self.kind'.
@@ -2521,68 +2533,75 @@ class Shape(ShapeConfiguration):
     def get_max_dimension(self, ctx):
         return asyncio.run(self.get_max_dimension_async(ctx))
 
+    async def get_metadata_async(self, ctx):
+        """Everything recorded about this shape when it was built, or None.
+
+        The three sections 'shape_envelope' defines - what the geometry
+        measures, what its source stated about its elements, what that source
+        stated about itself - as one dict, exactly as the wrapper that built the
+        shape produced them.
+
+        Materializing the shape is what produces this, and materializing it from
+        the cache is what reads it back: the metadata lives in the same cache
+        entry as the geometry, so a hit carries both and there is no second
+        lookup to make and no second entry to be missing. That is the whole
+        reason this is cheap enough to ask for.
+
+        'None' for a shape that recorded nothing - one that did not build, or
+        one whose geometry could not be measured. A reader cannot tell those
+        apart and should not: all of them mean "nothing to report".
+
+        Internally the two *are* told apart, because they decide different
+        things: 'None' on the attribute means nobody has looked yet and is what
+        sends this to build the shape, while an empty dict means the shape has
+        been materialized and recorded nothing. Without that an object with
+        nothing to report would rebuild on every ask.
+        """
+        if self._metadata is None:
+            await self.get_wrapped(ctx)
+        return self._metadata or None
+
     async def get_measurements_async(self, ctx):
         """How big this shape is and how much of it there is, or None.
 
-        ``{"bbox": [...] | None, "volume": float | None, "solids": int}`` as
-        'wrappers/wrapper_measure.py' produced it - the box in the shape's own
-        coordinates and without the gap OCCT pads one by, the volume in cubic
-        millimetres, and how many solids that is the volume of. None when the
-        shape did not build or could not be measured.
+        ``{"bbox": [...] | None, "volume": float | None, "solids": int}`` - the
+        box in the shape's own coordinates and without the gap OCCT pads one by,
+        the volume in cubic millimetres, and how many solids that is the volume
+        of.
 
-        Cached in an entry of its own under the geometry's hash (see
-        'cache_shape.measurements_key'), which is what makes this affordable to
-        ask: the numbers are derived from the geometry, so they are exactly as
-        valid as the entry they are named after, and the measuring costs a
-        sandbox process while reading them back costs a file. A shape that
-        rebuilds measures again, because its hash moved.
-
-        The third accessor of its kind on this class, beside
-        'get_cached_properties_async' and 'get_annotations'; what is different
-        here is that a miss is filled in rather than reported, since unlike
-        those two this can be computed on demand.
+        Measured as the shape was *built*, in the process that held the live
+        geometry, and carried here in the envelope's metadata. Nothing is
+        computed on demand: by the time anybody asks, either the shape has been
+        built - in which case the numbers came back with it - or it has not, in
+        which case building it is what produces them, and that is the same work
+        as answering any other question about it.
         """
-        # 'kind' is set by Part, Assembly, Sketch and Scene rather than by this
-        # class, so a *bare* Shape has none - and an entry named after one it
-        # does not have is an entry nothing could read back. Such a shape is
-        # still measured if it has geometry; only the caching is skipped.
-        kind = getattr(self, "kind", None)
-        key = measurements_key(kind) if kind else None
-        cache_hash = await self.get_cache_key_async()
-        if key and ctx and cache_hash is not None:
-            cached, _ = await ctx.cache_shapes.read_async(self.hash, [key])
-            measured = cached.get(key)
-            if isinstance(measured, dict):
-                return measured
+        metadata = await self.get_metadata_async(ctx)
+        return shape_envelope.metadata_section(metadata, shape_envelope.METADATA_MEASUREMENTS)
 
-        obj = await self.get_wrapped(ctx)
-        if obj is None:
-            # Nothing was built, so there is nothing to measure - and nothing to
-            # record either: the next run should ask the geometry again rather
-            # than be answered with this failure.
-            return None
+    async def get_annotations_async(self, ctx) -> list:
+        """What this shape's source said about its individual elements.
 
-        with pc_logging.Action("Measure", self.project_name, self.name):
-            try:
-                measured = await measure.measurements(ctx, obj)
-            except Exception as e:  # pylint: disable=broad-except
-                # About the machine rather than the shape - a sandbox that is not
-                # built yet, most often - so it is reported and not cached. 'pc
-                # info' still has the configuration, the hash and the
-                # dependencies to show, which is most of what it was asked for.
-                pc_logging.debug("Failed to measure '%s': %s" % (self.name, e))
-                return None
+        One opaque record per element, as the importing wrapper read them. A
+        DXF states these as XDATA against a line, which is where the angle and
+        the radius of a sheet metal bend come from; a source that states nothing
+        of the kind yields an empty list.
 
-        if key and ctx and cache_hash is not None:
-            await ctx.cache_shapes.write_async(self.hash, {key: measured})
-        return measured
+        The records are the source's own vocabulary and are never read into
+        here. What asks the real question is a manufacturing check, and it has
+        no business knowing which format answered.
+        """
+        metadata = await self.get_metadata_async(ctx)
+        return shape_envelope.metadata_section(metadata, shape_envelope.METADATA_ANNOTATIONS) or []
 
     async def _reported_async(self, ctx):
         """What 'pc info' adds to a shape once the shape itself has been built.
 
-        Two things, and neither of them is in the declaration: what the geometry
-        *measures*, and what the file it came from *stated*.
+        All of it comes out of the one metadata dict the shape was built with,
+        and it is reported in two registers:
 
+        The measurements are the generic half and are named here, because they
+        are the same three numbers for every shape whatever produced it.
         ``BoundingBox`` is the measured box as ``min``/``max``/``size`` triples
         of millimetres. ``size`` is stated rather than left to be subtracted -
         it is the one of the three anybody reads out loud. ``Volume`` is in
@@ -2592,57 +2611,43 @@ class Shape(ShapeConfiguration):
         negative volume is reported as it stands: the faces are oriented inward,
         which is worth seeing rather than taking the modulus of.
 
-        What the file stated is merged in **as the wrapper named it**. The
-        sections are a STEP file's or a DXF drawing's own vocabulary, and the
-        core has no business translating one into the other - it did not read
-        the file and does not know which format answered.
+        Everything else is merged in **as the wrapper named it**. The sections
+        are a STEP file's or a DXF drawing's own vocabulary, and the core has no
+        business translating one into the other - it did not read the file and
+        does not know which format answered.
         """
         info = {}
 
-        measured = await self.get_measurements_async(ctx)
+        metadata = await self.get_metadata_async(ctx)
+        if not metadata:
+            return info
+
+        measured = shape_envelope.metadata_section(metadata, shape_envelope.METADATA_MEASUREMENTS)
         if measured:
-            box = measured.get("bbox")
+            box = measured.get(shape_envelope.METADATA_BBOX)
             if box:
                 info["BoundingBox"] = {
                     "min": list(box[:3]),
                     "max": list(box[3:]),
                     "size": [box[axis + 3] - box[axis] for axis in range(3)],
                 }
-            if measured.get("volume") is not None:
-                info["Volume"] = measured["volume"]
-                info["Solids"] = measured.get("solids", 0)
+            if measured.get(shape_envelope.METADATA_VOLUME) is not None:
+                info["Volume"] = measured[shape_envelope.METADATA_VOLUME]
+                info["Solids"] = measured.get(shape_envelope.METADATA_SOLIDS, 0)
 
-        stated = await self.get_cached_metadata_async(ctx)
-        if stated:
-            info.update(stated)
+        sections = shape_envelope.metadata_section(metadata, shape_envelope.METADATA_SECTIONS)
+        if sections:
+            info.update(sections)
+
+        # The per-element records are deliberately *not* reported from here.
+        # They are carried for 'get_annotations_async()', whose caller is a
+        # manufacturing check that needs every element including the ones
+        # nothing was written against. Deciding which of them are worth showing
+        # a reader means reading into a record, and what a record holds is the
+        # producing wrapper's vocabulary - so the wrapper reports the ones worth
+        # showing under a heading of its own, in 'sections' above, and this
+        # stays unable to tell a bend angle from a layer name.
         return info
-
-    async def get_cached_metadata_async(self, ctx):
-        """What the file this shape was imported from stated, or None.
-
-        The wrapper that read the file put it on the envelope beside the BREP
-        (see 'shape_envelope.KEY_METADATA'); this is the entry it was stored in
-        (see 'cache_shape.metadata_key'). Read on its own, so asking what a STEP
-        file's layers are does not pull a BREP back out of the cache.
-
-        None for a shape whose type reads no file, for one built before any of
-        this existed, and for a file that stated nothing - all three mean the
-        same thing to a reader and none of them is a reason to build again.
-
-        What this object learnt while building comes first, and is the answer
-        for a run that had nowhere to cache it: 'cache: false', a shape that does
-        not own its entry, every tier switched off. The cache entry is what
-        answers on every run after the one that built it.
-        """
-        if self._file_metadata:
-            return self._file_metadata
-        kind = getattr(self, "kind", None)
-        if not kind or not ctx or await self.get_cache_key_async() is None:
-            return None
-        key = metadata_key(kind)
-        cached, _ = await ctx.cache_shapes.read_async(self.hash, [key])
-        metadata = cached.get(key)
-        return metadata if isinstance(metadata, dict) and metadata else None
 
     async def _run_test_async(self, ctx: Context, tests: list | None = None, use_wrapper: bool = False) -> bool:
         if not self.finalized:

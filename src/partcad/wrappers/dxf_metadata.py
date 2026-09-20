@@ -289,6 +289,10 @@ def read_file(path: str, include=None, exclude=None) -> dict:
     one format's vocabulary into another's. ``Layers`` is the heading a STEP file
     uses for the same idea, which is why it is lifted out of ``Drawing`` - the
     rest of what a DXF states about itself has no counterpart anywhere else.
+
+    ``Annotations`` is there too, and holds the annotated elements alone. The
+    full list under the second key is what a manufacturing check reads; this is
+    what a person reads.
     """
     import ezdxf
 
@@ -296,12 +300,30 @@ def read_file(path: str, include=None, exclude=None) -> dict:
     described = describe(document, include, exclude)
     layers = described.pop("layers", [])
 
+    annotations = annotations_of(document, include, exclude)
+
     metadata = {}
     if described:
         metadata["Drawing"] = described
     if layers:
         metadata["Layers"] = layers
-    return {"metadata": metadata, "annotations": annotations_of(document, include, exclude)}
+
+    # Which elements are worth *showing* a reader is decided here and nowhere
+    # else. The full list travels on as 'annotations' - a check that every bend
+    # line states its angle has to see the lines that do not - but a drawing of
+    # a few thousand lines would bury what it does say under what it does not,
+    # and an element somebody wrote an angle against is what the question was
+    # asked to see.
+    #
+    # It is a section rather than something the core filters out of the list,
+    # because filtering means reading into a record, and what a record holds is
+    # this module's vocabulary. The core reports a section verbatim under the
+    # heading given here and never opens one.
+    annotated = [record for record in annotations if record.get("metadata")]
+    if annotated:
+        metadata["Annotations"] = annotated
+
+    return {"metadata": metadata, "annotations": annotations}
 
 
 def describe(document, include=None, exclude=None) -> dict:

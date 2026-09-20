@@ -33,6 +33,7 @@ exercised through 'Shape.get_wrapped' over a shape that builds nothing.
 """
 
 import asyncio
+import hashlib
 import os
 import sys
 
@@ -41,9 +42,11 @@ import pytest
 from cache_config import CacheUserConfig
 
 import partcad as pc
+from partcad import cache_hash as cache_hash_module
+from partcad import shape_envelope
+from partcad.cache_hash import CacheHash
 from partcad.cache_shape import ShapeCache
 from partcad.sketch import Sketch
-from partcad.sketch_factory_dxf import SketchFactoryDxf
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 import dxf_metadata  # noqa: E402
@@ -189,7 +192,13 @@ BREP = b"CASCADE Topology V3, (c) Open Cascade\n" + b"0" * (1 << 16)
 
 
 class _CountingSketch(Sketch):
-    """A sketch that records what its drawing said, and counts the times it read it."""
+    """A sketch that records what its drawing said, and counts the times it read it.
+
+    What it returns is what a real import wrapper returns: one envelope, with
+    the annotations on it under the protocol's own section. There is no second
+    channel to set anything on, which is the point - a factory that wanted one
+    would have to invent it.
+    """
 
     def __init__(self, project_name, config, annotations):
         super().__init__(project_name, config)
@@ -198,8 +207,11 @@ class _CountingSketch(Sketch):
 
     async def get_shape(self, ctx):
         self.builds += 1
-        self.annotations = list(self._annotations)
-        return {"name": self.name, "label": self.name, "brep": BREP}
+        envelope = {"name": self.name, "label": self.name, "brep": BREP}
+        metadata = shape_envelope.make_metadata(annotations=self._annotations)
+        if metadata:
+            envelope[shape_envelope.KEY_METADATA] = metadata
+        return envelope
 
 
 @pytest.fixture
@@ -228,6 +240,9 @@ def test_annotations_come_back_with_the_cached_geometry(ctx):
     They are cached because they have to be: a sketch that comes out of the
     cache is never instantiated, so annotations that were only ever set while
     building would be silently empty for every run but the first.
+
+    And they come back out of the *same* entry the geometry does, which is what
+    makes one cache hit the whole answer.
     """
     annotations = [{"type": "LINE", "layer": "BEND_UP", "metadata": {"angle": 90.0}}]
     first = _sketch(ctx, annotations)
@@ -238,6 +253,32 @@ def test_annotations_come_back_with_the_cached_geometry(ctx):
     second = _sketch(ctx, [])
     assert asyncio.run(second.get_annotations(ctx)) == annotations
     assert second.builds == 0
+
+
+def test_the_geometry_entry_is_the_only_entry(ctx):
+    """One key, holding the geometry and everything recorded about it.
+
+    The annotations used to be a sibling entry keyed on the same hash with a
+    suffix, which is two entries that can be separately present for one object.
+    Reading the geometry key alone now yields both halves, and no other key is
+    written for the sketch at all.
+    """
+    annotations = [{"type": "LINE", "layer": "BEND_UP", "metadata": {"angle": 90.0}}]
+    sketch = _sketch(ctx, annotations, name="one-entry")
+    asyncio.run(sketch.get_wrapped(ctx))
+
+    cached, _ = asyncio.run(ctx.cache_shapes.read_async(sketch.hash, ["sketch"]))
+    entry = cached["sketch"]
+    assert shape_envelope.brep_bytes(entry["brep"]) == BREP
+    assert (
+        shape_envelope.metadata_section(shape_envelope.metadata_of(entry), shape_envelope.METADATA_ANNOTATIONS)
+        == annotations
+    )
+
+    # Nothing under the suffixes this used to be split across.
+    stale, _ = asyncio.run(ctx.cache_shapes.read_async(sketch.hash, ["annotations", "sketch-meta"]))
+    assert stale.get("annotations") is None
+    assert stale.get("sketch-meta") is None
 
 
 def test_a_sketch_that_says_nothing_records_that_it_said_nothing(ctx):
@@ -255,31 +296,71 @@ def test_a_sketch_that_says_nothing_records_that_it_said_nothing(ctx):
     assert second.builds == 0
 
 
-def test_geometry_cached_before_annotations_existed_is_built_again(ctx):
-    """The upgrade case, and the reason a missing entry is not taken for empty.
+def _seeded(version, data):
+    """A cache key as PartCAD of that format version would have computed it."""
+    hasher = hashlib.md5()
+    hasher.update(("partcad-cache-v%d" % version).encode())
+    cache_hash = CacheHash("//test:upgrade", hasher=hasher, cache=True)
+    cache_hash.add_string(data)
+    return cache_hash
 
-    A sketch cached by an older PartCAD has valid geometry under a key that has
-    not moved. Reading it back and reporting no annotations would say the
-    drawing annotates nothing - which is a different answer, and the one a check
-    would act on. So the geometry is built again, once, and both entries are
-    written.
+
+def test_a_key_is_seeded_with_the_cache_format_version():
+    """The mechanism the upgrade below rests on, asserted against the real thing.
+
+    A hash built the ordinary way has to match one seeded by hand with the
+    *current* version tag, and differ from one seeded with the previous. The
+    first half is what fails if the seeding is ever dropped or mis-spelled -
+    comparing two hand-seeded hashes would only ever prove that md5 tells two
+    inputs apart.
     """
-    annotations = [{"type": "LINE", "layer": "BEND_UP", "metadata": {"angle": 90.0}}]
+    data = "a sketch that was cached before any of this existed"
 
-    # A cache entry with the geometry alone, exactly as it used to be written.
-    legacy = _sketch(ctx, annotations, name="legacy")
-    asyncio.run(
-        ctx.cache_shapes.write_async(legacy.hash, {"sketch": {"brep": BREP}}),
-    )
+    ordinary = CacheHash("//test:upgrade", cache=True)
+    ordinary.add_string(data)
 
-    rebuilt = _sketch(ctx, annotations, name="legacy")
-    assert asyncio.run(rebuilt.get_annotations(ctx)) == annotations
-    assert rebuilt.builds == 1
+    assert ordinary.get() == _seeded(cache_hash_module.VERSION, data).get()
+    assert ordinary.get() != _seeded(cache_hash_module.VERSION - 1, data).get()
 
-    # ...and now it is there, so nothing builds again.
-    again = _sketch(ctx, annotations, name="legacy")
-    assert asyncio.run(again.get_annotations(ctx)) == annotations
-    assert again.builds == 0
+
+def test_a_geometry_only_entry_is_never_read_back_as_one_that_recorded_nothing(ctx):
+    """The upgrade case, and why it is a cache *version* rather than a check.
+
+    A sketch cached by an older PartCAD holds valid geometry and nothing else,
+    and nothing in that entry distinguishes "this drawing annotates nothing"
+    from "nobody recorded what it annotates". The first is an answer a
+    manufacturability check acts on; the second is not an answer at all.
+
+    Rather than teach every reader to tell them apart, the entry is not read:
+    the version seeds every hash, so what the old run wrote is never looked up
+    again.
+    """
+    data = "a sketch that was cached before any of this existed"
+    old = _seeded(cache_hash_module.VERSION - 1, data)
+
+    # Exactly what the previous format wrote: the geometry, alone.
+    asyncio.run(ctx.cache_shapes.write_async(old, {"sketch": {"brep": BREP}}))
+
+    # It is there under the key it went in under...
+    written, _ = asyncio.run(ctx.cache_shapes.read_async(old, ["sketch"]))
+    assert written["sketch"] is not None
+
+    # ...and unreachable under the one this version asks with, so "recorded
+    # nothing" is never what a reader is told.
+    current = CacheHash("//test:upgrade", cache=True)
+    current.add_string(data)
+    cached, _ = asyncio.run(ctx.cache_shapes.read_async(current, ["sketch"]))
+    assert cached.get("sketch") is None
+
+
+def test_the_cache_version_was_moved_for_this_change(ctx):
+    """The entry format changed, so the version had to, and this says so out loud.
+
+    Without the bump, a v3 entry - geometry and nothing else - would be read
+    back under an unchanged key and reported as a drawing that annotates
+    nothing.
+    """
+    assert cache_hash_module.VERSION >= 4
 
 
 #
@@ -389,61 +470,52 @@ def test_one_pass_over_the_file_answers_both_questions(tmp_path):
     assert [a["layer"] for a in read["annotations"]] == ["BEND_UP"]
     # ...and under the headings 'pc info' prints them with, which is the
     # reader's to choose: the core merges what a wrapper hands it verbatim.
-    assert set(read["metadata"]) == {"Drawing", "Layers"}
+    assert set(read["metadata"]) == {"Annotations", "Drawing", "Layers"}
     assert len(read["metadata"]["Layers"]) == len(dxf_metadata.describe(ezdxf.readfile(path))["layers"])
 
 
 #
-# ...and what the factory makes of them for 'pc info'
+# ...and which of them a reader is shown, which the *wrapper* decides
 #
 
 
-class _Runtime:
-    """The sandbox as 'SketchFactoryPython.info' reports it: two strings."""
-
-    version = "3.12"
-    path = "/nowhere"
-
-
-class _InfoSketch:
-    """A sketch that has annotations and nothing else worth reporting."""
-
-    def __init__(self, annotations):
-        self.annotations = annotations
-
-    def shape_info(self, ctx):
-        """What the shape itself contributes, which this factory only adds to."""
-        return {"Kind": "sketch"}
-
-
-def _info(annotations):
-    """'SketchFactoryDxf.info' over a sketch carrying 'annotations'."""
-    factory = object.__new__(SketchFactoryDxf)
-    factory.ctx = None
-    factory.runtime = _Runtime()
-    return SketchFactoryDxf.info(factory, _InfoSketch(annotations))
-
-
 def test_the_annotated_elements_are_what_pc_info_lists(tmp_path):
-    """The per-element half: an 'angle' and a 'radius' against a bend line.
+    """An 'angle' and a 'radius' against a bend line, and no un-annotated lines.
 
-    What the drawing said about *itself* is not here - the wrapper put that on
-    the envelope and the core reports it from its own cache entry - so this
-    factory is only ever adding the elements the sketch already carries.
+    Chosen here, in the module that reads the drawing, rather than by the core:
+    picking the annotated records out means knowing that a record has a
+    'metadata' key and that an empty one means un-annotated, which is this
+    format's vocabulary. The core reports the section verbatim and never opens a
+    record - so 'Annotations' is a heading this module chose, exactly like
+    'Layers' and 'Drawing' beside it.
     """
-    bend = {"layer": "BEND_UP", "metadata": {"angle": 90.0, "radius": 1.5}}
-    info = _info([bend, {"layer": "CUT", "metadata": {}}])
+    read = dxf_metadata.read_file(_drawing(tmp_path))
 
-    assert info["Annotations"] == [bend]
+    listed = read["metadata"]["Annotations"]
+    assert [record["layer"] for record in listed] == ["BEND_UP", "BEND_DOWN"]
+    # Values exactly as the file states them: this bend is written as string
+    # tags, so its angle is the text "90" and not the number 90.0. The one
+    # beside it is written as typed tags and comes back typed.
+    assert listed[0]["metadata"] == {"angle": "90", "radius": "1.5", "direction": "Up"}
+    assert listed[1]["metadata"] == {"angle": 30.0, "radius": 2.0, "direction": "down"}
+
+    # ...while the full list, which the manufacturability check reads, still
+    # holds the un-annotated element that is deliberately not listed above.
+    assert any(not record["metadata"] for record in read["annotations"])
 
 
-def test_a_drawing_that_annotated_nothing_gets_no_heading_at_all():
-    """An empty 'Annotations' would read as a drawing that was asked and said
-    nothing, which is not the same as one where the question does not arise."""
-    assert "Annotations" not in _info([])
-    assert "Annotations" not in _info(None)
+def test_a_drawing_that_annotates_nothing_lists_no_elements(tmp_path):
+    """No section at all, rather than an empty one.
 
+    An empty 'Annotations' heading in 'pc info' would read as a drawing whose
+    elements were examined and found bare, which is what it is - but the
+    heading costs a reader a line to discover it says nothing.
+    """
+    document = ezdxf.new("R2010")
+    document.modelspace().add_line((0, 0), (1, 0))
+    path = str(tmp_path / "bare.dxf")
+    document.saveas(path)
 
-def test_what_the_sketch_itself_reports_is_kept():
-    """The factory adds to 'shape_info' rather than standing in for it."""
-    assert _info([])["Kind"] == "sketch"
+    read = dxf_metadata.read_file(path)
+    assert read["annotations"]
+    assert "Annotations" not in read["metadata"]

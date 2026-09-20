@@ -101,10 +101,10 @@ def process(path, request):
         # What the drawing says about its own elements, and about itself, which
         # the geometry cannot carry: BREP has nowhere to put an angle written
         # against a line, nor the name of a layer that was filtered out. Read
-        # here, as the file is imported, so that both travel onwards from here -
-        # the elements with the sketch (see 'Sketch.get_annotations'), the rest
-        # on the envelope below - and nothing downstream has to know that a DXF
-        # file was ever involved.
+        # here, as the file is imported, because this is the one process that
+        # ever has the file open - and handed to the encoder below, so that both
+        # halves land on the envelope beside the BREP and, from there, in the
+        # same cache entry as the geometry.
         #
         # The same layer filters the import above was given, so the annotations
         # describe what is in the sketch rather than what was filtered out of
@@ -115,22 +115,31 @@ def process(path, request):
             include=request["include"],
             exclude=request["exclude"],
         )
-        # What the drawing says about *itself* goes onto the envelope beside the
-        # BREP, under the protocol's own key, so the core stores and reports it
-        # without knowing a DXF was involved (see 'ocp_serialize.KEY_METADATA').
+        # Both halves go under the protocol's own section names - the per-element
+        # records under 'annotations', what the drawing says about itself under
+        # 'sections' - and nothing else travels beside them. There is no second
+        # channel: a sibling key on this response would be one more thing for the
+        # core to know about, to carry and to cache separately, and knowing that
+        # a DXF was involved is exactly what the core must not do.
+        #
         # The shape is encoded here rather than left to 'handle_output' because
-        # that is what there is to hang the key on; the name and the label are
-        # the ones the request carried, which is what that step would have
+        # that is what there is to hang the metadata on; the name and the label
+        # are the ones the request carried, which is what that step would have
         # stamped on anyway.
-        shape = ocp_serialize.encode_shape(shape, name=request.get("name"), label=request.get("label"))
-        if read["metadata"]:
-            shape[ocp_serialize.KEY_METADATA] = read["metadata"]
+        shape = ocp_serialize.encode_shape(
+            shape,
+            name=request.get("name"),
+            label=request.get("label"),
+            metadata=ocp_serialize.make_metadata(
+                annotations=read["annotations"],
+                sections=read["metadata"],
+            ),
+        )
         return {
             "success": True,
             "exception": None,
             "warning": warning,
             "shape": shape,
-            "annotations": read["annotations"],
         }
 
     except Exception as e:

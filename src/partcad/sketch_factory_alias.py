@@ -131,9 +131,10 @@ class SketchFactoryAlias(SketchFactory):
             # The pieces a compound reports separately from its own shape,
             # which the source resolved along with it...
             obj.components = copy.copy(source.components)
-            # ...and, for the same reason, whatever else the source learned
-            # while building: a sketch's annotations are what its drawing said,
-            # and an alias to it says the same (see 'Shape.CACHED_SIDE_DATA').
+            # ...and, for the same reason, whatever the source recorded about
+            # the geometry while building it: how big it is and what its drawing
+            # said, which an alias to it answers identically because it is the
+            # same geometry (see 'Shape.take_side_data_from').
             obj.take_side_data_from(source)
             return wrapped
 

@@ -11,7 +11,7 @@ import json
 
 from . import shape_envelope, telemetry
 from .cache import Cache
-from .cache_backend import MEASUREMENTS_SUFFIX, METADATA_SUFFIX, PROPERTIES_SUFFIX
+from .cache_backend import PROPERTIES_SUFFIX
 from .cache_hash import CacheHash
 from .utils import total_size
 
@@ -21,35 +21,95 @@ from .utils import total_size
 # that the protocol no longer registers them, the cache stores plain data,
 # which also removes an arbitrary code execution path from a cache file.
 #
-# What it stores is the payload alone - never the envelope's outer layer. A
-# lone shape (a part or a sketch, and the bulk of what is cached) is stored as
+# What it stores is the payload plus the metadata the producer recorded with it,
+# and never the envelope's outer layer. The outer layer (name, label, placement)
+# says which object this is, which several objects sharing one geometry cannot
+# agree on; the metadata describes the geometry itself, so it belongs to the
+# entry exactly as much as the BREP does.
+#
+# **One entry holds both.** Everything learnt about a shape as it was built -
+# how big it is, what its source file stated, what that file said about
+# individual elements - was previously written to sibling entries keyed on the
+# same hash with a suffix. That made the geometry and the facts about it
+# separately present, separately missing, and separately readable, which is
+# three ways for them to disagree about one object. Now a cache hit either
+# carries the lot or is not a hit.
+#
+# A lone shape (a part or a sketch, and the bulk of what is cached) is stored as
 # the zstd-compressed BREP frame the core already holds in memory: it goes to
 # the storage tier byte for byte, with no JSON, no base64 and no re-encoding.
+# That is worth keeping, so metadata does not turn such an entry into JSON.
+# Instead it is framed in front of the BREP, which stays exactly the bytes it
+# was (see _FRAME_MAGIC).
+#
 # Anything else (an assembly tree, a list of components) has to be JSON, and
 # there each payload it holds is base64 - the one form JSON can carry.
 #
-# The two are told apart on read by the leading bytes: JSON produced here is
-# always an object or an array, while a BREP payload is either a zstd frame or,
-# where the peer had no zstd, the ASCII BREP header - the same distinction
-# 'wrappers/ocp_serialize.py' already relies on.
+# The three are told apart on read by the leading bytes: the frame by its magic,
+# JSON produced here is always an object or an array, and a BREP payload is
+# either a zstd frame or, where the peer had no zstd, the ASCII BREP header -
+# the same distinction 'wrappers/ocp_serialize.py' already relies on.
 _BREP_PREFIXES = (b"\x28\xb5\x2f\xfd", b"CASCADE Topology", b"DBRep_DrawableShape")
+
+# A BREP payload with metadata in front of it:
+#
+#     b"PCM1" | 4-byte big-endian length of the JSON | JSON metadata | BREP
+#
+# Chosen over putting the BREP inside the JSON because the BREP is by far the
+# largest thing here and base64 would cost a third of its size and a copy in
+# each direction, on every read and every write, to carry a few hundred bytes of
+# metadata. Here the BREP is still the exact bytes the core holds, at a known
+# offset, and reading it back is a slice.
+#
+# The magic cannot collide with either of the other two forms: no zstd frame and
+# no BREP file begins with it, and neither does JSON.
+_FRAME_MAGIC = b"PCM1"
+_FRAME_HEADER = len(_FRAME_MAGIC) + 4
 
 
 def _serialize(value) -> bytes:
     """The bytes to store for a cache value, with no outer layer left in them.
 
-    A lone shape needs no conversion at all: the core already carries its
-    payload as the compressed bytes, so they are handed to the storage tier as
-    they are, with nothing copied and nothing re-encoded.
+    A lone shape with nothing recorded about it needs no conversion at all: the
+    core already carries its payload as the compressed bytes, so they are handed
+    to the storage tier as they are, with nothing copied and nothing re-encoded.
+    One with metadata is the same bytes behind a small frame (see _FRAME_MAGIC),
+    so that the geometry and what is known about it are one entry without the
+    geometry paying for it.
     """
+    metadata = shape_envelope.metadata_of(value)
     payload = shape_envelope.strip_metadata(value)
-    if isinstance(payload, dict) and list(payload) == [shape_envelope.KEY_BREP]:
-        return shape_envelope.brep_bytes(payload[shape_envelope.KEY_BREP])
+    # The metadata is taken out before asking whether this is a lone shape,
+    # because 'strip_metadata()' deliberately leaves it in place. Asking with it
+    # still there answers "no" for every shape that carries any, which silently
+    # sends the largest thing here down the base64 path it exists to avoid.
+    geometry = payload
+    if isinstance(payload, dict) and shape_envelope.KEY_METADATA in payload:
+        geometry = {key: value for key, value in payload.items() if key != shape_envelope.KEY_METADATA}
+    if isinstance(geometry, dict) and list(geometry) == [shape_envelope.KEY_BREP]:
+        brep = shape_envelope.brep_bytes(geometry[shape_envelope.KEY_BREP])
+        if not metadata:
+            return brep
+        header = json.dumps(metadata).encode("utf-8")
+        return _FRAME_MAGIC + len(header).to_bytes(4, "big") + header + brep
+    payload = geometry
+    if metadata:
+        # An assembly or a component list: already JSON, so the metadata is one
+        # more key in it rather than a frame around it.
+        payload = dict(payload)
+        payload[shape_envelope.KEY_METADATA] = metadata
     return json.dumps(shape_envelope.encode(payload)).encode("utf-8")
 
 
 def _deserialize(data: bytes):
-    """Inverse of '_serialize()' - the payload, still without an outer layer."""
+    """Inverse of '_serialize()' - the payload and its metadata, no outer layer."""
+    if data.startswith(_FRAME_MAGIC):
+        length = int.from_bytes(data[len(_FRAME_MAGIC) : _FRAME_HEADER], "big")
+        metadata = json.loads(data[_FRAME_HEADER : _FRAME_HEADER + length].decode("utf-8"))
+        return {
+            shape_envelope.KEY_BREP: data[_FRAME_HEADER + length :],
+            shape_envelope.KEY_METADATA: metadata,
+        }
     if data.startswith(_BREP_PREFIXES):
         return {shape_envelope.KEY_BREP: data}
     return shape_envelope.decode(json.loads(data.decode("utf-8")))
@@ -65,36 +125,15 @@ def properties_key(kind: str) -> str:
     it happened to be written with. An entry of its own is written, read and
     missed on its own - and a shape's properties can be had without pulling its
     geometry back out of the cache.
+
+    This is the one thing about a shape that is still kept apart from it, and
+    the reason is the sentence above: it is *declared* rather than produced,
+    so the hash the geometry is keyed on does not cover it. Everything the
+    machinery that built the geometry learnt - its size, what its source file
+    stated - is inside the geometry's own entry, because the same hash makes
+    it valid or stale.
     """
     return kind + PROPERTIES_SUFFIX
-
-
-def metadata_key(kind: str) -> str:
-    """The key holding what the *file* the shape came from stated about itself.
-
-    A STEP file's layers and property sets, a DXF drawing's layers and units:
-    read by the wrapper that imports the file, carried back on the envelope
-    beside the BREP, and stored here.
-
-    Beside the geometry for the same reason the properties are, and one more of
-    its own: it is answered without pulling a BREP back out of the cache, which
-    is what 'pc info' wants - it asks what the file said, not what the shape is.
-    A shape type that reads no file never writes this entry, and a missing entry
-    reads as "nothing stated" rather than as a reason to build again.
-    """
-    return kind + METADATA_SUFFIX
-
-
-def measurements_key(kind: str) -> str:
-    """The key holding what the geometry measures: its box, its volume, its solids.
-
-    Unlike the two above this is *derived* from the geometry rather than stated
-    beside it, so it is exactly as valid as the entry it is named after - the
-    same hash covers both, and a shape that rebuilds measures again. It is a
-    separate entry all the same, because the measuring costs a sandbox and the
-    question ("how big is it?") is asked far more often than the BREP is needed.
-    """
-    return kind + MEASUREMENTS_SUFFIX
 
 
 @telemetry.instrument()
