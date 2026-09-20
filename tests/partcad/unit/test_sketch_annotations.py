@@ -12,10 +12,18 @@ imported ('wrappers/dxf_metadata.py') and carried beside the geometry from then
 on, which is what makes it a property of the *sketch* rather than of the file:
 the day another sketch type states the same thing, nothing that reads it changes.
 
+A drawing also says things about *itself* - which layers it has, what its
+numbers are in, which application wrote it - and that is read on the same trip,
+for a reason of its own: a sketch is the layers its filters selected, and the
+interesting thing about the ones they did not select is that they exist. It
+travels a different road from here, on the envelope beside the BREP rather than
+on the sketch, so what is checked of it here is the reading alone.
+
 Two halves are checked here, and they are the two the feature is made of:
 
 * the reading - which spellings of XDATA are understood, which elements are
-  reported, and what the layer filters do to the answer;
+  reported, what the layer filters do to the answer, and what the drawing says
+  about itself;
 * the carrying - that the annotations are cached beside the geometry, and that a
   cache entry written before they existed is rebuilt rather than read back as a
   drawing that annotates nothing.
@@ -35,6 +43,7 @@ from cache_config import CacheUserConfig
 import partcad as pc
 from partcad.cache_shape import ShapeCache
 from partcad.sketch import Sketch
+from partcad.sketch_factory_dxf import SketchFactoryDxf
 
 sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
 import dxf_metadata  # noqa: E402
@@ -271,3 +280,170 @@ def test_geometry_cached_before_annotations_existed_is_built_again(ctx):
     again = _sketch(ctx, annotations, name="legacy")
     assert asyncio.run(again.get_annotations(ctx)) == annotations
     assert again.builds == 0
+
+
+#
+# What the drawing says about itself, rather than about any of its elements
+#
+
+
+def test_the_layers_include_the_ones_this_sketch_does_not_read(tmp_path):
+    """The point of reporting a layer that was filtered out is that it exists.
+
+    A layer filter that matched nothing and a layer that is not in the file both
+    produce a sketch with nothing in it, and this is what tells them apart.
+    """
+    document = ezdxf.readfile(_drawing(tmp_path))
+    described = dxf_metadata.describe(document, include=["BEND_UP"])
+    by_name = {layer["name"]: layer for layer in described["layers"]}
+
+    assert by_name["BEND_UP"]["read"] is True
+    assert by_name["BEND_DOWN"]["read"] is False
+    assert by_name["OUTLINE"]["read"] is False
+
+
+def test_a_layer_says_how_much_is_on_it_and_of_what(tmp_path):
+    """Per layer and per entity type, including a layer nothing is drawn on."""
+    document = ezdxf.readfile(_drawing(tmp_path))
+    by_name = {layer["name"]: layer for layer in dxf_metadata.describe(document)["layers"]}
+
+    assert by_name["BEND_UP"]["elements"] == 1
+    assert by_name["BEND_UP"]["types"] == {"LINE": 1}
+    assert by_name["OUTLINE"]["types"] == {"LWPOLYLINE": 1}
+    # Declared by the table and drawn on by nothing, which is still a layer.
+    assert by_name["0"]["elements"] == 0
+
+
+def test_what_the_drawing_says_about_itself(tmp_path):
+    """Which DXF it is, how much it holds, and who could have annotated it."""
+    document = ezdxf.readfile(_drawing(tmp_path))
+    described = dxf_metadata.describe(document)
+
+    assert described["release"] == "R2010"
+    assert described["elements"] == 3
+    # XDATA is written under an APPID, so the ones the file declares are the
+    # names an annotation could have come from.
+    assert "PARTCAD" in described["appids"]
+
+
+def test_the_units_are_what_the_drawing_states(tmp_path):
+    """PartCAD reads a DXF as millimetres; what the file says is worth seeing."""
+    document = ezdxf.new("R2010")
+    document.header["$INSUNITS"] = 1
+    document.modelspace().add_line((0, 0), (1, 0))
+    path = str(tmp_path / "inches.dxf")
+    document.saveas(path)
+
+    assert dxf_metadata.read_file(path)["metadata"]["Drawing"]["units"] == "in"
+
+
+def test_the_us_survey_units_are_units(tmp_path):
+    """Codes 21-24, which AutoCAD added long after the first twenty.
+
+    A code the table does not have used to come back as None, which is what a
+    drawing that states it is *unitless* comes back as - so a survey drawing
+    read as having no units at all, which is a wrong answer rather than a
+    missing one.
+    """
+    for code, name in ((21, "us-ft"), (22, "us-in"), (23, "us-yd"), (24, "us-mi")):
+        document = ezdxf.new("R2010")
+        document.header["$INSUNITS"] = code
+        document.modelspace().add_line((0, 0), (1, 0))
+        path = str(tmp_path / ("survey-%d.dxf" % code))
+        document.saveas(path)
+
+        assert dxf_metadata.read_file(path)["metadata"]["Drawing"]["units"] == name
+
+
+def test_a_unit_this_does_not_know_is_not_no_unit(tmp_path):
+    """DXF has gained units before and will again, and the two must not merge.
+
+    Reported as the code it is, so a drawing read by a PartCAD that predates its
+    unit says something a reader can act on rather than reading as unitless.
+    """
+    document = ezdxf.new("R2010")
+    document.header["$INSUNITS"] = 97
+    document.modelspace().add_line((0, 0), (1, 0))
+    path = str(tmp_path / "from-the-future.dxf")
+    document.saveas(path)
+
+    assert dxf_metadata.read_file(path)["metadata"]["Drawing"]["units"] == "unknown (97)"
+
+
+def test_a_drawing_that_says_it_is_unitless(tmp_path):
+    """'unitless' is not 'millimetres', and reporting it as one would be a guess."""
+    document = ezdxf.new("R2010")
+    document.header["$INSUNITS"] = 0
+    document.modelspace().add_line((0, 0), (1, 0))
+    path = str(tmp_path / "unitless.dxf")
+    document.saveas(path)
+
+    assert dxf_metadata.read_file(path)["metadata"]["Drawing"]["units"] is None
+
+
+def test_one_pass_over_the_file_answers_both_questions(tmp_path):
+    """'read_file' is 'describe' and 'read' of one opening of the drawing."""
+    path = _drawing(tmp_path)
+    read = dxf_metadata.read_file(path, include=["BEND_UP"])
+
+    assert [a["layer"] for a in read["annotations"]] == ["BEND_UP"]
+    # ...and under the headings 'pc info' prints them with, which is the
+    # reader's to choose: the core merges what a wrapper hands it verbatim.
+    assert set(read["metadata"]) == {"Drawing", "Layers"}
+    assert len(read["metadata"]["Layers"]) == len(dxf_metadata.describe(ezdxf.readfile(path))["layers"])
+
+
+#
+# ...and what the factory makes of them for 'pc info'
+#
+
+
+class _Runtime:
+    """The sandbox as 'SketchFactoryPython.info' reports it: two strings."""
+
+    version = "3.12"
+    path = "/nowhere"
+
+
+class _InfoSketch:
+    """A sketch that has annotations and nothing else worth reporting."""
+
+    def __init__(self, annotations):
+        self.annotations = annotations
+
+    def shape_info(self, ctx):
+        """What the shape itself contributes, which this factory only adds to."""
+        return {"Kind": "sketch"}
+
+
+def _info(annotations):
+    """'SketchFactoryDxf.info' over a sketch carrying 'annotations'."""
+    factory = object.__new__(SketchFactoryDxf)
+    factory.ctx = None
+    factory.runtime = _Runtime()
+    return SketchFactoryDxf.info(factory, _InfoSketch(annotations))
+
+
+def test_the_annotated_elements_are_what_pc_info_lists(tmp_path):
+    """The per-element half: an 'angle' and a 'radius' against a bend line.
+
+    What the drawing said about *itself* is not here - the wrapper put that on
+    the envelope and the core reports it from its own cache entry - so this
+    factory is only ever adding the elements the sketch already carries.
+    """
+    bend = {"layer": "BEND_UP", "metadata": {"angle": 90.0, "radius": 1.5}}
+    info = _info([bend, {"layer": "CUT", "metadata": {}}])
+
+    assert info["Annotations"] == [bend]
+
+
+def test_a_drawing_that_annotated_nothing_gets_no_heading_at_all():
+    """An empty 'Annotations' would read as a drawing that was asked and said
+    nothing, which is not the same as one where the question does not arise."""
+    assert "Annotations" not in _info([])
+    assert "Annotations" not in _info(None)
+
+
+def test_what_the_sketch_itself_reports_is_kept():
+    """The factory adds to 'shape_info' rather than standing in for it."""
+    assert _info([])["Kind"] == "sketch"

@@ -889,6 +889,20 @@ element with no extended data is still carried, with nothing against it, because
 different answers. The layer filters above apply, so the annotations describe
 what is in the sketch and not what was filtered out of it.
 
+``pc info`` on the sketch prints them, under ``Annotations``, beside what the
+drawing says about *itself*: which DXF it is, what ``$INSUNITS`` says its
+numbers are in, and -- under ``Layers`` -- **every** layer the file has, with
+how many elements of which types are on each and whether this sketch reads it.
+That last is not the question the annotations answer, and it is why the drawing
+is described as well as read: a layer filter that matched nothing and a layer
+that is not in the file both produce a sketch with nothing in it.
+
+A STEP file states the same kind of thing in its own vocabulary -- a
+``PROPERTY_DEFINITION`` hung on a product or on one named feature of one, and
+``PRESENTATION_LAYER_ASSIGNMENT`` for its layers -- and ``pc info`` on a
+``step`` part or assembly reports those under ``Properties`` and ``Layers``,
+with the keys lower-cased the same way.
+
 SVG
 ---
 

@@ -179,6 +179,12 @@ KEY_BYTES = "__bytes__"
 # Optional on a shape/assembly object: the placement, as the packed
 # [[tx,ty,tz], [ax,ay,az], angle] form, applied when the object is decoded.
 KEY_LOCATION = "location"
+# Optional on a shape object: what the file this shape was imported from stated
+# about itself - a STEP file's layers and property sets, a DXF drawing's layers
+# and units. Set by the wrapper that read the file, because that is the process
+# the file is open in, and carried through untouched from there (the core's twin
+# of this constant is 'shape_envelope.KEY_METADATA').
+KEY_METADATA = "metadata"
 
 # What 'BRepTools.Write_s' produces is verbose ASCII, and it is by far the
 # largest thing that either travels the wrapper pipe or lands in the shape

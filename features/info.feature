@@ -185,6 +185,31 @@ Feature: `pc info` command
     And STDOUT should contain "sample PartCAD package"
 
   @success @pc-info
+  Scenario: `pc info` reports what was measured when the part was built
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        block:
+          type: cadquery
+          path: block.py
+      """
+    And a file named "block.py" with content:
+      """
+      import cadquery as cq
+
+      if __name__ != "__cqgi__":
+          from cq_server.ui import ui, show_object
+
+      show_object(cq.Workplane("front").box(10, 20, 30))
+      """
+    When I run "pc info block"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "BoundingBox"
+    And STDOUT should contain "'size': [10.0, 20.0, 30.0]"
+    And STDOUT should contain "Volume: 6000.0"
+    And STDOUT should contain "Solids: 1"
+
+  @success @pc-info
   Scenario: `pc info -i` on a parametrized interface
     Given a file named "partcad.yaml" with content:
       """
