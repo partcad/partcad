@@ -1,0 +1,97 @@
+# The same eight solids as 'AeroAssembly.assy', placed where they can actually
+# be put together. 'AeroAssembly.assy' is the unedited record of what
+# 'pc import assembly' read out of 'AeroAssembly.step'; this file is that record
+# with its three interferences resolved, and every difference between the two is
+# a placement, commented below. Not one part file differs.
+#
+# See 'docs.intro' in ../partcad.yaml for what each of the three overlaps turned
+# out to be and why these are the corrections.
+name: AeroAssembly_buildable
+description: >-
+  The imported AeroAssembly with its three interferences resolved: the mirrored
+  frame half moved onto the bolt pattern it is meant to bolt to, the cap lifted
+  clear of the plate by the 0.751923 mm its front feet overhang, and every
+  placement written at the precision the STEP file actually holds instead of the
+  five decimals the importer rounds to.
+links:
+  # Unchanged from the import except for the extra digits: this half already
+  # bolted up flush. Its four 3 mm holes are coaxial with the plate's front
+  # flange (x = -102.040610, y = -45.2/-42.2/-30.2/-27.2) and its bolt face is
+  # flat against the flange's underside at z = 69.691086.
+  - type: assembly
+    name: AeroFrameAssembly
+    links:
+      - type: part
+        name: AeroFrameAssembly_solid1
+        part: AeroAssembly_assy_example/AeroFrameAssembly_solid1
+        location: [[-69.134226869844, -87.080855661874, 82.881290119571], [1.0, 0.0,
+            0.0], 0.0]
+      - type: part
+        name: AeroFrameAssembly_solid2
+        part: AeroAssembly_assy_example/AeroFrameAssembly_solid2
+        location: [[-69.134226869844, -87.080855661874, 82.881290119571], [1.0, 0.0,
+            0.0], 0.0]
+      - type: part
+        name: AeroFrameAssembly_solid3
+        part: AeroAssembly_assy_example/AeroFrameAssembly_solid3
+        location: [[-128.617172447944, 53.052923677092, 75.225092331764], [0.129428307996,
+            -0.129428307996, -0.98310560276], 90.976200401604]
+  - type: part
+    name: AeroFrame_Plate
+    part: AeroAssembly_assy_example/AeroFrame_Plate
+    location: [[-76.86294015592, -86.19998835248, 80.297688179203], [1.0, 0.0, 0.0],
+      0.0]
+  # Raised by 0.751923190 mm in z (80.297688179203 -> 81.049611369203).
+  #
+  # The cap stands on the plate on four feet. The two rear ones (8 x 10 mm)
+  # land exactly on the plate's rear flange at z = 131.885499. The two front
+  # ones (6 x 10 mm) reach down to z = 75.939163 while the front flange's top
+  # face is at z = 76.691086, so each of them was 0.751923 mm inside the plate:
+  # 6 x 10 x 0.751923 = 45.115 mm^3 twice, the 90.231 mm^3 the check reported.
+  #
+  # That is a defect in the cap part, not in its placement - the feet are
+  # modelled 5.000 mm and 6.000 mm tall against faces 0.751923 mm apart, and no
+  # rigid motion of one part seats all four. Trimming the front feet would mean
+  # editing the imported STEP, which would stop it being the imported STEP, so
+  # what this file does instead is the least motion that takes metal out of
+  # metal: the cap seats on its front feet and stands 0.751923 mm clear on the
+  # rear ones, where nothing fastens through and a shim takes it up.
+  - type: part
+    name: AeroFrame_Cap
+    part: AeroAssembly_assy_example/AeroFrame_Cap
+    location: [[-76.86294015592, -86.19998835248, 81.049611369203], [1.0, 0.0, 0.0],
+      0.0]
+  # Moved by (+7.728713286, -3.380867309, +2.583601940) mm, as one rigid body.
+  #
+  # The plate's front flange carries eight 3 mm holes in two mirrored groups of
+  # four, one group per frame half. The half above is bolted through its group;
+  # this one missed the other group by exactly that vector, which left it
+  # 2.583602 mm clear of the flange at solid2 and 12.998 mm^3 inside the plate
+  # at solid1 - a half that is simultaneously floating and buried, which is how
+  # a misplaced instance reads rather than a design.
+  #
+  # The vector is not fitted: it is what puts the four holes on the plate's
+  # four. It equals the plate's own origin offset from the frame's,
+  # (-7.728713286, +0.880867309, -2.583601940), negated, plus 2.5 mm along -y -
+  # the exporter had folded the plate's offset into the mirrored branch. After
+  # it, every clearance this half has matches its twin's to the ninth decimal:
+  # 0.000000000 mm to the plate at both feet, 7.751923190 and 6.486821381 mm to
+  # the cap.
+  - type: assembly
+    name: MirrorAeroFrameAssembly
+    links:
+      - type: part
+        name: MirrorAeroFrameAssembly_solid1
+        part: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid1
+        location: [[-76.862940156, -88.699988352, -75.130484299], [1.0, 0.0, 0.0],
+          0.0]
+      - type: part
+        name: MirrorAeroFrameAssembly_solid2
+        part: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid2
+        location: [[-76.862940156, -88.699988352, -75.130484299], [1.0, 0.0, 0.0],
+          0.0]
+      - type: part
+        name: MirrorAeroFrameAssembly_solid3
+        part: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3
+        location: [[-136.345885734, 51.433790987, -67.474286511], [-0.129428307996,
+            0.129428307996, -0.98310560276], 90.976200401604]
