@@ -746,7 +746,6 @@
       "description": "What 'partcad.test.interference' does with this assembly. There is no list of pairs to excuse here: two parts have one relationship, the 'connect' that joins them, and that is where an overlap which is meant to be there is stated - with 'selfScrew' or 'snapIn' on the interface, the mating or the connection's 'how', or with 'interferes' naming the further items the same act of joining drives through.",
       "type": "object",
       "properties": {
-        "skip": { "type": "boolean", "default": false, "description": "Do not run this check on this object." },
         "minVolume": {
           "description": "Shared volume, in mm^3, below which an overlap is not reported. A rounding tolerance and nothing else: the default of 0.05 is orders of magnitude below any overlap a person would call one, and above the noise of two surfaces that meet exactly.",
           "type": "number",
@@ -765,7 +764,6 @@
       "description": "What 'partcad.test.connectivity' does with this assembly.",
       "type": "object",
       "properties": {
-        "skip": { "type": "boolean", "default": false, "description": "Do not run this check on this object." },
         "allowDuplicates": {
           "description": "Whether the same part in the same place twice is allowed.",
           "type": "boolean",
@@ -776,14 +774,6 @@
           "type": "boolean",
           "default": true
         }
-      },
-      "additionalProperties": false
-    },
-    "check-validity": {
-      "description": "What 'partcad.test.validity' does with this object.",
-      "type": "object",
-      "properties": {
-        "skip": { "type": "boolean", "default": false, "description": "Do not run this check on this object." }
       },
       "additionalProperties": false
     },
@@ -1241,7 +1231,6 @@
                   "uniqueItems": true
                 },
                 "parameters": { "$ref": "#/definitions/shape-parameter"},
-                "validity": { "$ref": "#/definitions/check-validity" },
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "cae": { "$ref": "#/definitions/output-section" },
@@ -1428,7 +1417,6 @@
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
                 "interference": { "$ref": "#/definitions/check-interference" },
                 "connectivity": { "$ref": "#/definitions/check-connectivity" },
-                "validity": { "$ref": "#/definitions/check-validity" },
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "simulate": { "$ref": "#/definitions/simulate" },
@@ -1463,7 +1451,6 @@
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
                 "interference": { "$ref": "#/definitions/check-interference" },
                 "connectivity": { "$ref": "#/definitions/check-connectivity" },
-                "validity": { "$ref": "#/definitions/check-validity" },
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "simulate": { "$ref": "#/definitions/simulate" },

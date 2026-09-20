@@ -147,6 +147,20 @@ class Test(ABC):
         message = self._log_message_prepare(*args)
         pc_logging.info(f"Test: {shape.project_name}:{shape.name}: {self.name}{message}")
 
+    def warned(self, shape, *args) -> bool:
+        """What the check found, on an object nobody is going to make.
+
+        A finding, reported, that does not fail the run. An object that says
+        'manufacturable: false' is a record of something - an import kept as it
+        arrived, a model of a part somebody else makes - and holding it to what
+        a thing being built is held to would mean either editing it until the
+        checks are happy, which destroys the record, or turning the checks off,
+        which loses the finding. Said out loud and not fatal keeps both.
+        """
+        message = self._log_message_prepare(*args)
+        pc_logging.warning(f"Test: {shape.project_name}:{shape.name}: {self.name}{message}")
+        return self.TEST_PASSED
+
     def failed(self, shape, *args) -> bool:
         """This methods works like logging.error() but prepends the message with the test name and the shape name."""
         message = self._log_message_prepare(*args)
