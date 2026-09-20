@@ -8,7 +8,7 @@ parts:
     with:
       height: 4
       width: 4
-    offset: [[0, 0, 0], [1, 0, 0], 90]
+    offset: [[0, 0, 0], [1, 0, 0], -90]
   side-support:
     desc: Horizontal support 2x6
     type: enrich
@@ -16,7 +16,7 @@ parts:
     with:
       height: 2
       width: 6
-    offset: [[0, 0, 0], [0, 1, 0], -90]
+    offset: [[0, 0, 0], [0, 1, 0], 90]
   table-top:
     type: enrich
     source: //pub/std/imperial/dimensional-lumber:plywood
