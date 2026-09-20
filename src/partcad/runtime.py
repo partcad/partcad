@@ -334,7 +334,7 @@ class Runtime:
         returncode = result.get("exit_code")
         return stdout, stderr, int(bool(stderr)) if returncode is None else returncode
 
-    def _finished(self, cmd, stdout, stderr, returncode, pid=None, since=None):
+    def _finished(self, cmd, stdout, stderr, returncode):
         """The triple every run returns, having reported what was written.
 
         Anything on stderr from a command that succeeded is a warning and is
@@ -381,8 +381,6 @@ class Runtime:
             crash = describe_termination(
                 cmd,
                 returncode,
-                pid=pid,
-                since=since,
                 where=self.path,
                 silent=not stdout and not stderr,
             )
@@ -448,7 +446,6 @@ class Runtime:
             stdout, stderr, returncode = self._rpc_result(response, output_files)
         else:
             argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
-            started_at = time.time()
             with sandbox_lock.process_slots.slot():
                 p = subprocess.Popen(
                     argv,
@@ -466,7 +463,7 @@ class Runtime:
                     # TODO(clairbee): add timeout
                 )
             returncode = p.returncode
-            return self._finished(cmd, stdout, stderr, returncode, pid=p.pid, since=started_at)
+            return self._finished(cmd, stdout, stderr, returncode)
 
         return self._finished(cmd, stdout, stderr, returncode)
 
@@ -497,7 +494,6 @@ class Runtime:
             stdout, stderr, returncode = self._rpc_result(response, output_files)
         else:
             argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, env)
-            started_at = time.time()
             async with sandbox_lock.process_slots.slot_async():
                 p = await asyncio.create_subprocess_exec(
                     *argv,
@@ -514,6 +510,6 @@ class Runtime:
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
             returncode = p.returncode
-            return self._finished(cmd, stdout, stderr, returncode, pid=p.pid, since=started_at)
+            return self._finished(cmd, stdout, stderr, returncode)
 
         return self._finished(cmd, stdout, stderr, returncode)

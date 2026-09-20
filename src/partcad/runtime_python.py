@@ -15,7 +15,6 @@ import pathlib
 import platform
 import subprocess
 import sys
-import time
 
 from . import logging as pc_logging
 from . import runtime, sandbox_lock, sandbox_versions, telemetry
@@ -585,7 +584,6 @@ class PythonRuntime(runtime.Runtime):
                 argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, self._subprocess_env())
                 # Noted before the spawn so that a crash report written for this
                 # run can be told from one an earlier run left behind.
-                started_at = time.time()
                 # Bytes rather than text, like 'run_async_onced' beside it: the
                 # output is decoded by 'process_output.decode', which replaces a
                 # byte it cannot read instead of raising on it. Asking Popen for
@@ -646,8 +644,6 @@ class PythonRuntime(runtime.Runtime):
                 crash = describe_termination(
                     cmd,
                     p.returncode,
-                    pid=p.pid,
-                    since=started_at,
                     where=path if path else self.path,
                     silent=not stdout and not stderr,
                 )
@@ -757,7 +753,6 @@ class PythonRuntime(runtime.Runtime):
                     span.set_attribute("cmd", " ".join(sanitized_cmd))
                     argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, self._subprocess_env())
                     # See the note beside the same line in 'run_onced'.
-                    started_at = time.time()
                     p = await asyncio.create_subprocess_exec(
                         *argv,
                         stdin=subprocess.PIPE,
@@ -809,8 +804,6 @@ class PythonRuntime(runtime.Runtime):
                 crash = describe_termination(
                     cmd,
                     p.returncode,
-                    pid=p.pid,
-                    since=started_at,
                     where=path if path else self.path,
                     silent=not stdout and not stderr,
                 )

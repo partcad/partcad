@@ -10,23 +10,21 @@ in the CAD kernel reaches the core as a number and nothing else. On POSIX that
 number is negative -- Python reports a death by signal as the negated signal --
 and "exit code -11" is what a segmentation fault inside OCCT looks like by the
 time anyone reads it. It names neither the signal nor the fact that there was
-one, and the operating system has usually written a full crash report that
-nothing points at.
+one.
 
 So the number is turned into a sentence here, once, for every runtime and every
-caller: which signal it was, what that signal is called, and where the crash
-report is. A caller that has nothing else to say about a failure says this.
+caller: which signal it was and what that signal is called. A caller that has
+nothing else to say about a failure says this.
 
-Nothing here raises. A diagnostic that fails must not replace the failure it was
-called to explain, so every lookup below is best effort and falls back to the
-plain description of the exit code.
+What is deliberately not said is where the operating system left its crash
+report. That file is a full register and thread dump of whatever crashed, which
+on a remote daemon is somebody else's machine and more than the failure needs to
+disclose; and naming it is macOS-specific in a way that the signal is not.
+Whoever is debugging a crash on their own machine knows where their own reports
+are kept.
 """
 
-import json
-import os
 import signal
-import sys
-import time
 
 # Windows has no signals: a native fault surfaces as a large unsigned status
 # code, and these two are the ones PartCAD's own sandboxes have produced. See
@@ -38,24 +36,14 @@ WINDOWS_FAULTS = {
 }
 
 # The signals that mean the process faulted rather than that something asked it
-# to stop. Only these are worth looking for a crash report for, and only these
-# say anything about the sandbox: a SIGKILL is the operating system (or PartCAD's
-# own timeout) ending a process that was working perfectly well.
+# to stop. Only these say anything about the sandbox: a SIGKILL is the operating
+# system (or PartCAD's own timeout) ending a process that was working perfectly
+# well.
 FAULT_SIGNALS = frozenset(
     getattr(signal, name)
     for name in ("SIGSEGV", "SIGBUS", "SIGILL", "SIGFPE", "SIGABRT", "SIGTRAP")
     if hasattr(signal, name)
 )
-
-# Where macOS leaves the crash report of a process that died on a signal.
-CRASH_REPORT_DIR = "~/Library/Logs/DiagnosticReports"
-
-# How long to keep looking for it. The report is written by a system service
-# after the process is already reaped, so it does not exist yet at the moment
-# the exit code is read -- and a wait is only ever paid on a path that has
-# already failed.
-CRASH_REPORT_TIMEOUT = 3.0
-CRASH_REPORT_POLL = 0.2
 
 
 def killed_by_signal(returncode) -> bool:
@@ -91,59 +79,6 @@ def command_failure(command, returncode) -> str:
     )
 
 
-def _report_pid(path) -> int:
-    """The pid a macOS .ips crash report is about, or -1 if it cannot be read.
-
-    An .ips file is two JSON documents on consecutive lines: a short header and
-    the report itself. Only the second one carries the pid, and it is megabytes
-    on a process with many threads -- but it is read in full rather than
-    pattern-matched, because a pid that happens to appear in a stack frame is
-    not the pid of the process that crashed.
-    """
-    try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            f.readline()
-            return int(json.loads(f.read()).get("pid", -1))
-    except Exception:
-        return -1
-
-
-def crash_report(pid, since=None, timeout=CRASH_REPORT_TIMEOUT):
-    """The path of the crash report for 'pid', or None.
-
-    macOS only: it is the one platform PartCAD supports that writes a symbolized
-    report for every crash without anything having to be enabled first. A Linux
-    core dump depends on 'ulimit -c' and on whatever the distribution's core
-    handler does with it, and there is no path that can be named without asking
-    both; Windows leaves nothing by default at all.
-
-    Matched on the pid recorded inside the report rather than on its name and
-    timestamp, because several sandboxes run at once and they are all called
-    'python'.
-    """
-    if sys.platform != "darwin" or not pid:
-        return None
-    directory = os.path.expanduser(CRASH_REPORT_DIR)
-    if not os.path.isdir(directory):
-        return None
-    deadline = time.monotonic() + timeout
-    while True:
-        try:
-            for name in os.listdir(directory):
-                if not name.endswith(".ips"):
-                    continue
-                path = os.path.join(directory, name)
-                if since is not None and os.path.getmtime(path) < since:
-                    continue
-                if _report_pid(path) == pid:
-                    return path
-        except OSError:
-            return None
-        if time.monotonic() >= deadline:
-            return None
-        time.sleep(CRASH_REPORT_POLL)
-
-
 def _faulted(returncode) -> bool:
     """Whether this process died of its own fault rather than being stopped."""
     if returncode in WINDOWS_FAULTS:
@@ -151,7 +86,7 @@ def _faulted(returncode) -> bool:
     return returncode is not None and returncode < 0 and -returncode in FAULT_SIGNALS
 
 
-def describe_termination(cmd, returncode, pid=None, since=None, where=None, silent=True):
+def describe_termination(cmd, returncode, where=None, silent=True):
     """Why a sandbox process ended the way it did, or None if it was not killed.
 
     Returned as the failure a caller reports, rather than logged here: the exit
@@ -168,10 +103,10 @@ def describe_termination(cmd, returncode, pid=None, since=None, where=None, sile
     message = "%s was %s." % (command, describe_exit_code(returncode))
 
     if not _faulted(returncode):
-        # Stopped rather than crashed. There is no crash report to look for and
-        # nothing about the sandbox to suspect -- the one thing worth saying is
-        # what ends a CAD sandbox from the outside, which on a model this size
-        # is almost always the machine running out of memory.
+        # Stopped rather than crashed, so there is nothing about the sandbox
+        # to suspect -- the one thing worth saying is what ends a CAD sandbox
+        # from the outside, which on a model this size is almost always the
+        # machine running out of memory.
         if returncode == -getattr(signal, "SIGKILL", -1):
             message += (
                 " Nothing in the sandbox chose this: something outside it ended the process,"
@@ -179,9 +114,6 @@ def describe_termination(cmd, returncode, pid=None, since=None, where=None, sile
             )
         return message
 
-    report = crash_report(pid, since=since)
-    if report:
-        message += " The crash report is at %s." % report
     if silent:
         message += (
             " A sandbox that dies like this without saying anything crashed inside a native"
