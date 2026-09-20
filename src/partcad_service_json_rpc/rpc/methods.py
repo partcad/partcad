@@ -14,6 +14,8 @@ summary taken from the operation's docstring.
 
 import functools
 
+from partcad_utils import staging
+
 from ..core import operations
 
 # CLI-shaped method name -> operation callable.
@@ -22,6 +24,12 @@ _OPERATIONS = {
     "inspect.sketch": operations.inspect_sketch,
     "inspect.interface": operations.inspect_interface,
     "inspect.assembly": operations.inspect_assembly,
+    # Not a CLI command: the second half of a two-phase assembly build, which
+    # a client calls on its own behalf after the first half told it to (see
+    # 'partcad_utils.staging'). Named from there rather than spelled out, so
+    # the name a client sends and the name the daemon answers to are one
+    # string.
+    staging.INSTANTIATE_METHOD: operations.instantiate_assembly,
     "inspect.scene": operations.inspect_scene,
     "inspect.file": operations.inspect_file,
     "export.part": operations.export_part,

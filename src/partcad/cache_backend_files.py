@@ -17,6 +17,7 @@ import uuid
 from pathlib import Path
 
 import aiofiles
+import aiofiles.os
 
 from . import telemetry
 from .cache_backend import CacheBackend
@@ -52,6 +53,20 @@ class FilesCacheBackend(CacheBackend):
 
         results = await asyncio.gather(*[asyncio.create_task(task_item(name)) for name in names])
         return {name: data for name, data in results if data is not None}
+
+    async def _contains_async(self, names: list[str]) -> dict[str, bool]:
+        # One stat() per entry instead of one read: the caller is asking
+        # whether a shape has to be built, and a cached assembly can be many
+        # megabytes that would be read and dropped to answer it.
+        async def task_item(name: str):
+            try:
+                stat = await aiofiles.os.stat(self.path(name))
+            except OSError:
+                return name, False
+            return name, stat.st_size > 0
+
+        results = await asyncio.gather(*[asyncio.create_task(task_item(name)) for name in names])
+        return dict(results)
 
     async def _write_async(self, items: dict[str, bytes]) -> dict[str, bool]:
         saved = {}

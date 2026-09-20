@@ -135,7 +135,8 @@ at all).
 Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|assembly|scene|file`,
 `export.part|assembly|scene`, `ai.regenerate|change`, `add.part|assembly|scene`, `package.load|path|refresh`, `init`,
 `list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults`, `cam.route`, `test`, `info`,
-`activate`, and `rpc.discover`. Server-to-client
+`activate`, and `rpc.discover`. One method mirrors no subcommand — `assembly.instantiate`, which a client
+calls on its own behalf as the second half of a two-phase assembly build (see below). Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,
 `stats`, `terminal`, `execute`, and the `*Done`/lifecycle signals).
 
@@ -163,6 +164,47 @@ no `object` it routes every sketch and part that declares a `cam:` section and p
 enumeration is here rather than in a client -- and it reports every failure instead of stopping at the first,
 because a route is a file and one object's broken section must not cost the other nineteen theirs. It has no
 `inline` twin: a route is text a machine reads, not something a webview draws.
+
+### An assembly is built in two phases
+
+An assembly is built out of other assemblies, and building one of those can take minutes. Done inside the
+request that asked for the parent, all of it is one request — for as long as the deepest tree takes, with
+nothing the client can do but wait.
+
+So the operations whose unit is one assembly look before they build: `inspect.assembly`, `export.assembly`,
+their scene counterparts, `inspect.object`, `render.objects` when it names one assembly or scene (which is
+what `pc export -a` and `pc render -a` are), and `assembly.instantiate` itself. The first phase reads the
+assembly's declaration and asks which of the assemblies it places are not cached yet
+(`Assembly.get_uncached_subassemblies_async`, which costs a declaration read and a `stat` per entry — never a
+payload). None, and the request proceeds exactly as it always did. Some, and **nothing is
+built**: the request comes back as the error code `-32004` naming them, and the client builds each one through
+`assembly.instantiate` with `cacheOnly` — which leaves the geometry in the daemon's cache and sends back a
+status — before asking again.
+
+Nesting needs nothing extra. A staging request is an assembly request, so a sub-assembly with sub-assemblies
+of its own answers `-32004` in its turn and the client recurses. The whole exchange takes longer than one
+request would; what it buys is that no single request is longer than one assembly's own work.
+
+Two things keep it from becoming a loop, and both are needed:
+
+* The daemon never names an assembly it has already built on request (`Session.staged`, weak so that an
+  evicted context takes its record with it). An entry too large to keep in memory and refused by every cache
+  tier would otherwise be reported as missing forever. Named once, built once, and after that the parent
+  builds it inline — slower than it should be, but an answer.
+* The client never stages the same entry twice for one call, and reports the error if a service asks for one
+  it has already built.
+
+The protocol — the code, the method name, the flag, the payload — is `partcad_utils.staging`, and both ends
+read it from there. The VS Code extension restates it in `ide/vscode/src/common/staging.ts` because it speaks
+JSON-RPC itself; that is the one copy, and it has to stay in step. A client that does not implement any of
+this gets an error message saying what to build first, which is the most a client that cannot act on it can be
+given.
+
+What is deliberately *not* staged: `bom`, `assembly.guide` and `supply.quote`, which walk the assembly tree
+without building geometry; a recursive or whole-package `render.objects` and `test.run`, whose unit is a
+package rather than one assembly — what they would have to name is everything they are about to build, and
+they already report where they have got to, object by object, as they go; and `convert.object`, which rewrites
+a declaration rather than building the object it names.
 
 There is deliberately no prompt in the protocol. A daemon has nobody to ask, and a request that blocks
 waiting for an answer it cannot receive is a hang, not a question -- anything a command needs is either an

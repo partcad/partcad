@@ -88,6 +88,21 @@ class CacheBackend:
             pc_logging.debug("cache: %s: read failed: %s" % (self.name, e))
             return {}
 
+    async def contains_async(self, names: list[str]) -> dict[str, bool]:
+        """Which of 'names' this tier holds, without handing the payloads over.
+
+        A tier that cannot be reached holds nothing, exactly as it reads
+        nothing: the answer this is asked for decides whether something is
+        built, and "no" is what makes it get built.
+        """
+        if not names:
+            return {}
+        try:
+            return await self._contains_async(names)
+        except Exception as e:
+            pc_logging.debug("cache: %s: existence check failed: %s" % (self.name, e))
+            return {}
+
     async def write_async(self, items: dict[str, bytes]) -> dict[str, bool]:
         """Store 'items', reporting which of them this tier took."""
         if not items:
@@ -103,6 +118,21 @@ class CacheBackend:
 
     async def _write_async(self, items: dict[str, bytes]) -> dict[str, bool]:
         raise NotImplementedError
+
+    async def _contains_async(self, names: list[str]) -> dict[str, bool]:
+        """Read them to find out - the answer for a tier with nothing cheaper.
+
+        An entry with no bytes in it counts as absent, because that is what
+        every reader here makes of one (see cache_shape.read_async): a tier
+        that answers an empty payload has not spared anybody the build.
+
+        Overridden by the tiers that can be asked the question directly: a
+        stat() on the filesystem, a HEAD on an object store. The difference is
+        the whole point of asking - what this is asked about is a shape big
+        enough that fetching it only to drop it is the expensive half.
+        """
+        stored = await self._read_async(names)
+        return {name: bool(stored.get(name)) for name in names}
 
 
 class PooledCacheBackend(CacheBackend):

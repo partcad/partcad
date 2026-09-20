@@ -111,6 +111,17 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
         obj.cache_dependencies = copy.copy(source.cache_dependencies)
         obj.cache_dependencies_broken = source.cache_dependencies_broken
 
+    async def subassemblies_async(self, assembly) -> list:
+        """What this points at: building that is what builds this.
+
+        One object, not its contents - it answers the same question about
+        itself when it is asked for. An enrich is an alias to a parameterized
+        instance and so needs nothing of its own here; by the time this is read
+        'prepare_async()' has resolved which instance that is.
+        """
+        source = self.get_source_object(self.source)
+        return [source] if source is not None else []
+
     def instantiate(self, obj):
         with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_assembly_name}"):
             source = self.get_source_object(self.source)

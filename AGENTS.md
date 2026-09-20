@@ -40,6 +40,11 @@ a CAD addon, or documentation.
   owns it: a copy on each side is a copy that can disagree, and a disagreement is a client silently starting a
   second daemon.
 
+  `staging` is there for the same reason and is the other thing the two ends have to agree on: an assembly is
+  built in two phases, and a daemon that finds sub-assemblies nobody has built yet does no work and answers
+  "not yet — build these first", naming them. A client that reads that from a different copy of the rule
+  reports the daemon's "ask me again" to the user as a failure.
+
 * [src/partcad_client](./src/partcad_client):
 
   What a **client** does, and a daemon must not: discovering the daemon serving a workspace and connecting to

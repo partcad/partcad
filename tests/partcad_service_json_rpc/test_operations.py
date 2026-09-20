@@ -25,6 +25,7 @@ from partcad_service_json_rpc.core import events, operations
 from partcad_service_json_rpc.core.events import EventEmitter
 from partcad_service_json_rpc.core.session import Session
 from partcad_service_json_rpc.rpc.dispatcher import JsonRpcError
+from partcad_utils import staging
 
 # ---- fakes -----------------------------------------------------------------
 
@@ -126,10 +127,33 @@ class FakePartcad:
 
 
 class FakeShape:
-    def __init__(self):
-        self.shown = False
+    """A part, or an assembly as the operations that build one see it.
 
-    def show(self):
+    ``uncached`` is what the first phase of a two-phase assembly build finds:
+    the assemblies this one places that are not cached yet (see
+    ``operations._stage_subassemblies``). Empty is the ordinary case -- a part,
+    or an assembly with nothing left to build first -- and the operation then
+    goes on exactly as it did before there were two phases.
+    """
+
+    def __init__(self, name="thing", project_name="//", uncached=(), kind="assembly"):
+        self.shown = False
+        self.name = name
+        self.project_name = project_name
+        # As on a real Shape: what the package registers it under, and what the
+        # first phase reports so a client can ask for it again.
+        self.kind = kind
+        self.uncached = list(uncached)
+        self.instantiated = False
+
+    async def get_uncached_subassemblies_async(self, ctx):
+        return list(self.uncached)
+
+    async def get_wrapped(self, ctx):
+        self.instantiated = True
+        return {"shape": self.name}
+
+    def show(self, ctx=None):
         self.shown = True
 
     def render(self, ctx, export_type, filepath=None):
@@ -1114,6 +1138,208 @@ def test_info_object_reports_a_missing_package_of_a_named_object():
     assert session.partcad.logging.messages("error") == ["Package //nope is not found"]
 
 
+# ---- building an assembly in two phases -------------------------------------
+#
+# The daemon's half of 'partcad_utils.staging': an assembly that places
+# sub-assemblies nobody has built yet is not built here and now. The request
+# comes back naming them, the client builds each one through
+# 'assembly.instantiate', and asks again.
+
+
+def _assembly_with(session, path, uncached=(), kind="assembly", sub_kind="assembly"):
+    """Register an assembly that still has 'uncached' to build before it."""
+    subs = [FakeShape(name=name, project_name=package, kind=sub_kind) for package, name in uncached]
+    assembly = FakeShape(name=path.split(":")[-1], project_name=path.split(":")[0], kind=kind, uncached=subs)
+    session.partcad_ctx.shapes[(kind, path)] = assembly
+    return assembly
+
+
+def _retry_error(caught):
+    """The code and the entries a raised staging refusal carries."""
+    assert caught.value.code == staging.RETRY_LATER
+    return caught.value.data[staging.SUBASSEMBLIES]
+
+
+def test_inspect_assembly_shows_it_when_there_is_nothing_to_build_first():
+    session, seen = make_session()
+    assembly = _assembly_with(session, "//:top")
+
+    operations.inspect_assembly(session, {"package": "//", "name": "top"})
+
+    assert assembly.shown is True
+    assert seen[-1] == (events.SHOW_PART_DONE, None)
+
+
+def test_inspect_assembly_asks_for_its_subassemblies_before_building_it():
+    session, seen = make_session()
+    assembly = _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.inspect_assembly(session, {"package": "//", "name": "top"})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "unit", "kind": "assembly"}]
+    # Nothing was built and nothing was shown: the whole point is that the
+    # request costs one declaration read rather than one assembly.
+    assert assembly.shown is False
+    assert seen == []
+
+
+def test_export_assembly_asks_for_its_subassemblies_first():
+    session, _ = make_session()
+    assembly = _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.export_assembly(session, {"package": "//", "name": "top", "type": "step", "path": "/tmp/top.step"})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "unit", "kind": "assembly"}]
+    assert not hasattr(assembly, "rendered")
+
+
+def test_a_scene_is_staged_like_the_assembly_it_is():
+    session, _ = make_session()
+    _assembly_with(session, "//:bench", uncached=[("//sub", "stack")], kind="scene")
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.inspect_scene(session, {"package": "//", "name": "bench"})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "stack", "kind": "assembly"}]
+
+
+def test_export_scene_asks_for_its_subassemblies_first():
+    session, _ = make_session()
+    _assembly_with(session, "//:bench", uncached=[("//sub", "stack")], kind="scene")
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.export_scene(session, {"package": "//", "name": "bench", "type": "step", "path": "/tmp/b.step"})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "stack", "kind": "assembly"}]
+
+
+def test_inspect_object_stages_an_assembly_it_is_about_to_show():
+    session, _ = make_session()
+    _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.inspect_object(session, {"package": "//", "object": "top", "assembly": True})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "unit", "kind": "assembly"}]
+
+
+def test_a_verbal_answer_builds_nothing_and_so_stages_nothing():
+    """What an assembly is, in words, is read off the declaration.
+
+    The object here answers nothing about sub-assemblies at all, which is what
+    holds this to reporting the summary before any of that is asked.
+    """
+    session, _ = make_session()
+    session.partcad_ctx.shapes[("assembly", "//:top")] = FakeObject("top", summary="a top level assembly")
+
+    result = operations.inspect_object(session, {"package": "//", "object": "top", "assembly": True, "verbal": True})
+
+    assert result == {"summary": "a top level assembly"}
+
+
+def test_a_part_is_not_staged():
+    """A part is built out of its own files; there is nothing to build first."""
+    session, _ = make_session()
+    part = FakeShape(name="widget")
+    session.partcad_ctx.shapes[("part", "//:widget")] = part
+
+    operations.inspect_object(session, {"package": "//", "object": "widget"})
+
+    assert part.shown is True
+
+
+def test_instantiate_assembly_builds_it_and_sends_back_a_status():
+    session, _ = make_session()
+    assembly = _assembly_with(session, "//sub:unit")
+
+    result = operations.instantiate_assembly(session, {"package": "//sub", "name": "unit", staging.CACHE_ONLY: True})
+
+    assert assembly.instantiated is True
+    # The geometry stays here: what crosses the wire says it was built.
+    assert result == {"assembly": "//sub:unit", "instantiated": True}
+    assert assembly.shown is False
+
+
+def test_instantiate_assembly_shows_the_result_when_it_is_not_cache_only():
+    session, _ = make_session()
+    assembly = _assembly_with(session, "//sub:unit")
+
+    operations.instantiate_assembly(session, {"package": "//sub", "name": "unit", staging.CACHE_ONLY: False})
+
+    assert assembly.shown is True
+
+
+def test_instantiate_assembly_is_staged_in_its_turn():
+    """A sub-assembly with sub-assemblies of its own refuses like anything else."""
+    session, _ = make_session()
+    _assembly_with(session, "//sub:unit", uncached=[("//sub", "bracket")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.instantiate_assembly(session, {"package": "//sub", "name": "unit"})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "bracket", "kind": "assembly"}]
+
+
+def test_a_scene_is_instantiated_as_a_scene():
+    """A scene alias points at a scene, and a package registers the two apart."""
+    session, _ = make_session()
+    scene = _assembly_with(session, "//:bench", kind="scene")
+
+    result = operations.instantiate_assembly(session, {"package": "//", "name": "bench", staging.KIND: "scene"})
+
+    assert scene.instantiated is True
+    assert result == {"assembly": "//:bench", "instantiated": True}
+
+
+def test_a_scene_alias_names_the_scene_it_points_at():
+    session, _ = make_session()
+    _assembly_with(session, "//:bench_alias", uncached=[("//", "bench")], kind="scene", sub_kind="scene")
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.inspect_scene(session, {"package": "//", "name": "bench_alias"})
+
+    # Without the kind the client would ask for an assembly called 'bench',
+    # which the package does not declare.
+    assert _retry_error(caught) == [{"package": "//", "name": "bench", "kind": "scene"}]
+
+
+def test_instantiate_assembly_reports_an_assembly_that_is_not_there():
+    session, _ = make_session()
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.instantiate_assembly(session, {"package": "//sub", "name": "nope"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+
+
+def test_an_assembly_this_daemon_has_built_is_never_asked_for_again():
+    """The bound on the exchange.
+
+    An entry too large for memory and refused by every cache tier would be
+    reported as missing however many times it is built. Having built it once,
+    the daemon stops naming it and builds the parent inline instead -- slower
+    than it should be, but an answer rather than a client asking forever.
+    """
+    session, _ = make_session()
+    assembly = _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+    session.staged.add(assembly.uncached[0])
+
+    operations.inspect_assembly(session, {"package": "//", "name": "top"})
+
+    assert assembly.shown is True
+
+
+def test_instantiating_an_assembly_records_it_as_built():
+    session, _ = make_session()
+    assembly = _assembly_with(session, "//sub:unit")
+
+    operations.instantiate_assembly(session, {"package": "//sub", "name": "unit"})
+
+    assert assembly in session.staged
+
+
 # ---- inspect ---------------------------------------------------------------
 
 
@@ -1745,6 +1971,71 @@ def test_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch):
     assert excinfo.value.code == operations.USAGE_ERROR
     assert "Unknown view" in excinfo.value.message
     assert rendered == []
+
+
+def _render_session(monkeypatch):
+    """A session whose renders are recorded rather than performed."""
+    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    session, _ = make_session()
+    session.partcad.output = types.SimpleNamespace(
+        all_formats=lambda ctx: ["step"],
+        NON_WRAPPER_FORMATS=set(),
+        SECTIONS=("export", "render"),
+        format_names=lambda section: [],
+        split_format=lambda project_name, fmt: (fmt, None),
+    )
+    rendered = []
+
+    async def _render_async(**kwargs):
+        rendered.append(kwargs)
+
+    session.partcad_ctx.render_async = _render_async
+    session.partcad_ctx.projects["//"].render_async = _render_async
+    return session, rendered
+
+
+def test_exporting_one_assembly_asks_for_its_subassemblies_first(monkeypatch):
+    """`pc export -a` is this operation, and it is one assembly's build."""
+    session, rendered = _render_session(monkeypatch)
+    _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_objects(session, {"package": "//", "format": "step", "object": "top", "assembly": True})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "unit", "kind": "assembly"}]
+    assert rendered == []
+
+
+def test_exporting_a_whole_package_is_not_staged(monkeypatch):
+    """Its unit is a package: what it would have to name is everything."""
+    session, rendered = _render_session(monkeypatch)
+    _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+
+    operations.render_objects(session, {"package": "//", "format": "step"})
+
+    assert rendered, "the package was not rendered"
+
+
+def test_exporting_a_part_is_not_staged(monkeypatch):
+    """A part is built out of its own files, whatever the package holds."""
+    session, rendered = _render_session(monkeypatch)
+    _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+    session.partcad_ctx.shapes[("part", "//:widget")] = FakeShape(name="widget")
+
+    operations.render_objects(session, {"package": "//", "format": "step", "object": "widget"})
+
+    assert rendered, "the part was not rendered"
+
+
+def test_an_unknown_file_type_is_refused_before_anything_is_built(monkeypatch):
+    """Staging costs an assembly build; a typo must not buy one first."""
+    session, _ = _render_session(monkeypatch)
+    _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_objects(session, {"package": "//", "format": "nosuchtype", "object": "top", "assembly": True})
+
+    assert caught.value.code == operations.USAGE_ERROR
 
 
 # ---- ad-hoc render ---------------------------------------------------------

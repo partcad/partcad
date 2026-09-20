@@ -33,6 +33,7 @@ import {
 } from 'vscode-jsonrpc/node';
 
 import { traceError, traceInfo } from './log/logging';
+import { identity, INSTANTIATE_METHOD, pendingSubassemblies, requestParams } from './staging';
 import { cliBeside, ensureServiceExecutable, locateCommand, resolveServicePath } from './provision';
 import { writeTerminal } from '../terminal';
 import { refreshToolsPath } from './terminalPath';
@@ -211,7 +212,53 @@ class JsonRpcBackend implements PartcadBackend {
     }
 
     private send(method: string, params: any): Promise<any> {
-        return Promise.resolve(this.connection.sendRequest(method, params));
+        return this.sendStaged(method, params, new Set<string>());
+    }
+
+    /**
+     * Make one request, building whatever the service says it needs first.
+     *
+     * An assembly the service would have to build sub-assemblies for comes back
+     * as an error naming them, with no work done (see `staging.ts`). Each is
+     * then asked for in a request of its own -- keeping the result on the
+     * service, since the extension has no use for the geometry -- and the
+     * original request is made again. Every request is one assembly's work,
+     * however deep the tree is.
+     *
+     * Recursive, because a staging request is an assembly request and can be
+     * answered the same way; `staged` is shared down the recursion so an
+     * assembly two others place is built once. It is also what stops this
+     * looping: an entry named a second time, having already been built, is
+     * reported rather than asked for again.
+     */
+    private async sendStaged(method: string, params: any, staged: Set<string>): Promise<any> {
+        for (;;) {
+            try {
+                return await this.connection.sendRequest(method, params);
+            } catch (e: any) {
+                const askedFor = pendingSubassemblies(e?.code, e?.data);
+                if (askedFor.length === 0) {
+                    throw e; // an ordinary error: the caller's to see
+                }
+                const pending = askedFor.filter((item) => !staged.has(identity(item)));
+                if (pending.length === 0) {
+                    // Everything it names has been built already, at its own
+                    // request. Asking again would be the same exchange forever,
+                    // so this ends here -- saying that rather than repeating
+                    // the service's "build these first", which is exactly what
+                    // this end just did.
+                    throw new Error(
+                        'The PartCAD service asked again for sub-assemblies it has already been told to build: ' +
+                            askedFor.map(identity).join(', '),
+                    );
+                }
+                for (const item of pending) {
+                    staged.add(identity(item));
+                    traceInfo(`PartCAD: building ${identity(item)} before ${method}`);
+                    await this.sendStaged(INSTANTIATE_METHOD, requestParams(item, params?.context), staged);
+                }
+            }
+        }
     }
 
     /**

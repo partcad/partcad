@@ -30,6 +30,7 @@ import threading
 import time
 from typing import Callable, Optional
 
+from partcad_utils import staging
 from partcad_utils.framing import read_message, write_message
 from partcad_utils.workspace import pid_path
 
@@ -193,10 +194,66 @@ class DaemonClient:
     def call(self, method: str, params=None, on_event: Optional[Callable[[str, object], None]] = None):
         """Send a request; forward notifications to ``on_event`` until the response.
 
-        Raises :class:`DaemonStalled` if the service says nothing for longer
-        than this client's timeout, :class:`DaemonError` if it answers with an
-        error, and ``RuntimeError`` if it closes the connection.
+        A service that answers "not yet -- build these first" is answered in
+        kind rather than reported: see :meth:`_call_staging`. Raises
+        :class:`DaemonStalled` if the service says nothing for longer than this
+        client's timeout, :class:`DaemonError` if it answers with an error, and
+        ``RuntimeError`` if it closes the connection.
         """
+        return self._call_staging(method, params, on_event, set())
+
+    def _call_staging(self, method: str, params, on_event, staged: set):
+        """Make one request, building whatever the service says it needs first.
+
+        An assembly the service would have to build sub-assemblies for comes
+        back as :data:`~partcad_utils.staging.RETRY_LATER` with those
+        sub-assemblies named and no work done (see ``partcad_utils.staging``).
+        Each of them is then asked for in a request of its own -- which keeps
+        the result on the service, since this end has no use for the geometry
+        -- and the original request is made again. Every request is one
+        assembly's work, however deep the tree is.
+
+        Recursive, because a staging request is an assembly request and can be
+        answered the same way; ``staged`` is shared down the recursion so that
+        an assembly two others place is built once. It is also what stops this
+        looping: an entry the service names a second time, having already been
+        told to build it, is reported rather than asked for again.
+        """
+        while True:
+            try:
+                return self._call(method, params, on_event)
+            except DaemonError as e:
+                asked_for = staging.pending_subassemblies(e.code, e.data)
+                if not asked_for:
+                    raise  # an ordinary error: the caller's to see
+                pending = [item for item in asked_for if staging.identity(item) not in staged]
+                if not pending:
+                    # Everything it names has been built already, at its own
+                    # request. Asking again would be the same exchange forever,
+                    # so the command ends here -- saying that rather than
+                    # repeating the service's "build these first", which is
+                    # exactly what this end just did.
+                    raise DaemonError(
+                        {
+                            "code": e.code,
+                            "message": "The PartCAD service asked again for sub-assemblies it has already been "
+                            "told to build: %s" % ", ".join(staging.identity(item) for item in asked_for),
+                            "data": e.data,
+                        }
+                    ) from e
+                context = params.get("context") if isinstance(params, dict) else None
+                for item in pending:
+                    staged.add(staging.identity(item))
+                    _logger.debug("Building %s before %s", staging.identity(item), method)
+                    self._call_staging(
+                        staging.INSTANTIATE_METHOD,
+                        staging.request_params(item, context),
+                        on_event,
+                        staged,
+                    )
+
+    def _call(self, method: str, params=None, on_event: Optional[Callable[[str, object], None]] = None):
+        """One request and its response, with no staging around it."""
         self._next_id += 1
         request_id = self._next_id
         # Only default when params is absent: an explicit [] or {} is a valid
