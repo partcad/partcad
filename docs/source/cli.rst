@@ -31,6 +31,44 @@ that copy rather than from the configuration it was started with. So ``pc --deve
 says even when a daemon has been running since before you set it, and there is no daemon to restart after
 changing a setting.
 
+.. _recursive-names:
+
+**********************************
+Naming a package and what is below
+**********************************
+
+A package name ending in ``...`` means **that package and every package below it**, transitively::
+
+    pc list parts //pub/examples...      # the parts of that package and of everything it imports
+    pc install -P //pub/examples...      # prepare all of them
+    pc test -P ...                       # test this package and everything below it
+
+``...`` on its own is the current package and everything below it, and ``//...`` is the whole workspace from
+the root down. The last path separator is optional, so ``//pub/examples/...`` is the same request as
+``//pub/examples...``.
+
+The suffix can also be written on an **object** name, in front of the ``:``, which is what makes it more than
+a flag::
+
+    pc render ...:bolt                   # every part named 'bolt', here and below
+    pc render //pub/examples...:bolt     # every part named 'bolt' in that subtree
+    pc export -a ...:frame               # every assembly named 'frame', here and below
+    pc info ...:bolt                     # what each of them is
+
+An object name that carries the suffix also says where the walk starts, so it wins over ``-P`` — the same rule
+a fully qualified ``//package:name`` already follows.
+
+A walk over a named object asks every package of the subtree for its **own** object of that name, and passes
+over the packages that declare none: a tree of forty packages in which three declare a ``bolt`` is three
+renders, not thirty-seven complaints. Finding it nowhere in the subtree is the one failure, and it is reported
+once.
+
+``-r``/``--recursive`` is the older spelling of a ``...`` on the package name and still works everywhere it
+did. It cannot say where the walk starts, it is not available on every command that could use one (``pc info``
+has none), and the rest of this page is written with ``...``. Note that ``pc supply find -r`` and
+``pc supply quote -r`` mean something else entirely — break every assembly down to its parts — and take no
+``...``.
+
 *************
 Host commands
 *************
@@ -213,14 +251,16 @@ Package commands
   which loads the packages the objects really depend on. Every piece of :ref:`software` is prepared too, by
   fetching its file - it has no cache key, being a file rather than something built out of one. Nothing is
   built. Use ``-P`` to install a package
-  other than the current one and ``-r`` to prepare the objects of the imported packages too.
+  other than the current one, and name it as ``-P <package>...`` to prepare the objects of the packages below
+  it too (see :ref:`recursive-names`).
 
 ``pc update``
   Force update all imported packages to their latest versions. This updates the packages a package imports;
   to upgrade the PartCAD installation itself, use ``pc upgrade``.
 
 ``pc lint``
-  Run linting checks on the files within packages. Use ``-r`` to check imported packages recursively and
+  Run linting checks on the files within packages. Name the package as ``-P <package>...`` to check the
+  packages below it too (see :ref:`recursive-names`), and use
   ``-f`` to run only checks whose name starts with a given prefix. ``--file PATH`` (repeatable) checks the
   named files instead, in this process rather than through the daemon; add ``--json`` for machine-readable
   findings and ``--stdin`` to check unsaved content supplied on standard input. ``--schema`` says which schema
@@ -234,6 +274,9 @@ Object commands
 ``pc list``
   List components. Subcommands select what to list: ``all``, ``parts``, ``sketches``, ``assemblies``,
   ``scenes``, ``interfaces``, ``mates``, ``providers``, ``software``, and ``packages``.
+
+  Each takes the package to list as its argument, the current one by default. Name it as ``<package>...`` to
+  list the packages below it too — ``pc list parts //pub/examples...`` (see :ref:`recursive-names`).
 
 ``pc add``
   Add an object to a package. Subcommands: ``dep`` (a dependency), ``sketch``, ``part``, ``assembly``,
@@ -258,7 +301,9 @@ Object commands
   :ref:`assembly_step` and :ref:`scenes`).
 
 ``pc test``
-  Run tests on a part, assembly, or scene. Use ``-r`` to test imported packages recursively, ``-f`` to filter
+  Run tests on a part, assembly, or scene. Name the package as ``-P <package>...`` to test the packages
+  below it too, or the object as ``...:<name>`` to test every object of that name from here down (see
+  :ref:`recursive-names`). Use ``-f`` to filter
   by name prefix, and ``-s``/``-i``/``-a``/``-S`` to indicate a sketch, interface, assembly, or scene.
   The tests cover whether the object builds (``cad``), whether it can be manufactured or purchased
   (``manufacturability`` and the methods below it), whether an assembly's connection instructions can be
@@ -302,8 +347,9 @@ Object commands
 
 ``pc sim``
   Run the simulations a part or an assembly declares in its ``simulate:`` section, and check the
-  ``validation:`` condition each of them states. Use ``-a`` when the object is an assembly, ``-r`` to run
-  everything the imported packages declare too, ``-f`` to run only the simulation of a given name, and
+  ``validation:`` condition each of them states. Use ``-a`` when the object is an assembly, ``-P
+  <package>...`` or ``...:<name>`` to run everything the packages below declare too (see
+  :ref:`recursive-names`), ``-f`` to run only the simulation of a given name, and
   ``--json`` to print the whole of what each simulation plugin reported. A validation that does not hold
   exits non-zero.
 
@@ -325,7 +371,9 @@ Object commands
   one, and ``-p <name>=<value>`` to set parameters.
 
 ``pc info``
-  Show detailed information about a part, assembly, scene, or software, including its parameters.
+  Show detailed information about a part, assembly, scene, or software, including its parameters. Name the
+  object as ``...:<name>`` to report every object of that name from here down, or pass ``<package>...`` as the
+  package with no object at all to report each package of a subtree (see :ref:`recursive-names`).
 
   Where the object says what it is made of, the material it names is resolved and reported as
   ``Material`` — the formal and full names, the density both ways round, the coefficient of friction and
@@ -436,7 +484,8 @@ Object commands
       pc cam                    # every object of this package that declares a `cam:` section
       pc cam :panel             # one of them
       pc cam -s :nameplate      # one that is a sketch
-      pc cam -r                 # this package and everything it imports
+      pc cam -P ...             # this package and everything it imports
+      pc cam ...:panel          # every panel from here down
 
   Unlike ``pc cae``, this is a **package-level** command. An analysis is asked of one part; a route is what a
   package's cut list is made of, so with nothing named ``pc cam`` produces one for every sketch and part of
@@ -557,8 +606,9 @@ Object commands
   Export a 3D view of parts, assemblies, or scenes. Use ``-a`` for an assembly and ``-S`` for a scene.
   Choose the format with ``-t``:
   ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, ``gltf``, ``iges``, ``urdf``, or any
-  file type a package implements itself (see :ref:`output-files`). Use ``-O`` to set the output directory and
-  ``-r`` to export recursively. ``urdf`` writes a ``.urdf`` file plus a directory of the mesh files it
+  file type a package implements itself (see :ref:`output-files`). Use ``-O`` to set the output directory,
+  and ``-P <package>...`` or ``...:<name>`` to export the packages below this one too (see
+  :ref:`recursive-names`). ``urdf`` writes a ``.urdf`` file plus a directory of the mesh files it
   references.
 
   ``-t`` also takes a full path, ``-t sim-gazebo:world``, which names the package the implementation lives
@@ -577,7 +627,8 @@ Object commands
   Render a 2D projection of parts, assemblies, or scenes onto a plane. Choose the format with ``-t``:
   ``svg``, ``png``, ``jpeg``, ``dxf``, ``readme``, ``pdf``, ``html``, or any file type a package implements
   itself (see :ref:`output-files`). ``-e`` works the same way as it does for ``pc export``, reading the
-  ``render:`` options from another package.
+  ``render:`` options from another package. ``-P <package>...`` and ``...:<name>`` render a whole subtree, the
+  same way they do for ``pc export`` (see :ref:`recursive-names`).
 
   ``--with-ports`` draws every port of the object on the projection: a coordinate frame at each, with the long
   arrow along ``+Z`` — the direction a part travels along when it is connected through that port — and the
@@ -716,4 +767,5 @@ Other commands
 
 ``pc search``
   Search for objects by keyword. Subcommands: ``all``, ``parts``, ``sketches``, ``assemblies``,
-  ``scenes``, ``interfaces``, and ``packages``.
+  ``scenes``, ``interfaces``, and ``packages``. ``-P`` names the package to search, the root package by
+  default; ``-P <package>...`` searches the packages below it too (see :ref:`recursive-names`).

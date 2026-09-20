@@ -113,6 +113,74 @@ def get_child_project_path(parent_path, child_name):
     return result
 
 
+# The suffix that turns a package name into "that package and every package
+# below it": '//pub/examples...' is '//pub/examples' together with everything it
+# imports, transitively. It says in the argument what '-r' says as a flag, and
+# that is the whole point of it -- a flag applies to the command, while a suffix
+# applies to the one name it is written on, so it can also say *where* the
+# recursion starts. '...:bolt' is every bolt from here down; '//pub/examples...'
+# is that subtree whatever '--package' says.
+#
+# Here rather than beside the operations that act on it, because both ends have
+# to read a package argument the same way and neither may import the heavy
+# 'partcad' to do it (see "Command boundary" in src/partcad_cli/AGENTS.md).
+RECURSIVE_SUFFIX = "..."
+
+
+def split_recursive_package(package):
+    """Split a package argument into the package it names and the recursion it asks for.
+
+    '//pub/examples...' and '//pub/examples/...' are the same request: a user
+    who has typed a path separator all the way along does not stop before the
+    last one. '...' on its own -- and './...' -- is the current package and
+    everything below it.
+
+    Anything without the suffix comes back unchanged beside False, so this is
+    safe to call on every package argument, including the many that never carry
+    one. A non-string (None, which is how "no --package" arrives) is one of
+    those.
+    """
+    if not isinstance(package, str) or not package.endswith(RECURSIVE_SUFFIX):
+        return package, False
+    package = package[: -len(RECURSIVE_SUFFIX)]
+    if package.endswith("/") and package not in ("/", "//"):
+        # '//pub/examples/...', written the way a path is written. '//' and the
+        # deprecated '/' are the root package itself and keep their slashes.
+        package = package[:-1]
+    if package == "":
+        # '...' with nothing in front of it: from here down.
+        package = "."
+    return package, True
+
+
+def split_recursive_object(package, object_name):
+    """The package, the object and the recursion that a pair of arguments asks for.
+
+    Both halves of a request can carry the suffix, and either turns recursion
+    on: '-P //pub/examples...' with no object walks that subtree, and
+    '//pub/examples...:bolt' asks every package of that subtree for its own
+    'bolt'. The object name wins over '--package' when it carries one, exactly
+    as a fully qualified object name already wins over it -- a name that says
+    which package it is about is the more specific of the two.
+
+    The marker is removed from the object name on the way out, and with it the
+    package it named: what comes back is the bare name, which is what resolving
+    it against each package of the subtree in turn needs. '...:bolt' names no
+    package of its own, so the subtree is still the one '--package' selected.
+    """
+    package, recursive = split_recursive_package(package)
+    if not isinstance(object_name, str) or ":" not in object_name:
+        return package, object_name, recursive
+
+    object_package, _, item = object_name.partition(":")
+    object_package, object_recursive = split_recursive_package(object_package)
+    if not object_recursive:
+        return package, object_name, recursive
+    if object_package != ".":
+        package = object_package
+    return package, item, True
+
+
 def parse_parameterized_name(name: str) -> tuple:
     """Split '<name>;<param>=<value>,...' into the name and the parameters.
 

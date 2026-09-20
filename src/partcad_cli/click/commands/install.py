@@ -22,14 +22,17 @@ from ..service import run
     type=str,
     default="",
     show_envvar=True,
-    help="Package to install the objects of (the current one by default)",
+    help=(
+        "Package to install the objects of (the current one by default). "
+        "'<package>...' installs that package and every package below it"
+    ),
 )
 @click.option(
     "--recursive",
     "-r",
     is_flag=True,
     show_envvar=True,
-    help="Also prepare the objects of all imported packages",
+    help="Also prepare the objects of all imported packages (older spelling of '<package>...')",
 )
 @click.pass_obj
 def cli(cli_ctx, package, recursive) -> None:

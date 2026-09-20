@@ -3248,8 +3248,8 @@ part in one package names a material catalogued in another:
           type: string
           default: //pub/std/manufacturing/material/plastic:pla
 
-List what a package catalogues with ``pc list materials`` (and ``-r`` to walk
-the packages it imports).
+List what a package catalogues with ``pc list materials`` (and
+``pc list materials //...`` to walk the packages it imports).
 
 Standard catalogues
 -------------------

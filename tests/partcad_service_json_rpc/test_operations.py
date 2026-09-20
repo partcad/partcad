@@ -207,6 +207,9 @@ class FakeProject:
         # package was tested: how a test tells which package a request landed on.
         self.parts_requested = []
         self.tested_whole_package = False
+        # What this package was asked to render, as 'render_async()' was called:
+        # how a test tells which packages of a subtree a walk reached.
+        self.render_requests = []
         self.sketches = {}
         self.assemblies = {}
         self.scenes = {}
@@ -242,6 +245,22 @@ class FakeProject:
         obj = self.scenes.get(name)
         return obj.config if obj is not None else None
 
+    def declares_object(self, kind, name):
+        # A real Project answers from its parsed 'partcad.yaml' whether it has
+        # an object of this kind under this name, without building it. That is
+        # what lets a run over a subtree for one name ('...:widget') pass over
+        # the packages that declare no such object instead of reporting each of
+        # them as a failure.
+        section = {
+            "sketch": "sketches",
+            "interface": "interfaces",
+            "part": "parts",
+            "assembly": "assemblies",
+            "scene": "scenes",
+            "software": "software",
+        }[kind]
+        return name.partition(";")[0] in getattr(self, section)
+
     def get_suppliers(self):
         return dict(self.suppliers)
 
@@ -263,6 +282,9 @@ class FakeProject:
 
     async def test_log_wrapper_async(self, ctx, tests=None):
         self.tested_whole_package = True
+
+    async def render_async(self, **kwargs):
+        self.render_requests.append(kwargs)
 
     def object_count(self, kind=None):
         # 'Context.get_packages(has_stuff=True)' asks one kind at a time; the
@@ -1217,6 +1239,159 @@ def test_test_run_reports_a_package_a_qualified_object_name_cannot_reach(monkeyp
     operations.test_run(session, {"object": "//nope:widget"})
 
     assert session.partcad.logging.messages("error") == ["Package //nope is not found"]
+
+
+# ---- '...': the package suffix that means "and everything below it" --------
+#
+# The same request '-r' makes, written where the package is named. Two things
+# it does that a flag cannot, and both are covered here: it can say where the
+# walk starts ('//sub...:widget' against a different '--package'), and it can
+# be given to a command that has no '-r' at all ('pc info').
+#
+# The third is the rule about missing objects. A walk over one name asks every
+# package of the subtree for its own object of that name, so a package that
+# declares none has not failed -- only a walk that found none anywhere has.
+
+
+def test_a_suffix_on_the_package_walks_the_subtree(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+    sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
+    session.partcad_ctx.projects["//sub"] = sub
+
+    operations.test_run(session, {"package": "//..."})
+
+    assert root.tested_whole_package
+    assert sub.tested_whole_package
+
+
+def test_a_suffix_on_the_object_walks_the_subtree(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+    sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
+    session.partcad_ctx.projects["//sub"] = sub
+
+    operations.test_run(session, {"object": "...:widget"})
+
+    assert root.parts_requested == ["widget"]
+    assert sub.parts_requested == ["widget"]
+
+
+def test_a_suffix_on_the_object_says_where_the_walk_starts(monkeypatch):
+    # '//sub...:widget' is about '//sub' and what is below it, whatever the
+    # root package holds -- which is what a flag could not have said.
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+    sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
+    session.partcad_ctx.projects["//sub"] = sub
+
+    operations.test_run(session, {"object": "//sub...:widget"})
+
+    assert sub.parts_requested == ["widget"]
+    assert root.parts_requested == []
+
+
+def test_a_walk_passes_over_the_packages_that_declare_no_such_object(monkeypatch):
+    # The point of the syntax: three packages of forty declare a widget, and
+    # the other thirty-seven are not thirty-seven failures.
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+    bare = FakeProject(name="//bare")
+    session.partcad_ctx.projects["//bare"] = bare
+
+    operations.test_run(session, {"object": "...:widget"})
+
+    assert root.parts_requested == ["widget"]
+    assert bare.parts_requested == []
+    assert session.partcad.logging.messages("error") == []
+
+
+def test_a_walk_that_found_the_object_nowhere_is_the_one_failure(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    session.partcad_ctx.projects["//sub"] = FakeProject(name="//sub")
+
+    operations.test_run(session, {"object": "...:nosuch"})
+
+    assert session.partcad.logging.messages("error") == ["nosuch is not found in // or in any package below it"]
+
+
+def test_the_suffix_reaches_a_command_that_has_no_recursive_flag():
+    # 'pc info' never had a '-r'. '...' is how it is asked for one, which is
+    # the whole reason the recursion is written on the package name.
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    ctx.projects["//"].add("parts", FakeObject("widget"))
+    ctx.projects["//sub"] = FakeProject(name="//sub").add("parts", FakeObject("widget"))
+    for path in ("//:widget", "//sub:widget"):
+        ctx.shapes[("part", path)] = FakeObject("widget", config={"kind": "part"}, info={"Path": path})
+
+    operations.info_object(session, {"object": "...:widget"})
+
+    reported = session.partcad.logging.messages("info")
+    assert "OBJECT: //:widget" in reported
+    assert "OBJECT: //sub:widget" in reported
+    assert session.partcad.logging.messages("error") == []
+
+
+def test_a_walk_renders_only_the_packages_that_have_the_object(monkeypatch):
+    # A render asked of a package that declares no such object raises
+    # 'EmptyShapesError' out of 'Project.render_async()', which used to end the
+    # whole run -- so one package without a widget cost every other package its
+    # render. The packages are filtered before anything is rendered.
+    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    session, _ = make_session()
+    session.partcad.output = types.SimpleNamespace(
+        all_formats=lambda ctx: ["svg"],
+        NON_WRAPPER_FORMATS=set(),
+        SECTIONS=("export", "render"),
+        format_names=lambda section: [],
+        split_format=lambda project_name, fmt: (fmt, None),
+    )
+    ctx = session.partcad_ctx
+    ctx.projects["//"].add("parts", FakeObject("widget"))
+    has_it = FakeProject(name="//sub").add("parts", FakeObject("widget"))
+    has_not = FakeProject(name="//bare").add("parts", FakeObject("other"))
+    ctx.projects["//sub"] = has_it
+    ctx.projects["//bare"] = has_not
+
+    operations.render_objects(session, {"format": "svg", "object": "...:widget"})
+
+    assert [request["parts"] for request in has_it.render_requests] == [["widget"]]
+    assert has_not.render_requests == []
+
+
+@pytest.mark.parametrize(
+    "operation, params",
+    [
+        (operations.bom, {"object": "...:frame"}),
+        (operations.inspect_object, {"object": "...:frame"}),
+        (operations.cae_analyze, {"analysis": "fea", "object": "...:frame"}),
+        (operations.convert_object, {"kind": "part", "object_name": "...:frame"}),
+    ],
+)
+def test_an_operation_that_answers_about_one_object_refuses_the_suffix(monkeypatch, operation, params):
+    # A bill of materials, a viewer window, a CAE model and a rewritten
+    # declaration are each one thing about one object, so "all of them" has no
+    # obvious meaning. Refused outright: left alone, the suffix reaches
+    # 'resolve_resource_path', which turns it into a '*' naming no package, and
+    # the user is told that '//*:frame' is not found.
+    install_fake_partcad_modules(monkeypatch, {"partcad.cae": {"ANALYSES": ("fea", "cfd")}})
+    session, _ = make_session()
+    session.partcad.cae = types.SimpleNamespace(ANALYSES=("fea", "cfd"))
+
+    with pytest.raises(JsonRpcError) as caught:
+        operation(session, params)
+
+    assert "'...'" in str(caught.value)
 
 
 # ---- package loading -------------------------------------------------------

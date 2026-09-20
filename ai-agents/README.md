@@ -242,8 +242,9 @@ The plugin folder is named `claude`, but the command namespace comes from
 - **`/pc:search <query>`** — finds existing parts and assemblies in the catalog
   whose name, description, or source matches the query (`pc search parts` /
   `pc search assemblies`), lists the matches, and can inspect or render a chosen
-  one. Searches the local package by default; `-r` widens to every imported
-  package (the public registry and dependencies).
+  one. Searches the local package by default; a `...` suffix on the package
+  (`-P //...`) widens to every imported package (the public registry and
+  dependencies).
 
 ## Local use (Claude)
 
