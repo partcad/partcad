@@ -350,13 +350,16 @@ class Context:
         self.stats_packages_instantiated = 0
         self.stats_interfaces = 0
         self.stats_interfaces_instantiated = 0
-        self.stats_sketches = 0
+        # The four kinds that are shapes have no counter of their own: they are
+        # counted from what the loaded packages declare, when somebody asks (see
+        # the properties below). A counter was a count of what had been
+        # *created*, which was the same number only for as long as loading a
+        # package created everything in it -- it no longer does (see
+        # 'Project.LAZY_OBJECT_KINDS'), and a 'pc info' reporting no parts in a
+        # package full of them would be the price of that.
         self.stats_sketches_instantiated = 0
-        self.stats_parts = 0
         self.stats_parts_instantiated = 0
-        self.stats_assemblies = 0
         self.stats_assemblies_instantiated = 0
-        self.stats_scenes = 0
         self.stats_scenes_instantiated = 0
         self.stats_plugins = 0
         self.stats_plugin_queries = 0
@@ -465,6 +468,32 @@ class Context:
         ):
             current_project_path = self.name
         self.current_project_path = current_project_path
+
+    def _stats_declared(self, kind: str) -> int:
+        """How many objects of a kind the packages loaded here declare.
+
+        Counted on demand rather than accumulated, so that the answer does not
+        depend on which objects some earlier command happened to create. Only
+        what each package already knows it declares, never an enumeration of its
+        own (see 'Project.object_count_known').
+        """
+        return sum(project.object_count_known(kind) for project in list(self.projects.values()))
+
+    @property
+    def stats_sketches(self) -> int:
+        return self._stats_declared("sketch")
+
+    @property
+    def stats_parts(self) -> int:
+        return self._stats_declared("part")
+
+    @property
+    def stats_assemblies(self) -> int:
+        return self._stats_declared("assembly")
+
+    @property
+    def stats_scenes(self) -> int:
+        return self._stats_declared("scene")
 
     def stats_recalc(self, verbose=False):
         self.stats_memory = total_size(self, verbose)

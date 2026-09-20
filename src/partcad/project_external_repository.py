@@ -90,21 +90,6 @@ class ProjectExternalRepository(ProjectPlugin):
         # rather than once per kind asked about - and so that a malformed
         # declaration is complained about once rather than ten times.
         self._served_kinds_parsed = _UNPARSED
-        # Objects are instantiated once, lazily, the first time this package's
-        # 'parts'/'sketches'/'assemblies' are accessed (see '_lazy_objects').
-        # Per kind, because the three are asked for separately and instantiating
-        # one says nothing about the others: 'pc list assemblies -r //pub' walks
-        # every package for its assemblies, and a kind-blind guard had each of
-        # those packages instantiate its parts and its sketches to answer.
-        # '_instantiating_kinds' is the reentrancy guard so factories can write
-        # into the backing dicts during instantiation without re-triggering it -
-        # per kind for the same reason, and because an object of one kind may
-        # legitimately resolve an object of another while it is being made.
-        self._parts = {}
-        self._sketches = {}
-        self._assemblies = {}
-        self._instantiated_kinds: set[str] = set()
-        self._instantiating_kinds: set[str] = set()
         super().__init__(ctx, name, path, config_obj=config_obj, inherited_config=inherited_config)
 
     def request(self, key: str, handler):
@@ -315,8 +300,10 @@ class ProjectExternalRepository(ProjectPlugin):
         sketches, assemblies) are NOT enumerated here: doing so eagerly for every
         package makes loading a large repository (thousands of parts across many
         sub-packages) prohibitively expensive. They are enumerated lazily, per
-        package, the first time that package's objects are actually accessed (see
-        the 'parts'/'sketches'/'assemblies' properties below).
+        package and per kind, the first time that package's objects of that kind
+        are actually asked for - by 'Project.object_names()', which is where the
+        round trip lives, and which a package creating that kind or answering a
+        single lookup goes through (see 'Project.LAZY_OBJECT_KINDS').
         """
         await self._materialize_meta_async()
         # Warm 'deps' so the synchronous 'dependencies()' is a cache hit.
@@ -340,84 +327,6 @@ class ProjectExternalRepository(ProjectPlugin):
         if not wanted:
             return
         await asyncio.gather(*(self.get_data_async("objects/" + kind) for kind in wanted))
-
-    # How each instantiable kind is created, for '_instantiate_enumerated()'.
-    # A mapping rather than a chain of 'if's so that the properties below, the
-    # guards and this stay one list of kinds instead of three.
-    _INSTANTIATE_BY_KIND = {
-        "sketch": "get_sketch",
-        "part": "get_part",
-        "assembly": "get_assembly",
-    }
-
-    def _instantiate_enumerated(self, kind: str):
-        """Instantiate this package's enumerated objects of one kind.
-
-        Runs at most once per kind, the first time a consumer reads the
-        matching 'parts'/'sketches'/'assemblies' (see those properties). Each
-        object is created independently and defensively: one that cannot be
-        built (an unsupported type, a file-backed object whose file is absent)
-        is skipped with a warning instead of hiding every other object from a
-        'list'. Geometry is not built here - only the factories.
-
-        One kind, not all three. The kinds are independent: an object of
-        another kind that this one names is resolved by name when it is named
-        ('get_part' and friends instantiate on demand), so nothing here needs
-        its neighbours to have been made first. Making them anyway is what made
-        a recursive listing of one kind pay for all of them - an LDraw category
-        of the public index has some hundreds of parts and no assemblies at
-        all, and 'pc list assemblies -r //pub' instantiated every one of those
-        parts, per category, to report that there were no assemblies.
-        """
-        getter = getattr(self, self._INSTANTIATE_BY_KIND[kind])
-        for name in self.object_names(kind):
-            try:
-                getter(name)
-            except Exception as e:
-                pc_logging.warning("%s: could not instantiate %s '%s': %s" % (self.name, kind, name, e))
-
-    def _lazy_objects(self, kind: str):
-        """Instantiate the enumerated objects of 'kind' on first access, once."""
-        if kind in self._instantiated_kinds or kind in self._instantiating_kinds:
-            return
-        self._instantiating_kinds.add(kind)
-        try:
-            self._instantiate_enumerated(kind)
-            self._instantiated_kinds.add(kind)
-        finally:
-            self._instantiating_kinds.discard(kind)
-
-    # The eager object dictionaries the synchronous consumers (the CLI 'list'
-    # commands, render, export, get_*) read. They are populated lazily, per
-    # package, so that loading a large repository does not enumerate every
-    # sub-package's objects up front. The reentrancy guard lets the factories
-    # write into the backing dict during instantiation without re-triggering.
-    @property
-    def parts(self):
-        self._lazy_objects("part")
-        return self._parts
-
-    @parts.setter
-    def parts(self, value):
-        self._parts = value
-
-    @property
-    def sketches(self):
-        self._lazy_objects("sketch")
-        return self._sketches
-
-    @sketches.setter
-    def sketches(self, value):
-        self._sketches = value
-
-    @property
-    def assemblies(self):
-        self._lazy_objects("assembly")
-        return self._assemblies
-
-    @assemblies.setter
-    def assemblies(self, value):
-        self._assemblies = value
 
     async def _materialize_meta_async(self):
         """Fill package-level metadata from the repository.
