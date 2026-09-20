@@ -274,6 +274,11 @@ class GuideSection:
     # it is the only item whose 'description' has nowhere else to go.
     base_name: Optional[str] = None
     base_description: Optional[str] = None
+    # How many of this assembly the whole build needs. An assembly used more
+    # than once is documented once, so this is what says it has to be made
+    # again - and it counts the copies of whatever uses it too, since four
+    # towers with a spire each need four spires.
+    count: int = 1
 
 
 async def collect_sections_async(ctx, assembly) -> list:
@@ -285,15 +290,32 @@ async def collect_sections_async(ctx, assembly) -> list:
     """
     sections = []
     seen = set()
-    await _collect_section(ctx, assembly, sections, seen, top=True)
+    uses = {}
+    await _collect_section(ctx, assembly, sections, seen, uses, top=True)
+    _count_sections(sections, uses)
     return sections
+
+
+def _count_sections(sections, uses):
+    """How many of each assembly the build needs.
+
+    A section is appended only once every assembly it uses is already in the
+    list, so walking the list backwards reaches an assembly before anything it
+    uses, and a total is complete by the time it is handed on.
+    """
+    totals = {}
+    for section in reversed(sections):
+        key = _assembly_key(section.assembly)
+        section.count = totals.get(key, 1)
+        for used, times in uses.get(key, {}).items():
+            totals[used] = totals.get(used, 0) + section.count * times
 
 
 def collect_sections(ctx, assembly) -> list:
     return asyncio.run(collect_sections_async(ctx, assembly))
 
 
-async def _collect_section(ctx, assembly, sections, seen, top=False):
+async def _collect_section(ctx, assembly, sections, seen, uses, top=False):
     await assembly.do_instantiate()
 
     key = _assembly_key(assembly)
@@ -302,9 +324,11 @@ async def _collect_section(ctx, assembly, sections, seen, top=False):
     seen.add(key)
 
     content = _step_source(assembly)
+    used = uses.setdefault(key, {})
     for child in content.children:
         if isinstance(child.item, Assembly):
-            await _collect_section(ctx, child.item, sections, seen)
+            used[_assembly_key(child.item)] = used.get(_assembly_key(child.item), 0) + 1
+            await _collect_section(ctx, child.item, sections, seen, uses)
 
     sections.append(await _build_section(ctx, assembly, content, top))
 
@@ -756,14 +780,20 @@ async def _section_pages(project, section: GuideSection, images: ImageSource, se
         blocks.append(doc.ImageRow([image], height=0.5))
 
     blocks += _prose_blocks(getattr(section.assembly, "desc", None))
-    blocks.append(
-        doc.Properties(
-            [
-                ("Package", section.assembly.project_name),
-                ("Steps", str(len(section.steps))),
-            ]
+    properties = [
+        ("Package", section.assembly.project_name),
+        ("Steps", str(len(section.steps))),
+    ]
+    if section.count > 1:
+        properties.append(("Needed", "%d" % section.count))
+    blocks.append(doc.Properties(properties))
+    if section.count > 1:
+        blocks.append(
+            doc.Paragraph(
+                "The build needs %d of these. Repeat this section %d times - the steps are the same every time."
+                % (section.count, section.count)
+            )
         )
-    )
     if section.top and section_count > 1:
         blocks.append(doc.Paragraph("Assemble the sub-assemblies documented above before starting on this one."))
     if section.base_name:
