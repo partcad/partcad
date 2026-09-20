@@ -165,6 +165,14 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         "cache",
         "cache_dependencies_ignore",
         "category",
+        # How the thing is packaged for sale, not what it is. The third of the
+        # (vendor, SKU, pack size) record, and the only one of the three that
+        # was missing here - so the same geometry sold in bags of 25 keyed
+        # differently from the same geometry sold singly, and declaring a pack
+        # size rebuilt a part for a number nothing reads but a bill of
+        # materials. Keying on less cannot serve the wrong shape here: nothing
+        # builds anything out of it.
+        "count_per_sku",
         "desc",
         "docs",
         "example",

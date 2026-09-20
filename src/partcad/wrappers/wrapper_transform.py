@@ -26,17 +26,34 @@ import wrapper_common
 
 
 def _relocate(shape, offset):
-    """Relocate 'shape' by the packed [translation, axis, angle] offset.
+    """Move 'shape' by the packed [translation, axis, angle] offset.
 
-    Mirrors the build123d relocate() the core used to run in-process, so the
-    accepted 'offset' form is exactly what 'build123d.Location(*offset)' takes.
+    The transform is applied to the geometry, so what comes back sits at the
+    new place with an identity location and carries the offset nowhere else.
+
+    It used to call build123d's 'relocate()', which does the opposite of what
+    the name suggests to anyone writing an 'offset:': it gives the shape a new
+    local frame and bakes the inverse into the geometry, so the shape does not
+    move at all. A 1mm box asked to move 10mm in X stayed at x[0, 1].
+
+    That left the offset expressed only as a location, and the consumers did
+    not agree about it. Exporting and rendering dropped it and so saw the
+    compensating inverse - a part rotated by the opposite of what was asked -
+    while 'partcad.test.interference' honoured it and saw a part that had not
+    moved. Two errors that cancelled in a picture and did not in a check:
+    'feature_enrich:desk-enrich' rendered as a desk while the check was shown
+    four legs lying across each other, and reported 4.8 million mm^3 of
+    overlap that is not there.
+
+    Baking it into the geometry is what stops any of that being possible: an
+    envelope is BREP bytes, and nothing downstream has to remember a frame.
     """
     import build123d as b3d
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
 
-    solid = b3d.Solid.make_box(1, 1, 1)
-    solid.wrapped = shape
-    solid.relocate(b3d.Location(*offset))
-    return solid.wrapped
+    location = b3d.Location(*offset)
+    transform = BRepBuilderAPI_Transform(shape, location.wrapped.Transformation(), True)
+    return transform.Shape()
 
 
 def _scale(shape, factor):

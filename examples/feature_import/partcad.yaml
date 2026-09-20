@@ -1,5 +1,87 @@
 desc: PartCAD example project to demonstrate parts defined using STL files.
 
+docs:
+  intro: |
+    ## Two assemblies out of one STEP file
+
+    `AeroAssembly.step` is a STEP assembly read by `pc import assembly`. The
+    eight solids it contains are committed as parts, and the tree it was read
+    from is committed twice:
+
+    | | |
+    |---|---|
+    | `AeroAssembly_assy_example/AeroAssembly` | the import, unedited. `manufacturable: false`. |
+    | `AeroAssembly_assy_example/AeroAssembly_buildable` | the same eight parts, placed so they can be put together. |
+
+    They share every part file. Only placements differ, and the first one is
+    never edited to make a check pass - its whole value is that it is exactly
+    what came out of the file, overlaps and all.
+
+    ### What the import got wrong
+
+    `partcad.test.interference` reports three overlaps in the import:
+
+    ```
+    AeroAssembly/AeroFrame_Plate and AeroAssembly/AeroFrame_Cap                                                  90.231 mm^3
+    AeroAssembly/AeroFrame_Plate and AeroAssembly/MirrorAeroFrameAssembly/MirrorAeroFrameAssembly_solid1         12.997 mm^3
+    AeroAssembly/MirrorAeroFrameAssembly/MirrorAeroFrameAssembly_solid1 and .../MirrorAeroFrameAssembly_solid3    0.161 mm^3
+    ```
+
+    None of the three is an overlap a joint means to have, so none of them is
+    something `selfScrew`, `snapIn` or `interferes` could state. They are three
+    different mistakes:
+
+    **90.231 mm^3 - the cap's two front feet are too long.** The cap stands on
+    the plate on four feet. The two rear ones, 8 x 10 mm, land exactly on the
+    rear flange's top face at z = 131.885499. The two front ones, 6 x 10 mm,
+    reach down to z = 75.939163 while the front flange's top face is at
+    z = 76.691086 - so each of them is 0.751923 mm inside solid metal, and
+    6 x 10 x 0.751923 mm^3 twice is the 90.231 mm^3 reported. The feet are
+    modelled 5.000 mm and 6.000 mm tall against faces 0.751923 mm apart: that is
+    a defect in the cap part, and no rigid motion of one part seats all four.
+    `AeroAssembly_buildable` raises the cap by exactly that 0.751923 mm, which
+    is the least motion that takes metal out of metal. The cap then seats on its
+    front feet and stands 0.751923 mm clear on the rear ones, where nothing
+    fastens through.
+
+    **12.997 mm^3 - the mirrored frame half is in the wrong place.** The plate's
+    front flange carries eight 3 mm holes in two mirrored groups of four, one
+    group per frame half. `AeroFrameAssembly`'s four holes are coaxial with its
+    group and its bolt face is flat against the flange's underside;
+    `MirrorAeroFrameAssembly`'s four miss the other group by
+    (7.728713, -3.380867, 2.583602) mm, which leaves that half 2.583602 mm clear
+    of the flange at `solid2` and 12.997 mm^3 inside the plate at `solid1`. A
+    half that is floating at one foot and buried at the other is a misplaced
+    instance, not a design. `AeroAssembly_buildable` moves the whole branch by
+    that vector - which is not fitted, it is what puts the four holes on the
+    plate's four. Afterwards every clearance this half has matches its twin's to
+    the ninth decimal.
+
+    **0.161 mm^3 - the importer's own rounding.** `pc import assembly` writes
+    each location to five decimals, the rotation axis included. `solid3` of each
+    half is placed by a rotation about an axis the source states as
+    `[-0.129428307996, 0.129428307996, -0.98310560276]` and the `.assy` file
+    holds as `[-0.12943, 0.12943, -0.98311]`. Rounding the axis there moves that
+    solid's 170 vertices by up to 0.78 um, 0.57 um on average - the part is up
+    to 257 mm off the axis it turns about, so the fifth decimal of a unit vector
+    is most of a micron out at the far end. And 0.161 mm^3 spread over the
+    288.9 mm^2 patch where `solid1` and `solid3` meet is 0.56 um thick: the same
+    number, which is two faces meant to be coincident and not quite being so.
+    None of it is in the source file - re-read at full precision the same two
+    solids touch at 0.000000000 mm. `AeroAssembly_buildable` writes every
+    placement at the precision the STEP file actually holds, and the sliver goes
+    away.
+
+    ### Why the second one can be made
+
+    Metal cannot be inside metal. After the three corrections the assembly has
+    no shared volume anywhere - the worst pair is 0.000000000 mm^3 - and the
+    contacts it does have are the ones the hardware is built on: both frame
+    halves flat against the plate's flanges with their 3 mm holes coaxial with
+    it, and the cap standing on the plate. `AeroAssembly` keeps all three
+    overlaps and declares `interference: skip: true`, because a faithful record
+    of a file is not a design to be checked; it is evidence.
+
 parts:
   AeroAssembly_assy_example/AeroFrameAssembly_solid1:
     type: step
@@ -20,5 +102,31 @@ parts:
   cube:
     type: stl
 assemblies:
+  # What 'pc import assembly' read out of 'AeroAssembly.step', unedited. It is
+  # kept exactly as the importer wrote it - five decimals and all - because its
+  # value is that it is what the file says, and an import that has been adjusted
+  # to pass a check is no longer evidence of anything.
+  #
+  # It holds three interferences, described under 'docs.intro' above and
+  # resolved in 'AeroAssembly_buildable'. They are not overlaps any joint means
+  # to have, so there is nothing here for 'selfScrew', 'snapIn' or 'interferes'
+  # to say, and 'minVolume' would be lying about two of them: at 90.231 mm^3 and
+  # 12.997 mm^3 they are interferences by any measure. The check is skipped
+  # instead, which says what is true - this object is not being held to it.
   AeroAssembly_assy_example/AeroAssembly:
     type: assy
+    manufacturable: false
+    interference:
+      skip: true
+    desc: >-
+      The unedited import of 'AeroAssembly.step'. It carries the three
+      interferences the source file contains, so it is a record and not a
+      design; 'AeroAssembly_buildable' is the same eight parts placed so they
+      go together.
+  AeroAssembly_assy_example/AeroAssembly_buildable:
+    type: assy
+    desc: >-
+      The import with its three interferences resolved - the mirrored frame
+      half put on its bolt pattern, the cap lifted clear of the plate, and the
+      placements written at the precision the STEP file holds. Shares every
+      part file with 'AeroAssembly'; only the placements differ.

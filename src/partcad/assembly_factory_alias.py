@@ -13,6 +13,7 @@ import typing
 from . import assembly_factory as pf
 from . import logging as pc_logging
 from . import telemetry
+from .shape_config_store import resolve_store_properties
 from .utils import format_parameterized_name, get_child_project_path
 
 
@@ -136,10 +137,16 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
                 obj.children = source.children
 
     def get_final_config(self):
+        """The declaration this reference resolves to, as this reference reports it.
+
+        The source's, but for the purchasing record this reference may state of
+        its own - an assembly is bought or put together the same way a part is.
+        See 'PartFactoryAlias.get_final_config' for why it is resolved here.
+        """
         source = self.get_source_object(self.source)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")
-        return source.get_final_config()
+        return resolve_store_properties(source.get_final_config(), self.config)
 
     def get_cacheable(self) -> bool:
         # Cacheable once it knows which entry it shares: a reference keys on
