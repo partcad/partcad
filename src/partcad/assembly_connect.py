@@ -48,6 +48,8 @@ HOW_FIELDS = (
     "turnDirection",
     "turnTorqueMax",
     "threadStep",
+    "selfScrew",
+    "snapIn",
     "holdWith",
     "holdWithInstance",
     "holdWithForce",
