@@ -702,6 +702,14 @@ class Project(project_config.Configuration):
         if name in done and configs is not None and configs.get(name) is config:
             return config
         normalized = config_class.normalize(name, config, f"{self.name}:{name}")
+        if kind in LAZY_OBJECT_KINDS and isinstance(normalized, dict) and "manufacturable" not in normalized:
+            # What the package says about anything it produces, written onto the
+            # declaration rather than only onto the object. 'ShapeFactory' puts
+            # it there as it creates one, which used to mean every declaration
+            # carried it once the package had loaded - and 'pc convert' reads
+            # the declaration rather than the object, so resolving one part
+            # copied the field out of a declaration that nothing had asked for.
+            normalized["manufacturable"] = self.is_manufacturable
         if configs is not None and configs.get(name) is not normalized:
             # A short-form declaration ('cube: //other:cube') normalizes into a
             # new dictionary rather than in place, and the package should hold

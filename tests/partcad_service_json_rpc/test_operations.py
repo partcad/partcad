@@ -265,6 +265,14 @@ class FakeProject:
         # the client reads each row's label from.
         self.config_obj.setdefault("name", name)
 
+    def object_count_known(self, kind):
+        """How many objects of a kind this package declares.
+
+        A real package counts the declarations it has read, without enumerating
+        and without creating anything; these fakes are their own declarations.
+        """
+        return len(getattr(self, self._sections[kind]))
+
     def object_descriptions(self, kind):
         """What a listing prints, as a real package answers it.
 
@@ -388,23 +396,45 @@ class FakeContext:
         # Instantiated objects, keyed by (kind, "package:name") as the context
         # is asked for them.
         self.shapes = {}
-        # Stats attributes read by the info/getStats operation.
+        # Stats attributes read by the info/getStats operation. Only the
+        # counters: a real Context computes the declared half from the packages
+        # it has loaded, and so does this (see the properties below). A number
+        # that could simply be assigned here would let a test pass against a
+        # payload the real context cannot produce.
         for name in (
             "stats_packages",
             "stats_packages_instantiated",
-            "stats_sketches_declared",
             "stats_sketches_instantiated",
-            "stats_interfaces_declared",
             "stats_interfaces_instantiated",
-            "stats_parts_declared",
             "stats_parts_instantiated",
-            "stats_assemblies_declared",
             "stats_assemblies_instantiated",
-            "stats_scenes_declared",
             "stats_scenes_instantiated",
             "stats_memory",
         ):
             setattr(self, name, 0)
+
+    def _stats_declared(self, kind):
+        return sum(project.object_count_known(kind) for project in self.projects.values())
+
+    @property
+    def stats_sketches_declared(self):
+        return self._stats_declared("sketch")
+
+    @property
+    def stats_interfaces_declared(self):
+        return self._stats_declared("interface")
+
+    @property
+    def stats_parts_declared(self):
+        return self._stats_declared("part")
+
+    @property
+    def stats_assemblies_declared(self):
+        return self._stats_declared("assembly")
+
+    @property
+    def stats_scenes_declared(self):
+        return self._stats_declared("scene")
 
     def stats_recalc(self):
         self.stats_packages = 3
@@ -617,12 +647,18 @@ def test_info_reports_what_is_declared_and_what_is_built_separately():
     did (see 'PartcadContext.ts').
     """
     session, seen = make_session()
-    session.partcad_ctx.stats_parts_declared = 12
+    project = session.partcad_ctx.projects["//"]
+    for index in range(12):
+        project.parts["p%d" % index] = FakeShape(name="p%d" % index)
     session.partcad_ctx.stats_parts_instantiated = 3
 
     operations.info(session, {})
     stats = seen[-1][1]["stats"]
 
+    # Twelve declared, three of them built: two questions, two numbers. The
+    # declared half is counted from the packages, here as on a real context -
+    # it is a property there, and a number this test could simply assign would
+    # be a number the real payload never carries.
     assert stats["partsDeclared"] == 12
     assert stats["parts"] == 12
     assert stats["partsInstantiated"] == 3
