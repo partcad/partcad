@@ -31,9 +31,10 @@ docs:
     connection it is; the small circles are the port boundaries, the `m3` and
     `m4` sketches this package defines.
 
-    On an assembly the same two options walk everything inside it, which is how
-    a connection that went wrong is found - two frames that should have met and
-    did not:
+    An assembly is taken at its word: what is drawn is what it says its ports
+    are, and this one externalizes none of the ones inside it. `--with-internals`
+    draws those anyway, which is how a connection that went wrong is found - two
+    frames that should have met and did not:
 
     <table><tr>
     <td valign=top><b><code>--with-ports</code></b><br/>
@@ -72,7 +73,7 @@ docs:
     # where the ports are, and which interface each of them belongs to
     pc render -t png --with-ports example-bracket
     pc render -t png --with-interfaces example-bracket
-    pc render -a -t png --with-all connect-mates
+    pc render -a -t png --with-all --with-internals connect-mates
     ```
 
     Every port drawn is also listed in the log, with the exact name to write in
@@ -311,6 +312,13 @@ parts:
         path: render_svg.py
         extension: ports.svg
         with_ports: true
+        # These two file types are declared once and used twice: by this part
+        # and by the `connect-mates` assembly below. `with_internals` means
+        # nothing for a part, which has nothing inside it; on the assembly it is
+        # what keeps this drawing a drawing of the whole mount. Without it an
+        # assembly draws the ports it externalizes and no others, and this one
+        # externalizes none.
+        with_internals: true
         # A name is drawn as line segments, and there are a lot of names here,
         # so these two files are several times the size of the plain drawing.
         # Four decimal places is a tenth of a micron on a part measured in tens
@@ -324,6 +332,7 @@ parts:
         path: render_svg.py
         extension: interfaces.svg
         with_interfaces: true
+        with_internals: true
         precision: 4
     connect:
       # The bracket is the fixture everything else is connected to: it is held

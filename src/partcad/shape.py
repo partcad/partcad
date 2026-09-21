@@ -24,7 +24,7 @@ from . import logging as pc_logging
 from . import material as pc_material
 from . import output, render_overlay
 from . import runtime as pc_runtime
-from . import sandbox_versions, wrapper
+from . import sandbox_versions, shape_ports, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from .shape_config import ShapeConfiguration
@@ -406,6 +406,7 @@ class Shape(ShapeConfiguration):
             if len(self.components) == 0:
                 self.components = [wrapped]
 
+            await shape_ports.prepare_async(self, ctx)
             if self.with_ports is not None:
                 ports_list = list(await self.with_ports.get_components(ctx))
                 if len(ports_list) != 0:
@@ -1020,6 +1021,7 @@ class Shape(ShapeConfiguration):
                 # A port is a coordinate frame with no geometry, so it cannot be
                 # tessellated; it travels beside the geometry for the viewer to
                 # draw a triad at.
+                await shape_ports.prepare_async(self, ctx)
                 markers = self.with_ports.get_markers() if self.with_ports is not None else []
 
                 await viewer.show(
@@ -1041,6 +1043,7 @@ class Shape(ShapeConfiguration):
         are on disk. For a shape built before, that is a cache hit.
         """
         asyncio.run(self.get_wrapped(ctx))
+        asyncio.run(shape_ports.prepare_async(self, ctx))
         info = {}
         info["Memory"] = "%.02f KB" % ((total_size(self) + 1023.0) / 1024.0)
         info.update(asyncio.run(self._reported_async(ctx)))
@@ -1321,8 +1324,10 @@ class Shape(ShapeConfiguration):
         """Where this shape's ports are, worked out at most once per render call.
 
         Two file types of one object can ask for different overlays, and what
-        the answers differ in is only whether the port boundaries came along -
-        so a collection that has them also answers a file type that does not.
+        the answers differ in is whether the port boundaries came along - so a
+        collection that has them also answers a file type that does not - and
+        how deep the walk went, which is a different set of ports rather than
+        the same set told differently.
 
         Failing to work it out must not cost the picture: an overlay is an
         annotation on a render, not the render. The failure is reported and the
@@ -1332,10 +1337,10 @@ class Shape(ShapeConfiguration):
         "nothing" would then take the markers off the next file type too, which
         never asked for a boundary at all.
         """
-        if True in cache:
-            return cache[True]
-        if not overlay.interfaces and False in cache:
-            return cache[False]
+        if (True, overlay.internals) in cache:
+            return cache[(True, overlay.internals)]
+        if not overlay.interfaces and (False, overlay.internals) in cache:
+            return cache[(False, overlay.internals)]
 
         try:
             records = await render_overlay.collect_async(self, ctx, overlay)
@@ -1343,7 +1348,7 @@ class Shape(ShapeConfiguration):
             pc_logging.error("%s:%s: failed to locate the ports to draw: %s" % (self.project_name, self.name, e))
             return []
         render_overlay.report(self, records, overlay)
-        cache[overlay.interfaces] = records
+        cache[(overlay.interfaces, overlay.internals)] = records
         return records
 
     async def _run_implementation_async(self, ctx, impl, script, request, final_filepath):
@@ -1943,14 +1948,16 @@ class Shape(ShapeConfiguration):
         """Where the boundary conditions this analysis was given actually are.
 
         The part names interfaces; a solver needs coordinate frames. The lookup
-        is the very one 'pc render --with-ports' does, so a user who cannot work
-        out why a fixture did nothing can draw the same ports on a projection and
-        look at them.
+        is the very one 'pc render --with-ports --with-internals' does, so a user
+        who cannot work out why a fixture did nothing can draw the same ports on
+        a projection and look at them. All the way down rather than to the first
+        boundary: a load is carried by a face of something, and on an assembly
+        that something is one of the parts inside it.
         """
         from .render_overlay import Overlay, collect_async
 
         try:
-            records = await collect_async(self, ctx, Overlay(ports=True))
+            records = await collect_async(self, ctx, Overlay(ports=True, internals=True))
         except Exception as e:
             raise pc_cae.CaeConfigError(
                 "Failed to locate the ports the '%s:' section names: %s" % (config.analysis, e)

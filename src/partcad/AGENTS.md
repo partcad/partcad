@@ -205,8 +205,8 @@ at all).
   boundary conditions in a section named after the analysis, because they belong to the part and not to
   whoever analyses it; `cae.py` parses `fix:`/`load:`, converts the units (a bare number is a mass in
   kilograms, weighed into newtons at `GRAVITY`; everything is stored as force), and `assign_ports()` attaches
-  them to the ports `render_overlay.collect_async()` already knows how to find -- so `pc render --with-ports`
-  draws exactly what a solver was told. Coming back, the implementation reports **findings** beside the file
+  them to the ports `shape_ports.ports_async()` already knows how to find -- so
+  `pc render --with-ports --with-internals` draws exactly what a solver was told. Coming back, the implementation reports **findings** beside the file
   it wrote, a JSON array that `pc cae` prints, `pc test`'s `fea`/`cfd` checks fail on, and the IDE lists under
   the model. `cae.py` imports nothing from `partcad`, which is what lets it be tested without a sandbox.
 
@@ -583,16 +583,40 @@ at all).
   accepts no such parameter (its file states a material per solid, and says it better), so nothing is promoted
   and the reader that read the file is what fills the property in.
 
+- **Where an object's ports are, and who has one** (`./src/partcad/shape_ports.py`,
+  `./src/partcad/assembly_ports.py`): one answer, for every caller that asks. `shape_ports.own_ports()` is the
+  per-object enumeration (a lookup: what `implements:` already placed, plus what a `map:` externalized),
+  `ports_async()` adds the optional walk through an assembly's children, and `interface_index()` answers the
+  same fact from the other side — which objects of a package implement an interface, for `pc search
+  --interface`. All of it is plain arithmetic on `geom.Location` plus what the declarations say, so the core
+  stays free of OCP, and all of it is lazy: nothing is computed while a package loads, because `pc list` does
+  not ask. The index in particular is built from the *declarations* (`implements:` keys and the interfaces a
+  `map:` names), so finding every part with an M3 hole does not instantiate a package.
+
+  **An assembly is taken at its word.** Its ports are the ones it externalizes, and what is inside it is its
+  own business — the same boundary `pc info`, the viewer, a `connect:` and `pc search` all see.
+  `ports_async(deep=True)` (`pc render --with-internals`) is the one caller that looks inside anyway, plus
+  `cae.py`, whose boundary conditions are applied to a face of one of the parts.
+
+- **`map:`** (`./src/partcad/assembly_ports.py`): what an assembly externalizes of what it is made of. Two
+  elements are a node and one of its ports, three are a node, an interface it implements and the instance of
+  it — by ASSY *node* name, because an assembly places the same part six times. A mapped interface instance
+  becomes an ordinary `InterfaceInherits` and goes through `Interface.adopt_inherit()`, the same method
+  `implements:` goes through, so the port naming, the inherited freedom of movement and the ancestor walk
+  happen once rather than twice. Resolution needs the assembly's tree rather than its declaration, so it is
+  asynchronous (`shape_ports.prepare_async()`, a no-op for everything that declares no `map:`) and every
+  reader of an object's ports calls it first. It runs *before* `ports:` and `implements:` are read, which is
+  what lets an `implements:` instance sit at a mapped port (`port:` on the instance).
+
 - **Drawing ports and interfaces** (`./src/partcad/render_overlay.py`, `./src/partcad/wrappers/stroke_text.py`):
   `pc render --with-ports`/`--with-interfaces` draws the connection metadata on top of a projection.
-  `render_overlay.py` answers only *where* the ports are — a lookup for a part, a walk for an assembly (and so
-  for a scene, which is one), all of it plain arithmetic on `geom.Location` plus the port sketches' existing
-  envelopes, so the core stays free of OCP — and `builtin/render/render_svg.py` does the drawing, because it is
-  the only side that knows where the camera is. The labels are line segments from `stroke_text.py` rather than
+  `render_overlay.py` is only the drawing half — where the ports are is `shape_ports.py` above — and
+  `builtin/render/render_svg.py` does the drawing, because it is the only side that knows where the camera is.
+  The labels are line segments from `stroke_text.py` rather than
   an SVG `<text>` element: PNG and JPEG go through the SVG and would keep one, but DXF converts paths only, and
   real text geometry would need a font whose version this repository does not control. Two things ask for the
   overlay and neither overrides the other — the command line, and a `render:` file type declaring
-  `with_ports:`/`with_interfaces:` — which is `render_overlay.effective()`, and is how
+  `with_ports:`/`with_interfaces:`/`with_internals:` — which is `render_overlay.effective()`, and is how
   `examples/feature_interface` keeps four such drawings checked in.
 
 - **Parametric interfaces and ports** (`./src/partcad/expr.py`, `interface_config.py`, `interface.py`,

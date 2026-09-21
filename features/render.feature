@@ -127,9 +127,14 @@ Feature: `pc render` command
   # gains a layer per overlay, and only for the overlay that was asked for. SVG
   # because it is the format that says so in text; the other three are the same
   # projection converted (see `//builtin/render`).
+  #
+  # `--with-internals` because the object is an assembly and this one
+  # externalizes nothing: an assembly is taken at its word, so the ports being
+  # drawn here are the ones inside it (see "Ports and interfaces of an
+  # assembly").
   @type-image
   Scenario Outline: `pc render` writes a layer per overlay
-    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_interface -t svg -O ./ -a <option> connect-mates"
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_interface -t svg -O ./ -a --with-internals <option> connect-mates"
     Then the command should exit with a status code of "0"
     Then a file named "connect-mates.svg" should be created
     Given a file named "partcad.yaml" does not exist
