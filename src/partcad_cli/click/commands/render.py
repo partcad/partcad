@@ -124,7 +124,8 @@ from ..viewport import viewport_options, viewport_params
 @click.option(
     "--with-internals",
     help=(
-        "Draw the ports of everything inside an assembly as well as the ones it externalizes, "
+        "Say how deep the three above reach rather than asking for a drawing of its own: with any of them, "
+        "the ports of everything inside an assembly are drawn as well as the ones it externalizes, "
         "which is how a connection that went wrong is found"
     ),
     is_flag=True,
