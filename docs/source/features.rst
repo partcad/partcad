@@ -695,6 +695,24 @@ You can also change telemetry settings using CLI:
     pc system set telemetry env <you-org-name>
     pc system set telemetry sentryDsn <your-sentry-dsn>
 
+How deep the traces go is a separate setting. By default PartCAD reports the
+operations it names for itself -- the process a command is, and the action each
+object it works on is -- and nothing below them:
+
+  .. code-block:: bash
+
+    pc system set telemetry detail actions   # the default
+    pc system set telemetry detail methods
+
+``methods`` adds a span for every instrumented method underneath those, which is
+what a trace needs to answer "where inside this did the time go". It is
+expensive in a way that is easy to miss: creating one part passes through a
+dozen instrumented methods, so a package of eight thousand of them costs a
+quarter of a million spans to list. Turn it on while you are looking at
+something, not for good.
+
+``pc system telemetry info`` reports both settings.
+
 Private Repositories
 --------------------
 

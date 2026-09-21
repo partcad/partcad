@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import copy
 import inspect
 import os
@@ -53,6 +54,7 @@ from . import (
     plugin_provider,
     plugin_repository,
     project_config,
+    reference,
     scene,
     scene_config,
 )
@@ -71,6 +73,7 @@ from . import (
     telemetry,
 )
 from .document_pdf import render_pdf_async
+from .enrich import enriched_source_name
 from .exception import EmptyShapesError, NeedsUpdateException, ObjectNameTakenError
 from .part import Part
 from .render import render_cfg_merge
@@ -126,6 +129,24 @@ OBJECT_KIND_SECTIONS = {
     # PartFactoryWrapper, which looks the definition up here.
     "partType": "partTypes",
 }
+
+# The object kinds a package creates on demand rather than when it loads.
+#
+# The four that are shapes, and the expensive ones: a catalog package declares
+# thousands of them, and creating one runs a factory. Which of them a command
+# wants is the command's business -- 'pc list assemblies' wants assemblies, 'pc
+# render //pkg:bolt' wants one part -- and a package that made all four as it
+# loaded answered every one of those questions by doing all of the work. So the
+# dictionaries below are filled per kind, the first time somebody reads the one
+# they are after (see '_lazy_objects'), and a lookup by name creates just the
+# object named (see 'get_object').
+#
+# The kinds that are not here stay eager, and are not an oversight: materials
+# and software are data rather than shapes, and interfaces and mates are what
+# the shapes are declared in terms of - a package has a handful of each, and
+# the parts that name them are created after them, which is the order
+# '_instantiate_objects' sets out.
+LAZY_OBJECT_KINDS = ("sketch", "part", "assembly", "scene")
 
 # The object types that are references to another object rather than an object
 # of their own. Parametrizing one of these does not mean applying the values to
@@ -353,6 +374,11 @@ class Project(project_config.Configuration):
         def __exit__(self, *_args):
             self.lock.release()
 
+    # Which lock guards one object of a kind. The bulk pass takes the same one a
+    # lookup by name takes (see 'get_object'), which is what makes the two safe
+    # to run at once.
+    OBJECT_KIND_LOCKS: typing.ClassVar[dict] = {}
+
     class ProviderLock(object):
         def __init__(self, prj, provider_name: str):
             prj.provider_locks_lock.acquire()
@@ -472,21 +498,49 @@ class Project(project_config.Configuration):
         self.interface_locks = {}
         self.interface_locks_lock = threading.Lock()
 
-        self.sketches = {}
+        # The four lazy kinds (see 'LAZY_OBJECT_KINDS'). Held under private
+        # names because the ones the rest of the world reads are properties
+        # that fill them first.
+        self._sketches = {}
         self.sketch_locks = {}
         self.sketch_locks_lock = threading.Lock()
 
-        self.parts = {}
+        self._parts = {}
         self.part_locks = {}
         self.part_locks_lock = threading.Lock()
 
-        self.assemblies = {}
+        self._assemblies = {}
         self.assembly_locks = {}
         self.assembly_locks_lock = threading.Lock()
 
-        self.scenes = {}
+        self._scenes = {}
         self.scene_locks = {}
         self.scene_locks_lock = threading.Lock()
+
+        # Which of the lazy kinds have been created in bulk already, and the
+        # lock that makes "have they" and "create them" one answer.
+        #
+        # One lock for all four kinds rather than one lock each: a factory
+        # making an object of one kind may ask for an object of another, and
+        # two locks taken in whatever order that happens to produce are two
+        # threads deadlocking on one package. Re-entrant, because that same
+        # factory registers what it makes into the very dictionary this is
+        # filling, and because a kind that resolves into itself (an alias to a
+        # part of this package) comes back through here on the same thread.
+        # '_instantiating_kinds' is what stops that from recursing: it is only
+        # ever read by the thread holding the lock, since every other thread is
+        # still waiting for it.
+        self._instantiated_kinds: set[str] = set()
+        self._instantiating_kinds: set[str] = set()
+        self._instantiate_lock = threading.RLock()
+        # Which declaration each implicitly declared alias belongs to, per kind
+        # and built on demand. See 'alias_declared_by'.
+        self._alias_index: dict[str, dict] = {}
+        # The names that exist because another object's 'aliases' asked for
+        # them, per kind, as they are created. See 'init_objects'.
+        self._implicit_aliases: dict[str, set] = {}
+        # The declarations already normalized, per kind. See '_normalized'.
+        self._normalized_configs: dict[str, set] = {}
 
         self.providers = {}
         self.provider_locks = {}
@@ -590,15 +644,24 @@ class Project(project_config.Configuration):
         # cannot fail on anything that is not read yet, and having them all in
         # place first means a part's 'material' resolves without a second pass.
         self.init_materials()
-        self.init_sketches()
-        self.init_interfaces()  # After sketches
+        # An interface may be defined by a sketch, which it asks for by name
+        # ('Interface.__init__'); that creates the one sketch it names rather
+        # than every sketch the package has, which is what "after sketches"
+        # used to mean here.
+        self.init_interfaces()
         self.init_mates()  # After interfaces
-        self.init_parts()  # After sketches and interfaces, and mates
-        self.init_assemblies()  # after parts
-        self.init_scenes()  # after parts and assemblies
-        self.init_providers()  # after parts
+        self.init_providers()
         self.init_suppliers()  # after providers
-        self.init_repositories()  # after parts
+        self.init_repositories()
+        # The four kinds that are shapes are NOT created here; they are created
+        # when something asks for them (see 'LAZY_OBJECT_KINDS'). The order
+        # their 'init_*' used to be called in was a dependency order and it
+        # still holds - a sketch before the part that extrudes it, a part
+        # before the assembly that places it - but it is now kept by the
+        # resolution itself rather than by this sequence: whatever an object
+        # names is asked for by name while it is being made, and 'get_object'
+        # creates that one thing on the spot. What this order was really
+        # protecting is the kinds above, which is why they stayed.
 
     # The generic object-access layer. Every read of a package's declared
     # objects goes through these three methods so that a plugin-backed package
@@ -612,6 +675,49 @@ class Project(project_config.Configuration):
             self._object_configs[kind] = configs
         return configs
 
+    def _normalized(self, kind: str, name: str, config):
+        """'config' with the fields every reader of a declaration expects.
+
+        A declaration gains its 'name' and 'orig_name', its parameter sections
+        expanded and the user's overrides applied, when it is normalized - and
+        because normalizing happens in place, that used to be a side effect of
+        the package creating all of its objects as it loaded. It no longer
+        creates them (see 'LAZY_OBJECT_KINDS'), so the accessor does it: a
+        declaration read from a package is a normalized one whether or not
+        anything has been made out of it.
+
+        Done once per object and remembered, because normalizing is not free -
+        it expands the parameter sections and applies the user's overrides - and
+        this accessor is read per object by every bulk pass over a kind.
+
+        Only the kinds that have a configuration class here; an interface and a
+        material have normalizations of their own (see
+        'normalized_interface_config'), and a 'partType' is not an object.
+        """
+        config_class = self.OBJECT_KIND_CONFIG_CLASSES.get(kind)
+        if config_class is None or config is None:
+            return config
+        done = self._normalized_configs.setdefault(kind, set())
+        configs = self._object_configs.get(kind)
+        if name in done and configs is not None and configs.get(name) is config:
+            return config
+        normalized = config_class.normalize(name, config, f"{self.name}:{name}")
+        if kind in LAZY_OBJECT_KINDS and isinstance(normalized, dict) and "manufacturable" not in normalized:
+            # What the package says about anything it produces, written onto the
+            # declaration rather than only onto the object. 'ShapeFactory' puts
+            # it there as it creates one, which used to mean every declaration
+            # carried it once the package had loaded - and 'pc convert' reads
+            # the declaration rather than the object, so resolving one part
+            # copied the field out of a declaration that nothing had asked for.
+            normalized["manufacturable"] = self.is_manufacturable
+        if configs is not None and configs.get(name) is not normalized:
+            # A short-form declaration ('cube: //other:cube') normalizes into a
+            # new dictionary rather than in place, and the package should hold
+            # the one every reader is handed.
+            configs[name] = normalized
+        done.add(name)
+        return normalized
+
     def object_config(self, kind: str, name: str):
         """The config of a single object, fetched individually when possible.
 
@@ -621,7 +727,7 @@ class Project(project_config.Configuration):
         """
         configs = self._object_configs.get(kind)
         if configs is not None and name in configs:
-            return configs[name]
+            return self._normalized(kind, name, configs[name])
         # Not in the (possibly already enumerated) set: try a targeted single
         # fetch. A plugin-backed package can serve objects beyond what it
         # enumerates - e.g. the first page of a large, paginated catalog - so
@@ -633,13 +739,76 @@ class Project(project_config.Configuration):
             # through this path only, and 'unless' has to hold on both.
             if self._skipped_by(kind, name, one) is not None:
                 return None
-            return one
+            return self._normalized(kind, name, one)
         if configs is None:
-            return self.object_configs(kind).get(name)
+            return self._normalized(kind, name, self.object_configs(kind).get(name))
         return None
 
     def object_names(self, kind: str) -> list:
         return list(self.object_configs(kind).keys())
+
+    def object_descriptions(self, kind: str) -> dict:
+        """What a listing prints beside each declared name, creating nothing.
+
+        A listing wants two columns and neither of them needs the object: the
+        name is the declaration's, and the description is the declaration's
+        too, apart from the reference types - an alias, an enrich and a
+        compound are described by what they point at, and that is resolved from
+        the declaration as well (see 'partcad.reference').
+
+        So a listing does not build a package to print it, which is the whole
+        point: 'pc list parts -r //pub' over a catalog of twenty thousand parts
+        used to run a factory per row. What that also means is that a listing
+        no longer reports a declaration PartCAD cannot use - it does not look
+        closely enough to find out. That is 'pc test's question, and it asks it
+        of every object.
+        """
+        descriptions = {}
+        for name, config in list(self.object_configs(kind).items()):
+            config = self._normalized(kind, name, config)
+            if not isinstance(config, dict):
+                descriptions[name] = None
+                continue
+            desc = config.get("desc")
+            if config.get("type") in reference.REFERENCE_TYPES:
+                try:
+                    desc = reference.describe(config["type"], self.name, self._reference_source(config))
+                except Exception as e:
+                    # A reference that says nothing about what it points at.
+                    # Reported by whoever tries to build it; a listing says what
+                    # it can and prints the row.
+                    pc_logging.debug("%s: cannot describe '%s': %s" % (self.name, name, e))
+            descriptions[name] = desc.strip() if isinstance(desc, str) else desc
+
+        # And the names that exist because another declaration's 'aliases'
+        # asked for them. They have no declaration to read, which is why they
+        # are listed from the index of who claimed them (see
+        # 'alias_declared_by') - and they are listed, because a package really
+        # does have an object under each of them.
+        for alias, owner in self._aliases_declared(kind).items():
+            if alias in descriptions:
+                # Refused when it was created: the package declares something
+                # else under that name, and that is what it has.
+                continue
+            descriptions[alias] = reference.describe("alias", self.name, self.name + ":" + owner)
+        return descriptions
+
+    def _reference_source(self, config: dict) -> str:
+        """The '<package>:<object>' a reference declaration resolves to.
+
+        The same answer its factory works out, by the same rules: an enrich
+        names an instance, so its parameters are part of which object it points
+        at ('enriched_source_name'), while an alias and a compound pass any
+        'with' on to what they name.
+        """
+        if config.get("type") == "enrich":
+            return enriched_source_name(self, self, config)
+        source = reference.source_of(self, self.name, config, config.get("type", "object"))
+        with_parameters = config.get("with")
+        if with_parameters:
+            package_name, object_name = reference.split(source)
+            source = package_name + ":" + format_parameterized_name(object_name, with_parameters)
+        return source
 
     def declares_object(self, kind: str, name: str) -> bool:
         """Whether this package has an object of that kind under that name to offer.
@@ -713,6 +882,19 @@ class Project(project_config.Configuration):
     def object_count(self, kind: str) -> int:
         """Number of declared objects of a kind, without instantiating them."""
         return len(self.object_configs(kind))
+
+    def object_count_known(self, kind: str) -> int:
+        """Number of declared objects of a kind, without enumerating either.
+
+        "Known", rather than "declared": for a local package the two are the
+        same, because its 'partcad.yaml' was parsed when it loaded, and for a
+        plugin-backed one this is whatever has been asked for so far. The
+        difference is a round trip to the repository, and the caller is a report
+        of what is loaded ('pc info') - which must not go to the network to make
+        its own numbers larger.
+        """
+        configs = self._object_configs.get(kind)
+        return len(configs) if configs else 0
 
     # Backward-compatible views onto the object-access layer. These keep the
     # historical 'self.<kind>_configs' attribute name working (now sourced
@@ -1174,42 +1356,6 @@ class Project(project_config.Configuration):
             return None
         return configs[object_name]
 
-    def init_sketches(self):
-        return self.init_objects(
-            "sketch",
-            self.sketch_configs,
-            sketch_config.SketchConfiguration,
-            sfa.SketchFactoryAlias,
-            self.get_sketch_config,
-        )
-
-    def init_parts(self):
-        return self.init_objects(
-            "part",
-            self.part_configs,
-            part_config.PartConfiguration,
-            pfa.PartFactoryAlias,
-            self.get_part_config,
-        )
-
-    def init_assemblies(self):
-        return self.init_objects(
-            "assembly",
-            self.assembly_configs,
-            assembly_config.AssemblyConfiguration,
-            afa.AssemblyFactoryAlias,
-            self.get_assembly_config,
-        )
-
-    def init_scenes(self):
-        return self.init_objects(
-            "scene",
-            self.scene_configs,
-            scene_config.SceneConfiguration,
-            scnf.SceneFactoryAlias,
-            self.get_scene_config,
-        )
-
     def init_providers(self):
         return self.init_objects(
             "provider",
@@ -1290,16 +1436,161 @@ class Project(project_config.Configuration):
         return name in self.retired_objects.get(kind, set())
 
     def objects(self, kind: str) -> dict:
-        """The instantiated objects of one kind, as {name: object}.
+        """The objects of one kind created so far, as {name: object}.
 
         The counterpart of 'object_configs()', which answers the same question
         about what the package *declares*. Only the kinds that are instantiated
         at all: a 'partType' is a way of constructing parts, not an object.
+
+        "So far", and deliberately not "all of them": this is the dictionary
+        itself, and reading it creates nothing. That is what a caller putting an
+        object *into* the package needs ('register_object' below, which holds
+        the package lock while it does), and what a caller asking for one object
+        by name needs ('get_object', which creates that one if it is absent).
+        The public 'parts'/'sketches'/'assemblies'/'scenes' are the other
+        question - every object of that kind, created if need be - and they fill
+        this first.
         """
-        objects = getattr(self, OBJECT_KIND_SECTIONS.get(kind, ""), None)
+        name = OBJECT_KIND_SECTIONS.get(kind, "")
+        objects = getattr(self, "_" + name, None) if kind in LAZY_OBJECT_KINDS else getattr(self, name, None)
         if objects is None:
             raise ValueError("'%s' is not a kind of object a package instantiates" % kind)
         return objects
+
+    def alias_declared_by(self, kind: str, name: str) -> typing.Optional[str]:
+        """The object whose 'aliases:' claims 'name', if any object does.
+
+        An alias declared that way has no declaration of its own: it comes into
+        being because the object that names it was created (see
+        'init_object_by_config'). While a package created every object of a
+        kind as it loaded, looking one up needed to know nothing about that;
+        now that a name is created when it is asked for, the lookup has to know
+        which declaration to create in order to get this one.
+
+        Indexed once per kind, on the first lookup that misses. The index is
+        built out of the declarations and creates nothing, so the miss that
+        builds it - including a name nothing declares at all - costs a pass
+        over a dictionary rather than a package full of factories.
+        """
+        return self._aliases_declared(kind).get(name)
+
+    def _aliases_declared(self, kind: str) -> dict:
+        """Every implicitly declared alias of a kind, mapped to what declares it."""
+        index = self._alias_index.get(kind)
+        if index is None:
+            index = {}
+            for owner, config in self.object_configs(kind).items():
+                if not isinstance(config, dict):
+                    continue
+                for alias in config.get("aliases") or []:
+                    if not isinstance(alias, str):
+                        continue
+                    if ";" in owner:
+                        # The parameters of a parametrized declaration travel
+                        # to the aliases it asks for, exactly as they do where
+                        # those aliases are created.
+                        alias += owner[owner.index(";") :]
+                    index.setdefault(alias, owner)
+            self._alias_index[kind] = index
+        return index
+
+    def object_lock(self, kind: str, name: str):
+        """The lock that guards creating one object of a kind, or None."""
+        lock_class = self.OBJECT_KIND_LOCKS.get(kind)
+        return lock_class(self, name) if lock_class is not None else contextlib.nullcontext()
+
+    def _lazy_objects(self, kind: str) -> None:
+        """Create every declared object of 'kind', once, on first demand.
+
+        The four lazy kinds only; everything else was created when the package
+        loaded. See 'LAZY_OBJECT_KINDS' for why, and the lock in '__init__' for
+        how the re-entrancy and the races are kept apart.
+        """
+        if kind in self._instantiated_kinds:
+            return
+        with self._instantiate_lock:
+            # Asked again under the lock: the thread that was waiting for it was
+            # waiting for exactly this to be done.
+            if kind in self._instantiated_kinds or kind in self._instantiating_kinds:
+                return
+            self._instantiating_kinds.add(kind)
+            try:
+                self._instantiate_kind(kind)
+                self._instantiated_kinds.add(kind)
+            finally:
+                self._instantiating_kinds.discard(kind)
+
+    # What each lazy kind is created from: the configuration class that
+    # normalizes a declaration, and the factory that makes the aliases it asks
+    # for. The same four arguments 'get_object' is handed for one object.
+    _CREATE_BY_KIND: typing.ClassVar[dict] = {}
+
+    # What normalizes a declaration of each kind - the classes above, plus the
+    # kinds that are still created as the package loads. Every kind in here is
+    # normalized by the accessor that reads it ('_normalized'), so nothing
+    # downstream has to normalize it again.
+    OBJECT_KIND_CONFIG_CLASSES: typing.ClassVar[dict] = {}
+
+    def _instantiate_kind(self, kind: str) -> None:
+        """Create every declared object of one lazy kind.
+
+        What it declares comes from 'object_names()', which is also where a
+        plugin-backed package's round trip to the repository lives - so that
+        package needs nothing of its own here.
+
+        Each object is created under its own lock, which is the lock a lookup
+        by name takes ('get_object'), and skipped if it is already there. That
+        is what makes the two safe to run at once: without it, a thread
+        arriving here while another is part-way through 'get_part("cube")'
+        makes a second cube under a name that is now taken, 'register_object'
+        refuses it, and the refusal is recorded against a declaration that is
+        perfectly good.
+
+        Created from the declaration rather than by calling the getter per
+        name, because the getter re-reads and re-parses what this already has
+        in hand, and a catalog package has thousands of these.
+        """
+        config_class, alias_class, get_config = self._CREATE_BY_KIND[kind]
+        self.init_objects(kind, self.object_configs(kind), config_class, alias_class, getattr(self, get_config))
+
+    # Every object of a lazy kind, created if it has not been yet. The reading
+    # is what asks for it: 'pc list parts' and a bulk render want all of them,
+    # while 'get_part' wants one and goes through 'objects()' instead.
+    @property
+    def sketches(self) -> dict:
+        self._lazy_objects("sketch")
+        return self._sketches
+
+    @sketches.setter
+    def sketches(self, value) -> None:
+        self._sketches = value
+
+    @property
+    def parts(self) -> dict:
+        self._lazy_objects("part")
+        return self._parts
+
+    @parts.setter
+    def parts(self, value) -> None:
+        self._parts = value
+
+    @property
+    def assemblies(self) -> dict:
+        self._lazy_objects("assembly")
+        return self._assemblies
+
+    @assemblies.setter
+    def assemblies(self, value) -> None:
+        self._assemblies = value
+
+    @property
+    def scenes(self) -> dict:
+        self._lazy_objects("scene")
+        return self._scenes
+
+    @scenes.setter
+    def scenes(self, value) -> None:
+        self._scenes = value
 
     def register_object(self, kind: str, name: str, obj) -> None:
         """Put a newly created object into this package under 'name'.
@@ -1343,17 +1634,35 @@ class Project(project_config.Configuration):
         if configs is None:
             return
 
-        for name in configs:
+        objects = self.objects(factory_name)
+        for name in list(configs):
             # Per object, so that one unusable declaration costs the user that
             # object and not the rest of the package. A package published years
             # ago can name a feature this PartCAD no longer has (the 'ai-*' part
             # types, say); without this, the first such entry aborted the loop
             # and every object declared after it silently disappeared too.
             try:
-                config = get_config(name)
-                full_object_name = f"{self.name}:{name}"
-                config = config_class.normalize(name, config, full_object_name)
-                self.init_object_by_config(factory_name, config_class, alias_class, config)
+                with self.object_lock(factory_name, name):
+                    if name in objects and name not in self._implicit_aliases.get(factory_name, ()):
+                        # Already made from this declaration: somebody asked for
+                        # it by name while this pass was running, and
+                        # 'get_object' made it. Making it again would land on a
+                        # name that is now taken, and 'register_object' refusing
+                        # that would be recorded as a broken declaration. Under
+                        # the lock, so the test and the creation are the same
+                        # answer the getter gets.
+                        #
+                        # A name that exists because another declaration's
+                        # 'aliases' claimed it is the other case, and a real
+                        # clash between two declarations: that one goes on to be
+                        # refused and recorded, exactly as it was before any of
+                        # this was created on demand.
+                        continue
+                    # Normalized by the accessor, which is where a declaration
+                    # of a kind gains its 'name' whether or not anything is ever
+                    # made out of it (see '_normalized').
+                    config = get_config(name)
+                    self.init_object_by_config(factory_name, config_class, alias_class, config)
             except Exception as e:
                 self.record_broken_object(factory_name, name, e)
 
@@ -1407,14 +1716,15 @@ class Project(project_config.Configuration):
         whose test-and-set under it is what makes this safe at all.
         """
         name = config["name"]
-        existing = self.parts.get(name)
+        parts = self.objects("part")
+        existing = parts.get(name)
         if existing is not None:
             return existing
         try:
             self.init_part_by_config(config)
         except ObjectNameTakenError:
             pass
-        return self.parts.get(name)
+        return parts.get(name)
 
     def init_object_by_config(self, factory_name: str, config_class, alias_class, config, source_project=None):
         if source_project is None:
@@ -1447,6 +1757,10 @@ class Project(project_config.Configuration):
                 # 'aliases' mentioned it.
                 try:
                     alias_class(self.ctx, source_project, self, alias_object_config)
+                    # Remembered so that the bulk pass can tell this name apart
+                    # from one of its own declarations that somebody has just
+                    # created by asking for it. See 'init_objects'.
+                    self._implicit_aliases.setdefault(factory_name, set()).add(alias)
                 except Exception as e:
                     self.record_broken_object(factory_name, alias, e)
 
@@ -1464,8 +1778,7 @@ class Project(project_config.Configuration):
         return self.get_object(
             "sketch",
             Project.SketchLock,
-            self.sketches,
-            self.sketch_configs,
+            self.objects("sketch"),
             self.get_sketch_config,
             sketch_config.SketchConfiguration,
             sfa.SketchFactoryAlias,
@@ -1479,8 +1792,7 @@ class Project(project_config.Configuration):
         return self.get_object(
             "part",
             Project.PartLock,
-            self.parts,
-            self.part_configs,
+            self.objects("part"),
             self.get_part_config,
             part_config.PartConfiguration,
             pfa.PartFactoryAlias,
@@ -1542,7 +1854,12 @@ class Project(project_config.Configuration):
             # whichever the package meant.
             for kind in ("assembly", "scene"):
                 config = (self._object_configs.get(kind) or {}).get(prefix)
-                if config and produces_own_parts(kind, config.get("type")):
+                # Read before normalization, and so possibly still in a short
+                # form: 'robot: //other:robot' is a bare string until the kind
+                # is normalized, and asking a string for its 'type' raises.
+                # Nothing is lost by stopping here - a short form is an alias,
+                # and an alias produces no parts of its own.
+                if isinstance(config, dict) and produces_own_parts(kind, config.get("type")):
                     return kind, prefix
         return None
 
@@ -1574,7 +1891,7 @@ class Project(project_config.Configuration):
         no second task of it could run at all -- which is precisely the blocking
         this change removes.
         """
-        if part_name in self.parts:
+        if part_name in self.objects("part"):
             return None
         owner = self._derived_part_owner(part_name)
         if owner is None:
@@ -1714,8 +2031,7 @@ class Project(project_config.Configuration):
         return self.get_object(
             "assembly",
             Project.AssemblyLock,
-            self.assemblies,
-            self.assembly_configs,
+            self.objects("assembly"),
             self.get_assembly_config,
             assembly_config.AssemblyConfiguration,
             afa.AssemblyFactoryAlias,
@@ -1728,8 +2044,7 @@ class Project(project_config.Configuration):
         return self.get_object(
             "scene",
             Project.SceneLock,
-            self.scenes,
-            self.scene_configs,
+            self.objects("scene"),
             self.get_scene_config,
             scene_config.SceneConfiguration,
             scnf.SceneFactoryAlias,
@@ -1743,7 +2058,6 @@ class Project(project_config.Configuration):
             "provider",
             Project.ProviderLock,
             self.providers,
-            self.provider_configs,
             self.get_provider_config,
             plugin_config.PluginConfiguration,
             None,
@@ -1756,7 +2070,6 @@ class Project(project_config.Configuration):
             "repository",
             Project.RepositoryLock,
             self.repositories,
-            self.repository_configs,
             self.get_repository_config,
             plugin_config.PluginConfiguration,
             None,
@@ -1769,7 +2082,6 @@ class Project(project_config.Configuration):
             "software",
             Project.SoftwareLock,
             self.software,
-            self.software_configs,
             self.get_software_config,
             software_config.SoftwareConfiguration,
             None,
@@ -1783,7 +2095,6 @@ class Project(project_config.Configuration):
         factory_name: str,
         lock_class,
         objects,
-        object_configs: dict[str, dict[str, typing.Any]],
         get_config: callable,
         config_class,
         alias_class,
@@ -1842,6 +2153,22 @@ class Project(project_config.Configuration):
                 # object it did not enumerate (a targeted single fetch).
                 config = get_config(object_name)
                 if config is None:
+                    # Nothing declares this name - but something may declare it
+                    # as one of its 'aliases', and such an alias is made by
+                    # making that something. Under that object's own lock, the
+                    # one its own creation takes.
+                    owner = self.alias_declared_by(factory_name, object_name)
+                    if owner is not None:
+                        with self.object_lock(factory_name, owner):
+                            if objects.get(owner) is None:
+                                try:
+                                    self.init_object_by_config(
+                                        factory_name, config_class, alias_class, get_config(owner)
+                                    )
+                                except Exception as e:
+                                    self.record_broken_object(factory_name, owner, e)
+                        if objects.get(object_name) is not None:
+                            return objects[object_name]
                     # We don't know anything about such an object - unless it
                     # is one this context excluded, which is not an error and
                     # must not read like one: the package declares it, PartCAD
@@ -1868,8 +2195,6 @@ class Project(project_config.Configuration):
                     return None
                 # This is not yet created (invalidated?)
                 try:
-                    full_object_name = f"{self.name}:{object_name}"
-                    config = config_class.normalize(object_name, config, full_object_name)
                     self.init_object_by_config(factory_name, config_class, alias_class, config)
                 except Exception as e:
                     self.record_broken_object(factory_name, object_name, e)
@@ -1887,12 +2212,21 @@ class Project(project_config.Configuration):
                 return objects[object_name]
 
             # This object has params (part_name != result_name). Only the base
-            # object's *config* is needed to derive the parametrized variant
-            # (see 'object_configs[base_object_name]' below), so check the
-            # enumerable configs rather than the instantiated 'objects' dict -
-            # a plugin-backed package enumerates lazily and may not have
-            # instantiated the base yet.
-            if base_object_name not in object_configs:
+            # object's *declaration* is needed to derive the parametrized
+            # variant, so it is asked for rather than looked up in the
+            # instantiated 'objects' dict - a plugin-backed package creates
+            # lazily and may not have made the base yet.
+            #
+            # Through 'get_config' rather than the enumerated mapping, for the
+            # two reasons that accessor exists: it can fetch this one
+            # declaration without enumerating the package (which is the whole
+            # of what a lookup by name should cost), and it hands back a
+            # normalized one, so the copy below carries what a declaration
+            # carries. Taking the mapping instead meant every named lookup
+            # materialized it, and a plugin-backed package answered 'get_part'
+            # with a round trip for its entire catalog.
+            config = get_config(base_object_name)
+            if config is None:
                 # The same distinction the unparametrized branch above makes:
                 # a base this context excluded is not a base that is missing,
                 # and 'gone;width=5' has to read the same way as 'gone'.
@@ -1924,15 +2258,6 @@ class Project(project_config.Configuration):
             pc_logging.debug("Found the base object: %s" % base_object_name)
 
             # Now we have the original assembly name and the complete set of parameters
-            config = object_configs[base_object_name]
-            if config is None:
-                pc_logging.error(
-                    "The config for the base object '%s' is not found in '%s'",
-                    base_object_name,
-                    self.name,
-                )
-                return None
-
             config = copy.deepcopy(config)
             declare_object_type_parameters(factory_name, config, params)
             if ("parameters" not in config or config["parameters"] is None) and (
@@ -3203,3 +3528,27 @@ class Project(project_config.Configuration):
         f = open(path, "w")
         f.writelines(lines)
         f.close()
+
+
+# Filled here rather than in the class body: the lock classes are nested in it,
+# and the configuration classes are imported above it. One table per question,
+# and both keyed by kind, so that adding a kind is one entry in each rather than
+# a branch in three methods.
+Project.OBJECT_KIND_LOCKS = {
+    "sketch": Project.SketchLock,
+    "part": Project.PartLock,
+    "assembly": Project.AssemblyLock,
+    "scene": Project.SceneLock,
+}
+Project._CREATE_BY_KIND = {
+    "sketch": (sketch_config.SketchConfiguration, sfa.SketchFactoryAlias, "get_sketch_config"),
+    "part": (part_config.PartConfiguration, pfa.PartFactoryAlias, "get_part_config"),
+    "assembly": (assembly_config.AssemblyConfiguration, afa.AssemblyFactoryAlias, "get_assembly_config"),
+    "scene": (scene_config.SceneConfiguration, scnf.SceneFactoryAlias, "get_scene_config"),
+}
+Project.OBJECT_KIND_CONFIG_CLASSES = {
+    **{kind: how[0] for kind, how in Project._CREATE_BY_KIND.items()},
+    "provider": plugin_config.PluginConfiguration,
+    "repository": plugin_config.PluginConfiguration,
+    "software": software_config.SoftwareConfiguration,
+}

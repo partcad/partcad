@@ -89,6 +89,7 @@ IN_PROCESS = {
     # own would be `pc daemon prune`.
     "system/prune.py": "removes the containers and images on the client's own machine",
     "system/set/telemetry/type.py": "writes the client's own user configuration",
+    "system/set/telemetry/detail.py": "writes the client's own user configuration",
     "system/set/telemetry/env.py": "writes the client's own user configuration",
     "system/set/telemetry/sentryDsn.py": "writes the client's own user configuration",
 }

@@ -227,7 +227,7 @@ def format_parameterized_name(base: str, parameters: dict) -> str:
     return base + ";" + ",".join("%s=%s" % (name, inherited[name]) for name in sorted(inherited))
 
 
-@telemetry.start_as_current_span("resolve_resource_path")
+@telemetry.instrument_function("resolve_resource_path")
 def resolve_resource_path(current_project_name, pattern: str):
     if ":" not in pattern:
         pattern = ":" + pattern
@@ -251,7 +251,7 @@ def resolve_resource_path(current_project_name, pattern: str):
     return project_pattern, item_pattern
 
 
-@telemetry.start_as_current_span("normalize_resource_path")
+@telemetry.instrument_function("normalize_resource_path")
 def normalize_resource_path(current_project_name, pattern: str):
     project_pattern, item_pattern = resolve_resource_path(current_project_name, pattern)
     return f"{project_pattern}:{item_pattern}"

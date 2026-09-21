@@ -39,7 +39,6 @@ class SceneFactoryMixin:
 
     OBJECT_KIND = "scene"
     OBJECT_CLASS = Scene
-    STATS_DECLARED = "stats_scenes"
     STATS_INSTANTIATED = "stats_scenes_instantiated"
 
     def get_source_object(self, name, params=None):

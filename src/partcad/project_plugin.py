@@ -31,9 +31,13 @@ class ProjectPlugin(Project):
         return None
 
     def _instantiate_objects(self):
-        # Do not instantiate anything eagerly. Objects are created on demand by
-        # the getters when first requested, so that a package backed by a large
-        # remote repository does not materialize its entire contents up front.
+        # Not even the kinds a local package creates as it loads (see
+        # 'Project.LAZY_OBJECT_KINDS' for the ones nobody creates eagerly).
+        # Those are materials, interfaces, mates and the plugins, and each of
+        # them would first have to be enumerated from the repository - which is
+        # a query per kind, made while loading the package, to be told 'none' by
+        # every package that holds no such thing. They are created on demand by
+        # the getters instead, like everything else here.
         pass
 
     def _enumerate_object_configs(self, kind):

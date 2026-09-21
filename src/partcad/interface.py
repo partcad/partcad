@@ -421,7 +421,6 @@ class Interface:
                 self._check_movement_range(param_name, param_config)
                 self.params[param_name] = InterfaceParameter(param_config)
 
-        self.project.ctx.stats_interfaces += 1
         self.lock = threading.RLock()
 
     def _check_movement_range(self, param_name, param_config) -> None:

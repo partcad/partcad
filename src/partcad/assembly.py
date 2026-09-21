@@ -228,7 +228,7 @@ class Assembly(Shape):
         This is also what get_wrapped() caches - no separate serialization pass.
         """
 
-        @telemetry.start_as_current_span_async("Assembly._get_shape_real.per_child")
+        @telemetry.instrument_function_async("Assembly._get_shape_real.per_child")
         async def per_child(child):
             envelope = await child.item.get_wrapped(ctx)
             if envelope is None:

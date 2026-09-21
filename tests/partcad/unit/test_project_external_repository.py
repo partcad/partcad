@@ -78,7 +78,15 @@ def test_enumeration_is_lazy_and_cached():
 
     # A subsequent enumeration and single lookups come from the cache.
     repo.object_configs("part")
-    assert repo.object_config("part", "bolt") == {"type": "step"}
+    # Normalized on the way out - the declaration carries the name it is
+    # declared under, and what the package says about anything it produces,
+    # whether or not anything has been made out of it yet.
+    assert repo.object_config("part", "bolt") == {
+        "type": "step",
+        "name": "bolt",
+        "orig_name": "bolt",
+        "manufacturable": True,
+    }
     assert fake.keys == ["objects/part"]  # no new remote calls
 
 
@@ -94,6 +102,49 @@ def test_single_fetch_avoids_full_enumeration():
     assert config["fileFrom"] == "plugin"
     assert fake.keys == ["objects/part/bolt"]
     assert "objects/part" not in fake.keys
+
+
+def test_a_lookup_by_name_asks_for_that_one_object(tmp_path):
+    """Not for the catalog it is in.
+
+    'object_config' falls back to a targeted single fetch precisely so that a
+    plugin-backed package can serve one object without listing everything it
+    has - and 'get_object' defeated that by taking the enumerated mapping as an
+    argument, which materialized it at the call site before the lookup began.
+    'pc render //pub/universe/lego/ldraw/bricks:3001' is the case: one part, and
+    a round trip for the category.
+    """
+    data = {
+        "objects/part/bolt": {"type": "step", "path": "bolt.step"},
+        "objects/part": {"bolt": {"type": "step"}, "nut": {"type": "step"}},
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+
+    repo.get_part("bolt", quiet=True)
+
+    assert fake.keys == ["objects/part/bolt"]
+    assert "objects/part" not in fake.keys
+
+
+def test_a_parametrized_lookup_reads_a_normalized_base(tmp_path):
+    """The declaration the variant is derived from is a declaration.
+
+    The parameterized branch used to index the raw enumerated mapping, so what
+    it copied was whatever the plugin sent - without the 'name' and the
+    'manufacturable' that every other reader of a declaration is handed (see
+    'Project._normalized').
+    """
+    data = {"objects/part/widget": {"type": "step", "parameters": {"width": {"default": 2.0}}}}
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    repo._repository = FakeRepository(data)
+
+    base = repo.get_part_config("widget")
+    assert base["name"] == "widget"
+    assert base["manufacturable"] is True
 
 
 def test_ensure_enumerated_async_warms_the_sync_accessors():
@@ -364,7 +415,7 @@ def test_a_malformed_declaration_is_complained_about_once():
 # the two 'get_all_packages' calls elsewhere in the suite pass has_stuff=False,
 # which skips the prefetch entirely, so the whole point of the change went
 # untested. These go in through the listing rather than through
-# '_prefetch_object_configs', so that the wiring is what is under test: a
+# 'prefetch_object_configs', so that the wiring is what is under test: a
 # listing that stopped prefetching would still pass a test that prefetched for
 # it.
 
@@ -442,6 +493,60 @@ def test_the_listing_skips_packages_outside_the_parent(tmp_path):
     assert [k for k in fake.keys if k.startswith("objects/")] == []
 
 
+def test_the_kinds_a_walk_does_not_filter_on_are_warmed_too(tmp_path):
+    """'pc list interfaces -r' walks every package, so nothing gated warms it.
+
+    The walk is not gated on 'has_stuff' for the kinds that are not geometry
+    (interfaces, software, materials), so until the listing warmed the kind
+    itself, each package of a plugin-backed tree was asked for its enumeration
+    as the walk reached it - one round trip per package, each waited out end to
+    end. LDraw has ninety-odd categories.
+    """
+    ctx, repo, fake = _listing_context(tmp_path, {"objects/interface": {"thru": {"desc": "an opening"}}})
+    asked = _record_prefetches(repo)
+
+    ctx.prefetch_object_configs("//test", ["interface"])
+
+    assert asked == [("interface",)]
+    assert [k for k in fake.keys if k.startswith("objects/")] == ["objects/interface"]
+    # ...and reading it back is the memo, not a second round trip.
+    assert list(repo.object_descriptions("interface")) == ["thru"]
+    assert [k for k in fake.keys if k.startswith("objects/")] == ["objects/interface"]
+
+
+def test_warming_several_packages_is_one_wait_rather_than_one_each(tmp_path):
+    """They go in flight together, which is the whole of the difference."""
+    import time
+
+    delay = 0.2
+    packages = 6
+
+    class SlowRepository:
+        def __init__(self, data):
+            self.data = data
+
+        async def get_data(self, key):
+            await asyncio.sleep(delay)
+            return self.data.get(key)
+
+    (tmp_path / "partcad.yaml").write_text("name: //test\ndesc: root\n")
+    ctx = pc.Context(str(tmp_path))
+    for index in range(packages):
+        name = "//test/cat%d" % index
+        repo = ProjectExternalRepository(ctx, name, "/tmp/ext", config_obj={})
+        repo._repository = SlowRepository({"objects/interface": {"i%d" % index: {}}})
+        ctx.projects[name] = repo
+
+    started = time.time()
+    ctx.prefetch_object_configs("//test", ["interface"])
+    for index in range(packages):
+        assert ctx.projects["//test/cat%d" % index].object_count("interface") == 1
+    elapsed = time.time() - started
+
+    # One wait, not six. Generously bounded: what it must not be is serial.
+    assert elapsed < delay * packages / 2
+
+
 def test_an_unreachable_repository_does_not_take_the_listing_down(tmp_path):
     """The prefetch is a warm-up; nothing downstream depends on it having worked."""
 
@@ -455,3 +560,49 @@ def test_an_unreachable_repository_does_not_take_the_listing_down(tmp_path):
     ctx.get_all_packages(has_stuff=True)  # must not raise
     # ...and the package is still readable afterwards, the slow way.
     assert repo.object_count("part") == 0
+
+
+def test_listing_one_kind_does_not_instantiate_the_others():
+    """'pc list assemblies' must not build every part of every package.
+
+    Reading one of the three eager dictionaries used to instantiate all three,
+    so a recursive listing of assemblies over the public index created every
+    LDraw part of every category - hundreds per package, each through the
+    'InitWrapper' factory - to report that those packages hold no assemblies.
+    """
+    ctx = pc.Context("examples")
+    data = {
+        "objects/part": {"bolt": {"type": "step"}, "nut": {"type": "step"}},
+        "objects/sketch": {"outline": {"type": "dxf"}},
+        "objects/assembly": {},
+    }
+    repo, fake = _make_repo(ctx, data)
+
+    assert repo.assemblies == {}
+    # The assemblies were enumerated; the parts and the sketches were not even
+    # asked for, let alone instantiated.
+    assert repo._parts == {} and repo._sketches == {}
+    assert fake.keys == ["objects/assembly"]
+
+
+def test_each_kind_is_instantiated_on_its_own_first_access():
+    """Per kind, and still once per kind."""
+    ctx = pc.Context("examples")
+    data = {
+        "objects/part": {"bolt": {"type": "step"}},
+        "objects/sketch": {},
+        "objects/assembly": {},
+    }
+    repo, fake = _make_repo(ctx, data)
+
+    assert repo.assemblies == {}
+    assert repo._instantiated_kinds == {"assembly"}
+    assert fake.keys == ["objects/assembly"]
+
+    _ = repo.parts
+    assert repo._instantiated_kinds == {"assembly", "part"}
+    assert fake.keys == ["objects/assembly", "objects/part"]
+
+    # Read again: no second enumeration and no second instantiation pass.
+    _ = repo.parts
+    assert fake.keys == ["objects/assembly", "objects/part"]

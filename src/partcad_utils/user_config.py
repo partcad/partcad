@@ -111,6 +111,7 @@ class TelemetryConfig(dict):
     def __init__(self, v: vyper.Vyper):
         self.v = v
         self.v.bind_env("telemetry.type", "PC_TELEMETRY_TYPE")
+        self.v.bind_env("telemetry.detail", "PC_TELEMETRY_DETAIL")
         self.v.bind_env("telemetry.env", "PC_TELEMETRY_ENV")
         self.v.bind_env("telemetry.performance", "PC_TELEMETRY_PERFORMANCE")
         self.v.bind_env("telemetry.failures", "PC_TELEMETRY_FAILURES")
@@ -135,6 +136,34 @@ class TelemetryConfig(dict):
                 return telemetry["type"]
 
         return "sentry"
+
+    @property
+    def detail(self):
+        """How deep the tracing goes: 'actions' (the default) or 'methods'.
+
+        'actions' is one span per operation PartCAD names - the processes and
+        the actions its own log lines are built from ('Action: InitWrapper',
+        'Process: ListAssemblies'). That is the shape of what a command does.
+
+        'methods' adds a span for every instrumented method underneath them.
+        It is what a trace needs to answer "where inside this did the time go",
+        and it is expensive in a way that is easy to miss: creating one part
+        goes through a dozen instrumented methods, so a package of eight
+        thousand of them is a quarter of a million spans for a listing. It is
+        available, and it is not the default.
+        """
+        try:
+            if self.v.is_set("telemetry.detail"):
+                return self.v.get_string("telemetry.detail")
+        except Exception:  # pragma: no cover
+            # Workaround for https://github.com/alexferl/vyper/pull/71
+            if "telemetry.detail" in self.v._override:
+                return self.v._override["telemetry.detail"]
+            telemetry = self.v._config.get("telemetry", {})
+            if "detail" in telemetry:
+                return telemetry["detail"]
+
+        return "actions"
 
     @property
     def env(self):
@@ -947,6 +976,7 @@ class UserConfig(vyper.Vyper):
         # values: <dict>
         # default: {
         #   "type": "sentry",
+        #   "detail": "actions",
         #   "environment": "prod",
         #   "performance": "true",
         #   "failures": "true",

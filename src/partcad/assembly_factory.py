@@ -35,7 +35,6 @@ class AssemblyFactory(ShapeFactory):
     # no gain.
     OBJECT_KIND = "assembly"
     OBJECT_CLASS = Assembly
-    STATS_DECLARED = "stats_assemblies"
     STATS_INSTANTIATED = "stats_assemblies_instantiated"
 
     def __init__(self, ctx, source_project, target_project, config, extension=""):
@@ -55,11 +54,6 @@ class AssemblyFactory(ShapeFactory):
 
         self.apply_environment_cache_key(self.assembly)
         self.post_create()
-
-        self.count_declared()
-
-    def count_declared(self) -> None:
-        setattr(self.ctx, self.STATS_DECLARED, getattr(self.ctx, self.STATS_DECLARED) + 1)
 
     def count_instantiated(self) -> None:
         setattr(self.ctx, self.STATS_INSTANTIATED, getattr(self.ctx, self.STATS_INSTANTIATED) + 1)

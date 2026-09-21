@@ -54,7 +54,7 @@ def _is_within(name: str, parent_name: Optional[str]) -> bool:
     just a prefix: '//foo' is not the parent of '//foobar', and matching it as
     one made a listing of '//foo' include its neighbour -- and now also send a
     round trip to that neighbour's repository plugin (see
-    '_prefetch_object_configs'). The root, '//', is the parent of everything,
+    'prefetch_object_configs'). The root, '//', is the parent of everything,
     which falls out of the same rule once the trailing separator is stripped.
     """
     if parent_name is None:
@@ -205,17 +205,22 @@ class Context:
     own. It holds the root package in 'self.root' and adopts its name instead.
     """
 
+    # Two numbers per kind, and two questions: how many objects the loaded
+    # packages *declare*, and how many of them have been *instantiated* - built
+    # into geometry, which is what 'instantiate' means everywhere else here.
+    #
+    # They used to be one number and a half: the "declared" one was a counter
+    # the factories incremented as they made objects, which equalled the
+    # declared count only for as long as loading a package made everything in
+    # it. It no longer does (see 'Project.LAZY_OBJECT_KINDS'), so the declared
+    # half is counted from the declarations and the instantiated half stays a
+    # counter - nothing can count a build that has not happened.
     stats_packages: int
     stats_packages_instantiated: int
-    stats_sketches: int
     stats_sketches_instantiated: int
-    stats_interfaces: int
     stats_interfaces_instantiated: int
-    stats_parts: int
     stats_parts_instantiated: int
-    stats_assemblies: int
     stats_assemblies_instantiated: int
-    stats_scenes: int
     stats_scenes_instantiated: int
     stats_plugins: int
     stats_plugin_queries: int
@@ -348,15 +353,17 @@ class Context:
 
         self.stats_packages = 0
         self.stats_packages_instantiated = 0
-        self.stats_interfaces = 0
         self.stats_interfaces_instantiated = 0
-        self.stats_sketches = 0
+        # The four kinds that are shapes have no counter of their own: they are
+        # counted from what the loaded packages declare, when somebody asks (see
+        # the properties below). A counter was a count of what had been
+        # *created*, which was the same number only for as long as loading a
+        # package created everything in it -- it no longer does (see
+        # 'Project.LAZY_OBJECT_KINDS'), and a 'pc info' reporting no parts in a
+        # package full of them would be the price of that.
         self.stats_sketches_instantiated = 0
-        self.stats_parts = 0
         self.stats_parts_instantiated = 0
-        self.stats_assemblies = 0
         self.stats_assemblies_instantiated = 0
-        self.stats_scenes = 0
         self.stats_scenes_instantiated = 0
         self.stats_plugins = 0
         self.stats_plugin_queries = 0
@@ -465,6 +472,36 @@ class Context:
         ):
             current_project_path = self.name
         self.current_project_path = current_project_path
+
+    def _stats_declared(self, kind: str) -> int:
+        """How many objects of a kind the packages loaded here declare.
+
+        Counted on demand rather than accumulated, so that the answer does not
+        depend on which objects some earlier command happened to create. Only
+        what each package already knows it declares, never an enumeration of its
+        own (see 'Project.object_count_known').
+        """
+        return sum(project.object_count_known(kind) for project in list(self.projects.values()))
+
+    @property
+    def stats_sketches_declared(self) -> int:
+        return self._stats_declared("sketch")
+
+    @property
+    def stats_interfaces_declared(self) -> int:
+        return self._stats_declared("interface")
+
+    @property
+    def stats_parts_declared(self) -> int:
+        return self._stats_declared("part")
+
+    @property
+    def stats_assemblies_declared(self) -> int:
+        return self._stats_declared("assembly")
+
+    @property
+    def stats_scenes_declared(self) -> int:
+        return self._stats_declared("scene")
 
     def stats_recalc(self, verbose=False):
         self.stats_memory = total_size(self, verbose)
@@ -901,14 +938,21 @@ class Context:
             # is a round trip to the plugin. Warm them here instead: every
             # package and every kind at once, on the traversal's event loop, so
             # what follows reads a memo. See Project.prefetch_object_configs_async.
-            self._prefetch_object_configs(parent_name, HAS_STUFF_KINDS)
+            self.prefetch_object_configs(parent_name, HAS_STUFF_KINDS)
         return self.get_packages(parent_name=parent_name, has_stuff=has_stuff)
 
-    def _prefetch_object_configs(self, parent_name, kinds):
+    def prefetch_object_configs(self, parent_name, kinds):
         """Warm 'kinds' across every loaded package, concurrently.
 
         A no-op for the packages that are local, which is most of them; what it
         is for is the plugin-backed ones, where the enumerations are remote.
+
+        Public because a command that is about to walk a tree for one kind
+        should say so: this is one round trip for the whole tree instead of one
+        per package, and the difference is the whole of the wait. 'pc list
+        interfaces -r' over LDraw's ninety-odd categories asked each of them in
+        turn - the walk is not gated on 'has_stuff', so nothing had warmed them
+        (see 'list_objects').
         """
         projects = [p for p in self.projects.values() if _is_within(p.name, parent_name)]
         projects = [p for p in projects if not p.skipped]

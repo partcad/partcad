@@ -100,8 +100,6 @@ class SketchFactory(ShapeFactory):
         self.apply_environment_cache_key(self.sketch)
         self.post_create()
 
-        self.ctx.stats_sketches += 1
-
     def post_create(self) -> None:
         # This is a base class catch-all method
         pass

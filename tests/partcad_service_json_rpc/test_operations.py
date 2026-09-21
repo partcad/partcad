@@ -239,6 +239,17 @@ class FakeProject:
         self.scenes = {}
         self.interfaces = {}
         self.software = {}
+        # The kind a section holds one of, for 'object_descriptions()' below.
+        self._sections = {
+            "material": "materials",
+            "sketch": "sketches",
+            "part": "parts",
+            "assembly": "assemblies",
+            "scene": "scenes",
+            "interface": "interfaces",
+            "software": "software",
+        }
+        self.materials = {}
         self.providers = {}
         self.children = []
         # The providers this package buys through, as `get_suppliers()` reports
@@ -253,6 +264,22 @@ class FakeProject:
         # A real package's parsed configuration carries its name, which is what
         # the client reads each row's label from.
         self.config_obj.setdefault("name", name)
+
+    def object_count_known(self, kind):
+        """How many objects of a kind this package declares.
+
+        A real package counts the declarations it has read, without enumerating
+        and without creating anything; these fakes are their own declarations.
+        """
+        return len(getattr(self, self._sections[kind]))
+
+    def object_descriptions(self, kind):
+        """What a listing prints, as a real package answers it.
+
+        From the declarations rather than the objects there; here the two are
+        the same fakes, so this reads their 'desc'.
+        """
+        return {name: getattr(obj, "desc", None) for name, obj in getattr(self, self._sections[kind]).items()}
 
     def get_child_project_names(self):
         return list(self.children)
@@ -346,6 +373,8 @@ class FakeContext:
         self.name = name
         self.current_project_path = name
         self.requested = []
+        # (parent, kinds) of every warm-up a listing asked for.
+        self.prefetched = []
         self.mates = {}
         # What `ProviderCart.add_object()` puts in the cart, by object name: the
         # line items an object breaks down into.
@@ -367,26 +396,57 @@ class FakeContext:
         # Instantiated objects, keyed by (kind, "package:name") as the context
         # is asked for them.
         self.shapes = {}
-        # Stats attributes read by the info/getStats operation.
+        # Stats attributes read by the info/getStats operation. Only the
+        # counters: a real Context computes the declared half from the packages
+        # it has loaded, and so does this (see the properties below). A number
+        # that could simply be assigned here would let a test pass against a
+        # payload the real context cannot produce.
         for name in (
             "stats_packages",
             "stats_packages_instantiated",
-            "stats_sketches",
             "stats_sketches_instantiated",
-            "stats_interfaces",
             "stats_interfaces_instantiated",
-            "stats_parts",
             "stats_parts_instantiated",
-            "stats_assemblies",
             "stats_assemblies_instantiated",
-            "stats_scenes",
             "stats_scenes_instantiated",
             "stats_memory",
         ):
             setattr(self, name, 0)
 
+    def _stats_declared(self, kind):
+        return sum(project.object_count_known(kind) for project in self.projects.values())
+
+    @property
+    def stats_sketches_declared(self):
+        return self._stats_declared("sketch")
+
+    @property
+    def stats_interfaces_declared(self):
+        return self._stats_declared("interface")
+
+    @property
+    def stats_parts_declared(self):
+        return self._stats_declared("part")
+
+    @property
+    def stats_assemblies_declared(self):
+        return self._stats_declared("assembly")
+
+    @property
+    def stats_scenes_declared(self):
+        return self._stats_declared("scene")
+
     def stats_recalc(self):
         self.stats_packages = 3
+
+    def prefetch_object_configs(self, parent_name, kinds):
+        """What a listing asks for before it walks, recorded rather than done.
+
+        A real context sends the enumerations of a plugin-backed tree in flight
+        together here; these packages are fakes with nothing to fetch, so what
+        is worth keeping is that the listing asked, and for what.
+        """
+        self.prefetched.append((parent_name, tuple(kinds)))
 
     def _get_shape(self, kind, path, params=None):
         self.requested.append((kind, path, params))
@@ -560,6 +620,51 @@ def test_info_emits_stats_with_version_and_recalculated_counts():
     assert payload["version"] == "0.7.158"
     assert payload["stats"]["packages"] == 3
     assert payload["stats"]["path"] == "/abs/partcad.yaml"
+
+
+def test_a_listing_warms_the_kind_it_is_about_to_walk():
+    """One round trip for the tree, rather than one per package.
+
+    A plugin-backed tree answers an enumeration over the wire, and the walk
+    below reads one package after another - so a listing that did not warm the
+    kind first waited out a round trip per package (LDraw has ninety-odd
+    categories).
+    """
+    session, _ = make_session()
+    operations.list_objects(session, {"kind": "interfaces", "package": ".", "recursive": True})
+    assert session.partcad_ctx.prefetched == [("//", ("interface",))]
+
+    session, _ = make_session()
+    operations.list_objects(session, {"kind": "parts", "package": ".", "recursive": False})
+    assert session.partcad_ctx.prefetched == [("//", ("part",))]
+
+
+def test_info_reports_what_is_declared_and_what_is_built_separately():
+    """Two numbers per kind, and the declared one says which it is.
+
+    The bare '<kind>' key carries the declared count too, so that an extension
+    published before the pair existed keeps showing the same number it always
+    did (see 'PartcadContext.ts').
+    """
+    session, seen = make_session()
+    project = session.partcad_ctx.projects["//"]
+    for index in range(12):
+        project.parts["p%d" % index] = FakeShape(name="p%d" % index)
+    session.partcad_ctx.stats_parts_instantiated = 3
+
+    operations.info(session, {})
+    stats = seen[-1][1]["stats"]
+
+    # Twelve declared, three of them built: two questions, two numbers. The
+    # declared half is counted from the packages, here as on a real context -
+    # it is a property there, and a number this test could simply assign would
+    # be a number the real payload never carries.
+    assert stats["partsDeclared"] == 12
+    assert stats["parts"] == 12
+    assert stats["partsInstantiated"] == 3
+    for kind in ("sketches", "interfaces", "assemblies", "scenes"):
+        assert stats[kind + "Declared"] == stats[kind]
+        assert kind + "Instantiated" in stats
 
 
 def test_package_path_emits_execute_with_the_callback(tmp_path):

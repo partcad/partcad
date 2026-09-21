@@ -23,19 +23,57 @@ def test_ctx1():
 
 
 def test_ctx_stats1():
+    """What the loaded packages declare, counted as they are loaded."""
     ctx = pc.Context("examples")
     assert ctx is not None
     ctx.stats_recalc()
     assert ctx.stats_packages > 0
-    assert ctx.stats_parts == 0
+    assert ctx.stats_parts_declared == 0
     ctx.get_project("//produce_part_cadquery_primitive")
-    assert ctx.stats_parts > 0
-    assert ctx.stats_parts_instantiated == 0
-    assert ctx.stats_assemblies == 0
+    assert ctx.stats_parts_declared > 0
+    assert ctx.stats_assemblies_declared == 0
     ctx.get_project("//produce_assembly_assy")
-    assert ctx.stats_assemblies > 0
-    assert ctx.stats_assemblies_instantiated == 0
+    assert ctx.stats_assemblies_declared > 0
     assert ctx.stats_memory > 0
+
+
+def test_declared_counts_what_is_declared_rather_than_what_was_made():
+    """The two numbers are two questions, and this is the first of them.
+
+    Loading a package declares its objects; it no longer makes them (see
+    'Project.LAZY_OBJECT_KINDS'), and the declared count must not move when
+    something does.
+    """
+    ctx = pc.Context("examples")
+    project = ctx.get_project("//produce_part_cadquery_primitive")
+
+    declared = ctx.stats_parts_declared
+    assert declared == len(project.object_configs("part")) > 0
+    assert project.objects("part") == {}  # counting made nothing
+
+    project.get_part("cube")
+    assert ctx.stats_parts_declared == declared
+    len(project.parts)
+    assert ctx.stats_parts_declared == declared
+
+
+def test_nothing_is_instantiated_until_something_is_built():
+    """And this is the second: a shape counts once it has been built.
+
+    Declaring one does not, and neither does creating the object that would
+    build it - which is what a listing does.
+    """
+    ctx = pc.Context("examples")
+    project = ctx.get_project("//produce_part_cadquery_primitive")
+    assert ctx.stats_parts_instantiated == 0
+
+    assert len(project.parts) > 0  # every part of the package, created
+    assert ctx.stats_parts_instantiated == 0  # and none of them built
+
+    cube = project.get_part("cube")
+    cube.cacheable = False
+    assert asyncio.run(cube.get_wrapped(ctx)) is not None
+    assert ctx.stats_parts_instantiated == 1
 
 
 def test_ctx_stats2():

@@ -24,4 +24,5 @@ def cli(cli_ctx) -> None:
             else:
                 pc.logging.info("Telemetry ID: None")
         pc.logging.info(f"Telemetry type: '{pc.user_config.telemetry_config.type}'")
+        pc.logging.info(f"Telemetry detail: '{pc.user_config.telemetry_config.detail}'")
         pc.logging.info(f"Telemetry env: '{pc.user_config.telemetry_config.env}'")
