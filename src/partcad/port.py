@@ -44,10 +44,6 @@ class WithPorts(Interface):
         # that states its ports itself. See 'partcad.assembly_ports'.
         self.mapped = None
 
-    def has_map(self) -> bool:
-        """Whether this object externalizes anything of what it is made of."""
-        return bool(self.config.get(assembly_ports.MAP))
-
     def map_resolved(self) -> bool:
         return self.mapped is not None
 
@@ -96,9 +92,11 @@ class WithPorts(Interface):
     # A shape's declaration is not an interface's: 'desc' is prose, 'fileUrl'
     # is a URL that may be percent-encoded, and neither has parameters
     # substituted into it. What a shape does declare about connections is where
-    # its ports are and which interfaces it implements, and those two are worth
-    # writing in terms of the shape's own dimensions.
-    EXPRESSION_SECTIONS = ("ports", "implements")
+    # its ports are, which interfaces it implements, and - for an assembly -
+    # which of the ones inside it are its own; all three are worth writing in
+    # terms of the shape's own parameters, since an assembly parametrized by how
+    # many of something it holds names its nodes after them.
+    EXPRESSION_SECTIONS = ("ports", "implements", assembly_ports.MAP)
 
     def declared_construction_params(self, config: dict) -> dict:
         """A shape's 'parameters:', all of it.

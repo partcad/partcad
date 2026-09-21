@@ -83,6 +83,19 @@ assemblies:
       inner: [frame/plate, handle]
       unnamed: [loose, handle]
 
+  # A map written in terms of what the assembly is parametrized by.
+  parametric:
+    type: assy
+    path: mount.assy
+    desc: The same two plates, externalizing whichever of them is asked for
+    parameters:
+      which:
+        type: string
+        enum: [lower, upper]
+        default: lower
+    map:
+      chosen: ["%which%", handle]
+
   # Something connected to what an assembly externalizes.
   bolted:
     type: assy

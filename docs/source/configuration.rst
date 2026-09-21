@@ -2661,7 +2661,7 @@ instance is a place rather than a kind -- the bracket calls it ``outer``, and th
 mount it is part of calls it ``mount``.
 
 Which nodes can be named
-~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 The first element is the **node name from the Assembly YAML file** -- a link's
 ``name:``, or the part or assembly name where the link has none (see
@@ -2676,6 +2676,11 @@ it. A node inside a *named* container is reached through it, with ``/``::
   map:
     left-foot: [frame/bracket, L-30mm-slotted-3mm-thru-opening-m4]
 
+A node name may be written in terms of the assembly's own parameters, the way
+``ports:`` and ``implements:`` may be -- ``map: {mount: ["%which%", handle]}`` --
+which is how an assembly parametrized by what it holds externalizes the right
+one.
+
 A sub-assembly that some package declares is a different matter: it is an object
 with a boundary of its own, and the map does not reach inside it. To reach a
 port in there, that sub-assembly externalizes it and this one maps *that*. A
@@ -2683,7 +2688,7 @@ boundary is crossed one object at a time, which is what keeps an assembly free
 to be rearranged inside without breaking whatever connects to it.
 
 What a map cannot say
-~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^
 
 Some of an assembly's connections are not a port of anything inside it -- the
 face a fixture is clamped by, a datum the whole product is aligned to. Those are
@@ -2709,7 +2714,7 @@ A ``ports:`` entry that uses a name the map already produced wins, and says so
 in the log: two things under one name is a mistake worth hearing about.
 
 The boundary
-~~~~~~~~~~~~
+^^^^^^^^^^^^
 
 What an assembly externalizes is what it *has*, everywhere: ``pc info`` lists
 those ports, the viewer marks them, ``pc render --with-ports`` draws them, a
@@ -2721,7 +2726,7 @@ can I connect to this", not a failure. ``pc render --with-internals`` looks
 inside one anyway, for finding the connection that went wrong (see :doc:`cli`).
 
 Other assembly types
-~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^
 
 ``map:`` is written for ``assy``, where the node names are the ones somebody
 wrote in the file. It works for ``step`` and ``urdf`` assemblies as best it can

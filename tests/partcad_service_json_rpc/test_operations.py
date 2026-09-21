@@ -665,14 +665,18 @@ def test_inspect_file_without_a_matching_file_changes_nothing(tmp_path):
 # ---- search ----------------------------------------------------------------
 
 
-def fake_search(select):
+def fake_search(select, takes_interface=True):
     """Build a stand-in for the ``partcad.actions.*.search_*`` functions.
 
     Mirrors ``partcad.actions.common._search``: keyword-filter the selected
-    objects of the package, and of its children when recursive.
+    objects of the package, and of its children when recursive, and -- for the
+    kinds whose objects have ports -- keep only the ones that implement the
+    interface asked for. ``search_interfaces`` and ``search_packages`` take no
+    interface, exactly as the real ones do not.
     """
 
-    def search(ctx, package, recursive, keyword):
+    def search(ctx, package, recursive, keyword, interface=None):
+        search.interface = interface
         names = [package]
         if recursive:
             # `_search` seeds the list with the package itself and then appends
@@ -685,8 +689,17 @@ def fake_search(select):
             if project is None:
                 continue
             found += [obj for obj in select(project) if not keyword or obj.matches(keyword)]
+        if interface:
+            found = [obj for obj in found if interface in getattr(obj, "interfaces", ())]
         return found
 
+    search.interface = None
+    if not takes_interface:
+
+        def search_without_interface(ctx, package, recursive, keyword):
+            return search(ctx, package, recursive, keyword)
+
+        return search_without_interface
     return search
 
 
@@ -699,9 +712,9 @@ def install_fake_search(monkeypatch):
                 "search_sketches": fake_search(lambda p: p.sketches.values()),
                 "search_assemblies": fake_search(lambda p: p.assemblies.values()),
                 "search_scenes": fake_search(lambda p: p.scenes.values()),
-                "search_interfaces": fake_search(lambda p: p.interfaces.values()),
+                "search_interfaces": fake_search(lambda p: p.interfaces.values(), takes_interface=False),
             },
-            "partcad.actions.package": {"search_packages": fake_search(lambda p: [p])},
+            "partcad.actions.package": {"search_packages": fake_search(lambda p: [p], takes_interface=False)},
         },
     )
 
@@ -739,6 +752,50 @@ def test_search_objects_reports_a_match_per_kind(monkeypatch, kind, process_labe
     assert output[1].startswith("\t// widget")
     assert output[1].endswith("a cube widget")
     assert output[-1] == "Matches: 1"
+
+
+def test_search_objects_can_search_by_interface(monkeypatch):
+    """Not by what the declaration says but by what the object connects by."""
+    install_fake_search(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    plate = FakeObject("plate", desc="a plate with a hole", project_name="//")
+    plate.interfaces = ["m3-thru"]
+    root.add("parts", plate)
+    root.add("parts", FakeObject("block", desc="nothing to connect to", project_name="//"))
+
+    operations.search_objects(session, {"kind": "parts", "package": "//", "interface": "m3-thru"})
+
+    output = lines_of(session.partcad.logging.only("info"))
+    assert output[0] == "PartCAD parts implementing 'm3-thru':"
+    assert output[1].startswith("\t// plate")
+    assert output[-1] == "Matches: 1"
+
+
+def test_search_objects_says_so_when_both_are_given(monkeypatch):
+    install_fake_search(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    plate = FakeObject("plate", desc="a cube plate", project_name="//")
+    plate.interfaces = ["m3-thru"]
+    root.add("parts", plate)
+
+    operations.search_objects(session, {"kind": "parts", "package": "//", "keyword": "cube", "interface": "m3-thru"})
+
+    output = lines_of(session.partcad.logging.only("info"))
+    assert output[0] == "PartCAD parts implementing 'm3-thru' with 'cube' keyword:"
+    assert output[-1] == "Matches: 1"
+
+
+def test_searching_packages_by_interface_is_refused(monkeypatch):
+    """A package has no ports, so there is nothing to answer rather than nothing found."""
+    install_fake_search(monkeypatch)
+    session, _ = make_session()
+
+    operations.search_objects(session, {"kind": "packages", "package": "//", "interface": "m3-thru"})
+
+    assert "not supported" in session.partcad.logging.only("error")
+    assert session.partcad.logging.messages("info") == []
 
 
 def test_search_packages_reports_the_package_with_its_url(monkeypatch):

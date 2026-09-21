@@ -160,12 +160,20 @@ async def prepare_async(shape, ctx) -> None:
     resolved on first use, so this is a no-op - and has to stay cheap, because
     every caller that is about to read an object's ports calls it first without
     knowing whether the object is an assembly at all.
-    """
-    with_ports = getattr(shape, "with_ports", None)
-    if with_ports is None or not with_ports.has_map() or with_ports.map_resolved():
-        return
 
+    The declaration is what decides, rather than the kind of object or anything
+    'with_ports' is asked: a shape that declares no 'map:' is every shape but a
+    few, and answering for one must not mean reaching into it. A 'map:' on
+    something that is not an assembly still gets here, and is reported there
+    rather than passed over in silence.
+    """
     from . import assembly_ports
+
+    if not (getattr(shape, "config", None) or {}).get(assembly_ports.MAP):
+        return
+    with_ports = getattr(shape, "with_ports", None)
+    if with_ports is None or with_ports.map_resolved():
+        return
 
     await assembly_ports.resolve_async(shape, ctx)
 

@@ -90,6 +90,15 @@ def test_a_boundary_is_crossed_one_object_at_a_time():
     assert list(column.with_ports.get_interfaces()["//:m3-thru"].keys()) == ["anchor"]
 
 
+def test_a_map_may_be_written_in_terms_of_the_assembly_s_parameters():
+    """An assembly parametrized by what it holds names its nodes after them."""
+    ctx = pc.init(PACKAGE)
+    for which, height in (("lower", 5.0), ("upper", 25.0)):
+        assembly = ctx._get_assembly(":parametric", {"which": which})
+        asyncio.run(shape_ports.prepare_async(assembly, ctx))
+        assert _at(assembly, "chosen") == pytest.approx((0.0, 0.0, height))
+
+
 def test_a_node_inside_a_container_is_reached_through_it():
     """A named 'links:' group is a path element; an anonymous one is not."""
     _, grouped = _assembly("grouped")
