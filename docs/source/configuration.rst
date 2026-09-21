@@ -3890,6 +3890,7 @@ are configured by a section of ``partcad.yaml`` named after the command --
       extension: <(optional) the extension used when the file name is derived>
       prefix: <(optional) where the file goes, relative to the package>
       exclude: <(optional) kinds of object not to write this type for>
+      reproducible: <(optional) true to require the same bytes every time>
       <parameter name>: <value> # anything else is an export parameter
 
   render:
@@ -3997,7 +3998,7 @@ looked at from, and ``viewport_up``, which way is up in the picture -- are
 common directions (see :doc:`cli`). Passed that way they layer on top of
 everything below, package and object alike, for that run only.
 
-Two names are not entirely the package's own.
+Three names are not entirely the package's own.
 
 ``decode`` is not a parameter at all. It is one of the fields PartCAD reads
 itself -- it says whether the sandbox rebuilds the shape and assembly envelopes
@@ -4032,6 +4033,78 @@ that declares an ordinary export parameter of its own named ``properties`` and
 gives it the value ``true`` will find that value replaced by the index before
 its implementation sees it. Any other value is passed through untouched, but the
 name is best avoided for anything else.
+
+.. _reproducible:
+
+``reproducible`` is the third, and it is a field of the protocol rather than any
+one format's parameter. It is a boolean, it defaults to ``false``, and it says
+whether this file has to come out **byte-for-byte the same every time it is
+written**, from the same object:
+
+.. code-block:: yaml
+
+  render:
+    svg:
+      reproducible: true
+
+Unlike every other parameter, it is handed to the implementation whether or not
+anybody declared it -- so an implementation reads ``request["reproducible"]``
+without first checking that the key is there, and means by it what every other
+implementation means. That is the whole point of it being here rather than in
+each format's own list of options: a package that publishes a ``render:``
+implementation of its own writes ``reproducible`` and it already means this.
+
+What it does depends on the file type, and on four of them it does something
+today:
+
+``svg``, ``png``, ``jpeg``
+  The projection goes through OpenCASCADE's **exact** hidden-line algorithm
+  rather than the polygonal one. The exact algorithm works from the surfaces;
+  the polygonal one works from a triangulation, which is floating point all the
+  way down, so the same shape meshed to the same deflection comes out with a
+  slightly different silhouette on a different architecture.
+
+  Every number written into the drawing is also rounded to the ``precision`` the
+  file type claims (ten decimal places by default), and a negative zero is
+  written as zero. Below that precision what is in the file is the last bit of
+  an arithmetic rather than a measurement -- a stroke width that differs in its
+  sixteenth digit, an arc rotated by half a femtodegree -- and it is a diff
+  every time the drawing is produced somewhere new.
+
+  For ``png`` and ``jpeg`` that settles the picture and not the encoding -- the
+  bytes below the projection are svglib's, reportlab's and Pillow's.
+
+``dxf``
+  The same, plus fixed header metadata: a DXF is otherwise stamped on every save
+  with the time it was written and a fresh pair of GUIDs, and ezdxf derives the
+  order of its ``CLASSES`` section from a ``set``, so it emits differently per
+  process.
+
+It is off by default because it is not free. The exact projection is the slower
+of the two by a wide margin on anything large, and it is the one that can take
+the sandbox down: every released OpenCASCADE reads past the end of an allocation
+in the rejection table that algorithm sorts its edge crossings in
+(`Open-Cascade-SAS/OCCT#1546
+<https://github.com/Open-Cascade-SAS/OCCT/issues/1546>`_), which is a coin flip
+on an assembly with enough edges. A picture produced to be looked at should be
+the fastest correct one; a drawing that is *kept*, so that a diff answers
+whether it changed, is the case that says so. Every image under ``examples/`` in
+the PartCAD repository sets it.
+
+The rest of the built-in file types accept it and write the same bytes either
+way. They declare it all the same, so that an implementation which starts
+reading it does not also have to start receiving it.
+
+What it is not is a promise that two machines produce one file. It removes
+everything PartCAD chooses -- which algorithm, how a number is written, the
+clock, the GUIDs, the iteration order of a ``set`` -- and what is left is the
+CAD kernel's own arithmetic. Two platforms that disagree about a transcendental
+function in the last bit can still find one intersection more than each other
+along a curved silhouette, and no amount of rounding makes those two drawings
+the same file. So two renders on one machine are the same file, and two
+machines agree on everything but the hardest subjects. That is why PartCAD's own
+``Examples (PartCAD)`` job compares the checked-in drawings on one cell of its
+matrix rather than on all of them.
 
 Custom implementations
 ----------------------

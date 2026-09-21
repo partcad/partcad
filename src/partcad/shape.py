@@ -1377,6 +1377,28 @@ class Shape(ShapeConfiguration):
         # and places every joint from that), none of which decoding carries over
         # into the geometry it builds.
         request[output.DECODE_KEY] = impl.decode
+
+        # Whether the file has to come out the same every time it is produced.
+        # Set here rather than left to whatever the configuration happened to
+        # carry, so that it is in *every* request and an implementation - one
+        # PartCAD ships, or one a package published on its own - can read it
+        # without first asking whether the key exists. That is the whole of what
+        # makes 'reproducible' mean one thing across every implementation there
+        # is; see 'output.REPRODUCIBLE_KEY'.
+        #
+        # What is already in the request wins, because by the time it gets here
+        # it is the layered answer: the file type's declaration merged through
+        # 'impl.parameters', with an explicit argument from the caller on top of
+        # it. 'impl.reproducible' is the fallback for a caller that built its
+        # request some other way, and the coercion is the point of reading both
+        # through the same function - "false" is a string on the way in from
+        # JSON-RPC and would otherwise be true.
+        request[output.REPRODUCIBLE_KEY] = (
+            output.as_flag(request[output.REPRODUCIBLE_KEY])
+            if output.REPRODUCIBLE_KEY in request
+            else impl.reproducible
+        )
+
         request_serialized = shape_envelope.serialize(request)
 
         # Where this implementation runs. A container when it declared one --

@@ -1401,10 +1401,12 @@ jobs:
       # short: every entry is a file nobody is watching any more. An entry needs
       # a reason here, and the package it belongs to has to carry the same
       # reason where a reader of that package will meet it. Nothing PartCAD
-      # implements itself is on it: the built-in DXF renderer suppresses the
-      # timestamp and GUIDs a DXF is otherwise stamped with, and pins the order
-      # of its CLASSES section, under the 'reproducible' parameter of the 'dxf'
-      # file type.
+      # implements itself is on it, and what earns that is the 'reproducible'
+      # flag every example under 'examples/' sets on every file type it renders:
+      # the exact hidden-line projection rather than the polygonal one, every
+      # number rounded to the precision the file type claims, and fixed values
+      # for the timestamp, the GUIDs and the order of the CLASSES section that a
+      # DXF is otherwise stamped with on every save.
       #
       # The interpreter named here has to be one PYTHONS_SANDBOX lists, because
       # that is this job's matrix. It named '3.10' until PYTHONS_SANDBOX was
@@ -1416,11 +1418,22 @@ jobs:
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-          # draftwright emits two faces of one glyph in an order that follows
-          # the process's hash seed - which a wrapper running under '-I' cannot
-          # pin - and stamps the PDF with the time it was written. Neither is
-          # settable through anything it takes; see 'render:' in the example's
-          # partcad.yaml.
+          # draftwright's PDF used to be here and is not any more. It stamped
+          # the file with the time it was written, which 'reproducible: true' on
+          # that file type now settles: the implementation passes the flag to
+          # draftwright's own 'reproducible=', and the file this repository
+          # carries was reproduced byte for byte on a second platform.
+          #
+          # Its SVG stays, for what is left after the reason it was put here.
+          # That reason - two faces of one glyph emitted in an order that
+          # followed the process's hash seed - is settled by the same flag. What
+          # is not is that draftwright writes the x-axis rotation of an
+          # elliptical arc at whatever the float came out as, and two
+          # architectures disagree about it in the last bit: an arc rotated by
+          # -7.8e-16 degrees against one rotated by 0. The same drawing, and a
+          # different file. PartCAD rounds its own drawings to the precision the
+          # file type claims, which is what makes them comparable; these bytes
+          # are draftwright's and that pass never sees them.
           #
           # The four raster projections below drift for a different reason: the
           # bytes are not PartCAD's. '//builtin/render' projects the shape to
@@ -1428,11 +1441,12 @@ jobs:
           # them is listed here - then hands the SVG to svglib, reportlab's
           # renderPM and Pillow to rasterize. That stack is resolved into the
           # sandbox at provisioning time, so a new release of any of it moves
-          # the encoded bytes by a few tens without changing the picture. See
-          # 'render:' in the example's partcad.yaml.
+          # the encoded bytes by a few tens without changing the picture.
+          # 'reproducible: true' on those two file types settles the projection
+          # they are drawn from and cannot settle the encoding. See 'render:' in
+          # the example's partcad.yaml.
           UNSTABLE=(
             ':(exclude)examples/feature_render_custom/bracket.svg'
-            ':(exclude)examples/feature_render_custom/bracket.pdf'
             ':(exclude)examples/feature_render/images/cube.png'
             ':(exclude)examples/feature_render/images/cube.jpg'
             ':(exclude)examples/feature_render/images/cylinder.png'

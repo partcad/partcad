@@ -10,6 +10,7 @@ import 'process()' from here rather than duplicating the projection.
 """
 
 import os
+import re
 import sys
 
 # Pinned before the CAD imports below, which load OCP and with it VTK's
@@ -355,10 +356,11 @@ def _interface_shapes(request):
 
 
 # How finely a shape is triangulated before it is projected, as a fraction of
-# its own size. The projection is of the triangulation, so this is what decides
-# how smooth a curved silhouette comes out; 1/2000 of the object puts the error
-# well under one pixel of a 512-pixel drawing, which is as true as a picture
-# can be.
+# its own size. The polygonal projection is of the triangulation, so this is
+# what decides how smooth a curved silhouette comes out there; 1/2000 of the
+# object puts the error well under one pixel of a 512-pixel drawing, which is as
+# true as a picture can be. The exact projection never reads it: it works from
+# the surfaces, which is what makes it the reproducible one.
 MESH_DEFLECTION = 5e-4
 
 # The floor under it, in millimetres, so that a part measured in microns is not
@@ -389,26 +391,62 @@ def _deflection(shape):
     return max(size * MESH_DEFLECTION, MIN_MESH_DEFLECTION)
 
 
-def project(shape, origin, up, look_at):
-    """The visible edges of 'shape' seen from 'origin', as build123d edges.
+def _project_exact(shape, origin, up, look_at):
+    """The visible edges, through OCCT's exact hidden-line algorithm.
 
-    This is 'Shape.project_to_viewport' with the polygonal hidden-line
-    algorithm in place of the exact one. build123d's method uses
-    'HLRBRep_Algo', and every released OCCT has an out-of-bounds read in the
-    rejection table that algorithm sorts its edge crossings in
-    ('TableauRejection::Set' tests the row index after dereferencing it, so a
-    row whose sentinel has just been used up is read one element past its
-    allocation). It is a real fault on every projection; whether it reaches
-    unmapped memory and takes the process down with SIGSEGV depends on where
-    the row happened to land, which makes it a coin flip on a model with enough
-    edges. It is fixed on OCCT master and in no release.
+    build123d's 'Shape.project_to_viewport', which is 'HLRBRep_Algo' underneath.
+    It works from the surfaces themselves, so what it draws is decided by the
+    B-rep and by the kernel's arithmetic on it - and by no intermediate
+    approximation of either, which is the whole of what 'reproducible' buys.
 
-    'HLRBRep_PolyAlgo' does not use that table at all. It also finishes a large
-    assembly in seconds rather than minutes, in a fraction of the memory,
-    because it works on the triangulation rather than the exact surfaces. What
-    it costs is that a curved silhouette is faceted rather than exact - which
-    'MESH_DEFLECTION' keeps below a pixel, and which is no cost at all for a
-    shape that was a mesh to begin with.
+    It is not the default, and the reason is not taste. Every released OCCT has
+    an out-of-bounds read in the rejection table this algorithm sorts its edge
+    crossings in - 'TableauRejection::Set' tests the row index after
+    dereferencing it, so a row whose sentinel has just been used up is read one
+    element past its allocation (Open-Cascade-SAS/OCCT#1546; fixed on master, in
+    no release). It is a real fault on every projection; whether it reaches
+    unmapped memory and takes the process down with SIGSEGV depends on where the
+    row happened to land, which makes it a coin flip on a model with enough
+    edges. A 732-part assembly crashed about half the time. It is also minutes
+    rather than seconds on such a model, and gigabytes rather than megabytes.
+
+    So this is what a caller gets when it has said that the bytes matter more
+    than that - a drawing kept in a repository, where a diff is the only thing
+    that answers whether the drawing changed.
+    """
+    # Every caller in this module hands over a build123d object, and the
+    # polygonal path beside this one takes either - it reaches for '.wrapped'
+    # only if there is one. Accepting both here too keeps 'project()' one
+    # function with one contract, rather than one whose argument type depends on
+    # a flag; the alternative is an 'AttributeError' a frame down, on the branch
+    # that is taken less often.
+    if not hasattr(shape, "project_to_viewport"):
+        carrier = b3d.Solid.make_box(1, 1, 1)
+        carrier.wrapped = shape
+        shape = carrier
+    return shape.project_to_viewport(
+        viewport_origin=origin,
+        viewport_up=up,
+        look_at=look_at,
+    )[0]
+
+
+def _project_polygonal(shape, origin, up, look_at):
+    """The visible edges, through OCCT's polygonal hidden-line algorithm.
+
+    'HLRBRep_PolyAlgo' does not use the rejection table '_project_exact'
+    describes at all, so it cannot walk off the end of it. It also finishes a
+    large assembly in seconds rather than minutes, in a fraction of the memory,
+    because it works on the triangulation rather than the exact surfaces.
+
+    Two things it costs. A curved silhouette is faceted rather than exact -
+    which 'MESH_DEFLECTION' keeps below a pixel, and which is no cost at all for
+    a shape that was a mesh to begin with. And the triangulation is floating
+    point all the way down: the same shape, meshed to the same deflection by the
+    same pinned kernel, comes out with a slightly different number of facets on
+    a different architecture, so two machines draw the same picture out of
+    different bytes. That second one is why this is not what a caller asking for
+    'reproducible' gets.
     """
     from OCP.BRepMesh import BRepMesh_IncrementalMesh
     from OCP.HLRBRep import HLRBRep_PolyAlgo, HLRBRep_PolyHLRToShape
@@ -442,7 +480,102 @@ def project(shape, origin, up, look_at):
     return edges
 
 
-def _add_projected(exporter, layer, shapes, origin, up, look_at):
+def project(shape, origin, up, look_at, reproducible=False):
+    """The visible edges of 'shape' seen from 'origin', as build123d edges.
+
+    Which of the two algorithms above draws them is the caller's to decide, and
+    it is the only thing 'reproducible' decides here: both are hidden-line
+    projections of the same shape from the same camera, and the picture is the
+    same picture either way. What differs is whether the bytes it is drawn out
+    of came from the surfaces or from a triangulation of them - see the two
+    functions, which say what each one costs.
+
+    Before this was a parameter it was a decision made once for everybody, and
+    made the wrong way round twice: through the exact algorithm it crashed on
+    large assemblies, and through the polygonal one every checked-in drawing in
+    the repository became a drawing the machine that rendered it agreed with and
+    no other machine did.
+    """
+    if reproducible:
+        return _project_exact(shape, origin, up, look_at)
+    return _project_polygonal(shape, origin, up, look_at)
+
+
+# Every number an SVG can hold, as one is written: an optional sign, digits, an
+# optional fraction, an optional exponent. Matched over the whole file rather
+# than per attribute because they are not all in attributes -- the arc flags and
+# the coordinates of a path are inside 'd', and the drawing's own size is a
+# number with 'mm' stuck to it.
+_NUMBER = re.compile(r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
+
+
+def _canonical_number(text, precision):
+    """One number, written to 'precision' decimal places and no further.
+
+    Integers are left exactly as they are. Every one of them in this file is a
+    count or a name rather than a measurement - the channels of 'rgb(64,192,64)',
+    the '1' and '-1' of the flip transform, the arc flags, the '2000' in the SVG
+    namespace URL - and turning those into '64.0' would be rewriting something
+    that was never a coordinate.
+    """
+    if "." not in text and "e" not in text and "E" not in text:
+        return text
+    value = round(float(text), precision)
+    if value == 0:
+        # Including negative zero, which is the single commonest disagreement
+        # between two machines drawing the same picture: a coordinate that is
+        # zero either way, written '0.0' on one and '-0.0' on the other.
+        value = 0.0
+    formatted = "%.*f" % (precision, value)
+    if "." in formatted:
+        formatted = formatted.rstrip("0")
+        if formatted.endswith("."):
+            formatted += "0"
+    return formatted
+
+
+def _normalize(path, precision):
+    """Round every number in the drawing to the precision it claims to have.
+
+    'precision' is already what the coordinates of a path are written to, but it
+    is not what everything else is: the width of a stroke, the size of the
+    sheet, and the x-axis rotation of an elliptical arc all go in at whatever
+    the float happened to be. Below the tenth decimal place those are not
+    measurements of anything - they are the last bit of an arithmetic that two
+    machines are not obliged to agree on - and left alone they are what makes a
+    drawing differ from itself on another machine.
+
+    Three measured examples, this repository's own drawings rendered on macOS
+    against the Linux runner that checks them:
+
+        stroke-width="0.0318943976924893"   vs "0.03189439769248931"
+        <line x1="0.0" ...                  vs x1="-0.0"
+        A 10.0,5.5761890734 0.0 0,1 ...     vs A 10.0,5.5761890734 5.66e-16 ...
+
+    The last of those is an ellipse rotated by half a femtodegree, which is the
+    same ellipse. None of the three is visible at any zoom, and all three are a
+    diff every time the drawing is produced somewhere new - which is exactly
+    what 'reproducible' is asked for to stop.
+
+    Done to the text rather than to the geometry on purpose. What is being
+    settled is how a number is *written*, the drawing is finished by the time
+    this runs, and the alternative is reaching into how build123d and ocpsvg
+    format each kind of value.
+
+    It settles how a number is written and not what the number is. Two machines
+    that disagree about a transcendental function in the last bit can still find
+    one intersection more than each other along a curved silhouette, and that is
+    a different drawing rather than a differently written one. See
+    'output.REPRODUCIBLE_KEY' - this is a floor, not a promise.
+    """
+    with open(path, "r", encoding="utf-8", newline="") as handle:
+        text = handle.read()
+    text = _NUMBER.sub(lambda match: _canonical_number(match.group(0), precision), text)
+    with open(path, "w", encoding="utf-8", newline="") as handle:
+        handle.write(text)
+
+
+def _add_projected(exporter, layer, shapes, origin, up, look_at, reproducible=False):
     """Project 'shapes' the way the object itself was projected, and draw them.
 
     The same three viewing parameters, so that what is drawn on top of the
@@ -454,6 +587,11 @@ def _add_projected(exporter, layer, shapes, origin, up, look_at):
     'shapes' mixes build123d edges built here with the raw OCCT shapes the port
     boundaries arrive as, so they are compounded through OCCT rather than
     through 'Compound(children=...)', which takes only the former.
+
+    Projected through the same algorithm as the object, too, and not only for
+    tidiness: an overlay drawn through the other one would be the one part of
+    the drawing that moved when nothing changed, in a file asked for because
+    nothing in it may move.
     """
     if not shapes:
         return
@@ -462,7 +600,7 @@ def _add_projected(exporter, layer, shapes, origin, up, look_at):
         compound.wrapped = ocp_serialize.compound_of(
             shape.wrapped if hasattr(shape, "wrapped") else shape for shape in shapes
         )
-        exporter.add_shape(project(compound, origin, up, look_at), layer=layer)
+        exporter.add_shape(project(compound, origin, up, look_at, reproducible), layer=layer)
     except Exception as e:
         wrapper_common.handle_exception(e)
 
@@ -483,7 +621,13 @@ def process(path, request):
         # it - so anything projected separately and drawn on top has to be given
         # the same one or it lands somewhere else on the page.
         look_at = b3d_obj.center().to_tuple()
-        visible = project(b3d_obj, origin, up, look_at)
+        # Whether this drawing has to come out the same every time it is drawn.
+        # Always present in the request - PartCAD puts it there whether or not
+        # the file type declared it - but defaulted here all the same, because
+        # this module is also imported and called directly by the other
+        # renderers and by drawings other packages declare against it.
+        reproducible = bool(request.get("reproducible", False))
+        visible = project(b3d_obj, origin, up, look_at, reproducible)
         max_dimension = max(*b3d.Compound(children=visible).bounding_box().size)
         if max_dimension == 0:
             max_dimension = 4
@@ -521,7 +665,7 @@ def process(path, request):
                 line_weight=line_weight,
                 line_type=b3d.LineType.ISO_DASH,
             )
-            _add_projected(exporter, "Annotations", edges, origin, up, look_at)
+            _add_projected(exporter, "Annotations", edges, origin, up, look_at, reproducible)
 
         # The ports and the interfaces, when they were asked for. Drawing them
         # cannot cost the picture: an overlay that fails is reported and the
@@ -536,11 +680,13 @@ def process(path, request):
                     if not layer_shapes:
                         continue
                     exporter.add_layer(layer, line_color=color, line_weight=line_weight)
-                    _add_projected(exporter, layer, layer_shapes, origin, up, look_at)
+                    _add_projected(exporter, layer, layer_shapes, origin, up, look_at, reproducible)
             except Exception as e:
                 wrapper_common.handle_exception(e)
 
         exporter.write(path)
+        if reproducible:
+            _normalize(path, precision(request))
 
         return {"success": True, "exception": None}
     except Exception as e:

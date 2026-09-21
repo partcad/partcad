@@ -2,10 +2,10 @@
 <svg width="513.0mm" height="513.0mm" viewBox="-2.5048828125 -2.5048828125 5.009765625 5.009765625" version="1.1" xmlns="http://www.w3.org/2000/svg">
   <g transform="scale(1,-1)" stroke-linecap="round">
     <g fill="none" stroke="rgb(64,192,64)" stroke-width="0.009765625" id="Visible">
-      <line x1="-2.5" y1="2.5" x2="2.5" y2="2.5" />
-      <line x1="-2.5" y1="-2.5" x2="-2.5" y2="2.5" />
-      <line x1="2.5" y1="-2.5" x2="-2.5" y2="-2.5" />
       <line x1="2.5" y1="2.5" x2="2.5" y2="-2.5" />
+      <line x1="2.5" y1="-2.5" x2="-2.5" y2="-2.5" />
+      <line x1="-2.5" y1="-2.5" x2="-2.5" y2="2.5" />
+      <line x1="-2.5" y1="2.5" x2="2.5" y2="2.5" />
     </g>
   </g>
 </svg>

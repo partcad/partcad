@@ -348,6 +348,89 @@ PROPERTIES_KEY = "properties"
 # placement is baked into the shape instead of staying readable as data.
 DECODE_KEY = "__decode__"
 
+# The request key that says whether this file has to come out the same every
+# time it is produced, from the same object.
+#
+# It is part of the protocol rather than one file type's parameter, and it is in
+# *every* request - export, render, analysis, route - whether or not anybody
+# declared it. An implementation that has nothing to decide reads it and ignores
+# it; one that does reads it without having to ask whether the key is there,
+# which is what makes 'reproducible' mean the same thing in a package PartCAD
+# has never heard of as it does in '//builtin/render'.
+#
+# Why it exists at all: some of what PartCAD writes is only reproducible if it
+# is asked for, and asking costs something.
+#
+#   - The SVG projection has two hidden-line algorithms behind it. The exact one
+#     works from the surfaces; the polygonal one works from a triangulation,
+#     which is floating point all the way down, so the same shape meshed to the
+#     same deflection comes out with a slightly different silhouette on a
+#     different architecture. The polygonal one is also the
+#     only one that does not walk off the end of an OCCT allocation, and it is
+#     minutes faster on a large assembly - so it is what a render gets unless
+#     the caller says the bytes matter more than that (see
+#     'builtin/render/render_svg.py', which spells the trade out in full).
+#   - A DXF is stamped with the wall clock and a fresh pair of GUIDs on every
+#     save, and a drawing that differs from the last one only in when it was
+#     written is a drawing nothing can be compared against.
+#
+# 'False' is the default, and deliberately: a render is normally produced to be
+# looked at, and the fastest correct picture is the right one to hand back. A
+# drawing that is *kept* - checked into a repository next to the model, so that
+# 'git diff' answers whether it changed - is the case that has to say so, and
+# every image under 'examples/' does.
+#
+# It is a floor rather than a promise, and worth saying so where the word is
+# defined: what it removes is everything PartCAD chooses - which algorithm, how
+# a number is written, the clock, the GUIDs, the iteration order of a set. What
+# is left is the CAD kernel's own arithmetic, and two machines that disagree
+# about a transcendental function in the last bit can still find one
+# intersection more than each other along a curved silhouette. So two renders on
+# one machine are the same file, and two machines agree on everything but the
+# hardest subjects.
+#
+# Not to be confused with the other 'reproducible' in this package, which is
+# about whether an *object* can be made twice: 'file_factory.unreproducible_reason()'
+# asks whether what a part is built from is pinned, and 'pc test' fails a part
+# that is not. That one is a property of a declaration; this one is a property of
+# a file somebody wrote.
+#
+# Declared on a file type as an ordinary field, so a package writes
+#
+#     render:
+#       svg:
+#         reproducible: true
+#
+# and so does a shape overriding its package. It is not one of RESERVED_KEYS
+# precisely because implementations are meant to see it.
+REPRODUCIBLE_KEY = "reproducible"
+
+
+def as_flag(value, name: str = REPRODUCIBLE_KEY) -> bool:
+    """One of the protocol's boolean fields, however it was written.
+
+    YAML gives back a real bool, and that is what a 'partcad.yaml' produces. The
+    other clients are not YAML: the CLI and the JSON-RPC callers hand values
+    through as they parsed them, and a 'reproducible' that arrived as the string
+    "false" would otherwise be true - which is the silent kind of wrong, since
+    what it turns off is a guarantee nobody checks until the bytes move.
+
+    Anything that is not a boolean, a boolean's name, or nothing at all is a
+    caller saying something this cannot act on, so it says so rather than
+    guessing.
+    """
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in ("true", "yes", "on", "1"):
+            return True
+        if text in ("false", "no", "off", "0", ""):
+            return False
+    raise ValueError("'%s' must be true or false, got: %r" % (name, value))
+
 
 class Implementation:
     """Who writes a file of a given type, and with what.
@@ -367,6 +450,21 @@ class Implementation:
         # implementation. Off for one that needs the assembly tree's structure
         # rather than the compound it decodes to.
         self.decode = config.get("decode", True) is not False
+
+    @property
+    def reproducible(self) -> bool:
+        """Whether this file type was asked for byte-for-byte reproducibly.
+
+        Read from the layered configuration rather than from the implementing
+        package alone, unlike 'python_version()' and the rest: this is not a
+        statement about what the script needs to run but about what the caller
+        wants out of it, and the caller is exactly who gets to say. A package
+        that keeps its drawings in the repository sets it on the file type; a
+        package that only looks at them leaves it alone.
+
+        See REPRODUCIBLE_KEY for what it costs and why 'False' is the default.
+        """
+        return as_flag(self.config.get(REPRODUCIBLE_KEY))
 
     @property
     def reserved(self) -> frozenset:

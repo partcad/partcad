@@ -388,11 +388,22 @@ diff someone has to look at rather than something a reader of the README discove
 projection or a generated document, re-render and commit the result. The `example-images` `pre-commit` hook
 catches the cheap half of this instantly (a README pointing at an image that is not checked in); the
 `Examples (PartCAD)` job in `test.yml` renders everything and fails if the tree changed, on one cell of the
-matrix because what is checked in is one rendering. Every output type PartCAD implements is byte-stable, DXF
-included: the built-in DXF renderer suppresses the timestamp and GUIDs a DXF is otherwise stamped with and
-pins the order of its `CLASSES` section, under the `reproducible` parameter of the `dxf` file type (on by
-default). An implementation another package supplies may not be, and those files are named one by one in that
-job's `UNSTABLE` list — keep it short, and give every entry a reason there and in the package it belongs to.
+matrix because what is checked in is one rendering.
+
+**Every drawing under `examples/` is rendered with `reproducible: true`, and a new one has to say so too.**
+That is the flag every `render:` and `export:` file type takes, `false` by default, and it is what makes a
+checked-in drawing a baseline rather than a diff every time: the SVG projection goes through OpenCASCADE's
+exact hidden-line algorithm instead of the polygonal one (the polygonal one projects a triangulation, which
+differs between architectures), every number is rounded to the `precision` the file type claims, and a DXF
+gets fixed header metadata instead of the clock and a fresh pair of GUIDs. It is off by default because the
+exact projection is the slower of the two and is the one that can walk off the end of an OCCT allocation — a
+picture produced only to be looked at should be the fastest correct one. See `examples/partcad.yaml`, which
+says all of this once for the tree, and `output.REPRODUCIBLE_KEY`.
+
+It is a floor and not a promise: it settles everything PartCAD chooses, and what is left is the CAD kernel's
+arithmetic, on which two architectures can still disagree along a curved silhouette. An implementation
+another package supplies may not be reproducible at all, and those files are named one by one in that job's
+`UNSTABLE` list — keep it short, and give every entry a reason there and in the package it belongs to.
 
 **Coverage is merged in the repository, not by a service.** Codecov is gone: every suite uploads its raw
 `.coverage` data as a `coverage-data-*` artifact, and the `Coverage` job in `test.yml` runs

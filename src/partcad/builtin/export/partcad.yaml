@@ -16,6 +16,23 @@
 #                              depends on `cadquery-ocp-novtk`, which overwrites
 #                              the very same OCP native module with a VTK-less
 #                              build (see `sandbox_versions.py`).
+#   - `reproducible`        -- whether the file has to come out byte-for-byte
+#                              the same every time it is written, from the same
+#                              object. It is declared on every
+#                              file type below, `false`, and it is in every
+#                              request whether declared or not: it is a field of
+#                              the protocol rather than one format's parameter,
+#                              so that it means the same thing in a package
+#                              PartCAD has never heard of. See
+#                              `output.REPRODUCIBLE_KEY`.
+#
+#                              None of the exporters below writes different
+#                              bytes for it *yet*, and it is declared here all
+#                              the same. A format that carries the wall clock -
+#                              STEP's and IGES's header timestamp, the archive
+#                              members of a 3MF - is where it will earn its
+#                              keep, and an implementation that starts reading
+#                              it should not also have to start receiving it.
 #   - anything else         -- an export parameter, passed to the wrapper script
 #                              as part of its `request`. The values here are the
 #                              defaults; a package, a shape, or a command-line
@@ -47,6 +64,11 @@ export:
       - cadquery-ocp==7.9.3.1.1
     write_pcurves: true
     precision_mode: 0
+    # See the header of this file. Declared so that it is stated rather than
+    # implied; this exporter writes the same bytes either way. A STEP header
+    # carries the moment the file was written, so this is the first place the
+    # flag would mean something.
+    reproducible: false
     # 'comment' has no default: without one the STEP header is left exactly as
     # OpenCASCADE wrote it. Set it to have the text placed in the file's
     # FILE_DESCRIPTION header entity.
@@ -58,6 +80,9 @@ export:
     extension: brep
     pythonRequirements:
       - cadquery-ocp==7.9.3.1.1
+    # See the header of this file. Declared so that it is stated rather than
+    # implied; this exporter writes the same bytes either way.
+    reproducible: false
 
   stl:
     desc: Triangle mesh, the 3D printing lingua franca.
@@ -68,6 +93,9 @@ export:
     tolerance: 0.1
     angularTolerance: 0.1
     ascii: false
+    # See the header of this file. Declared so that it is stated rather than
+    # implied; this exporter writes the same bytes either way.
+    reproducible: false
 
   3mf:
     desc: 3D Manufacturing Format.
@@ -78,6 +106,9 @@ export:
       - cadquery==2.8.0
     tolerance: 0.1
     angularTolerance: 0.1
+    # See the header of this file. Declared so that it is stated rather than
+    # implied; this exporter writes the same bytes either way.
+    reproducible: false
 
   obj:
     desc: Wavefront OBJ mesh.
@@ -87,6 +118,9 @@ export:
       - cadquery-ocp==7.9.3.1.1
     tolerance: 0.1
     angularTolerance: 0.1
+    # See the header of this file. Declared so that it is stated rather than
+    # implied; this exporter writes the same bytes either way.
+    reproducible: false
 
   gltf:
     desc: glTF 2.0 (written as '.json' unless 'binary' is set).
@@ -98,6 +132,9 @@ export:
     tolerance: 0.1
     angularTolerance: 0.1
     binary: false
+    # See the header of this file. Declared so that it is stated rather than
+    # implied; this exporter writes the same bytes either way.
+    reproducible: false
 
   iges:
     desc: Initial Graphics Exchange Specification.
@@ -107,6 +144,10 @@ export:
       - cadquery-ocp==7.9.3.1.1
     write_pcurves: true
     precision_mode: 0
+    # See the header of this file. Declared so that it is stated rather than
+    # implied; this exporter writes the same bytes either way. An IGES header
+    # carries the moment the file was written, as a STEP one does.
+    reproducible: false
 
   threejs:
     desc: The three.js JSON geometry format.
@@ -116,6 +157,9 @@ export:
       - cadquery-ocp==7.9.3.1.1
     tolerance: 0.1
     angularTolerance: 0.1
+    # See the header of this file. Declared so that it is stated rather than
+    # implied; this exporter writes the same bytes either way.
+    reproducible: false
 
   urdf:
     desc: |
@@ -156,3 +200,6 @@ export:
     # the index that looks one up by name, which costs a walk of the tree that
     # is already in hand. See 'wrappers/wrapper_export.properties_index()'.
     properties: true
+    # See the header of this file. Declared so that it is stated rather than
+    # implied; this exporter writes the same bytes either way.
+    reproducible: false

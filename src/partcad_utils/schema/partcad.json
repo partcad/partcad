@@ -350,6 +350,11 @@
               "default": true,
               "description": "Whether the shape and assembly envelopes are rebuilt into live CAD geometry before the implementation sees them. Set to false by an implementation that needs the assembly tree's structure rather than the single compound it decodes to (the built-in URDF exporter is the one that does)"
             },
+            "reproducible": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether this file has to come out byte-for-byte the same every time it is written from the same object. Set to true for a drawing that is kept in a repository, so that a diff answers whether it changed: the built-in 2D projections then go through OpenCASCADE's exact hidden-line algorithm rather than the polygonal one, every number is rounded to the precision the file type claims, and a DXF gets fixed header metadata instead of the clock and a fresh pair of GUIDs. Off by default because the exact projection is much the slower of the two on a large assembly. Unlike the other fields here it is also handed to the implementation, so an implementation another package supplies reads it and means the same thing by it"
+            },
             "extension": { "type": "string", "minLength": 1 },
             "prefix": { "type": "string", "minLength": 1 },
             "output_dir": { "type": "string", "minLength": 1 },

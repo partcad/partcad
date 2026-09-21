@@ -702,21 +702,51 @@ regenerated ``README.md`` is a tracked file and stages itself with ``git add
 tree changed at all; that check runs on one cell of the matrix, because what is
 checked in is one rendering.
 
-Everything PartCAD implements itself can be a baseline, including the DXF --
-which a CAD tool would otherwise stamp with the time it was written and a fresh
-pair of GUIDs. The built-in DXF renderer writes fixed values for those instead,
-and pins the order of the ``CLASSES`` section, which ezdxf otherwise derives
-from a ``set`` and so emits differently per process. That is the
-``reproducible`` parameter of the ``dxf`` file type, on by default; a drawing
-that has to record when it was really written sets ``reproducible: false``, and
-stops being diffable.
+Everything PartCAD implements itself can be a baseline, and what asks for one is
+``reproducible: true`` on the file type -- the flag every ``export:`` and
+``render:`` file type takes (see :ref:`reproducible`). Every drawing under
+``examples/`` sets it, and a new example has to set it too, or what it checks in
+is a file that differs from itself on the next run.
+
+It buys three things. The SVG projection goes through OpenCASCADE's exact
+hidden-line algorithm rather than the polygonal one, which projects a
+triangulation and so draws a slightly different silhouette on a different
+architecture. Every number written into the drawing is rounded to the
+``precision`` the file type claims, which is what stops a stroke width that
+differs in its sixteenth digit from being a diff. And a DXF -- which a CAD tool
+would otherwise stamp with the time it was written and a fresh pair of GUIDs --
+gets fixed values for those and a pinned order for its ``CLASSES`` section,
+which ezdxf otherwise derives from a ``set`` and so emits differently per
+process.
+
+It is ``false`` by default, because the exact projection is much the slower of
+the two on anything large and is the one that can take the sandbox down; a
+picture produced only to be looked at should be the fastest correct one. And it
+is a floor rather than a promise -- it settles everything PartCAD chooses, and
+what is left is the kernel's own arithmetic, on which two architectures can
+still disagree along a curved silhouette. That is the other reason this check
+runs on one cell of the matrix.
 
 An implementation another package supplies is not PartCAD's to fix, and one of
 them may well write a different file every time. Those files are named in the
 CI check's ``UNSTABLE`` list, which is deliberately short: every entry is a file
 nobody is watching any more, so it needs a reason there and the same reason
-where a reader of that package will meet it. See ``examples/feature_render_custom``,
-whose SVG and PDF are the only entries today.
+where a reader of that package will meet it.
+
+Four of the five entries today are the raster projections of
+``examples/feature_render``, and what they drift on is the encoding rather than
+the picture: PartCAD's own SVG goes into svglib, reportlab and Pillow, and that
+stack is resolved into the sandbox when it is provisioned. ``reproducible``
+settles the projection they are drawn from and cannot settle what a new release
+of an encoder does with it.
+
+The fifth is ``examples/feature_render_custom/bracket.svg``. Its PDF sibling was
+there too and came off once the implementation started passing ``reproducible``
+through to draftwright's own flag of the same name; the SVG is still there
+because draftwright writes the x-axis rotation of an elliptical arc at whatever
+the float came out as, and two architectures disagree about it in the last bit.
+PartCAD rounds its own drawings to the precision the file type claims, which is
+what makes those comparable -- those bytes are not PartCAD's.
 
 Coverage
 ^^^^^^^^
