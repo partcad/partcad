@@ -77,13 +77,21 @@ connects through them: the rear foot hangs from the strut and bears on the
 flange. The cap is seated on the two front feet that touch, by name, which
 leaves the other pair 0.751923 mm clear - where a fitter puts a shim.
 
+### What the file never said
+
+`AeroAssembly.step` is AP214: no material, no tolerance, no stock. Those are
+supplied below, and the method is read off each solid. Seven are
+`subtractive`, each cut from a billet `stock.py` derives from the solid it
+holds; `AeroFrame_Cap` is `forming`, because milling a bent 3 mm strip
+throws away 97.2% of its block. The measurements are in the YAML.
+
 ### What makes the third one manufacturable
 
 `manufacturable: true` is a set of checks rather than a label:
 `connectivity`, `interference` as a failure instead of a note, `connect`,
-and `manufacturability`. The last is why the eight parts carry
-`manufacturing: {method: subtractive}`, a `tolerance:` their STEP files
-never stated, and a shop to cut them. And it earns a document:
+and `manufacturability`. The last is why the section above exists - a
+method, a stock, a material, a tolerance and a shop that will take the job.
+And it earns a document:
 
 ```shell
 pc render -t pdf -a AeroAssembly_assy_example/AeroAssembly_connected
@@ -112,7 +120,14 @@ pc render -t svg --with-all AeroAssembly_assy_example/AeroFrame_Plate
 # the assembly instructions, which only stage 3 has
 pc render -t pdf -a AeroAssembly_assy_example/AeroAssembly_connected
 
-# who cuts the eight milled parts, and for how much
+# the billet a part is cut out of, and the part beside it
+pc inspect AeroAssembly_assy_example/AeroFrame_Plate_stock
+pc inspect AeroAssembly_assy_example/AeroFrame_Plate
+
+# that this part is what is left of the stock it names
+pc test -f manufacturability AeroAssembly_assy_example/AeroFrame_Plate
+
+# who makes the eight parts, and for how much
 pc supply quote AeroAssembly_assy_example/AeroFrame_Plate#1
 ```
 
