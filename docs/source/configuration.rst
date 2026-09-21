@@ -1073,11 +1073,13 @@ Here is how it will get visualized:
 The same two things are drawn on a rendered projection by
 ``pc render --with-ports`` and ``--with-interfaces`` (``--with-all`` for both):
 a marker and a name at each port, and each interface instance named once with a
-line out to every port that belongs to it, over the port boundaries above. On an
-assembly or a :ref:`scene <scenes>` they walk everything inside it and place
-each child's ports where it put the child, which is how a connection that did
-not come out as intended is found. See :doc:`cli`, and `Drawing the ports and
-the interfaces`_ for asking a package to keep such a drawing checked in.
+line out to every port that belongs to it, over the port boundaries above. An
+assembly or a :ref:`scene <scenes>` is taken at its word -- what is drawn is
+what it says its ports are (see :ref:`assembly-ports`) -- and
+``--with-internals`` draws what is inside one anyway, each child's ports placed
+where the assembly put the child, which is how a connection that did not come
+out as intended is found. See :doc:`cli`, and `Drawing the ports and the
+interfaces`_ for asking a package to keep such a drawing checked in.
 
 Port matching
 -------------
@@ -2590,6 +2592,20 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
         holdForceMax: <(optional) most force to hold this assembly with, in N, default: 7>
         holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
 
+      # The ports and interfaces of the things inside it that this assembly
+      # presents as its own. See "Ports and interfaces of an assembly" below.
+      map: # (optional)
+        <new port name>: [<node>, <port of that node>]
+        <new instance name>: [<node>, <interface that node implements>, <instance of it>]
+
+      # Declared the way a part declares them, for what the map cannot say.
+      implements: # (optional) the list of interfaces to implement
+        <interface name>:
+          <instance name>: <OCCT Location object>
+          <other instance>: { port: <a port of this assembly> }
+      ports: # (optional) the list of ports in addition to the inherited ones
+        <port name>: <OCCT Location object>
+
 The ``assy`` type is used to define assemblies in `Assembly YAML` format, and
 the ``step`` type reads the structure out of a STEP file (see :ref:`assembly_step`).
 The ``urdf`` type reads a robot description as an assembly directly
@@ -2602,6 +2618,122 @@ The source file does not have to be a part of the package: ``fileFrom`` and
 ``fileUrl`` pull it from a remote location on first use, exactly as they do for
 :ref:`parts` (see :ref:`files`). This holds for every assembly type -- a vendor's
 STEP assembly is declared with its URL and read from there.
+
+.. _assembly-ports:
+
+Ports and interfaces of an assembly
+-----------------------------------
+
+An assembly is connected to other things the way a part is: by its ports, and by
+the interfaces those ports belong to (see :ref:`interfaces`). What it does not
+have is a part's way of getting them. A part is one solid and says where its
+ports are on it; an assembly is made of parts that already carry ports, already
+placed -- and an assembly's port is one of those, seen from outside.
+
+So an assembly does not state a coordinate somebody worked out by hand. It says
+which one it means:
+
+.. code-block:: yaml
+
+  assemblies:
+    motor-mount:
+      type: assy
+      map:
+        # a port of a node, under a name of this assembly's choosing
+        output: [bracket, TR-thru-3-opening-m3]
+        # an instance of an interface a node implements, under a new instance
+        # name; the interface itself is what it is
+        mount: [bracket, nema-17-motor-bracket-3, outer]
+
+The key is the new name. The value names what is being externalized: two
+elements are **a node and one of its ports**, three are **a node, an interface it
+implements and the instance of it**. Nothing else changes as a result: a mapped
+port is a port of this assembly like any other, and a mapped interface instance
+brings in exactly what an ``implements:`` of the same interface would have --
+the same port names (``mount-3mm-thru-opening-m3``), the same freedom of
+movement, and the same ancestors, so an assembly that externalizes an
+``m4-thru-3`` can be connected as an ``m4-thru`` like anything else.
+
+What the map does **not** do is rename an interface. The interface is read off
+the node and kept: it is a contract, and an assembly is in no position to
+restate one. The *instance* name is the assembly's to choose, because an
+instance is a place rather than a kind -- the bracket calls it ``outer``, and the
+mount it is part of calls it ``mount``.
+
+Which nodes can be named
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+The first element is the **node name from the Assembly YAML file** -- a link's
+``name:``, or the part or assembly name where the link has none (see
+:doc:`assy`) -- and not the name of the part. An assembly places the same part
+six times; five of those are not the one being externalized.
+
+The anonymous ``links:`` containers an ASSY file is built out of contribute
+nothing to the name: they are the file's own structure rather than things, so
+every node is named exactly as the file names it however deeply the file nests
+it. A node inside a *named* container is reached through it, with ``/``::
+
+  map:
+    left-foot: [frame/bracket, L-30mm-slotted-3mm-thru-opening-m4]
+
+A node name may be written in terms of the assembly's own parameters, the way
+``ports:`` and ``implements:`` may be -- ``map: {mount: ["%which%", handle]}`` --
+which is how an assembly parametrized by what it holds externalizes the right
+one.
+
+A sub-assembly that some package declares is a different matter: it is an object
+with a boundary of its own, and the map does not reach inside it. To reach a
+port in there, that sub-assembly externalizes it and this one maps *that*. A
+boundary is crossed one object at a time, which is what keeps an assembly free
+to be rearranged inside without breaking whatever connects to it.
+
+What a map cannot say
+^^^^^^^^^^^^^^^^^^^^^
+
+Some of an assembly's connections are not a port of anything inside it -- the
+face a fixture is clamped by, a datum the whole product is aligned to. Those are
+declared the way a part declares them, with ``ports:`` and ``implements:``,
+which an assembly takes in exactly the same spelling as :ref:`parts`.
+
+The two are read in order: the map first, then ``ports:``, then ``implements:``.
+So a declaration may refer to what the map produced -- an ``implements:``
+instance may sit at a mapped port instead of at a coordinate:
+
+.. code-block:: yaml
+
+  assemblies:
+    motor-mount:
+      type: assy
+      map:
+        output: [bracket, TR-thru-3-opening-m3]
+      implements:
+        my-mounting-face:
+          front: { port: output }   # where the map put it
+
+A ``ports:`` entry that uses a name the map already produced wins, and says so
+in the log: two things under one name is a mistake worth hearing about.
+
+The boundary
+^^^^^^^^^^^^
+
+What an assembly externalizes is what it *has*, everywhere: ``pc info`` lists
+those ports, the viewer marks them, ``pc render --with-ports`` draws them, a
+``connect:`` in an ASSY file reaches them, and ``pc search --interface`` finds
+the assembly by them. What is inside it and not externalized is its own
+business. An assembly that declares no ``map:``, no ``ports:`` and no
+``implements:`` therefore has no ports at all -- which is the answer to "what
+can I connect to this", not a failure. ``pc render --with-internals`` looks
+inside one anyway, for finding the connection that went wrong (see :doc:`cli`).
+
+Other assembly types
+^^^^^^^^^^^^^^^^^^^^
+
+``map:`` is written for ``assy``, where the node names are the ones somebody
+wrote in the file. It works for ``step`` and ``urdf`` assemblies as best it can
+-- the nodes are then the components or the links, named as the imported file
+names them, which is not something this package controls. Where that does not
+fit, those assemblies state their ports the way a part does, with ``ports:`` and
+``implements:``.
 
 .. _assembly-manufacturing:
 
@@ -4520,21 +4652,25 @@ the file type asks:
     svg:
       with_ports: true        # a marker and a name at every port
       with_interfaces: true   # every interface named, and joined to its ports
+      with_internals: true    # on an assembly, what is inside it as well
       port_marker_size: 0.1   # the length of a port's +Z arrow ...
       port_label_size: 0.035  # ... and the cap height of the names, as a
                               # fraction of the projection's largest dimension
 
-``pc render --with-ports``, ``--with-interfaces`` and ``--with-all`` ask for the
-same thing for one invocation (see :doc:`cli`); declaring it on a file type asks
-for it permanently, which is how a package keeps a drawing of its connections
-checked in beside the plain one. The two add up rather than override: a file
-type declared with ``with_ports: true`` draws them whether or not the option was
-given.
+``pc render --with-ports``, ``--with-interfaces``, ``--with-all`` and
+``--with-internals`` ask for the same things for one invocation (see
+:doc:`cli`); declaring them on a file type asks for them permanently, which is
+how a package keeps a drawing of its connections checked in beside the plain
+one. The two add up rather than override: a file type declared with
+``with_ports: true`` draws them whether or not the option was given.
 
 On an assembly -- or a :ref:`scene <scenes>`, which is built the same way --
-both walk everything inside it and place each child's ports where the assembly
-put the child, so a connection that went wrong is visible as two frames that
-should have met and did not.
+what is drawn is what the assembly says its ports are: the ones its ``map:``
+externalizes and the ones it declares (see :ref:`assembly-ports`). Hiding the
+rest is the point of externalizing anything. ``with_internals`` walks everything
+inside it as well and places each child's ports where the assembly put the
+child, so a connection that went wrong is visible as two frames that should have
+met and did not.
 
 The two flags reach every ``render:`` file type, this package's own and
 another's alike, along with the ports themselves; what an implementation makes

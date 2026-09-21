@@ -711,15 +711,22 @@ Object commands
   arrow along ``+Z`` — the direction a part travels along when it is connected through that port — and the
   name a ``connectPorts:`` would have to use written beside it. ``--with-interfaces`` names each *instance* of
   an interface once, draws a line from that name out to each port that belongs to it, and draws each port's
-  boundary sketch where the port is. ``--with-all`` draws both. On an assembly or a scene all three walk
-  everything inside it and place each child's ports where it put the child, which is how a connection that
-  went wrong is found: two frames that should have met and did not. Every port drawn is also listed in the
-  log, with the exact name to write in an Assembly YAML file.
+  boundary sketch where the port is. ``--with-all`` draws both. Every port drawn is also listed in the log,
+  with the exact name to write in an Assembly YAML file.
+
+  An assembly is taken at its word: what is drawn is what it says its ports are -- the ones its ``map:``
+  externalizes and the ones it declares (see :ref:`assembly-ports`) -- and not everything inside it. That is
+  the same boundary ``pc info`` and a ``connect:`` see, and an assembly that externalizes three ports of the
+  forty it contains means those three. ``--with-internals`` draws what is inside one anyway, each child's
+  ports placed where the assembly put the child, which is how a connection that went wrong is found: two
+  frames that should have met and did not. On its own it asks for nothing; it says how deep the three options
+  above reach.
 
   The options apply to whichever format is being written — the projection is the same one underneath ``svg``,
   ``png``, ``jpeg`` and ``dxf`` — and a package can ask for the same thing permanently, by declaring
-  ``with_ports:`` or ``with_interfaces:`` on a file type of its own (see :ref:`output-files`, and
-  ``examples/feature_interface``, which keeps four such drawings checked in). ``port_marker_size`` and
+  ``with_ports:``, ``with_interfaces:`` or ``with_internals:`` on a file type of its own (see
+  :ref:`output-files`, and ``examples/feature_interface``, which keeps four such drawings checked in).
+  ``port_marker_size`` and
   ``port_label_size`` set how big the markers and the names are, as a fraction of the projection's largest
   dimension.
 
@@ -846,3 +853,15 @@ Other commands
   Search for objects by keyword. Subcommands: ``all``, ``parts``, ``sketches``, ``assemblies``,
   ``scenes``, ``interfaces``, and ``packages``. ``-P`` names the package to search, the root package by
   default; ``-P <package>...`` searches the packages below it too (see :ref:`recursive-names`).
+
+  ``pc search parts`` and ``pc search assemblies`` also take ``-i``/``--interface``, which searches by what
+  an object *connects by* rather than by what its declaration says: ``pc search parts -i m4-thru`` finds
+  every part with a 4mm through hole, and finds the ones that implement ``m4-thru-3`` or any other interface
+  derived from it, because a part with a 3mm-thick 4mm through hole is a part with a 4mm through hole. An
+  abstract interface is therefore the most useful thing to search by -- it is the name a whole family is
+  known by. A bare name is the interface this package declares, and ``//package:name`` is any other.
+
+  The answer comes from the declarations -- ``implements:``, and an assembly's ``map:`` -- so nothing is
+  built and nothing is instantiated to produce it; the interfaces named in those declarations are resolved
+  once per package and kept for the rest of the run. ``--keyword`` and ``--interface`` may be given together,
+  and then both have to hold.

@@ -900,3 +900,69 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "0"
+
+  @success
+  Scenario: An assembly may externalize the ports of what it is made of
+    # 'map:', 'ports:' and 'implements:' on an assembly: what it presents to
+    # whatever connects to it. See "Ports and interfaces of an assembly".
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package whose assembly says what its ports are
+      interfaces:
+        m3-thru:
+          ports:
+            m3:
+      parts:
+        plate:
+          type: step
+          implements:
+            m3-thru:
+              TL: [[-10, 10, 0], [0, 0, 1], 0]
+          ports:
+            handle: [[0, 0, 5], [0, 0, 1], 0]
+      assemblies:
+        mount:
+          type: assy
+          map:
+            hold: [lower, handle]
+            top: [upper, m3-thru, TL]
+          implements:
+            m3-thru:
+              held:
+                port: hold
+          ports:
+            datum: [[0, 0, 0], [0, 0, 1], 0]
+      """
+    And a file named "plate.step" with content:
+      """
+      This is a STEP file for plate
+      """
+    And a file named "mount.assy" with content:
+      """
+      links:
+        - part: plate
+          name: lower
+        - part: plate
+          name: upper
+          location: [[0, 0, 20], [0, 0, 1], 0]
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+
+  @failure
+  Scenario: A map entry has to name a node and what of it to externalize
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package whose map says too much
+      assemblies:
+        mount:
+          type: assy
+          map:
+            hold: [lower, handle, TL, and-then-some]
+      """
+    And a file named "mount.assy" with content:
+      """
+      links:
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "1"

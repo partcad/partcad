@@ -28,13 +28,25 @@ from ...service import run
     "--keyword",
     help="Search and filter parts using the specified keyword",
     type=str,
-    required=True,
+)
+@click.option(
+    "-i",
+    "--interface",
+    "interface",
+    type=str,
+    help=(
+        "Search for the parts that implement this interface, or anything derived from it. "
+        "A bare name is the one this package declares; '//package:name' is any other"
+    ),
+    show_envvar=True,
 )
 @click.pass_obj
-def cli(cli_ctx, recursive: bool, package: str, keyword: str) -> None:
+def cli(cli_ctx, recursive: bool, package: str, keyword: str, interface: str) -> None:
+    if not keyword and not interface:
+        raise click.UsageError("Nothing to search for: pass --keyword, --interface, or both")
     run(
         cli_ctx,
         "search.objects",
-        {"kind": "parts", "package": package, "recursive": recursive, "keyword": keyword},
+        {"kind": "parts", "package": package, "recursive": recursive, "keyword": keyword, "interface": interface},
         needs_context=True,
     )

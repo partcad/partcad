@@ -719,6 +719,72 @@
       "type": "number",
       "minimum": 0
     },
+    "implements": {
+      "description": "The interfaces this object implements, and where each instance of each of them is. Declared by a part, a sketch and an assembly alike: an assembly whose 'map:' does not fit -- a fixture whose mounting face is a coordinate rather than a port of anything inside it -- states it the way a part does.",
+      "type": "object",
+      "patternProperties": {
+        "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "null" },
+            { "$ref": "#/definitions/OCCTLocation" },
+            {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_/.%-]+$": { "$ref": "#/definitions/OCCTLocation" }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_/./-]+$": {
+                  "type": "object",
+                  "properties": {
+                    "location": { "$ref": "#/definitions/OCCTLocation" },
+                    "port": {
+                      "description": "A port of this same object to place this instance at, instead of a location. The ports of an object are known before its 'implements:' is read, so this names one of its own 'ports:' or one its 'map:' externalized.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "params": { "type": "object", "properties": { "offset": { "type": "number" } } }
+                  },
+                  "anyOf": [{ "required": ["location"] }, { "required": ["port"] }],
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ports-section": {
+      "description": "The ports this object has in addition to the ones it inherits from the interfaces it implements.",
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/.%-]+$": { "$ref": "#/definitions/port" }
+      },
+      "additionalProperties": false
+    },
+    "port-map": {
+      "description": "What an assembly externalizes of the things it is made of. The key is the new name; the value names what it stands for: [node, port] externalizes a port of that node under that name, and [node, interface, instance] externalizes that instance of that interface under that instance name (the interface itself is read off the node -- an assembly is in no position to rename one). The node is the ASSY file's node name -- a link's 'name:', or the part/assembly name where the link has none -- and not the name of the part, since an assembly may place the same part six times. A node inside a named container is reached through it ('frame/bracket'); the anonymous 'links:' containers an ASSY file is built out of contribute nothing to the path, and a sub-assembly that a package declares is not descended into -- it externalizes its own ports and this assembly maps those.",
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/.%-]+$": {
+          "type": "array",
+          "items": [
+            { "type": "string", "minLength": 1, "description": "The ASSY node." },
+            { "type": "string", "minLength": 1, "description": "A port of that node, or an interface it implements." },
+            { "type": "string", "description": "The instance of that interface. The empty string is the unnamed one." }
+          ],
+          "minItems": 2,
+          "maxItems": 3
+        }
+      },
+      "additionalProperties": false
+    },
     "connect": {
       "description": "What this part or assembly contributes to every connection it takes part in. The defaults for the 'how' section of an ASSY 'connect*' node.",
       "type": "object",
@@ -1361,48 +1427,8 @@
                     }
                   ]
                 },
-                "implements": {
-                  "type": "object",
-                  "patternProperties": {
-                    "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": {
-                      "oneOf": [
-                        { "type": "string" },
-                        { "type": "null" },
-                        { "$ref": "#/definitions/OCCTLocation" },
-                        {
-                          "type": "object",
-                          "patternProperties": {
-                            "^[a-zA-Z0-9_/.%-]+$": { "$ref": "#/definitions/OCCTLocation" }
-                          },
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "patternProperties": {
-                            "^[a-zA-Z0-9_/./-]+$": {
-                              "type": "object",
-                              "properties": {
-                                "location": { "$ref": "#/definitions/OCCTLocation" },
-                                "params": { "type": "object", "properties": { "offset": { "type": "number" } } }
-                              },
-                              "required": ["location"],
-                              "additionalProperties": false
-                            }
-                          },
-                          "additionalProperties": false
-                        }
-                      ]
-                    }
-                  },
-                  "additionalProperties": false
-                },
-                "ports":{
-                  "type": "object",
-                  "patternProperties": {
-                    "^[a-zA-Z0-9_/.%-]+$": { "$ref": "#/definitions/port" }
-                  },
-                  "additionalProperties": false
-                },
+                "implements": { "$ref": "#/definitions/implements" },
+                "ports": { "$ref": "#/definitions/ports-section" },
                 "manufacturable": { "type": "boolean" },
                 "tolerance": {
                   "type": "number",
@@ -1528,6 +1554,9 @@
                 "manufacturable": { "type": "boolean" },
                 "unless": { "$ref": "#/definitions/unless" },
                 "connect": { "$ref": "#/definitions/connect" },
+                "map": { "$ref": "#/definitions/port-map" },
+                "implements": { "$ref": "#/definitions/implements" },
+                "ports": { "$ref": "#/definitions/ports-section" },
                 "properties": { "$ref": "#/definitions/shape-properties" },
                 "software": { "$ref": "#/definitions/software-refs" }
               },
