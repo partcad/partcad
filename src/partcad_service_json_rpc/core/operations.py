@@ -2112,6 +2112,28 @@ _LIST_LABELS = {
     "software": "PartCAD software",
 }
 
+# The kind each section holds one of, for the accessors that are keyed by kind.
+_LIST_KINDS = {
+    "materials": "material",
+    "parts": "part",
+    "sketches": "sketch",
+    "assemblies": "assembly",
+    "scenes": "scene",
+    "interfaces": "interface",
+    "software": "software",
+}
+
+# The one section a listing still reads the objects of.
+#
+# An interface's description is a property of the *instance* rather than of the
+# declaration: '//pub/std/metric/m' declares one interface whose description
+# reads "Abstract %size%mm circular interface", and each parametrized instance
+# of it substitutes its own size. There is nothing to substitute before the
+# instance exists, so a listing of interfaces reads what the package has made.
+# It costs nothing to: interfaces are created when the package loads, unlike
+# the kinds that are shapes (see 'Project.LAZY_OBJECT_KINDS').
+_LIST_FROM_OBJECTS = ("interfaces",)
+
 # The kinds whose recursive listing walks every package rather than only the
 # ones with geometry in them. A package of firmware images has nothing to render
 # and would be filtered out of the walk exactly as a package of interfaces is
@@ -2145,20 +2167,33 @@ def list_objects(session, params):
         else:
             packages = [package]
 
+        # One round trip for the tree rather than one per package. A local
+        # package has nothing to fetch and pays nothing; a plugin-backed one
+        # would otherwise be asked for its enumeration as the walk below
+        # reaches it, in turn, each wait end to end.
+        ctx.prefetch_object_configs(package, [_LIST_KINDS[kind]])
+
         output = _LIST_LABELS.get(kind, "PartCAD objects") + ":\n"
         for project_name in packages:
             project = ctx.projects[project_name]
-            # A snapshot, not the live dictionary: reading an object can
-            # resolve another one into the package - an interface declared as
-            # an alias takes its description from the interface it names - and
-            # that registers it, which is a dictionary changing size while it
-            # is being walked.
-            for name, obj in sorted(getattr(project, kind).items()):
+            if kind in _LIST_FROM_OBJECTS:
+                # A snapshot, not the live dictionary: reading an object can
+                # resolve another one into the package - an interface declared
+                # as an alias takes its description from the interface it names
+                # - and that registers it, which is a dictionary changing size
+                # while it is being walked.
+                rows = {name: obj.desc for name, obj in list(getattr(project, kind).items())}
+            else:
+                # From what the package declares, so that listing it does not
+                # build it: a recursive listing of a catalog used to run a
+                # factory per row (see 'Project.object_descriptions').
+                rows = project.object_descriptions(_LIST_KINDS[kind])
+            for name, desc in sorted(rows.items()):
                 line = "\t"
                 if recursive:
                     line += "%s" % project_name + " " + " " * (35 - len(project_name))
                 line += "%s" % name + " " + " " * (35 - len(name))
-                desc = obj.desc if obj.desc is not None else ""
+                desc = desc if desc is not None else ""
                 desc = desc.replace("\n", "\n" + " " * (84 if recursive else 44))
                 line += "%s" % desc
                 output += line + "\n"

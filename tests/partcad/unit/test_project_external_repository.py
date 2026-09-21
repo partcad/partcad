@@ -366,7 +366,7 @@ def test_a_malformed_declaration_is_complained_about_once():
 # the two 'get_all_packages' calls elsewhere in the suite pass has_stuff=False,
 # which skips the prefetch entirely, so the whole point of the change went
 # untested. These go in through the listing rather than through
-# '_prefetch_object_configs', so that the wiring is what is under test: a
+# 'prefetch_object_configs', so that the wiring is what is under test: a
 # listing that stopped prefetching would still pass a test that prefetched for
 # it.
 
@@ -442,6 +442,60 @@ def test_the_listing_skips_packages_outside_the_parent(tmp_path):
     ctx.get_all_packages(parent_name="//test/sub", has_stuff=True)
     assert asked == []
     assert [k for k in fake.keys if k.startswith("objects/")] == []
+
+
+def test_the_kinds_a_walk_does_not_filter_on_are_warmed_too(tmp_path):
+    """'pc list interfaces -r' walks every package, so nothing gated warms it.
+
+    The walk is not gated on 'has_stuff' for the kinds that are not geometry
+    (interfaces, software, materials), so until the listing warmed the kind
+    itself, each package of a plugin-backed tree was asked for its enumeration
+    as the walk reached it - one round trip per package, each waited out end to
+    end. LDraw has ninety-odd categories.
+    """
+    ctx, repo, fake = _listing_context(tmp_path, {"objects/interface": {"thru": {"desc": "an opening"}}})
+    asked = _record_prefetches(repo)
+
+    ctx.prefetch_object_configs("//test", ["interface"])
+
+    assert asked == [("interface",)]
+    assert [k for k in fake.keys if k.startswith("objects/")] == ["objects/interface"]
+    # ...and reading it back is the memo, not a second round trip.
+    assert list(repo.object_descriptions("interface")) == ["thru"]
+    assert [k for k in fake.keys if k.startswith("objects/")] == ["objects/interface"]
+
+
+def test_warming_several_packages_is_one_wait_rather_than_one_each(tmp_path):
+    """They go in flight together, which is the whole of the difference."""
+    import time
+
+    delay = 0.2
+    packages = 6
+
+    class SlowRepository:
+        def __init__(self, data):
+            self.data = data
+
+        async def get_data(self, key):
+            await asyncio.sleep(delay)
+            return self.data.get(key)
+
+    (tmp_path / "partcad.yaml").write_text("name: //test\ndesc: root\n")
+    ctx = pc.Context(str(tmp_path))
+    for index in range(packages):
+        name = "//test/cat%d" % index
+        repo = ProjectExternalRepository(ctx, name, "/tmp/ext", config_obj={})
+        repo._repository = SlowRepository({"objects/interface": {"i%d" % index: {}}})
+        ctx.projects[name] = repo
+
+    started = time.time()
+    ctx.prefetch_object_configs("//test", ["interface"])
+    for index in range(packages):
+        assert ctx.projects["//test/cat%d" % index].object_count("interface") == 1
+    elapsed = time.time() - started
+
+    # One wait, not six. Generously bounded: what it must not be is serial.
+    assert elapsed < delay * packages / 2
 
 
 def test_an_unreachable_repository_does_not_take_the_listing_down(tmp_path):

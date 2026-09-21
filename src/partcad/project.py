@@ -54,6 +54,7 @@ from . import (
     plugin_provider,
     plugin_repository,
     project_config,
+    reference,
     scene,
     scene_config,
 )
@@ -72,6 +73,7 @@ from . import (
     telemetry,
 )
 from .document_pdf import render_pdf_async
+from .enrich import enriched_source_name
 from .exception import EmptyShapesError, NeedsUpdateException, ObjectNameTakenError
 from .part import Part
 from .render import render_cfg_merge
@@ -737,6 +739,69 @@ class Project(project_config.Configuration):
     def object_names(self, kind: str) -> list:
         return list(self.object_configs(kind).keys())
 
+    def object_descriptions(self, kind: str) -> dict:
+        """What a listing prints beside each declared name, creating nothing.
+
+        A listing wants two columns and neither of them needs the object: the
+        name is the declaration's, and the description is the declaration's
+        too, apart from the reference types - an alias, an enrich and a
+        compound are described by what they point at, and that is resolved from
+        the declaration as well (see 'partcad.reference').
+
+        So a listing does not build a package to print it, which is the whole
+        point: 'pc list parts -r //pub' over a catalog of twenty thousand parts
+        used to run a factory per row. What that also means is that a listing
+        no longer reports a declaration PartCAD cannot use - it does not look
+        closely enough to find out. That is 'pc test's question, and it asks it
+        of every object.
+        """
+        descriptions = {}
+        for name, config in list(self.object_configs(kind).items()):
+            config = self._normalized(kind, name, config)
+            if not isinstance(config, dict):
+                descriptions[name] = None
+                continue
+            desc = config.get("desc")
+            if config.get("type") in reference.REFERENCE_TYPES:
+                try:
+                    desc = reference.describe(config["type"], self.name, self._reference_source(config))
+                except Exception as e:
+                    # A reference that says nothing about what it points at.
+                    # Reported by whoever tries to build it; a listing says what
+                    # it can and prints the row.
+                    pc_logging.debug("%s: cannot describe '%s': %s" % (self.name, name, e))
+            descriptions[name] = desc.strip() if isinstance(desc, str) else desc
+
+        # And the names that exist because another declaration's 'aliases'
+        # asked for them. They have no declaration to read, which is why they
+        # are listed from the index of who claimed them (see
+        # 'alias_declared_by') - and they are listed, because a package really
+        # does have an object under each of them.
+        for alias, owner in self._aliases_declared(kind).items():
+            if alias in descriptions:
+                # Refused when it was created: the package declares something
+                # else under that name, and that is what it has.
+                continue
+            descriptions[alias] = reference.describe("alias", self.name, self.name + ":" + owner)
+        return descriptions
+
+    def _reference_source(self, config: dict) -> str:
+        """The '<package>:<object>' a reference declaration resolves to.
+
+        The same answer its factory works out, by the same rules: an enrich
+        names an instance, so its parameters are part of which object it points
+        at ('enriched_source_name'), while an alias and a compound pass any
+        'with' on to what they name.
+        """
+        if config.get("type") == "enrich":
+            return enriched_source_name(self, self, config)
+        source = reference.source_of(self, self.name, config, config.get("type", "object"))
+        with_parameters = config.get("with")
+        if with_parameters:
+            package_name, object_name = reference.split(source)
+            source = package_name + ":" + format_parameterized_name(object_name, with_parameters)
+        return source
+
     def declares_object(self, kind: str, name: str) -> bool:
         """Whether this package has an object of that kind under that name to offer.
 
@@ -1399,6 +1464,10 @@ class Project(project_config.Configuration):
         builds it - including a name nothing declares at all - costs a pass
         over a dictionary rather than a package full of factories.
         """
+        return self._aliases_declared(kind).get(name)
+
+    def _aliases_declared(self, kind: str) -> dict:
+        """Every implicitly declared alias of a kind, mapped to what declares it."""
         index = self._alias_index.get(kind)
         if index is None:
             index = {}
@@ -1415,7 +1484,7 @@ class Project(project_config.Configuration):
                         alias += owner[owner.index(";") :]
                     index.setdefault(alias, owner)
             self._alias_index[kind] = index
-        return index.get(name)
+        return index
 
     def object_lock(self, kind: str, name: str):
         """The lock that guards creating one object of a kind, or None."""

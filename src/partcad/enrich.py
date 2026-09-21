@@ -12,9 +12,10 @@ part and for a sketch.
 """
 
 from . import logging as pc_logging
+from . import reference
 from .shape_config_store import STORE_PROPERTIES, resolve_store_properties
 from .user_config import user_config
-from .utils import format_parameterized_name, get_child_project_path
+from .utils import format_parameterized_name
 
 # The properties of an 'enrich' declaration that describe the reference itself
 # rather than the object it resolves to: which object is being enriched, which
@@ -195,30 +196,7 @@ def enriched_source_name(source_project, target_project, config) -> str:
     enrich declares is which instance it wants rather than the parameters
     themselves.
     """
-    if "source" in config:
-        source_name = config["source"]
-    else:
-        source_name = config["name"]
-        if "project" not in config and "package" not in config:
-            raise Exception("Enrich needs either the source object name or the source project name")
-
-    if "project" in config or "package" in config:
-        project_name = config["project"] if "project" in config else config["package"]
-        if project_name == "this" or project_name == "":
-            project_name = source_project.name
-        elif not project_name.startswith("//"):
-            # Resolve the project name relative to the target project
-            project_name = get_child_project_path(target_project.name, project_name)
-        source_name = project_name + ":" + source_name
-    elif ":" not in source_name:
-        source_name = source_project.name + ":" + source_name
-    else:
-        # Written as a reference of its own (':widget', '../other:widget'), so
-        # the package that authored it is what it is relative to. Spelled out
-        # here rather than left to the alias this hands the work to, because the
-        # name is also what gets recorded as 'source_resolved', and a consumer
-        # that walks the stored configuration has no package to read it against.
-        source_name = source_project.normalize(source_name)
+    source_name = reference.source_of(source_project, target_project.name, config, "object")
 
     parameters = dict(config.get("with") or {})
     parameters.update(user_config.parameter_config.to_dict().get(f"{target_project.name}:{config['name']}", {}))

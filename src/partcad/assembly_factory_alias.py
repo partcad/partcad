@@ -12,9 +12,9 @@ import typing
 
 from . import assembly_factory as pf
 from . import logging as pc_logging
-from . import telemetry
+from . import reference, telemetry
 from .shape_config_store import resolve_store_properties
-from .utils import format_parameterized_name, get_child_project_path
+from .utils import format_parameterized_name
 
 
 @telemetry.instrument()
@@ -36,46 +36,27 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             # one of the object it points at (see 'prepare_async').
             self.keyed = False
 
-            if "source" in config:
-                self.source_assembly_name = config["source"]
-            else:
-                self.source_assembly_name = config["name"]
-                if "project" not in config and "package" not in config:
-                    raise Exception("Alias needs either the source assembly name or the source project name")
-
-            if "project" in config or "package" in config:
-                if "project" in config:
-                    self.source_project_name = config["project"]
-                else:
-                    self.source_project_name = config["package"]
-                if self.source_project_name == "this" or self.source_project_name == "":
-                    self.source_project_name = self.project.name
-                elif not self.source_project_name.startswith("//"):
-                    # Resolve the project name relative to the target project
-                    self.source_project_name = get_child_project_path(target_project.name, self.source_project_name)
-            else:
-                if ":" in self.source_assembly_name:
-                    self.source_project_name, self.source_assembly_name = self.project.resolve(
-                        self.source_assembly_name,
-                    )
-                else:
-                    self.source_project_name = self.project.name
+            # Where this points, by the rules every reference spells it with
+            # (see 'partcad.reference'). Recorded on the declaration as well,
+            # because 'pc convert' follows the stored configuration rather than
+            # the object, and a listing reads its description off it without
+            # building anything.
+            self.source = reference.source_of(source_project, target_project.name, config, "assembly")
+            self.source_project_name, self.source_assembly_name = reference.split(self.source)
             # Parameters handed to an alias are passed on to what it points
-            # at: an alias declares none of its own to apply them to. See
-            # 'PartFactoryAlias' for what that makes possible.
+            # at. An alias declares no parameters of its own, so it has nothing
+            # to apply them to - it is a reference, and a reference to an object
+            # with other parameter values is a reference to another instance of
+            # it. This is what lets aliases and enriches be chained in any
+            # order: the parameters travel down the chain until they reach the
+            # object that declares them ('Project.get_object' puts them in
+            # 'with' when it parametrizes a reference).
             if config.get("with"):
                 self.source_assembly_name = format_parameterized_name(self.source_assembly_name, config["with"])
-
-            self.source = self.source_project_name + ":" + self.source_assembly_name
+                self.source = self.source_project_name + ":" + self.source_assembly_name
             config["source_resolved"] = self.source
 
-            if self.source_project_name == self.project.name:
-                self.assembly.desc = "Alias to %s" % self.source_assembly_name
-            else:
-                self.assembly.desc = "Alias to %s from %s" % (
-                    self.source_assembly_name,
-                    self.source_project_name,
-                )
+            self.assembly.desc = reference.describe(config["type"], target_project.name, self.source)
 
             # pc_logging.debug("Initialized an alias to %s" % self.source)
 

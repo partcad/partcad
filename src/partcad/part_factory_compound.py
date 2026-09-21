@@ -6,8 +6,7 @@
 
 from . import logging as pc_logging
 from . import part_factory as pf
-from . import telemetry
-from .utils import get_child_project_path, resolve_resource_path
+from . import reference, telemetry
 
 
 @telemetry.instrument()
@@ -29,34 +28,17 @@ class PartFactoryCompound(pf.PartFactory):
             super().__init__(ctx, source_project, target_project, config)
             self._create(config)
 
-            if "source" in config:
-                self.source_assembly_name = config["source"]
-            else:
-                self.source_assembly_name = config["name"]
-                if "project" not in config and "package" not in config:
-                    raise Exception("Compound needs either the source assembly name or the source project name")
-
-            if "project" in config or "package" in config:
-                self.source_project_name = config["project"] if "project" in config else config["package"]
-                if self.source_project_name == "this" or self.source_project_name == "":
-                    self.source_project_name = source_project.name
-                elif not self.source_project_name.startswith("//"):
-                    self.source_project_name = get_child_project_path(target_project.name, self.source_project_name)
-            elif ":" in self.source_assembly_name:
-                self.source_project_name, self.source_assembly_name = resolve_resource_path(
-                    source_project.name,
-                    self.source_assembly_name,
-                )
-            else:
-                self.source_project_name = source_project.name
-
-            self.source = self.source_project_name + ":" + self.source_assembly_name
+            # Where this points, by the rules every reference spells it with
+            # (see 'partcad.reference'), and recorded on the declaration so a
+            # listing can read its description off it without building it.
+            self.source = reference.source_of(source_project, target_project.name, config, "assembly")
+            self.source_project_name, self.source_assembly_name = reference.split(self.source)
             config["source_resolved"] = self.source
 
             # Passed verbatim to the assembly, but only when declared.
             self.parameters = config.get("parameters", None)
 
-            self.part.desc = "Compound of %s" % self.source
+            self.part.desc = reference.describe(config["type"], target_project.name, self.source)
 
     async def prepare_async(self, part) -> None:
         """Resolve the referenced assembly, then prepare it.

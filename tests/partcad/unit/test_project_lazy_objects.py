@@ -118,3 +118,36 @@ def test_one_by_name_and_the_bulk_pass_at_the_same_time():
     assert errors == []
     assert len(set(counts)) == 1  # every bulk read saw the whole package
     assert project.broken_objects.get("part", {}) == {}
+
+
+def test_a_listing_reads_the_declarations_and_builds_nothing():
+    """Name and description without a factory anywhere near it.
+
+    Including the descriptions a reference takes from what it points at, which
+    used to be knowable only by building the reference (see
+    'partcad.reference').
+    """
+    ctx = pc.Context("examples")
+    project = ctx.get_project(PARTS)
+
+    descriptions = project.object_descriptions("part")
+
+    assert project.objects("part") == {}  # nothing was created to answer
+    assert descriptions["cube"] == "This is a cube from examples"
+    assert descriptions["cube_alias"] == "Alias to cube"
+    assert descriptions["cube_enrich"] == "Alias to cube;height=7.5,length=10.0,width=20.0"
+    # The alias a part's own 'aliases:' asks for has no declaration to read, and
+    # is listed from what claimed it.
+    assert descriptions["box"] == "Alias to cube"
+
+
+def test_the_listed_descriptions_are_the_ones_the_objects_carry():
+    """The two answers have to agree, or a listing quietly says something else."""
+    ctx = pc.Context("examples")
+    project = ctx.get_project(PARTS)
+
+    from_declarations = project.object_descriptions("part")
+    from_objects = {name: obj.desc for name, obj in project.parts.items()}
+
+    assert from_objects  # the package does declare parts
+    assert from_declarations == from_objects

@@ -54,7 +54,7 @@ def _is_within(name: str, parent_name: Optional[str]) -> bool:
     just a prefix: '//foo' is not the parent of '//foobar', and matching it as
     one made a listing of '//foo' include its neighbour -- and now also send a
     round trip to that neighbour's repository plugin (see
-    '_prefetch_object_configs'). The root, '//', is the parent of everything,
+    'prefetch_object_configs'). The root, '//', is the parent of everything,
     which falls out of the same rule once the trailing separator is stripped.
     """
     if parent_name is None:
@@ -938,14 +938,21 @@ class Context:
             # is a round trip to the plugin. Warm them here instead: every
             # package and every kind at once, on the traversal's event loop, so
             # what follows reads a memo. See Project.prefetch_object_configs_async.
-            self._prefetch_object_configs(parent_name, HAS_STUFF_KINDS)
+            self.prefetch_object_configs(parent_name, HAS_STUFF_KINDS)
         return self.get_packages(parent_name=parent_name, has_stuff=has_stuff)
 
-    def _prefetch_object_configs(self, parent_name, kinds):
+    def prefetch_object_configs(self, parent_name, kinds):
         """Warm 'kinds' across every loaded package, concurrently.
 
         A no-op for the packages that are local, which is most of them; what it
         is for is the plugin-backed ones, where the enumerations are remote.
+
+        Public because a command that is about to walk a tree for one kind
+        should say so: this is one round trip for the whole tree instead of one
+        per package, and the difference is the whole of the wait. 'pc list
+        interfaces -r' over LDraw's ninety-odd categories asked each of them in
+        turn - the walk is not gated on 'has_stuff', so nothing had warmed them
+        (see 'list_objects').
         """
         projects = [p for p in self.projects.values() if _is_within(p.name, parent_name)]
         projects = [p for p in projects if not p.skipped]
