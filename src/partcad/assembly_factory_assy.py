@@ -20,6 +20,8 @@ from .assembly import Assembly, AssemblyChild
 from .assembly_connect import ConnectHow, check_stage_sequence
 from .assembly_factory_file import AssemblyFactoryFile
 from .geom import Location
+from .interface import port_location
+from .shape_ports import prepare_async as prepare_ports_async
 
 
 @telemetry.instrument()
@@ -394,6 +396,11 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
             if connect is not None:
                 pc_logging.debug("Attempting to connect %s" % name)
+                # What is being connected may be an assembly that externalizes
+                # ports of its own ('map:'), and those are ports of it like any
+                # other - but they are worked out from its tree rather than read
+                # off its declaration, so they have to be worked out first.
+                await prepare_ports_async(item, self.ctx)
                 source_port = None
                 source_iface = None
                 source_iface_obj = None
@@ -422,6 +429,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 if target_part is None:
                     pc_logging.error("Target part not found: %s" % connect_to_name)
                 else:
+                    await prepare_ports_async(target_part, self.ctx)
                     if hasattr(child, "location"):
                         target_part_location = child.location
                     else:
@@ -432,7 +440,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     if (
                         connect_with_iface is None
                         and item.with_ports is not None
-                        and "ports" not in item.with_ports.config
+                        and not item.with_ports.has_loose_ports()
                         and len(list(item.with_ports.get_interfaces().keys())) == 1
                     ):
                         connect_with_iface = list(item.with_ports.get_interfaces().keys())[0]
@@ -473,7 +481,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     if (
                         connect_to_iface is None
                         and target_part.with_ports is not None
-                        and "ports" not in target_part.with_ports.config
+                        and not target_part.with_ports.has_loose_ports()
                         and len(list(target_part.with_ports.get_interfaces().keys())) == 1
                     ):
                         connect_to_iface = list(target_part.with_ports.get_interfaces().keys())[0]
@@ -934,13 +942,13 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                             )
                         )
 
-                        location = target_part_location * target_port.location * turn_around
+                        location = target_part_location * port_location(target_port) * turn_around
                         for target_offset in target_offsets:
                             pc_logging.debug("Target offset: %s" % target_offset)
                             location = location * target_offset
                         for source_offset in source_offsets:
                             location = location * source_offset
-                        location = location * source_port.location.inverse()
+                        location = location * port_location(source_port).inverse()
                     elif source_port is None and target_port is not None:
                         pc_logging.debug(
                             "Connected %s to %s of %s"
@@ -951,7 +959,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                             )
                         )
 
-                        location = target_part_location * target_port.location * turn_around
+                        location = target_part_location * port_location(target_port) * turn_around
                         for target_offset in target_offsets:
                             location = location * target_offset
                     elif source_port is not None and target_port is None:
@@ -959,7 +967,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         location = target_part_location * turn_around
                         for source_offset in source_offsets:
                             location = location * source_offset
-                        location = location * source_port.location.inverse()
+                        location = location * port_location(source_port).inverse()
                     elif source_port is None and target_port is None:
                         pc_logging.debug("Connected %s to %s" % (name, connect_to_name))
                         location = target_part_location * turn_around
@@ -983,7 +991,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 # The source port is the frame a derived "pushDistance" is
                 # measured along, and that same port once the object is in place
                 # is what the push direction is deduced from, so both go along.
-                source_frame = None if source_port is None else source_port.location
+                source_frame = None if source_port is None else port_location(source_port)
                 mated_frame = location if source_frame is None else location * source_frame
                 connect_how.resolve(
                     item,
@@ -1049,9 +1057,9 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             "interferes": _as_names(connect.get("interferes", None), self.name),
         }
         if target_port is not None and target_part_location is not None:
-            port_location = target_part_location * target_port.location
-            info["point"] = list(port_location.translation)
-            info["direction"] = list(port_location.rotate_vector((0, 0, 1)))
+            frame = target_part_location * port_location(target_port)
+            info["point"] = list(frame.translation)
+            info["direction"] = list(frame.rotate_vector((0, 0, 1)))
         return info
 
     def _exploded_distance(self, value, connect_to_name):

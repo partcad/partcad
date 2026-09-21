@@ -463,6 +463,12 @@ class Project(project_config.Configuration):
             kind: self._initial_object_configs(kind) for kind in OBJECT_KINDS
         }
 
+        # {kind: {interface name: [objects that implement it]}}, built on the
+        # first search that asks for one and never while a package loads:
+        # 'pc list' does not ask, and must not pay for an index it does not
+        # read. See 'partcad.shape_ports.interface_index'.
+        self.interface_indexes: dict[str, dict] = {}
+
         # The instantiated objects of each kind, filled lazily by the getters.
         self.materials = {}
         self.material_locks = {}

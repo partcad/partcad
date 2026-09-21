@@ -3102,7 +3102,7 @@ def _supply_totals(items):
 
 
 def search_objects(session, params):
-    """Search parts/sketches/assemblies/interfaces/packages by keyword."""
+    """Search parts/sketches/assemblies/interfaces/packages by keyword or interface."""
     ctx = _ctx(session, params)
     if ctx is None:
         return None
@@ -3110,6 +3110,10 @@ def search_objects(session, params):
     kind = params.get("kind", "parts")
     selected, _, recursive = _request(params, "//")
     keyword = params.get("keyword", "")
+    # What the object connects by, rather than what its declaration says: the
+    # shapes that implement this interface or anything derived from it. Only the
+    # kinds that have ports take it; "packages" and "interfaces" do not.
+    interface = params.get("interface") or None
     package = ctx.resolve_package_path(selected)
 
     from partcad.actions.package import search_packages
@@ -3130,11 +3134,25 @@ def search_objects(session, params):
         "packages": search_packages,
     }
     search_fn = search_fns.get(kind, search_parts)
+    takes_interface = kind in ("parts", "sketches", "assemblies", "scenes")
+    if interface and not takes_interface:
+        pc.logging.error("Searching %s by interface is not supported" % kind)
+        return None
 
     count = 0
-    output = "PartCAD %s with '%s' keyword:\n" % (kind, keyword)
+    if interface and keyword:
+        output = "PartCAD %s implementing '%s' with '%s' keyword:\n" % (kind, interface, keyword)
+    elif interface:
+        output = "PartCAD %s implementing '%s':\n" % (kind, interface)
+    else:
+        output = "PartCAD %s with '%s' keyword:\n" % (kind, keyword)
     with pc.logging.Process("Search " + kind.capitalize(), package):
-        for obj in search_fn(ctx, package, recursive, keyword):
+        found = (
+            search_fn(ctx, package, recursive, keyword, interface)
+            if takes_interface
+            else search_fn(ctx, package, recursive, keyword)
+        )
+        for obj in found:
             if kind == "packages":
                 line = "\t%s" % obj.name
                 padding_size = 60 - len(obj.name)
@@ -3279,6 +3297,7 @@ def render_objects(session, params):
         ports=params.get("with_ports", False),
         interfaces=params.get("with_interfaces", False),
         all=params.get("with_all", False),
+        internals=params.get("with_internals", False),
     )
 
     with (

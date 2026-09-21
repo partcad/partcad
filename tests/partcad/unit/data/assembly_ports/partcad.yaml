@@ -1,0 +1,106 @@
+desc: A package to exercise "map:" - the ports and interfaces an assembly externalizes
+
+sketches:
+  m3:
+    type: basic
+    circle: 1.5
+
+interfaces:
+  m3:
+    desc: Abstract 3mm circular interface
+    abstract: True
+    ports:
+      m3:
+        sketch: m3
+  m3-thru:
+    desc: 3mm through hole
+    inherits:
+      m3: thru
+  m3-screw:
+    desc: M3 screw
+    inherits:
+      m3: screw
+    mates: m3-thru
+  grip:
+    desc: A surface to hold the object by
+    ports:
+      grip:
+
+parts:
+  plate:
+    type: cadquery
+    desc: A plate with two through holes and a place to hold it by
+    implements:
+      m3-thru:
+        TL: [[-10.0, 10.0, 0.0], [0.0, 0.0, 1.0], 0.0]
+        TR: [[10.0, 10.0, 0.0], [0.0, 0.0, 1.0], 0.0]
+    ports:
+      handle: [[0.0, 0.0, 5.0], [0.0, 0.0, 1.0], 0.0]
+      origin: # no location: the origin of the part that declares it
+  screw:
+    type: cadquery
+    desc: An M3 screw
+    implements:
+      m3-screw: [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], 180.0]
+
+assemblies:
+  # The subject: two plates, with one port and one interface instance of each
+  # externalized under names of this assembly's choosing.
+  mount:
+    type: assy
+    desc: Two plates, one above the other
+    map:
+      hold: [lower, handle]
+      top: [upper, m3-thru, TL]
+      bottom: [lower, m3-thru, TR]
+    # What the map produced is a port of this assembly like any other, so an
+    # interface may be placed at one rather than at a coordinate.
+    implements:
+      grip:
+        held:
+          port: hold
+
+  # The same file, with nothing externalized: an assembly is taken at its word,
+  # and this one says nothing.
+  mount_opaque:
+    type: assy
+    path: mount.assy
+
+  # Externalizing what another assembly externalized: a boundary is crossed one
+  # object at a time.
+  column:
+    type: assy
+    desc: Two mounts, stacked
+    map:
+      grab: [bottom-mount, hold]
+      anchor: [bottom-mount, m3-thru, top]
+
+  # A node inside a named container, and the container itself.
+  grouped:
+    type: assy
+    desc: A plate inside a named group
+    map:
+      inner: [frame/plate, handle]
+      unnamed: [loose, handle]
+
+  # Something connected to what an assembly externalizes.
+  bolted:
+    type: assy
+    desc: A screw driven into the hole the mount presents as its own
+
+  # A connection made through a port that declares no location.
+  connect_origin:
+    type: assy
+    desc: A screw connected to a port that sits at its part's origin
+
+  # Every way of getting it wrong, so that each is reported rather than raised.
+  broken:
+    type: assy
+    path: mount.assy
+    map:
+      no_such_node: [nowhere, handle]
+      no_such_port: [lower, nowhere]
+      interface_as_port: [lower, m3-thru]
+      no_such_interface: [lower, nowhere, TL]
+      no_such_instance: [lower, m3-thru, nowhere]
+      not_a_tuple: lower

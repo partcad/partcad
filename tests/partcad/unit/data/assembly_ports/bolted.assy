@@ -1,0 +1,14 @@
+links:
+  # An assembly that says what its ports are, placed as a whole.
+  - assembly: mount
+    name: mount
+
+  # And something connected to one of them: the instance the mount externalized
+  # is an instance of 'm3-thru' like any other, so the screw mates with it
+  # exactly as it would with a hole in a part.
+  - part: screw
+    name: pin
+    connect:
+      name: mount
+      to: m3-thru
+      toInstance: top

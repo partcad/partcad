@@ -63,6 +63,13 @@ The following syntax is used to create a node that places a part in the assembly
       how: <(optional) assembly instructions, see "How" below>
       exploded: <(optional) the gap to show in the exploded view of this step, in mm>
 
+The `name` a node is given is how everything else in and around this assembly
+refers to it: the `name` of a `connect`/`connectPorts` names a node, and so does
+the first element of the `map:` section that decides which of the ports inside
+this assembly the assembly itself has (see :ref:`assembly-ports`). A node with no
+`name` of its own is known by the name of the part or assembly it places, which
+is enough until the same one is placed twice.
+
 One and only one method for placing the object is acceptable.
 Therefore the sections `location`, `connectPorts` and `connect` are mutually exclusive.
 Both `connectPorts` and `connect` are used to connect parts to each other by matching their ports.

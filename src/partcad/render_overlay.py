@@ -11,47 +11,52 @@ makes them hard to get right: a port ends up a millimetre off, or facing the
 wrong way, and the only way to find out used to be to build an assembly and look
 at where the parts landed.
 
-These two options put them on the picture instead. This module answers the
-question the renderer cannot: *where are they*, in the coordinate system of the
-thing being rendered. For a part that is a lookup ('implements:' already placed
-every port). For an assembly it is a walk: each child contributes its own ports,
-moved by where the assembly put the child, so a connection that went wrong is
-visible as two frames that do not meet.
+These options put them on the picture instead. *Where* they are is not a
+question about drawing and is not answered here: 'partcad.shape_ports' answers
+it, for this and for everything else that asks. What is left here is the part
+that is about drawing - which of the overlays a file type ends up carrying, the
+port boundaries that travel to the renderer as geometry, and the log line that
+repeats every name drawn on the picture at a size somebody can read.
 
-Everything here is plain Python arithmetic on 'geom.Location' plus the shape
-envelopes the port sketches already come as, so the core stays free of OCP; the
-drawing itself happens in the render implementation ('//builtin/render'), which
-is the only side that knows where the camera is.
+An assembly is taken at its word by default: what is drawn is what it declares
+and what its 'map:' externalizes, and not what is inside it. That is the same
+boundary 'pc info' and a 'connect:' see, and an assembly that externalizes three
+ports of the forty it contains means those three. '--with-internals' is for
+looking inside one anyway, which is how a connection that went wrong is found -
+two frames that should have met and did not.
 """
 
 from . import logging as pc_logging
-from . import output
-from .geom import Location
+from . import output, shape_ports
 
 
 class Overlay:
-    """Which of the two overlays a render was asked for.
+    """Which of the overlays a render was asked for.
 
-    A single value rather than two booleans, because it travels the whole way
+    A single value rather than three booleans, because it travels the whole way
     from the command line through the context and the package down to the
     shape, and because "neither" - the overwhelmingly common case - is then one
-    'None' rather than a pair of falses.
+    'None' rather than a set of falses.
+
+    'internals' is not an overlay of its own: it says how deep the two above
+    reach, and on its own it asks for nothing.
     """
 
-    def __init__(self, ports: bool = False, interfaces: bool = False):
+    def __init__(self, ports: bool = False, interfaces: bool = False, internals: bool = False):
         self.ports = bool(ports)
         self.interfaces = bool(interfaces)
+        self.internals = bool(internals)
 
     def __bool__(self):
         return self.ports or self.interfaces
 
     def __repr__(self):
-        return "Overlay(ports=%r, interfaces=%r)" % (self.ports, self.interfaces)
+        return "Overlay(ports=%r, interfaces=%r, internals=%r)" % (self.ports, self.interfaces, self.internals)
 
     @staticmethod
-    def of(ports: bool = False, interfaces: bool = False, all: bool = False):
+    def of(ports: bool = False, interfaces: bool = False, all: bool = False, internals: bool = False):
         """The overlay these flags ask for, or None if they ask for nothing."""
-        overlay = Overlay(ports=ports or all, interfaces=interfaces or all)
+        overlay = Overlay(ports=ports or all, interfaces=interfaces or all, internals=internals)
         return overlay if overlay else None
 
 
@@ -60,10 +65,10 @@ def effective(overlay, impl):
 
     Two things ask for it and neither overrides the other. "--with-ports" and
     "--with-interfaces" ask for it once, for this invocation. A package asks for
-    it permanently, by declaring 'with_ports:' or 'with_interfaces:' on a file
-    type of its own - which is how an example can keep a picture of its ports
-    checked in beside the plain one, produced by the same 'pc render' as
-    everything else.
+    it permanently, by declaring 'with_ports:'/'with_interfaces:' (and
+    'with_internals:') on a file type of its own - which is how an example can
+    keep a picture of its ports checked in beside the plain one, produced by the
+    same 'pc render' as everything else.
 
     Only a 'render:' file type carries one. A projection is something to draw
     ports on; a STEP file is not, and every byte of a port boundary would travel
@@ -74,34 +79,9 @@ def effective(overlay, impl):
     result = Overlay(
         ports=bool(impl.parameters.get("with_ports")) or (overlay is not None and overlay.ports),
         interfaces=bool(impl.parameters.get("with_interfaces")) or (overlay is not None and overlay.interfaces),
+        internals=bool(impl.parameters.get("with_internals")) or (overlay is not None and overlay.internals),
     )
     return result if result else None
-
-
-def _interface_of_port(with_ports) -> dict:
-    """port name -> (interface name, instance name), for one object's ports.
-
-    'WithPorts.get_interfaces()' is keyed the other way round - interface, then
-    instance, then the ports of that instance - and records an interface at
-    every level of the inheritance it walks, most specific first. The first
-    entry that claims a port is therefore the interface a user would name in a
-    'connect:', which is the one worth drawing.
-    """
-    owner = {}
-    for interface_name, instances in (with_ports.get_interfaces() or {}).items():
-        for instance_name, ports in (instances or {}).items():
-            for port_full_name in (ports or {}).values():
-                owner.setdefault(port_full_name, (interface_name, instance_name))
-    return owner
-
-
-def _qualify(owner: str, name: str) -> str:
-    """How a port of an assembly's child is named on the picture.
-
-    The same way an ASSY file names it: the instance the port belongs to, then
-    the port. The instance itself is a path when the assembly nests.
-    """
-    return ("%s:%s" % (owner, name)) if owner else name
 
 
 def _short(name: str) -> str:
@@ -111,89 +91,36 @@ def _short(name: str) -> str:
     the port on the picture is what a user writes in a 'connect:' - which, for
     an interface of the package being worked in, is the short name.
     """
-    return name.rsplit(":", 1)[-1] if name else name
-
-
-async def _collect_object(shape, ctx, owner: str, placement: Location, sketches: bool, out: list):
-    """The ports 'shape' declares itself, placed by 'placement'."""
-    from .interface import _port_location, place_components
-
-    with_ports = getattr(shape, "with_ports", None)
-    if with_ports is None:
-        return
-
-    interfaces = _interface_of_port(with_ports)
-    for port_name, port in with_ports.get_ports().items():
-        location = placement * _port_location(port)
-        interface_name, instance_name = interfaces.get(port_name, (None, None))
-        record = {
-            "port": _qualify(owner, port_name),
-            "interface": interface_name,
-            "interface_label": _short(interface_name),
-            "instance": instance_name,
-            "owner": owner,
-            "location": location.as_packed(),
-        }
-        if sketches and port.sketch is not None:
-            # The port's boundary - the circle of a hole, the profile of a rail.
-            # It stays a BREP envelope and is placed as plain data, exactly as
-            # the viewer places it (see Interface.get_components).
-            components = list(await port.sketch.get_components(ctx))
-            record["sketch"] = place_components(components, location)
-        out.append(record)
-
-
-def _child_owner(owner: str, child) -> str:
-    """The instance path of one child of an assembly.
-
-    An ASSY file's 'links:' becomes an assembly of its own inside the object the
-    file defines, and so does every nested 'links:' - assemblies that are no
-    object of any package and that nobody names in a 'connect:'. They are passed
-    over here for exactly the reason 'Assembly.connected_children()' passes over
-    them: what they hold belongs to the assembly that embeds them.
-    """
-    item = child.item
-    if getattr(item, "config", {}).get("child", False):
-        return owner
-    name = child.name if child.name is not None else getattr(item, "name", None)
-    return _qualify(owner, name) if name else owner
-
-
-async def _collect(shape, ctx, owner: str, placement: Location, sketches: bool, out: list):
-    """'shape' and, if it is an assembly, everything inside it."""
-    from .assembly import Assembly
-
-    if isinstance(shape, Assembly):
-        # An assembly's own placement is carried on the envelope it renders as,
-        # so the geometry moves by it and the ports have to move with it.
-        root = shape._root_location()
-        if root is not None:
-            placement = placement * root
-        await shape.do_instantiate()
-
-    await _collect_object(shape, ctx, owner, placement, sketches, out)
-
-    if not isinstance(shape, Assembly):
-        return
-    for child in shape.children:
-        child_placement = placement
-        if child.location is not None:
-            child_placement = placement * (
-                child.location if isinstance(child.location, Location) else Location(child.location)
-            )
-        await _collect(child.item, ctx, _child_owner(owner, child), child_placement, sketches, out)
+    return shape_ports.short_interface_name(name)
 
 
 async def collect_async(shape, ctx, overlay: Overlay) -> list:
-    """Every port of 'shape', in the coordinate system 'shape' renders in.
+    """Every port to be drawn, as the renderer is handed it.
 
     Each record names the port and the interface it belongs to as a user would
     have to name them in an ASSY file, and carries the port's placement. When
     the interfaces are to be drawn, it also carries the port's boundary sketch
     as a shape envelope, ready to be decoded and projected in the sandbox.
     """
+    from .interface import place_components
+
     records = []
-    await _collect(shape, ctx, "", Location(), overlay.interfaces, records)
+    for record in await shape_ports.ports_async(shape, ctx, deep=overlay.internals):
+        drawn = {
+            "port": record.name,
+            "interface": record.interface,
+            "interface_label": _short(record.interface),
+            "instance": record.instance,
+            "owner": record.owner,
+            "location": record.location.as_packed(),
+        }
+        if overlay.interfaces and record.port.sketch is not None:
+            # The port's boundary - the circle of a hole, the profile of a rail.
+            # It stays a BREP envelope and is placed as plain data, exactly as
+            # the viewer places it (see Interface.get_components).
+            components = list(await record.port.sketch.get_components(ctx))
+            drawn["sketch"] = place_components(components, record.location)
+        records.append(drawn)
     return records
 
 
@@ -208,9 +135,20 @@ def report(shape, records: list, overlay: Overlay) -> None:
         name for name, wanted in (("--with-ports", overlay.ports), ("--with-interfaces", overlay.interfaces)) if wanted
     )
     if not records:
-        pc_logging.warning(
-            "%s:%s: nothing to draw for %s: this object declares no ports" % (shape.project_name, shape.name, asked_for)
-        )
+        # Not the same fact for an assembly as for a part: an assembly full of
+        # ports draws none of them until it says which of them are its own.
+        from .assembly import Assembly
+
+        if isinstance(shape, Assembly) and not overlay.internals:
+            pc_logging.warning(
+                "%s:%s: nothing to draw for %s: this assembly externalizes no ports of its own "
+                "('map:'); '--with-internals' draws what is inside it" % (shape.project_name, shape.name, asked_for)
+            )
+        else:
+            pc_logging.warning(
+                "%s:%s: nothing to draw for %s: this object declares no ports"
+                % (shape.project_name, shape.name, asked_for)
+            )
         return
 
     lines = []

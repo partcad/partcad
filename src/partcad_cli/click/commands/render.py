@@ -102,10 +102,10 @@ from ..viewport import viewport_options, viewport_params
     show_envvar=True,
 )
 # Ports and interfaces are not geometry, so they are invisible in a projection
-# unless asked for. These three ask.
+# unless asked for. These four ask.
 @click.option(
     "--with-ports",
-    help="Draw a labelled coordinate frame at every port of the object (and, for an assembly, of everything in it)",
+    help="Draw a labelled coordinate frame at every port of the object",
     is_flag=True,
     show_envvar=True,
 )
@@ -118,6 +118,15 @@ from ..viewport import viewport_options, viewport_params
 @click.option(
     "--with-all",
     help="Draw both the ports and the interfaces",
+    is_flag=True,
+    show_envvar=True,
+)
+@click.option(
+    "--with-internals",
+    help=(
+        "Draw the ports of everything inside an assembly as well as the ones it externalizes, "
+        "which is how a connection that went wrong is found"
+    ),
     is_flag=True,
     show_envvar=True,
 )
@@ -142,6 +151,7 @@ def cli(
     with_ports,
     with_interfaces,
     with_all,
+    with_internals,
     object,
 ):
     run(
@@ -165,6 +175,7 @@ def cli(
             "with_ports": with_ports,
             "with_interfaces": with_interfaces,
             "with_all": with_all,
+            "with_internals": with_internals,
             "object": object,
         },
         needs_context=True,
