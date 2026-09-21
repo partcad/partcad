@@ -704,9 +704,9 @@ checked in is one rendering.
 
 Everything PartCAD implements itself can be a baseline, and what asks for one is
 ``reproducible: true`` on the file type -- the flag every ``export:`` and
-``render:`` file type takes (see :ref:`reproducible`). Every drawing under
-``examples/`` sets it, and a new example has to set it too, or what it checks in
-is a file that differs from itself on the next run.
+``render:`` file type takes (see :ref:`the reproducible flag <reproducible>`).
+Every drawing under ``examples/`` sets it, and a new example has to set it too,
+or what it checks in is a file that differs from itself on the next run.
 
 It buys three things. The SVG projection goes through OpenCASCADE's exact
 hidden-line algorithm rather than the polygonal one, which projects a
