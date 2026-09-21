@@ -299,7 +299,12 @@ force-exclude = """
 # handed to it by name regardless. That is why the `flake8` hook in
 # "dev-tools/pre-commit-config.yaml" carries an `exclude:` of its own -- the
 # one place the two trees above are named twice, and the comment there says so.
-extend-exclude = ".venv,examples,features"
+# "node_modules" is here for a third reason again: it holds somebody else's
+# code, and a dependency of the VS Code extension vendors a Python file of its
+# own ("flatted"). Nothing checks it out by default, so this only bites after an
+# `npm ci` in "ide/vscode" -- and then `flake8 .` reports thirteen findings in a
+# file this repository does not own.
+extend-exclude = ".venv,examples,features,node_modules"
 max-line-length = 120
 
 # E203 is the usual black-compatibility waiver (black puts a space before the

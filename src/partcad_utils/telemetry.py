@@ -4,6 +4,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import functools
 import inspect
 import os
 from contextlib import asynccontextmanager, contextmanager
@@ -27,6 +28,52 @@ def init(version: str):
 
     global tracer
     tracer = telemetry_none.init_none()
+
+
+# What 'telemetry.detail' may be set to. 'actions' is one span per operation
+# PartCAD names; 'methods' adds one per instrumented method underneath.
+DETAIL_ACTIONS = "actions"
+DETAIL_METHODS = "methods"
+
+# Whether a span is created per instrumented method, decided once. Read on
+# every such call, so it is a module global and not a configuration lookup:
+# creating one part passes through a dozen of them, and a package of eight
+# thousand parts through a quarter of a million.
+_method_spans: bool | None = None
+
+
+def method_spans() -> bool:
+    """Whether the instrumented methods each get a span of their own.
+
+    They did, always and with nothing to say otherwise, which is what made a
+    trace of 'pc list parts' 28 spans per part - the part's own action, and
+    every method the factory, the configuration and the package went through to
+    make it. That is a useful thing to be able to ask for and a poor thing to
+    pay for by default, so it is now what 'telemetry.detail: methods' asks for.
+
+    What is left at the default is the operations PartCAD names for itself: the
+    'Process' a command is, and the 'Action' each object it works on is. Those
+    are created explicitly (see 'partcad_utils.logging.Action') and are not
+    gated here.
+    """
+    global _method_spans
+    if _method_spans is None:
+        # Imported here rather than at the top: the configuration reads the
+        # user's config file, and this module is imported by everything.
+        from .user_config import user_config
+
+        _method_spans = user_config.telemetry_config.detail == DETAIL_METHODS
+    return _method_spans
+
+
+def forget_settings() -> None:
+    """Read the telemetry settings again on next use.
+
+    For a caller that changes them after something has already read them, which
+    in practice means a test.
+    """
+    global _method_spans
+    _method_spans = None
 
 
 def collecting() -> bool:
@@ -67,9 +114,13 @@ def once():
     global tracer
 
     if os.getenv("PYTEST_VERSION"):
-        # Do not collect telemetry data for pytest as it's mostly short meaningless transactions
-        # It is already of type "none"
-        # tracer = telemetry_none.init_none()
+        # Do not collect telemetry data for pytest as it's mostly short
+        # meaningless transactions. The no-op tracer, and not merely whatever
+        # 'init()' left behind: a test that imports this module without
+        # importing PartCAD - one about telemetry itself, say - reaches here
+        # with 'tracer' still None, and the readers below would fail on it
+        # rather than record nothing.
+        tracer = telemetry_none.init_none()
         return
 
     if not collecting():
@@ -105,11 +156,52 @@ def set_context(ctx):
     context.detach(token)
 
 
+def instrument_function(name: str):
+    """A span for one function, at the same depth as an instrumented method.
+
+    The hand-picked counterpart of 'instrument()': a free function or a nested
+    one that is worth naming in a trace, but that is called per object and so
+    belongs with the methods rather than with the actions. Gated by
+    'method_spans()' for that reason - 'resolve_resource_path' alone is a span
+    per part.
+    """
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            if not method_spans():
+                return func(*args, **kwargs)
+            with start_as_current_span(name):
+                return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+def instrument_function_async(name: str):
+    """'instrument_function' for a coroutine."""
+
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            if not method_spans():
+                return await func(*args, **kwargs)
+            async with start_as_current_span_async(name):
+                return await func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
 def instrument_span(name, category: str = ""):
     once()
 
     def decorator(func, attr_getter):
         def wrapper(*args, **kwargs):
+            if not method_spans():
+                return func(*args, **kwargs)
             parent = trace.get_current_span()
             tag = name if not category else f"{category}.{name}"
             if getattr(parent, "tag", "") == tag:
@@ -140,6 +232,8 @@ def instrument_span_async(name, category: str = ""):
 
     def decorator(func, attr_getter):
         async def wrapper(*args, **kwargs):
+            if not method_spans():
+                return await func(*args, **kwargs)
             parent = trace.get_current_span()
             tag = name if not category else f"{category}.{name}"
             if getattr(parent, "tag", "") == tag:

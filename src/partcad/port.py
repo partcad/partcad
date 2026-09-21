@@ -68,7 +68,7 @@ class WithPorts(Interface):
         self.interfaces = {}
 
         # Recursively merge the inherited interfaces
-        @telemetry.start_as_current_span("WithPorts.instantiate_interfaces.merge_inherits")
+        @telemetry.instrument_function("WithPorts.instantiate_interfaces.merge_inherits")
         def merge_inherits(inherits, interface_state: str = "", top_level=False):
             if not top_level and len(inherits.keys()) == 1 and (len(list(inherits.values())[0].instances.keys()) == 1):
                 compatible = True
