@@ -78,7 +78,9 @@ def test_enumeration_is_lazy_and_cached():
 
     # A subsequent enumeration and single lookups come from the cache.
     repo.object_configs("part")
-    assert repo.object_config("part", "bolt") == {"type": "step"}
+    # Normalized on the way out - the declaration carries the name it is
+    # declared under, whether or not anything has been made out of it yet.
+    assert repo.object_config("part", "bolt") == {"type": "step", "name": "bolt", "orig_name": "bolt"}
     assert fake.keys == ["objects/part"]  # no new remote calls
 
 
