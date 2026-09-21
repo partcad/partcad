@@ -211,8 +211,8 @@ def _resolve_object(ctx, pc, params):
     return pc.utils.resolve_resource_path(package_obj.name, object_name)
 
 
-def _root_config_path(ctx) -> str:
-    """The path of the ``partcad.yaml`` a context loaded as its root package.
+def _root_loaded(ctx) -> bool:
+    """Whether the context read a root package, as opposed to failing to.
 
     A ``Context`` has neither ``config_path`` nor ``broken``: both belong to the
     root ``Project`` it loaded, reachable as ``Context.root``. Reading them off
@@ -220,14 +220,22 @@ def _root_config_path(ctx) -> str:
     report "No PartCAD package is detected" for a package that had in fact
     loaded perfectly. Guarding the attribute with ``getattr(..., "broken",
     False)`` does not help either: the guard then always says "not broken" and
-    the very next line still raises.
+    the very next line still raises. So the question is asked of the root: a
+    missing or unparseable ``partcad.yaml`` leaves it ``None`` or ``broken``,
+    and a context in that state answers every lookup with nothing.
+    """
+    root = getattr(ctx, "root", None)
+    return root is not None and not root.broken
+
+
+def _root_config_path(ctx) -> str:
+    """The path of the ``partcad.yaml`` a context loaded as its root package.
 
     Raises if the root package did not load, so the caller reports why.
     """
-    root = getattr(ctx, "root", None)
-    if root is None or root.broken:
+    if not _root_loaded(ctx):
         raise Exception("Package configuration file is not found or is not valid")
-    return root.config_path
+    return ctx.root.config_path
 
 
 # ---- two-phase assembly builds ---------------------------------------------
@@ -1852,6 +1860,23 @@ def context_create(session, params):
     # Nothing on disk is discarded: the git cache keys each revision separately,
     # so switching back and forth re-reads rather than re-clones.
     if context_id in session.contexts and session.context_user_configs.get(context_id) != fingerprint:
+        session.contexts.pop(context_id, None)
+
+    # A context whose root package did not load is dropped as well, and for a
+    # sharper reason than staleness: it is a failure, and the errors saying so
+    # were logged while it was being built. Kept, it would answer every later
+    # command in this daemon with the same empty result, silently and with a zero
+    # exit status -- so one command reports "configuration file is not found" and
+    # exits 1, and every command after it looks like it worked. That is how two
+    # spellings of one request come to look like one of them is broken: whichever
+    # was typed second is the one that "works". Kept, it also means a
+    # ``partcad.yaml`` written after that first command is never read, so ``pc
+    # init`` in a directory a command has already visited leaves a package the
+    # daemon goes on denying until it is stopped.
+    #
+    # Nothing is paid for re-reading it: a root that did not load imported no
+    # dependencies, so there is no package graph behind it to rebuild.
+    if context_id in session.contexts and not _root_loaded(session.contexts[context_id]):
         session.contexts.pop(context_id, None)
 
     if context_id not in session.contexts:
