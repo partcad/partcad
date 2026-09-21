@@ -260,18 +260,28 @@ class ShapeConfiguration:
                 # By default, the parameter is not set
                 value = None
 
-            if value:
-                if "parameters" not in self.config:
-                    self.config["parameters"] = {}
-                self.config["parameters"][property] = {
-                    "type": "string",
-                    "enum": [value],
-                    "default": value,
-                }
-            else:
+            if value is None:
                 kind = getattr(self, "kind", "object").capitalize()
                 pc_logging.warning(f"{kind} '{self.name}' has no '{property}'")
 
+            # Answered on the way out and never written into
+            # 'config["parameters"]', for the same two reasons
+            # 'object_type_parameter()' above gives - and this one had a third.
+            #
+            # That dictionary is what the factories hand to the wrapper as the
+            # model's build parameters, one name per declared parameter. A
+            # 'finish' synthesized here is not a parameter of the model, so the
+            # next build of that object was rejected outright:
+            #
+            #     Cannot set value 'finish': not a parameter of the model.
+            #
+            # Which build that was depended on timing. 'pc test' runs an
+            # object's checks concurrently, so the manufacturability check
+            # asking for the finish raced the CAD check building the shape, and
+            # the write landed first only sometimes. It also moved the shape's
+            # cache key ('Shape.__init__' hashes this dictionary), so the answer
+            # to "has this already been built" changed underneath an object that
+            # nobody had re-declared.
             return value
 
         if (

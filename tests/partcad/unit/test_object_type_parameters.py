@@ -16,6 +16,7 @@ loading, that one part does not.
 """
 
 import asyncio
+import copy
 
 import pytest
 import yaml
@@ -194,6 +195,39 @@ def test_get_mcftt_still_reads_the_declared_value(tmp_path, name):
     part = pc.Context(str(package)).get_part("//:body")
 
     assert asyncio.run(part.get_mcftt(name)) == "//pub:brass"
+
+
+def test_asking_for_the_finish_declares_nothing(tmp_path):
+    """The default finish is answered, not written into the parameter list.
+
+    'config["parameters"]' is what a factory hands the wrapper as the model's
+    build parameters, one name per declared parameter, so a 'finish' invented
+    here would be passed to a script that never declared one and the build would
+    be rejected: "Cannot set value 'finish': not a parameter of the model." It
+    is also hashed into the shape's cache key. Neither may move because somebody
+    asked a question.
+    """
+    package = _write_package(tmp_path, {"body": _part("cadquery", parameters=_declare("tolerance", 0.25))})
+
+    part = pc.Context(str(package)).get_part("//:body")
+    before = copy.deepcopy(part.config.get("parameters"))
+
+    assert asyncio.run(part.get_mcftt("finish")) == "none"
+    # Asked twice, because the write this guards against was a memoization: the
+    # second answer came from what the first had left behind.
+    assert asyncio.run(part.get_mcftt("finish")) == "none"
+
+    assert part.config.get("parameters") == before
+
+
+def test_a_declared_finish_still_reads_back(tmp_path):
+    """What the part does declare is what it answers with, default and all."""
+    finish = {"finish": {"type": "string", "enum": ["anodized"], "default": "anodized"}}
+    package = _write_package(tmp_path, {"body": _part("cadquery", parameters=finish)})
+
+    part = pc.Context(str(package)).get_part("//:body")
+
+    assert asyncio.run(part.get_mcftt("finish")) == "anodized"
 
 
 def test_a_declared_tolerance_reads_back_as_a_number(tmp_path):
