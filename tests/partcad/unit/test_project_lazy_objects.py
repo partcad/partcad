@@ -151,3 +151,35 @@ def test_the_listed_descriptions_are_the_ones_the_objects_carry():
 
     assert from_objects  # the package does declare parts
     assert from_declarations == from_objects
+
+
+def test_a_part_lookup_survives_a_short_form_assembly(tmp_path):
+    """A declaration nothing has normalized yet is still a bare string.
+
+    A part named '<something>/<something>' may be one an assembly materializes
+    as it builds, so every part lookup asks which assembly or scene produces
+    that prefix - reading the declarations as they were written, because going
+    through the normalizing accessor would send a plugin-backed package to the
+    network on every lookup. Eagerly created packages had normalized all of
+    them by then; a lazy one has not, and a short-form declaration is a string
+    until it is. Asking a string for its 'type' raised.
+    """
+    (tmp_path / "partcad.yaml").write_text(
+        "name: //test\n"
+        "assemblies:\n"
+        "  robot: //other:robot\n"
+        "parts:\n"
+        "  cube:\n"
+        "    type: cadquery\n"
+        "    path: cube.py\n"
+    )
+    (tmp_path / "cube.py").write_text("")
+
+    project = pc.Context(str(tmp_path)).get_project("//")
+    assert project.objects("assembly") == {}, "the short form is still a string here"
+
+    # Nothing produces it: the short form is an alias, and an alias produces no
+    # parts of its own.
+    assert project.get_part("robot/link", quiet=True) is None
+    # ...and the package still answers for what it does declare.
+    assert project.get_part("cube", quiet=True) is not None

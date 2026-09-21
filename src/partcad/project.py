@@ -1854,7 +1854,12 @@ class Project(project_config.Configuration):
             # whichever the package meant.
             for kind in ("assembly", "scene"):
                 config = (self._object_configs.get(kind) or {}).get(prefix)
-                if config and produces_own_parts(kind, config.get("type")):
+                # Read before normalization, and so possibly still in a short
+                # form: 'robot: //other:robot' is a bare string until the kind
+                # is normalized, and asking a string for its 'type' raises.
+                # Nothing is lost by stopping here - a short form is an alias,
+                # and an alias produces no parts of its own.
+                if isinstance(config, dict) and produces_own_parts(kind, config.get("type")):
                     return kind, prefix
         return None
 
