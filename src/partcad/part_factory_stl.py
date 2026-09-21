@@ -13,6 +13,7 @@ from . import logging as pc_logging
 from . import shape_envelope, telemetry, wrapper
 from .part_factory_file import PartFactoryFile
 from .part_factory_homogen import PartFactoryHomogen
+from .process_crash import command_failure
 
 
 @telemetry.instrument()
@@ -43,7 +44,7 @@ class PartFactoryStl(PartFactoryHomogen, PartFactoryFile):
                     request_serialized,
                 )
                 if exitcode != 0 and len(errors) == 0:
-                    errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+                    errors = command_failure(command, exitcode)
 
                 if errors:
                     pc_logging.error(errors)

@@ -19,6 +19,7 @@ import os
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, telemetry, transform, wrapper
 from .part_factory import PartFactory
+from .process_crash import describe_exit_code
 from .runtime_python import environment_requirements
 from .utils import resolve_resource_path
 
@@ -153,10 +154,10 @@ class PartFactoryWrapper(PartFactory):
                 session=self.session,
             )
             if exitcode != 0 and not errors:
-                errors = "%s: %s: partType wrapper failed (exit code %s)" % (
+                errors = "%s: %s: partType wrapper failed (%s)" % (
                     part.project_name,
                     part.name,
-                    exitcode,
+                    describe_exit_code(exitcode),
                 )
             if errors:
                 for line in errors.split("\n"):

@@ -17,6 +17,7 @@ from . import software as pc_software
 from . import telemetry, wrapper
 from .geom import Location
 from .plugin_provider_data_cart import ProviderCartItem
+from .process_crash import command_failure
 from .revision import package_revision
 from .shape import Shape
 from .shape_config import final_config as _final_config
@@ -400,7 +401,7 @@ class Assembly(Shape):
                 command = [wrapper.get("interference.py"), os.path.join(unused_dir, "unused.txt")]
                 exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
             if exitcode != 0 and len(errors) == 0:
-                errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+                errors = command_failure(command, exitcode)
             if errors:
                 pc_logging.error(errors)
                 raise Exception(errors)

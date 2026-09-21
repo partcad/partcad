@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 # - can import the OCP codec lazily.
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from . import shape_envelope, telemetry
+from .process_crash import command_failure
 
 PART_EXTENSION_MAPPING = {
     "step": "step",
@@ -1442,7 +1443,7 @@ class Shape(ShapeConfiguration):
                 extra = {}
             exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized, **extra)
             if exitcode != 0 and len(errors) == 0:
-                errors = "Failed to execute command '%s' with exit code %s" % (" ".join(command), exitcode)
+                errors = command_failure(command, exitcode)
             if errors:
                 pc_logging.error(errors)
                 raise Exception(errors)
@@ -2559,7 +2560,7 @@ class Shape(ShapeConfiguration):
                 command = [wrapper.get("solidity.py"), os.path.join(unused_dir, "unused.txt")]
                 exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
             if exitcode != 0 and len(errors) == 0:
-                errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+                errors = command_failure(command, exitcode)
             if errors:
                 pc_logging.error(errors)
                 raise Exception(errors)
@@ -2611,7 +2612,7 @@ class Shape(ShapeConfiguration):
                 command = [wrapper.get("bbox.py"), os.path.join(unused_dir, "unused.txt")]
                 exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
             if exitcode != 0 and len(errors) == 0:
-                errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+                errors = command_failure(command, exitcode)
             if errors:
                 pc_logging.error(errors)
                 raise Exception(errors)

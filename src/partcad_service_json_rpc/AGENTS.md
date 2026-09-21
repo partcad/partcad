@@ -17,6 +17,18 @@ The daemon owns two things its clients do not, and both decide what belongs on w
    client that edits `partcad.yaml` behind the daemon's back leaves it serving stale contents, which is why a
    package-mutating command (`add`, `import`) must be a daemon client and evict the context it changed
    (`_invalidate_context`).
+   A **failed** load is not kept either, for a reason of its own: the errors saying why are logged while the
+   context is being built, so a cached one would be a single command reporting "configuration file is not
+   found" and exiting non-zero followed by any number of commands answering with nothing and exiting zero --
+   one request that "fails" once and "works" from then on, and two spellings of it (`...` and `./...`) that
+   look like one of them is broken when what differs is which was typed first. So `context.create` drops a
+   context whose root package did not load and reads it again, which is also what makes a `partcad.yaml`
+   written after that first command visible without stopping the daemon. It costs nothing, because a root that
+   did not load imported no dependencies. That covers the root and only the root: an error logged while some
+   *other* package of the graph loaded (an unreachable dependency, an object a plugin could not enumerate) is
+   still reported once, by whichever command paid for the load, so the same command still exits non-zero then
+   zero. Remembering those with the packages they belong to, and re-reporting them for every answer that
+   includes one, is the rest of this problem and is not done yet.
    The context is warm across connections, which is why `activate` **reloads** `partcad` rather than importing
    it: `Session.load_partcad` drops `partcad` and `partcad.*` from `sys.modules` (along with `partcad_cli*` and
    `partcad_ide_client*`, but never this package, whose session is doing the dropping) and imports again,

@@ -13,6 +13,7 @@ from . import config as pc_config
 from . import expr
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, telemetry, wrapper
+from .process_crash import describe_exit_code
 from .sketch_factory import SketchFactory
 
 
@@ -90,10 +91,10 @@ class SketchFactoryBasic(SketchFactory):
                     [wrapper_path, "sketch_basic"], request_serialized
                 )
                 if exitcode != 0 and not errors:
-                    errors = "%s: %s: basic sketch failed with exit code %s" % (
+                    errors = "%s: %s: basic sketch failed: %s" % (
                         sketch.project_name,
                         sketch.name,
-                        exitcode,
+                        describe_exit_code(exitcode),
                     )
                 if errors:
                     pc_logging.error(errors)

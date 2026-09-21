@@ -26,8 +26,9 @@
 # which interfaces these joints use and why.
 name: AeroAssembly_connected
 description: >-
-  The imported AeroAssembly, corrected and then joined: eight milled parts, six
-  M3 bolted joints and a seat, in the order somebody would put them together.
+  The imported AeroAssembly, corrected and then joined: seven milled parts and
+  a bent cap, six M3 bolted joints and a seat, in the order somebody would put
+  them together.
 links:
   # The fixture. Nothing is connected to it from underneath, so it is what the
   # other seven hang from, and it is placed by being first rather than by

@@ -20,6 +20,7 @@ from . import sandbox_versions, shape_envelope, telemetry, wrapper
 from .healthcheck.openscad import find_executable as find_openscad_executable
 from .part_factory_file import PartFactoryFile
 from .part_factory_homogen import PartFactoryHomogen
+from .process_crash import command_failure
 from .process_output import decode as decode_output
 
 
@@ -316,7 +317,7 @@ class PartFactoryScad(PartFactoryHomogen, PartFactoryFile):
                         request_serialized,
                     )
                 if exitcode != 0 and len(errors) == 0:
-                    errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+                    errors = command_failure(command, exitcode)
 
                 if errors:
                     part.error("%s: %s" % (part.name, errors))

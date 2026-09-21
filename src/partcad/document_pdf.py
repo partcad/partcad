@@ -19,6 +19,7 @@ import os
 from . import document as pc_document
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, wrapper
+from .process_crash import command_failure
 
 # The paper the instruction book is printed on. A4 is the ISO default and what
 # the rest of the world prints on; "letter" is accepted for North America.
@@ -40,7 +41,7 @@ async def render_pdf_async(ctx, document: pc_document.Document, path, page_size=
     command = [wrapper.get("render_pdf.py"), os.path.abspath(path)]
     exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
     if exitcode != 0 and len(errors) == 0:
-        errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+        errors = command_failure(command, exitcode)
     if errors:
         pc_logging.error(errors)
         raise Exception(errors)

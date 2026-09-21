@@ -116,3 +116,32 @@ Feature: `pc daemon` commands
     When I run "pc --no-ansi daemon stop"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "PartCAD daemon stopped"
+
+  @pc-daemon @success @skip-windows
+  Scenario: A directory with no package is not remembered as having none
+    # The daemon answers from the context it keeps, and that context must never
+    # be a failed load: the errors explaining one are logged while it is built,
+    # so a cached failure is one command that says why followed by any number
+    # that quietly say nothing and exit zero.
+    When I run "pc --no-ansi list packages ..."
+    Then the command should exit with a non-zero status code
+    And STDERR should contain "PartCAD configuration file is not found"
+    When I run "pc --no-ansi list packages ..."
+    Then the command should exit with a non-zero status code
+    And STDERR should contain "PartCAD configuration file is not found"
+    # And a package written after that is read, rather than denied for as long as
+    # this daemon runs.
+    Given a file named "partcad.yaml" with content:
+      """
+      name: //
+      desc: Root Package
+      sketches:
+        circle:
+          type: basic
+          circle: 1
+      """
+    When I run "pc --no-ansi list packages ..."
+    Then the command should exit with a status code of "0"
+    And STDERR should contain "Root Package"
+    When I run "pc --no-ansi daemon stop"
+    Then the command should exit with a status code of "0"

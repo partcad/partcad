@@ -16,6 +16,7 @@ codec, so this module never touches OCP.
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, wrapper
 from .geom import Location
+from .process_crash import describe_exit_code
 
 # The bounding box only needs OCCT itself, no CAD kernel on top of it.
 _DEPENDENCIES = (sandbox_versions.CADQUERY_OCP,)
@@ -35,7 +36,7 @@ async def _run(ctx, request):
     command = [wrapper_path, operation]
     exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
     if exitcode != 0 and not errors:
-        errors = "measure '%s' failed with exit code %s" % (operation, exitcode)
+        errors = "measure '%s' failed: %s" % (operation, describe_exit_code(exitcode))
     if errors:
         pc_logging.error(errors)
         raise Exception(errors)
