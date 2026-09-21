@@ -104,6 +104,49 @@ def test_single_fetch_avoids_full_enumeration():
     assert "objects/part" not in fake.keys
 
 
+def test_a_lookup_by_name_asks_for_that_one_object(tmp_path):
+    """Not for the catalog it is in.
+
+    'object_config' falls back to a targeted single fetch precisely so that a
+    plugin-backed package can serve one object without listing everything it
+    has - and 'get_object' defeated that by taking the enumerated mapping as an
+    argument, which materialized it at the call site before the lookup began.
+    'pc render //pub/universe/lego/ldraw/bricks:3001' is the case: one part, and
+    a round trip for the category.
+    """
+    data = {
+        "objects/part/bolt": {"type": "step", "path": "bolt.step"},
+        "objects/part": {"bolt": {"type": "step"}, "nut": {"type": "step"}},
+    }
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    fake = FakeRepository(data)
+    repo._repository = fake
+
+    repo.get_part("bolt", quiet=True)
+
+    assert fake.keys == ["objects/part/bolt"]
+    assert "objects/part" not in fake.keys
+
+
+def test_a_parametrized_lookup_reads_a_normalized_base(tmp_path):
+    """The declaration the variant is derived from is a declaration.
+
+    The parameterized branch used to index the raw enumerated mapping, so what
+    it copied was whatever the plugin sent - without the 'name' and the
+    'manufacturable' that every other reader of a declaration is handed (see
+    'Project._normalized').
+    """
+    data = {"objects/part/widget": {"type": "step", "parameters": {"width": {"default": 2.0}}}}
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", str(tmp_path), config_obj={})
+    repo._repository = FakeRepository(data)
+
+    base = repo.get_part_config("widget")
+    assert base["name"] == "widget"
+    assert base["manufacturable"] is True
+
+
 def test_ensure_enumerated_async_warms_the_sync_accessors():
     """After the async warm-up, the sync accessors never bridge to async."""
     ctx = pc.Context("examples")

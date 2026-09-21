@@ -1779,7 +1779,6 @@ class Project(project_config.Configuration):
             "sketch",
             Project.SketchLock,
             self.objects("sketch"),
-            self.sketch_configs,
             self.get_sketch_config,
             sketch_config.SketchConfiguration,
             sfa.SketchFactoryAlias,
@@ -1794,7 +1793,6 @@ class Project(project_config.Configuration):
             "part",
             Project.PartLock,
             self.objects("part"),
-            self.part_configs,
             self.get_part_config,
             part_config.PartConfiguration,
             pfa.PartFactoryAlias,
@@ -2029,7 +2027,6 @@ class Project(project_config.Configuration):
             "assembly",
             Project.AssemblyLock,
             self.objects("assembly"),
-            self.assembly_configs,
             self.get_assembly_config,
             assembly_config.AssemblyConfiguration,
             afa.AssemblyFactoryAlias,
@@ -2043,7 +2040,6 @@ class Project(project_config.Configuration):
             "scene",
             Project.SceneLock,
             self.objects("scene"),
-            self.scene_configs,
             self.get_scene_config,
             scene_config.SceneConfiguration,
             scnf.SceneFactoryAlias,
@@ -2057,7 +2053,6 @@ class Project(project_config.Configuration):
             "provider",
             Project.ProviderLock,
             self.providers,
-            self.provider_configs,
             self.get_provider_config,
             plugin_config.PluginConfiguration,
             None,
@@ -2070,7 +2065,6 @@ class Project(project_config.Configuration):
             "repository",
             Project.RepositoryLock,
             self.repositories,
-            self.repository_configs,
             self.get_repository_config,
             plugin_config.PluginConfiguration,
             None,
@@ -2083,7 +2077,6 @@ class Project(project_config.Configuration):
             "software",
             Project.SoftwareLock,
             self.software,
-            self.software_configs,
             self.get_software_config,
             software_config.SoftwareConfiguration,
             None,
@@ -2097,7 +2090,6 @@ class Project(project_config.Configuration):
         factory_name: str,
         lock_class,
         objects,
-        object_configs: dict[str, dict[str, typing.Any]],
         get_config: callable,
         config_class,
         alias_class,
@@ -2215,12 +2207,21 @@ class Project(project_config.Configuration):
                 return objects[object_name]
 
             # This object has params (part_name != result_name). Only the base
-            # object's *config* is needed to derive the parametrized variant
-            # (see 'object_configs[base_object_name]' below), so check the
-            # enumerable configs rather than the instantiated 'objects' dict -
-            # a plugin-backed package enumerates lazily and may not have
-            # instantiated the base yet.
-            if base_object_name not in object_configs:
+            # object's *declaration* is needed to derive the parametrized
+            # variant, so it is asked for rather than looked up in the
+            # instantiated 'objects' dict - a plugin-backed package creates
+            # lazily and may not have made the base yet.
+            #
+            # Through 'get_config' rather than the enumerated mapping, for the
+            # two reasons that accessor exists: it can fetch this one
+            # declaration without enumerating the package (which is the whole
+            # of what a lookup by name should cost), and it hands back a
+            # normalized one, so the copy below carries what a declaration
+            # carries. Taking the mapping instead meant every named lookup
+            # materialized it, and a plugin-backed package answered 'get_part'
+            # with a round trip for its entire catalog.
+            config = get_config(base_object_name)
+            if config is None:
                 # The same distinction the unparametrized branch above makes:
                 # a base this context excluded is not a base that is missing,
                 # and 'gone;width=5' has to read the same way as 'gone'.
@@ -2252,15 +2253,6 @@ class Project(project_config.Configuration):
             pc_logging.debug("Found the base object: %s" % base_object_name)
 
             # Now we have the original assembly name and the complete set of parameters
-            config = object_configs[base_object_name]
-            if config is None:
-                pc_logging.error(
-                    "The config for the base object '%s' is not found in '%s'",
-                    base_object_name,
-                    self.name,
-                )
-                return None
-
             config = copy.deepcopy(config)
             declare_object_type_parameters(factory_name, config, params)
             if ("parameters" not in config or config["parameters"] is None) and (
