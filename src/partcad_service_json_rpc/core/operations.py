@@ -884,15 +884,26 @@ def info(session, params):
                 "path": path,
                 "packages": ctx.stats_packages,
                 "packagesInstantiated": ctx.stats_packages_instantiated,
-                "sketches": ctx.stats_sketches,
+                # Two numbers per kind: what the loaded packages declare, and
+                # how many of those have been built. The '<kind>' keys carried
+                # the first of those under a name that did not say so, and are
+                # emitted beside the new ones so that an extension published
+                # before this keeps working (see 'PartcadContext.ts', which
+                # reads whichever it is given).
+                "sketchesDeclared": ctx.stats_sketches_declared,
+                "sketches": ctx.stats_sketches_declared,
                 "sketchesInstantiated": ctx.stats_sketches_instantiated,
-                "interfaces": ctx.stats_interfaces,
+                "interfacesDeclared": ctx.stats_interfaces_declared,
+                "interfaces": ctx.stats_interfaces_declared,
                 "interfacesInstantiated": ctx.stats_interfaces_instantiated,
-                "parts": ctx.stats_parts,
+                "partsDeclared": ctx.stats_parts_declared,
+                "parts": ctx.stats_parts_declared,
                 "partsInstantiated": ctx.stats_parts_instantiated,
-                "assemblies": ctx.stats_assemblies,
+                "assembliesDeclared": ctx.stats_assemblies_declared,
+                "assemblies": ctx.stats_assemblies_declared,
                 "assembliesInstantiated": ctx.stats_assemblies_instantiated,
-                "scenes": ctx.stats_scenes,
+                "scenesDeclared": ctx.stats_scenes_declared,
+                "scenes": ctx.stats_scenes_declared,
                 "scenesInstantiated": ctx.stats_scenes_instantiated,
                 "size": ctx.stats_memory,
             },

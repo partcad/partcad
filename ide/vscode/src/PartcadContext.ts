@@ -17,18 +17,39 @@ type Stats = {
     size: number;
     packages: number;
     packagesInstantiated: number;
-    sketches: number;
+    // Two numbers per kind: how many objects the loaded packages declare, and
+    // how many of those have been built. Both spellings of the first are
+    // optional because they arrive from whichever PartCAD is serving: the
+    // `<kind>Declared` keys are the ones that say what the number is, and the
+    // bare `<kind>` keys are what a service published before them sends.
+    sketchesDeclared?: number;
+    sketches?: number;
     sketchesInstantiated: number;
-    interfaces: number;
+    interfacesDeclared?: number;
+    interfaces?: number;
     interfacesInstantiated: number;
-    parts: number;
+    partsDeclared?: number;
+    parts?: number;
     partsInstantiated: number;
-    assemblies: number;
+    assembliesDeclared?: number;
+    assemblies?: number;
     assembliesInstantiated: number;
-    // Optional: an older PartCAD service does not report these.
+    // Optional in both spellings: an older PartCAD service does not report
+    // scenes at all.
+    scenesDeclared?: number;
     scenes?: number;
     scenesInstantiated?: number;
 };
+
+/** The declared count of a kind, whichever of the two keys carried it. */
+function declared(stats: Stats, kind: 'sketches' | 'interfaces' | 'parts' | 'assemblies' | 'scenes'): number {
+    const asDeclared = stats[`${kind}Declared` as keyof Stats];
+    if (typeof asDeclared === 'number') {
+        return asDeclared;
+    }
+    const bare = stats[kind as keyof Stats];
+    return typeof bare === 'number' ? bare : 0;
+}
 
 /**
  * What the version cell holds until PartCAD has reported one.
@@ -48,15 +69,15 @@ let saved: {
         size: 0,
         packages: 0,
         packagesInstantiated: 0,
-        sketches: 0,
+        sketchesDeclared: 0,
         sketchesInstantiated: 0,
-        interfaces: 0,
+        interfacesDeclared: 0,
         interfacesInstantiated: 0,
-        parts: 0,
+        partsDeclared: 0,
         partsInstantiated: 0,
-        assemblies: 0,
+        assembliesDeclared: 0,
         assembliesInstantiated: 0,
-        scenes: 0,
+        scenesDeclared: 0,
         scenesInstantiated: 0,
     },
     version: VERSION_UNKNOWN,
@@ -191,23 +212,23 @@ export class PartcadContext implements vscode.WebviewViewProvider {
         </tr>
         <tr>
         <td>Sketches:</td>
-        <td id="num-sketches" class="num-sketches">${saved.stats.sketches}&nbsp;(${saved.stats.sketchesInstantiated})</td>
+        <td id="num-sketches" class="num-sketches">${declared(saved.stats, 'sketches')}&nbsp;(${saved.stats.sketchesInstantiated})</td>
         </tr>
         <tr>
         <td>Interfaces:</td>
-        <td id="num-interfaces" class="num-interfaces">${saved.stats.interfaces}&nbsp;(${saved.stats.interfacesInstantiated})</td>
+        <td id="num-interfaces" class="num-interfaces">${declared(saved.stats, 'interfaces')}&nbsp;(${saved.stats.interfacesInstantiated})</td>
         </tr>
         <tr>
         <td>Parts:</td>
-        <td id="num-parts" class="num-parts">${saved.stats.parts}&nbsp;(${saved.stats.partsInstantiated})</td>
+        <td id="num-parts" class="num-parts">${declared(saved.stats, 'parts')}&nbsp;(${saved.stats.partsInstantiated})</td>
         </tr>
         <tr>
         <td>Assemblies:</td>
-        <td id="num-assemblies" class="num-assemblies">${saved.stats.assemblies}&nbsp;(${saved.stats.assembliesInstantiated})</td>
+        <td id="num-assemblies" class="num-assemblies">${declared(saved.stats, 'assemblies')}&nbsp;(${saved.stats.assembliesInstantiated})</td>
         </tr>
         <tr>
         <td>Scenes:</td>
-        <td id="num-scenes" class="num-scenes">${saved.stats.scenes ?? 0}&nbsp;(${saved.stats.scenesInstantiated ?? 0})</td>
+        <td id="num-scenes" class="num-scenes">${declared(saved.stats, 'scenes')}&nbsp;(${saved.stats.scenesInstantiated ?? 0})</td>
         </tr>
         <tr>
         <td>Memory:</td>

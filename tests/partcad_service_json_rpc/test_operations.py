@@ -371,15 +371,15 @@ class FakeContext:
         for name in (
             "stats_packages",
             "stats_packages_instantiated",
-            "stats_sketches",
+            "stats_sketches_declared",
             "stats_sketches_instantiated",
-            "stats_interfaces",
+            "stats_interfaces_declared",
             "stats_interfaces_instantiated",
-            "stats_parts",
+            "stats_parts_declared",
             "stats_parts_instantiated",
-            "stats_assemblies",
+            "stats_assemblies_declared",
             "stats_assemblies_instantiated",
-            "stats_scenes",
+            "stats_scenes_declared",
             "stats_scenes_instantiated",
             "stats_memory",
         ):
@@ -560,6 +560,28 @@ def test_info_emits_stats_with_version_and_recalculated_counts():
     assert payload["version"] == "0.7.158"
     assert payload["stats"]["packages"] == 3
     assert payload["stats"]["path"] == "/abs/partcad.yaml"
+
+
+def test_info_reports_what_is_declared_and_what_is_built_separately():
+    """Two numbers per kind, and the declared one says which it is.
+
+    The bare '<kind>' key carries the declared count too, so that an extension
+    published before the pair existed keeps showing the same number it always
+    did (see 'PartcadContext.ts').
+    """
+    session, seen = make_session()
+    session.partcad_ctx.stats_parts_declared = 12
+    session.partcad_ctx.stats_parts_instantiated = 3
+
+    operations.info(session, {})
+    stats = seen[-1][1]["stats"]
+
+    assert stats["partsDeclared"] == 12
+    assert stats["parts"] == 12
+    assert stats["partsInstantiated"] == 3
+    for kind in ("sketches", "interfaces", "assemblies", "scenes"):
+        assert stats[kind + "Declared"] == stats[kind]
+        assert kind + "Instantiated" in stats
 
 
 def test_package_path_emits_execute_with_the_callback(tmp_path):

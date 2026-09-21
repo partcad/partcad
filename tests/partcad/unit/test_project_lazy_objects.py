@@ -70,12 +70,12 @@ def test_declared_counts_do_not_depend_on_what_was_created():
     ctx = pc.Context("examples")
     project = ctx.get_project(PARTS)
 
-    declared = ctx.stats_parts
+    declared = ctx.stats_parts_declared
     assert declared == len(project.object_configs("part")) > 0
     assert project.objects("part") == {}  # counting created nothing
 
     project.get_part("cube")
-    assert ctx.stats_parts == declared
+    assert ctx.stats_parts_declared == declared
 
 
 def test_one_by_name_and_the_bulk_pass_at_the_same_time():

@@ -205,17 +205,22 @@ class Context:
     own. It holds the root package in 'self.root' and adopts its name instead.
     """
 
+    # Two numbers per kind, and two questions: how many objects the loaded
+    # packages *declare*, and how many of them have been *instantiated* - built
+    # into geometry, which is what 'instantiate' means everywhere else here.
+    #
+    # They used to be one number and a half: the "declared" one was a counter
+    # the factories incremented as they made objects, which equalled the
+    # declared count only for as long as loading a package made everything in
+    # it. It no longer does (see 'Project.LAZY_OBJECT_KINDS'), so the declared
+    # half is counted from the declarations and the instantiated half stays a
+    # counter - nothing can count a build that has not happened.
     stats_packages: int
     stats_packages_instantiated: int
-    stats_sketches: int
     stats_sketches_instantiated: int
-    stats_interfaces: int
     stats_interfaces_instantiated: int
-    stats_parts: int
     stats_parts_instantiated: int
-    stats_assemblies: int
     stats_assemblies_instantiated: int
-    stats_scenes: int
     stats_scenes_instantiated: int
     stats_plugins: int
     stats_plugin_queries: int
@@ -348,7 +353,6 @@ class Context:
 
         self.stats_packages = 0
         self.stats_packages_instantiated = 0
-        self.stats_interfaces = 0
         self.stats_interfaces_instantiated = 0
         # The four kinds that are shapes have no counter of their own: they are
         # counted from what the loaded packages declare, when somebody asks (see
@@ -480,19 +484,23 @@ class Context:
         return sum(project.object_count_known(kind) for project in list(self.projects.values()))
 
     @property
-    def stats_sketches(self) -> int:
+    def stats_sketches_declared(self) -> int:
         return self._stats_declared("sketch")
 
     @property
-    def stats_parts(self) -> int:
+    def stats_interfaces_declared(self) -> int:
+        return self._stats_declared("interface")
+
+    @property
+    def stats_parts_declared(self) -> int:
         return self._stats_declared("part")
 
     @property
-    def stats_assemblies(self) -> int:
+    def stats_assemblies_declared(self) -> int:
         return self._stats_declared("assembly")
 
     @property
-    def stats_scenes(self) -> int:
+    def stats_scenes_declared(self) -> int:
         return self._stats_declared("scene")
 
     def stats_recalc(self, verbose=False):

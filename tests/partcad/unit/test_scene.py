@@ -121,7 +121,7 @@ def test_a_scene_alias_resolves_to_a_scene_and_not_to_an_assembly(tmp_path):
 def test_the_context_resolves_a_scene_by_name(tmp_path):
     ctx = pc.Context(str(sandbox(tmp_path)))
     assert ctx.get_scene("//%s:bench" % SCENE_EXAMPLE_PACKAGE) is not None
-    assert ctx.stats_scenes >= 1
+    assert ctx.stats_scenes_declared >= 1
 
 
 #
