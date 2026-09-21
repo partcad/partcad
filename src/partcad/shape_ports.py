@@ -200,6 +200,7 @@ def as_location(location) -> Location:
 
 
 async def _collect(shape, ctx, owner: str, placement: Location, deep: bool, out: list) -> None:
+    """'shape' and, when the walk is a deep one and it is an assembly, what is inside it."""
     from .assembly import Assembly
 
     is_assembly = isinstance(shape, Assembly)

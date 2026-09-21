@@ -773,6 +773,7 @@ def test_search_objects_can_search_by_interface(monkeypatch):
 
 
 def test_search_objects_says_so_when_both_are_given(monkeypatch):
+    """Both filters hold, and the line above the results says which two."""
     install_fake_search(monkeypatch)
     session, _ = make_session()
     root = session.partcad_ctx.projects["//"]

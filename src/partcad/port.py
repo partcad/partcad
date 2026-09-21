@@ -45,6 +45,7 @@ class WithPorts(Interface):
         self.mapped = None
 
     def map_resolved(self) -> bool:
+        """Whether somebody has already worked out what this object's 'map:' names."""
         return self.mapped is not None
 
     def has_loose_ports(self) -> bool:
@@ -80,6 +81,7 @@ class WithPorts(Interface):
         return self.mapped.inherits if self.mapped is not None else {}
 
     def instantiate_ports(self):
+        """This object's ports: the ones it externalizes, then the ones it declares."""
         # Externalized first, declared second: 'ports:' and 'implements:' are
         # this object's own statements about itself and get the last word, and
         # they are entitled to name what the map has produced (an 'implements:'

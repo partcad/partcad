@@ -225,6 +225,12 @@ def _merge_inherit(mapped: MappedPorts, inherit: InterfaceInherits, where: str) 
 
 
 def _resolve_port(shape, mapped: MappedPorts, name: str, item, placement: Location, port_name: str, where: str) -> None:
+    """The two-element form: one port of one node, under a name of this assembly's own.
+
+    The port itself is not moved - a port of a part stays a port of that part.
+    What this assembly gets is a port of its own at the place that one ended up,
+    drawn with the same boundary.
+    """
     ports = item.with_ports.get_ports()
     port = ports.get(port_name)
     if port is None:
@@ -259,6 +265,13 @@ def _resolve_instance(
     instance_name: str,
     where: str,
 ) -> None:
+    """The three-element form: one instance of one interface a node implements.
+
+    Spelled as the 'implements:' this assembly would have had to write for
+    itself, so that everything downstream treats it as exactly that. The
+    interface is the node's; only the instance name is this assembly's to
+    choose.
+    """
     interfaces = item.with_ports.get_interfaces() or {}
     matched = _match_interface(interfaces, interface_name, item)
     if matched is None:
@@ -288,6 +301,14 @@ def _resolve_instance(
 
 
 async def _resolve_entry(ctx, shape, mapped: MappedPorts, nodes: dict, name: str, spec, where: str) -> None:
+    """One entry of a 'map:' section: what it names, if it names anything usable.
+
+    Everything a declaration can get wrong is reported here and costs the user
+    that one port rather than the assembly: a node this file does not have, a
+    port that node does not have, an interface it does not implement, an
+    instance of it that does not exist, and a value that is neither of the two
+    forms.
+    """
     if isinstance(spec, str):
         # One string is not a tuple of two, and reading it as a list of
         # characters is the kind of help nobody asked for.
