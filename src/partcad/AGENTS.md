@@ -178,6 +178,20 @@ at all).
   `sandbox_versions.py` pins, which `tests/partcad/unit/test_output.py` enforces — as does a check that every
   built-in package validates against PartCAD's own configuration schema, since nothing else reads them.
 
+  One field of a file type is not a parameter of any one format but a field of the **protocol**:
+  `reproducible` (`output.REPRODUCIBLE_KEY`), a boolean defaulting to `false`. It says whether this file has
+  to come out byte-for-byte the same every time it is written from the same object, and
+  `Shape._run_implementation_locked()` puts it into *every* request beside `__decode__`, declared or not — so
+  an implementation reads `request["reproducible"]` without asking whether the key exists, and a package that
+  publishes a `render:` implementation of its own means by it what `//builtin/render` means. Unlike `decode`
+  it is not reserved: it has to reach the script. What it costs is why it is off by default — the SVG
+  projection takes OpenCASCADE's exact hidden-line algorithm over the polygonal one, which is much the slower
+  on anything large and is the one that reads past the end of an OCCT allocation. It is a floor and not a
+  promise: it settles what PartCAD chooses and leaves the kernel's own arithmetic, on which two architectures
+  can disagree along a curved silhouette. (Not to be confused with the `reproducible` of
+  `file_factory.unreproducible_reason()` below, which is about whether an object can be *made* twice, not
+  whether a file is written twice the same.)
+
 - **Engineering analysis** (`./src/partcad/cae.py`, `Shape.analyze_async()`, `./src/partcad/test/cae.py`):
   `pc cae fea`/`pc cae cfd` are a third output section, `cae:`, resolved by the very code that resolves
   `export:` and `render:` -- same `path`/`package`, same sandbox, same meta-wrapper (`wrapper_export.py`), and

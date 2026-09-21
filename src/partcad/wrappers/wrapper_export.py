@@ -64,6 +64,13 @@ reuse the SVG one.
 A format that declared 'properties: true' finds 'request["properties"]' holding
 what each shape reports about itself - its material, its colour, its physics -
 keyed by the full name the shape carries. See 'properties_index()'.
+
+Every request carries 'request["reproducible"]', a boolean, whether or not the
+file type declared it: whether the caller needs this file to come out the same
+every time it is written, from the same object. An
+implementation with nothing to decide ignores it; one that would otherwise stamp
+the file with the clock, or reach for the quicker of two algorithms that do not
+agree to the last bit, reads it and does the other thing. See REPRODUCIBLE_KEY.
 """
 
 import os
@@ -104,6 +111,24 @@ DECODE_KEY = "__decode__"
 # reserved key: a format that has no way to state a material or a mass never
 # declares it and never sees the index.
 PROPERTIES_KEY = "properties"
+
+# Whether the file this implementation is about to write has to come out
+# byte-for-byte the same every time it is written, from the same object.
+#
+# It is in every request the core sends, whether or not the file type declared
+# it, and that is the point of naming it here: an implementation reads
+# 'request["reproducible"]' without first asking whether the key exists, and
+# means by it what every other implementation means. Its twin is
+# 'partcad.output.REPRODUCIBLE_KEY', spelled out separately for the reason
+# DECODE_KEY is - a wrapper runs in a sandbox and cannot import 'partcad'.
+#
+# A plain parameter rather than a reserved one, so a package declares it as
+# 'reproducible: true' on a file type like any other field, and so an
+# implementation that has nothing to decide is free to ignore it. The built-in
+# renderers do decide: it picks which of OCCT's two hidden-line algorithms the
+# projection goes through, because only one of the two draws the same bytes on
+# two machines - see 'builtin/render/render_svg.py'.
+REPRODUCIBLE_KEY = "reproducible"
 
 # The key the core puts what each shape inherits from its material under, keyed
 # by the same full name the index below is keyed by. A shape says what it is

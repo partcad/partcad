@@ -18,6 +18,14 @@ without a single extra package in the sandbox.
 
 This module is imported by its siblings rather than run on its own: it is not
 declared as the 'path' of any file type.
+
+'reproducible' reaches the projection through the request, which is handed to
+'render_svg.process()' whole - so a raster asked for reproducibly is drawn from
+the projection that is. It settles the picture and not the encoding: the bytes
+below this point are svglib's, reportlab's and Pillow's, and a new release of
+any of the three moves them by a few tens without moving the picture. That is
+why the four raster projections under 'examples/feature_render/images' are on
+the CI job's UNSTABLE list and the SVGs beside them are not.
 """
 
 import math

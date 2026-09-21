@@ -8,6 +8,15 @@
 # `readme` is deliberately absent. It is not produced by a wrapper script at all
 # but assembled by PartCAD itself out of the images the other formats leave
 # behind, so there is nothing here for a package to replace.
+#
+# `reproducible` is the one field here that is worth reading twice. Unlike the
+# exporters, where it is so far only declared, every file type below acts on it:
+# it picks the hidden-line algorithm the projection goes through, and for DXF
+# the metadata that goes in the header. It is `false` on all four, which is the
+# default everywhere -- a picture produced to be looked at should be the fastest
+# correct one. A package that *keeps* its drawings, so that a diff answers
+# whether they changed, sets it to `true` on the file type; every example in
+# this repository does.
 
 name: //builtin/render
 desc: |
@@ -58,6 +67,17 @@ render:
     # renderer has always written; lower it for a drawing that is kept in a
     # repository, where the last six of them are bytes rather than information.
     precision: 10
+    # Which hidden-line algorithm the projection goes through. 'false' - the
+    # default here as everywhere - picks the polygonal one: it works from the
+    # triangulation, it is the only one that does not read past the end of an
+    # OCCT allocation, and it draws a large assembly in seconds rather than
+    # minutes. What it costs is that the triangulation is floating point all the
+    # way down, so the same shape comes out with a slightly different silhouette
+    # on a different machine. 'true' picks the exact one, which works from the
+    # surfaces and draws the same bytes anywhere - which is what a drawing kept
+    # in a repository needs, and what every image under 'examples/' asks for.
+    # See 'render_svg.project()' for the whole trade.
+    reproducible: false
 
   png:
     desc: The SVG projection, rasterized.
@@ -73,6 +93,12 @@ render:
     # See 'svg' above.
     port_marker_size: 0.1
     port_label_size: 0.035
+    # The projection underneath this one, so a raster asked for reproducibly is
+    # drawn from the projection that is. See 'svg' above. It settles the picture
+    # and not the encoding: what rasterizes the SVG is svglib, reportlab and
+    # Pillow, and a new release of any of the three moves the encoded bytes
+    # without moving the picture.
+    reproducible: false
 
   jpeg:
     # The format is named 'jpeg' but the file it writes is a '.jpg'.
@@ -99,6 +125,8 @@ render:
     # below quality 95) smears color across the one-pixel-wide edges, so keep
     # full chroma unless the package asks for something smaller.
     subsampling: "4:4:4"
+    # See 'png' above.
+    reproducible: false
 
   dxf:
     desc: The SVG projection, converted to DXF.
@@ -113,10 +141,16 @@ render:
     # See 'svg' above.
     port_marker_size: 0.1
     port_label_size: 0.035
-    # Write the same bytes for the same drawing: a fixed creation time and the
-    # all-zero GUID pair, instead of the wall clock and fresh GUIDs a DXF is
-    # otherwise stamped with on every save. On by default because the same
-    # drawing rendered twice should be the same file - that is what makes a
-    # checked-in DXF a baseline a change can be noticed against. Set it to
-    # 'false' for a file that has to record when it was really written.
-    reproducible: true
+    # Write the same bytes for the same drawing: the exact projection rather
+    # than the polygonal one (see 'svg' above), and a fixed creation time and
+    # the all-zero GUID pair instead of the wall clock and the fresh GUIDs a DXF
+    # is otherwise stamped with on every save.
+    #
+    # This was the one file type that had a flag of this name before it was one,
+    # and it was on by default. It is off now, with the rest: 'reproducible' is
+    # a protocol field with one meaning and one default everywhere it appears,
+    # and a DXF that alone among the file types wrote fixed metadata was a
+    # second answer to the question this field asks. A package that wants the
+    # old behaviour says so - 'examples/feature_render' does, and so does every
+    # example that keeps its drawing in the repository.
+    reproducible: false

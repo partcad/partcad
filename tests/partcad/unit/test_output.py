@@ -17,6 +17,7 @@ import asyncio
 import importlib.util
 import math
 import os
+import re
 import sys
 
 import pytest
@@ -98,18 +99,31 @@ def test_every_builtin_implementation_honours_the_wrapper_contract(ctx):
             assert arguments == ["path", "request"], "%s: %s" % (format_name, arguments)
 
 
-def _builtin_function(section, script_name, function_name):
+def _builtin_function(section, script_name, function_name, also=()):
     """One function out of a built-in implementation, without its imports.
 
     Same reason as the test above parses instead of importing: these scripts
     import a CAD stack this process does not have. Compiling the single
     function definition gives a callable to test the arithmetic in.
+
+    'also' names the other top-level definitions it needs -- a sibling function
+    it calls, a constant it reads -- which are compiled into the same namespace,
+    in the order the file has them.
     """
     script = os.path.join(output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[section]], script_name)
     tree = ast.parse(open(script).read(), filename=script)
-    definition = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == function_name)
-    namespace = {"DEFAULT_SIZE": 512, "math": math}
-    exec(compile(ast.Module(body=[definition], type_ignores=[]), script, "exec"), namespace)
+    wanted = set(also) | {function_name}
+
+    def names_of(node):
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            return {node.name}
+        if isinstance(node, ast.Assign):
+            return {target.id for target in node.targets if isinstance(target, ast.Name)}
+        return set()
+
+    body = [node for node in tree.body if names_of(node) & wanted]
+    namespace = {"DEFAULT_SIZE": 512, "math": math, "re": re}
+    exec(compile(ast.Module(body=body, type_ignores=[]), script, "exec"), namespace)
     return namespace[function_name]
 
 
@@ -269,7 +283,9 @@ def test_a_builtin_format_resolves_to_the_builtin_implementation(ctx):
     assert impl.section == output.EXPORT
     assert impl.script == "export_step.py"
     assert impl.config["package"] == output.BUILTIN_PACKAGES[output.EXPORT]
-    assert impl.parameters == {"write_pcurves": True, "precision_mode": 0}
+    # 'reproducible' is among them because '//builtin/export' declares it on
+    # every file type -- see 'test_every_builtin_file_type_declares_reproducible'.
+    assert impl.parameters == {"write_pcurves": True, "precision_mode": 0, "reproducible": False}
 
 
 def test_a_package_field_becomes_an_export_parameter(ctx):
@@ -963,3 +979,202 @@ def test_a_custom_implementation_writes_the_file(tmp_path):
     # ASCII, and named after the package's comment - neither is what the
     # built-in STL exporter would have produced.
     assert first_line.startswith("solid Produced by the PartCAD")
+
+
+# --------------------------------------------------------------------------- #
+# 'reproducible'                                                              #
+# --------------------------------------------------------------------------- #
+
+
+def test_every_builtin_file_type_declares_reproducible(ctx):
+    """All of them, in both sections, and all of them 'false'.
+
+    Declared even on the exporters that write the same bytes either way. It is a
+    field of the protocol rather than one format's parameter, and a file type
+    that left it out would be one where a package reading '//builtin' as the
+    reference could reasonably conclude that the word means nothing here.
+    """
+    for section in output.SECTIONS:
+        project = ctx.get_project(output.BUILTIN_PACKAGES[section])
+        for format_name, config in project.config_obj[section].items():
+            assert output.REPRODUCIBLE_KEY in config, "%s:%s" % (section, format_name)
+            assert config[output.REPRODUCIBLE_KEY] is False, "%s:%s" % (section, format_name)
+
+
+def test_reproducible_is_a_parameter_and_not_a_reserved_field():
+    """It has to reach the implementation, which is what reserving it would stop."""
+    impl = output.Implementation(output.RENDER, "svg", {"path": "s.py", "reproducible": True})
+    assert impl.parameters == {"reproducible": True}
+    assert impl.reproducible is True
+    assert output.REPRODUCIBLE_KEY not in output.RESERVED_KEYS
+
+
+def test_reproducible_defaults_to_false_when_nothing_declares_it():
+    assert output.Implementation(output.RENDER, "svg", {}).reproducible is False
+    assert output.Implementation(output.EXPORT, "step", {"comment": "x"}).reproducible is False
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (True, True),
+        (False, False),
+        (None, False),
+        ("true", True),
+        ("True", True),
+        ("yes", True),
+        ("1", True),
+        ("false", False),
+        ("False", False),
+        ("no", False),
+        ("0", False),
+        ("", False),
+    ],
+)
+def test_a_flag_is_read_the_same_however_a_caller_spelled_it(value, expected):
+    """YAML hands back a bool; the CLI and JSON-RPC hand back what they parsed.
+
+    A 'reproducible' that arrived as the string "false" and was read as true is
+    the silent kind of wrong: what it turns off is a guarantee nobody checks
+    until the bytes move.
+    """
+    assert output.as_flag(value) is expected
+
+
+@pytest.mark.parametrize("value", [0, 1, 2, "maybe", [], {}, 1.5])
+def test_a_flag_that_is_not_a_flag_is_refused(value):
+    with pytest.raises(ValueError, match="must be true or false"):
+        output.as_flag(value)
+
+
+def test_the_flag_reaches_the_request_of_every_implementation():
+    """Set by '_run_implementation_locked', whatever the caller put in.
+
+    The point of it is that an implementation never has to ask whether the key
+    is there, so this covers the request that declared nothing as much as the
+    one that did.
+    """
+    recorded = []
+
+    class _Impl:
+        decode = True
+        container = None
+        format_name = "svg"
+        project = None
+
+        def __init__(self, reproducible):
+            self.reproducible = reproducible
+
+    class _Fake:
+        name = "part"
+        project_name = "//pkg"
+
+        _run_implementation_locked = pc.shape.Shape._run_implementation_locked
+
+        def error(self, message):  # pragma: no cover - not reached here
+            raise AssertionError(message)
+
+    def _serialize(request):
+        recorded.append(dict(request))
+        raise _Stop()
+
+    class _Stop(Exception):
+        pass
+
+    original = pc.shape.shape_envelope.serialize
+    pc.shape.shape_envelope.serialize = _serialize
+    try:
+        for declared, request, expected in (
+            (False, {}, False),
+            (True, {}, True),
+            # What the layered configuration produced, which is already in the
+            # request by the time it gets here, wins over the implementation's
+            # own reading of it -- that is where a command-line override lands.
+            (False, {"reproducible": True}, True),
+            (True, {"reproducible": False}, False),
+            # ...and is coerced on the way through.
+            (False, {"reproducible": "true"}, True),
+        ):
+            with pytest.raises(_Stop):
+                asyncio.run(_Fake()._run_implementation_locked(None, _Impl(declared), "s.py", request, "/tmp/out.svg"))
+            assert recorded[-1][output.REPRODUCIBLE_KEY] is expected
+    finally:
+        pc.shape.shape_envelope.serialize = original
+
+
+def test_the_svg_renderer_rounds_every_number_to_the_precision_it_claims():
+    """What 'reproducible' settles besides the choice of algorithm.
+
+    The three cases here are measured ones: a stroke width and an arc rotation
+    that two machines computed a last bit apart, and a coordinate that is zero
+    on both but signed on one. None is visible at any zoom and each is a diff
+    every time the drawing is produced somewhere new.
+    """
+    canonical = _builtin_function(output.RENDER, "render_svg.py", "_canonical_number")
+
+    # A number that differs below the precision is written the same either way.
+    assert canonical("0.03189439769248931", 10) == canonical("0.0318943976924893", 10) == "0.0318943977"
+    # An angle of half a femtodegree is no rotation at all.
+    assert canonical("5.660461030554823e-16", 10) == "0.0"
+    assert canonical("-5.021204581828495e-16", 10) == "0.0"
+    # Negative zero is zero.
+    assert canonical("-0.0", 10) == "0.0"
+    assert canonical("-0.00000000001", 10) == "0.0"
+    # A coordinate already within the precision is left where it was.
+    assert canonical("-8.1649658093", 10) == "-8.1649658093"
+    assert canonical("10.0", 10) == "10.0"
+    # An integer is a count or a name -- a colour channel, an arc flag, the
+    # '2000' of the SVG namespace URL -- and is never a measurement here.
+    assert canonical("64", 10) == "64"
+    assert canonical("-1", 10) == "-1"
+    assert canonical("2000", 10) == "2000"
+
+
+def test_a_reproducible_drawing_is_normalized_and_an_ordinary_one_is_not(tmp_path):
+    """The rounding is what 'reproducible' asks for and not what a render does.
+
+    A drawing nobody has to diff is left exactly as build123d wrote it: the
+    rounding costs a pass over the file, and every digit it removes was one the
+    file type did not claim to have.
+    """
+    normalize = _builtin_function(output.RENDER, "render_svg.py", "_normalize", also=("_NUMBER", "_canonical_number"))
+
+    drawn = (
+        '<svg width="444.40500673690001mm" version="1.1" xmlns="http://www.w3.org/2000/svg">\n'
+        '  <g stroke="rgb(64,192,64)" stroke-width="0.03189439769248931">\n'
+        '    <line x1="-0.0" y1="-8.1649658093" />\n'
+        '    <path d="M 10.0,5.576189073395618 A 10.0,5.0 5.660461030554823e-16 0,1 1.0,2.0" />\n'
+        "  </g>\n"
+        "</svg>\n"
+    )
+    path = tmp_path / "drawing.svg"
+    path.write_text(drawn, encoding="utf-8")
+    normalize(str(path), 10)
+    written = path.read_text(encoding="utf-8")
+
+    assert 'stroke-width="0.0318943977"' in written
+    assert 'x1="0.0"' in written
+    assert "A 10.0,5.0 0.0 0,1 1.0,2.0" in written
+    assert 'width="444.4050067369mm"' in written
+    # Untouched: the colour channels, the version, the namespace, the flags.
+    assert 'stroke="rgb(64,192,64)"' in written
+    assert 'version="1.1"' in written
+    assert 'xmlns="http://www.w3.org/2000/svg"' in written
+    # Idempotent, which is what makes it safe to run over a drawing twice.
+    normalize(str(path), 10)
+    assert path.read_text(encoding="utf-8") == written
+
+
+def test_the_dxf_renderer_writes_fixed_metadata_only_when_asked():
+    """'reproducible' used to be on by default here, and here alone.
+
+    That made 'dxf' the one file type where the word meant something different
+    from what it means everywhere else. The DXF example asks for it explicitly
+    now, like every other drawing in this repository that is checked in.
+    """
+    script = os.path.join(output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.RENDER]], "render_dxf.py")
+    tree = ast.parse(open(script).read(), filename=script)
+    convert = next(
+        node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "convert_svg_to_dxf"
+    )
+    assert ast.literal_eval(convert.args.defaults[-1]) is False

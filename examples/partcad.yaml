@@ -7,6 +7,55 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+# Every drawing under this package is rendered with 'reproducible: true', and
+# every sub-package says so on each of its 'render:' file types. It is worth
+# saying once, here, why they all do.
+#
+# These drawings are checked in. That is the whole point of them: 'pc render -r'
+# over this tree has to leave the working tree clean, and the 'Examples
+# (PartCAD)' job fails when it does not, so that a change in how PartCAD renders
+# is a diff somebody looks at rather than something a reader of a README
+# discovers. A file that is not the same file twice cannot do that job - it is a
+# diff every time, which is a diff nobody reads.
+#
+# 'reproducible' is what asks for that, and what it costs is real, which is why
+# it is off by default and stated here rather than assumed:
+#
+#   - The SVG projection goes through OCCT's exact hidden-line algorithm instead
+#     of the polygonal one. The exact one works from the surfaces; the polygonal
+#     one works from a triangulation, which is floating point all the way down,
+#     so the same shape meshed to the same deflection comes out with a different
+#     silhouette on a different architecture. That is what made these files
+#     churn: after the projection was moved to the polygonal algorithm the
+#     drawings in this tree were the rendering machine's, and no other machine
+#     agreed with them.
+#   - Every number written into the drawing is rounded to the precision the file
+#     type claims ('precision', ten decimal places by default), and a negative
+#     zero is written as zero. Below that, what is in the file is the last bit
+#     of somebody's arithmetic rather than a measurement of anything -- a stroke
+#     width that differs in its sixteenth digit, an arc rotated by half a
+#     femtodegree -- and it is a diff every time the drawing is produced
+#     somewhere new.
+#   - It is the slower of the two, and on a large assembly it is the one that
+#     can walk off the end of an OCCT allocation. Neither matters at this size,
+#     and both are why a render that is only going to be looked at gets the
+#     other one.
+#   - A DXF also gets fixed header metadata instead of the wall clock and a
+#     fresh pair of GUIDs.
+#
+# What it does not settle is the CAD kernel's own arithmetic. Two machines that
+# disagree about a transcendental function in the last bit can still find one
+# intersection more than each other along a curved silhouette, and no amount of
+# rounding makes those two drawings the same file. So this is a floor and not a
+# promise: it removes everything PartCAD chooses -- the algorithm, the
+# formatting, the clock, the GUIDs, the iteration order of a set -- and what is
+# left is OCCT's. On the curved subjects here (the clock, the pipe, the swept
+# DXF, the store's parts) two platforms can still differ, which is why the
+# 'Examples (PartCAD)' job renders on one cell and not on all of them.
+#
+# See 'reproducible' in '//builtin/render', and 'output.REPRODUCIBLE_KEY' for
+# what it means to an implementation.
+
 # In most cases the path prefix should match what is expected in the real production use case.
 name: //pub/examples/partcad
 partcad: ">=0.8.115"
