@@ -460,6 +460,184 @@ def test_links_page_points_at_the_package_and_its_suppliers():
 
 
 #
+# Drawing the illustrations
+#
+
+
+class _CountingImages(assembly_guide.ImageSource):
+    """An image source that says how many pictures were being drawn at once.
+
+    It draws nothing: what a projection actually costs needs a CAD runtime, and
+    what is under test here is how many of them the document asks for at a time
+    and in what order it puts the answers.
+    """
+
+    def __init__(self, delay=0.01):
+        self.delay = delay
+        self.drawn = []
+        self.in_flight = 0
+        self.peak = 0
+
+    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None):
+        self.drawn.append(key or shape.name)
+        self.in_flight += 1
+        self.peak = max(self.peak, self.in_flight)
+        try:
+            await asyncio.sleep(self.delay)
+        finally:
+            self.in_flight -= 1
+        return pc_document.Image(file="/tmp/%s.svg" % (key or shape.name), alt=alt, caption=caption)
+
+
+def _section_of(step_count):
+    section = assembly_guide.GuideSection(assembly=make_assembly("widget"), name="widget")
+    for number in range(1, step_count + 1):
+        section.steps.append(
+            assembly_guide.GuideStep(
+                number=number,
+                item=make_assembly("item-%d" % number),
+                item_name="item-%d" % number,
+                location=Location(),
+                counterpart=make_assembly("base"),
+                counterpart_name="base",
+                counterpart_location=Location(),
+            )
+        )
+    return section
+
+
+def test_a_section_is_drawn_all_at_once():
+    """Every picture of every step of a section is asked for at the same time
+
+    A projection is a sandbox process, and a step's page carries three of them -
+    the item, what it is joined to, and the two pulled apart. Asking for them
+    one after another is what made a book of twenty steps cost sixty of them in
+    a row, on a machine with nothing else to do.
+    """
+    section = _section_of(3)
+    images = _CountingImages()
+
+    pages = asyncio.run(assembly_guide._section_pages(None, section, images, 1))
+
+    # The assembly's own picture, and three for each of the three steps.
+    assert len(images.drawn) == 10
+    assert images.peak == 10
+    assert [page.title for page in pages] == ["widget", "widget: step 1", "widget: step 2", "widget: step 3"]
+
+
+def test_the_pages_are_in_the_order_they_are_read_in():
+    """A page lands where the book puts it, not where its pictures finished
+
+    The steps are drawn together, so they finish in whatever order the sandbox
+    hands them back - here deliberately backwards.
+    """
+
+    class _Backwards(_CountingImages):
+        async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None):
+            # The later the step, the sooner its pictures are done.
+            self.delay = 0.05 / (1 + len(self.drawn))
+            return await super().shape_image_async(shape, key, alt, caption, annotations)
+
+    section = _section_of(4)
+
+    pages = asyncio.run(assembly_guide._section_pages(None, section, _Backwards(), 1))
+
+    assert [page.title for page in pages] == [
+        "widget",
+        "widget: step 1",
+        "widget: step 2",
+        "widget: step 3",
+        "widget: step 4",
+    ]
+
+
+class _RecordingShape:
+    """A shape whose projection is a file it writes and a call it counts."""
+
+    def __init__(self, name):
+        self.project_name = "//pkg"
+        self.name = name
+        self.renders = 0
+
+    async def render_svg_somewhere_async(self, ctx=None, project=None, filepath=None, annotations=None):
+        self.renders += 1
+        # Long enough for whoever else wants this picture to arrive while it is
+        # being drawn, which is the whole point of the test.
+        await asyncio.sleep(0.01)
+        with open(filepath, "w") as f:
+            f.write('<svg xmlns="http://www.w3.org/2000/svg"/>')
+
+
+def test_one_illustration_is_drawn_once_however_many_pages_show_it():
+    """Two pages wanting the same picture wait for one projection, not two
+
+    The top assembly is on the title page and on its own page, and an item is
+    the counterpart of the step after the one that placed it. While the pages
+    were built one after another the second of those found the picture already
+    drawn; built together, both find nothing and would both draw it - into the
+    one file it is named by.
+    """
+    shape = _RecordingShape("bracket")
+
+    async def both(directory):
+        images = assembly_guide.RenderedImages(None, None, directory)
+        return await asyncio.gather(images.shape_image_async(shape), images.shape_image_async(shape))
+
+    with tempfile.TemporaryDirectory() as directory:
+        first, second = asyncio.run(both(directory))
+
+    assert shape.renders == 1
+    assert first.file == second.file
+
+
+class _CrowdShape(_RecordingShape):
+    """One of many shapes that report how many were being drawn together."""
+
+    in_flight = 0
+    peak = 0
+
+    @classmethod
+    def reset(cls):
+        cls.in_flight = 0
+        cls.peak = 0
+
+    async def render_svg_somewhere_async(self, ctx=None, project=None, filepath=None, annotations=None):
+        _CrowdShape.in_flight += 1
+        _CrowdShape.peak = max(_CrowdShape.peak, _CrowdShape.in_flight)
+        try:
+            await super().render_svg_somewhere_async(ctx, project, filepath, annotations)
+        finally:
+            _CrowdShape.in_flight -= 1
+
+
+def test_no_more_illustrations_are_drawn_at_once_than_the_machine_has_slots():
+    """The document does not ask for more sandbox processes than there are slots
+
+    'asyncio.gather' admits everything it is given, and a book of a hundred
+    steps would hand the machine three hundred CAD interpreters. What bounds it
+    is the machine's budget for those (see partcad.sandbox_lock); the pages
+    queue up behind it rather than in front of it.
+    """
+    from partcad.sandbox_lock import process_slots
+
+    limit = max(1, process_slots.count)
+    shapes = [_CrowdShape("part-%d" % number) for number in range(limit * 3)]
+    _CrowdShape.reset()
+
+    async def all_of_them(directory):
+        images = assembly_guide.RenderedImages(None, None, directory)
+        return await asyncio.gather(*[images.shape_image_async(shape) for shape in shapes])
+
+    with tempfile.TemporaryDirectory() as directory:
+        results = asyncio.run(all_of_them(directory))
+
+    assert len(results) == len(shapes)
+    assert all(shape.renders == 1 for shape in shapes)
+    # Every slot is kept full, and not one more is asked for.
+    assert _CrowdShape.peak == limit
+
+
+#
 # End to end
 #
 
@@ -597,7 +775,85 @@ def test_render_assembly_guide_refuses_a_non_manufacturable_assembly():
     prj = ctx.get_project("//produce_assembly_assy")
     output_dir = tempfile.mkdtemp()
 
+    # 'logo_embedded' rather than 'logo': the latter says it is manufacturable
+    # now, being four printed parts and a screw that anybody could put together.
+    # This one places its parts by coordinates and is the example of one nobody
+    # is meant to build.
     with pytest.raises(NotManufacturableError):
-        prj.render_assembly_guide("logo", "pdf", output_dir=output_dir)
+        prj.render_assembly_guide("logo_embedded", "pdf", output_dir=output_dir)
 
-    assert not os.path.exists(os.path.join(output_dir, "logo.pdf"))
+    assert not os.path.exists(os.path.join(output_dir, "logo_embedded.pdf"))
+
+
+class _FakeAssembly:
+    """Just enough of an assembly for the bill of materials to be looked up by"""
+
+    def __init__(self, name, project_name="//pkg"):
+        self.project_name = project_name
+        self.name = name
+        self.config = {}
+
+
+def _section(name, project_name="//pkg"):
+    return assembly_guide.GuideSection(assembly=_FakeAssembly(name, project_name), name=name)
+
+
+def test_repeat_count_comes_from_the_bill_of_materials():
+    """How many of each sub-assembly to make is what the BOM already counted
+
+    Deriving it again by walking the tree would be a second answer to a
+    question the BOM has answered, free to disagree with the page that prints
+    it.
+    """
+    spire, tower, castle = (_section(n) for n in ("spire", "tower", "castle"))
+    grouped = {"assemblies": {"//pkg": {"spire": {"count": 9}, "tower": {"count": 4}}}}
+
+    assembly_guide.count_sections([spire, tower, castle], grouped)
+
+    assert spire.count == 9
+    assert tower.count == 4
+    # The top level assembly is not in its own bill of materials.
+    assert castle.count == 1
+
+
+def test_repeat_count_of_an_embedded_assembly_is_one():
+    """An assembly embedded in an ASSY file is in no package, so in no BOM"""
+    head = _section("logo_embedded_head")
+
+    assembly_guide.count_sections([head], {"assemblies": {}})
+
+    assert head.count == 1
+
+
+def test_repeat_count_does_not_confuse_two_packages():
+    """Two packages may each declare an assembly of the same name"""
+    mine, theirs = _section("spire", "//mine"), _section("spire", "//theirs")
+    grouped = {"assemblies": {"//mine": {"spire": {"count": 9}}, "//theirs": {"spire": {"count": 2}}}}
+
+    assembly_guide.count_sections([mine, theirs], grouped)
+
+    assert (mine.count, theirs.count) == (9, 2)
+
+
+def test_section_page_says_how_many_of_a_repeated_assembly_to_make():
+    """An assembly used more than once is documented once and asks to be repeated"""
+    section = assembly_guide.GuideSection(assembly=make_assembly("spire"), name="spire", count=9)
+
+    (page,) = asyncio.run(assembly_guide._section_pages(None, section, assembly_guide.ImageSource(), 2))
+
+    texts = [block.text for block in page.blocks if isinstance(block, pc_document.Paragraph)]
+    assert texts == ["The build needs 9 of these. Repeat this section 9 times - the steps are the same every time."]
+    (properties,) = [block for block in page.blocks if isinstance(block, pc_document.Properties)]
+    assert ("Needed", "9") in properties.items
+
+
+def test_section_page_of_a_one_off_assembly_says_nothing_about_repeating_it():
+    """The count is only worth saying when it is not one"""
+    section = assembly_guide.GuideSection(assembly=make_assembly("keep"), name="keep")
+
+    (page,) = asyncio.run(assembly_guide._section_pages(None, section, assembly_guide.ImageSource(), 2))
+
+    texts = [block.text for block in page.blocks if isinstance(block, pc_document.Paragraph)]
+    assert texts == []
+    (properties,) = [block for block in page.blocks if isinstance(block, pc_document.Properties)]
+    assert [name for name, _ in properties.items] == ["Package", "Steps"]

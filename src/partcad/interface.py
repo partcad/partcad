@@ -13,7 +13,7 @@ import threading
 from . import config as pc_config
 from . import expr, interface_config
 from . import logging as pc_logging
-from . import telemetry
+from . import shape_envelope, shape_ports, telemetry
 from .geom import Location
 from .interface_inherit import InterfaceInherits
 from .sketch import Sketch
@@ -24,12 +24,15 @@ from .utils import resolve_resource_path
 # import it lazily.
 
 
-def _port_location(port) -> Location:
+def port_location(port) -> Location:
     """A port's placement, defaulting to the identity.
 
     'InterfacePort.location' is only set when the port declares one, so a port
     that sits at its interface's origin - which is most of them, and every port
-    inherited without a placement - leaves it None.
+    inherited without a placement - leaves it None. None is not a location, and
+    a port declared by name alone ("grip:") is at the origin of the object that
+    declares it rather than nowhere: every reader of a port's placement goes
+    through here, so that "at the origin" is what they all see.
     """
     return port.location if port.location is not None else Location()
 
@@ -421,7 +424,6 @@ class Interface:
                 self._check_movement_range(param_name, param_config)
                 self.params[param_name] = InterfaceParameter(param_config)
 
-        self.project.ctx.stats_interfaces += 1
         self.lock = threading.RLock()
 
     def _check_movement_range(self, param_name, param_config) -> None:
@@ -615,7 +617,15 @@ class Interface:
 
     def instantiate_ports(self):
         self.ports = {}
+        self.instantiate_declared_ports()
 
+    def instantiate_declared_ports(self):
+        """The ports this object's own 'ports:' section declares.
+
+        Split from 'instantiate_ports' so that an object with ports from
+        somewhere else - an assembly's 'map:' - fills those in first and then
+        lets its own declaration have the last word on a name they both use.
+        """
         if self.config.get("ports", None) is not None:
             ports_config = self.config["ports"]
             if isinstance(ports_config, list):
@@ -633,6 +643,11 @@ class Interface:
                     port_config = {}
                 elif isinstance(port_config, list):
                     port_config = {"location": port_config}
+                if port_name in self.ports:
+                    pc_logging.warning(
+                        "%s: the port '%s' is both declared in 'ports:' and produced by 'map:'; "
+                        "the declaration wins" % (self.full_name, port_name)
+                    )
                 self.ports[port_name] = InterfacePort(port_name, self.project, port_config)
 
     def get_parents(self):
@@ -696,12 +711,22 @@ class Interface:
     def instantiate(self):
         self.project.ctx.stats_interfaces_instantiated += 1
         self.inherits = {}
-        self.get_ports()  # Make sure self.ports is initialized
+        if self.ports is None:
+            # Make sure self.ports is initialized, without going through
+            # 'get_ports()': that calls this method in turn, and the second pass
+            # over the parents would adopt every one of them twice.
+            self.instantiate_ports()
 
         # What this interface declares for itself, before anything is inherited
         # into it. Read now rather than tested against the configuration later,
         # because the parents are merged into the very dictionary being tested.
         own_param_names = set(self.params.keys())
+
+        # Before the declared ones, so that an interface an assembly
+        # externalizes is already among its parents while 'implements:' is read
+        # and can be refined by it rather than colliding with it.
+        for inherit in self.inherited_from_elsewhere().values():
+            self.adopt_inherit(inherit, own_param_names)
 
         # Initialize inheritance ("inherits" or "implements")
         inherits_config = self.config.get(self.config_section, None)
@@ -743,11 +768,10 @@ class Interface:
             for interface_name, inherited_config in inherits_config.items():
                 interface_name = expr.resolve(interface_name, names, self.full_name)
 
-                inherit = InterfaceInherits(interface_name, self.project, inherited_config)
+                inherit = InterfaceInherits(interface_name, self.project, inherited_config, ports=self.ports)
                 if inherit.interface is None:
                     pc_logging.error("Failed to inherit interface: %s" % interface_name)
                     continue
-                self.inherits[inherit.name] = inherit
 
                 if compatible_with_parents:
                     # Only the parent itself. What *it* is a drop-in for is
@@ -756,88 +780,7 @@ class Interface:
                     # not instantiated, so its own set is still empty.
                     self._compatible_with.add(inherit.name)
 
-                for (
-                    instance_name,
-                    instance_location,
-                ) in inherit.instances.items():
-                    # pc_logging.debug(
-                    #     "Inherited ports: %s"
-                    #     % str(inherit.interface.get_ports())
-                    # )
-                    for (
-                        port_name,
-                        port,
-                    ) in inherit.interface.get_ports().items():
-                        if instance_name != "":
-                            inherited_port_name = instance_name + "-" + port_name
-                        else:
-                            inherited_port_name = port_name
-
-                        if port.location is None:
-                            port_location = instance_location
-                        else:
-                            # The inherited port sits at the instance's location
-                            # composed with the port's own: apply the port first,
-                            # then the instance. Pure-Python composition, no OCP.
-                            port_location = instance_location * port.location
-                        # pc_logging.debug(
-                        #     "Inherited port from %s to %s at %s: %s"
-                        #     % (
-                        #         interface_name,
-                        #         instance_name,
-                        #         self.name,
-                        #         inherited_port_name,
-                        #     )
-                        # )
-                        # The boundary this instance draws with, where it
-                        # restates it ('sketch:' beside the instance), and the
-                        # inherited one otherwise. A slotted hole is a through
-                        # hole with a slot for an outline; see
-                        # 'InterfaceInherits'.
-                        restated = inherit.sketches.get(instance_name)
-                        if restated is None:
-                            port_sketch, port_sketch_params = port.sketch, port.sketch_params
-                        else:
-                            restated_port = InterfacePort(
-                                inherited_port_name,
-                                self.project,
-                                config={"sketch": restated},
-                            )
-                            port_sketch, port_sketch_params = (
-                                restated_port.sketch,
-                                restated_port.sketch_params,
-                            )
-
-                        self.ports[inherited_port_name] = InterfacePort(
-                            inherited_port_name,
-                            self.project,
-                            sketch=port_sketch,
-                            location=port_location,
-                            sketch_params=port_sketch_params,
-                        )
-
-                    # TODO(clairbee): prepend the instance name to the param name
-                    # TODO(clairbee): prepend only if it's not the only instance?
-                    # pc_logging.debug(
-                    #     "Inherited parameters: %s"
-                    #     % str(inherit.interface.params)
-                    # )
-                    for (
-                        param_name,
-                        param,
-                    ) in inherit.interface.params.items():
-                        # What this interface says about a parameter wins over
-                        # what it inherits about it. An M4 screw 12mm long
-                        # narrows the 'moveZ' it gets from the abstract 'm4' to
-                        # how far *this* screw can still be driven in, and
-                        # taking the parent's back would put the narrowing back
-                        # to nothing - which is what used to happen, silently,
-                        # to every interface that refined an inherited
-                        # parameter.
-                        if param_name in own_param_names:
-                            continue
-                        self.params[param_name] = param
-                    # pc_logging.debug("Result parameters: %s" % str(self.params))
+                self.adopt_inherit(inherit, own_param_names)
 
         if self.alias is not None:
             self._adopt_alias_target()
@@ -857,6 +800,101 @@ class Interface:
                 raise Exception("Invalid 'mates' section in the interface '%s'" % self.name)
 
             self.add_mates(self.project, mates)
+
+    def inherited_from_elsewhere(self) -> dict:
+        """The interfaces this object gets from somewhere other than its own declaration.
+
+        Empty for an interface: an interface inherits what its 'inherits:' says
+        and nothing else. An assembly's 'map:' externalizes an instance of an
+        interface that one of its children implements, and that instance has to
+        arrive here - as an 'InterfaceInherits' like any other - so that it gets
+        its ports named, its parameters merged and its ancestors walked by the
+        very code that serves 'implements:'. See 'WithPorts'.
+        """
+        return {}
+
+    def adopt_inherit(self, inherit, own_param_names: set) -> None:
+        """Take one inherited (or externalized) interface into this object.
+
+        Records it among the parents, creates a port of this object for every
+        port of every instance, and merges in the freedom of movement it
+        declares. Called once per entry of 'inherits:'/'implements:', and once
+        per interface a 'map:' externalizes - there is one way an interface
+        becomes part of an object, and this is it.
+
+        An interface named twice - mapped and implemented, or written twice
+        under two spellings of one name - merges rather than replaces: the
+        instances of both are instances of this object.
+        """
+        existing = self.inherits.get(inherit.name)
+        if existing is None:
+            self.inherits[inherit.name] = inherit
+        else:
+            for instance_name, instance_location in inherit.instances.items():
+                if instance_name in existing.instances:
+                    pc_logging.error(
+                        "%s: the instance '%s' of the interface '%s' is declared more than once"
+                        % (self.full_name, instance_name, inherit.name)
+                    )
+                    continue
+                existing.instances[instance_name] = instance_location
+                if instance_name in inherit.sketches:
+                    existing.sketches[instance_name] = inherit.sketches[instance_name]
+
+        for instance_name, instance_location in inherit.instances.items():
+            for port_name, port in inherit.interface.get_ports().items():
+                if instance_name != "":
+                    inherited_port_name = instance_name + "-" + port_name
+                else:
+                    inherited_port_name = port_name
+
+                if port.location is None:
+                    inherited_location = instance_location
+                else:
+                    # The inherited port sits at the instance's location
+                    # composed with the port's own: apply the port first,
+                    # then the instance. Pure-Python composition, no OCP.
+                    inherited_location = instance_location * port.location
+
+                # The boundary this instance draws with, where it restates it
+                # ('sketch:' beside the instance), and the inherited one
+                # otherwise. A slotted hole is a through hole with a slot for an
+                # outline; see 'InterfaceInherits'.
+                restated = inherit.sketches.get(instance_name)
+                if restated is None:
+                    port_sketch, port_sketch_params = port.sketch, port.sketch_params
+                else:
+                    restated_port = InterfacePort(
+                        inherited_port_name,
+                        self.project,
+                        config={"sketch": restated},
+                    )
+                    port_sketch, port_sketch_params = (
+                        restated_port.sketch,
+                        restated_port.sketch_params,
+                    )
+
+                self.ports[inherited_port_name] = InterfacePort(
+                    inherited_port_name,
+                    self.project,
+                    sketch=port_sketch,
+                    location=inherited_location,
+                    sketch_params=port_sketch_params,
+                )
+
+            # TODO(clairbee): prepend the instance name to the param name
+            # TODO(clairbee): prepend only if it's not the only instance?
+            for param_name, param in inherit.interface.params.items():
+                # What this interface says about a parameter wins over what it
+                # inherits about it. An M4 screw 12mm long narrows the 'moveZ'
+                # it gets from the abstract 'm4' to how far *this* screw can
+                # still be driven in, and taking the parent's back would put the
+                # narrowing back to nothing - which is what used to happen,
+                # silently, to every interface that refined an inherited
+                # parameter.
+                if param_name in own_param_names:
+                    continue
+                self.params[param_name] = param
 
     def _adopt_alias_target(self):
         """Take from the alias target whatever this interface does not state itself.
@@ -948,41 +986,88 @@ class Interface:
     async def get_components(self, ctx):
         """This interface's port sketches, each moved onto its port.
 
-        This is a viewer-only path (Interface.show); 'render_overlay' does the
-        same for a projection. The sketch components stay BREP envelopes - see
+        The flat spelling of what 'get_representation()' below gives as a tree, and
+        the one every *shape* that implements an interface reaches: a shape's
+        components are its own geometry plus the boundaries of its ports, which is
+        what 'pc render --with-interfaces' draws (see 'Shape.get_components' and
+        'render_overlay'). The sketch components stay BREP envelopes - see
         'place_components()' above for why.
         """
         components = []
         for port in self.get_ports().values():
             if port.sketch is not None:
                 sketch_components = list(await port.sketch.get_components(ctx))
-                components.append(place_components(sketch_components, _port_location(port)))
+                components.append(place_components(sketch_components, port_location(port)))
         return components
 
-    def get_markers(self):
-        """The ports' coordinate frames, as packed locations.
+    async def get_representation(self, ctx, form=shape_envelope.FORM_BREP):
+        """This interface as a tree of nodes, with the geometry at each in 'form'.
 
-        A port is a frame, and a frame has no geometry to tessellate - glTF has
-        no primitive for one. They are sent to the viewer alongside the geometry
-        so it can draw axes at each, which is what showing a bare 'port.location'
-        used to produce.
+        An interface is its ports, and each of those is drawn with a sketch that
+        comes along on the root node exactly as a part's do (see 'port_sketches'):
+        one frame and one boundary per port, which is the whole of what an interface
+        is. What the interface *inherits* is a node: a sub-assembly per instance of
+        each inherited interface, at the instance's location, with the whole of that
+        interface inside it, which is what makes an inherited bolt pattern something
+        a reader can switch off in one go.
+
+        The same tree, and the same two forms, as any other shape - an interface is
+        not a special kind of subject to whatever draws it. See
+        'Shape.get_representation'.
         """
-        return [{"name": name, "location": _port_location(port).as_packed()} for name, port in self.get_ports().items()]
+        from . import port_sketches, shape_gltf
+
+        tree = await port_sketches.attach_async(ctx, await self._tree_async(ctx))
+        return await shape_gltf.in_form_async(ctx, tree, form)
+
+    async def _tree_async(self, ctx, seen: set = None):
+        """The BREP tree of this interface, built once and converted at the top.
+
+        'seen' stops an interface that reaches itself through what it inherits.
+        The inheritance is a DAG and a cycle in it is a broken package rather than
+        something to support, but a cycle here would recurse until the stack ran
+        out, which reports nothing about the package that caused it.
+        """
+        seen = set() if seen is None else seen
+        seen.add(self.full_name)
+
+        # No node per port: a port is drawn where it is, with the sketch it names,
+        # by whoever draws the tree. A node of its own would be that same sketch a
+        # second time, under a second checkbox.
+        children = []
+        for inherited in (self.get_parents() or {}).values():
+            parent = inherited.interface
+            if parent is None or parent.full_name in seen:
+                continue
+            subtree = await parent._tree_async(ctx, set(seen))
+            for instance_name, location in (inherited.instances or {}).items():
+                children.append(
+                    shape_envelope.placed(
+                        subtree,
+                        location,
+                        label=instance_name or parent.name,
+                    )
+                )
+
+        node = {"name": self.full_name, "label": self.name, shape_envelope.KEY_ASSEMBLY: children}
+        node.update(shape_ports.connection_metadata(self))
+        return node
 
     async def show_async(self, ctx=None):
-        components = []
+        from . import viewer
+
+        ctx = viewer.context(ctx, self.name)
+        if ctx is None:
+            return
+
+        tree = None
         try:
-            components = await self.get_components(ctx)
+            tree = await self.get_representation(ctx, shape_envelope.FORM_GLTF)
         except Exception as e:
             pc_logging.error(e)
 
-        markers = self.get_markers()
-        if len(components) != 0 or len(markers) != 0:
-            from . import viewer
-
-            await viewer.show(
-                ctx, components, name=self.name, kind="interface", package=self.project.name, markers=markers
-            )
+        if tree is not None:
+            await viewer.show(ctx, tree, name=self.name, kind="interface", package=self.project.name)
 
     def show(self, ctx=None):
         asyncio.run(self.show_async(ctx))

@@ -69,7 +69,29 @@ SECTIONS = (EXPORT, RENDER)
 # implementation, and neither is a thing a solver can do.
 CAE = "cae"
 ANALYSIS_SECTIONS = (CAE,)
-ALL_SECTIONS = SECTIONS + ANALYSIS_SECTIONS
+
+# The manufacturing section, which is an output section of the same shape again:
+# a file type declared under 'cam:' is produced by a script exactly as an export
+# or a render one is, and 'Implementation' below serves it unchanged. What
+# differs is who asks for it and what the file is - 'pc cam' asks, and what comes
+# back is the program a machine runs (see 'partcad.cam').
+#
+# Out of 'SECTIONS' for the reason 'cae:' is: a route is not a file another CAD
+# tool opens as a part, so offering it to 'pc export -t'/'pc render -t' would
+# offer a file type nothing downstream of those two can read - and falling back
+# to a 'render:' implementation for it would answer a request for a machine
+# program with a drawing.
+#
+# Out of 'ANALYSIS_SECTIONS' too, and that one is not a technicality. An
+# analysis answers a question *about* an object -- and reports findings, which
+# 'pc test' fails on; a route says how to *make* one, and what it reports is how
+# long the job is. Nothing a caller does with the one is what it does with the
+# other, and the two are unalike even in their bottom layer: 'cae:' has no
+# built-in package and this one does (see BUILTIN_PACKAGES).
+CAM = "cam"
+MANUFACTURING_SECTIONS = (CAM,)
+
+ALL_SECTIONS = SECTIONS + ANALYSIS_SECTIONS + MANUFACTURING_SECTIONS
 
 # Another section resolved the same way that produces no output file at all:
 # 'simulation:' declares the plugins 'pc sim' runs a scene through. Out of
@@ -163,6 +185,13 @@ BUILTIN_PACKAGES = {
     RENDER: "//builtin/render",
     IMPORT: "//builtin/import",
     OPEN: "//builtin/open",
+    # Unlike 'cae:', this section has a built-in implementation, and the reason
+    # is the test the other three pass: a route is arithmetic on the object's
+    # own outline, with no third-party program and no release cycle of anybody
+    # else's behind it. So PartCAD ships one the way it ships DXF, and the
+    # default 'camImplementation' names it rather than naming a package a user
+    # has to go and find.
+    CAM: "//builtin/cam",
 }
 # The one built-in package that declares objects rather than implementations:
 # the scene a 'simulate:' that names no scene of its own is run in, whose
@@ -176,6 +205,7 @@ BUILTIN_PATHS = {
     BUILTIN_PACKAGES[RENDER]: os.path.join(BUILTIN_ROOT_PATH, RENDER),
     BUILTIN_PACKAGES[IMPORT]: os.path.join(BUILTIN_ROOT_PATH, IMPORT),
     BUILTIN_PACKAGES[OPEN]: os.path.join(BUILTIN_ROOT_PATH, OPEN),
+    BUILTIN_PACKAGES[CAM]: os.path.join(BUILTIN_ROOT_PATH, CAM),
     BUILTIN_SCENE_PACKAGE: os.path.join(BUILTIN_ROOT_PATH, "scene"),
 }
 
@@ -207,6 +237,42 @@ def format_names(section_obj) -> list:
     if not isinstance(section_obj, dict):
         return []
     return [name for name in section_obj if name not in SECTION_KEYS]
+
+
+def name_to_path(name: str, suffix: str = "") -> str:
+    """The file an object's name names, relative to the directory it goes in.
+
+    An object's name may carry '/'. The objects another file materializes are
+    named that way -- a STEP assembly's components are the parts
+    '<assembly>/<component>', a URDF's links '<assembly>/<link>', a Gazebo
+    world's '<scene>/<model>/<link>' -- and a package is free to declare one
+    like that itself, which is what 'examples/feature_import' does.
+
+    Everything up to the last '/' is a directory the file goes in, and only what
+    follows it names the file: no filesystem takes a '/' in a file name, so the
+    alternative is not a flat file called 'a/b.step' but no file at all. The
+    directories are created when the file is written -- see
+    'Context.ensure_dirs_for_file()'.
+
+    The separator in a name is always '/', on every platform: it is part of a
+    name written in 'partcad.yaml' or in somebody else's model file, not a path
+    anybody typed. Splitting on it here and joining with 'os.path.join()' is
+    what makes Windows put the file in the same directory Linux and macOS put it
+    in, rather than in a directory called 'a/b' that only one of the three can
+    read back.
+    """
+    *directories, stem = name.split("/")
+    return os.path.join(*directories, stem + suffix)
+
+
+def name_dirs(name: str) -> str:
+    """The directories an object's name asks for, or '' when it asks for none.
+
+    The counterpart of 'name_to_path()' for the caller that has the path already
+    and needs to know how much of its tail the name is responsible for.
+    """
+    directories = name.split("/")[:-1]
+    return os.path.join(*directories) if directories else ""
 
 
 def is_document_format(format_name: str, section_obj) -> bool:
@@ -282,6 +348,89 @@ PROPERTIES_KEY = "properties"
 # placement is baked into the shape instead of staying readable as data.
 DECODE_KEY = "__decode__"
 
+# The request key that says whether this file has to come out the same every
+# time it is produced, from the same object.
+#
+# It is part of the protocol rather than one file type's parameter, and it is in
+# *every* request - export, render, analysis, route - whether or not anybody
+# declared it. An implementation that has nothing to decide reads it and ignores
+# it; one that does reads it without having to ask whether the key is there,
+# which is what makes 'reproducible' mean the same thing in a package PartCAD
+# has never heard of as it does in '//builtin/render'.
+#
+# Why it exists at all: some of what PartCAD writes is only reproducible if it
+# is asked for, and asking costs something.
+#
+#   - The SVG projection has two hidden-line algorithms behind it. The exact one
+#     works from the surfaces; the polygonal one works from a triangulation,
+#     which is floating point all the way down, so the same shape meshed to the
+#     same deflection comes out with a slightly different silhouette on a
+#     different architecture. The polygonal one is also the
+#     only one that does not walk off the end of an OCCT allocation, and it is
+#     minutes faster on a large assembly - so it is what a render gets unless
+#     the caller says the bytes matter more than that (see
+#     'builtin/render/render_svg.py', which spells the trade out in full).
+#   - A DXF is stamped with the wall clock and a fresh pair of GUIDs on every
+#     save, and a drawing that differs from the last one only in when it was
+#     written is a drawing nothing can be compared against.
+#
+# 'False' is the default, and deliberately: a render is normally produced to be
+# looked at, and the fastest correct picture is the right one to hand back. A
+# drawing that is *kept* - checked into a repository next to the model, so that
+# 'git diff' answers whether it changed - is the case that has to say so, and
+# every image under 'examples/' does.
+#
+# It is a floor rather than a promise, and worth saying so where the word is
+# defined: what it removes is everything PartCAD chooses - which algorithm, how
+# a number is written, the clock, the GUIDs, the iteration order of a set. What
+# is left is the CAD kernel's own arithmetic, and two machines that disagree
+# about a transcendental function in the last bit can still find one
+# intersection more than each other along a curved silhouette. So two renders on
+# one machine are the same file, and two machines agree on everything but the
+# hardest subjects.
+#
+# Not to be confused with the other 'reproducible' in this package, which is
+# about whether an *object* can be made twice: 'file_factory.unreproducible_reason()'
+# asks whether what a part is built from is pinned, and 'pc test' fails a part
+# that is not. That one is a property of a declaration; this one is a property of
+# a file somebody wrote.
+#
+# Declared on a file type as an ordinary field, so a package writes
+#
+#     render:
+#       svg:
+#         reproducible: true
+#
+# and so does a shape overriding its package. It is not one of RESERVED_KEYS
+# precisely because implementations are meant to see it.
+REPRODUCIBLE_KEY = "reproducible"
+
+
+def as_flag(value, name: str = REPRODUCIBLE_KEY) -> bool:
+    """One of the protocol's boolean fields, however it was written.
+
+    YAML gives back a real bool, and that is what a 'partcad.yaml' produces. The
+    other clients are not YAML: the CLI and the JSON-RPC callers hand values
+    through as they parsed them, and a 'reproducible' that arrived as the string
+    "false" would otherwise be true - which is the silent kind of wrong, since
+    what it turns off is a guarantee nobody checks until the bytes move.
+
+    Anything that is not a boolean, a boolean's name, or nothing at all is a
+    caller saying something this cannot act on, so it says so rather than
+    guessing.
+    """
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in ("true", "yes", "on", "1"):
+            return True
+        if text in ("false", "no", "off", "0", ""):
+            return False
+    raise ValueError("'%s' must be true or false, got: %r" % (name, value))
+
 
 class Implementation:
     """Who writes a file of a given type, and with what.
@@ -301,6 +450,21 @@ class Implementation:
         # implementation. Off for one that needs the assembly tree's structure
         # rather than the compound it decodes to.
         self.decode = config.get("decode", True) is not False
+
+    @property
+    def reproducible(self) -> bool:
+        """Whether this file type was asked for byte-for-byte reproducibly.
+
+        Read from the layered configuration rather than from the implementing
+        package alone, unlike 'python_version()' and the rest: this is not a
+        statement about what the script needs to run but about what the caller
+        wants out of it, and the caller is exactly who gets to say. A package
+        that keeps its drawings in the repository sets it on the file type; a
+        package that only looks at them leaves it alone.
+
+        See REPRODUCIBLE_KEY for what it costs and why 'False' is the default.
+        """
+        return as_flag(self.config.get(REPRODUCIBLE_KEY))
 
     @property
     def reserved(self) -> frozenset:
@@ -492,9 +656,10 @@ def stamp(config: dict, package_name: str) -> dict:
 def config_sections(section: str) -> tuple:
     """The 'partcad.yaml' sections a file type's configuration is read from.
 
-    'cae:' is read alone. It has no fallback and is nobody's fallback: an
-    analysis is not a file another CAD tool opens, and neither an export nor a
-    render implementation could stand in for one.
+    'cae:' and 'cam:' are each read alone. Neither has a fallback and neither is
+    anybody's: an analysis is not a file another CAD tool opens, a route is a
+    program a machine runs rather than a shape at all, and no export or render
+    implementation could stand in for either.
 
     For the other two, both sections are read either way, and the one that owns
     the file type is read last so that it wins. What the other one provides is a
@@ -520,7 +685,7 @@ def config_sections(section: str) -> tuple:
     'export:' request never falls back to a 'render:' implementation for a
     format that 'render:' owns.
     """
-    if section in (CAE, SIMULATE, IMPORT, OPEN):
+    if section in (CAE, CAM, SIMULATE, IMPORT, OPEN):
         return (section,)
     return (RENDER, EXPORT) if section == EXPORT else (EXPORT, RENDER)
 
@@ -566,6 +731,9 @@ def builtin_project(ctx, section: str):
     'UserConfig.cae_fea_implementation'). Everything downstream therefore has to
     cope with a section whose bottom layer is missing - which is already the case
     for a file type a package declares that '//builtin' has never heard of.
+
+    'cam:' is not that case and has a built-in package like the first three: see
+    BUILTIN_PACKAGES for why a route ships where a solver does not.
     """
     package = BUILTIN_PACKAGES.get(section)
     return ctx.get_project(package) if package else None

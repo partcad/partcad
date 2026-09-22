@@ -12,8 +12,10 @@ part and for a sketch.
 """
 
 from . import logging as pc_logging
+from . import reference
+from .shape_config_store import STORE_PROPERTIES, resolve_store_properties
 from .user_config import user_config
-from .utils import format_parameterized_name, get_child_project_path
+from .utils import format_parameterized_name
 
 # The properties of an 'enrich' declaration that describe the reference itself
 # rather than the object it resolves to: which object is being enriched, which
@@ -146,15 +148,23 @@ def adopt_source_config(obj, source, source_name: str) -> None:
     reference in the middle. Not its placement: the instance applies its own
     when it materializes itself, and this object's own applies on top of what
     came back.
+
+    The purchasing record is the one thing not layered key by key: what an
+    object is bought as is a (vendor, SKU, pack size) written together, so an
+    enrich naming a vendor and an SKU of its own replaces the source's record
+    whole rather than half of it (see 'resolve_store_properties'). The same
+    resolution 'get_final_config()' performs, so that what this object reports
+    and what it stores under 'config' cannot come out differently.
     """
     enrich_config = obj.config
+    source_config = resolve_store_properties(source.get_final_config(), enrich_config)
     obj.config = {
         key: value
-        for key, value in source.get_final_config().items()
+        for key, value in source_config.items()
         if key not in INSTANCE_APPLIED_PROPERTIES and key not in SOURCE_ONLY_PROPERTIES
     }
     for prop_to_copy in enrich_config:
-        if prop_to_copy in ENRICH_ONLY_PROPERTIES:
+        if prop_to_copy in ENRICH_ONLY_PROPERTIES or prop_to_copy in STORE_PROPERTIES:
             continue
         obj.config[prop_to_copy] = enrich_config[prop_to_copy]
     obj.config["source"] = source_name
@@ -186,30 +196,7 @@ def enriched_source_name(source_project, target_project, config) -> str:
     enrich declares is which instance it wants rather than the parameters
     themselves.
     """
-    if "source" in config:
-        source_name = config["source"]
-    else:
-        source_name = config["name"]
-        if "project" not in config and "package" not in config:
-            raise Exception("Enrich needs either the source object name or the source project name")
-
-    if "project" in config or "package" in config:
-        project_name = config["project"] if "project" in config else config["package"]
-        if project_name == "this" or project_name == "":
-            project_name = source_project.name
-        elif not project_name.startswith("//"):
-            # Resolve the project name relative to the target project
-            project_name = get_child_project_path(target_project.name, project_name)
-        source_name = project_name + ":" + source_name
-    elif ":" not in source_name:
-        source_name = source_project.name + ":" + source_name
-    else:
-        # Written as a reference of its own (':widget', '../other:widget'), so
-        # the package that authored it is what it is relative to. Spelled out
-        # here rather than left to the alias this hands the work to, because the
-        # name is also what gets recorded as 'source_resolved', and a consumer
-        # that walks the stored configuration has no package to read it against.
-        source_name = source_project.normalize(source_name)
+    source_name = reference.source_of(source_project, target_project.name, config, "object")
 
     parameters = dict(config.get("with") or {})
     parameters.update(user_config.parameter_config.to_dict().get(f"{target_project.name}:{config['name']}", {}))

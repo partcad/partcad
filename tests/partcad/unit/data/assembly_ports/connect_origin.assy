@@ -1,0 +1,12 @@
+links:
+  - part: plate
+    name: base
+
+  # Connected through a port that declares no location of its own: it is at the
+  # origin of the part that declares it, which is a place like any other.
+  - part: screw
+    name: pin
+    connectPorts:
+      with: screw-m3
+      name: base
+      to: origin

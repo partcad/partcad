@@ -7,17 +7,17 @@
 # Licensed under Apache License, Version 2.0.
 
 import asyncio
-import json
 import os
 import tempfile
 import typing
 
 from . import logging as pc_logging
-from . import sandbox_versions, shape_envelope
+from . import sandbox_versions, shape_envelope, shape_ports
 from . import software as pc_software
 from . import telemetry, wrapper
 from .geom import Location
 from .plugin_provider_data_cart import ProviderCartItem
+from .process_crash import command_failure
 from .revision import package_revision
 from .shape import Shape
 from .shape_config import final_config as _final_config
@@ -38,10 +38,24 @@ class AssemblyChild:
     placed with 'location:', and for assemblies built through 'add()'.
     """
 
-    def __init__(self, item, name=None, location=None, comment=None, how=None, connection=None, description=None):
+    def __init__(
+        self,
+        item,
+        name=None,
+        location=None,
+        comment=None,
+        how=None,
+        connection=None,
+        description=None,
+        located=False,
+    ):
         self.item = item
         self.name = name
         self.location = location
+        # Whether the ASSY file placed this item with 'location:'. Not the same
+        # as 'location is not None', which every item has once it is placed,
+        # connected or not.
+        self.located = located
         # The non-geometric half of the 'connect'/'connectPorts' section that
         # placed this child: free-form context ('comment') and the assembly
         # instructions ('how'). Both are None unless the child was connected.
@@ -84,6 +98,53 @@ class Assembly(Shape):
 
         # self.children contains all child parts and assemblies before they turn into 'self.shape'
         self.children = []
+
+        # Set by the factory (see AssemblyFactory._create): which assemblies
+        # this one is built out of, without building any of them. None for an
+        # assembly nobody declared - one put together in Python with 'add()' -
+        # which has no declaration to read them out of.
+        self._subassemblies = None
+
+    async def get_subassemblies_async(self) -> list["Assembly"]:
+        """The assemblies this one places, resolved but not built.
+
+        What a declaration points at, read from the declaration: an ASSY file's
+        'assembly:' links, the object an alias or an enrich stands for. Not the
+        parts, and not the sub-assemblies of the sub-assemblies - each of those
+        answers the same question about itself, which is what makes an assembly
+        tree walkable one level at a time.
+
+        Prepared first, because that is what resolves the references: a link
+        may name a package nothing has loaded yet, and an enrich does not know
+        which instance it points at until the parameter values have reached it.
+        """
+        await self.prepare_async()
+        if self._subassemblies is None:
+            return []
+        return await self._subassemblies(self)
+
+    async def get_uncached_subassemblies_async(self, ctx) -> list["Assembly"]:
+        """The distinct assemblies this one places that would have to be built.
+
+        The first phase of building an assembly in two: what is already cached
+        (or already in memory) costs nothing to use, so what is left is the
+        work this assembly is really about to do, one entry per assembly however
+        many times it is placed.
+
+        An assembly that links to itself is left out of its own list - the
+        recursion is reported where it is built, not here.
+        """
+        found = {}
+        for sub in await self.get_subassemblies_async():
+            # The kind is part of what identifies one: a package may declare an
+            # assembly and a scene of one name, and they are two objects.
+            key = (sub.kind, sub.project_name, sub.name)
+            if sub is self or key in found:
+                continue
+            if await sub.is_cached_async(ctx):
+                continue
+            found[key] = sub
+        return list(found.values())
 
     def get_async_instantiate_lock(self) -> asyncio.Lock:
         """The task lock 'do_instantiate' serializes on, one per thread.
@@ -167,7 +228,7 @@ class Assembly(Shape):
         This is also what get_wrapped() caches - no separate serialization pass.
         """
 
-        @telemetry.start_as_current_span_async("Assembly._get_shape_real.per_child")
+        @telemetry.instrument_function_async("Assembly._get_shape_real.per_child")
         async def per_child(child):
             envelope = await child.item.get_wrapped(ctx)
             if envelope is None:
@@ -211,7 +272,10 @@ class Assembly(Shape):
         that every shape carries, an assembly carries its own placement: two
         assemblies of the same children in different places share the cached
         children but must not inherit each other's location. It carries what it
-        reports about itself for the same reason.
+        reports about itself, and what it says about connections, for the same
+        reason - an assembly's own ports are the ones its 'map:' externalizes,
+        and two assemblies of identical geometry need not externalize the same
+        ones.
         """
         name = ("%s:%s" % (self.project_name, self.name)) if self.name else self.project_name
         metadata = {"name": name, "label": self.name}
@@ -221,6 +285,7 @@ class Assembly(Shape):
         root = self._root_location()
         if root is not None:
             metadata[shape_envelope.KEY_LOCATION] = root.as_packed()
+        metadata.update(shape_ports.connection_metadata(self))
         return metadata
 
     def _root_location(self):
@@ -240,21 +305,14 @@ class Assembly(Shape):
         return name, label
 
     def _place(self, child_env, placement, name, label):
-        """The child's envelope re-stamped for this assembly.
+        """The child's node re-stamped for this assembly.
 
-        The child keeps its own geometry and, if it is a sub-assembly, its own
-        internal location; this assembly's placement of the child is composed
-        onto that (placement first, then the child's own) and carried as data.
+        'shape_envelope.placed()' is the composition, and is shared with
+        everything else that puts a node inside a node: the name and the label
+        are this assembly's account of the child, and the placement is composed
+        onto whatever the child already carried.
         """
-        entry = dict(child_env)
-        entry["name"] = name
-        entry["label"] = label
-        if placement is not None:
-            placement = placement if isinstance(placement, Location) else Location(placement)
-            own = child_env.get(shape_envelope.KEY_LOCATION)
-            composed = placement if own is None else (placement * Location(own))
-            entry[shape_envelope.KEY_LOCATION] = composed.as_packed()
-        return entry
+        return shape_envelope.placed(child_env, placement, name=name, label=label)
 
     def connected_children(self):
         """Every child of this assembly, including those of the sub-assemblies it embeds.
@@ -286,7 +344,7 @@ class Assembly(Shape):
             problems.extend([(child.name, problem) for problem in child.how.problems])
         return problems
 
-    async def get_interference_async(self, ctx, min_volume=1.0, min_fraction=0.0):
+    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0):
         """The pairs of parts in this assembly whose solids share space.
 
         Returned as {"overlaps": [{"a", "b", "volume"}, ...], "unchecked": [...],
@@ -300,10 +358,10 @@ class Assembly(Shape):
         out is the only way the rest of the answer means anything - and a caller
         that was told nothing would take "no interference" for "checked".
 
-        'min_volume' and 'min_fraction' are what separates a design fault from a
-        design that fits together. Parts meant to go together touch, and meshed
-        geometry touching is numerically noisy, so an overlap smaller than this
-        is not reported.
+        'min_volume' is a floor under the arithmetic: two surfaces that merely
+        touch bound nothing, and a boolean over tessellated faces answers with a
+        sliver rather than with zero. It is not a place to hide an overlap that
+        is meant to be there.
         """
         obj = await self.get_wrapped(ctx)
         if obj is None:
@@ -319,7 +377,13 @@ class Assembly(Shape):
             # leaf by leaf, keeping each name attached to its solid.
             request_serialized = shape_envelope.serialize(
                 {
-                    "assembly_json": json.dumps(obj),
+                    # shape_envelope.dumps, not json.dumps: the envelope carries
+                    # its BREP payloads as bytes, which stock JSON cannot encode
+                    # at all. Getting this wrong raised a TypeError that the
+                    # test caught and reported as a pass, so the check answered
+                    # "no interference" for every assembly without ever looking
+                    # at one.
+                    "assembly_json": shape_envelope.dumps(obj),
                     "min_volume": min_volume,
                     "min_fraction": min_fraction,
                 }
@@ -334,7 +398,7 @@ class Assembly(Shape):
                 command = [wrapper.get("interference.py"), os.path.join(unused_dir, "unused.txt")]
                 exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
             if exitcode != 0 and len(errors) == 0:
-                errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+                errors = command_failure(command, exitcode)
             if errors:
                 pc_logging.error(errors)
                 raise Exception(errors)

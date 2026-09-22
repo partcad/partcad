@@ -16,6 +16,7 @@ module never touches OCP.
 
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, wrapper
+from .process_crash import describe_exit_code
 
 # 'offset'/'scale' mirror the build123d relocate()/scale() the core used to run
 # in-process, so their runtime needs build123d; 'compound' only needs OCP to
@@ -44,7 +45,7 @@ async def _run(ctx, request):
     command = [wrapper_path, operation]
     exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
     if exitcode != 0 and not errors:
-        errors = "transform '%s' failed with exit code %s" % (operation, exitcode)
+        errors = "transform '%s' failed: %s" % (operation, describe_exit_code(exitcode))
     if errors:
         pc_logging.error(errors)
         raise Exception(errors)

@@ -46,9 +46,14 @@ poetry run behave                                                               
 The client tests stand up a fake IDE on an ephemeral port and point the client at it with `PARTCAD_IDE_PORT`,
 so they never collide with a PartCAD IDE the developer actually has open.
 
-To exercise the whole path — a real part, tessellated in a sandbox, over a real socket — point a `partcad` at a
-listening socket and show something; `tests/partcad/unit/test_viewer.py` covers the core side with the sandbox
-stubbed out, and the sandbox side is covered by the render tests.
+To exercise the whole path — a real part, tessellated in a sandbox, over a real socket — run
+`dev-tools/fake_viewer.py`, which listens where the IDE listens, acknowledges every frame and prints each show
+with its control tree and the geometry and frames attributed to the items that draw them. Give it `--port` and
+the same port in `PARTCAD_IDE_PORT` to stay out of the way of a PartCAD IDE that is actually open, and remember
+that the process doing the show is usually the **daemon** rather than the `pc` you ran, one per workspace.
+`tests/partcad/unit/test_viewer.py` covers the core side with the sandbox stubbed out,
+`tests/partcad/unit/test_shape_tree.py` covers what the tree holds, and the sandbox side is covered by the
+render tests.
 
 ## Lint / format
 

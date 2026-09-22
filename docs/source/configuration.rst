@@ -295,9 +295,9 @@ See ``examples/plugin_repository_basic`` (a package backed by a local file),
 
 .. _objects:
 
-=======
+========
 Objects
-=======
+========
 
 PartCAD :ref:`packages` may contain the following objects:
 
@@ -574,7 +574,7 @@ Reproducibility and manufacturability
 Manufacturing is repetition: the run after this one has to produce the same
 thing, so everything that goes into a product has to be gettable a second time
 and be the same thing. There are three ways an object can promise that, and the
-``cam`` check of ``pc test`` fails one that offers none of them:
+``manufacturability`` check of ``pc test`` fails one that offers none of them:
 
 - **It is bought.** A ``vendor`` and an ``sku`` name a thing to order, and
   ordering it again is what "the same again" means for it -- whatever file the
@@ -592,9 +592,9 @@ materials that names it worthless.
 
 .. code-block:: text
 
-  Test failed: //robot:bracket: cam: It is not reproducible: it is fetched with
-  'fileFrom: url', declares no 'fileHash', and names no vendor and SKU to order
-  it by, so nothing says which one it is
+  Test failed: //robot:bracket: manufacturability: It is not reproducible: it is
+  fetched with 'fileFrom: url', declares no 'fileHash', and names no vendor and
+  SKU to order it by, so nothing says which one it is
 
 The rule is about being *identified*, not about being available -- the file may
 download perfectly well and still be a different file than it was last month.
@@ -773,6 +773,140 @@ Such sketches are declared using the following syntax:
       include: <(optional) a layer name or a list of layer names to import>
       exclude: <(optional) a layer name or a list of layer names not to import>
 
+.. _sketch-layers:
+
+Layers, and reading one drawing several ways
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``include`` and ``exclude`` are **object-type parameters**: the ``dxf`` type
+contributes them rather than the author of the sketch inventing them, in the
+same way ``material``, ``color`` and ``tolerance`` are contributed to a part (see
+:ref:`parameters`). Two things follow from that, and both are the point of it.
+
+First, they exist whether or not the declaration mentions them, so whoever
+*refers* to the sketch can set them -- and a reference is the natural place for
+this to be decided, because which layers are wanted depends on what the sketch is
+being used for:
+
+.. code-block:: yaml
+
+  sketches:
+    panel:
+      type: dxf       # one drawing: the outline, the bend lines, the notes
+
+  parts:
+    sheet:
+      type: step                        # the stock the blank is cut out of
+
+    blank:
+      type: extrude
+      sketch: panel;include=OUTLINE     # the flat pattern
+      depth: 2.0
+      manufacturing:
+        method: subtractive
+        source: sheet
+
+    bracket:
+      type: step
+      manufacturing:
+        method: sheet_metal
+        source: blank
+        instructions: panel;include=BEND_UP,BEND_DOWN   # the bends, from the same drawing
+
+A list is written with commas in it, as above. Nothing has to be declared in
+advance for either reference to work, and each of them is its own sketch --
+with its own cache entry -- so the two do not have to be rendered twice or kept
+in step by hand.
+
+Layer names are matched **case-insensitively**, and only one of ``include`` and
+``exclude`` may be given -- both are the DXF importer's own rules. A reference
+setting either of them is deciding how the drawing is read, so it replaces what
+the declaration said rather than being added to it: a sketch declaring
+``include: [OUTLINE]`` and referred to as ``panel;exclude=NOTES`` is read by
+that exclusion alone. A reference that sets *both* is refused, the way a
+declaration writing both is.
+
+A drawing whose selected layers do not close into faces is imported as the
+**wires** it draws. That is what a drawing of bend lines is: two parallel lines
+across a blank are where it is folded, and a line is open by nature. PartCAD
+says so when it happens, because the other way to arrive there is an outline
+with a gap in it, which is a mistake rather than a drawing of lines.
+
+Second, the fields above are the **default** the reference overrides. They go on
+meaning exactly what they always meant, and a sketch that carries neither reads
+every layer. The long form is available too, for a sketch that wants to describe
+its own default:
+
+.. code-block:: yaml
+
+  sketches:
+    panel:
+      type: dxf
+      parameters:
+        include:
+          desc: The layers this drawing is read from
+          type: array
+          default: [OUTLINE]
+
+Every other sketch type rejects the two names, the way a part type rejects an
+object-type parameter it cannot honour: a layer is something a DXF has, and
+accepting the parameter silently on an SVG would leave a package believing it was
+filtering something.
+
+.. _sketch-annotations:
+
+Annotations
+^^^^^^^^^^^
+
+A DXF entity may carry **extended data** -- XDATA -- which is what an application
+wrote against that entity, in the file, beside the geometry. It is where a
+drawing states what the geometry cannot: two identical lines are a bend up
+through 90 degrees and a bend down through 30, and nothing about the lines says
+which.
+
+PartCAD reads it as the file is imported and carries it beside the geometry from
+then on, so it is a property of the **sketch** rather than of the file it came
+from. That is what lets :ref:`sheet metal instructions <sheet-metal>` be a
+sketch: the check reads what the sketch reports, and a sketch type that learns to
+state the same thing needs no change anywhere else. Today ``dxf`` is the only
+type that states anything, so sheet metal instructions have to be read from a DXF
+in practice -- but not by anything's design.
+
+Both of the usual spellings are read, and either may be used:
+
+.. code-block:: text
+
+  1001 PARTCAD          the APPID, as DXF requires
+  1000 angle=90         a key and its value in one string tag...
+  1000 radius=1.5
+  1000 direction=up
+
+  1001 PARTCAD
+  1000 angle            ...or the name, followed by the value as its own type
+  1040 90.0
+
+Keys are read case-insensitively -- ``ANGLE`` and ``angle`` are one key -- and
+values are kept exactly as the file states them. What is carried per element is
+its DXF type, its layer, its handle, where it is, and those key/value pairs; an
+element with no extended data is still carried, with nothing against it, because
+"this drawing annotates nothing" and "this line was left un-annotated" are
+different answers. The layer filters above apply, so the annotations describe
+what is in the sketch and not what was filtered out of it.
+
+``pc info`` on the sketch prints them, under ``Annotations``, beside what the
+drawing says about *itself*: which DXF it is, what ``$INSUNITS`` says its
+numbers are in, and -- under ``Layers`` -- **every** layer the file has, with
+how many elements of which types are on each and whether this sketch reads it.
+That last is not the question the annotations answer, and it is why the drawing
+is described as well as read: a layer filter that matched nothing and a layer
+that is not in the file both produce a sketch with nothing in it.
+
+A STEP file states the same kind of thing in its own vocabulary -- a
+``PROPERTY_DEFINITION`` hung on a product or on one named feature of one, and
+``PRESENTATION_LAYER_ASSIGNMENT`` for its layers -- and ``pc info`` on a
+``step`` part or assembly reports those under ``Properties`` and ``Layers``,
+with the keys lower-cased the same way.
+
 SVG
 ---
 
@@ -939,11 +1073,13 @@ Here is how it will get visualized:
 The same two things are drawn on a rendered projection by
 ``pc render --with-ports`` and ``--with-interfaces`` (``--with-all`` for both):
 a marker and a name at each port, and each interface instance named once with a
-line out to every port that belongs to it, over the port boundaries above. On an
-assembly or a :ref:`scene <scenes>` they walk everything inside it and place
-each child's ports where it put the child, which is how a connection that did
-not come out as intended is found. See :doc:`cli`, and `Drawing the ports and
-the interfaces`_ for asking a package to keep such a drawing checked in.
+line out to every port that belongs to it, over the port boundaries above. An
+assembly or a :ref:`scene <scenes>` is taken at its word -- what is drawn is
+what it says its ports are (see :ref:`assembly-ports`) -- and
+``--with-internals`` draws what is inside one anyway, each child's ports placed
+where the assembly put the child, which is how a connection that did not come
+out as intended is found. See :doc:`cli`, and `Drawing the ports and the
+interfaces`_ for asking a package to keep such a drawing checked in.
 
 Port matching
 -------------
@@ -1303,6 +1439,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
     <part name>:
       type: <scad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|extrude|sweep>
       desc: <(optional) textual description>
+      images: <(optional) the images this part was modeled from; see below>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
       fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
       fileUrl: <(fileFrom=url only) the URL to download the source file from>
@@ -1383,6 +1520,13 @@ cuts its own. See :doc:`assy`.
 The fields of the ``connect`` section are the defaults for the ``holdWith*`` and
 ``holdTo*`` fields of the ``how`` section of an Assembly YAML
 ``connect``/``connectPorts`` node. See :doc:`assy`.
+
+``images`` names the pictures a part was modeled from -- a technical drawing, a
+photograph, a sketch -- as paths relative to the package. They are what
+``pc render -t readme`` puts beside the part, next to its own rendered image, so
+that a reader of the README sees what the model was made to match. Assemblies,
+sketches and interfaces take the same field, and it says nothing about how the
+object is built: nothing reads these images but the README.
 
 The ``properties`` section says what the shape this part produces is, as opposed
 to ``parameters``, which say what is asked of the type that produces it. See
@@ -1918,8 +2062,6 @@ file could have carried it - the part declaration takes a ``tolerance:``
   parts:
     bracket:
       type: step
-      manufacturing:
-        method: subtractive
       tolerance: 0.1   # millimetres
 
 It is a field rather than a parameter because it asks nothing of the type that
@@ -2022,9 +2164,11 @@ The ``manufacturing.method`` field says how a part is made:
 +==================+===========================================================+
 | ``additive``     | Built up, e.g. 3D printed                                 |
 +------------------+-----------------------------------------------------------+
-| ``subtractive``  | Cut away from stock, e.g. machined                        |
+| ``subtractive``  | Cut away from stock -- see :ref:`subtractive`             |
 +------------------+-----------------------------------------------------------+
 | ``forming``      | Shaped without adding or removing material                |
++------------------+-----------------------------------------------------------+
+| ``sheet_metal``  | A flat piece bent to shape -- see :ref:`sheet-metal`      |
 +------------------+-----------------------------------------------------------+
 | ``pcbBasic``     | A printed circuit board (**not implemented yet**)         |
 +------------------+-----------------------------------------------------------+
@@ -2035,6 +2179,297 @@ together rather than made, and has a single method of its own -- see
 
 A part that is bought rather than made carries ``vendor`` and ``sku`` instead of
 a method.
+
+.. _subtractive:
+
+Subtractive
+-----------
+
+``subtractive`` is the method that takes material away: a router, a laser, a
+saw, a drill. What it says about a part is not a property of the part's own
+shape -- almost any solid can be machined out of a big enough block -- but a
+relation between the part and what it is made *from*, and between the part and
+the machine that makes it. Both can be declared, and both are checked.
+
+The stock it is cut from
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+``source`` names the piece the part is cut out of:
+
+.. code-block:: yaml
+
+  parts:
+    stock_plate:
+      type: build123d      # bought, so it declares no method of its own
+      path: stock_plate.py
+
+    bearing_block:
+      type: build123d
+      path: bearing_block.py
+      manufacturing:
+        method: subtractive
+        source: stock_plate
+
+Cutting can only ever remove material, so the part has to be what is left of the
+stock. ``pc test`` asks both halves of that, because each catches a different
+mistake and neither implies the other:
+
+- **Nothing of the part is outside the stock.** A part that pokes out of what it
+  is cut from cannot be made from it however good the machine is -- most often
+  the stock is simply too small, or the part is positioned off it.
+- **The stock is bigger than the part somewhere.** A part that fills its stock
+  exactly is one whose ``source`` names itself, or a copy of itself, which is
+  the mistake a reader of the YAML cannot see.
+
+``source`` is **required**, the way :ref:`sheet-metal`'s two fields are, and for
+the same reason: subtraction is defined by what it starts from. A shape somebody
+arrived at is not a subtractive part -- what makes it one is that it is what is
+left of a piece that existed first -- so a declaration naming no stock has not
+said what the method means.
+
+A part genuinely made from no stock is a part made some other way: bought
+(``vendor``/``sku``), ``additive``, or ``forming``.
+
+.. _subtractive-machines:
+
+The machine it is cut on
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Subtraction is one idea, but the machines that do it are not interchangeable,
+and what they **cannot** do is the useful thing to know. A machine is named by
+adding its own subsection:
+
+.. code-block:: yaml
+
+  manufacturing:
+    method: subtractive
+    source: stock_sheet
+    laser:
+      kerf: 0.15         # what the beam itself removes
+      toolAxis: -Z       # the axis it fires along
+
++----------------+------------------------------------------------------------+
+| Subsection     | The machine, and what it cannot do                         |
++================+============================================================+
+| *(none)*       | A CNC router or mill. It follows any 2.5D path, so there   |
+|                | is nothing it is held to beyond fitting its stock.         |
++----------------+------------------------------------------------------------+
+| ``cnc:``       | The same machine, said out loud.                           |
++----------------+------------------------------------------------------------+
+| ``laser:``     | A laser cutter. Its beam does not tilt, so every wall it   |
+|                | makes is parallel to the axis it fires along.              |
++----------------+------------------------------------------------------------+
+| ``drill:``     | A drilling machine. It goes in and comes out, so the only  |
+|                | thing it makes is a **round** hole along its own axis.     |
++----------------+------------------------------------------------------------+
+
+Naming none of them means CNC. That is the machine that can make anything the
+other two can, so it is the answer that is never wrong -- and it is what every
+``subtractive`` part written before machines could be named already meant.
+
+**Several may be named, and they are alternatives rather than stages.** A part
+that declares both ``laser:`` and ``cnc:`` is claiming it could be made either
+way, and ``pc test`` answers for both claims. ``pc cam`` then has to be told
+which one to write for -- ``pc cam -m laser :gasket`` -- because a default
+nobody picked is a program for the wrong machine; the file it writes is named
+after the machine (``gasket.laser.nc``), so the alternatives land beside each
+other rather than one overwriting the other. A part that really is machined in
+*stages* is not this: it is a chain of parts, each naming the previous one as
+its ``source``.
+
+**Only ``subtractive`` has a machine at all**, and the keys that describe a cut
+are refused everywhere else rather than accepted and never read. A ``diameter:``
+on a part that says ``method: additive`` is a number somebody chose and nothing
+acts on, which is the whole reason the job moved out of a section of its own --
+a printer has feeds and speeds too, and the day PartCAD writes a program for one
+they will be a printer's keys under a printer's subsection rather than a
+router's read by accident. A *sketch* is the one section with no ``method:`` in
+it: a drawing is not made out of anything, so it names the machine and the job
+and nothing else.
+
+Every machine takes a ``toolAxis``, which is the axis the tool, the beam or the
+drill approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
+or ``-Z``. It defaults to ``-Z``: the part sits on the bed and the tool comes
+down to it. It is **not** ``direction:``, which says which way round a
+contour is cut (climb or conventional) -- the two reach one implementation in
+one request, which is why they do not share a name. A laser also takes a ``kerf``, the width the beam itself removes,
+which is a property of that machine and that material rather than of the job --
+which is why it is a property of the machine rather than of the cut.
+
+What ``pc test`` checks
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Beyond the stock, one question per limited machine, and each applies **only to a
+part that named that machine**:
+
+- ``manufacturability-laser`` -- every face of the part is either a wall along
+  the beam or a face across it. A chamfer, a taper, a dome or a fillet rolling
+  over an edge is none of those, and there is no orientation of a beam that
+  produces a surface at an angle to itself.
+- ``manufacturability-drill`` -- the same, and every wall is round. This one
+  is asked of what the machine **took away** rather than of the part, where the
+  part names a ``source``: a drilled plate's straight sides came with the stock,
+  and asking the part's own walls would fail every plate for having them.
+
+Both are measured by sampling each face's own normal against the axis, not by
+reading its surface type. The type is not the question: a cylinder is a wall
+when it is coaxial with the axis and a defect when it lies across it, and a
+surface extruded along the axis is a perfectly good wall whatever it is made of.
+
+What is deliberately **not** checked is thickness, material or power. A laser
+will cut a 20 mm plate as readily as a 1 mm sheet given enough of it, and how
+much is enough is a property of the machine and the material rather than of the
+design -- so it is not something PartCAD can answer from the geometry, and a
+check that guessed would refuse parts the shop next door cuts every day.
+
+What ``pc cam`` writes
+^^^^^^^^^^^^^^^^^^^^^^
+
+The same ``gcode`` file type produces a different program for each machine, and
+which one it writes for is the part's own statement rather than a job parameter
+-- what a part is made on is a property of the part, and a re-tunable key for it
+would be a route written for a machine nobody owns.
+
++----------------+------------------------------------------------------------+
+| Machine        | The program                                                |
++================+============================================================+
+| CNC            | Contours offset by the cutter's radius, cut at stepped     |
+|                | depths. ``M3``/``M5`` where a ``speed`` is named.          |
++----------------+------------------------------------------------------------+
+| Laser          | One pass, offset by half the ``kerf``, with the beam gated |
+|                | ``M3 S<power>``/``M5`` around each contour and no Z motion |
+|                | at all. Reads no ``tool`` and no ``depth_per_pass``.       |
++----------------+------------------------------------------------------------+
+| Drilling       | A rapid to each round feature's centre, a plunge and a     |
+|                | retract, broken into steps where ``peck:`` says.           |
++----------------+------------------------------------------------------------+
+
+``power`` (a laser's S-word) and ``peck`` (how deep a drill goes before clearing
+the swarf) join the other :ref:`cam job keys <cam-section>`. A part declaring a
+``toolAxis`` other than ``-Z`` is rotated into the machine's frame before the
+route is written, so the program is in the coordinates the part is fixtured in.
+
+``examples/produce_part_subtractive`` is the whole of the above in one package:
+two stocks, a laser-cut blank and gasket, a routed block whose chamfer is the
+one feature only a router can make, and a drilled plate. The blank is what
+:ref:`sheet-metal` bends.
+
+.. _sheet-metal:
+
+Sheet metal
+-----------
+
+``sheet_metal`` is the one method that is not described by the part alone. The
+others say how a shape is produced from stock; this one says that an existing
+flat piece was put through a brake, so it names two things instead:
+
+.. code-block:: yaml
+
+  parts:
+    bracket:
+      type: step
+      manufacturing:
+        method: sheet_metal
+        source: blank                              # the part that is bent
+        instructions: bends;include=BEND_UP,BEND_DOWN   # the sketch that says how
+      tolerance: 0.1
+
+- ``source`` -- **required.** The part that goes into the brake: the flat blank.
+  It is a reference, resolved against this package like every other reference a
+  part makes, and it points at a **part** rather than at a drawing because it is
+  one. It has a thickness, a material, a tolerance, and a manufacturing method of
+  its own.
+
+- ``instructions`` -- **required.** The sketch that says where the bends are and
+  what each of them is. It is a reference to a :ref:`sketch <sketches>`, so it
+  may carry parameters: a drawing that holds the outline *and* the bend lines is
+  read as bends alone with ``;include=BEND_UP,BEND_DOWN``, which is what the
+  DXF layer parameters are for.
+
+The outline belongs to the blank
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The outline of the part, its holes, its slots and its cut-outs are **not** the
+sheet metal process's to make, and must not be described as part of it. They
+belong to the blank, which is usually cut flat -- laser, waterjet, punch,
+router -- and so is usually an ordinary ``subtractive`` part:
+
+.. code-block:: yaml
+
+  parts:
+    sheet:
+      type: step                # the stock, 2 mm, bought by the sheet
+
+    blank:
+      type: extrude
+      sketch: outline           # the flat pattern, holes and all
+      depth: 2.0
+      manufacturing:
+        method: subtractive     # laser cut, and that is where the holes come from
+        source: sheet
+      parameters:
+        tolerance: 0.1
+
+    bracket:
+      type: step
+      manufacturing:
+        method: sheet_metal
+        source: blank
+        instructions: bends;include=BEND_UP,BEND_DOWN
+
+That is how it is made, and so it is how it is written down. A shop cuts the
+flat pattern on one machine and bends it on another, they are quoted, toleranced
+and scheduled separately, and the flat pattern is a thing that exists -- it is
+what arrives at the brake. Describing a hole as part of the bending step would
+put it on the process that cannot make it, and would leave the part with no
+declaration of the process that can.
+
+``subtractive`` is the usual answer rather than a required one: what has to be
+true of a ``source`` is that it is flat, which is what ``pc test`` asks of it. A
+blank that is bought in rather than made has no manufacturing method to declare,
+one sheared or punched to outline is ``forming``, and an ``alias`` or an
+``enrich`` of a part declared elsewhere carries whatever that one says. All of
+them are blanks, and the check takes them.
+
+What ``pc test`` checks
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Two questions, one about each half of the declaration:
+
+- **The blank is flat, top and bottom.** What goes into a brake is a piece of
+  sheet, so the horizontal plane through its highest point and the one through
+  its lowest each meet it in an area rather than touching it at a point. A
+  ``source`` that fails this is not a blank -- most often it is the bent part
+  itself, named by mistake.
+
+- **Every bend line says what kind of bend it is.** Each line of the
+  instructions sketch carries three annotations:
+
+  +-----------------+----------------------------------------------------------+
+  | Annotation      | What it has to be                                        |
+  +=================+==========================================================+
+  | ``angle``       | How far the metal is turned, in degrees. Positive.       |
+  +-----------------+----------------------------------------------------------+
+  | ``radius``      | The **inner** radius of the bend, in millimetres. More   |
+  |                 | than zero -- zero is a fold, not a bend.                 |
+  +-----------------+----------------------------------------------------------+
+  | ``direction``   | ``up`` or ``down``, in either case.                      |
+  +-----------------+----------------------------------------------------------+
+
+  Where they come from is the sketch's business, not this check's: a DXF states
+  them as :ref:`extended data <sketch-annotations>`, and the check reads what the
+  sketch reports rather than the file it was read from.
+
+What is *not* checked is the geometry of the part against those instructions.
+Whether bending the blank as described produces the shape the part declares is a
+question for the day PartCAD bends the blank itself; until then the part is what
+its own type built, and these are the manufacturing inputs beside it.
+
+``examples/produce_part_sheet_metal`` is the whole of the above in one package:
+one DXF holding the flat pattern and two bend lines, a blank extruded from the
+outline layer, and three parts folded from that one blank -- at one bend line,
+at the other, and at both. They differ in nothing but which layers their
+``instructions`` select, which is the case the layer parameters exist for.
 
 .. _procurement:
 
@@ -2095,6 +2530,29 @@ pack sizes, declare one part per (vendor, SKU) pair, for example using
       sku: "2803-0004-0002"
       count_per_sku: 25  # sold in bags of 25
 
+    # The same nut, ordered from somewhere else. What it is stays where it is
+    # declared; only what it is bought as is restated here.
+    nut_m4_0_7mm_from_mcmaster:
+      type: alias
+      source: nut_m4_0_7mm
+      vendor: mcmaster
+      sku: "90592A090"
+      count_per_sku: 100
+
+What an object is bought as is the one thing an ``alias`` or an ``enrich`` may
+state of its own: everything else it reports -- where the file is, what it is
+built with, which parameter values it has -- belongs to the declaration it
+resolves to. A reference that names a ``vendor`` or an ``sku`` replaces the
+whole record, ``count_per_sku`` included, because a pack size written for one
+SKU says nothing about another one; an absent ``count_per_sku`` therefore reads
+as ``1``, the same as it would on a part declared outright. A reference that
+names neither is ordering the same thing, so the record stands -- and a
+``count_per_sku`` on its own corrects how many of that same SKU arrive in one.
+
+This travels down a chain: an alias of an alias, and an enrich of an enrich,
+report what the reference in the middle declared rather than only what is at
+the end of the chain.
+
 .. _assemblies:
 
 ==========
@@ -2134,6 +2592,20 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
         holdForceMax: <(optional) most force to hold this assembly with, in N, default: 7>
         holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
 
+      # The ports and interfaces of the things inside it that this assembly
+      # presents as its own. See "Ports and interfaces of an assembly" below.
+      map: # (optional)
+        <new port name>: [<node>, <port of that node>]
+        <new instance name>: [<node>, <interface that node implements>, <instance of it>]
+
+      # Declared the way a part declares them, for what the map cannot say.
+      implements: # (optional) the list of interfaces to implement
+        <interface name>:
+          <instance name>: <OCCT Location object>
+          <other instance>: { port: <a port of this assembly> }
+      ports: # (optional) the list of ports in addition to the inherited ones
+        <port name>: <OCCT Location object>
+
 The ``assy`` type is used to define assemblies in `Assembly YAML` format, and
 the ``step`` type reads the structure out of a STEP file (see :ref:`assembly_step`).
 The ``urdf`` type reads a robot description as an assembly directly
@@ -2146,6 +2618,122 @@ The source file does not have to be a part of the package: ``fileFrom`` and
 ``fileUrl`` pull it from a remote location on first use, exactly as they do for
 :ref:`parts` (see :ref:`files`). This holds for every assembly type -- a vendor's
 STEP assembly is declared with its URL and read from there.
+
+.. _assembly-ports:
+
+Ports and interfaces of an assembly
+-----------------------------------
+
+An assembly is connected to other things the way a part is: by its ports, and by
+the interfaces those ports belong to (see :ref:`interfaces`). What it does not
+have is a part's way of getting them. A part is one solid and says where its
+ports are on it; an assembly is made of parts that already carry ports, already
+placed -- and an assembly's port is one of those, seen from outside.
+
+So an assembly does not state a coordinate somebody worked out by hand. It says
+which one it means:
+
+.. code-block:: yaml
+
+  assemblies:
+    motor-mount:
+      type: assy
+      map:
+        # a port of a node, under a name of this assembly's choosing
+        output: [bracket, TR-thru-3-opening-m3]
+        # an instance of an interface a node implements, under a new instance
+        # name; the interface itself is what it is
+        mount: [bracket, nema-17-motor-bracket-3, outer]
+
+The key is the new name. The value names what is being externalized: two
+elements are **a node and one of its ports**, three are **a node, an interface it
+implements and the instance of it**. Nothing else changes as a result: a mapped
+port is a port of this assembly like any other, and a mapped interface instance
+brings in exactly what an ``implements:`` of the same interface would have --
+the same port names (``mount-3mm-thru-opening-m3``), the same freedom of
+movement, and the same ancestors, so an assembly that externalizes an
+``m4-thru-3`` can be connected as an ``m4-thru`` like anything else.
+
+What the map does **not** do is rename an interface. The interface is read off
+the node and kept: it is a contract, and an assembly is in no position to
+restate one. The *instance* name is the assembly's to choose, because an
+instance is a place rather than a kind -- the bracket calls it ``outer``, and the
+mount it is part of calls it ``mount``.
+
+Which nodes can be named
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+The first element is the **node name from the Assembly YAML file** -- a link's
+``name:``, or the part or assembly name where the link has none (see
+:doc:`assy`) -- and not the name of the part. An assembly places the same part
+six times; five of those are not the one being externalized.
+
+The anonymous ``links:`` containers an ASSY file is built out of contribute
+nothing to the name: they are the file's own structure rather than things, so
+every node is named exactly as the file names it however deeply the file nests
+it. A node inside a *named* container is reached through it, with ``/``::
+
+  map:
+    left-foot: [frame/bracket, L-30mm-slotted-3mm-thru-opening-m4]
+
+A node name may be written in terms of the assembly's own parameters, the way
+``ports:`` and ``implements:`` may be -- ``map: {mount: ["%which%", handle]}`` --
+which is how an assembly parametrized by what it holds externalizes the right
+one.
+
+A sub-assembly that some package declares is a different matter: it is an object
+with a boundary of its own, and the map does not reach inside it. To reach a
+port in there, that sub-assembly externalizes it and this one maps *that*. A
+boundary is crossed one object at a time, which is what keeps an assembly free
+to be rearranged inside without breaking whatever connects to it.
+
+What a map cannot say
+^^^^^^^^^^^^^^^^^^^^^
+
+Some of an assembly's connections are not a port of anything inside it -- the
+face a fixture is clamped by, a datum the whole product is aligned to. Those are
+declared the way a part declares them, with ``ports:`` and ``implements:``,
+which an assembly takes in exactly the same spelling as :ref:`parts`.
+
+The two are read in order: the map first, then ``ports:``, then ``implements:``.
+So a declaration may refer to what the map produced -- an ``implements:``
+instance may sit at a mapped port instead of at a coordinate:
+
+.. code-block:: yaml
+
+  assemblies:
+    motor-mount:
+      type: assy
+      map:
+        output: [bracket, TR-thru-3-opening-m3]
+      implements:
+        my-mounting-face:
+          front: { port: output }   # where the map put it
+
+A ``ports:`` entry that uses a name the map already produced wins, and says so
+in the log: two things under one name is a mistake worth hearing about.
+
+The boundary
+^^^^^^^^^^^^
+
+What an assembly externalizes is what it *has*, everywhere: ``pc info`` lists
+those ports, the viewer marks them, ``pc render --with-ports`` draws them, a
+``connect:`` in an ASSY file reaches them, and ``pc search --interface`` finds
+the assembly by them. What is inside it and not externalized is its own
+business. An assembly that declares no ``map:``, no ``ports:`` and no
+``implements:`` therefore has no ports at all -- which is the answer to "what
+can I connect to this", not a failure. ``pc render --with-internals`` looks
+inside one anyway, for finding the connection that went wrong (see :doc:`cli`).
+
+Other assembly types
+^^^^^^^^^^^^^^^^^^^^
+
+``map:`` is written for ``assy``, where the node names are the ones somebody
+wrote in the file. It works for ``step`` and ``urdf`` assemblies as best it can
+-- the nodes are then the components or the links, named as the imported file
+names them, which is not something this package controls. Where that does not
+fit, those assemblies state their ports the way a part does, with ``ports:`` and
+``implements:``.
 
 .. _assembly-manufacturing:
 
@@ -2765,10 +3353,9 @@ the same for every tool and happens once, in ``partcad_client.external``.
       sceneType: demo                    # it reads this scene type and no other
 
 ``pc open --with democad ./cell.demo`` then works, in a workspace whose packages
-import that one. PartCAD ships five of these in ``//builtin/open`` -- FreeCAD,
-KiCad, Blender, and, until the wheel stops carrying them, Gazebo and MuJoCo. A
-package's entry replaces a built-in of the same name, which is how the plugin
-for a simulation engine comes to own the application for it: both
+import that one. PartCAD ships three of these in ``//builtin/open`` -- FreeCAD,
+KiCad and Blender. A package's entry replaces a built-in of the same name, which
+is how the plugin for a simulation engine comes to own the application for it: both
 `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ and
 `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ declare
 theirs, so a workspace that imports either already gets the entry from there.
@@ -2995,8 +3582,31 @@ part in one package names a material catalogued in another:
           type: string
           default: //pub/std/manufacturing/material/plastic:pla
 
-List what a package catalogues with ``pc list materials`` (and ``-r`` to walk
-the packages it imports).
+List what a package catalogues with ``pc list materials`` (and
+``pc list materials //...`` to walk the packages it imports).
+
+Standard catalogues
+-------------------
+
+The PartCAD index publishes two families of standard materials, so that a part
+made of something ordinary need not restate any of the above:
+
+- ``//pub/std/manufacturing/material/plastic`` -- polymers: the commodity and
+  printable thermoplastics (``pla``, ``abs``, ``asa``, ``petg``, ``pc``), the
+  engineering ones (``nylon``, ``pa12``, ``pa66-gf30``, ``pom``, ``uhmwpe``),
+  the high-performance ones (``ptfe``, ``peek``, ``pei``, ``pps``), the
+  polymer-matrix composites (``cfrp``, ``gfrp``) and the elastomers (``tpu``,
+  ``nr``, ``nbr``, ``epdm``, ``fkm``, ``silicone``).
+
+- ``//pub/std/manufacturing/material/metal`` -- metals and alloys, named by
+  their standard designation and temper: ``al-5052-h32``, ``al-6061-t6``,
+  ``al-7075-t6``, ``steel-4130``, ``ss-316l``, ``ti-6al-4v``, ``inconel-718``
+  and the rest of what robotics, aviation and automotive parts are made of.
+
+An alloy is named ``<metal>-<designation>-<temper>`` rather than by the bare
+designation for two reasons: ``5052:`` in YAML is the *number* 5052 rather than
+a name, and a temper is part of what was ordered -- 6061-T6 and 6061-O are one
+alloy and not one material to build out of.
 
 .. _software:
 
@@ -3160,7 +3770,7 @@ Manufacturability
 -----------------
 
 A board nobody can flash is not a board anybody can make. So the manufacturing
-test (``pc test``, the ``cam`` check) asks the same question of a part's
+test (``pc test``, the ``manufacturability`` check) asks the same question of a part's
 ``software`` that it asks of everything else the part needs, and the part fails
 unless all of it holds:
 
@@ -3412,6 +4022,7 @@ are configured by a section of ``partcad.yaml`` named after the command --
       extension: <(optional) the extension used when the file name is derived>
       prefix: <(optional) where the file goes, relative to the package>
       exclude: <(optional) kinds of object not to write this type for>
+      reproducible: <(optional) true to require the same bytes every time>
       <parameter name>: <value> # anything else is an export parameter
 
   render:
@@ -3454,6 +4065,34 @@ would promise a part it cannot deliver.
 
 The short form ``<file type>: <path>`` is the same as ``prefix: <path>``.
 
+Where the file goes
+-------------------
+
+``prefix`` is the directory the file goes in, relative to the output directory
+(``-O``) or, failing that, to the package. A ``prefix`` that carries an
+extension names the file itself, which is the one way to give an object's output
+a name of its own. Otherwise the file is named after the object, with the
+extension the file type declares.
+
+An object whose name carries a ``/`` is written into a sub-directory of that
+name, and the directories are created on the way. A package may declare an
+object that way itself, and the objects another file materializes are named that
+way whether it did or not -- a STEP assembly's components are the parts
+``<assembly>/<component>``, a URDF's links ``<assembly>/<link>``:
+
+.. code-block:: shell
+
+  pc export -t step -O ./ //pub/examples/partcad/produce_assembly_urdf:robot/wrist
+  # ./robot/wrist.step
+
+The separator in a *name* is always ``/``, whichever operating system reads it,
+so the same command produces the same tree on Linux, macOS and Windows.
+
+Those sub-directories are created whether or not ``-p``/``--create-dirs`` was
+given: a name with a ``/`` in it is a file in a directory however the command
+was invoked. ``--create-dirs`` is what creates the directory *around* them --
+the one ``-O``, ``prefix`` or ``output_dir`` asked for and nobody has made.
+
 Export parameters
 -----------------
 
@@ -3491,7 +4130,7 @@ looked at from, and ``viewport_up``, which way is up in the picture -- are
 common directions (see :doc:`cli`). Passed that way they layer on top of
 everything below, package and object alike, for that run only.
 
-Two names are not entirely the package's own.
+Three names are not entirely the package's own.
 
 ``decode`` is not a parameter at all. It is one of the fields PartCAD reads
 itself -- it says whether the sandbox rebuilds the shape and assembly envelopes
@@ -3526,6 +4165,78 @@ that declares an ordinary export parameter of its own named ``properties`` and
 gives it the value ``true`` will find that value replaced by the index before
 its implementation sees it. Any other value is passed through untouched, but the
 name is best avoided for anything else.
+
+.. _reproducible:
+
+``reproducible`` is the third, and it is a field of the protocol rather than any
+one format's parameter. It is a boolean, it defaults to ``false``, and it says
+whether this file has to come out **byte-for-byte the same every time it is
+written**, from the same object:
+
+.. code-block:: yaml
+
+  render:
+    svg:
+      reproducible: true
+
+Unlike every other parameter, it is handed to the implementation whether or not
+anybody declared it -- so an implementation reads ``request["reproducible"]``
+without first checking that the key is there, and means by it what every other
+implementation means. That is the whole point of it being here rather than in
+each format's own list of options: a package that publishes a ``render:``
+implementation of its own writes ``reproducible`` and it already means this.
+
+What it does depends on the file type, and on four of them it does something
+today:
+
+``svg``, ``png``, ``jpeg``
+  The projection goes through OpenCASCADE's **exact** hidden-line algorithm
+  rather than the polygonal one. The exact algorithm works from the surfaces;
+  the polygonal one works from a triangulation, which is floating point all the
+  way down, so the same shape meshed to the same deflection comes out with a
+  slightly different silhouette on a different architecture.
+
+  Every number written into the drawing is also rounded to the ``precision`` the
+  file type claims (ten decimal places by default), and a negative zero is
+  written as zero. Below that precision what is in the file is the last bit of
+  an arithmetic rather than a measurement -- a stroke width that differs in its
+  sixteenth digit, an arc rotated by half a femtodegree -- and it is a diff
+  every time the drawing is produced somewhere new.
+
+  For ``png`` and ``jpeg`` that settles the picture and not the encoding -- the
+  bytes below the projection are svglib's, reportlab's and Pillow's.
+
+``dxf``
+  The same, plus fixed header metadata: a DXF is otherwise stamped on every save
+  with the time it was written and a fresh pair of GUIDs, and ezdxf derives the
+  order of its ``CLASSES`` section from a ``set``, so it emits differently per
+  process.
+
+It is off by default because it is not free. The exact projection is the slower
+of the two by a wide margin on anything large, and it is the one that can take
+the sandbox down: every released OpenCASCADE reads past the end of an allocation
+in the rejection table that algorithm sorts its edge crossings in
+(`Open-Cascade-SAS/OCCT#1546
+<https://github.com/Open-Cascade-SAS/OCCT/issues/1546>`_), which is a coin flip
+on an assembly with enough edges. A picture produced to be looked at should be
+the fastest correct one; a drawing that is *kept*, so that a diff answers
+whether it changed, is the case that says so. Every image under ``examples/`` in
+the PartCAD repository sets it.
+
+The rest of the built-in file types accept it and write the same bytes either
+way. They declare it all the same, so that an implementation which starts
+reading it does not also have to start receiving it.
+
+What it is not is a promise that two machines produce one file. It removes
+everything PartCAD chooses -- which algorithm, how a number is written, the
+clock, the GUIDs, the iteration order of a ``set`` -- and what is left is the
+CAD kernel's own arithmetic. Two platforms that disagree about a transcendental
+function in the last bit can still find one intersection more than each other
+along a curved silhouette, and no amount of rounding makes those two drawings
+the same file. So two renders on one machine are the same file, and two
+machines agree on everything but the hardest subjects. That is why PartCAD's own
+``Examples (PartCAD)`` job compares the checked-in drawings on one cell of its
+matrix rather than on all of them.
 
 Custom implementations
 ----------------------
@@ -3753,12 +4464,17 @@ run -- and says which of the two would fix it.
 Built-in implementations
 ------------------------
 
-The formats PartCAD ships are not special-cased anywhere: they are declared in
-exactly the form above by two packages that live inside the ``partcad``
-installation and that every context can reach, ``//builtin/export`` and
-``//builtin/render``. They are the bottom layer of the configuration, so a
+The export and render formats PartCAD ships are not special-cased anywhere: they
+are declared in exactly the form above by two packages that live inside the
+``partcad`` installation and that every context can reach, ``//builtin/export``
+and ``//builtin/render``. They are the bottom layer of the configuration, so a
 package that sets a single parameter keeps the built-in implementation for
 everything else, and a package that sets ``path`` replaces it.
+
+Two of the other sections ship one the same way: ``//builtin/cam`` declares the
+``gcode`` file type ``pc cam`` writes (see :ref:`pc cam <cam>`), and
+``//builtin/open`` declares the applications ``pc open`` starts. ``cae:`` is the
+one that ships nothing, because PartCAD implements no solver.
 
 ``//builtin/export`` implements ``step``, ``brep``, ``stl``, ``3mf``, ``obj``,
 ``gltf``, ``iges``, ``threejs`` and ``urdf``. ``//builtin/render`` implements
@@ -3766,11 +4482,10 @@ everything else, and a package that sets ``path`` replaces it.
 way to see what parameters each file type takes and what a package's own
 implementation should look like.
 
-It also carries ``world`` and ``mjcf`` for the moment, and will not for much
-longer: an engine's own scene format belongs to that engine's plugin package,
-beside the reader and the simulator that share its knowledge of the format.
-Write ``sim-gazebo:world`` and ``sim-mujoco:mjcf`` (see `Naming a file type
-elsewhere`_), which resolve through the plugin and keep working.
+It carries neither ``world`` nor ``mjcf``: an engine's own scene format belongs
+to that engine's plugin package, beside the reader and the simulator that share
+its knowledge of the format. Write ``sim-gazebo:world`` and ``sim-mujoco:mjcf``
+(see `Naming a file type elsewhere`_), which resolve through the plugin.
 
 Naming a file type elsewhere
 ----------------------------
@@ -3873,6 +4588,129 @@ is a property of the part rather than of whoever analyses it; see
 :ref:`pc cae <cae>` for how ``fix:`` and ``load:`` are written and what units
 they are in.
 
+.. _cam-section:
+
+Routes
+------
+
+``cam:`` is a fourth section of the same shape, and it is where a route -- the
+program a machine cuts an object with -- is implemented. Its file types are what
+:ref:`pc cam <cam>` produces, and every field means what it means above:
+
+.. code-block:: yaml
+
+  cam:
+    gcode:
+      path: post_gcode.py
+      extension: nc           # required: PartCAD has no default to guess at
+      feed: 2400              # a parameter of this implementation ...
+      depth_per_pass: 3       # ... and of every object it routes
+
+Two things are different from ``export:`` and ``render:``, and one thing is
+different from ``cae:``:
+
+* **There is a built-in package**, unlike ``cae:``. A route is arithmetic on the
+  object's own outline rather than somebody else's program with a release cycle
+  of its own, which is the test ``export:`` and ``render:`` already pass and a
+  solver does not -- so PartCAD ships ``//builtin/cam``, whose ``gcode`` file
+  type is what ``camImplementation`` names by default. Nothing has to be
+  installed for ``pc cam`` to work.
+* **There is no fallback section.** A route is not a file another CAD tool opens
+  as a part, so a ``gcode`` declared under ``render:`` is a render format that
+  happens to be called ``gcode``, and neither section stands in for the other.
+* **``extension`` is required**, for the reason it is required of an analysis:
+  what a controller reads is the implementation's decision.
+
+The file it writes is named after the object alone -- ``panel.nc`` -- because an
+object has one route at a time and the extension already says what the file is.
+
+**The parameters PartCAD knows by name -- the job: the tool, the depth, the feed
+and the rest of the closed list below -- are also keys an object may set for
+itself.** Nothing else is: not the parameters that describe the file rather than
+the cut, and not a parameter a third-party implementation invented, however
+squarely it describes the cut. PartCAD cannot check a name it has never heard of
+against a list, which is why the list is closed and why the paragraphs after the
+example spell out what is on it. That shared job half is what makes this section
+and the object's own declaration layers of one namespace rather than two
+different things:
+
+.. code-block:: yaml
+
+  # The package: what this shop does, for every object in it.
+  cam:
+    gcode:
+      feed: 2400 mm/min
+      safe_z: 8 mm
+
+  parts:
+    stock:
+      type: build123d
+      path: sheet.py
+
+    panel:
+      type: build123d
+      path: panel.py
+      # The object: what is true of this object, and nothing else. It goes in
+      # the section that already says how the part is made, beside the machine
+      # it belongs to.
+      manufacturing:
+        method: subtractive
+        source: stock
+        cnc:
+          operation: profile
+          diameter: 6 mm
+
+``//builtin/cam`` is underneath both. So a package cutting twenty parts from one
+sheet sets the feed once, and the one part that needs a smaller cutter says so
+for itself.
+
+The object's half lives in ``manufacturing:`` and not in a ``cam:`` section of
+its own, and that is what makes the word mean one thing. It used to mean two --
+the file types a package declares, and the job an object declared -- with the
+ambiguity managed by keeping the two key sets disjoint. Now ``cam:`` is the
+implementation registry and nothing else, and the job sits where the rest of
+"how this is made" already was.
+
+Within the object there are two scopes, and the difference is the point of
+having two. What is written directly under ``manufacturing:`` is shared by every
+machine the part names; what is written inside a machine's own subsection is
+that machine's, and outranks the shared value:
+
+.. code-block:: yaml
+
+  manufacturing:
+    method: subtractive
+    source: stock
+    feed: 1800            # whichever machine cuts it
+    laser:
+      kerf: 0.15
+      power: 85           # the laser's own
+    cnc:
+      diameter: 3
+      depth: 2
+
+**Each machine takes only the keys it reads.** A laser has no ``diameter:`` --
+it has no cutter, and ``kerf:`` is what it removes -- and no ``depth:`` or
+``safe_z:``, because it cuts through in one pass and never moves in Z. A drill
+has no ``depth:`` (how deep each hole goes is the geometry's to say), no
+``feed:`` and no ``operation:``. Writing one of those inside that machine's own
+subsection is refused with a sentence naming what it does take; writing it in
+the shared scope is perfectly legal and simply not read by a machine that has no
+use for it.
+
+That distinction is the one a single flat list could not draw. ``tool:`` used to
+be one key meaning three things, and a cutter diameter written on a laser-cut
+part was a value silently ignored. It is ``diameter:`` now, it lives beside the
+machine it belongs to, and on a laser it is an error.
+
+Those are the keys that describe the **cut**. A file type's other parameters
+describe the **file** -- ``//builtin/cam``'s ``units``, ``precision``,
+``tolerance`` and ``comments`` -- and are set here or by a package rather than by
+an object. The line is not tidiness: an object's section is checked against a
+list, a list can only hold what PartCAD knows the name of, and PartCAD cannot
+know the parameters of an implementation somebody else writes. So a package sets
+those for its objects, and the closed set is what buys the error message.
+
 Drawing the ports and the interfaces
 ------------------------------------
 
@@ -3887,21 +4725,25 @@ the file type asks:
     svg:
       with_ports: true        # a marker and a name at every port
       with_interfaces: true   # every interface named, and joined to its ports
+      with_internals: true    # on an assembly, what is inside it as well
       port_marker_size: 0.1   # the length of a port's +Z arrow ...
       port_label_size: 0.035  # ... and the cap height of the names, as a
                               # fraction of the projection's largest dimension
 
-``pc render --with-ports``, ``--with-interfaces`` and ``--with-all`` ask for the
-same thing for one invocation (see :doc:`cli`); declaring it on a file type asks
-for it permanently, which is how a package keeps a drawing of its connections
-checked in beside the plain one. The two add up rather than override: a file
-type declared with ``with_ports: true`` draws them whether or not the option was
-given.
+``pc render --with-ports``, ``--with-interfaces``, ``--with-all`` and
+``--with-internals`` ask for the same things for one invocation (see
+:doc:`cli`); declaring them on a file type asks for them permanently, which is
+how a package keeps a drawing of its connections checked in beside the plain
+one. The two add up rather than override: a file type declared with
+``with_ports: true`` draws them whether or not the option was given.
 
 On an assembly -- or a :ref:`scene <scenes>`, which is built the same way --
-both walk everything inside it and place each child's ports where the assembly
-put the child, so a connection that went wrong is visible as two frames that
-should have met and did not.
+what is drawn is what the assembly says its ports are: the ones its ``map:``
+externalizes and the ones it declares (see :ref:`assembly-ports`). Hiding the
+rest is the point of externalizing anything. ``with_internals`` walks everything
+inside it as well and places each child's ports where the assembly put the
+child, so a connection that went wrong is visible as two frames that should have
+met and did not.
 
 The two flags reach every ``render:`` file type, this package's own and
 another's alike, along with the ports themselves; what an implementation makes

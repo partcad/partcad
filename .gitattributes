@@ -44,6 +44,45 @@
 # carried a 130-byte pointer file where its icon should be, and showed none in
 # the marketplace or in the Extensions view. Named on its own rather than by
 # extension: the rest of the `.png`s in the tree really are rendered output.
+#
+# `.svg` is here for the same reason the `.png`s are, and with the same
+# exceptions for the same reason. Nearly every SVG in this tree is a *drawing* --
+# `pc render` writes one per object of every example package, some of them
+# hundreds of kilobytes of line elements, and they are rewritten in full
+# whenever the projection changes. That is text, so without this every revision
+# of every drawing is kept whole in the history and diffed line by line by
+# anything that looks at it.
+#
+# Six sets of SVGs are held out. The first three are the build-input rule above
+# applied again:
+#
+#   `/ide/vscode/resources/**/*.svg` are the extension's icons -- the tree
+#   view's file and interface glyphs, the refresh and globe buttons, the logo.
+#   `vsce package` copies the directory into the `.vsix`, exactly as it copies
+#   `logo_128x128.png`, so a pointer file there is an editor drawing nothing.
+#
+#   `/cad/freecad/resources/icons/*.svg` is the same thing for the FreeCAD
+#   workbench: the addon reads them off disk at run time to put its toolbar
+#   together.
+#
+#   `/apache20.svg` is the licence badge `README.md` opens with, and a badge is
+#   read by whoever is looking at the repository rather than by a build -- which
+#   includes a reader who has never run `git lfs`.
+#
+# The next two are the same rule again, and are inside `examples/`, which is
+# where it is easiest to miss: `/examples/produce_sketch_svg/*.svg` and
+# `/examples/feature_convert_sketch/svg/**` are not drawings PartCAD produced
+# but sketches it *reads* -- `type: svg` parts, named by `path:`. A pointer file
+# there is not a broken picture, it is an example that fails to build, and it
+# would fail in CI first, where nothing fetches LFS.
+#
+# The sixth is not a build input: `/examples/produce_sketch_basic/*.svg` are
+# renders like all the rest. They are held out because they are the smallest
+# drawings here by a wide margin -- seven files, 560 bytes to 15 KB, of a circle
+# or a rectangle apiece -- so LFS would cost each of them a round trip to store
+# what fits in a pointer file. They are also the one example whose whole subject
+# is how a sketch is declared, which makes them the drawings most likely to be
+# opened straight out of a fresh checkout.
 * text=auto eol=lf
 *.step binary
 *.stl binary
@@ -53,7 +92,14 @@
 *.bmp binary
 **/*.jpg filter=lfs diff=lfs merge=lfs -text
 **/*.png filter=lfs diff=lfs merge=lfs -text
+**/*.svg filter=lfs diff=lfs merge=lfs -text
 /ide/vscode/resources/logo_128x128.png -filter binary
+/ide/vscode/resources/**/*.svg -filter binary
+/cad/freecad/resources/icons/*.svg -filter binary
+/apache20.svg -filter binary
+/examples/produce_sketch_svg/*.svg -filter binary
+/examples/feature_convert_sketch/svg/** -filter binary
+/examples/produce_sketch_basic/*.svg -filter binary
 
 # The dev container's polyglot initializeCommand shim: cmd.exe reads the top of it
 # and /bin/sh the bottom, and the shell half breaks on a trailing CR -- so pin it to

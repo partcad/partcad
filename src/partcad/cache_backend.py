@@ -44,6 +44,16 @@ SIZED_KEYS = ("shape", "sketch", "part", "assembly", "cmps")
 # exempts. The window is there to keep trivial *geometry* out.
 PROPERTIES_SUFFIX = "-props"
 
+# Every key that is named after a geometry key without holding geometry, as one
+# tuple. A new one added to this list is a new one the size window stops
+# applying to, which is the whole of what 'accepts' needs to know.
+#
+# There used to be two more, for what a shape measures and for what its source
+# file stated. Both are now inside the geometry's own entry rather than beside
+# it (see the header of cache_shape.py), which is why they are gone rather than
+# renamed: there is no separate key left to exempt.
+NON_GEOMETRY_SUFFIXES = (PROPERTIES_SUFFIX,)
+
 
 class CacheBackend:
     """One storage tier: flat names in, bytes out.
@@ -69,7 +79,7 @@ class CacheBackend:
 
     def accepts(self, key: str, size: int) -> bool:
         """Whether an entry of this size belongs in this tier."""
-        if not key.startswith(SIZED_KEYS) or key.endswith(PROPERTIES_SUFFIX):
+        if not key.startswith(SIZED_KEYS) or key.endswith(NON_GEOMETRY_SUFFIXES):
             return True
         # One-byte entries are how a test result is stored, and they are exempt
         # from the minimum: the point of the minimum is to keep small geometry
@@ -88,6 +98,21 @@ class CacheBackend:
             pc_logging.debug("cache: %s: read failed: %s" % (self.name, e))
             return {}
 
+    async def contains_async(self, names: list[str]) -> dict[str, bool]:
+        """Which of 'names' this tier holds, without handing the payloads over.
+
+        A tier that cannot be reached holds nothing, exactly as it reads
+        nothing: the answer this is asked for decides whether something is
+        built, and "no" is what makes it get built.
+        """
+        if not names:
+            return {}
+        try:
+            return await self._contains_async(names)
+        except Exception as e:
+            pc_logging.debug("cache: %s: existence check failed: %s" % (self.name, e))
+            return {}
+
     async def write_async(self, items: dict[str, bytes]) -> dict[str, bool]:
         """Store 'items', reporting which of them this tier took."""
         if not items:
@@ -103,6 +128,21 @@ class CacheBackend:
 
     async def _write_async(self, items: dict[str, bytes]) -> dict[str, bool]:
         raise NotImplementedError
+
+    async def _contains_async(self, names: list[str]) -> dict[str, bool]:
+        """Read them to find out - the answer for a tier with nothing cheaper.
+
+        An entry with no bytes in it counts as absent, because that is what
+        every reader here makes of one (see cache_shape.read_async): a tier
+        that answers an empty payload has not spared anybody the build.
+
+        Overridden by the tiers that can be asked the question directly: a
+        stat() on the filesystem, a HEAD on an object store. The difference is
+        the whole point of asking - what this is asked about is a shape big
+        enough that fetching it only to drop it is the expensive half.
+        """
+        stored = await self._read_async(names)
+        return {name: bool(stored.get(name)) for name in names}
 
 
 class PooledCacheBackend(CacheBackend):

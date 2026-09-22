@@ -1,0 +1,12 @@
+# A file whose root node says where what it holds is.
+#
+# The root node is the assembly itself and has no node of its own to carry that
+# on, so the placement moves every item the file holds. See
+# 'AssemblyFactoryAssy.apply_root_placement'.
+location: [[0.0, 0.0, 100.0], [0.0, 0.0, 1.0], 0.0]
+links:
+  - part: plate
+    name: lower
+  - part: plate
+    name: upper
+    location: [[0.0, 0.0, 20.0], [0.0, 0.0, 1.0], 0.0]

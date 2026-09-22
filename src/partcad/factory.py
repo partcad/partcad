@@ -155,6 +155,27 @@ def register(kind: str, t: str, factory_class: Factory.__class__):
     all[kind][t] = factory_class
 
 
+def accepted_object_type_parameters(kind: str, t) -> dict:
+    """The object-type parameters the factory for this type accepts.
+
+    An object-type parameter is one the *type* contributes rather than the
+    author of the object declaring it from nothing, so it exists whether or not
+    the declaration mentions it - which is what lets a reference set one on an
+    object that declares no 'parameters:' section at all
+    ('bends;include=BEND_UP,BEND_DOWN' on a plain DXF sketch). See
+    'Project.get_object', which is where that is put to use, and
+    'PartFactory.ACCEPTED_OBJECT_TYPE_PARAMETERS' for what the mapping means.
+
+    Empty for a type nothing is registered for, and for one whose factory
+    contributes none. A partType or an imported reader resolves to no registered
+    factory here, which is the same answer: its parameters are its own.
+    """
+    factory_class = all.get(kind, {}).get(t)
+    if factory_class is None:
+        return {}
+    return getattr(factory_class, "ACCEPTED_OBJECT_TYPE_PARAMETERS", None) or {}
+
+
 def instantiate(kind: str, t: str, ctx, source_project, target_project, config):
     # A part 'type' that starts with ':' is a short reference to a partType
     # declared in the part's own package. Expand it to the fully-qualified

@@ -12,8 +12,9 @@ import typing
 
 from . import logging as pc_logging
 from . import part_factory as pf
-from . import telemetry
-from .utils import format_parameterized_name, get_child_project_path
+from . import reference, telemetry
+from .shape_config_store import resolve_store_properties
+from .utils import format_parameterized_name
 
 
 @telemetry.instrument()
@@ -37,30 +38,13 @@ class PartFactoryAlias(pf.PartFactory):
             # 'offset', which identifies nothing.
             self.keyed = False
 
-            if "source" in config:
-                self.source_part_name = config["source"]
-            else:
-                self.source_part_name = config["name"]
-                if "project" not in config and "package" not in config:
-                    raise Exception("Alias needs either the source part name or the source project name")
-
-            if "project" in config or "package" in config:
-                if "project" in config:
-                    self.source_project_name = config["project"]
-                else:
-                    self.source_project_name = config["package"]
-                if self.source_project_name == "this" or self.source_project_name == "":
-                    self.source_project_name = source_project.name
-                elif not self.source_project_name.startswith("//"):
-                    # Resolve the project name relative to the target project
-                    self.source_project_name = get_child_project_path(target_project.name, self.source_project_name)
-            else:
-                if ":" in self.source_part_name:
-                    self.source_project_name, self.source_part_name = source_project.resolve(
-                        self.source_part_name,
-                    )
-                else:
-                    self.source_project_name = source_project.name
+            # Where this points, by the rules every reference spells it with
+            # (see 'partcad.reference'). Recorded on the declaration as well,
+            # because 'pc convert' follows the stored configuration rather than
+            # the object, and a listing reads its description off it without
+            # building anything.
+            self.source = reference.source_of(source_project, target_project.name, config, "part")
+            self.source_project_name, self.source_part_name = reference.split(self.source)
             # Parameters handed to an alias are passed on to what it points
             # at. An alias declares no parameters of its own, so it has nothing
             # to apply them to - it is a reference, and a reference to an object
@@ -71,17 +55,10 @@ class PartFactoryAlias(pf.PartFactory):
             # 'with' when it parametrizes a reference).
             if config.get("with"):
                 self.source_part_name = format_parameterized_name(self.source_part_name, config["with"])
-
-            self.source = self.source_project_name + ":" + self.source_part_name
+                self.source = self.source_project_name + ":" + self.source_part_name
             config["source_resolved"] = self.source
 
-            if self.source_project_name == target_project.name:
-                self.part.desc = "Alias to %s" % self.source_part_name
-            else:
-                self.part.desc = "Alias to %s from %s" % (
-                    self.source_part_name,
-                    self.source_project_name,
-                )
+            self.part.desc = reference.describe(config["type"], target_project.name, self.source)
 
             # pc_logging.debug("Initialized an alias to %s" % self.source)
 
@@ -135,10 +112,20 @@ class PartFactoryAlias(pf.PartFactory):
             return wrapped
 
     def get_final_config(self):
+        """The declaration this reference resolves to, as this reference reports it.
+
+        The source's, but for the purchasing record: a reference may name a
+        vendor and an SKU of its own, and that is the one thing about the object
+        it is allowed to restate (see 'resolve_store_properties'). Applied here
+        rather than where the record is read, so that it travels: an alias of an
+        alias, and an enrich of an enrich, resolve through this same method and
+        so see what the reference below them declared rather than only what the
+        object at the end of the chain did.
+        """
         source = self.ctx._get_part(self.source)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")
-        return source.get_final_config()
+        return resolve_store_properties(source.get_final_config(), self.config)
 
     def get_cacheable(self) -> bool:
         # Cacheable once it knows which entry it shares: a reference keys on

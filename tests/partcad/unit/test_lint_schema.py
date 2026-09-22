@@ -171,7 +171,7 @@ def test_schema_a_parameter_default_may_be_any_other_value(kind):
 # What the schema has to accept, because PartCAD's own tooling writes it.
 
 
-@pytest.mark.parametrize("section", ["dependencies", "sketches", "parts", "assemblies", "scenes", "software"])
+@pytest.mark.parametrize("section", ["dependencies", "sketches", "parts", "assemblies", "scenes", "software", "mates"])
 def test_schema_an_empty_section_is_the_empty_section(section):
     """'pc init' writes three of these, and 'pc add part' fills one in.
 
@@ -193,6 +193,80 @@ def test_schema_every_registered_part_type_is_accepted():
     """
     for part_type in ("cadquery", "build123d", "chili3d", "sdf", "step", "brep", "stl", "3mf", "obj", "scad"):
         validate({"parts": {"widget": {"type": part_type}}})
+
+
+# Sections the loader reads that the schema did not know about.
+
+
+def test_schema_the_top_level_mates_section_is_accepted():
+    """'Project.init_mates' reads it, and the schema rejected every package that
+    wrote one: the root is 'additionalProperties: false' and 'mates' was not
+    among the properties. It exists so that a package can mate interfaces it
+    does not own, which is the only way to say how two other packages' parts go
+    together."""
+    validate({"mates": {"a": {"b": {"selfScrew": True}}}})
+
+
+def test_schema_a_top_level_mate_is_a_map_of_pairs():
+    """'add_mates' iterates the value's items, so a list would not survive it."""
+    failure({"mates": {"a": ["b"]}})
+
+
+@pytest.mark.parametrize(
+    "mates",
+    [
+        "m8-opening",
+        ["m8-opening"],
+        {"m8-opening": None},
+        {"m8-opening": {}},
+        {"//pub/std/metric/m:m8-opening": {}},
+    ],
+    ids=["a name", "a list of names", "a name with nothing said", "a name with an empty map", "a qualified name"],
+)
+def test_schema_an_interface_may_state_its_mates_in_any_form_the_loader_takes(mates):
+    """'Interface' normalizes all of these to a map. The list form is the one
+    '//pub/std/metric/m' writes -- 'mates: [m8-opening]' on every screw, shaft
+    and opening it declares -- and the schema took only a string or a map, so
+    the standard package failed its own schema check."""
+    validate({"interfaces": {"m8-screw": {"mates": mates}}})
+
+
+def test_schema_a_mating_carries_the_properties_of_the_pairing():
+    validate(
+        {
+            "interfaces": {
+                "m8-screw": {
+                    "mates": {
+                        "m8-opening": {
+                            "desc": "Driven into plain plastic",
+                            "selfScrew": True,
+                            "sourcePortSelector": "tip",
+                            "targetPortSelector": "mouth",
+                        }
+                    }
+                }
+            }
+        }
+    )
+
+
+def test_schema_a_mating_also_carries_the_joint_parameters():
+    """What 'feature_interface' states on two of its matings. 'mates' pointed at
+    'interface-parameter', which is this and *only* this -- so the parameters
+    were the one thing a mating could say, and 'desc' was not."""
+    validate({"interfaces": {"a": {"mates": {"b": {"move-z": {"min": -2, "max": 0, "default": -2}}}}}})
+    validate({"interfaces": {"a": {"mates": {"b": {"offset": {"dir": [1, 0, 0], "min": -15, "max": 15}}}}}})
+    validate({"interfaces": {"a": {"mates": {"b": {"selfScrew": True, "move-z": {"max": 0}}}}}})
+
+
+@pytest.mark.parametrize(
+    "mating",
+    [{"selfscrew": True}, {"selfScrew": "yes"}, {"srcPortSelector": "tip"}, {"move-w": {"min": 0}}],
+    ids=["the wrong case", "the wrong type", "a misspelled selector", "an axis that does not exist"],
+)
+def test_schema_a_mating_does_not_take_what_it_cannot_mean(mating):
+    """Anything unrecognized has to be a named parameter, which needs a 'dir'."""
+    failure({"interfaces": {"a": {"mates": {"b": mating}}}})
 
 
 # The package walk: which check claims which file, and what it reports.

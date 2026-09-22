@@ -17,6 +17,7 @@ import importlib
 import logging
 import sys
 import threading
+import weakref
 
 from partcad_utils.booleans import to_bool
 
@@ -62,6 +63,14 @@ class Session:
         # a context built from a different one cannot answer for it, so this is
         # what says whether the warm context still applies.
         self.context_user_configs: dict = {}
+
+        # The assemblies this daemon has built because a client asked it to,
+        # ahead of the assembly that places them (see
+        # 'operations._stage_subassemblies'). Weak, so that it says nothing
+        # about a context that has been evicted: what is in it is whatever is
+        # still loaded, and a reloaded package is a new object that has not
+        # been built yet.
+        self.staged: weakref.WeakSet = weakref.WeakSet()
 
         self._load_lock = threading.RLock()
 

@@ -129,7 +129,7 @@ def test_render_assembly_readme():
     assert "| Part | Count | Description |" in lines
     assert "| bone | 2 | Plate used as one of the bones on PartCAD logo |" in lines
     assert "| head_half | 2 | Bracket used as one side of the head on PartCAD logo |" in lines
-    assert "| bolt | 1 | M8x30-screw |" in lines
+    assert "| bolt | 1 | M8x35-screw |" in lines
     # No sub-assembly of this assembly is an object of a package.
     assert "## Sub-Assemblies" not in lines
 
@@ -227,3 +227,100 @@ def test_a_git_dependency_with_no_name_is_listed_by_its_alias(tmp_path):
         lines = f.read().splitlines()
 
     assert "### [sim-mujoco](https://github.com/partcad/partcad-sim-mujoco.git)" in lines
+
+
+def test_the_synchronous_render_forwards_its_arguments_by_name(monkeypatch):
+    """`Shape.render()` must not hand `render_async()` its arguments by position.
+
+    The two signatures are written out separately, and `render_async` grew an
+    `options_project` parameter *between* `options_package` and `output_dir`
+    (#643). A positional forwarding then re-addressed everything after it: a
+    caller naming `output_dir=` had that directory delivered as the options
+    package, which `_output_getopts()` reads `.config_obj` off, and `overlay`
+    delivered as the output directory. Nothing caught it, because no test named
+    `output_dir=` on the synchronous call.
+
+    So this asserts the forwarding itself rather than a rendered file: it is the
+    signatures agreeing that is at stake, and that is a question with an answer
+    even where no CAD sandbox can be built.
+    """
+    seen = {}
+
+    async def fake_render_async(self, ctx, format_name, **kwargs):
+        seen.update(kwargs)
+        seen["format_name"] = format_name
+
+    monkeypatch.setattr(pc.shape.Shape, "render_async", fake_render_async)
+
+    shape = pc.shape.Shape.__new__(pc.shape.Shape)
+    shape.render(
+        "ctx",
+        "svg",
+        project="project",
+        filepath="filepath",
+        options_package="options-package",
+        output_dir="output-dir",
+        overlay="overlay",
+    )
+
+    # By name, every one of them -- nothing arrived in a neighbour's slot.
+    assert seen == {
+        "format_name": "svg",
+        "project": "project",
+        "filepath": "filepath",
+        "options_package": "options-package",
+        "options_project": None,
+        "output_dir": "output-dir",
+        "overlay": "overlay",
+    }
+
+
+def test_a_parametrized_instance_is_not_a_section_of_its_own(tmp_path, monkeypatch):
+    """The README documents what a package declares, not what it derived.
+
+    A reference with parameter values in it - 'plate;side=20' - creates an
+    instance beside the declared objects, and the package then holds two
+    sketches where it wrote one. Nothing renders an image for such an instance,
+    so it used to be reached, found to have none, and reported as a file that
+    was missing - naming a path nobody was ever going to write. The declaration
+    it came from is in the README already, with its parameters listed.
+    """
+    root = tmp_path / "workspace"
+    root.mkdir()
+    (root / "partcad.yaml").write_text(
+        "name: //p\n"
+        "desc: A package with one parametrized sketch in it\n"
+        "sketches:\n"
+        "  plate:\n"
+        "    type: basic\n"
+        "    desc: A square of a declared size\n"
+        "    parameters:\n"
+        "      side: 10.0\n"
+        "    square:\n"
+        "      side: 10.0\n"
+        "render:\n  readme:\n",
+        encoding="utf-8",
+    )
+    output_dir = str(tmp_path / "out")
+    os.makedirs(output_dir)
+
+    ctx = pc.Context(str(root))
+    prj = ctx.get_project("//")
+    # Asking for an instance is what puts one beside the declaration.
+    assert prj.get_sketch("plate;side=20") is not None
+    assert "plate;side=20" in prj.sketches
+
+    # The 'partcad' logger does not propagate, so caplog sees nothing; record
+    # the calls instead.
+    warnings = []
+    monkeypatch.setattr(pc.logging, "warn", lambda *args: warnings.append(" ".join(str(a) for a in args)))
+
+    prj.render(format="readme", output_dir=output_dir)
+    with open(os.path.join(output_dir, "README.md")) as f:
+        readme = f.read()
+
+    assert "plate;side=20" not in readme
+    assert not [w for w in warnings if "plate;side=20" in w]
+    # The declared sketch is still reached - it is skipped here only because
+    # this package renders no images at all, which is what that warning is for.
+    assert [w for w in warnings if "Skipping rendering of plate:" in w]

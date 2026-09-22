@@ -10,6 +10,7 @@
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, telemetry, wrapper
 from .part_factory_homogen import PartFactoryHomogen
+from .process_crash import describe_exit_code
 from .sketch import Sketch
 
 
@@ -94,7 +95,7 @@ class PartFactoryExtrude(PartFactoryHomogen):
                     [wrapper_path, "extrude"], request_serialized
                 )
                 if exitcode != 0 and not errors:
-                    errors = "%s: %s: extrude failed with exit code %s" % (part.project_name, part.name, exitcode)
+                    errors = "%s: %s: extrude failed: %s" % (part.project_name, part.name, describe_exit_code(exitcode))
                 if errors:
                     pc_logging.error(errors)
                     raise Exception(errors)

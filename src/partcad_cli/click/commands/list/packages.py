@@ -17,8 +17,15 @@ When no recursion in requested, it shows the current package if and only if it h
 """
 
 
-@click.command(help="List imported packages")
-@click.option("-r", "--recursive", is_flag=True, help="Recursively process all imported packages")
+@click.command(
+    help="List imported packages. PACKAGE may end in '...' to reach every package below it",
+)
+@click.option(
+    "-r",
+    "--recursive",
+    is_flag=True,
+    help="Recursively process all imported packages (older spelling of '<package>...')",
+)
 @click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
 def cli(cli_ctx, recursive: bool, package: str):

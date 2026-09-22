@@ -24,6 +24,31 @@ The magic and the explicit length let the reader on either side resynchronize
 instead of guessing, and keep a frame from being confused with the LSP traffic
 that also flows between these two processes.
 
+What a "show" carries is one **object**, as the tree of nodes PartCAD carries
+every shape as (see 'partcad.shape_envelope'). There is no per-kind payload and
+no flat list of anything: a part or a sketch is that tree one node deep, an
+assembly is a node per thing it holds nested as deeply as it goes, and an
+interface is a node per port. A node is
+
+    {
+      "name":       the object's full name, or null
+      "label":      what this node is called where it sits, or null
+      "location":   [[tx,ty,tz], [ax,ay,az], angle] - where this node sits inside
+                    its parent, or absent for one that was not placed
+      "gltf":       this node's own geometry, or absent for one that has none
+      "ports":      [{"name", "location", "interface", "instance", "sketch"}, ...]
+      "interfaces": [{"name", "instance", "ports": [port name, ...]}, ...]
+      "assembly":   [node, ...] - what is inside it, or absent for a leaf
+      "sketches":   on the root node only: {reference -> node}, the sketches the
+                    ports name, one per sketch however many ports point at it
+    }
+
+Placements are **not** baked into the geometry. A node's "gltf" is its own shape
+in its own coordinate system and its "location" says where the node sits, exactly
+as the BREP form carries it, so whoever draws the tree composes the locations
+down it. The same goes for a port: its "location" is in the frame of the object
+that declares it, and moves with the node that holds it.
+
 Geometry travels as glTF, never as BREP. The core used to hand live OCP objects
 to 'ocp_vscode', which meant the receiving side needed a full CAD stack to
 tessellate them; a browser cannot do that, so the sandbox tessellates first and
@@ -32,6 +57,10 @@ base64-encoded (see 'encode_gltf'/'decode_gltf'). Note that this is zlib and
 not the zstd the BREP envelopes in 'partcad.shape_envelope' use: both ends of
 *this* pipe have to decompress it, and zlib is in the standard library of both
 Python and Node, whereas zstd is not (Node gained it only in 23.8).
+
+One glTF per node rather than one for the whole object, because a node is what a
+reader of the tree switches on and off, and what it switches off has to be its
+own buffer to be hideable.
 """
 
 import base64
@@ -63,19 +92,41 @@ MSG_CLEAR = "clear"
 MSG_PING = "ping"
 MSG_ACK = "ack"
 
-# Keys of a displayable object. 'gltf' is to this protocol what 'brep' is to the
-# shape envelope: the compressed geometry payload that identifies the object.
+# The keys of a node. 'gltf' is to this protocol what 'brep' is to the shape
+# envelope: the compressed geometry payload of one node.
 KEY_GLTF = "gltf"
 KEY_NAME = "name"
 KEY_LABEL = "label"
+# What is inside a node, as nodes. The same key the BREP form uses, because it is
+# the same tree.
+KEY_ASSEMBLY = "assembly"
+# Where a node sits inside its parent, and where a port sits in the frame of the
+# object that declares it: the packed [[tx,ty,tz], [ax,ay,az], angle] form
+# 'geom.Location.as_packed()' produces.
+KEY_LOCATION = "location"
+# What a node declares about connections. 'ports' are the coordinate frames, each
+# naming the interface instance it belongs to where it belongs to one;
+# 'interfaces' are those instances, each naming the ports it is made of. The
+# ports are partitioned between the interfaces and the ones that belong to none,
+# so nothing is listed twice.
+KEY_PORTS = "ports"
+KEY_INTERFACES = "interfaces"
+# On the root node: the sketches the ports anywhere in the tree are drawn with,
+# keyed by the reference those ports name in their own "sketch". A port is a
+# coordinate frame, which is drawn as a triad; most ports are also drawn *with*
+# something - the circle of a hole, the profile of a rail - and that is this. One
+# entry per sketch however many ports point at it, so a bolt pattern of four holes
+# carries one circle. Each is an ordinary node, so it carries its geometry the same
+# way, in its own coordinate system, to be placed at the port by whoever draws it.
+KEY_SKETCHES = "sketches"
+# On a show message: the object itself, as the root node of its tree.
+KEY_OBJECT = "object"
 # On a show message, beside 'name' and 'kind': the package the shown object
 # belongs to. The viewer shows more than geometry - what an assembly is made of,
 # how it goes together, where to buy its parts - and asks the PartCAD daemon for
 # all of it by '<package>:<name>', which a name on its own cannot spell. Absent
 # or None for a shape that belongs to no package.
 KEY_PACKAGE = "package"
-# On a marker: the packed [[tx,ty,tz], [ax,ay,az], angle] frame to draw axes at.
-KEY_LOCATION = "location"
 
 
 class ProtocolError(Exception):
@@ -94,41 +145,24 @@ def decode_gltf(payload: str) -> bytes:
     return zlib.decompress(base64.b64decode(payload))
 
 
-def is_object(obj) -> bool:
-    """Whether 'obj' is a displayable object this protocol carries."""
-    return isinstance(obj, dict) and KEY_GLTF in obj
+def is_node(obj) -> bool:
+    """Whether 'obj' is a node of a shape tree.
 
-
-def make_object(glb: bytes, name=None, label=None) -> dict:
-    """Build a displayable object from an already-tessellated GLB buffer."""
-    return {KEY_NAME: name, KEY_LABEL: label, KEY_GLTF: encode_gltf(glb)}
-
-
-def make_marker(marker) -> dict:
-    """Normalize a coordinate-frame marker for the wire.
-
-    Accepts either an already-built '{"name", "location"}' dict or a bare packed
-    '[[tx,ty,tz], [ax,ay,az], angle]' location, which is the form PartCAD's
-    'geom.Location.as_packed()' produces.
+    A node has geometry, or something inside it, or both. One that has neither is
+    still a node - an empty assembly, an interface whose ports carry no boundary -
+    and is recognised by the keys it would carry either in.
     """
-    if isinstance(marker, dict):
-        location = marker.get(KEY_LOCATION)
-        name = marker.get(KEY_NAME)
-    else:
-        location, name = marker, None
+    return isinstance(obj, dict) and (KEY_GLTF in obj or KEY_ASSEMBLY in obj)
 
-    if not isinstance(location, (list, tuple)) or len(location) != 3:
-        raise TypeError("a marker location must be the packed [[t], [axis], angle] form, got %r" % (location,))
 
-    translation, axis, angle = location
-    return {
-        KEY_NAME: name,
-        KEY_LOCATION: [
-            [float(translation[0]), float(translation[1]), float(translation[2])],
-            [float(axis[0]), float(axis[1]), float(axis[2])],
-            float(angle),
-        ],
-    }
+def make_node(glb: bytes = None, name=None, label=None, children=None) -> dict:
+    """Build a node from an already-tessellated GLB buffer and what is inside it."""
+    node = {KEY_NAME: name, KEY_LABEL: label}
+    if glb is not None:
+        node[KEY_GLTF] = encode_gltf(glb)
+    if children is not None:
+        node[KEY_ASSEMBLY] = list(children)
+    return node
 
 
 def encode_frame(message: dict) -> bytes:

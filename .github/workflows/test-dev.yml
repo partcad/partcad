@@ -28,7 +28,7 @@ permissions:
   contents: read
 
 env:
-  VERSION: 0.8.89
+  VERSION: 0.8.123
   CONTAINER_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}-devcontainer
   TOTAL_TIMEOUT: 900
@@ -412,10 +412,30 @@ jobs:
     name: "Run: behave"
     runs-on: ubuntu-24.04
 
-    # 60 -> 90: this dev-container behave run was hitting the 60-minute budget
-    # on the new stack. The 'test.yml' Behave jobs (native, not containerized)
-    # get a larger bump because they also cover Windows and macOS.
-    timeout-minutes: 90
+    # 60 -> 90 -> 120: this job runs the *whole* behave suite in one process,
+    # where the "Behave" jobs in "test.yml" shard the same suite
+    # BEHAVE_SHARDS ways -- so it is the one place where the suite's total
+    # growth lands on a single budget, and the only thing that ever gives it
+    # room back is a bump here.
+    #
+    # Measured rather than guessed, on devel itself: the "Run Behave" step took
+    # 81m09s on 0ded0360 and 70m20s on 3c29314c. Those are consecutive version
+    # bumps, and the *longer* of the two is the one with *fewer* scenarios in
+    # it -- so an eleven minute spread between runners sits on top of whatever
+    # the suite really costs, and 90 left the slower of those two runs under
+    # nine minutes of margin with nothing changed at all.
+    #
+    # What the suite grows *in* is what makes that margin disappear rather than
+    # erode: a scenario that renders anything provisions a CAD sandbox of its
+    # own from a throwaway $HOME, so each one costs minutes where a scenario
+    # settled by its declaration costs under a second. Seven were added to
+    # "features/test.feature" alone between 0.8.90 and here.
+    #
+    # The failure this bump is for gives no reason of its own: a job at
+    # "timeout-minutes" is cancelled with its log ending mid-sentence, which
+    # is why "test.yml" wraps its long commands in "dev-tools/ci/bounded.sh".
+    # Nothing wraps this one, so the budget is the whole of the margin.
+    timeout-minutes: 120
 
     # The KiCad image as well, on the same rule as "test.yml": no test job
     # starts before every container it might run in has been published.

@@ -21,6 +21,10 @@ assemblies:
   logo:
     type: assy
     desc: PartCAD logo
+    # Somebody can actually make this one: four printed parts and a screw. That
+    # is also what holds it to connecting every item rather than placing any of
+    # them by coordinates - see 'partcad.test.connectivity'.
+    manufacturable: true
     # Ask for a document of this assembly's own: its bill of materials, grouped
     # by package. 'pc render -t readme -a :logo' generates the same thing.
     render:
@@ -43,4 +47,9 @@ parts:
 render:
   readme:
   svg:
+    # This drawing is checked in, so it has to be the same file every time it
+    # is rendered. See 'reproducible' in '//builtin/render', and the note at
+    # the top of 'examples/partcad.yaml' for what that settles and what it
+    # cannot.
+    reproducible: true
     prefix: ./

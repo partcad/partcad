@@ -10,6 +10,7 @@
 #   - `//builtin/import` -- the third-party formats a package can declare an
 #     object as.
 #   - `//builtin/open` -- the applications `pc open` launches.
+#   - `//builtin/cam` -- the machine programs `pc cam` writes.
 #
 # And one that declares an object rather than a way of producing one:
 #
@@ -25,25 +26,28 @@
 # where MJCF and SDFormat belong and where they are on their way to.
 #
 # A package that wants to produce a format differently does not patch anything
-# here. It declares the same format in its own `export:`/`render:` section with
+# here. It declares the same format in its own `export:`/`render:`/`cam:`
+# section with
 # a `path` of its own, which replaces the built-in implementation for that
 # package (see `docs/source/configuration.rst`).
 
 name: //builtin
 desc: |
   The packages PartCAD ships with itself: the built-in ways of producing output
-  files, declared in `//builtin/export` and `//builtin/render`, the formats it
-  reads in `//builtin/import`, the applications it opens in `//builtin/open`,
-  and the scene a simulation places its subject in, in `//builtin/scene`.
+  files, declared in `//builtin/export`, `//builtin/render` and `//builtin/cam`,
+  the formats it reads in `//builtin/import`, the applications it opens in
+  `//builtin/open`, and the scene a simulation places its subject in, in
+  `//builtin/scene`.
 
-# Only three of the five children are listed. Every `//builtin/*` package is
+# Only three of the six children are listed. Every `//builtin/*` package is
 # reachable by path whatever this says -- `output.BUILTIN_PATHS` maps each one
 # to a directory inside the installation and `Context._get_builtin_project()`
 # loads it straight from there, so that they resolve in a context whose root
 # package is called something else entirely. What listing one here would add is
 # eager loading of it with this package, which is the opposite of what
 # `//builtin` is for: a context that never reads a foreign format should not pay
-# for `//builtin/import`.
+# for `//builtin/import`, and a context that never routes anything should not
+# pay for `//builtin/cam`.
 dependencies:
   export:
     type: local

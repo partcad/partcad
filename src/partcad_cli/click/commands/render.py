@@ -17,7 +17,13 @@ from ..viewport import viewport_options, viewport_params
 
 
 # TODO-105: @alexanderilyin: Replace --scene, --interface, --assembly, --sketch with a single option --type
-@click.command(help="Render a 2D projection of parts, assemblies, or scenes onto a plane")
+@click.command(
+    help=(
+        "Render a 2D projection of parts, assemblies, or scenes onto a plane. "
+        "OBJECT may be written '...:<name>' to mean every object of that name in this "
+        "package and in every package below it"
+    ),
+)
 @click.option(
     "-p",
     "--create-dirs",
@@ -49,7 +55,7 @@ from ..viewport import viewport_options, viewport_params
 @click.option(
     "-P",
     "--package",
-    help="Package to retrieve the object from",
+    help="Package to retrieve the object from ('<package>...' for that package and every package below it)",
     type=str,
     show_envvar=True,
 )
@@ -63,7 +69,7 @@ from ..viewport import viewport_options, viewport_params
 @click.option(
     "-r",
     "--recursive",
-    help="Recursively test all imported packages",
+    help="Recursively test all imported packages (older spelling of '<package>...')",
     is_flag=True,
     show_envvar=True,
 )
@@ -96,10 +102,10 @@ from ..viewport import viewport_options, viewport_params
     show_envvar=True,
 )
 # Ports and interfaces are not geometry, so they are invisible in a projection
-# unless asked for. These three ask.
+# unless asked for. These four ask.
 @click.option(
     "--with-ports",
-    help="Draw a labelled coordinate frame at every port of the object (and, for an assembly, of everything in it)",
+    help="Draw a labelled coordinate frame at every port of the object",
     is_flag=True,
     show_envvar=True,
 )
@@ -112,6 +118,16 @@ from ..viewport import viewport_options, viewport_params
 @click.option(
     "--with-all",
     help="Draw both the ports and the interfaces",
+    is_flag=True,
+    show_envvar=True,
+)
+@click.option(
+    "--with-internals",
+    help=(
+        "Say how deep the three above reach rather than asking for a drawing of its own: with any of them, "
+        "the ports of everything inside an assembly are drawn as well as the ones it externalizes, "
+        "which is how a connection that went wrong is found"
+    ),
     is_flag=True,
     show_envvar=True,
 )
@@ -136,6 +152,7 @@ def cli(
     with_ports,
     with_interfaces,
     with_all,
+    with_internals,
     object,
 ):
     run(
@@ -159,6 +176,7 @@ def cli(
             "with_ports": with_ports,
             "with_interfaces": with_interfaces,
             "with_all": with_all,
+            "with_internals": with_internals,
             "object": object,
         },
         needs_context=True,

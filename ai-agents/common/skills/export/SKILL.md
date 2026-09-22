@@ -81,9 +81,10 @@ Useful options:
 
 - `-O <dir>` — where the files go. The directory must exist; add `-p` to create
   the structure a configured output path needs.
-- **No object name** exports everything the package declares; `-r` walks the
-  imported packages too. Say what that will produce before running it on a
-  package that imports the public index.
+- **No object name** exports everything the package declares; a `...` suffix on
+  the package (`-P //...`) walks the imported packages too, and `...:<name>`
+  exports every object of that name from here down. Say what that will produce
+  before running it on a package that imports the public index.
 - `-e <package>` — read another package's `export:` options and implementations,
   which is how one package's exporter is applied to another's objects.
 

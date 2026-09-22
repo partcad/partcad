@@ -35,6 +35,18 @@ answers with the same dict plus one key of its own:
 a 'severity' and a 'where'. An empty one means the analysis found nothing to
 report, which is what "pc test" requires of a part.
 
+A 'cam:' implementation is run through here as well, and is handed the job the
+object declared merged with the file type's own parameters - the tool, the
+depths, the feeds, all of them numbers in millimetres and millimetres per minute
+by the time they arrive (see 'partcad.cam'). It answers with a key of its own
+too:
+
+    output = {"success": True, "stats": {...}}      # wrote the route, and it is this
+
+'stats' is whatever that implementation counted about the route. It is reported
+and never interpreted, so an implementation may put in it whatever a reader of
+its output would want to know.
+
 and reports what happened in one of two ways, whichever suits it:
 
     output = {"success": True}                        # wrote the file
@@ -52,6 +64,13 @@ reuse the SVG one.
 A format that declared 'properties: true' finds 'request["properties"]' holding
 what each shape reports about itself - its material, its colour, its physics -
 keyed by the full name the shape carries. See 'properties_index()'.
+
+Every request carries 'request["reproducible"]', a boolean, whether or not the
+file type declared it: whether the caller needs this file to come out the same
+every time it is written, from the same object. An
+implementation with nothing to decide ignores it; one that would otherwise stamp
+the file with the clock, or reach for the quicker of two algorithms that do not
+agree to the last bit, reads it and does the other thing. See REPRODUCIBLE_KEY.
 """
 
 import os
@@ -92,6 +111,24 @@ DECODE_KEY = "__decode__"
 # reserved key: a format that has no way to state a material or a mass never
 # declares it and never sees the index.
 PROPERTIES_KEY = "properties"
+
+# Whether the file this implementation is about to write has to come out
+# byte-for-byte the same every time it is written, from the same object.
+#
+# It is in every request the core sends, whether or not the file type declared
+# it, and that is the point of naming it here: an implementation reads
+# 'request["reproducible"]' without first asking whether the key exists, and
+# means by it what every other implementation means. Its twin is
+# 'partcad.output.REPRODUCIBLE_KEY', spelled out separately for the reason
+# DECODE_KEY is - a wrapper runs in a sandbox and cannot import 'partcad'.
+#
+# A plain parameter rather than a reserved one, so a package declares it as
+# 'reproducible: true' on a file type like any other field, and so an
+# implementation that has nothing to decide is free to ignore it. The built-in
+# renderers do decide: it picks which of OCCT's two hidden-line algorithms the
+# projection goes through, because only one of the two draws the same bytes on
+# two machines - see 'builtin/render/render_svg.py'.
+REPRODUCIBLE_KEY = "reproducible"
 
 # The key the core puts what each shape inherits from its material under, keyed
 # by the same full name the index below is keyed by. A shape says what it is
@@ -213,7 +250,15 @@ def process(script, path, request):
     # verdict and two files would let them disagree - and because the IDE's FEA
     # tab is a webview with no file system, so a finding has to arrive as data.
     # Meaningless for an export or a render implementation, which never set it.
-    for key in ("warnings", "unsupported", "findings"):
+    #
+    # 'stats' is the same arrangement for a 'cam:' implementation: what it
+    # counted about the route it wrote - how many passes, how far the tool
+    # travels in the cut - reported beside the file rather than parsed back out
+    # of it. Passed through as the implementation shaped it and never
+    # interpreted here, because what is worth counting differs between a router
+    # and a wire EDM, and a fixed set of keys in this line would be PartCAD
+    # deciding that on their behalf.
+    for key in ("warnings", "unsupported", "findings", "stats"):
         if output.get(key):
             result[key] = output[key]
     return result

@@ -16,7 +16,7 @@ from ..concurrency import ReentrantGate
 # Shared by every Test, because MAX_CONCURRENT_TESTS is a cap on tests as a
 # whole rather than on any one of them.
 #
-# Re-entrant, and it has to be: 'CamTest.test' runs the whole suite over every
+# Re-entrant, and it has to be: 'ManufacturabilityTest.test' runs the whole suite over every
 # object the assembly under test is procured from, from inside the call this
 # gate has already admitted. Counting those nested runs as new arrivals is what
 # used to wedge 'pc test -r' for good -- with every permit held by a caller
@@ -54,7 +54,7 @@ class Test(ABC):
     def __init__(self, name: str) -> None:
         self.name = name
 
-    def cache_key_suffix(self, ctx, shape) -> str:
+    async def cache_key_suffix(self, ctx, shape) -> str:
         """What this test's result depends on beyond 'shape.hash', as text.
 
         A shape's hash covers what the shape is built from, and a test may read
@@ -63,7 +63,14 @@ class Test(ABC):
         before the change.
 
         Empty for a test whose answer is a property of the shape alone; see
-        'CamTest.cache_key_suffix()' for the one that is not.
+        'ManufacturabilityTest.cache_key_suffix()' for the one that is not.
+
+        Asynchronous because what a test reads is not always text in the
+        declaration in front of it: a verdict about *another* object depends on
+        that object's own cache key, and a shape has no correct key until the
+        files it is built from are on disk (see 'Shape.get_cache_key_async').
+        See 'ManufacturabilitySheetMetalTest.cache_key_suffix()', which is the
+        one that does.
         """
         return ""
 
@@ -79,7 +86,8 @@ class Test(ABC):
             # not part of shape.hash; fold it into the cache key so that flipping
             # the flag invalidates any previously cached result.
             manufacturable = int(bool(getattr(shape, "is_manufacturable", True)))
-            cache_key = f"test.{self.name}.manufacturable={manufacturable}{self.cache_key_suffix(ctx, shape)}"
+            suffix = await self.cache_key_suffix(ctx, shape)
+            cache_key = f"test.{self.name}.manufacturable={manufacturable}{suffix}"
             cached_results = await ctx.cache_tests.read_data_async(shape.hash, [cache_key])
             cached_bytes = cached_results.get(cache_key, [])
             if cached_bytes and len(cached_bytes) != 0:
@@ -138,6 +146,20 @@ class Test(ABC):
         """
         message = self._log_message_prepare(*args)
         pc_logging.info(f"Test: {shape.project_name}:{shape.name}: {self.name}{message}")
+
+    def warned(self, shape, *args) -> bool:
+        """What the check found, on an object nobody is going to make.
+
+        A finding, reported, that does not fail the run. An object that says
+        'manufacturable: false' is a record of something - an import kept as it
+        arrived, a model of a part somebody else makes - and holding it to what
+        a thing being built is held to would mean either editing it until the
+        checks are happy, which destroys the record, or turning the checks off,
+        which loses the finding. Said out loud and not fatal keeps both.
+        """
+        message = self._log_message_prepare(*args)
+        pc_logging.warning(f"Test: {shape.project_name}:{shape.name}: {self.name}{message}")
+        return self.TEST_PASSED
 
     def failed(self, shape, *args) -> bool:
         """This methods works like logging.error() but prepends the message with the test name and the shape name."""

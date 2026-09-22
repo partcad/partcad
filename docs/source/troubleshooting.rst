@@ -21,6 +21,39 @@ The status of PartCAD context can be evaluated using the ``system status`` comma
 Pay attention to any exception or error message produced by the
 ``status`` command.
 
+The same command has two more reports, for the two things that most often turn
+out to be the answer -- what the configuration actually resolved to, and what
+the environment actually said:
+
+  .. code-block:: shell
+
+    pc system status config
+    pc system status env
+
+They are worth reading together. The first says what an option resolved to once
+the configuration file, the ``PC_*`` environment and the command line had all
+been applied; the second says what the environment asked for. They disagree
+whenever a command-line option won, a variable was misspelled, or a value was
+rejected -- which covers most of the cases where somebody runs either of them.
+Variables whose names say they carry a credential are listed but printed as
+``<scrubbed>``, so the output is something you can attach to a bug report.
+
+If the work is being done by a daemon -- which it is for most commands -- ask
+the daemon the same two questions:
+
+  .. code-block:: shell
+
+    pc daemon status
+    pc daemon status config
+    pc daemon status env
+
+A daemon is warm and shared per workspace, so the configuration and environment
+it reports are whatever its own environment held when something first started
+it, possibly days ago and possibly from a VS Code window. Your command does not
+run under them -- every command hands the daemon its own resolved configuration
+-- but the daemon's own copy is what it falls back on, and the environment it
+inherited is not something this side can reconstruct any other way.
+
 Health Check
 ------------
 
@@ -53,6 +86,63 @@ In order to selectively execute only a subset of the healthchecks tests, the ``h
 
     pc healthcheck --filters python,windows
 
+Most of what ``healthcheck`` finds is reported as a warning and the command
+still succeeds, because most of it is a machine missing something it can do
+without. There is one exception, and it is about sandboxes.
+
+Can this machine render anything?
+---------------------------------
+
+PartCAD imports no CAD kernel of its own. Every part is produced by a script
+run in a sandbox, and there are two mechanisms that can provide one on a
+machine that starts with nothing: conda, which installs an interpreter and the
+CAD stack beside it, and a container runtime, which carries both already. Three
+checks report on this, and they share the ``sandbox`` tag:
+
+  .. code-block:: shell
+
+    pc healthcheck --filters sandbox
+
+* ``CondaAvailable`` -- a warning when conda or mamba cannot be found. PartCAD
+  builds a virtual environment instead, which works wherever the host has a
+  usable Python.
+* ``DockerAvailable`` -- a warning when no container runtime answers. Note that
+  a Docker daemon running *Windows* containers counts as none here: every image
+  PartCAD uses is a Linux image. Set ``useDocker: false`` (or
+  ``PC_USE_DOCKER=false``) on a machine that has a daemon and should not use it,
+  and the check stops looking.
+* ``SandboxAvailable`` -- an **error**, and the only check that makes
+  ``pc healthcheck`` exit non-zero.
+
+A stated ``pythonSandbox`` is obeyed, and that is most of what
+``SandboxAvailable`` does. "Is there conda or a container" is the right
+question only when nobody has said which sandbox to use, because that is when
+PartCAD is the one choosing between them. If you wrote ``pythonSandbox: venv``
+-- a CI job that builds a virtual environment from the interpreter it already
+has, an air-gapped machine, a container image with no conda in it -- nothing is
+misconfigured, and the check passes:
+
+  .. code-block:: shell
+
+    pythonSandbox: venv       # in ~/.partcad/config.yaml
+    PC_PYTHON_SANDBOX=venv    # or in the environment
+
+A declared sandbox is then checked against what *it* needs and nothing else:
+``conda`` needs a conda, ``docker`` needs a container runtime, and ``venv``,
+``pypy`` and ``none`` need only the Python PartCAD is running under.
+(``remote`` needs a reachable ``partcad-service-remote-docker``, which is a
+network address this check does not ping.) Asking for ``conda`` on a machine
+that has none is a failure -- being unable to do what was asked is not a reason
+to quietly do something else.
+
+Three things need a container specifically, and say so when they are reached
+rather than in advance: an implementation whose package declares ``container:``,
+importing a KiCad PCB (``useDockerKicad``), and the ``docker`` Python sandbox
+when it was asked for by name. If ``pc render``, ``pc export`` or ``pc inspect``
+reports that no container runtime is available, start Docker or take the other
+route the message names -- for KiCad that is installing KiCad on this machine
+and setting ``useDockerKicad: false``.
+
 Typical problems
 ----------------
 
@@ -68,6 +158,15 @@ Which one is running, the standalone build or a wheel?
 - ``command -v pc`` says. A path under ``~/.local/share/partcad`` (or wherever ``--install-dir`` pointed) is
   the standalone build; a path inside a Python environment is the wheel. Having both installed is supported,
   but only the first on ``PATH`` runs.
+
+Imports hang, or time out reaching a repository the browser can open:
+
+- The network is very likely one where a proxy is the only route out. PartCAD reads ``HTTPS_PROXY``,
+  ``HTTP_PROXY`` and ``NO_PROXY`` for everything it downloads -- git repositories, tarballs and
+  ``fileFrom: url`` files alike -- so exporting them is usually the whole fix. See
+  :ref:`proxy-configuration`.
+- If a fetch fails to verify a certificate rather than hanging, the proxy is re-terminating TLS and its CA
+  is not trusted here. Point ``SSL_CERT_FILE`` and ``REQUESTS_CA_BUNDLE`` at the proxy's CA bundle.
 
 ========================
 PartCAD VSCode Extension

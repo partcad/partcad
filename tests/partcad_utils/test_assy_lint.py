@@ -372,6 +372,28 @@ def test_a_freshly_initialized_package_is_clean():
     assert config_diagnostics("sketches:\nparts:\n  cube:\n    type: cadquery\nassemblies:\n") == []
 
 
+@pytest.mark.parametrize(
+    "section,body",
+    [
+        ("parts", "    type: build123d\n"),
+        ("assemblies", "    type: assy\n"),
+        ("sketches", "    type: build123d\n"),
+        ("interfaces", "    abstract: true\n"),
+    ],
+)
+def test_an_object_may_name_the_images_it_was_modeled_from(section, body):
+    """`images:` is what puts a drawing beside an object in the README.
+
+    `Project.generate_readme()` renders that list for every kind of object it
+    writes a section for, so all four of them accept it -- a key the renderer
+    reads and the schema rejected is one nobody could write down.
+    """
+    assert (
+        config_diagnostics("%s:\n  bracket:\n%s    images:\n      - drawing.png\n      - photo.jpg\n" % (section, body))
+        == []
+    )
+
+
 def test_jinja2_in_a_configuration_is_not_mistaken_for_broken_yaml():
     """`partcad.yaml` is rendered as a template too, `includePaths` and all."""
     assert (

@@ -13,12 +13,12 @@ import hashlib
 import os
 import pathlib
 import platform
-import signal
 import subprocess
 import sys
 
 from . import logging as pc_logging
 from . import runtime, sandbox_lock, sandbox_versions, telemetry
+from .process_crash import describe_exit_code, describe_termination  # noqa: F401  (re-exported)
 from .process_output import decode as decode_output
 
 # Every session v-env directory is named this way, which is what lets the
@@ -135,25 +135,6 @@ def needs_reassert(path: str, python_package: str) -> bool:
 def clear_reassert(path: str, python_package: str) -> None:
     with contextlib.suppress(OSError):
         os.remove(get_reassert_path(path, python_package))
-
-
-def describe_exit_code(returncode: int) -> str:
-    """Describe a process exit code, naming the signal if it was killed by one."""
-    # POSIX reports a signal death as a negative returncode
-    if returncode < 0:
-        try:
-            name = signal.Signals(-returncode).name
-        except ValueError:
-            name = "unknown signal"
-        return "killed by signal %d (%s)" % (-returncode, name)
-    # Windows surfaces native crashes as large unsigned status codes
-    known_windows_faults = {
-        3221225477: "EXCEPTION_ACCESS_VIOLATION",
-        3221226356: "STATUS_HEAP_CORRUPTION",
-    }
-    if returncode in known_windows_faults:
-        return "exit code %d (%s)" % (returncode, known_windows_faults[returncode])
-    return "exit code %d" % returncode
 
 
 def package_requirements(project) -> list[str]:
@@ -647,22 +628,25 @@ class PythonRuntime(runtime.Runtime):
             # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
             exitcode = 0 if p.returncode in [3221226356, 3221225477] else p.returncode
 
-            if exitcode != 0 and not stdout and not stderr:
-                # Neither a traceback nor stderr means the interpreter died
-                # before it could report anything, which is what a native crash
-                # looks like: most often two incompatible OCP builds loaded into
-                # one process. Say so here, otherwise the only symptom is an
-                # unrelated AttributeError on a None shape much further away.
+            if exitcode != 0:
+                # A negative exit code means the interpreter was killed rather
+                # than that it failed, and the caller reports whatever comes
+                # back from here -- left to itself, the raw number, which names
+                # neither the signal nor the fact that there was one. So say it
+                # here, once, for every caller.
                 #
-                # Warning rather than error on purpose: pc_logging.error() sets
-                # the global had_errors flag that becomes a non-zero exit code,
-                # and the caller that consumes this exit code already reports
-                # the failure itself. This line only explains why it happened.
-                pc_logging.warning(
-                    "%s terminated abnormally (%s) without any output. This usually means conflicting "
-                    "native dependencies, such as mismatched cadquery-ocp versions, in %s"
-                    % (cmd, describe_exit_code(p.returncode), path if path else self.path)
+                # Saying nothing at all on the way out is the case worth
+                # guessing about: it is what a native crash looks like, and a
+                # fault in the CAD kernel and two incompatible OCP builds are
+                # the two things that produce it.
+                crash = describe_termination(
+                    cmd,
+                    p.returncode,
+                    where=path if path else self.path,
+                    silent=not stdout and not stderr,
                 )
+                if crash:
+                    stderr = crash if not stderr else stderr.rstrip() + "\n" + crash
 
             return exitcode, stdout, stderr
 
@@ -766,6 +750,7 @@ class PythonRuntime(runtime.Runtime):
                     sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
                     span.set_attribute("cmd", " ".join(sanitized_cmd))
                     argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, self._subprocess_env())
+                    # See the note beside the same line in 'run_onced'.
                     p = await asyncio.create_subprocess_exec(
                         *argv,
                         stdin=subprocess.PIPE,
@@ -803,22 +788,25 @@ class PythonRuntime(runtime.Runtime):
             # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
             exitcode = 0 if p.returncode in [3221226356, 3221225477] else p.returncode
 
-            if exitcode != 0 and not stdout and not stderr:
-                # Neither a traceback nor stderr means the interpreter died
-                # before it could report anything, which is what a native crash
-                # looks like: most often two incompatible OCP builds loaded into
-                # one process. Say so here, otherwise the only symptom is an
-                # unrelated AttributeError on a None shape much further away.
+            if exitcode != 0:
+                # A negative exit code means the interpreter was killed rather
+                # than that it failed, and the caller reports whatever comes
+                # back from here -- left to itself, the raw number, which names
+                # neither the signal nor the fact that there was one. So say it
+                # here, once, for every caller.
                 #
-                # Warning rather than error on purpose: pc_logging.error() sets
-                # the global had_errors flag that becomes a non-zero exit code,
-                # and the caller that consumes this exit code already reports
-                # the failure itself. This line only explains why it happened.
-                pc_logging.warning(
-                    "%s terminated abnormally (%s) without any output. This usually means conflicting "
-                    "native dependencies, such as mismatched cadquery-ocp versions, in %s"
-                    % (cmd, describe_exit_code(p.returncode), path if path else self.path)
+                # Saying nothing at all on the way out is the case worth
+                # guessing about: it is what a native crash looks like, and a
+                # fault in the CAD kernel and two incompatible OCP builds are
+                # the two things that produce it.
+                crash = describe_termination(
+                    cmd,
+                    p.returncode,
+                    where=path if path else self.path,
+                    silent=not stdout and not stderr,
                 )
+                if crash:
+                    stderr = crash if not stderr else stderr.rstrip() + "\n" + crash
 
             return exitcode, stdout, stderr
 

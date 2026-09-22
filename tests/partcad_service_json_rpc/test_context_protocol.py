@@ -113,6 +113,10 @@ class FakeContext:
         self.stats_git_ops = 0
         self.packages = ["//", "//sub"]
         self.project = FakePackage()
+        # As on a real Context: the root package it loaded, and the only thing
+        # that knows whether that package parsed. A missing or unparseable
+        # 'partcad.yaml' leaves this 'None' or 'broken'.
+        self.root = SimpleNamespace(broken=False, config_path=os.path.join(path, "partcad.yaml"))
         self.fail_with = None
         # get_all_packages() records the force_update it actually ran under: the
         # point of install/update is that the fetch *is* forced, and the point of
@@ -228,6 +232,45 @@ def test_the_same_url_yields_the_same_id_and_reuses_the_warm_context(tmp_path):
     # Reused rather than rebuilt -- otherwise the daemon buys the client nothing.
     assert len(session.partcad.contexts_built) == 1
     assert session.contexts[first["context"]] is session.partcad.contexts_built[0]
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        # A 'partcad.yaml' that is not there at all.
+        "missing",
+        # One that is there and did not parse, or named an 'import:' section the
+        # root may not have: 'Project.broken', reported and remembered.
+        "broken",
+    ],
+)
+def test_a_context_whose_root_did_not_load_is_read_again(tmp_path, state):
+    """A failed load must not be what this daemon answers with from then on.
+
+    The errors explaining it were logged while the context was being built, so a
+    cached failure is a command that exits non-zero with a reason followed by any
+    number of commands that exit zero with an empty answer -- which is how two
+    spellings of one request ('...' and './...') come to look like one of them is
+    broken, when what differs is which of them was typed first. Re-reading also
+    means a 'partcad.yaml' written in between is seen, rather than denied until
+    the daemon is stopped.
+    """
+    session, _ = make_session()
+
+    first = operations.context_create(session, {"url": workspace_url(tmp_path)})["context"]
+    if state == "missing":
+        session.contexts[first].root = None
+    else:
+        session.contexts[first].root.broken = True
+
+    second = operations.context_create(session, {"url": workspace_url(tmp_path)})["context"]
+
+    # The same workspace, so the same id: the client's context id stays valid.
+    assert second == first
+    assert len(session.partcad.contexts_built) == 2
+    assert session.contexts[second] is session.partcad.contexts_built[1]
+    # ...and the operations that follow this handshake get the fresh one.
+    assert session.partcad_ctx is session.contexts[second]
 
 
 def test_a_request_without_a_url_uses_the_working_directory_as_a_real_uri(tmp_path, monkeypatch):

@@ -43,6 +43,9 @@ def test_overlay_of_reports_nothing_as_none():
     assert Overlay.of(interfaces=True).interfaces
     everything = Overlay.of(all=True)
     assert everything.ports and everything.interfaces
+    # On its own it asks for nothing: it says how deep the others reach.
+    assert Overlay.of(internals=True) is None
+    assert Overlay.of(ports=True, internals=True).internals
 
 
 def test_only_a_render_file_type_carries_an_overlay():
@@ -63,6 +66,13 @@ def test_the_option_adds_to_what_the_file_type_declared():
     """Neither overrides the other: both are somebody asking for a drawing."""
     both = effective(Overlay(interfaces=True), _implementation(output.RENDER, {"with_ports": True}))
     assert both.ports and both.interfaces
+
+
+def test_a_file_type_can_ask_to_see_inside_an_assembly():
+    """Which is how the example keeps a drawing of a whole mount checked in."""
+    declared = _implementation(output.RENDER, {"with_ports": True, "with_internals": True})
+    assert effective(None, declared).internals
+    assert not effective(None, _implementation(output.RENDER, {"with_ports": True})).internals
 
 
 def test_a_part_reports_every_port_it_implements():
@@ -91,9 +101,18 @@ def test_a_port_with_no_boundary_sketch_asked_for_carries_none():
     assert all("sketch" not in record for record in _collect("example-bracket"))
 
 
+def test_an_assembly_is_taken_at_its_word():
+    """An assembly's ports are the ones it externalizes, and this one has none.
+
+    What is inside it is its own business: the drawing stops at the boundary,
+    the same one 'pc info' and a 'connect:' see.
+    """
+    assert _collect("connect-mates", kind="assembly") == []
+
+
 def test_an_assembly_reports_the_ports_of_everything_in_it():
-    """An assembly declares no ports of its own; its children do."""
-    records = _collect("connect-mates", kind="assembly")
+    """With '--with-internals', which is for looking inside one anyway."""
+    records = _collect("connect-mates", kind="assembly", overlay=Overlay(ports=True, internals=True))
     ports = [record["port"] for record in records]
     assert "example-bracket:inner-TL-3mm-thru-opening-m3" in ports
     assert "example-motor:TL-4.5mm-hole-opening-m3" in ports
@@ -111,7 +130,10 @@ def test_an_assembly_moves_a_childs_ports_where_it_put_the_child():
     does not - which is what makes a connection that went wrong visible as two
     frames that should have met and did not.
     """
-    records = {record["port"]: record for record in _collect("connect-mates", kind="assembly")}
+    records = {
+        record["port"]: record
+        for record in _collect("connect-mates", kind="assembly", overlay=Overlay(ports=True, internals=True))
+    }
     connected = records["example-bracket:outer-TR-3mm-thru-opening-m3"]["location"][0]
     mated = records["example-motor:TR-4.5mm-hole-opening-m3"]["location"][0]
     elsewhere = records["example-bracket:inner-TR-3mm-thru-opening-m3"]["location"][0]

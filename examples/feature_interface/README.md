@@ -28,9 +28,10 @@ line out to each port that belongs to it, so a bolt pattern reads as the one
 connection it is; the small circles are the port boundaries, the `m3` and
 `m4` sketches this package defines.
 
-On an assembly the same two options walk everything inside it, which is how
-a connection that went wrong is found - two frames that should have met and
-did not:
+An assembly is taken at its word: what is drawn is what it says its ports
+are, and this one externalizes none of the ones inside it. `--with-internals`
+draws those anyway, which is how a connection that went wrong is found - two
+frames that should have met and did not:
 
 <table><tr>
 <td valign=top><b><code>--with-ports</code></b><br/>
@@ -70,7 +71,7 @@ pc inspect -a -p placement=inner connect-mates
 # where the ports are, and which interface each of them belongs to
 pc render -t png --with-ports example-bracket
 pc render -t png --with-interfaces example-bracket
-pc render -a -t png --with-all connect-mates
+pc render -a -t png --with-all --with-internals connect-mates
 ```
 
 Every port drawn is also listed in the log, with the exact name to write in

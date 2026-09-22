@@ -17,18 +17,48 @@ type Stats = {
     size: number;
     packages: number;
     packagesInstantiated: number;
-    sketches: number;
+    // Two numbers per kind: how many objects the loaded packages declare, and
+    // how many of those have been built. Both spellings of the first are
+    // optional because they arrive from whichever PartCAD is serving: the
+    // `<kind>Declared` keys are the ones that say what the number is, and the
+    // bare `<kind>` keys are what a service published before them sends.
+    sketchesDeclared?: number;
+    sketches?: number;
     sketchesInstantiated: number;
-    interfaces: number;
+    interfacesDeclared?: number;
+    interfaces?: number;
     interfacesInstantiated: number;
-    parts: number;
+    partsDeclared?: number;
+    parts?: number;
     partsInstantiated: number;
-    assemblies: number;
+    assembliesDeclared?: number;
+    assemblies?: number;
     assembliesInstantiated: number;
-    // Optional: an older PartCAD service does not report these.
+    // Optional in both spellings: an older PartCAD service does not report
+    // scenes at all.
+    scenesDeclared?: number;
     scenes?: number;
     scenesInstantiated?: number;
 };
+
+/** The declared count of a kind, whichever of the two keys carried it. */
+function declared(stats: Stats, kind: 'sketches' | 'interfaces' | 'parts' | 'assemblies' | 'scenes'): number {
+    const asDeclared = stats[`${kind}Declared` as keyof Stats];
+    if (typeof asDeclared === 'number') {
+        return asDeclared;
+    }
+    const bare = stats[kind as keyof Stats];
+    return typeof bare === 'number' ? bare : 0;
+}
+
+/**
+ * What the version cell holds until PartCAD has reported one.
+ *
+ * Not a version, and therefore never a mismatch: the extension is compared
+ * against what the service said, and before the first `info` it has said
+ * nothing.
+ */
+const VERSION_UNKNOWN = 'Loading...';
 
 let saved: {
     stats: Stats;
@@ -39,26 +69,55 @@ let saved: {
         size: 0,
         packages: 0,
         packagesInstantiated: 0,
-        sketches: 0,
+        sketchesDeclared: 0,
         sketchesInstantiated: 0,
-        interfaces: 0,
+        interfacesDeclared: 0,
         interfacesInstantiated: 0,
-        parts: 0,
+        partsDeclared: 0,
         partsInstantiated: 0,
-        assemblies: 0,
+        assembliesDeclared: 0,
         assembliesInstantiated: 0,
-        scenes: 0,
+        scenesDeclared: 0,
         scenesInstantiated: 0,
     },
-    version: 'Loading...',
+    version: VERSION_UNKNOWN,
 };
+
+/**
+ * Whether the PartCAD the service reports is a different release from the one
+ * this extension was published with.
+ *
+ * `dev-tools/bumpversion.toml` moves `ide/vscode/package.json` along with every
+ * other version constant in the repository, so an extension and the PartCAD it
+ * shipped beside state the same string. Anything else means the two come from
+ * different releases -- and the JSON-RPC surface grows methods, so an older
+ * PartCAD answering a newer extension fails in whatever way the method it does
+ * not have happens to fail in. The context view is where that is visible before
+ * it is confusing, hence the red.
+ *
+ * Two non-answers are deliberately not mismatches: the placeholder above, and
+ * an extension version this build could not read at all -- neither is evidence
+ * of disagreement, and colouring them red would cry wolf on every start.
+ */
+export function versionsDiffer(partcadVersion?: string, extensionVersion?: string): boolean {
+    const reported = (partcadVersion ?? '').trim();
+    const expected = (extensionVersion ?? '').trim();
+    if (reported === '' || reported === VERSION_UNKNOWN || expected === '') {
+        return false;
+    }
+    return reported !== expected;
+}
 
 export class PartcadContext implements vscode.WebviewViewProvider {
     public static readonly viewType = 'partcadContext';
 
     private _view?: vscode.WebviewView;
 
-    constructor(private readonly _extensionUri: vscode.Uri) {}
+    constructor(
+        private readonly _extensionUri: vscode.Uri,
+        // The extension's own version, to compare what PartCAD reports against.
+        private readonly _extensionVersion: string,
+    ) {}
 
     public async setStats(stats: Stats, version: string) {
         console.log('setStats');
@@ -102,6 +161,19 @@ export class PartcadContext implements vscode.WebviewViewProvider {
         // Use a nonce to only allow a specific script to be run.
         const nonce = getNonce();
 
+        // A PartCAD that is not this extension's release is called out rather
+        // than merely stated: the number is in the view either way, and nobody
+        // compares it against an extension version they would have to go and
+        // look up. The title says what it is being compared against, because
+        // "this is wrong" without "and here is what was expected" is not
+        // actionable.
+        const mismatch = versionsDiffer(saved.version, this._extensionVersion);
+        const versionClass = mismatch ? 'version mismatch' : 'version';
+        const versionTitle = mismatch
+            ? ` title="PartCAD ${escapeHtml(saved.version)} does not match this extension` +
+              ` (${escapeHtml(this._extensionVersion)}). Update PartCAD, or install the matching extension."`
+            : '';
+
         return `<!DOCTYPE html>
 			<html lang="en">
 			<head>
@@ -125,7 +197,7 @@ export class PartcadContext implements vscode.WebviewViewProvider {
         <table>
         <tr>
         <td>PartCAD:</td>
-        <td id="version" class="version">${saved.version}</td>
+        <td id="version" class="${versionClass}"${versionTitle}>${escapeHtml(saved.version)}</td>
         </tr>
         <tr>
         <td>Package:</td>
@@ -140,23 +212,23 @@ export class PartcadContext implements vscode.WebviewViewProvider {
         </tr>
         <tr>
         <td>Sketches:</td>
-        <td id="num-sketches" class="num-sketches">${saved.stats.sketches}&nbsp;(${saved.stats.sketchesInstantiated})</td>
+        <td id="num-sketches" class="num-sketches">${declared(saved.stats, 'sketches')}&nbsp;(${saved.stats.sketchesInstantiated})</td>
         </tr>
         <tr>
         <td>Interfaces:</td>
-        <td id="num-interfaces" class="num-interfaces">${saved.stats.interfaces}&nbsp;(${saved.stats.interfacesInstantiated})</td>
+        <td id="num-interfaces" class="num-interfaces">${declared(saved.stats, 'interfaces')}&nbsp;(${saved.stats.interfacesInstantiated})</td>
         </tr>
         <tr>
         <td>Parts:</td>
-        <td id="num-parts" class="num-parts">${saved.stats.parts}&nbsp;(${saved.stats.partsInstantiated})</td>
+        <td id="num-parts" class="num-parts">${declared(saved.stats, 'parts')}&nbsp;(${saved.stats.partsInstantiated})</td>
         </tr>
         <tr>
         <td>Assemblies:</td>
-        <td id="num-assemblies" class="num-assemblies">${saved.stats.assemblies}&nbsp;(${saved.stats.assembliesInstantiated})</td>
+        <td id="num-assemblies" class="num-assemblies">${declared(saved.stats, 'assemblies')}&nbsp;(${saved.stats.assembliesInstantiated})</td>
         </tr>
         <tr>
         <td>Scenes:</td>
-        <td id="num-scenes" class="num-scenes">${saved.stats.scenes ?? 0}&nbsp;(${saved.stats.scenesInstantiated ?? 0})</td>
+        <td id="num-scenes" class="num-scenes">${declared(saved.stats, 'scenes')}&nbsp;(${saved.stats.scenesInstantiated ?? 0})</td>
         </tr>
         <tr>
         <td>Memory:</td>
@@ -168,6 +240,17 @@ export class PartcadContext implements vscode.WebviewViewProvider {
 			</body>
 			</html>`;
     }
+}
+
+/**
+ * Escape a value for HTML text or for a double-quoted attribute.
+ *
+ * The version arrives from the service rather than from this extension, and the
+ * title attribute above puts it inside quotes, where an unescaped one would end
+ * the attribute.
+ */
+function escapeHtml(value: string): string {
+    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function getNonce() {

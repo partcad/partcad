@@ -20,9 +20,28 @@ from .assembly import Assembly, AssemblyChild
 from .assembly_connect import ConnectHow, check_stage_sequence
 from .assembly_factory_file import AssemblyFactoryFile
 from .geom import Location
+from .interface import port_location
+from .shape_ports import prepare_async as prepare_ports_async
 
 
 @telemetry.instrument()
+def _as_names(value, where=""):
+    """One name, several names, or nothing, as a list either way.
+
+    Anything else is reported and read as nothing. A bare number is not a name
+    and is not iterable either, so taking it as given would end the whole
+    instantiation with a TypeError from inside a list comprehension.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [str(name) for name in value]
+    pc_logging.error("%s: 'interferes' must be a name or a list of them, ignoring: %r" % (where, value))
+    return []
+
+
 class AssemblyFactoryAssy(AssemblyFactoryFile):
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitASSY", source_project.name, config["name"]):
@@ -140,6 +159,42 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             return
         await item.prepare_async()
 
+    async def subassemblies_async(self, assembly) -> list:
+        """The assemblies this file links to, resolved but not built.
+
+        The same links 'prepare_node_async()' walks, kept rather than prepared:
+        the nodes naming an 'assembly', in the order the file names them. A
+        container node ('links:' of its own) is walked into rather than
+        collected - the sub-assembly it declares is assembled here, out of what
+        it links to, and is not an object anybody can ask for by name.
+
+        A link that does not resolve is left out: this decides what to build
+        first, and naming what is missing is the build's to do (see
+        'handle_node').
+        """
+        found = []
+        self.collect_subassemblies(self.read_assy(), found)
+        return found
+
+    def collect_subassemblies(self, node, found: list) -> None:
+        """Walk one node of the file, appending the assemblies it links to."""
+        if isinstance(node, list):
+            for item in node:
+                self.collect_subassemblies(item, found)
+            return
+        if not isinstance(node, dict):
+            return
+
+        if "links" in node and node["links"] is not None:
+            self.collect_subassemblies(node["links"], found)
+            return
+
+        if "assembly" not in node:
+            return
+        item = self.ctx._get_assembly(self.node_object_name(node, "assembly"), self.node_params(node))
+        if item is not None:
+            found.append(item)
+
     def instantiate(self, assembly):
         # # This method is best executed on a thread but the current Python version
         # # might not be good enough to do that.
@@ -161,21 +216,62 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         with pc_logging.Action("ASSY", assembly.project_name, assembly.name):
             assy = self.read_assy()
 
-            # The root node of an ASSY file is a container like any other, and
-            # its "description" is what the file says about the assembly as a
-            # whole. The package that declares the assembly may say it better
-            # ("desc"), so that one wins; with neither, the assembly's documents
-            # would have nothing to say about it at all.
+            # The root node of an ASSY file says what the file says about the
+            # assembly as a whole. The package that declares the assembly may say
+            # it better ("desc"), so that one wins; with neither, the assembly's
+            # documents would have nothing to say about it at all.
             if not assembly.desc:
                 assembly.desc = self.node_description(assy)
 
-            result = await self.handle_node(assembly, assy)
-            if result is not None:
-                assembly.children.append(result)
+            # And the root node *is* this assembly rather than something inside
+            # it, so the file fills this assembly directly. Putting a container in
+            # between gave the tree two roots with one name between them - "logo"
+            # holding "logo:links" holding everything - which is a level nobody
+            # declared, nobody can name in a 'connect:', and every reader of the
+            # tree had to know to ignore.
+            if "links" in assy and assy["links"] is not None:
+                await self.handle_node_list(assembly, assy["links"])
+                self.apply_root_placement(assembly, assy)
             else:
+                # A file that is one part or one assembly and nothing else. It
+                # still has a node of its own, because that is what it is.
+                result = await self.handle_node(assembly, assy)
+                if result is not None:
+                    assembly.children.append(result)
+            if not assembly.children:
                 pc_logging.warning("Assembly is empty")
 
             self.count_instantiated()
+
+    def apply_root_placement(self, assembly, node) -> None:
+        """Move what the file holds by where its root node says it is.
+
+        The root node has no node of its own to carry a placement on any more, so
+        'location:' on it is composed onto every item it holds - which is what
+        moving the whole of it means, and keeps the connections between those items
+        exactly as they were resolved, since all of them move together.
+
+        Not composed onto the assembly's own location instead: that one is
+        re-stamped from the declaration every time a payload is materialized (see
+        'Assembly.get_cache_metadata'), including on a cache hit, where nothing has
+        read this file at all.
+
+        A 'connect:' on the root is reported rather than honoured. It names a
+        sibling to connect to and the root node has none, so there has never been
+        anything it could do - it used to be answered with "Target part not found",
+        which said nothing about where the mistake was.
+        """
+        for section in ("connect", "connectPorts"):
+            if section in node:
+                pc_logging.error(
+                    "%s: the root node of an ASSY file has nothing to '%s' to; ignoring it" % (self.name, section)
+                )
+        location = node.get("location")
+        if location is None:
+            return
+        placement = Location(location)
+        for child in assembly.children:
+            child.location = placement if child.location is None else placement * Location(child.location)
 
     async def handle_node_list(self, assembly, node_list):
         tasks = []
@@ -247,6 +343,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         connect_to_port = None
         connect_to_port_pattern = None
         # "location" is an optional parameter for both parts and assemblies
+        located = "location" in node
         if "location" in node:
             loc = node["location"]
             location = Location((loc[0][0], loc[0][1], loc[0][2]), (loc[1][0], loc[1][1], loc[1][2]), loc[2])
@@ -303,7 +400,11 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             item = Assembly(
                 assembly.project_name,
                 {
-                    "name": f"{self.name}:{name}",
+                    # An anonymous 'links:' list is named after what it is, not
+                    # after the nothing it was called: this name is what the node
+                    # carries into the tree, and a reader of that tree - the IDE
+                    # viewer draws it now - was being shown "<assembly>:None".
+                    "name": f"{self.name}:{name}" if name else f"{self.name}:links",
                     "child": True,
                     # A container node declares a sub-assembly, so what the node
                     # says it is is what that sub-assembly is: the same "desc"
@@ -340,6 +441,11 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
             if connect is not None:
                 pc_logging.debug("Attempting to connect %s" % name)
+                # What is being connected may be an assembly that externalizes
+                # ports of its own ('map:'), and those are ports of it like any
+                # other - but they are worked out from its tree rather than read
+                # off its declaration, so they have to be worked out first.
+                await prepare_ports_async(item, self.ctx)
                 source_port = None
                 source_iface = None
                 source_iface_obj = None
@@ -368,6 +474,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 if target_part is None:
                     pc_logging.error("Target part not found: %s" % connect_to_name)
                 else:
+                    await prepare_ports_async(target_part, self.ctx)
                     if hasattr(child, "location"):
                         target_part_location = child.location
                     else:
@@ -378,7 +485,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     if (
                         connect_with_iface is None
                         and item.with_ports is not None
-                        and "ports" not in item.with_ports.config
+                        and not item.with_ports.has_loose_ports()
                         and len(list(item.with_ports.get_interfaces().keys())) == 1
                     ):
                         connect_with_iface = list(item.with_ports.get_interfaces().keys())[0]
@@ -419,7 +526,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     if (
                         connect_to_iface is None
                         and target_part.with_ports is not None
-                        and "ports" not in target_part.with_ports.config
+                        and not target_part.with_ports.has_loose_ports()
                         and len(list(target_part.with_ports.get_interfaces().keys())) == 1
                     ):
                         connect_to_iface = list(target_part.with_ports.get_interfaces().keys())[0]
@@ -880,13 +987,13 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                             )
                         )
 
-                        location = target_part_location * target_port.location * turn_around
+                        location = target_part_location * port_location(target_port) * turn_around
                         for target_offset in target_offsets:
                             pc_logging.debug("Target offset: %s" % target_offset)
                             location = location * target_offset
                         for source_offset in source_offsets:
                             location = location * source_offset
-                        location = location * source_port.location.inverse()
+                        location = location * port_location(source_port).inverse()
                     elif source_port is None and target_port is not None:
                         pc_logging.debug(
                             "Connected %s to %s of %s"
@@ -897,7 +1004,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                             )
                         )
 
-                        location = target_part_location * target_port.location * turn_around
+                        location = target_part_location * port_location(target_port) * turn_around
                         for target_offset in target_offsets:
                             location = location * target_offset
                     elif source_port is not None and target_port is None:
@@ -905,7 +1012,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         location = target_part_location * turn_around
                         for source_offset in source_offsets:
                             location = location * source_offset
-                        location = location * source_port.location.inverse()
+                        location = location * port_location(source_port).inverse()
                     elif source_port is None and target_port is None:
                         pc_logging.debug("Connected %s to %s" % (name, connect_to_name))
                         location = target_part_location * turn_around
@@ -929,7 +1036,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 # The source port is the frame a derived "pushDistance" is
                 # measured along, and that same port once the object is in place
                 # is what the push direction is deduced from, so both go along.
-                source_frame = None if source_port is None else source_port.location
+                source_frame = None if source_port is None else port_location(source_port)
                 mated_frame = location if source_frame is None else location * source_frame
                 connect_how.resolve(
                     item,
@@ -941,7 +1048,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 )
 
         if item is not None:
-            return AssemblyChild(item, name, location, connect_comment, connect_how, connection, description)
+            return AssemblyChild(item, name, location, connect_comment, connect_how, connection, description, located)
         else:
             return None
 
@@ -981,11 +1088,23 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             # values: number
             # default: half of the largest dimension of the two items
             "exploded": self._exploded_distance(connect.get("exploded", None), connect_to_name),
+            # option: "interferes"
+            # description: the other items this one also ends up sharing space
+            #              with as this connection is made. A screw is driven
+            #              into the part it is connected to and carries on
+            #              through the ones underneath, cutting its thread in
+            #              those as well; the connection is to one of them and
+            #              the interference is with all of them, and only the
+            #              connection knows which. Read by
+            #              'partcad.test.interference'.
+            # values: an item name, or a list of them
+            # default: none
+            "interferes": _as_names(connect.get("interferes", None), self.name),
         }
         if target_port is not None and target_part_location is not None:
-            port_location = target_part_location * target_port.location
-            info["point"] = list(port_location.translation)
-            info["direction"] = list(port_location.rotate_vector((0, 0, 1)))
+            frame = target_part_location * port_location(target_port)
+            info["point"] = list(frame.translation)
+            info["direction"] = list(frame.rotate_vector((0, 0, 1)))
         return info
 
     def _exploded_distance(self, value, connect_to_name):

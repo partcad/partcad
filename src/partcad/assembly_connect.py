@@ -48,6 +48,8 @@ HOW_FIELDS = (
     "turnDirection",
     "turnTorqueMax",
     "threadStep",
+    "selfScrew",
+    "snapIn",
     "holdWith",
     "holdWithInstance",
     "holdWithForce",
@@ -245,6 +247,27 @@ class ConnectHow:
         self.push_force_max = self._number(config, "pushForceMax", DEFAULT_PUSH_FORCE_MAX)
         self.turn_direction = self._turn_direction(config)
         self.turn_torque_max = self._number(config, "turnTorqueMax", DEFAULT_TURN_TORQUE_MAX)
+        # option: "snapIn"
+        # description: whether this joint is made by pushing one part past a
+        #              feature on the other that springs back behind it - a
+        #              clip, a barb, a detent. Getting past it means the two
+        #              solids pass through each other on the way, and in a
+        #              model that holds no springs they stay that way.
+        # values: boolean
+        # default: taken from the mating of the two interfaces; see 'resolve()'
+        self.snap_in, self.snap_in_specified = self._flag(config, "snapIn")
+
+        # option: "selfScrew"
+        # description: whether this joint is made by one part cutting its own
+        #              thread in the other. An interface can say this of itself
+        #              - a self-tapping screw is one wherever it is used - but
+        #              a plain screw driven into soft material cuts a thread
+        #              there too, and that is a fact about this joint rather
+        #              than about the screw.
+        # values: boolean
+        # default: taken from the interfaces being connected; see 'resolve()'
+        self.self_screw, self.self_screw_specified = self._flag(config, "selfScrew")
+
         # 'threadStep' is inherited from the interfaces being connected when the
         # ASSY file does not give one: see 'resolve()'.
         declared_thread_step = self._number(config, "threadStep", None)
@@ -297,6 +320,25 @@ class ConnectHow:
         # one of them is also repaired in place, so that an assembly still
         # builds; the list is what says the repair happened.
         self.problems: list[str] = []
+
+    def _flag(self, config, field):
+        """One of the boolean options, as '(value, was it stated)'.
+
+        Only a real boolean counts as stating it. 'bool("false")' is True, so
+        taking the value as given would make a quoted 'false' - or a 'no' that
+        YAML 1.2 keeps as a string where YAML 1.1 would have made it a boolean -
+        mean the opposite of what it reads like, and 'specified' would then stop
+        the interfaces from being consulted at all. Anything else is reported
+        and left unstated, so the mating and the interfaces decide as though the
+        line were not there.
+        """
+        value = config.get(field, None) if config else None
+        if value is None:
+            return False, False
+        if isinstance(value, bool):
+            return value, True
+        pc_logging.error("%s: 'how.%s' must be true or false, ignoring: %r" % (self.where, field, value))
+        return False, False
 
     def _number(self, config, field, default):
         value = config.get(field, None)
@@ -362,6 +404,7 @@ class ConnectHow:
         self._push_frame = source_frame
         self.push_direction = _push_direction(mated_frame)
         self._resolve_thread_step(source_interface, target_interface)
+        self._resolve_snap_in(source_interface, target_interface)
 
         self.hold_with = _resolve_holds(
             self._hold_with_spec,
@@ -389,6 +432,20 @@ class ConnectHow:
         self.hold_force_specified = specified
         return self
 
+    def _resolve_snap_in(self, source_interface, target_interface):
+        """Whether this joint is made by pushing one part past the other.
+
+        Said on the mating when it is true of the pairing wherever they meet -
+        a bore pushed onto a thread rather than screwed along it, a stud into
+        the hole that grips it - and on this connection's 'how' when it is true
+        of this joint alone. The more specific one wins, so a 'how' that says
+        either way is left as it is.
+        """
+        if self.snap_in_specified:
+            return
+        mating = _mating_between(source_interface, target_interface)
+        self.snap_in = bool(getattr(mating, "snap_in", False))
+
     def _resolve_thread_step(self, source_interface, target_interface):
         """Inherit 'threadStep' from the interfaces, and check that they agree.
 
@@ -406,13 +463,21 @@ class ConnectHow:
             ends.append((side, None if step is None else float(step), self_screw))
 
         declared = {side: step for side, step, _ in ends if step is not None}
-        # Either end may cut its own thread, and so may the connection itself:
-        # a screw is self-tapping in the pilot hole it is driven into and in
-        # nothing else, which is a fact about the pairing rather than about
-        # either part, so a package states it on the mating.
+        # Three levels say whether this joint cuts its own thread, and the more
+        # specific one wins. The interface knows when it is true wherever the
+        # interface is used; the mating knows when it is true of this pairing -
+        # a screw in a tapped hole cuts nothing and the same screw in a pilot
+        # hole cuts its own thread, so only the pairing can tell them apart;
+        # and 'how' knows when it is true of this joint alone.
         mating = _mating_between(source_interface, target_interface)
         cuts_its_own = any(self_screw for _, _, self_screw in ends) or bool(getattr(mating, "self_screw", False))
-        if len(set(declared.values())) > 1 and not cuts_its_own:
+        if not self.self_screw_specified:
+            self.self_screw = cuts_its_own
+        # Against the resolved answer rather than the interfaces' own: a mating
+        # or a 'how' that says this joint cuts its own thread is the more
+        # specific statement, and a joint that cuts its own thread is under no
+        # obligation to match one.
+        if len(set(declared.values())) > 1 and not self.self_screw:
             self._problem(
                 "the interfaces disagree about 'threadStep' (%s) and neither declares 'selfScrew'"
                 % ", ".join("%s: %s" % (side, step) for side, step in sorted(declared.items()))

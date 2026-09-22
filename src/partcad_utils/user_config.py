@@ -111,6 +111,7 @@ class TelemetryConfig(dict):
     def __init__(self, v: vyper.Vyper):
         self.v = v
         self.v.bind_env("telemetry.type", "PC_TELEMETRY_TYPE")
+        self.v.bind_env("telemetry.detail", "PC_TELEMETRY_DETAIL")
         self.v.bind_env("telemetry.env", "PC_TELEMETRY_ENV")
         self.v.bind_env("telemetry.performance", "PC_TELEMETRY_PERFORMANCE")
         self.v.bind_env("telemetry.failures", "PC_TELEMETRY_FAILURES")
@@ -135,6 +136,34 @@ class TelemetryConfig(dict):
                 return telemetry["type"]
 
         return "sentry"
+
+    @property
+    def detail(self):
+        """How deep the tracing goes: 'actions' (the default) or 'methods'.
+
+        'actions' is one span per operation PartCAD names - the processes and
+        the actions its own log lines are built from ('Action: InitWrapper',
+        'Process: ListAssemblies'). That is the shape of what a command does.
+
+        'methods' adds a span for every instrumented method underneath them.
+        It is what a trace needs to answer "where inside this did the time go",
+        and it is expensive in a way that is easy to miss: creating one part
+        goes through a dozen instrumented methods, so a package of eight
+        thousand of them is a quarter of a million spans for a listing. It is
+        available, and it is not the default.
+        """
+        try:
+            if self.v.is_set("telemetry.detail"):
+                return self.v.get_string("telemetry.detail")
+        except Exception:  # pragma: no cover
+            # Workaround for https://github.com/alexferl/vyper/pull/71
+            if "telemetry.detail" in self.v._override:
+                return self.v._override["telemetry.detail"]
+            telemetry = self.v._config.get("telemetry", {})
+            if "detail" in telemetry:
+                return telemetry["detail"]
+
+        return "actions"
 
     @property
     def env(self):
@@ -313,6 +342,7 @@ OPTION_KEYS = (
     "useDockerKicad",
     "caeFeaImplementation",
     "caeCfdImplementation",
+    "camImplementation",
     "tags",
 )
 
@@ -356,6 +386,14 @@ DEFAULT_CAE_IMPLEMENTATIONS = {
     "fea": "//pub/feature/cae/calculix:fea",
     "cfd": "//pub/feature/cae/calculix:cfd",
 }
+
+# Which implementation produces a route when nothing says otherwise. Unlike the
+# two above this one *is* built into 'partcad': a route is arithmetic on the
+# object's own outline rather than somebody else's program, so PartCAD ships it
+# (see 'partcad.output.BUILTIN_PACKAGES'). The option exists all the same,
+# because which post-processor a shop's machine reads is that shop's answer and
+# not PartCAD's.
+DEFAULT_CAM_IMPLEMENTATION = "//builtin/cam:gcode"
 
 
 class UserConfig(vyper.Vyper):
@@ -412,6 +450,19 @@ class UserConfig(vyper.Vyper):
     def get_config_dir():
         home = os.environ.get("HOME", Path.home())
         return os.path.join(home, ".partcad")
+
+    @staticmethod
+    def get_config_path():
+        """The configuration file itself: the first of the layers '__init__' resolves.
+
+        Next to the directory above rather than derived from it at each call
+        site, for the reason 'get_generated_id_path' below gives: a path spelled
+        twice is a path that can be read from one place and written to another.
+        A report of what the configuration resolved to has to name this file,
+        and naming a different one would make the report a lie exactly when
+        somebody is using it to find out why an option did not take.
+        """
+        return os.path.join(UserConfig.get_config_dir(), "config.yaml")
 
     @staticmethod
     def get_cache_dir():
@@ -483,10 +534,7 @@ class UserConfig(vyper.Vyper):
 
         cfg_dir = UserConfig.get_config_dir()
         os.makedirs(cfg_dir, exist_ok=True)
-        config_path = os.path.join(
-            cfg_dir,
-            "config.yaml",
-        )
+        config_path = UserConfig.get_config_path()
         if os.path.exists(config_path):
             try:
                 with open(config_path, "r") as f:
@@ -928,6 +976,7 @@ class UserConfig(vyper.Vyper):
         # values: <dict>
         # default: {
         #   "type": "sentry",
+        #   "detail": "actions",
         #   "environment": "prod",
         #   "performance": "true",
         #   "failures": "true",
@@ -1081,6 +1130,23 @@ class UserConfig(vyper.Vyper):
         # worse answer than the default one.
         self.cae_fea_implementation = self.get_string("caeFeaImplementation") or DEFAULT_CAE_IMPLEMENTATIONS["fea"]
         self.cae_cfd_implementation = self.get_string("caeCfdImplementation") or DEFAULT_CAE_IMPLEMENTATIONS["cfd"]
+
+        # option: camImplementation
+        # description: which implementation produces a route for "pc cam", as
+        #              "<package>:<file type>"
+        # values: <string>
+        # default: //builtin/cam:gcode
+        #
+        # Unlike the two above there *is* a built-in to fall back on, and the
+        # default names it. What this option is for is the machine at the other
+        # end: a controller that wants a dialect of its own, or a shop with a
+        # post-processor it already trusts, is a package declaring a file type
+        # in its own 'cam:' section and this option pointing at it. A run
+        # overrides it with "pc cam --implementation", and an object with
+        # "implementation:" in its own 'cam:' section.
+        self.set_default("camImplementation", DEFAULT_CAM_IMPLEMENTATION)
+        self.bind_env("camImplementation", "PC_CAM_IMPLEMENTATION")
+        self.cam_implementation = self.get_string("camImplementation") or DEFAULT_CAM_IMPLEMENTATION
 
     def cae_implementation(self, analysis: str) -> str:
         """Which implementation runs one analysis, by its name ("fea"/"cfd").

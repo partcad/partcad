@@ -76,6 +76,17 @@ parts:
     manufacturable: false
 ```
 
+If the part was modelled from reference images — a drawing, a photo, a sketch —
+name them under `images:` as well, as paths relative to the package. That is what
+puts them beside the part in the README `pc render` writes, so a reader sees what
+the model was made to match; nothing else reads them.
+
+```yaml
+    images:
+      - drawing.png
+      - photo.jpg
+```
+
 If you started the project with `pc init`, also delete the empty `sketches:` and
 `assemblies:` sections it leaves — a null section crashes `pc render` on older
 PartCAD (fixed in partcad/partcad#470).

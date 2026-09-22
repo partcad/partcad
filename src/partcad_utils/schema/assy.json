@@ -88,6 +88,14 @@
           "type": "number",
           "minimum": 0
         },
+        "selfScrew": {
+          "description": "Whether this joint cuts its own thread - an ordinary screw driven into soft material, which forms a thread there that neither part declares. The two solids occupy the same space where that thread is formed, so the interference is expected rather than reported. Says it of this one joint: an interface says it of everywhere it is used, and a mating of the pair. Only meaningful where the joint is turned, so it requires 'turnTorqueMax'.",
+          "type": "boolean"
+        },
+        "snapIn": {
+          "description": "Whether this joint is made by pushing one part past a feature on the other that springs back behind it - a clip, a barb, a detent. Getting past means the two solids pass through each other, and a model that holds no springs holds them overlapping, so the interference is expected rather than reported. Turned or not, but never alongside 'selfScrew': a joint is snapped together or threaded into place, not both.",
+          "type": "boolean"
+        },
         "holdWith": { "$ref": "#/definitions/holdInterfaces" },
         "holdWithInstance": { "$ref": "#/definitions/holdInterfaces" },
         "holdWithForce": { "$ref": "#/definitions/force" },
@@ -99,7 +107,28 @@
         "holdToForceMin": { "$ref": "#/definitions/force" },
         "holdToForceMax": { "$ref": "#/definitions/force" }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "selfScrew": { "const": true } }, "required": ["selfScrew"] },
+          "then": { "required": ["turnTorqueMax"] }
+        },
+        {
+          "if": { "properties": { "selfScrew": { "const": true } }, "required": ["selfScrew"] },
+          "then": { "properties": { "snapIn": { "const": false } } }
+        }
+      ]
+    },
+    "interferes": {
+      "description": "The other items this one also ends up sharing space with as this connection is made. A screw driven into one part carries on through the next and cuts its thread in that one too: the connection is to one of them, but the interference is with all of them, and only the connection knows. Named the way an item is named in this assembly; a name matches an item whose own name ends with it, so 'shaft' covers 'gearbox/shaft'.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        }
+      ]
     },
     "connect": {
       "description": "Placement by mating an interface of this object with an interface of an object already in the assembly.",
@@ -115,6 +144,7 @@
         "toPort": { "type": "string", "minLength": 1 },
         "toParams": { "$ref": "#/definitions/params" },
         "comment": { "$ref": "#/definitions/comment" },
+        "interferes": { "$ref": "#/definitions/interferes" },
         "how": { "$ref": "#/definitions/how" },
         "exploded": { "$ref": "#/definitions/exploded" }
       },
@@ -128,6 +158,7 @@
         "name": { "type": "string", "minLength": 1 },
         "to": { "type": "string", "minLength": 1 },
         "comment": { "$ref": "#/definitions/comment" },
+        "interferes": { "$ref": "#/definitions/interferes" },
         "how": { "$ref": "#/definitions/how" },
         "exploded": { "$ref": "#/definitions/exploded" }
       },

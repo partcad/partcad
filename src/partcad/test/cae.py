@@ -25,8 +25,8 @@ Everything else - which implementation, what the boundary conditions mean, what
 units they are in - is `partcad.cae` and `Shape.analyze_async()`, shared with
 `pc cae fea` so that the test and the command cannot disagree about a part.
 
-Named after what it checks, like `cam.py` and `connect.py` beside it, and
-emphatically *not* `cae_test.py`: that matches pytest's default `*_test.py`
+Named after what it checks, like `manufacturability.py` and `connect.py` beside
+it, and emphatically *not* `cae_test.py`: that matches pytest's default `*_test.py`
 pattern, so any collection that reaches `src/` imports this module as a test
 file -- under a package name that does not resolve -- and the run dies during
 collection rather than running anything.
@@ -59,7 +59,7 @@ class CaeTest(Test):
             return None
         return pc_cae.config_of(shape, self.analysis)
 
-    def cache_key_suffix(self, ctx, shape) -> str:
+    async def cache_key_suffix(self, ctx, shape) -> str:
         """What this test reads beyond the shape, folded into the cache key.
 
         Three things, none of which moves `shape.hash`:

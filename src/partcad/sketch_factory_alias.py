@@ -11,9 +11,9 @@ import copy
 import typing
 
 from . import logging as pc_logging
-from . import telemetry
+from . import reference, telemetry
 from .sketch_factory import SketchFactory
-from .utils import format_parameterized_name, get_child_project_path
+from .utils import format_parameterized_name
 
 
 @telemetry.instrument()
@@ -37,30 +37,13 @@ class SketchFactoryAlias(SketchFactory):
             # 'offset', which identifies nothing.
             self.keyed = False
 
-            if "source" in config:
-                self.source_sketch_name = config["source"]
-            else:
-                self.source_sketch_name = config["name"]
-                if "project" not in config and "package" not in config:
-                    raise Exception("Alias needs either the source sketch name or the source project name")
-
-            if "project" in config or "package" in config:
-                if "project" in config:
-                    self.source_project_name = config["project"]
-                else:
-                    self.source_project_name = config["package"]
-                if self.source_project_name == "this" or self.source_project_name == "":
-                    self.source_project_name = source_project.name
-                elif not self.source_project_name.startswith("//"):
-                    # Resolve the project name relative to the target project
-                    self.source_project_name = get_child_project_path(target_project.name, self.source_project_name)
-            else:
-                if ":" in self.source_sketch_name:
-                    self.source_project_name, self.source_sketch_name = source_project.resolve(
-                        self.source_sketch_name,
-                    )
-                else:
-                    self.source_project_name = source_project.name
+            # Where this points, by the rules every reference spells it with
+            # (see 'partcad.reference'). Recorded on the declaration as well,
+            # because 'pc convert' follows the stored configuration rather than
+            # the object, and a listing reads its description off it without
+            # building anything.
+            self.source = reference.source_of(source_project, target_project.name, config, "sketch")
+            self.source_project_name, self.source_sketch_name = reference.split(self.source)
             # Parameters handed to an alias are passed on to what it points
             # at. An alias declares no parameters of its own, so it has nothing
             # to apply them to - it is a reference, and a reference to an object
@@ -71,16 +54,10 @@ class SketchFactoryAlias(SketchFactory):
             # 'with' when it parametrizes a reference).
             if config.get("with"):
                 self.source_sketch_name = format_parameterized_name(self.source_sketch_name, config["with"])
+                self.source = self.source_project_name + ":" + self.source_sketch_name
+            config["source_resolved"] = self.source
 
-            self.source = self.source_project_name + ":" + self.source_sketch_name
-
-            if self.source_project_name == target_project.name:
-                self.sketch.desc = "Alias to %s" % self.source_sketch_name
-            else:
-                self.sketch.desc = "Alias to %s from %s" % (
-                    self.source_sketch_name,
-                    self.source_project_name,
-                )
+            self.sketch.desc = reference.describe(config["type"], target_project.name, self.source)
 
             # pc_logging.debug("Initialized an alias to %s" % self.source)
 
@@ -129,11 +106,24 @@ class SketchFactoryAlias(SketchFactory):
             # does with whatever a factory returns.
             wrapped = await source.get_wrapped(self.ctx)
             # The pieces a compound reports separately from its own shape,
-            # which the source resolved along with it.
+            # which the source resolved along with it...
             obj.components = copy.copy(source.components)
+            # ...and, for the same reason, whatever the source recorded about
+            # the geometry while building it: how big it is and what its drawing
+            # said, which an alias to it answers identically because it is the
+            # same geometry (see 'Shape.take_side_data_from').
+            obj.take_side_data_from(source)
             return wrapped
 
     def get_final_config(self):
+        """The declaration this reference resolves to.
+
+        The source's, whole. The part and assembly references resolve one thing
+        of their own on the way through - the purchasing record, which a
+        reference may restate (see 'PartFactoryAlias.get_final_config') - and
+        there is deliberately no counterpart here: the schema gives 'vendor' and
+        'sku' to parts and assemblies alone, so a sketch has nothing to restate.
+        """
         source = self.ctx._get_sketch(self.source)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")

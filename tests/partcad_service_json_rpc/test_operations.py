@@ -20,10 +20,12 @@ import types
 
 import pytest
 
+import partcad.utils as pc_utils
 from partcad_service_json_rpc.core import events, operations
 from partcad_service_json_rpc.core.events import EventEmitter
 from partcad_service_json_rpc.core.session import Session
 from partcad_service_json_rpc.rpc.dispatcher import JsonRpcError
+from partcad_utils import staging
 
 # ---- fakes -----------------------------------------------------------------
 
@@ -125,11 +127,39 @@ class FakePartcad:
 
 
 class FakeShape:
-    def __init__(self):
-        self.shown = False
+    """A part, or an assembly as the operations that build one see it.
 
-    def show(self):
+    ``uncached`` is what the first phase of a two-phase assembly build finds:
+    the assemblies this one places that are not cached yet (see
+    ``operations._stage_subassemblies``). Empty is the ordinary case -- a part,
+    or an assembly with nothing left to build first -- and the operation then
+    goes on exactly as it did before there were two phases.
+    """
+
+    def __init__(self, name="thing", project_name="//", uncached=(), kind="assembly"):
+        self.shown = False
+        self.name = name
+        self.project_name = project_name
+        # As on a real Shape: what the package registers it under, and what the
+        # first phase reports so a client can ask for it again.
+        self.kind = kind
+        self.uncached = list(uncached)
+        self.instantiated = False
+
+    async def get_uncached_subassemblies_async(self, ctx):
+        return list(self.uncached)
+
+    async def get_wrapped(self, ctx):
+        self.instantiated = True
+        return {"shape": self.name}
+
+    def show(self, ctx=None):
         self.shown = True
+        # Which context it was shown in, and not merely that it was shown. A
+        # 'show()' with none falls back to a module-level context that a daemon
+        # cannot count on having, and a fake that dropped the argument is what let
+        # that go unnoticed.
+        self.shown_in = ctx
 
     def render(self, ctx, export_type, filepath=None):
         self.rendered = (export_type, filepath)
@@ -182,6 +212,7 @@ class FakeObject:
 
     def show(self, ctx=None):
         self.shown = True
+        self.shown_in = ctx
 
 
 class FakeProject:
@@ -206,11 +237,25 @@ class FakeProject:
         # package was tested: how a test tells which package a request landed on.
         self.parts_requested = []
         self.tested_whole_package = False
+        # What this package was asked to render, as 'render_async()' was called:
+        # how a test tells which packages of a subtree a walk reached.
+        self.render_requests = []
         self.sketches = {}
         self.assemblies = {}
         self.scenes = {}
         self.interfaces = {}
         self.software = {}
+        # The kind a section holds one of, for 'object_descriptions()' below.
+        self._sections = {
+            "material": "materials",
+            "sketch": "sketches",
+            "part": "parts",
+            "assembly": "assemblies",
+            "scene": "scenes",
+            "interface": "interfaces",
+            "software": "software",
+        }
+        self.materials = {}
         self.providers = {}
         self.children = []
         # The providers this package buys through, as `get_suppliers()` reports
@@ -226,6 +271,22 @@ class FakeProject:
         # the client reads each row's label from.
         self.config_obj.setdefault("name", name)
 
+    def object_count_known(self, kind):
+        """How many objects of a kind this package declares.
+
+        A real package counts the declarations it has read, without enumerating
+        and without creating anything; these fakes are their own declarations.
+        """
+        return len(getattr(self, self._sections[kind]))
+
+    def object_descriptions(self, kind):
+        """What a listing prints, as a real package answers it.
+
+        From the declarations rather than the objects there; here the two are
+        the same fakes, so this reads their 'desc'.
+        """
+        return {name: getattr(obj, "desc", None) for name, obj in getattr(self, self._sections[kind]).items()}
+
     def get_child_project_names(self):
         return list(self.children)
 
@@ -240,6 +301,22 @@ class FakeProject:
     def get_scene_config(self, name):
         obj = self.scenes.get(name)
         return obj.config if obj is not None else None
+
+    def declares_object(self, kind, name):
+        # A real Project answers from its parsed 'partcad.yaml' whether it has
+        # an object of this kind under this name, without building it. That is
+        # what lets a run over a subtree for one name ('...:widget') pass over
+        # the packages that declare no such object instead of reporting each of
+        # them as a failure.
+        section = {
+            "sketch": "sketches",
+            "interface": "interfaces",
+            "part": "parts",
+            "assembly": "assemblies",
+            "scene": "scenes",
+            "software": "software",
+        }[kind]
+        return name.partition(";")[0] in getattr(self, section)
 
     def get_suppliers(self):
         return dict(self.suppliers)
@@ -262,6 +339,9 @@ class FakeProject:
 
     async def test_log_wrapper_async(self, ctx, tests=None):
         self.tested_whole_package = True
+
+    async def render_async(self, **kwargs):
+        self.render_requests.append(kwargs)
 
     def object_count(self, kind=None):
         # 'Context.get_packages(has_stuff=True)' asks one kind at a time; the
@@ -299,6 +379,8 @@ class FakeContext:
         self.name = name
         self.current_project_path = name
         self.requested = []
+        # (parent, kinds) of every warm-up a listing asked for.
+        self.prefetched = []
         self.mates = {}
         # What `ProviderCart.add_object()` puts in the cart, by object name: the
         # line items an object breaks down into.
@@ -308,6 +390,10 @@ class FakeContext:
         self.item_suppliers = {}
         self.provider_plugins = {}
         self.stats_git_ops = 0
+        # As on a real Context, which sets it in '__init__': a per-request flag
+        # that operations turn on and put back. The fake used not to have it
+        # because the operations only ever assigned it.
+        self.option_create_dirs = False
         self.user_config = FakeUserConfig()
         self.projects = {name: FakeProject(name=name)}
         # As on a real Context: the root package, and the only place the loaded
@@ -316,26 +402,57 @@ class FakeContext:
         # Instantiated objects, keyed by (kind, "package:name") as the context
         # is asked for them.
         self.shapes = {}
-        # Stats attributes read by the info/getStats operation.
+        # Stats attributes read by the info/getStats operation. Only the
+        # counters: a real Context computes the declared half from the packages
+        # it has loaded, and so does this (see the properties below). A number
+        # that could simply be assigned here would let a test pass against a
+        # payload the real context cannot produce.
         for name in (
             "stats_packages",
             "stats_packages_instantiated",
-            "stats_sketches",
             "stats_sketches_instantiated",
-            "stats_interfaces",
             "stats_interfaces_instantiated",
-            "stats_parts",
             "stats_parts_instantiated",
-            "stats_assemblies",
             "stats_assemblies_instantiated",
-            "stats_scenes",
             "stats_scenes_instantiated",
             "stats_memory",
         ):
             setattr(self, name, 0)
 
+    def _stats_declared(self, kind):
+        return sum(project.object_count_known(kind) for project in self.projects.values())
+
+    @property
+    def stats_sketches_declared(self):
+        return self._stats_declared("sketch")
+
+    @property
+    def stats_interfaces_declared(self):
+        return self._stats_declared("interface")
+
+    @property
+    def stats_parts_declared(self):
+        return self._stats_declared("part")
+
+    @property
+    def stats_assemblies_declared(self):
+        return self._stats_declared("assembly")
+
+    @property
+    def stats_scenes_declared(self):
+        return self._stats_declared("scene")
+
     def stats_recalc(self):
         self.stats_packages = 3
+
+    def prefetch_object_configs(self, parent_name, kinds):
+        """What a listing asks for before it walks, recorded rather than done.
+
+        A real context sends the enumerations of a plugin-backed tree in flight
+        together here; these packages are fakes with nothing to fetch, so what
+        is worth keeping is that the listing asked, and for what.
+        """
+        self.prefetched.append((parent_name, tuple(kinds)))
 
     def _get_shape(self, kind, path, params=None):
         self.requested.append((kind, path, params))
@@ -466,6 +583,37 @@ def test_inspect_part_shows_the_part_and_signals_done():
     assert seen[-1] == (events.SHOW_PART_DONE, None)
 
 
+@pytest.mark.parametrize(
+    "operation, kind",
+    [
+        (operations.inspect_part, "part"),
+        (operations.inspect_sketch, "sketch"),
+        (operations.inspect_interface, "interface"),
+        (operations.inspect_assembly, "assembly"),
+        (operations.inspect_scene, "scene"),
+    ],
+)
+def test_inspect_shows_the_object_in_this_session_s_context(operation, kind):
+    """Every kind, in the context the request is about.
+
+    'Shape.show_async()' falls back to a module-level context when it is given
+    none, and that fallback is a workaround for a client that cannot pass one. This
+    daemon can: it has the context in hand, it may be serving several, and whether
+    the global is set at all depends on how the session was brought up. Dropping it
+    is how showing a sketch from the IDE's Explorer came to answer "A context is
+    required to tessellate a shape tree" while 'pc inspect' - which goes through
+    'inspect_object', and always passed it - worked.
+    """
+    session, _seen = make_session()
+    shape = FakeShape(kind=kind)
+    session.partcad_ctx.shapes[(kind, "//:foo")] = shape
+
+    operation(session, {"package": "//", "name": "foo"})
+
+    assert shape.shown is True
+    assert shape.shown_in is session.partcad_ctx
+
+
 def test_inspect_part_without_context_is_a_silent_noop():
     seen = []
     session = Session(EventEmitter(lambda e, p: seen.append((e, p))))
@@ -509,6 +657,51 @@ def test_info_emits_stats_with_version_and_recalculated_counts():
     assert payload["version"] == "0.7.158"
     assert payload["stats"]["packages"] == 3
     assert payload["stats"]["path"] == "/abs/partcad.yaml"
+
+
+def test_a_listing_warms_the_kind_it_is_about_to_walk():
+    """One round trip for the tree, rather than one per package.
+
+    A plugin-backed tree answers an enumeration over the wire, and the walk
+    below reads one package after another - so a listing that did not warm the
+    kind first waited out a round trip per package (LDraw has ninety-odd
+    categories).
+    """
+    session, _ = make_session()
+    operations.list_objects(session, {"kind": "interfaces", "package": ".", "recursive": True})
+    assert session.partcad_ctx.prefetched == [("//", ("interface",))]
+
+    session, _ = make_session()
+    operations.list_objects(session, {"kind": "parts", "package": ".", "recursive": False})
+    assert session.partcad_ctx.prefetched == [("//", ("part",))]
+
+
+def test_info_reports_what_is_declared_and_what_is_built_separately():
+    """Two numbers per kind, and the declared one says which it is.
+
+    The bare '<kind>' key carries the declared count too, so that an extension
+    published before the pair existed keeps showing the same number it always
+    did (see 'PartcadContext.ts').
+    """
+    session, seen = make_session()
+    project = session.partcad_ctx.projects["//"]
+    for index in range(12):
+        project.parts["p%d" % index] = FakeShape(name="p%d" % index)
+    session.partcad_ctx.stats_parts_instantiated = 3
+
+    operations.info(session, {})
+    stats = seen[-1][1]["stats"]
+
+    # Twelve declared, three of them built: two questions, two numbers. The
+    # declared half is counted from the packages, here as on a real context -
+    # it is a property there, and a number this test could simply assign would
+    # be a number the real payload never carries.
+    assert stats["partsDeclared"] == 12
+    assert stats["parts"] == 12
+    assert stats["partsInstantiated"] == 3
+    for kind in ("sketches", "interfaces", "assemblies", "scenes"):
+        assert stats[kind + "Declared"] == stats[kind]
+        assert kind + "Instantiated" in stats
 
 
 def test_package_path_emits_execute_with_the_callback(tmp_path):
@@ -614,14 +807,18 @@ def test_inspect_file_without_a_matching_file_changes_nothing(tmp_path):
 # ---- search ----------------------------------------------------------------
 
 
-def fake_search(select):
+def fake_search(select, takes_interface=True):
     """Build a stand-in for the ``partcad.actions.*.search_*`` functions.
 
     Mirrors ``partcad.actions.common._search``: keyword-filter the selected
-    objects of the package, and of its children when recursive.
+    objects of the package, and of its children when recursive, and -- for the
+    kinds whose objects have ports -- keep only the ones that implement the
+    interface asked for. ``search_interfaces`` and ``search_packages`` take no
+    interface, exactly as the real ones do not.
     """
 
-    def search(ctx, package, recursive, keyword):
+    def search(ctx, package, recursive, keyword, interface=None):
+        search.interface = interface
         names = [package]
         if recursive:
             # `_search` seeds the list with the package itself and then appends
@@ -634,8 +831,17 @@ def fake_search(select):
             if project is None:
                 continue
             found += [obj for obj in select(project) if not keyword or obj.matches(keyword)]
+        if interface:
+            found = [obj for obj in found if interface in getattr(obj, "interfaces", ())]
         return found
 
+    search.interface = None
+    if not takes_interface:
+
+        def search_without_interface(ctx, package, recursive, keyword):
+            return search(ctx, package, recursive, keyword)
+
+        return search_without_interface
     return search
 
 
@@ -648,9 +854,9 @@ def install_fake_search(monkeypatch):
                 "search_sketches": fake_search(lambda p: p.sketches.values()),
                 "search_assemblies": fake_search(lambda p: p.assemblies.values()),
                 "search_scenes": fake_search(lambda p: p.scenes.values()),
-                "search_interfaces": fake_search(lambda p: p.interfaces.values()),
+                "search_interfaces": fake_search(lambda p: p.interfaces.values(), takes_interface=False),
             },
-            "partcad.actions.package": {"search_packages": fake_search(lambda p: [p])},
+            "partcad.actions.package": {"search_packages": fake_search(lambda p: [p], takes_interface=False)},
         },
     )
 
@@ -688,6 +894,51 @@ def test_search_objects_reports_a_match_per_kind(monkeypatch, kind, process_labe
     assert output[1].startswith("\t// widget")
     assert output[1].endswith("a cube widget")
     assert output[-1] == "Matches: 1"
+
+
+def test_search_objects_can_search_by_interface(monkeypatch):
+    """Not by what the declaration says but by what the object connects by."""
+    install_fake_search(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    plate = FakeObject("plate", desc="a plate with a hole", project_name="//")
+    plate.interfaces = ["m3-thru"]
+    root.add("parts", plate)
+    root.add("parts", FakeObject("block", desc="nothing to connect to", project_name="//"))
+
+    operations.search_objects(session, {"kind": "parts", "package": "//", "interface": "m3-thru"})
+
+    output = lines_of(session.partcad.logging.only("info"))
+    assert output[0] == "PartCAD parts implementing 'm3-thru':"
+    assert output[1].startswith("\t// plate")
+    assert output[-1] == "Matches: 1"
+
+
+def test_search_objects_says_so_when_both_are_given(monkeypatch):
+    """Both filters hold, and the line above the results says which two."""
+    install_fake_search(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    plate = FakeObject("plate", desc="a cube plate", project_name="//")
+    plate.interfaces = ["m3-thru"]
+    root.add("parts", plate)
+
+    operations.search_objects(session, {"kind": "parts", "package": "//", "keyword": "cube", "interface": "m3-thru"})
+
+    output = lines_of(session.partcad.logging.only("info"))
+    assert output[0] == "PartCAD parts implementing 'm3-thru' with 'cube' keyword:"
+    assert output[-1] == "Matches: 1"
+
+
+def test_searching_packages_by_interface_is_refused(monkeypatch):
+    """A package has no ports, so there is nothing to answer rather than nothing found."""
+    install_fake_search(monkeypatch)
+    session, _ = make_session()
+
+    operations.search_objects(session, {"kind": "packages", "package": "//", "interface": "m3-thru"})
+
+    assert "not supported" in session.partcad.logging.only("error")
+    assert session.partcad.logging.messages("info") == []
 
 
 def test_search_packages_reports_the_package_with_its_url(monkeypatch):
@@ -1109,6 +1360,208 @@ def test_info_object_reports_a_missing_package_of_a_named_object():
     assert session.partcad.logging.messages("error") == ["Package //nope is not found"]
 
 
+# ---- building an assembly in two phases -------------------------------------
+#
+# The daemon's half of 'partcad_utils.staging': an assembly that places
+# sub-assemblies nobody has built yet is not built here and now. The request
+# comes back naming them, the client builds each one through
+# 'assembly.instantiate', and asks again.
+
+
+def _assembly_with(session, path, uncached=(), kind="assembly", sub_kind="assembly"):
+    """Register an assembly that still has 'uncached' to build before it."""
+    subs = [FakeShape(name=name, project_name=package, kind=sub_kind) for package, name in uncached]
+    assembly = FakeShape(name=path.split(":")[-1], project_name=path.split(":")[0], kind=kind, uncached=subs)
+    session.partcad_ctx.shapes[(kind, path)] = assembly
+    return assembly
+
+
+def _retry_error(caught):
+    """The code and the entries a raised staging refusal carries."""
+    assert caught.value.code == staging.RETRY_LATER
+    return caught.value.data[staging.SUBASSEMBLIES]
+
+
+def test_inspect_assembly_shows_it_when_there_is_nothing_to_build_first():
+    session, seen = make_session()
+    assembly = _assembly_with(session, "//:top")
+
+    operations.inspect_assembly(session, {"package": "//", "name": "top"})
+
+    assert assembly.shown is True
+    assert seen[-1] == (events.SHOW_PART_DONE, None)
+
+
+def test_inspect_assembly_asks_for_its_subassemblies_before_building_it():
+    session, seen = make_session()
+    assembly = _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.inspect_assembly(session, {"package": "//", "name": "top"})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "unit", "kind": "assembly"}]
+    # Nothing was built and nothing was shown: the whole point is that the
+    # request costs one declaration read rather than one assembly.
+    assert assembly.shown is False
+    assert seen == []
+
+
+def test_export_assembly_asks_for_its_subassemblies_first():
+    session, _ = make_session()
+    assembly = _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.export_assembly(session, {"package": "//", "name": "top", "type": "step", "path": "/tmp/top.step"})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "unit", "kind": "assembly"}]
+    assert not hasattr(assembly, "rendered")
+
+
+def test_a_scene_is_staged_like_the_assembly_it_is():
+    session, _ = make_session()
+    _assembly_with(session, "//:bench", uncached=[("//sub", "stack")], kind="scene")
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.inspect_scene(session, {"package": "//", "name": "bench"})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "stack", "kind": "assembly"}]
+
+
+def test_export_scene_asks_for_its_subassemblies_first():
+    session, _ = make_session()
+    _assembly_with(session, "//:bench", uncached=[("//sub", "stack")], kind="scene")
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.export_scene(session, {"package": "//", "name": "bench", "type": "step", "path": "/tmp/b.step"})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "stack", "kind": "assembly"}]
+
+
+def test_inspect_object_stages_an_assembly_it_is_about_to_show():
+    session, _ = make_session()
+    _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.inspect_object(session, {"package": "//", "object": "top", "assembly": True})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "unit", "kind": "assembly"}]
+
+
+def test_a_verbal_answer_builds_nothing_and_so_stages_nothing():
+    """What an assembly is, in words, is read off the declaration.
+
+    The object here answers nothing about sub-assemblies at all, which is what
+    holds this to reporting the summary before any of that is asked.
+    """
+    session, _ = make_session()
+    session.partcad_ctx.shapes[("assembly", "//:top")] = FakeObject("top", summary="a top level assembly")
+
+    result = operations.inspect_object(session, {"package": "//", "object": "top", "assembly": True, "verbal": True})
+
+    assert result == {"summary": "a top level assembly"}
+
+
+def test_a_part_is_not_staged():
+    """A part is built out of its own files; there is nothing to build first."""
+    session, _ = make_session()
+    part = FakeShape(name="widget")
+    session.partcad_ctx.shapes[("part", "//:widget")] = part
+
+    operations.inspect_object(session, {"package": "//", "object": "widget"})
+
+    assert part.shown is True
+
+
+def test_instantiate_assembly_builds_it_and_sends_back_a_status():
+    session, _ = make_session()
+    assembly = _assembly_with(session, "//sub:unit")
+
+    result = operations.instantiate_assembly(session, {"package": "//sub", "name": "unit", staging.CACHE_ONLY: True})
+
+    assert assembly.instantiated is True
+    # The geometry stays here: what crosses the wire says it was built.
+    assert result == {"object": "//sub:unit", staging.KIND: "assembly", "instantiated": True}
+    assert assembly.shown is False
+
+
+def test_instantiate_assembly_shows_the_result_when_it_is_not_cache_only():
+    session, _ = make_session()
+    assembly = _assembly_with(session, "//sub:unit")
+
+    operations.instantiate_assembly(session, {"package": "//sub", "name": "unit", staging.CACHE_ONLY: False})
+
+    assert assembly.shown is True
+
+
+def test_instantiate_assembly_is_staged_in_its_turn():
+    """A sub-assembly with sub-assemblies of its own refuses like anything else."""
+    session, _ = make_session()
+    _assembly_with(session, "//sub:unit", uncached=[("//sub", "bracket")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.instantiate_assembly(session, {"package": "//sub", "name": "unit"})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "bracket", "kind": "assembly"}]
+
+
+def test_a_scene_is_instantiated_as_a_scene():
+    """A scene alias points at a scene, and a package registers the two apart."""
+    session, _ = make_session()
+    scene = _assembly_with(session, "//:bench", kind="scene")
+
+    result = operations.instantiate_assembly(session, {"package": "//", "name": "bench", staging.KIND: "scene"})
+
+    assert scene.instantiated is True
+    assert result == {"object": "//:bench", staging.KIND: "scene", "instantiated": True}
+
+
+def test_a_scene_alias_names_the_scene_it_points_at():
+    session, _ = make_session()
+    _assembly_with(session, "//:bench_alias", uncached=[("//", "bench")], kind="scene", sub_kind="scene")
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.inspect_scene(session, {"package": "//", "name": "bench_alias"})
+
+    # Without the kind the client would ask for an assembly called 'bench',
+    # which the package does not declare.
+    assert _retry_error(caught) == [{"package": "//", "name": "bench", "kind": "scene"}]
+
+
+def test_instantiate_assembly_reports_an_assembly_that_is_not_there():
+    session, _ = make_session()
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.instantiate_assembly(session, {"package": "//sub", "name": "nope"})
+
+    assert caught.value.code == operations.USAGE_ERROR
+
+
+def test_an_assembly_this_daemon_has_built_is_never_asked_for_again():
+    """The bound on the exchange.
+
+    An entry too large for memory and refused by every cache tier would be
+    reported as missing however many times it is built. Having built it once,
+    the daemon stops naming it and builds the parent inline instead -- slower
+    than it should be, but an answer rather than a client asking forever.
+    """
+    session, _ = make_session()
+    assembly = _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+    session.staged.add(assembly.uncached[0])
+
+    operations.inspect_assembly(session, {"package": "//", "name": "top"})
+
+    assert assembly.shown is True
+
+
+def test_instantiating_an_assembly_records_it_as_built():
+    session, _ = make_session()
+    assembly = _assembly_with(session, "//sub:unit")
+
+    operations.instantiate_assembly(session, {"package": "//sub", "name": "unit"})
+
+    assert assembly in session.staged
+
+
 # ---- inspect ---------------------------------------------------------------
 
 
@@ -1212,6 +1665,159 @@ def test_test_run_reports_a_package_a_qualified_object_name_cannot_reach(monkeyp
     operations.test_run(session, {"object": "//nope:widget"})
 
     assert session.partcad.logging.messages("error") == ["Package //nope is not found"]
+
+
+# ---- '...': the package suffix that means "and everything below it" --------
+#
+# The same request '-r' makes, written where the package is named. Two things
+# it does that a flag cannot, and both are covered here: it can say where the
+# walk starts ('//sub...:widget' against a different '--package'), and it can
+# be given to a command that has no '-r' at all ('pc info').
+#
+# The third is the rule about missing objects. A walk over one name asks every
+# package of the subtree for its own object of that name, so a package that
+# declares none has not failed -- only a walk that found none anywhere has.
+
+
+def test_a_suffix_on_the_package_walks_the_subtree(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+    sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
+    session.partcad_ctx.projects["//sub"] = sub
+
+    operations.test_run(session, {"package": "//..."})
+
+    assert root.tested_whole_package
+    assert sub.tested_whole_package
+
+
+def test_a_suffix_on_the_object_walks_the_subtree(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+    sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
+    session.partcad_ctx.projects["//sub"] = sub
+
+    operations.test_run(session, {"object": "...:widget"})
+
+    assert root.parts_requested == ["widget"]
+    assert sub.parts_requested == ["widget"]
+
+
+def test_a_suffix_on_the_object_says_where_the_walk_starts(monkeypatch):
+    # '//sub...:widget' is about '//sub' and what is below it, whatever the
+    # root package holds -- which is what a flag could not have said.
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+    sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
+    session.partcad_ctx.projects["//sub"] = sub
+
+    operations.test_run(session, {"object": "//sub...:widget"})
+
+    assert sub.parts_requested == ["widget"]
+    assert root.parts_requested == []
+
+
+def test_a_walk_passes_over_the_packages_that_declare_no_such_object(monkeypatch):
+    # The point of the syntax: three packages of forty declare a widget, and
+    # the other thirty-seven are not thirty-seven failures.
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+    bare = FakeProject(name="//bare")
+    session.partcad_ctx.projects["//bare"] = bare
+
+    operations.test_run(session, {"object": "...:widget"})
+
+    assert root.parts_requested == ["widget"]
+    assert bare.parts_requested == []
+    assert session.partcad.logging.messages("error") == []
+
+
+def test_a_walk_that_found_the_object_nowhere_is_the_one_failure(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    session.partcad_ctx.projects["//sub"] = FakeProject(name="//sub")
+
+    operations.test_run(session, {"object": "...:nosuch"})
+
+    assert session.partcad.logging.messages("error") == ["nosuch is not found in // or in any package below it"]
+
+
+def test_the_suffix_reaches_a_command_that_has_no_recursive_flag():
+    # 'pc info' never had a '-r'. '...' is how it is asked for one, which is
+    # the whole reason the recursion is written on the package name.
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    ctx.projects["//"].add("parts", FakeObject("widget"))
+    ctx.projects["//sub"] = FakeProject(name="//sub").add("parts", FakeObject("widget"))
+    for path in ("//:widget", "//sub:widget"):
+        ctx.shapes[("part", path)] = FakeObject("widget", config={"kind": "part"}, info={"Path": path})
+
+    operations.info_object(session, {"object": "...:widget"})
+
+    reported = session.partcad.logging.messages("info")
+    assert "OBJECT: //:widget" in reported
+    assert "OBJECT: //sub:widget" in reported
+    assert session.partcad.logging.messages("error") == []
+
+
+def test_a_walk_renders_only_the_packages_that_have_the_object(monkeypatch):
+    # A render asked of a package that declares no such object raises
+    # 'EmptyShapesError' out of 'Project.render_async()', which used to end the
+    # whole run -- so one package without a widget cost every other package its
+    # render. The packages are filtered before anything is rendered.
+    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    session, _ = make_session()
+    session.partcad.output = types.SimpleNamespace(
+        all_formats=lambda ctx: ["svg"],
+        NON_WRAPPER_FORMATS=set(),
+        SECTIONS=("export", "render"),
+        format_names=lambda section: [],
+        split_format=lambda project_name, fmt: (fmt, None),
+    )
+    ctx = session.partcad_ctx
+    ctx.projects["//"].add("parts", FakeObject("widget"))
+    has_it = FakeProject(name="//sub").add("parts", FakeObject("widget"))
+    has_not = FakeProject(name="//bare").add("parts", FakeObject("other"))
+    ctx.projects["//sub"] = has_it
+    ctx.projects["//bare"] = has_not
+
+    operations.render_objects(session, {"format": "svg", "object": "...:widget"})
+
+    assert [request["parts"] for request in has_it.render_requests] == [["widget"]]
+    assert has_not.render_requests == []
+
+
+@pytest.mark.parametrize(
+    "operation, params",
+    [
+        (operations.bom, {"object": "...:frame"}),
+        (operations.inspect_object, {"object": "...:frame"}),
+        (operations.cae_analyze, {"analysis": "fea", "object": "...:frame"}),
+        (operations.convert_object, {"kind": "part", "object_name": "...:frame"}),
+    ],
+)
+def test_an_operation_that_answers_about_one_object_refuses_the_suffix(monkeypatch, operation, params):
+    # A bill of materials, a viewer window, a CAE model and a rewritten
+    # declaration are each one thing about one object, so "all of them" has no
+    # obvious meaning. Refused outright: left alone, the suffix reaches
+    # 'resolve_resource_path', which turns it into a '*' naming no package, and
+    # the user is told that '//*:frame' is not found.
+    install_fake_partcad_modules(monkeypatch, {"partcad.cae": {"ANALYSES": ("fea", "cfd")}})
+    session, _ = make_session()
+    session.partcad.cae = types.SimpleNamespace(ANALYSES=("fea", "cfd"))
+
+    with pytest.raises(JsonRpcError) as caught:
+        operation(session, params)
+
+    assert "'...'" in str(caught.value)
 
 
 # ---- package loading -------------------------------------------------------
@@ -1742,6 +2348,75 @@ def test_render_refuses_a_viewport_it_cannot_make_sense_of(monkeypatch):
     assert rendered == []
 
 
+def _render_session(monkeypatch):
+    """A session whose output files are recorded rather than written."""
+    _fake_render_module(monkeypatch, lambda view, origin, up: {})
+    session, _ = make_session()
+    session.partcad.output = types.SimpleNamespace(
+        all_formats=lambda ctx: ["step"],
+        NON_WRAPPER_FORMATS=set(),
+        SECTIONS=("export", "render"),
+        format_names=lambda section: [],
+        split_format=lambda project_name, fmt: (fmt, None),
+    )
+    rendered = []
+
+    async def _render_async(**kwargs):
+        rendered.append(kwargs)
+
+    session.partcad_ctx.render_async = _render_async
+    session.partcad_ctx.projects["//"].render_async = _render_async
+    return session, rendered
+
+
+def test_one_named_assembly_asks_for_its_subassemblies_first(monkeypatch):
+    """One named assembly: its shape has to exist before any file comes out of it.
+
+    This is where `pc export -a` and `pc render -a` both arrive today, and what
+    is staged is neither of those -- it is the instantiation both need first.
+    """
+    session, rendered = _render_session(monkeypatch)
+    _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_objects(session, {"package": "//", "format": "step", "object": "top", "assembly": True})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "unit", "kind": "assembly"}]
+    assert rendered == []
+
+
+def test_a_whole_package_is_not_staged(monkeypatch):
+    """Its unit is a package: what it would have to name is everything."""
+    session, rendered = _render_session(monkeypatch)
+    _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+
+    operations.render_objects(session, {"package": "//", "format": "step"})
+
+    assert rendered, "the package was not rendered"
+
+
+def test_a_named_part_is_not_staged(monkeypatch):
+    """A part is built out of its own files, whatever the package holds."""
+    session, rendered = _render_session(monkeypatch)
+    _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+    session.partcad_ctx.shapes[("part", "//:widget")] = FakeShape(name="widget")
+
+    operations.render_objects(session, {"package": "//", "format": "step", "object": "widget"})
+
+    assert rendered, "the part was not rendered"
+
+
+def test_an_unknown_file_type_is_refused_before_anything_is_built(monkeypatch):
+    """Staging costs an assembly build; a typo must not buy one first."""
+    session, _ = _render_session(monkeypatch)
+    _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_objects(session, {"package": "//", "format": "nosuchtype", "object": "top", "assembly": True})
+
+    assert caught.value.code == operations.USAGE_ERROR
+
+
 # ---- ad-hoc render ---------------------------------------------------------
 #
 # `pc adhoc render` is the sibling of `pc adhoc convert` for the other thing an
@@ -2159,3 +2834,77 @@ def test_cae_defaults_answers_for_every_analysis():
         "fea": "//pub/feature/cae/calculix:fea",
         "cfd": "//pub/feature/cae/calculix:cfd",
     }
+
+
+# ---- the create_dirs flag is a per-request setting on a long-lived context --
+
+
+def test_creating_dirs_puts_the_flag_back_even_when_the_request_raises():
+    """`-p` belongs to one request; the context it is set on outlives thousands.
+
+    The daemon holds a context per workspace and keeps it warm, so a flag left
+    on is a flag every later request inherits -- including the ones that never
+    set it and have always refused to create directories.
+    """
+    ctx = types.SimpleNamespace(option_create_dirs=False)
+
+    with operations._creating_dirs(ctx, True):
+        assert ctx.option_create_dirs is True
+    assert ctx.option_create_dirs is False
+
+    with contextlib.suppress(RuntimeError):
+        with operations._creating_dirs(ctx, True):
+            raise RuntimeError("the request failed")
+    assert ctx.option_create_dirs is False
+
+
+def test_a_request_that_creates_directories_does_not_leave_the_next_one_doing_so():
+    """Asked of a real operation rather than of the helper alone.
+
+    `pc export` never sets this flag, so before it was restored a single
+    `pc cae -p` or `pc cam -p` left that daemon writing directories for every
+    export that followed it.
+    """
+    session, part = make_cae_session()
+
+    operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea", "create_dirs": True})
+
+    # It was on while the analysis ran...
+    assert part.calls[-1]["create_dirs"] is True
+    # ...and is off again for whatever the daemon serves next.
+    assert session.partcad_ctx.option_create_dirs is False
+
+
+def test_rendering_a_package_that_does_not_resolve_names_it():
+    """A render aimed at a package that is not there, reported as what it is.
+
+    The way in is an object name that carries a package of its own: the render
+    cuts the package out of it, so a name that was mistyped - or mangled by a
+    shell that does not quote the way the writer expected - arrives here rather
+    than being rejected earlier. Reporting it as a usage error names the
+    package; calling 'render_async' on what the lookup returned raised
+    "'NoneType' object has no attribute 'render_async'" and named nothing.
+    """
+    import asyncio
+
+    pc_stub = types.SimpleNamespace(
+        output=types.SimpleNamespace(all_formats=lambda ctx: None),
+        utils=pc_utils,
+    )
+    ctx = types.SimpleNamespace(get_project=lambda name: None)
+
+    with pytest.raises(JsonRpcError) as caught:
+        asyncio.run(
+            operations._render_packages_async(
+                pc_stub,
+                ctx,
+                {"sketch": True},
+                ["//nosuch"],
+                "svg",
+                "./",
+                ":panel",
+                None,
+                False,
+            )
+        )
+    assert "//nosuch" in str(caught.value)

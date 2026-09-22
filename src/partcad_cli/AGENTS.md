@@ -49,6 +49,14 @@ in a script. Both subcommands are the same operation with the analysis as an arg
 holds the options and the body, the way `click/viewport.py` holds the three that `pc render` and
 `pc adhoc render` share, so the two commands are a name and a docstring each and cannot drift apart.
 
+**`pc cam` is a daemon command too, and it is the one that is package-level.** A route reads the package graph
+and drives a CAD wrapper, like an analysis. What differs is what "no argument" means: `pc cae fea` is asked of
+one part, while `pc cam` with nothing named produces a route for every sketch and part of the package that
+declares a `cam:` section -- so the enumeration lives on the daemon (`Project.routable_shapes_async()`), and
+what stays in the client is the exit code and `--json`. It exits non-zero if any object it was *asked about*
+produced no route, and reports every one of them rather than stopping at the first: a route is a file, and an
+object whose section is wrong must not cost the other nineteen theirs.
+
 **`pc lint` sits on both sides of the line, one mode each.** `pc lint [-P/-r]` checks a *package*: which
 packages, resolved how, with which files, is the package graph, so it is a thin daemon client like any other.
 `pc lint --file` checks the *files named on the command line*, in this process: an ASSY file and a
@@ -107,9 +115,9 @@ that machine's installation. Still unmigrated: `supply/*`,
 `add sketch`, `add dep`.
 
 `pc daemon ...` is the other side of that pair, command for command: `daemon start|stop` manage the process,
-while **`daemon status`**, **`daemon reset`** and **`daemon set telemetry ...`** are the daemon-side
-counterparts of the `pc system` commands of the same name — they report and change the daemon's own internal
-state directory and configuration, not the client's. The two coincide today, because the daemon runs on the
+while **`daemon status`** (with its `config` and `env` subcommands), **`daemon reset`** and **`daemon set
+telemetry ...`** are the daemon-side counterparts of the `pc system` commands of the same name — they report
+and change the daemon's own internal state directory and configuration, not the client's. The two coincide today, because the daemon runs on the
 same machine; they will not once a daemon can be remote, which is why both halves exist. `daemon reset` clears
 the daemon's state directory and the warm contexts that reference it. It runs unconditionally, because the caller has already decided and a
 background daemon has nobody to ask for confirmation; a destructive confirmation, when one is wanted, belongs
@@ -117,7 +125,22 @@ in the client, before the call. (The daemon and the CLI share a machine today, s
 coincide; they will not once a daemon can be remote, which is why the commands are separate. `daemon reset`
 carries a TODO to gate it behind access control before that happens.)
 
-## Whose user configuration the daemon works under
+## `...`: the package name that means "and everything below it"
+
+`//pub/examples...` is that package and every package below it — the same request `-r` makes, written where
+the package is named. It works on an object name too, in front of the `:`: `pc render ...:bolt` is every bolt
+from here down, and `//pub/examples...:bolt` is every bolt of that subtree whatever `-P` said. `-r` is kept
+and still means what it meant; the documentation is written with `...`.
+
+**A command does not parse it.** The package and object arguments go over the wire as the user typed them, and
+`operations._request()` on the daemon reads both spellings into one answer — see "`package`, `object` and the
+`...` suffix" in [`partcad_service_json_rpc/AGENTS.md`](../partcad_service_json_rpc/AGENTS.md). There are three
+clients of that daemon, and a syntax each of them parsed for itself is a syntax they would each get slightly
+wrong. So adding the suffix to a command is a `--help` string here and, where the command has none yet, a
+`recursive` branch there.
+
+Two commands keep a `-r` that is **not** this: `pc supply find` and `pc supply quote`, where `-r` means "break
+every assembly down to its parts" and has nothing to do with the package graph. Do not fold those in.
 
 The client's whenever the client sends one — as of the moment the command ran. `service.py::run` resolves the
 CLI's own `user_config` (file + `PC_*` environment + command line) and sends a copy of it,
@@ -137,6 +160,30 @@ The daemon keeps the configuration each warm context was built from (`session.co
 rebuilds the context when a caller's differs, because a package graph resolved under one configuration cannot
 answer for another. A client that sends no configuration — the VS Code extension, which configures the daemon
 once through its launch arguments — keeps getting the daemon's own.
+
+**`pc system status` and `pc daemon status` each have three answers, and the pair of them is how you tell the
+two sides apart.** Bare, each reports the internal data on its own machine. `... status config` reports the
+configuration that side resolved, and `... status env` the `PC_*` variables that side's process was started
+with. All six print through `partcad_utils.config_report`, which is where the redaction rules live: a
+configuration option that is a secret is named there one by one, and an environment variable is scrubbed when
+its name carries an auth word between underscores (`TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL`, `AUTH`
+— not `DSN`, and the module says why). Two options are reported by *shape* rather than by value, because
+"is it set" is the wrong answer for both: `git.auth` keeps the host, username and key path that say *which*
+credential and drops the password and passphrase, and the `user` section keeps only which of its fields are
+configured — it is personally identifiable information in its entirety, and `PIIConfig` fills in two of its
+keys unconditionally, so a truthiness test would claim a name and an address were on file for a machine that
+has never been told any. Two copies of a redaction rule are one copy that stops redacting, which
+is why the daemon does not have its own; the daemon also scrubs before logging, so a value the client has no
+business holding never reaches the wire.
+
+The daemon's `config` answer is deliberately *not* the configuration your command ran under — that one travels
+with every `context.create`, as this section says above. It is the daemon's own, resolved from its own
+environment whenever something first started it, which is what a client sending no configuration gets. The
+`env` answer is the one thing the client cannot reconstruct at all — on POSIX. On Windows `connect()` serves
+the request from a one-shot stdio child of the client rather than from the named-pipe daemon, so both answers
+describe a process that inherited the caller's environment; the command still reports whatever process did the
+work, which is what it promises. `tests/partcad_cli/unit/test_status.py` asserts each half on its own platform,
+having first asserted the POSIX half on both and failed on Windows for exactly that reason.
 
 PartCAD **never prompts** for anything mid-operation. Credentials for private Git dependencies are configured
 upfront under `git.auth` in the user configuration, and `GitCallbacks` fails with a message naming that setting

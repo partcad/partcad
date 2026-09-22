@@ -1,24 +1,650 @@
-desc: PartCAD example project to demonstrate parts defined using STL files.
+desc: >-
+  PartCAD example project that takes one imported STEP assembly from a record of
+  a file to something that can be built, in three stages - and defines a part
+  from an STL file.
+
+docs:
+  intro: |
+    ## One STEP file, three stages
+
+    `AeroAssembly.step` is a STEP assembly read by `pc import assembly`. The
+    eight solids it holds are committed as parts, and the tree they came in is
+    committed three times. The three share every part file - not one differs -
+    and what separates them is what each is able to say:
+
+    | | | establishes | does not establish |
+    |---|---|---|---|
+    | 1 | `AeroAssembly` | what the file contains | whether any of it is right |
+    | 2 | `AeroAssembly_corrected` | that the geometry is consistent | what holds any of it |
+    | 3 | `AeroAssembly_connected` | how it goes together, and that it can | |
+
+    ### 1. Import
+
+    `pc import assembly` writes one `location:` per solid, at five decimals.
+    That file is committed unedited and is never adjusted to make a check pass:
+    its value is that it is evidence. `partcad.test.interference` reports three
+    overlaps in it, and each is a different kind of mistake:
+
+    * **90.231 mm^3** - the cap's two front feet are modelled 0.751923 mm too
+      long for the faces they land on. A defect in a part: no rigid motion of
+      it seats all four feet.
+    * **12.997 mm^3** - the mirrored frame half sits (7.728713, -3.380867,
+      2.583602) mm off its own footprint, because the exporter folded the
+      plate's origin offset into the mirrored branch instead of reflecting it.
+      A misplaced instance.
+    * **0.161 mm^3** - not in the STEP file at all. It is the importer's own
+      five-decimal rounding of a rotation axis, 0.56 um thick on a face 257 mm
+      from the axis it turns about.
+
+    None of the three is an overlap a joint means to have, so none is something
+    `selfScrew`, `snapIn` or `interferes` could state. Stage 1 says
+    `manufacturable: false`, which is what it is.
+
+    ### 2. Correct
+
+    `AeroAssembly_corrected` changes three placements and nothing else; the
+    arithmetic behind each is beside it in `AeroAssembly_corrected.assy`.
+    Afterwards no two of the eight parts share any volume - the worst of the 28
+    pairs is 0.000000000 mm^3.
+
+    That is worth having and it is not the same as being buildable. Every item
+    is still placed by `location:`, and a coordinate says where a part ends up
+    without saying what keeps it there. Nothing here knows that the front foot
+    is bolted to the flange rather than resting on it, nothing says which part
+    goes on before which, and nothing would notice if the plate moved and the
+    other seven did not.
+
+    ### 3. Connect
+
+    `AeroAssembly_connected` carries no `location:` at all. The plate is placed
+    by being first; each of the other seven names what it is joined to, the
+    interface it is joined by, and - in `how:` - what somebody has to do to make
+    that joint. `partcad.test.connectivity` holds a manufacturable assembly to
+    exactly that.
+
+    Every Ø3 hole in these parts is a clearance hole a bolt passes through, not
+    a tapped one and not a tapping drill, which in
+    [`//pub/std/metric/m`](https://github.com/partcad/partcad-standard-metric-m)
+    is `m-opening` - with the metal it goes through stated,
+    `m-thru-depth;size=3,depth=<t>`. `aero-plate-opening` (7 mm) and
+    `aero-foot-opening` (8 mm) are aliases of that and nothing more. Two things
+    the standard package has no interface for are local: `aero-strut-opening`,
+    which is the same hole in 6 mm of plate plus the 14 mm of `moveZ` by which
+    the strut's flange stands off the seat it rests on; and `aero-cap-seat`,
+    because a flat seat is not a feature anything passes through.
+
+    Naming the joints says what coordinates could not. The plate's rear flange
+    holes and the rear feet's **miss each other by 2.5 mm**, one half each way,
+    in the source file. Both patterns are declared on the parts and nothing
+    connects through them: the rear foot hangs from the strut and bears on the
+    flange. The cap is seated on the two front feet that touch, by name, which
+    leaves the other pair 0.751923 mm clear - where a fitter puts a shim.
+
+    ### What the file never said
+
+    `AeroAssembly.step` is AP214: no material, no tolerance, no stock. Those are
+    supplied below, and the method is read off each solid. Seven are
+    `subtractive`, each cut from a billet `stock.py` derives from the solid it
+    holds; `AeroFrame_Cap` is `forming`, because milling a bent 3 mm strip
+    throws away 97.2% of its block. The measurements are in the YAML.
+
+    ### What makes the third one manufacturable
+
+    `manufacturable: true` is a set of checks rather than a label:
+    `connectivity`, `interference` as a failure instead of a note, `connect`,
+    and `manufacturability`. The last is why the section above exists - a
+    method, a stock, a material, a tolerance and a shop that will take the job.
+    And it earns a document:
+
+    ```shell
+    pc render -t pdf -a AeroAssembly_assy_example/AeroAssembly_connected
+    ```
+
+    `assembly_guide.py` refuses to write one for an assembly that is not
+    manufacturable, and has nothing to write for one placed by coordinates: the
+    steps, their order, the two items each joins and the direction they come
+    apart all come from `connect:`. The result is checked in as
+    [`AeroAssembly_connected.pdf`](./AeroAssembly_assy_example/AeroAssembly_connected.pdf).
+
+  usage: |
+    ```shell
+    # the three stages
+    pc inspect -a AeroAssembly_assy_example/AeroAssembly
+    pc inspect -a AeroAssembly_assy_example/AeroAssembly_corrected
+    pc inspect -a AeroAssembly_assy_example/AeroAssembly_connected
+
+    # what each stage is held to
+    pc test -a AeroAssembly_assy_example/AeroAssembly_connected
+
+    # where the ports are, and which interface each belongs to
+    pc render -t svg --with-all AeroAssembly_assy_example/AeroFrame_Plate
+
+    # the assembly instructions, which only stage 3 has
+    pc render -t pdf -a AeroAssembly_assy_example/AeroAssembly_connected
+
+    # the billet a part is cut out of, and the part beside it
+    pc inspect AeroAssembly_assy_example/AeroFrame_Plate_stock
+    pc inspect AeroAssembly_assy_example/AeroFrame_Plate
+
+    # that this part is what is left of the stock it names
+    pc test -f manufacturability AeroAssembly_assy_example/AeroFrame_Plate
+
+    # who makes the eight parts, and for how much
+    pc supply quote AeroAssembly_assy_example/AeroFrame_Plate#1
+    ```
+
+# Who makes the eight parts - seven milled, one bent. The example defines its
+# own shop rather than buying from 'examples/provider_store', because nothing
+# here is a catalogue item: these are one product's parts, made from 6061 to a
+# drawing.
+suppliers:
+  machineShop:
+
+providers:
+  machineShop:
+    type: manufacturer
+    desc: >-
+      A machine shop that mills and forms aluminium plate. A stand-in for a
+      real supplier's API, exactly as the pseudo 3D printer in
+      'examples/provider_manufacturer' is: it answers the one question
+      'pc test' asks of a supplier - can you make this - out of a table rather
+      than over the wire.
+
+materials:
+  al6061:
+    formal: AA 6061-T6
+    full: Aluminium alloy 6061, T6 temper
+    desc: >-
+      The usual wrought aluminium for a milled bracket: stiff enough for a
+      frame, soft enough to cut quickly, and available as plate in the
+      thicknesses these parts are cut from. Named by every part and by every
+      billet below, because 'AeroAssembly.step' names none: what an AP214 file
+      carries is geometry, and what a part is made of is not geometry.
+    url: https://en.wikipedia.org/wiki/6061_aluminium_alloy
+    density: 0.0027 # g/mm^3
+    tags:
+      - milled
+      - formed
+      - aluminium
+
+sketches:
+  # The footprint of one of the cap's feet: 6 x 10 mm, which is the whole of
+  # what the cap and the plate have in common. Drawn so that
+  # 'pc render --with-ports' shows the seat at its real size rather than as a
+  # bare coordinate frame.
+  cap-foot:
+    type: basic
+    rectangle:
+      side-x: 10 # along the flange, which is where the cap's feet are 10mm long
+      side-y: 6
+
+interfaces:
+  # Names of this package's own for the M3 clearance openings this hardware has,
+  # one per thickness of metal an opening goes through. Each is an alias of one
+  # instance of the parametric family in '//pub/std/metric/m': the same port,
+  # the same boundary - ISO 273 medium clearance, 3.4mm for an M3 - and the same
+  # mating, which is that an opening mates an opening. Aliasing is how that
+  # package publishes its own names too ('m3-thru-7' is one), and what it buys
+  # here is a name that says which part of this hardware the opening is in.
+  #
+  # Every Ø3 hole in these eight parts is a clearance hole something passes
+  # through. None of them is tapped and none is a tapping drill, which is why
+  # none of 'm-tapped-opening', 'm-pilot-opening' or 'm-press-opening' appears
+  # below: what holds these joints is a bolt and a nut, not a thread cut in the
+  # aluminium.
+  aero-plate-opening:
+    desc: The plate's Ø3 clearance opening, through 7mm of flange
+    alias: "//pub/std/metric/m:m-thru-depth;size=3,depth=7"
+  aero-foot-opening:
+    desc: A frame foot's Ø3 clearance opening, through 8mm of plate
+    alias: "//pub/std/metric/m:m-thru-depth;size=3,depth=8"
+
+  # The strut's opening is the same hole in 6mm of plate, and one thing besides.
+  #
+  # The strut seats on the foot, but its bolt holes are in a flange 14mm above
+  # that seat: the bolt passes through the foot, spans the channel, and takes
+  # hold in the flange. A plain 'm-opening' cannot say that - its 'moveZ' is
+  # fixed at zero, which is right for two plates bolted face to face and wrong
+  # for this - so this one inherits the M3 through hole and widens 'moveZ' to
+  # the 14mm the channel is deep. The joint then states the stand-off where it
+  # belongs, on itself: 'withParams: {moveZ: 14}'.
+  aero-strut-opening:
+    desc: A strut's Ø3 clearance opening, through 6mm of plate, up to 14mm off its seat
+    parameters:
+      moveZ:
+        min: 0
+        max: 14
+        default: 0
+    inherits:
+      # Unnamed and at the origin, which leaves the ports named as the standard
+      # interface names them and makes this one a drop-in for it - so it mates
+      # the two above by the standard package's own rules.
+      "//pub/std/metric/m:m-thru-depth;size=3,depth=6":
+
+  # The cap is not fastened to anything: it stands on the plate on its feet.
+  # '//pub/std' has no interface for a flat seat - it has openings, shafts,
+  # screws and bolts, every one of which is a feature something passes through -
+  # so this package declares the one it needs. A seat mates a seat.
+  aero-cap-seat:
+    desc: A flat 6 x 10 mm seat where a cap foot stands on the plate
+    ports:
+      seat:
+        location: [[0, 0, 0], [0, 0, 1], 0]
+        sketch: cap-foot
+    mates: aero-cap-seat
 
 parts:
+  # The eight solids, shared by all three stages: not one part file differs
+  # between them, and only the assemblies do.
+  #
+  # Everything below each 'type: step' line is there for stage 3. Ports and
+  # interfaces are metadata - they add no geometry and change none - so the
+  # import and the corrected variant carry them too and are unaffected; the
+  # connected assembly is the only one that uses them.
+  #
+  # 'manufacturing' is the half of each declaration the file could not fill in.
+  # 'AeroAssembly.step' is AP214 written by FreeCAD, and what it carries is
+  # eight solids, the tree they hang in, the names of the products, millimetres,
+  # and one colour used for all eight. It carries no material - not one
+  # MATERIAL_DESIGNATION, PROPERTY_DEFINITION or DESCRIPTIVE_REPRESENTATION_ITEM
+  # in 24540 lines - no tolerance, no stock and no process. So every part below
+  # states four things somebody had to supply:
+  #
+  #   * 'properties.material', because the file names no material. The colour it
+  #     does carry is one FreeCAD default applied to all eight and says nothing
+  #     about what they are made of.
+  #   * 'tolerance', because the file states none. AP242 carries the whole of
+  #     GD&T; this is AP214 and holds pure geometry.
+  #   * 'manufacturing.method', because a solid is not a process. Seven of the
+  #     eight are cut from stock; the cap is formed, and why is beside it.
+  #   * 'manufacturing.source' on each of the seven, because subtraction is
+  #     defined by what it starts from. The stock is below.
+  #
+  # No machine subsection appears on any of them, and that is measured rather
+  # than skipped. A 'laser:' or a 'drill:' claims every face is a wall along the
+  # tool axis or a face across it, and no axis of any of these solids gets past
+  # 94.5% of the surface area (the plate, about its own Y; the feet and the
+  # struts, 45-62% about their best axis, because a third of their area is ruled
+  # spline flank). Naming no machine means CNC, which is the one that can make
+  # what the other two can.
+  #
+  # Every instance below is named for what it faces, and sits at the mouth of
+  # its own hole - the face the bolt enters that part through - rather than at
+  # the middle of it. Where two parts meet face to face those two mouths are the
+  # same point, and a connection through them needs nothing else; where the
+  # strut's flange stands 14mm off the seat it rests on they are not, and the
+  # joint says so with 'moveZ'.
   AeroAssembly_assy_example/AeroFrameAssembly_solid1:
     type: step
+    manufacturing:
+      method: subtractive
+      source: AeroAssembly_assy_example/AeroFrameAssembly_solid1_stock
+    tolerance: 0.1 # mm; the STEP file states none, so the declaration does
+    properties:
+      material: al6061
+    desc: The first frame half's rear foot
+    implements:
+      # 'strut-*' is the joint: where the bolt leaves this foot on its way up
+      # to the strut's flange, declared on the face the two share. 'plate-*' is
+      # this foot's own pair of holes under the plate's rear flange, which the
+      # flange's four miss by 2.5mm - so the foot bears there and bolts nowhere.
+      aero-foot-opening:
+        plate-a: [[106.53424021138, 45.880867309392, 42.004207344372], [0, 1, 0], 180]
+        plate-b: [[106.53424021138, 60.880867309392, 42.004207344372], [0, 1, 0], 180]
+        strut-a: [[129.871884875786, 126.024265591604, 42.568576658612], [0.70406259222, 0.70406259222, 0.092691598724], 169.40858886519]
+        strut-b: [[141.462994791252, 126.024265591605, 45.674405199853], [0.70406259222, 0.70406259222, 0.092691598724], 169.40858886519]
+
   AeroAssembly_assy_example/AeroFrameAssembly_solid2:
     type: step
+    manufacturing:
+      method: subtractive
+      source: AeroAssembly_assy_example/AeroFrameAssembly_solid2_stock
+    tolerance: 0.1 # mm; the STEP file states none, so the declaration does
+    properties:
+      material: al6061
+    desc: The first frame half's front foot
+    implements:
+      # 'plate-*' bolts up under the plate's front flange; 'strut-*' is where
+      # the strut is bolted on top of this foot.
+      aero-foot-opening:
+        plate-a: [[-32.906382815736, 43.380867309394, -13.190203658158], [0, 1, 0], 180]
+        plate-b: [[-32.906382815736, 58.380867309394, -13.190203658158], [0, 1, 0], 180]
+        strut-a: [[-65.922927907255, 126.02426559159, -9.894485308995], [0.991444861374, 0, 0.13052619222], 180]
+        strut-b: [[-54.331817991784, 126.02426559159, -6.788656767765], [0.991444861374, 0, 0.13052619222], 180]
+
   AeroAssembly_assy_example/AeroFrameAssembly_solid3:
     type: step
+    manufacturing:
+      method: subtractive
+      source: AeroAssembly_assy_example/AeroFrameAssembly_solid3_stock
+    tolerance: 0.1 # mm; the STEP file states none, so the declaration does
+    properties:
+      material: al6061
+    desc: The first frame half's strut
+    connect:
+      hold: aero-strut-opening
+      holdInstance: rear-a
+      holdForceMin: 5.0
+      holdForceMax: 15.0
+    implements:
+      # 'foot-*' meets the front foot and 'rear-*' the rear one. Both sit on
+      # the underside of the flange that carries the holes, which is 14mm above
+      # the seat the strut actually rests on - so the bolt crosses 14mm of
+      # channel between the two parts, and the joint states that as 'moveZ: 14'.
+      aero-strut-opening:
+        foot-a: [[14.109513747375, -6.799856691462, 13.50477035354], [1, 0, 0], 0]
+        foot-b: [[14.109513747376, 5.200143308539, 13.504770353527], [1, 0, 0], 0]
+        rear-a: [[14.109513747375, 195.90184923072, 13.504770353527], [0, 0, 1], 90]
+        rear-b: [[14.109513747375, 207.90184923072, 13.504770353527], [0, 0, 1], 90]
+
   AeroAssembly_assy_example/AeroFrame_Plate:
     type: step
+    manufacturing:
+      method: subtractive
+      source: AeroAssembly_assy_example/AeroFrame_Plate_stock
+    tolerance: 0.1 # mm; the STEP file states none, so the declaration does
+    properties:
+      material: al6061
+    desc: The plate both frame halves bolt to and the cap stands on
+    connect:
+      # The fixture everything else is connected to, held by the one pattern
+      # nothing joins: the rear flange's, which no foot lines up with.
+      hold: aero-plate-opening
+      holdInstance: frame-rear-a
+      holdForceMin: 12.0
+      holdForceMax: 30.0
+    implements:
+      # Eight Ø3 clearance holes, four per flange, all declared on the
+      # underside the feet meet. The front four are joints - a front foot bolts
+      # under each pair. The rear four are not: the rear feet that reach them
+      # are 2.5mm out, one half each way, in the source file and therefore in
+      # all three stages. They are declared because they are there, and nothing
+      # connects through them.
+      aero-plate-opening:
+        frame-front-a: [[-25.17766952966, 42.5, -10.60660171779], [0, 0, 1], 90]
+        frame-front-b: [[-25.17766952966, 57.5, -10.60660171779], [0, 0, 1], 90]
+        frame-rear-a: [[114.26295349746, 42.5, 44.587809284739], [0, 0, 1], 90]
+        frame-rear-b: [[114.26295349746, 57.5, 44.587809284739], [0, 0, 1], 90]
+        mirror-front-a: [[-25.17766952966, 5, -10.60660171779], [0, 0, 1], 90]
+        mirror-front-b: [[-25.17766952966, 20, -10.60660171779], [0, 0, 1], 90]
+        mirror-rear-a: [[114.26295349746, 5, 44.587809284739], [0, 0, 1], 90]
+        mirror-rear-b: [[114.26295349746, 20, 44.587809284739], [0, 0, 1], 90]
+      # Where the cap's two front feet land on the plate's front flange.
+      aero-cap-seat:
+        cap-a: [[-32.60660171779, 5.512675693185, -3.606601718526], [0.707106781187, 0.707106781187, 0], 180]
+        cap-b: [[-32.60660171779, 56.987324306815, -3.606601718526], [0.707106781187, 0.707106781187, 0], 180]
+
   AeroAssembly_assy_example/AeroFrame_Cap:
     type: step
+    # Formed rather than cut, which is the one method in this package the
+    # geometry decides rather than the reader. Every curved face of this
+    # solid is one of a concentric pair 3mm apart about a single axis - r17
+    # inside r20, r22 inside r25 - which is a 3mm strip bent, and the solid
+    # fills 3.5% of the smallest box that holds it. Milling it would start
+    # from a 215 x 75 x 67 billet and throw 97.2% of it away.
+    #
+    # 'forming' rather than 'sheet_metal' because 'sheet_metal' names the
+    # flat piece that goes into the brake and the sketch that says where the
+    # bends are, and neither is in the STEP file: it holds the bent shape and
+    # nothing about how it got there. That is the same gap as the missing
+    # material and the missing tolerance, said about a process.
+    manufacturing:
+      method: forming
+    tolerance: 0.1 # mm; the STEP file states none, so the declaration does
+    properties:
+      material: al6061
+    desc: The cap, which stands on the plate on four feet - two of which touch
+    connect:
+      # Lifted by its own seat, and gently: it is only being set down.
+      hold: aero-cap-seat
+      holdForceMin: 4.0
+      holdForceMax: 12.0
+    implements:
+      # The two front feet, which are the only two that touch: the other pair
+      # stands 0.751923mm clear, which is the defect stage 1 reports.
+      aero-cap-seat:
+        plate-a: [[-32.60660171779, 5.512675693185, -4.358524908526], [1, 0, 0], 0]
+        plate-b: [[-32.60660171779, 56.987324306815, -4.358524908526], [1, 0, 0], 0]
+
   AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid1:
     type: step
+    manufacturing:
+      method: subtractive
+      source: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid1_stock
+    tolerance: 0.1 # mm; the STEP file states none, so the declaration does
+    properties:
+      material: al6061
+    desc: The mirrored half's rear foot
+    implements:
+      aero-foot-opening:
+        plate-a: [[114.26295349746, 5.00000000008, 200.01598176239], [0, 1, 0], 180]
+        plate-b: [[114.26295349746, 20.00000000008, 200.01598176239], [0, 1, 0], 180]
+        strut-a: [[137.600598162105, -60.143398282069, 200.580351076661], [0.70406259222, 0.70406259222, 0.092691598724], 169.40858886519]
+        strut-b: [[149.191708077568, -60.143398282068, 203.686179617888], [0.70406259222, 0.70406259222, 0.092691598724], 169.40858886519]
+
   AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid2:
     type: step
+    manufacturing:
+      method: subtractive
+      source: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid2_stock
+    tolerance: 0.1 # mm; the STEP file states none, so the declaration does
+    properties:
+      material: al6061
+    desc: The mirrored half's front foot
+    implements:
+      aero-foot-opening:
+        plate-a: [[-25.17766952958, 7.49999999952, 144.821570760413], [0, 1, 0], 180]
+        plate-b: [[-25.17766952958, 22.49999999952, 144.821570760413], [0, 1, 0], 180]
+        strut-a: [[-58.194214621185, -60.14339828212, 148.117289109025], [0.991444861374, 0, 0.13052619222], 180]
+        strut-b: [[-46.603104705715, -60.14339828212, 151.223117650255], [0.991444861374, 0, 0.13052619222], 180]
+
   AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3:
     type: step
+    manufacturing:
+      method: subtractive
+      source: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3_stock
+    tolerance: 0.1 # mm; the STEP file states none, so the declaration does
+    properties:
+      material: al6061
+    desc: The mirrored half's strut
+    connect:
+      hold: aero-strut-opening
+      holdInstance: rear-a
+      holdForceMin: 5.0
+      holdForceMax: 15.0
+    implements:
+      aero-strut-opening:
+        foot-a: [[200.277177621118, -42.109187015595, 148.132899464302], [1, 0, 0], 30.000000000055]
+        foot-b: [[200.277177621119, -31.716882170186, 154.132899464313], [1, 0, 0], 30.000000000055]
+        rear-a: [[200.27717762108, 133.435639703503, 249.483752425812], [0.250562807086, -0.250562807086, 0.935113126531], 93.840965716272]
+        rear-b: [[200.27717762108, 143.827944548905, 255.483752425817], [0.250562807086, -0.250562807086, 0.935113126531], 93.840965716272]
+
+  # The stock the seven cut parts come out of, one billet each.
+  #
+  # 'source:' has to name a part, and an import has no part to name: the STEP
+  # file is the finished shape and says nothing about the piece it came off.
+  # So the billets are derived from the solids by 'stock.py' - the smallest
+  # rectangular block that holds the solid, in the solid's own orientation, plus
+  # 2mm of machining allowance a face, rounded up to 1mm of plate thickness and
+  # 5mm of sawn length.
+  #
+  # Derived rather than written down, and oriented to the solid rather than to
+  # the axes: an imported solid sits where the STEP file put it, at an angle to
+  # all three, and a billet cut square with the coordinate system is 2.4 times
+  # the metal across these seven - 3.5 times for the mirrored strut. Each
+  # declaration below names the same script and one file, and 'dependencies' is
+  # what re-cuts the billet if that file is ever re-imported.
+  #
+  # None of them declares a 'manufacturing' method. Nobody here makes stock -
+  # it is bought by the metre, and what is done to it is the business of the
+  # part that names it. They carry the material because that is what is being
+  # bought, and a sawing tolerance because they are sawn.
+  AeroAssembly_assy_example/AeroFrameAssembly_solid1_stock:
+    type: build123d
+    path: stock.py
+    desc: The 135 x 45 x 18 mm billet the first half's rear foot is cut from
+    parameters:
+      part:
+        default: AeroAssembly_assy_example/AeroFrameAssembly_solid1.step
+      tolerance: 0.5
+    dependencies:
+      - AeroAssembly_assy_example/AeroFrameAssembly_solid1.step
+    properties:
+      material: al6061
+
+  AeroAssembly_assy_example/AeroFrameAssembly_solid2_stock:
+    type: build123d
+    path: stock.py
+    desc: The 140 x 50 x 20 mm billet the first half's front foot is cut from
+    parameters:
+      part:
+        default: AeroAssembly_assy_example/AeroFrameAssembly_solid2.step
+      tolerance: 0.5
+    dependencies:
+      - AeroAssembly_assy_example/AeroFrameAssembly_solid2.step
+    properties:
+      material: al6061
+
+  AeroAssembly_assy_example/AeroFrameAssembly_solid3_stock:
+    type: build123d
+    path: stock.py
+    desc: The 235 x 95 x 32 mm billet the first half's strut is cut from
+    parameters:
+      part:
+        default: AeroAssembly_assy_example/AeroFrameAssembly_solid3.step
+      tolerance: 0.5
+    dependencies:
+      - AeroAssembly_assy_example/AeroFrameAssembly_solid3.step
+    properties:
+      material: al6061
+
+  AeroAssembly_assy_example/AeroFrame_Plate_stock:
+    type: build123d
+    path: stock.py
+    desc: The 180 x 70 x 26 mm billet the plate is cut from
+    parameters:
+      part:
+        default: AeroAssembly_assy_example/AeroFrame_Plate.step
+      tolerance: 0.5
+    dependencies:
+      - AeroAssembly_assy_example/AeroFrame_Plate.step
+    properties:
+      material: al6061
+
+  AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid1_stock:
+    type: build123d
+    path: stock.py
+    desc: The 135 x 45 x 18 mm billet the mirrored half's rear foot is cut from
+    parameters:
+      part:
+        default: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid1.step
+      tolerance: 0.5
+    dependencies:
+      - AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid1.step
+    properties:
+      material: al6061
+
+  AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid2_stock:
+    type: build123d
+    path: stock.py
+    desc: The 140 x 50 x 20 mm billet the mirrored half's front foot is cut from
+    parameters:
+      part:
+        default: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid2.step
+      tolerance: 0.5
+    dependencies:
+      - AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid2.step
+    properties:
+      material: al6061
+
+  AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3_stock:
+    type: build123d
+    path: stock.py
+    desc: The 235 x 95 x 32 mm billet the mirrored half's strut is cut from
+    parameters:
+      part:
+        default: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3.step
+      tolerance: 0.5
+    dependencies:
+      - AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3.step
+    properties:
+      material: al6061
+
   cube:
     type: stl
+
 assemblies:
+  # Stage 1 - import.
+  #
+  # What 'pc import assembly' read out of 'AeroAssembly.step', unedited. It is
+  # kept exactly as the importer wrote it - five decimals and all - because its
+  # value is that it is what the file says, and an import that has been adjusted
+  # to pass a check is no longer evidence of anything.
+  #
+  # It holds three interferences, described under 'docs.intro' above and
+  # resolved in 'AeroAssembly_corrected'. They are not overlaps any joint means
+  # to have, so there is nothing here for 'selfScrew', 'snapIn' or 'interferes'
+  # to say, and 'minVolume' would be lying about two of them: at 90.231 mm^3 and
+  # 12.997 mm^3 they are interferences by any measure. Nothing is declared:
+  # 'manufacturable: false' is the whole of it, and the check reports the three
+  # as warnings rather than failing an object nobody is building.
   AeroAssembly_assy_example/AeroAssembly:
     type: assy
+    manufacturable: false
+    desc: >-
+      Stage 1, import. The unedited record of 'AeroAssembly.step', three
+      interferences and all: a record rather than a design.
+  # Stage 2 - correct.
+  AeroAssembly_assy_example/AeroAssembly_corrected:
+    type: assy
+    desc: >-
+      Stage 2, correct. The import with its three interferences resolved - the
+      mirrored half put on its own footprint, the cap lifted clear of the plate,
+      and every placement written at the precision the STEP file holds. No two
+      parts share any volume; every item is still placed by 'location:'.
+  # Stage 3 - connect.
+  #
+  # Somebody can build this one, which is what 'manufacturable: true' means and
+  # what 'pc test' then holds it to: every item connected rather than placed
+  # (see 'partcad.test.connectivity'), no shared volume anywhere as a failure
+  # rather than a note, instructions that resolve, and eight parts that a
+  # supplier will make. The 'assy' manufacturing method comes with the type: an
+  # ASSY is put together by following its own instructions, which is what
+  # 'pc render -t pdf' writes out.
+  AeroAssembly_assy_example/AeroAssembly_connected:
+    type: assy
+    manufacturable: true
+    desc: >-
+      Stage 3, connect. The same eight parts with no 'location:' anywhere: each
+      names the item it is joined to, the M3 pattern or the seat it is joined
+      by, and what somebody has to do to make that joint.
+    # The assembly instructions are checked in beside the ASSY file -
+    # 'AeroAssembly_assy_example/AeroAssembly_connected.pdf', which is where
+    # the assembly's own name puts them - and regenerated with:
+    #
+    #   pc render -t pdf -a AeroAssembly_assy_example/AeroAssembly_connected
+    #
+    # Asked for rather than declared under 'render:', which is deliberate.
+    # A declared file type is produced by the 'pc render -r' sweep, and CI
+    # requires that sweep to leave the examples byte for byte as they are
+    # checked in; reportlab stamps every PDF it writes with the time it was
+    # written, so a declared one would differ on every run and would have to
+    # join the list of files nobody watches. This one is watched: it changes
+    # when somebody changes the assembly and regenerates it, which is the only
+    # thing that should change it.
+
+# The package document: 'docs.intro' and 'docs.usage' above, plus what the
+# package declares. It is what a reader meets on GitHub, and it is what the
+# assembly instruction book links back to. Markdown is written byte for byte
+# the same every time, so 'pc render -r' leaving it unchanged is a check rather
+# than noise - which is exactly what the PDF beside it cannot promise.
+render:
+  readme:
+    # Nothing here is rendered to an image, so every one of these sections
+    # would be a heading with nothing under it. What the package has to say is
+    # in 'docs' above.
+    exclude:
+      - assemblies
+      - interfaces
+      - parts
+      - sketches

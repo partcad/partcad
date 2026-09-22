@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 import os
 import sys
 import tempfile
@@ -18,15 +19,16 @@ import warnings
 from typing import TYPE_CHECKING, Optional
 
 from . import cae as pc_cae
+from . import cam as pc_cam
 from . import logging as pc_logging
 from . import material as pc_material
 from . import output, render_overlay
 from . import runtime as pc_runtime
-from . import sandbox_versions, wrapper
+from . import sandbox_versions, shape_ports, wrapper
 from .cache_hash import CacheHash
 from .cache_shape import properties_key
 from .shape_config import ShapeConfiguration
-from .utils import total_size
+from .utils import resolve_resource_path, total_size
 
 if TYPE_CHECKING:
     from partcad.context import Context
@@ -39,6 +41,7 @@ if TYPE_CHECKING:
 # - can import the OCP codec lazily.
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from . import shape_envelope, telemetry
+from .process_crash import command_failure
 
 PART_EXTENSION_MAPPING = {
     "step": "step",
@@ -163,6 +166,14 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         "cache",
         "cache_dependencies_ignore",
         "category",
+        # How the thing is packaged for sale, not what it is. The third of the
+        # (vendor, SKU, pack size) record, and the only one of the three that
+        # was missing here - so the same geometry sold in bags of 25 keyed
+        # differently from the same geometry sold singly, and declaring a pack
+        # size rebuilt a part for a number nothing reads but a bill of
+        # materials. Keying on less cannot serve the wrong shape here: nothing
+        # builds anything out of it.
+        "count_per_sku",
         "desc",
         "docs",
         "example",
@@ -237,6 +248,12 @@ class Shape(ShapeConfiguration):
         # Memory cache
         self._wrapped = None
         self._bounding_box = None
+        # Everything recorded about this shape's geometry when it was built -
+        # its measurements, and whatever its source stated (see
+        # 'shape_envelope.KEY_METADATA'). Learnt while building or read back
+        # with the geometry, and kept here for the runs that have nowhere to
+        # cache it. See 'get_metadata_async()'.
+        self._metadata = None
 
         # Set by the factory (see ShapeFactory.prepare_async): everything that has
         # to happen before this shape's cache key means anything - 'fileFrom'
@@ -389,12 +406,40 @@ class Shape(ShapeConfiguration):
             if len(self.components) == 0:
                 self.components = [wrapped]
 
+            await shape_ports.prepare_async(self, ctx)
             if self.with_ports is not None:
                 ports_list = list(await self.with_ports.get_components(ctx))
                 if len(ports_list) != 0:
                     self.components.append(ports_list)
 
         return self.components
+
+    async def get_representation(self, ctx, form=shape_envelope.FORM_BREP):
+        """This shape as a tree of nodes, with the geometry at each in 'form'.
+
+        The one way to ask a shape for itself as a whole. Every shape is such a
+        tree: an assembly is a node per thing it holds, and a part or a sketch is
+        a tree of depth one - itself, its geometry, and what it says about
+        connections. Nothing about the hierarchy depends on the form; the form
+        decides only what sits at a node that has geometry (see
+        'shape_envelope.FORM_BREP' / 'FORM_GLTF').
+
+        BREP is the tree the core builds, composes and caches, so that is what
+        this is in the ordinary case and it costs a cache lookup. glTF is that
+        same tree tessellated, in one sandbox, for a caller that has to draw it
+        rather than compute with it - a browser has no CAD kernel. It is not
+        cached: it is derived from the form that is, in one pass, and caching a
+        second copy of every assembly would cost more disk than it saves.
+
+        The sketches this object's ports are drawn with come with it, on the root
+        node, in the same form (see 'port_sketches'). They are not in what is
+        cached, because what a node records about a port is the reference and not
+        the geometry.
+        """
+        from . import port_sketches, shape_gltf
+
+        tree = await port_sketches.attach_async(ctx, await self.get_wrapped(ctx))
+        return await shape_gltf.in_form_async(ctx, tree, form)
 
     def prepare(self):
         return asyncio.run(self.prepare_async())
@@ -440,6 +485,30 @@ class Shape(ShapeConfiguration):
 
     def get_cache_key(self) -> Optional[str]:
         return asyncio.run(self.get_cache_key_async())
+
+    async def is_cached_async(self, ctx) -> bool:
+        """Whether this shape can be had without building it.
+
+        True when it is already in this process's memory, and otherwise when
+        the cache holds the one entry 'get_wrapped()' materializes it from.
+        One entry is the whole of it: whatever was recorded about the geometry
+        travels inside that entry (see cache_shape.py), so a hit is a hit and
+        there is no sibling entry that might be missing. The components beside
+        it are not asked after for the same reason 'get_wrapped()' does not
+        insist on them - a shape that has none is cached exactly as completely
+        as one that has.
+
+        Asked of the tiers rather than read out of them, so that answering it
+        for a large assembly costs a stat() rather than the assembly. A shape
+        that is not cacheable at all is never "cached" by this: it is either in
+        memory or it has to be built.
+        """
+        if self._wrapped is not None:
+            return True
+        if not ctx or await self.get_cache_key_async() is None:
+            return False
+        present = await ctx.cache_shapes.contains_data_async(self.hash, [self.kind])
+        return present.get(self.kind, False)
 
     async def take_cache_key_from(self, source: "Shape") -> None:
         """Key this shape on the shape it points at, plus what it adds to it.
@@ -491,14 +560,33 @@ class Shape(ShapeConfiguration):
             # happened.
             await self.prepare_async()
 
+            # And before the layer this shape stamps on whatever comes back means
+            # anything: that layer carries the shape's ports, and an assembly's
+            # 'map:' is what turns a declaration into ports. It is resolved here
+            # rather than on the way to 'get_shape()' because the cache hit below
+            # stamps the same layer without ever getting there. A no-op - one
+            # dictionary lookup - for everything that declares no 'map:', which
+            # is every part, every sketch, and most assemblies.
+            await shape_ports.prepare_async(self, ctx)
+
             is_cacheable = self.get_cacheable() and ctx
             if is_cacheable:
                 cache_hash = self.hash
                 if cache_hash:
-                    keys_to_read = [self.kind, "cmps"]
                     cached, to_cache_in_memory = await ctx.cache_shapes.read_async(
-                        cache_hash, keys_to_read, self.get_cache_metadata()
+                        cache_hash, [self.kind, "cmps"], self.get_cache_metadata()
                     )
+                    # Whatever was recorded about the geometry came back inside
+                    # the same entry as the geometry (see cache_shape.py), so a
+                    # hit is a hit: there is no sibling entry that might be
+                    # missing, and nothing to check for completeness.
+                    #
+                    # Set only on a hit, and to '{}' rather than None when the
+                    # entry recorded nothing: None on this attribute means "not
+                    # known yet" and is what sends 'get_metadata_async()' off to
+                    # build the shape. A miss here has to leave it saying that.
+                    if cached.get(self.kind) is not None:
+                        self._metadata = shape_envelope.metadata_of(cached[self.kind]) or {}
                     if to_cache_in_memory.get(self.kind, False):
                         self._wrapped = cached[self.kind]
                     if to_cache_in_memory.get("cmps", False):
@@ -523,6 +611,14 @@ class Shape(ShapeConfiguration):
             if self.components:
                 self.components = [self._component_to_envelope(c) for c in self.components]
 
+            # What the wrapper that produced this envelope recorded about it -
+            # the size it measured, and whatever the source file stated (see
+            # 'shape_envelope.KEY_METADATA'). Taken off here and not later
+            # because 'offset'/'scale' below go through a wrapper that decodes
+            # the envelope and encodes a fresh one, which cannot carry forward
+            # what it was never sent.
+            recorded = shape_envelope.metadata_of(shape)
+
             # TODO(clairbee): apply 'offset' and 'scale' during instantiation and
             #                 apply to both 'wrapped' and 'components'
             # 'offset'/'scale' are applied in a sandbox (see transform.py) so
@@ -535,6 +631,24 @@ class Shape(ShapeConfiguration):
                 if "scale" in self.config:
                     shape = await transform.scale(ctx, shape, self.config["scale"])
 
+                # The transform rebuilt the geometry, so the encoder on the far
+                # side measured what came out and the numbers on the way back
+                # are the new ones - which is the point: a part scaled by two is
+                # not the size the file it was read from would suggest. What
+                # that wrapper could not know is what the *source* stated, so
+                # the sections read at import are laid back under the fresh
+                # measurements rather than lost with the envelope they rode in.
+                #
+                # The old measurements are dropped first rather than merged
+                # under. They describe a shape that no longer exists, so if the
+                # far side could not measure what came out, the honest answer is
+                # that this shape's size is unknown - not the size it used to
+                # be, which is the one answer nobody could detect as wrong.
+                recorded = shape_envelope.merge_metadata(
+                    shape_envelope.without_measurements(recorded),
+                    shape_envelope.metadata_of(shape),
+                )
+
             # Whatever produced the envelope - a factory, a wrapper, a
             # transform - the outer layer around it is this shape's own. It
             # is stamped here rather than left to whoever built the payload,
@@ -542,19 +656,36 @@ class Shape(ShapeConfiguration):
             # the cache later carry exactly the same name and label.
             shape = shape_envelope.apply_metadata(shape, self.get_cache_metadata())
 
+            # Kept on the object as well as cached, because the two answer for
+            # different runs. A shape with 'cache: false', one that does not own
+            # its entry, and a run with every tier switched off all reach here
+            # having built the shape and having nowhere to store what that
+            # produced - and 'pc info' should still be able to say how big it is.
+            self._metadata = recorded or {}
+            if recorded:
+                shape = dict(shape)
+                shape[shape_envelope.KEY_METADATA] = recorded
+
             if cache_hash:
                 if is_cacheable and self.owns_cache_entry:
+                    # The geometry and everything recorded about it go into the
+                    # one entry, in the one write, because they were produced
+                    # together and are valid together: the hash that keys the
+                    # entry covers what produced the geometry, so a shape that
+                    # rebuilds measures again and one that does not never needs
+                    # to. Separate entries could be separately present.
                     to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
                     if self.components and len(self.components) > 0:
                         to_cache["cmps"] = self.components
                     properties = self._shape_properties()
                     if properties:
-                        # Both entries are filled here and nowhere else:
-                        # this is the one path that has actually
-                        # instantiated the shape, and so the one that knows
-                        # what came out of it. They are materialized apart
-                        # (see 'get_cached_properties_async()'), and a shape
-                        # that reports nothing leaves no entry to read.
+                        # The one thing still kept beside the geometry rather
+                        # than in it, and the reason is that it is *declared*:
+                        # the hash does not cover a 'properties:' section, so
+                        # editing one leaves the geometry entry valid and a copy
+                        # buried inside it would go on answering with the values
+                        # it happened to be written with. See
+                        # 'cache_shape.properties_key()'.
                         to_cache[properties_key(self.kind)] = properties
                     to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
                     do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
@@ -590,6 +721,40 @@ class Shape(ShapeConfiguration):
             return None
         properties = {key: value for key, value in properties.items() if value not in (None, {}, [], "")}
         return properties or None
+
+    def material_reference(self) -> Optional[str]:
+        """What this shape says it is made of, as it was written, or None.
+
+        A *name* - '//pub/std/manufacturing/material/metal:al-5052-h32', or
+        ':aluminium' for one catalogued in the shape's own package - and not
+        yet a thing anything can be asked of. 'get_material()' below is what
+        turns it into one.
+        """
+        properties = self._shape_properties() or {}
+        reference = properties.get("material")
+        return reference if isinstance(reference, str) and reference else None
+
+    def get_material(self, ctx, quiet: bool = True):
+        """The material this shape is made of, or None if it names none.
+
+        Resolved against the package that owns *this shape*, exactly as
+        'material.physics_by_shape()' resolves it on the far side of an export:
+        ':aluminium' means "in my own package", and whose package that is is a
+        fact about the shape that wrote the reference rather than about the
+        string. Two packages may each catalogue an 'aluminium' of their own and
+        each get theirs.
+
+        Quiet by default, because the callers are the ones that report a
+        reference nobody answers to in their own way - 'shape_info()' below puts
+        it in the answer rather than in the log - and because a shape with no
+        material at all is the ordinary case rather than a mistake.
+        """
+        reference = self.material_reference()
+        if reference is None or ctx is None:
+            return None
+        package, name = resolve_resource_path(self.project_name, reference)
+        _project, found = pc_material.lookup(ctx, "%s:%s" % (package, name), quiet=quiet)
+        return found
 
     async def get_cached_properties_async(self, ctx):
         """What the cache recorded beside this shape's geometry, or None.
@@ -637,16 +802,37 @@ class Shape(ShapeConfiguration):
         if shape is None or shape_envelope.is_shape_envelope(shape):
             return shape
         import ocp_serialize
+        import shape_measure
 
         if name is None and label is None:
             name, label = self._shape_metadata()
-        return shape_envelope.make_shape(ocp_serialize.compressed_brep(shape), name=name, label=label)
+        envelope = shape_envelope.make_shape(ocp_serialize.compressed_brep(shape), name=name, label=label)
+        # Measured here for the same reason a wrapper's shapes are measured as
+        # they are encoded: this is the moment the live object exists, and it is
+        # the last one. An in-process factory is the one producer that does not
+        # go through the sandbox encoder, so without this its shapes would be
+        # the only ones whose size had to be computed all over again later.
+        measured = shape_measure.measurements_or_none(shape)
+        if measured:
+            envelope[shape_envelope.KEY_METADATA] = {shape_envelope.METADATA_MEASUREMENTS: measured}
+        return envelope
 
     def _component_to_envelope(self, component):
         """Normalize a component (or nested list of components) into envelopes."""
         if isinstance(component, list):
             return [self._component_to_envelope(item) for item in component]
         return self._to_envelope(component)
+
+    def take_side_data_from(self, source) -> None:
+        """Adopt what the object this one points at recorded about its geometry.
+
+        A reference shares the cache entry of its source (see
+        'take_cache_key_from'), so the two have to answer the same - and the
+        source is what builds, and so what learns, what the geometry measures
+        and what its file stated. Called once the source has been materialized,
+        beside the copy of its components that happens for the same reason.
+        """
+        self._metadata = copy.deepcopy(getattr(source, "_metadata", None))
 
     async def get_cache_value(self, ctx, shape):
         """The value handed to the shape cache under 'self.kind'.
@@ -669,12 +855,18 @@ class Shape(ShapeConfiguration):
         lives here rather than in the cache - see ShapeCache. That includes what
         the shape reports about itself: two parts cut from the same solid may
         well be made of different materials, and each has to get its own back.
+
+        And what it says about connections, for the same reason: two parts cut
+        from one solid may have their ports in different places, or none at all,
+        so where this shape's ports are and which interfaces they form is
+        re-stamped here rather than stored inside the entry they share.
         """
         full_name, label = self._shape_metadata()
         metadata = {"name": full_name, "label": label}
         properties = self._shape_properties()
         if properties:
             metadata[shape_envelope.KEY_PROPERTIES] = properties
+        metadata.update(shape_ports.connection_metadata(self))
         return metadata
 
     async def convert(self, part_type: str, ctx=None, **kwargs):
@@ -847,46 +1039,73 @@ class Shape(ShapeConfiguration):
         return await self.convert("build123d", ctx)
 
     async def show_async(self, ctx=None):
-        # Remove this workaround when the VSCode extension is updated to pass 'ctx'
-        if ctx is None:
-            from .globals import _partcad_context
+        from . import viewer
 
-            ctx = _partcad_context
+        # A caller that cannot pass one gets the process-wide context; one that
+        # passes None where there is no global is told so rather than left to
+        # discover it from the first thing that needs one. See 'viewer.context'.
+        ctx = viewer.context(ctx, self.name)
+        if ctx is None:
+            return
 
         with pc_logging.Action("Show", self.project_name, self.name):
-            components = []
+            # The whole object, as the tree it is, with every node's geometry
+            # tessellated: the viewer is a browser and has no CAD kernel, so the
+            # glTF form is what it can draw (see 'shape_gltf'). Nothing about the
+            # tree is built for the viewer - it is the same hierarchy, with the
+            # same names, placements, ports and interfaces, that this shape
+            # answers with for every other purpose.
+            tree = None
             # TODO(clairbee): consider removing this exception handler permanently
             # Comment out the below exception handler for easier troubleshooting in CLI
             try:
-                components = await self.get_components(ctx)
+                tree = await self.get_representation(ctx, shape_envelope.FORM_GLTF)
             except Exception as e:
                 pc_logging.exception(e)
 
-            if len(components) != 0:
-                # The components are BREP envelopes and stay that way here: the
-                # viewer is a browser, so tessellation into glTF happens in a
-                # sandbox and the core never decodes a live OCP object to show one.
-                from . import viewer
-
-                # A port is a coordinate frame with no geometry, so it cannot be
-                # tessellated; it travels beside the geometry for the viewer to
-                # draw a triad at.
-                markers = self.with_ports.get_markers() if self.with_ports is not None else []
-
-                await viewer.show(
-                    ctx, components, name=self.name, kind=self.kind, package=self.project_name, markers=markers
-                )
+            if tree is not None:
+                await viewer.show(ctx, tree, name=self.name, kind=self.kind, package=self.project_name)
 
     def show(self, ctx=None):
         asyncio.run(self.show_async(ctx))
 
     def shape_info(self, ctx):
+        """What 'pc info' reports of any shape, whatever kind or type it is.
+
+        What it cost to hold, what it measured, what it is keyed and cached
+        under, and the ports it carries. A factory adds what is particular to
+        its type on top of this (see 'ShapeFactory.info').
+
+        The shape is built first, and has to be: a measurement is of geometry,
+        and the hash of a shape means nothing until the files it is built from
+        are on disk. For a shape built before, that is a cache hit.
+        """
         asyncio.run(self.get_wrapped(ctx))
+        asyncio.run(shape_ports.prepare_async(self, ctx))
         info = {}
         info["Memory"] = "%.02f KB" % ((total_size(self) + 1023.0) / 1024.0)
+        info.update(asyncio.run(self._reported_async(ctx)))
 
         if self.with_ports is not None:
             info["Ports"] = self.with_ports.info()
+
+        # What the shape is made of, as the facts rather than as the name. The
+        # configuration printed beside this already shows the reference, and the
+        # question somebody running 'pc info' on a part is asking is what that
+        # reference means: the density its mass came from, the friction a
+        # simulation of it used, what the substance is good and bad at.
+        material_reference = self.material_reference()
+        if material_reference is not None:
+            material = self.get_material(ctx)
+            info["Material"] = (
+                material.material_info()
+                if material is not None
+                # A reference nothing answers to is reported as it was written
+                # rather than dropped: it is the most useful thing that can be
+                # said about what this is made of, and the reason no mass and no
+                # friction came from it.
+                else {"Name": material_reference, "Errors": ["The material is not found"]}
+            )
 
         info["Hash"] = self.hash.get()
         if self.environment_cache_key is not None:
@@ -1018,6 +1237,10 @@ class Shape(ShapeConfiguration):
         'bracket.vtu': the analysis is part of what the file is, and a part has
         as many analysis results as it has analyses. Empty for everything else,
         where the file type is already the extension.
+
+        A name with a '/' in it names a file in a sub-directory of wherever the
+        configuration put it -- see 'output.name_to_path()' for why, and
+        'Context.ensure_dirs_for_file()' for who creates it.
         """
         if filepath is not None:
             return filepath
@@ -1034,7 +1257,7 @@ class Shape(ShapeConfiguration):
         # A directory that does not exist yet is still a directory: '--create-dirs'
         # is what creates it, and that happens once the name is known.
         if os.path.isdir(filepath) or not os.path.splitext(filepath)[1]:
-            filepath = os.path.join(filepath, self.name + stem_suffix + extension)
+            filepath = os.path.join(filepath, output.name_to_path(self.name, stem_suffix + extension))
         return filepath
 
     def output_getopts(self, ctx, format_name, project=None, filepath=None, options_project=None, output_dir=None):
@@ -1139,8 +1362,10 @@ class Shape(ShapeConfiguration):
         """Where this shape's ports are, worked out at most once per render call.
 
         Two file types of one object can ask for different overlays, and what
-        the answers differ in is only whether the port boundaries came along -
-        so a collection that has them also answers a file type that does not.
+        the answers differ in is whether the port boundaries came along - so a
+        collection that has them also answers a file type that does not - and
+        how deep the walk went, which is a different set of ports rather than
+        the same set told differently.
 
         Failing to work it out must not cost the picture: an overlay is an
         annotation on a render, not the render. The failure is reported and the
@@ -1150,10 +1375,10 @@ class Shape(ShapeConfiguration):
         "nothing" would then take the markers off the next file type too, which
         never asked for a boundary at all.
         """
-        if True in cache:
-            return cache[True]
-        if not overlay.interfaces and False in cache:
-            return cache[False]
+        if (True, overlay.internals) in cache:
+            return cache[(True, overlay.internals)]
+        if not overlay.interfaces and (False, overlay.internals) in cache:
+            return cache[(False, overlay.internals)]
 
         try:
             records = await render_overlay.collect_async(self, ctx, overlay)
@@ -1161,7 +1386,7 @@ class Shape(ShapeConfiguration):
             pc_logging.error("%s:%s: failed to locate the ports to draw: %s" % (self.project_name, self.name, e))
             return []
         render_overlay.report(self, records, overlay)
-        cache[overlay.interfaces] = records
+        cache[(overlay.interfaces, overlay.internals)] = records
         return records
 
     async def _run_implementation_async(self, ctx, impl, script, request, final_filepath):
@@ -1195,6 +1420,28 @@ class Shape(ShapeConfiguration):
         # and places every joint from that), none of which decoding carries over
         # into the geometry it builds.
         request[output.DECODE_KEY] = impl.decode
+
+        # Whether the file has to come out the same every time it is produced.
+        # Set here rather than left to whatever the configuration happened to
+        # carry, so that it is in *every* request and an implementation - one
+        # PartCAD ships, or one a package published on its own - can read it
+        # without first asking whether the key exists. That is the whole of what
+        # makes 'reproducible' mean one thing across every implementation there
+        # is; see 'output.REPRODUCIBLE_KEY'.
+        #
+        # What is already in the request wins, because by the time it gets here
+        # it is the layered answer: the file type's declaration merged through
+        # 'impl.parameters', with an explicit argument from the caller on top of
+        # it. 'impl.reproducible' is the fallback for a caller that built its
+        # request some other way, and the coercion is the point of reading both
+        # through the same function - "false" is a string on the way in from
+        # JSON-RPC and would otherwise be true.
+        request[output.REPRODUCIBLE_KEY] = (
+            output.as_flag(request[output.REPRODUCIBLE_KEY])
+            if output.REPRODUCIBLE_KEY in request
+            else impl.reproducible
+        )
+
         request_serialized = shape_envelope.serialize(request)
 
         # Where this implementation runs. A container when it declared one --
@@ -1261,7 +1508,7 @@ class Shape(ShapeConfiguration):
                 extra = {}
             exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized, **extra)
             if exitcode != 0 and len(errors) == 0:
-                errors = "Failed to execute command '%s' with exit code %s" % (" ".join(command), exitcode)
+                errors = command_failure(command, exitcode)
             if errors:
                 pc_logging.error(errors)
                 raise Exception(errors)
@@ -1300,8 +1547,10 @@ class Shape(ShapeConfiguration):
         # Create the output directory for the resolved path (the incoming
         # 'filepath' is None when called from Project.render_async) using the
         # 'ctx' passed in, so direct callers without a project get
-        # '--create-dirs' too.
-        ctx.ensure_dirs_for_file(final_filepath)
+        # '--create-dirs' too. The name goes in with it: a '/' in it is a
+        # sub-directory of wherever the file lands, created whether or not
+        # '--create-dirs' was given.
+        ctx.ensure_dirs_for_file(final_filepath, self.name)
         pc_logging.debug("Rendering: %s:%s for format '%s'" % (self.project_name, self.name, format_name))
 
         script = await self._materialize_output_script(ctx, impl)
@@ -1430,12 +1679,30 @@ class Shape(ShapeConfiguration):
         project: Optional[Project] = None,
         filepath=None,
         options_package: Optional[str] = None,
+        options_project: Optional[Project] = None,
         output_dir=None,
         overlay=None,
         **kwargs,
     ) -> None:
+        # By keyword, every one of them. 'render_async' grew an
+        # 'options_project' parameter between 'options_package' and
+        # 'output_dir', and a positional forwarding here handed 'output_dir' to
+        # it and 'overlay' to 'output_dir' - so a caller that named
+        # 'output_dir=' got a string where '_output_getopts' reads
+        # '.config_obj' off a package. Nothing in the signature above can drift
+        # away from the one below while the names are what is passed.
         asyncio.run(
-            self.render_async(ctx, format_name, project, filepath, options_package, output_dir, overlay, **kwargs)
+            self.render_async(
+                ctx,
+                format_name,
+                project=project,
+                filepath=filepath,
+                options_package=options_package,
+                options_project=options_project,
+                output_dir=output_dir,
+                overlay=overlay,
+                **kwargs,
+            )
         )
 
     # ------------------------------------------------------------------ #
@@ -1498,6 +1765,110 @@ class Shape(ShapeConfiguration):
             opts, output_dir, "." + extension, project, filepath, stem_suffix="." + analysis
         )
         return impl, filepath
+
+    def cam_getopts(
+        self,
+        ctx,
+        format_name: str,
+        project=None,
+        filepath=None,
+        options_project=None,
+        output_dir=None,
+    ):
+        """Resolve one route: its implementation, options and output path.
+
+        The counterpart of 'analysis_getopts' for the 'cam:' section, and the
+        same shape as it but for the file's name. An analysis writes
+        'bracket.fea.vtu' because a part has as many results as it has analyses;
+        a route writes 'bracket.nc', with no infix, because the extension
+        already says what the file is and an object has one route at a time. Two
+        file types that both routed the same object would collide -- and they
+        cannot, because which one produces the route is a single answer resolved
+        before this is called.
+
+        There is no default extension to fall back on, for the reason the
+        analysis path has none: what a controller reads is the implementation's
+        decision, and an implementation that does not say is a bug in that
+        package rather than something to guess at on its behalf.
+        """
+        opts, configured_output_dir = self._output_getopts(ctx, format_name, output.CAM, project, options_project)
+        output_dir = output_dir or configured_output_dir
+
+        if filepath is not None and os.path.isdir(filepath):
+            # A directory was passed where a file was expected: it names where
+            # the file goes, not the file.
+            output_dir, filepath = filepath, None
+
+        # With the implementing package, for the reason 'analysis_getopts' fills
+        # it in: something asks about the implementation before it is run, and a
+        # missing project answers "declared nothing" rather than failing.
+        impl = output.Implementation(output.CAM, format_name, opts, project=options_project)
+        extension = impl.extension(None)
+        if not extension:
+            raise Exception(
+                "The '%s' implementation does not say what file it writes: it needs an 'extension:'" % format_name
+            )
+        filepath = self._output_filepath(opts, output_dir, "." + extension, project, filepath)
+        return impl, filepath
+
+    def _route_implementation(self, ctx, implementation=None, declared=None):
+        """Who produces this route: the package and the file type in it.
+
+        The very precedence '_analysis_implementation' documents, over the one
+        thing that differs: the bottom of it is 'camImplementation', and unlike
+        the CAE defaults that one names a package PartCAD ships. So the chain is
+
+        * 'implementation' -- this run's answer, from 'pc cam -i'.
+        * 'declared' -- the object's own, from 'implementation:' in its 'cam:'
+          section. A statement about the object: the post-processor its numbers
+          were written for.
+        * the user configuration ('camImplementation'), which is what makes
+          'pc cam' work in a package that says nothing about machines.
+
+        A relative package name is resolved against whoever said it, which is
+        why the two are handed over separately rather than picked between here.
+        """
+        own = False
+        if not implementation:
+            if declared:
+                implementation, own = declared, True
+            else:
+                # The *context's* configuration, not the process-wide singleton:
+                # a daemon builds its context from the caller's configuration,
+                # and reading the singleton here would route under the daemon's
+                # default. The same reason '_analysis_implementation' gives.
+                implementation = ctx.user_config.cam_implementation
+        implementation = str(implementation).strip()
+        if not implementation:
+            raise Exception("No 'cam' implementation is configured")
+
+        package, separator, format_name = implementation.rpartition(":")
+        if not separator:
+            # A package on its own: the file type is 'gcode', which is what the
+            # built-in package calls its only one and what a package publishing
+            # one route implementation is most likely to call its own.
+            package, format_name = implementation, "gcode"
+        format_name = format_name or "gcode"
+        package = self._resolve_implementing_package(ctx, package, own)
+
+        options_project = ctx.get_project(package)
+        if options_project is None:
+            raise Exception(
+                "The package implementing 'cam' is not found: %s. "
+                "Add it to this package's 'dependencies:', or name another one." % package
+            )
+        if getattr(options_project, "broken", False):
+            # A package that failed to load answers every question about itself
+            # with nothing, so without this the next thing to go wrong is
+            # 'cam_getopts' reporting that the implementation declared no
+            # 'extension:' -- which sends the reader to look at a file that was
+            # never read.
+            raise Exception(
+                "The package implementing 'cam' did not load: %s. "
+                "The reason is reported above; a dependency that could not be fetched is the usual one."
+                % options_project.name
+            )
+        return options_project, format_name
 
     def _resolve_implementing_package(self, ctx, package: str, own: bool) -> str:
         """Make a package name absolute, from the point of view of whoever said it.
@@ -1615,14 +1986,16 @@ class Shape(ShapeConfiguration):
         """Where the boundary conditions this analysis was given actually are.
 
         The part names interfaces; a solver needs coordinate frames. The lookup
-        is the very one 'pc render --with-ports' does, so a user who cannot work
-        out why a fixture did nothing can draw the same ports on a projection and
-        look at them.
+        is the very one 'pc render --with-ports --with-internals' does, so a user
+        who cannot work out why a fixture did nothing can draw the same ports on
+        a projection and look at them. All the way down rather than to the first
+        boundary: a load is carried by a face of something, and on an assembly
+        that something is one of the parts inside it.
         """
         from .render_overlay import Overlay, collect_async
 
         try:
-            records = await collect_async(self, ctx, Overlay(ports=True))
+            records = await collect_async(self, ctx, Overlay(ports=True, internals=True))
         except Exception as e:
             raise pc_cae.CaeConfigError(
                 "Failed to locate the ports the '%s:' section names: %s" % (config.analysis, e)
@@ -1769,7 +2142,7 @@ class Shape(ShapeConfiguration):
             # next run copies them; giving each run its own path instead would
             # take that name away from everyone who relies on it.
             async with self.locked():
-                ctx.ensure_dirs_for_file(final_filepath)
+                ctx.ensure_dirs_for_file(final_filepath, self.name)
                 # A model is the answer to *this* run, and the path it goes to
                 # is stable -- '<part>.<analysis>.<extension>', beside the
                 # package. So one an earlier run left there would satisfy the
@@ -1844,6 +2217,331 @@ class Shape(ShapeConfiguration):
     ) -> dict:
         """`analyze_async` for a caller that has no event loop of its own."""
         return asyncio.run(self.analyze_async(ctx, analysis, implementation, project, filepath, output_dir, **kwargs))
+
+    async def route_async(
+        self,
+        ctx: Context,
+        implementation: Optional[str] = None,
+        project: Optional[Project] = None,
+        filepath=None,
+        output_dir=None,
+        machine: Optional[str] = None,
+        **kwargs,
+    ) -> dict:
+        """Produce the route file this shape declares, and report what it is.
+
+        Args:
+            ctx: Execution context.
+            implementation: '<package>:<file type>' naming who produces it,
+                overriding the user configuration's default for this run.
+            project: The package the object belongs to, whose 'cam:' section
+                re-tunes the implementation's parameters.
+            filepath: The file to write. None resolves it from the
+                configuration and the object's name.
+            output_dir: Where the file goes when 'filepath' does not say.
+            kwargs: Job parameters, overriding what the configuration says.
+
+        Returns:
+            The route file that was written, what it took, and anything the
+            implementation wanted said about it, as plain data.
+
+        Raises:
+            partcad.cam.CamConfigError: the object declares no 'cam:' section,
+                or declares one that cannot be made sense of. Both are answers
+                to the user's question rather than failures, and both are
+                reported as the sentence they carry - which is what lets a run
+                over a whole package tell the objects it skips from the one
+                that is broken.
+            partcad.cam.CamFailed: the implementation was asked and produced no
+                route.
+        """
+        try:
+            config = pc_cam.config_of(self, machine)
+        except pc_cam.CamConfigError as e:
+            # Named, because a run over a package reports one line per object
+            # and "'cam: tool:' is not a length" against forty parts is a
+            # sentence with no address on it. Done here rather than in
+            # 'partcad.cam', which deliberately knows nothing about shapes.
+            raise self._cam_config_error(e) from e
+        if config is None:
+            raise pc_cam.CamConfigError(
+                "%s:%s says nothing about being cut, so there is nothing to route" % (self.project_name, self.name)
+            )
+
+        if project is None:
+            project = ctx.get_project(self.project_name)
+        # '-i' first, then what the object declared, then the user
+        # configuration. The object's own answer sits in the middle because it
+        # is a statement about the object -- the post-processor its numbers were
+        # written for -- and the two things that outrank it are the two that are
+        # about this run and this machine.
+        try:
+            options_project, format_name = self._route_implementation(
+                ctx, implementation, declared=config.implementation
+            )
+        except pc_cam.CamConfigError as e:
+            raise self._cam_config_error(e) from e
+        except Exception as e:
+            # Naming who should produce the route is configuration, so failing
+            # to resolve that name is a 'CamConfigError' and not a plain one.
+            # The type is what decides the blast radius: a package-wide run
+            # gathers these, and '_route_packages_async' re-raises anything it
+            # does not recognise -- so an unresolvable implementation used to
+            # abort the whole request and discard the routes already produced
+            # for every other object in the package.
+            raise self._cam_config_error(
+                pc_cam.CamConfigError("the 'cam' implementation could not be resolved: %s" % e)
+            ) from e
+
+        try:
+            return await self._route_run_async(
+                ctx, config, project, options_project, format_name, filepath, output_dir, kwargs, machine
+            )
+        except pc_cam.CamConfigError as e:
+            # The same naming, for the layers underneath the object: a feed the
+            # *package* wrote in a spelling nothing can read is reported against
+            # every object it covers, and each of those reports has to say which
+            # object could not be routed because of it.
+            raise self._cam_config_error(e) from e
+        except pc_runtime.SandboxUnavailable:
+            # Neither is the implementation failing, and neither gets the
+            # report. The first is the object's own section being wrong, which
+            # is answered by editing it; the second is this machine having no
+            # sandbox, so nothing was ever asked.
+            raise
+        except Exception as e:
+            # Everything else is "asked, and no route", and every caller says so
+            # the same way. Written here rather than by each of them because
+            # this is where the implementation's name is known.
+            raise pc_cam.CamFailed(
+                pc_cam.dysfunction_report(
+                    "%s:%s" % (self.project_name, self.name),
+                    "%s:%s" % (options_project.name, format_name),
+                    e,
+                )
+            ) from e
+
+    def _route_machine_data(self, machine: Optional[str] = None) -> dict:
+        """Which machine this route is written for, as the request says it.
+
+        Empty for everything that declares no machine: an assembly, a part made
+        some other way, anything with no `manufacturing:` section at all. An
+        implementation that gets nothing writes what it has always written,
+        which is a CNC program -- so such an object is unaffected by any of this.
+
+        **A sketch is asked like anything else.** A drawing declares the section
+        with no `method:` in it -- it is not made out of anything, it is a path a
+        machine follows -- and `_read_machines` reads that case on purpose. So
+        the answer has to come from what the object declared rather than from
+        what class it is: a `not isinstance(self, Part)` here returned `{}` for a
+        sketch that had named a `laser:`, its `machine`, `toolAxis` and `kerf`
+        never reached the request, and the drawing was handed to the *router*
+        emitter -- which asked it for a cutter diameter a beam does not have.
+
+        Read from the part's own declaration rather than passed in as a job
+        parameter, because the machine is not something a run gets to re-tune:
+        `pc cam` on a laser-cut part produces a laser program on anybody's
+        machine, and the day it does not is the day somebody sends a router
+        program to a laser. What a run *may* do is choose between the machines
+        the part itself named, which is what `machine` is.
+
+        Raises:
+            partcad.cam.CamConfigError: the part named a machine and the naming
+                cannot be read -- a `laser:` that is not a section, a key that
+                machine does not take, an axis that is not one. `route_async`
+                already wraps this call's caller in a `try` that re-raises such
+                an error through `_cam_config_error`, so it is raised bare here
+                and named there.
+
+        It has to *refuse* rather than fall back, and that is the whole reason
+        this is not a `debug` line. `_read_machines` records such a declaration
+        in `machine_error` and keeps no machine, which is indistinguishable here
+        from the part that simply named none -- and a part that named none
+        routes as CNC. (`cam.declared_config` refuses first for the same reason,
+        which makes this the backstop; the sentence is the same either way.) So a part whose `laser:` subsection has a typo in it
+        would be handed a *router* program, silently. `pc test` reporting it too
+        is not enough, because nothing makes `pc cam` wait for `pc test`.
+        """
+        try:
+            from .part_config import PartConfiguration
+
+            manufacturing_data = PartConfiguration.get_manufacturing_data(self)
+        except Exception as e:  # pylint: disable=broad-except
+            raise pc_cam.CamConfigError("the 'manufacturing:' section could not be read: %s" % e) from e
+        machine_error = getattr(manufacturing_data, "machine_error", None)
+        if machine_error:
+            # A backstop rather than the refusal a user meets: `declared_config`
+            # reads the same field and raises first, on every path that reaches
+            # here. Verbatim and not wrapped, so that the one fault reads as one
+            # sentence whichever of the two spoke it.
+            raise pc_cam.CamConfigError(machine_error)
+
+        chosen = manufacturing_data.machine_named(machine) if machine else manufacturing_data.machine
+        if chosen is None:
+            # Made some other way, so there is no machine to name and nothing
+            # wrong with that: an implementation handed nothing writes what it
+            # has always written. A part that named several and had none chosen
+            # never reaches here -- `cam.declared_config` refuses first, where
+            # the sentence can name the choices.
+            return {}
+        return chosen.to_data()
+
+    def _cam_config_error(self, error) -> "pc_cam.CamConfigError":
+        """One `cam:` configuration error, with the object it is about in front.
+
+        Idempotent by construction: it is applied where the error leaves
+        `route_async`, which is once.
+        """
+        return pc_cam.CamConfigError("%s:%s: %s" % (self.project_name, self.name, error))
+
+    async def _route_run_async(
+        self,
+        ctx: Context,
+        config,
+        project: Project,
+        options_project: Project,
+        format_name: str,
+        filepath,
+        output_dir,
+        kwargs: dict,
+        machine: Optional[str] = None,
+    ) -> dict:
+        """'route_async' once it knows what to run and who runs it.
+
+        Split out so that the caller can say what every failure in here means
+        without a ninety-line 'try:' around the part that does the work - the
+        same split 'analyze_async' and '_analysis_run_async' are.
+        """
+        with pc_logging.Action("CAM", self.project_name, self.name):
+            impl, final_filepath = self.cam_getopts(ctx, format_name, project, filepath, options_project, output_dir)
+            if machine is not None and (filepath is None or os.path.isdir(filepath)):
+                # 'panel.laser.nc' beside 'panel.drill.nc'. Only when a machine
+                # was chosen, which only happens when the part offered more than
+                # one -- so an object with a single machine keeps the name it
+                # has always had, and a caller that named a path gets that path.
+                #
+                # A directory is not naming a path: 'cam_getopts' has just read
+                # it as the *output_dir* and derived the filename from the
+                # object, which is the same filename for every machine. Asking
+                # the same question it asked is what keeps two alternatives from
+                # resolving to one file -- where the second route deletes the
+                # first before writing itself, and the run reports two.
+                root, extension = os.path.splitext(final_filepath)
+                final_filepath = "%s.%s%s" % (root, machine, extension)
+            final_filepath = os.path.abspath(final_filepath)
+
+            # Clearing the path, writing it and checking it afterwards are one
+            # operation on one file, and the path is derived from the shape --
+            # so a second run over the same shape resolves to the same path and
+            # would otherwise interleave with this one. Held for all three; the
+            # nested 'get_wrapped' and '_run_implementation_async' take the same
+            # re-entrant lock without waiting for it.
+            async with self.locked():
+                ctx.ensure_dirs_for_file(final_filepath, self.name)
+                # A route is the answer to *this* run, and the path it goes to
+                # is stable. So one an earlier run left there would satisfy the
+                # check below and be handed back as the new result: last week's
+                # depths under today's tool, with nothing to say they are not
+                # today's. Removed before the implementation is asked, which
+                # makes the file's existence afterwards mean what it is read as
+                # meaning -- the same thing 'analyze_async' does and for the
+                # same reason.
+                if os.path.exists(final_filepath):
+                    os.remove(final_filepath)
+
+                obj = await self.get_wrapped(ctx)
+                if obj is None:
+                    raise Exception("Cannot route '%s': shape is empty" % self.name)
+
+                script = await self._materialize_output_script(ctx, impl)
+                # Handed no kwargs, deliberately: '_output_request' applies them
+                # before the object's own section is merged in, and the object
+                # would then overwrite the very values this call was given.
+                # 'route_async' promises the opposite -- an explicit parameter
+                # is the most specific thing anybody said -- so they go on top,
+                # below.
+                request = await self._output_request(ctx, obj, impl, {})
+                # The object's own job, on top of the file type's parameters:
+                # only what the object actually declared, so that a package that
+                # set a tool for all of its parts still answers for the ones
+                # that did not name one (see 'partcad.cam.CamConfig.to_data').
+                request.update(config.to_data())
+                # And last, what this call was told: 'pc cam' passes none today,
+                # but 'route_async(tool=...)' is the documented way to route one
+                # object against another cutter without editing its section.
+                request.update({key: value for key, value in kwargs.items() if value is not None})
+                # And last of all, which machine this is cut on. It comes from
+                # the part's 'manufacturing:' section rather than from any of
+                # the three layers above, so it is applied after them and
+                # cannot be overridden by a 'cam:' key: what a part is made on
+                # is a property of the part, not a parameter of the route, and
+                # a route written for a laser by a section that said 'machine'
+                # would be a program for a machine nobody owns.
+                request.update(self._route_machine_data(machine))
+                # And then every layer of it converted together. The object's
+                # own values are already numbers; the ones the package and
+                # '//builtin/cam' contributed have never been near a parser, and
+                # a '2400 mm/min' written one layer down is as much PartCAD's to
+                # understand as the same words written on the object.
+                request = pc_cam.normalize_job(request)
+
+                result = await self._run_implementation_async(ctx, impl, script, request, final_filepath)
+
+                if result is None:
+                    raise Exception("The '%s' implementation reported nothing: %s" % (format_name, script))
+                if not result.get("success", False):
+                    raise Exception(
+                        "No route for %s:%s: %s"
+                        % (self.project_name, self.name, result.get("exception", "Unknown error"))
+                    )
+                written = os.path.exists(final_filepath)
+
+        if not written:
+            # The meta-wrapper reports what the script returned and does not look
+            # at the path, so "success" alone is the script's word for it. A
+            # caller acts on 'filepath' -- the CLI prints it, and whoever sends
+            # it to a machine opens it -- so a path to nothing is worse than a
+            # refusal. Sound only because the path was cleared above.
+            raise Exception("The route for %s:%s was not written: %s" % (self.project_name, self.name, final_filepath))
+        for warning in result.get("warnings") or []:
+            pc_logging.warning("%s:%s: %s" % (self.project_name, self.name, warning))
+
+        return {
+            "object": "%s:%s" % (self.project_name, self.name),
+            "implementation": "%s:%s" % (options_project.name, format_name),
+            "filepath": final_filepath,
+            "extension": os.path.splitext(final_filepath)[1].lstrip("."),
+            # Whatever the implementation counted. Reported rather than
+            # interpreted: what is worth knowing about a route differs between a
+            # router and a wire EDM, and a fixed set of keys here would be
+            # PartCAD deciding that on their behalf (see 'cam.route_report').
+            "stats": result.get("stats") or {},
+            "warnings": list(result.get("warnings") or []),
+        }
+
+    def route(
+        self,
+        ctx: Context,
+        implementation: Optional[str] = None,
+        project: Optional[Project] = None,
+        filepath=None,
+        output_dir=None,
+        **kwargs,
+    ) -> dict:
+        """'route_async' for a caller that has no event loop of its own."""
+        # By keyword, for the reason 'render' carries at length: a parameter
+        # added to the middle of 'route_async' would otherwise silently
+        # re-address every argument after it here.
+        return asyncio.run(
+            self.route_async(
+                ctx,
+                implementation=implementation,
+                project=project,
+                filepath=filepath,
+                output_dir=output_dir,
+                **kwargs,
+            )
+        )
 
     async def render_svg_somewhere_async(
         self,
@@ -1929,7 +2627,7 @@ class Shape(ShapeConfiguration):
                 command = [wrapper.get("solidity.py"), os.path.join(unused_dir, "unused.txt")]
                 exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
             if exitcode != 0 and len(errors) == 0:
-                errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+                errors = command_failure(command, exitcode)
             if errors:
                 pc_logging.error(errors)
                 raise Exception(errors)
@@ -1981,7 +2679,7 @@ class Shape(ShapeConfiguration):
                 command = [wrapper.get("bbox.py"), os.path.join(unused_dir, "unused.txt")]
                 exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
             if exitcode != 0 and len(errors) == 0:
-                errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+                errors = command_failure(command, exitcode)
             if errors:
                 pc_logging.error(errors)
                 raise Exception(errors)
@@ -2015,6 +2713,122 @@ class Shape(ShapeConfiguration):
 
     def get_max_dimension(self, ctx):
         return asyncio.run(self.get_max_dimension_async(ctx))
+
+    async def get_metadata_async(self, ctx):
+        """Everything recorded about this shape when it was built, or None.
+
+        The three sections 'shape_envelope' defines - what the geometry
+        measures, what its source stated about its elements, what that source
+        stated about itself - as one dict, exactly as the wrapper that built the
+        shape produced them.
+
+        Materializing the shape is what produces this, and materializing it from
+        the cache is what reads it back: the metadata lives in the same cache
+        entry as the geometry, so a hit carries both and there is no second
+        lookup to make and no second entry to be missing. That is the whole
+        reason this is cheap enough to ask for.
+
+        'None' for a shape that recorded nothing - one that did not build, or
+        one whose geometry could not be measured. A reader cannot tell those
+        apart and should not: all of them mean "nothing to report".
+
+        Internally the two *are* told apart, because they decide different
+        things: 'None' on the attribute means nobody has looked yet and is what
+        sends this to build the shape, while an empty dict means the shape has
+        been materialized and recorded nothing. Without that an object with
+        nothing to report would rebuild on every ask.
+        """
+        if self._metadata is None:
+            await self.get_wrapped(ctx)
+        return self._metadata or None
+
+    async def get_measurements_async(self, ctx):
+        """How big this shape is and how much of it there is, or None.
+
+        ``{"bbox": [...] | None, "volume": float | None, "solids": int}`` - the
+        box in the shape's own coordinates and without the gap OCCT pads one by,
+        the volume in cubic millimetres, and how many solids that is the volume
+        of.
+
+        Measured as the shape was *built*, in the process that held the live
+        geometry, and carried here in the envelope's metadata. Nothing is
+        computed on demand: by the time anybody asks, either the shape has been
+        built - in which case the numbers came back with it - or it has not, in
+        which case building it is what produces them, and that is the same work
+        as answering any other question about it.
+        """
+        metadata = await self.get_metadata_async(ctx)
+        return shape_envelope.metadata_section(metadata, shape_envelope.METADATA_MEASUREMENTS)
+
+    async def get_annotations_async(self, ctx) -> list:
+        """What this shape's source said about its individual elements.
+
+        One opaque record per element, as the importing wrapper read them. A
+        DXF states these as XDATA against a line, which is where the angle and
+        the radius of a sheet metal bend come from; a source that states nothing
+        of the kind yields an empty list.
+
+        The records are the source's own vocabulary and are never read into
+        here. What asks the real question is a manufacturing check, and it has
+        no business knowing which format answered.
+        """
+        metadata = await self.get_metadata_async(ctx)
+        return shape_envelope.metadata_section(metadata, shape_envelope.METADATA_ANNOTATIONS) or []
+
+    async def _reported_async(self, ctx):
+        """What 'pc info' adds to a shape once the shape itself has been built.
+
+        All of it comes out of the one metadata dict the shape was built with,
+        and it is reported in two registers:
+
+        The measurements are the generic half and are named here, because they
+        are the same three numbers for every shape whatever produced it.
+        ``BoundingBox`` is the measured box as ``min``/``max``/``size`` triples
+        of millimetres. ``size`` is stated rather than left to be subtracted -
+        it is the one of the three anybody reads out loud. ``Volume`` is in
+        cubic millimetres and ``Solids`` is how many solids that is the volume
+        of; both are left out for a shape holding no solid at all, because a
+        volume of zero and no volume to speak of are different things. A
+        negative volume is reported as it stands: the faces are oriented inward,
+        which is worth seeing rather than taking the modulus of.
+
+        Everything else is merged in **as the wrapper named it**. The sections
+        are a STEP file's or a DXF drawing's own vocabulary, and the core has no
+        business translating one into the other - it did not read the file and
+        does not know which format answered.
+        """
+        info = {}
+
+        metadata = await self.get_metadata_async(ctx)
+        if not metadata:
+            return info
+
+        measured = shape_envelope.metadata_section(metadata, shape_envelope.METADATA_MEASUREMENTS)
+        if measured:
+            box = measured.get(shape_envelope.METADATA_BBOX)
+            if box:
+                info["BoundingBox"] = {
+                    "min": list(box[:3]),
+                    "max": list(box[3:]),
+                    "size": [box[axis + 3] - box[axis] for axis in range(3)],
+                }
+            if measured.get(shape_envelope.METADATA_VOLUME) is not None:
+                info["Volume"] = measured[shape_envelope.METADATA_VOLUME]
+                info["Solids"] = measured.get(shape_envelope.METADATA_SOLIDS, 0)
+
+        sections = shape_envelope.metadata_section(metadata, shape_envelope.METADATA_SECTIONS)
+        if sections:
+            info.update(sections)
+
+        # The per-element records are deliberately *not* reported from here.
+        # They are carried for 'get_annotations_async()', whose caller is a
+        # manufacturing check that needs every element including the ones
+        # nothing was written against. Deciding which of them are worth showing
+        # a reader means reading into a record, and what a record holds is the
+        # producing wrapper's vocabulary - so the wrapper reports the ones worth
+        # showing under a heading of its own, in 'sections' above, and this
+        # stays unable to tell a bend angle from a layer name.
+        return info
 
     async def _run_test_async(self, ctx: Context, tests: list | None = None, use_wrapper: bool = False) -> bool:
         if not self.finalized:

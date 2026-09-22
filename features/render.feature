@@ -6,6 +6,49 @@ Feature: `pc render` command
     Given I have temporary $HOME in "/tmp/sandbox/home"
     Given a file named "partcad.yaml" does not exist
 
+  @success @pc-render @pc-render-parametrized
+  Scenario: Each reading of one drawing renders to a file of its own
+    # A sketch read with particular parameter values is an object of its own -
+    # 'examples/produce_part_sheet_metal' holds one DXF with two bend lines on
+    # two layers, and three parts read it: one folded at each line, and one
+    # folded at both - and the file each reading is written to is named after
+    # it, parameters and all. Both ';' and '=' are legal in a filename
+    # everywhere PartCAD runs; '/' and ':' are the ones that are not, and
+    # neither can appear in an object name.
+    #
+    # What this rules out is the two ways it could go wrong: a reading that
+    # writes nothing, and readings that write over each other or over the
+    # projection of the drawing itself.
+    # Written with the multi-line form and *double* quotes on purpose. A
+    # parameterized name holds ';', which a POSIX shell reads as a command
+    # separator, so it has to be quoted -- and these commands run through
+    # 'subprocess.run(shell=True)', which is 'cmd.exe' on Windows, where "'"
+    # quotes nothing and would be passed through as part of the name. The
+    # object would then begin "'" rather than ':', 'resolve_resource_path'
+    # would cut the package at the ':' after it, and the render would be asked
+    # for a package named "'".
+    When I run command
+      """
+      pc --no-ansi -p $PARTCAD_ROOT/examples render --package //produce_part_sheet_metal -t svg -O ./ -s ":panel;include=BEND_UP"
+      """
+    Then the command should exit with a status code of "0"
+    When I run command
+      """
+      pc --no-ansi -p $PARTCAD_ROOT/examples render --package //produce_part_sheet_metal -t svg -O ./ -s ":panel;include=BEND_DOWN"
+      """
+    Then the command should exit with a status code of "0"
+    When I run command
+      """
+      pc --no-ansi -p $PARTCAD_ROOT/examples render --package //produce_part_sheet_metal -t svg -O ./ -s ":panel;include=BEND_UP,BEND_DOWN"
+      """
+    Then the command should exit with a status code of "0"
+    Then a file named "panel;include=BEND_UP.svg" should be created
+    And a file named "panel;include=BEND_DOWN.svg" should be created
+    And a file named "panel;include=BEND_UP,BEND_DOWN.svg" should be created
+    # Nobody asked for the drawing itself, and nothing wrote it: a reading that
+    # lost its parameters on the way to a filename would have landed here.
+    And a file named "panel.svg" should not exist
+
   Scenario Outline: `pc render` command
     When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t <type> -O ./ -a :logo_embedded"
     Then the command should exit with a status code of "0"
@@ -84,9 +127,14 @@ Feature: `pc render` command
   # gains a layer per overlay, and only for the overlay that was asked for. SVG
   # because it is the format that says so in text; the other three are the same
   # projection converted (see `//builtin/render`).
+  #
+  # `--with-internals` because the object is an assembly and this one
+  # externalizes nothing: an assembly is taken at its word, so the ports being
+  # drawn here are the ones inside it (see "Ports and interfaces of an
+  # assembly").
   @type-image
   Scenario Outline: `pc render` writes a layer per overlay
-    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_interface -t svg -O ./ -a <option> connect-mates"
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_interface -t svg -O ./ -a --with-internals <option> connect-mates"
     Then the command should exit with a status code of "0"
     Then a file named "connect-mates.svg" should be created
     Given a file named "partcad.yaml" does not exist
@@ -149,6 +197,17 @@ Feature: `pc render` command
       |          --view isometric  |
       |      --viewport-origin 1,2 |
       |        --viewport-up 0,0,0 |
+
+  # A name with a "/" in it is a projection in a sub-directory of that name,
+  # created on the way -- the same thing `pc export` does with the file it
+  # writes. `feature_import` declares its parts that way in `partcad.yaml`.
+  @type-image
+  Scenario: `pc render` of a part whose name has a "/" in it
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package //feature_import -t svg -O ./ :AeroAssembly_assy_example/AeroFrame_Cap"
+    Then the command should exit with a status code of "0"
+    Then a file named "AeroAssembly_assy_example/AeroFrame_Cap.svg" should be created
+    Given a file named "partcad.yaml" does not exist
+    Then STDERR should contain "DONE: Render: //pub/examples/partcad/feature_import:"
 
   @type-guide
   Scenario: `pc render -t pdf` refuses an assembly that is not meant to be built

@@ -40,6 +40,16 @@ a CAD addon, or documentation.
   owns it: a copy on each side is a copy that can disagree, and a disagreement is a client silently starting a
   second daemon.
 
+  `config_report` is here for the same reason one level down: it is how a configuration and a `PC_*`
+  environment are *read back* — by `pc config`, by `pc system status config|env`, and by the daemon answering
+  `pc daemon status config|env` for its own side. What it really holds is the redaction, and a redaction rule
+  with a copy per caller is a rule with copies that stop redacting.
+
+  `staging` is there for the same reason again, and is the other thing the two ends have to agree on: an
+  assembly is built in two phases, and a daemon that finds sub-assemblies nobody has built yet does no work
+  and answers "not yet — build these first", naming them. A client that reads that from a different copy of
+  the rule reports the daemon's "ask me again" to the user as a failure.
+
 * [src/partcad_client](./src/partcad_client):
 
   What a **client** does, and a daemon must not: discovering the daemon serving a workspace and connecting to
@@ -164,7 +174,7 @@ runner. There the container is not a thing to insist on; it is a thing that cann
 to install into the checkout and run everything directly:
 
 ```bash
-./dev-tools/setup-native.sh          # poetry install, OpenSCAD, and what installing outside the container gets wrong
+./dev-tools/setup-native.sh          # git-lfs, poetry install, OpenSCAD, and what installing outside the container gets wrong
 ```
 
 Then drop the `devcontainer exec` prefix from every command below and keep the `poetry run` one.
@@ -173,6 +183,25 @@ That script installs **OpenSCAD** as part of setting up, because PartCAD treats 
 rather than as an optional extra — the standalone bundles carry one, `pc healthcheck` asks after it, and a
 `.scad` part fails without it rather than degrading. It stops if it cannot get one, rather than leaving that
 to be found by a test run half an hour later.
+
+That script also installs **git-lfs** and runs `git lfs install --local`, and that one is not a convenience.
+`.gitattributes` routes every `.png`, `.jpg` and `.svg` through the `lfs` filter, and git resolves a `filter=`
+attribute naming a driver that no config defines by storing the file *verbatim* — no warning, no error,
+nothing in the commit to look at. So committing an image from a machine without git-lfs writes raw bytes at
+a path declared to hold a pointer, and the damage surfaces only on someone else's machine, as `Encountered N
+files that should have been pointers, but weren't` plus N files that `git checkout` cannot clean (git keeps
+cleaning their real bytes into a pointer and comparing that against a raw blob). The four images under
+`examples/feature_render/images/` were committed that way and have since been repaired. Repairing such a file
+is `git add --renormalize <path>` and a commit; the raw blob stays in history, which for a handful of small
+images is not worth a `git lfs migrate` rewrite of a shared branch.
+
+Every exception is written down in `.gitattributes`, with its reason beside it, and most of them are build
+**inputs** — the `.ico`, the `.bmp`s, `logo_128x128.png`, the extension's and the FreeCAD workbench's `.svg`
+icons, the `.svg` sketches two examples *read* as parts. That rule exists because no checkout in
+`.github/workflows` passes `lfs: true`, so anything a build reads back must not be an LFS pointer. Rendered
+output that nothing reads back belongs in LFS. Read the file before adding to that list: not every entry is a
+build input — `produce_sketch_basic` is held out on size instead — and an exemption granted for the wrong
+reason is the kind that is never revisited.
 
 This is still a fallback and not a second supported environment. What it does not give you:
 
@@ -194,6 +223,14 @@ This is still a fallback and not a second supported environment. What it does no
 * **conda.** Without it the Python sandbox falls back to `venv`, which is a real sandbox and passes the suite;
   it just cannot provision an *interpreter version*, so a package asking for a Python this host does not have
   renders on the host's and says so. See `pythonSandbox` in `src/partcad_utils/user_config.py`.
+
+`pc healthcheck --filters sandbox` says which of those two this machine has. Missing conda and a missing
+container runtime are each a warning, since either one alone renders everything; `SandboxAvailable` is the
+one check that exits non-zero. It asks "conda or a container" only where nothing was declared, which is
+where PartCAD is the one choosing; a stated `pythonSandbox` is checked against what that sandbox needs, so
+`PC_PYTHON_SANDBOX=venv` passes on a machine with neither. Whatever asks "can we use Docker here" asks
+`runtime.docker_enabled()` — permission (`useDocker`) and a real ping, cached — so the healthcheck, the
+sandbox default and the KiCad importer cannot come to different conclusions about the same machine.
 
 **Never run the whole `behave` suite here — run the one feature a change touches.** Every scenario takes a
 throwaway `$HOME` (the `Given I have temporary $HOME` in each feature's `Background`), so a scenario that
@@ -269,6 +306,14 @@ poetry run pytest tests cad/freecad \
   -x -p no:error-for-skips -p no:warnings --dist no                                        # unit tests (matches CI)
 poetry run behave                                                                        # integration tests (./features)
 ```
+
+**A warm daemon outlives a checkout, and one test says so.** `pc version` reports the version of the
+`partcad` the *daemon* loaded, which is the useful answer and not this process's — so after anything that moves
+the tree across a version bump (a rebase, a branch switch), a daemon still running the old code fails
+`tests/partcad_cli/unit/test_version.py::test_version` against the new `partcad_cli.__version__`, and passes
+again when run on its own once that daemon has been replaced. It is the skew being reported rather than a flake:
+`pc daemon stop` before re-running, and read it as a reminder that every other local run was served by that
+same daemon.
 
 CI fans these out over operating systems, and how much of that fan-out a run gets is decided in two places,
 which answer two different questions.
@@ -378,11 +423,22 @@ diff someone has to look at rather than something a reader of the README discove
 projection or a generated document, re-render and commit the result. The `example-images` `pre-commit` hook
 catches the cheap half of this instantly (a README pointing at an image that is not checked in); the
 `Examples (PartCAD)` job in `test.yml` renders everything and fails if the tree changed, on one cell of the
-matrix because what is checked in is one rendering. Every output type PartCAD implements is byte-stable, DXF
-included: the built-in DXF renderer suppresses the timestamp and GUIDs a DXF is otherwise stamped with and
-pins the order of its `CLASSES` section, under the `reproducible` parameter of the `dxf` file type (on by
-default). An implementation another package supplies may not be, and those files are named one by one in that
-job's `UNSTABLE` list — keep it short, and give every entry a reason there and in the package it belongs to.
+matrix because what is checked in is one rendering.
+
+**Every drawing under `examples/` is rendered with `reproducible: true`, and a new one has to say so too.**
+That is the flag every `render:` and `export:` file type takes, `false` by default, and it is what makes a
+checked-in drawing a baseline rather than a diff every time: the SVG projection goes through OpenCASCADE's
+exact hidden-line algorithm instead of the polygonal one (the polygonal one projects a triangulation, which
+differs between architectures), every number is rounded to the `precision` the file type claims, and a DXF
+gets fixed header metadata instead of the clock and a fresh pair of GUIDs. It is off by default because the
+exact projection is the slower of the two and is the one that can walk off the end of an OCCT allocation — a
+picture produced only to be looked at should be the fastest correct one. See `examples/partcad.yaml`, which
+says all of this once for the tree, and `output.REPRODUCIBLE_KEY`.
+
+It is a floor and not a promise: it settles everything PartCAD chooses, and what is left is the CAD kernel's
+arithmetic, on which two architectures can still disagree along a curved silhouette. An implementation
+another package supplies may not be reproducible at all, and those files are named one by one in that job's
+`UNSTABLE` list — keep it short, and give every entry a reason there and in the package it belongs to.
 
 **Coverage is merged in the repository, not by a service.** Codecov is gone: every suite uploads its raw
 `.coverage` data as a `coverage-data-*` artifact, and the `Coverage` job in `test.yml` runs
@@ -575,6 +631,12 @@ pre-commit run --config dev-tools/pre-commit-config.yaml
 
 Hooks that reformat files (`trailing-whitespace`, `end-of-file-fixer`) rewrite them in place — re-stage
 anything they touch, then commit.
+
+**A `-F <file>` message has to live inside the workspace.** The commit runs in the container, and the only
+host directory that reaches it is the bind-mounted checkout — so a message written to the host's `/tmp` fails
+with `fatal: could not read log file '/tmp/...': No such file or directory`, *after* the whole hook suite has
+run. Write it under the repository instead (`.git/` is in the bind mount and is never committed) and pass it as
+a relative path.
 
 **If `git commit` fails with `` `pre-commit` not found ``, you are committing on the host, not in the
 container.** `.git/hooks/pre-commit` is generated by `pre-commit install` running *inside* the container, so it

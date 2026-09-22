@@ -21,7 +21,9 @@ from partcad_client import client as client_module
 from partcad_client.client import DaemonClient, DaemonError, DaemonStalled
 from partcad_service_json_rpc.core import events
 from partcad_service_json_rpc.core.session import Session
+from partcad_service_json_rpc.rpc.dispatcher import JsonRpcError
 from partcad_service_json_rpc.transport.socket_server import SocketServer
+from partcad_utils import staging
 
 if not hasattr(socket, "AF_UNIX"):
     pytest.skip("AF_UNIX not available on this platform", allow_module_level=True)
@@ -349,3 +351,176 @@ def test_a_stalled_stdio_service_is_interrupted_rather_than_waited_on():
         assert "stopped responding" in str(caught.value)
     finally:
         read_stream.close()
+
+
+# ---- building an assembly in two phases -------------------------------------
+#
+# The client's half of 'partcad_utils.staging': a service that answers "not yet
+# -- build these first" is answered in kind, and only an answer it cannot act on
+# reaches the caller. Driven against the real socket server with a registry of
+# stand-in handlers, so what is exercised is the exchange rather than a mock.
+
+
+def _retry(items):
+    """What an operation raises when sub-assemblies have to be built first."""
+    return JsonRpcError(staging.RETRY_LATER, staging.error_message(items), staging.error_data(items))
+
+
+def _staging_registry(needs: dict):
+    """A registry where each assembly names what has to be built before it.
+
+    'needs' maps an assembly's name to the names it places. Asking for one
+    before those are built raises the retry error; 'assembly.instantiate' is
+    what marks one built, and every request made is recorded in order.
+    """
+    built = set()
+    calls = []
+
+    def instantiate(session, params):
+        calls.append((staging.INSTANTIATE_METHOD, params))
+        pending = [{"package": "//", "name": name} for name in needs.get(params["name"], []) if name not in built]
+        if pending:
+            raise _retry(pending)
+        built.add(params["name"])
+        return {"assembly": params["name"], "instantiated": True}
+
+    def inspect(session, params):
+        calls.append(("inspect.assembly", params))
+        pending = [{"package": "//", "name": name} for name in needs.get(params["name"], []) if name not in built]
+        if pending:
+            raise _retry(pending)
+        return {"shown": params["name"]}
+
+    return {staging.INSTANTIATE_METHOD: instantiate, "inspect.assembly": inspect}, calls
+
+
+def test_client_builds_the_subassemblies_the_service_asks_for_first(socket_dir):
+    registry, calls = _staging_registry({"top": ["unit"]})
+    server, path = _serve(socket_dir, registry)
+    try:
+        client = _client(path)
+        assert client.call("inspect.assembly", {"package": "//", "name": "top"}) == {"shown": "top"}
+        client.close()
+    finally:
+        server.stop()
+
+    assert [method for method, _ in calls] == [
+        "inspect.assembly",  # refused: 'unit' is not built
+        staging.INSTANTIATE_METHOD,  # 'unit', built and left there
+        "inspect.assembly",  # asked again, and answered
+    ]
+    # The result of a staging request stays on the service: this end asked for
+    # the cache entry, not for the geometry.
+    assert calls[1][1] == {
+        "package": "//",
+        "name": "unit",
+        staging.KIND: staging.KIND_ASSEMBLY,
+        staging.CACHE_ONLY: True,
+    }
+
+
+def test_client_builds_a_nested_tree_one_assembly_at_a_time(socket_dir):
+    """A staging request is an assembly request, so it can be refused in its turn."""
+    registry, calls = _staging_registry({"top": ["mid"], "mid": ["leaf"]})
+    server, path = _serve(socket_dir, registry)
+    try:
+        client = _client(path)
+        assert client.call("inspect.assembly", {"package": "//", "name": "top"}) == {"shown": "top"}
+        client.close()
+    finally:
+        server.stop()
+
+    assert [(method, params["name"]) for method, params in calls] == [
+        ("inspect.assembly", "top"),
+        (staging.INSTANTIATE_METHOD, "mid"),  # refused in its turn
+        (staging.INSTANTIATE_METHOD, "leaf"),
+        (staging.INSTANTIATE_METHOD, "mid"),  # now that 'leaf' is there
+        ("inspect.assembly", "top"),
+    ]
+
+
+def test_client_builds_a_shared_subassembly_once(socket_dir):
+    """Two branches over one assembly are one build, not two."""
+    registry, calls = _staging_registry({"top": ["left", "right"], "left": ["shared"], "right": ["shared"]})
+    server, path = _serve(socket_dir, registry)
+    try:
+        client = _client(path)
+        assert client.call("inspect.assembly", {"package": "//", "name": "top"}) == {"shown": "top"}
+        client.close()
+    finally:
+        server.stop()
+
+    staged = [params["name"] for method, params in calls if method == staging.INSTANTIATE_METHOD]
+    assert staged.count("shared") == 1
+
+
+def test_the_context_travels_with_a_staging_request(socket_dir):
+    """A warm service serves several contexts; the wrong one is another workspace."""
+    registry, calls = _staging_registry({"top": ["unit"]})
+    server, path = _serve(socket_dir, registry)
+    try:
+        client = _client(path)
+        client.call("inspect.assembly", {"package": "//", "name": "top", "context": "ctx-7"})
+        client.close()
+    finally:
+        server.stop()
+
+    assert calls[1][1]["context"] == "ctx-7"
+
+
+def test_a_scene_is_asked_for_as_a_scene(socket_dir):
+    """What the service named is what it is asked for, kind included."""
+    staged = []
+
+    def instantiate(session, params):
+        staged.append(params)
+        return {"instantiated": True}
+
+    def inspect(session, params):
+        if staged:
+            return {"shown": params["name"]}
+        raise _retry([{"package": "//", "name": "bench", staging.KIND: "scene"}])
+
+    server, path = _serve(socket_dir, {"inspect.scene": inspect, staging.INSTANTIATE_METHOD: instantiate})
+    try:
+        client = _client(path)
+        client.call("inspect.scene", {"package": "//", "name": "bench_alias"})
+        client.close()
+    finally:
+        server.stop()
+
+    assert staged[0][staging.KIND] == "scene"
+
+
+def test_a_service_that_asks_for_the_same_thing_twice_is_reported(socket_dir):
+    """The loop guard: an unbuildable sub-assembly ends the command, not the client."""
+
+    def never_satisfied(session, params):
+        raise _retry([{"package": "//", "name": "unit"}])
+
+    server, path = _serve(
+        socket_dir,
+        {"inspect.assembly": never_satisfied, staging.INSTANTIATE_METHOD: lambda s, p: {"instantiated": True}},
+    )
+    try:
+        client = _client(path)
+        with pytest.raises(DaemonError) as caught:
+            client.call("inspect.assembly", {"package": "//", "name": "top"})
+        # Says what actually happened, rather than repeating the service's
+        # "build these first" -- which is exactly what this end just did.
+        assert "asked again" in str(caught.value)
+        assert "//:unit" in str(caught.value)
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_an_ordinary_error_is_not_mistaken_for_a_staging_request(socket_dir):
+    server, path = _serve(socket_dir, {"boom": lambda s, p: (_ for _ in ()).throw(JsonRpcError(-32002, "no such"))})
+    try:
+        client = _client(path)
+        with pytest.raises(DaemonError):
+            client.call("boom")
+        client.close()
+    finally:
+        server.stop()

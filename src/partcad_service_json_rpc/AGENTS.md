@@ -17,6 +17,18 @@ The daemon owns two things its clients do not, and both decide what belongs on w
    client that edits `partcad.yaml` behind the daemon's back leaves it serving stale contents, which is why a
    package-mutating command (`add`, `import`) must be a daemon client and evict the context it changed
    (`_invalidate_context`).
+   A **failed** load is not kept either, for a reason of its own: the errors saying why are logged while the
+   context is being built, so a cached one would be a single command reporting "configuration file is not
+   found" and exiting non-zero followed by any number of commands answering with nothing and exiting zero --
+   one request that "fails" once and "works" from then on, and two spellings of it (`...` and `./...`) that
+   look like one of them is broken when what differs is which was typed first. So `context.create` drops a
+   context whose root package did not load and reads it again, which is also what makes a `partcad.yaml`
+   written after that first command visible without stopping the daemon. It costs nothing, because a root that
+   did not load imported no dependencies. That covers the root and only the root: an error logged while some
+   *other* package of the graph loaded (an unreachable dependency, an object a plugin could not enumerate) is
+   still reported once, by whichever command paid for the load, so the same command still exits non-zero then
+   zero. Remembering those with the packages they belong to, and re-reporting them for every answer that
+   includes one, is the rest of this problem and is not done yet.
    The context is warm across connections, which is why `activate` **reloads** `partcad` rather than importing
    it: `Session.load_partcad` drops `partcad` and `partcad.*` from `sys.modules` (along with `partcad_cli*` and
    `partcad_ide_client*`, but never this package, whose session is doing the dropping) and imports again,
@@ -39,10 +51,18 @@ The daemon owns two things its clients do not, and both decide what belongs on w
 A command stays in the client only when its inputs and outputs are the *client's own* state, which cannot cross
 the wire: `init` (bootstraps a workspace before any package exists), `config` (prints the client's resolved
 `user_config`, including its `--threads-max`/`PC_*` overrides), `healthcheck` (diagnoses the client host),
-`daemon start|stop`, and `system telemetry clear|info`. File paths are not a reason to stay local: a client
-sends an absolute path, `Project._validate_path` rejects anything outside the package, and `Project.rel_path`
-reports it back relative to the package that owns it — so the output does not depend on anyone's working
-directory.
+`daemon start|stop`, `system status ...` and `system telemetry clear|info`. File paths are not a reason to
+stay local: a client sends an absolute path, `Project._validate_path` rejects anything outside the package, and
+`Project.rel_path` reports it back relative to the package that owns it — so the output does not depend on
+anyone's working directory.
+
+`system status`, `system status config` and `system status env` each have a daemon-side twin — `daemon.status`,
+`daemon.status.config`, `daemon.status.env` — because the answers differ: the daemon's internal state
+directory, the configuration it resolved from its *own* environment when something first started it, and that
+environment itself, which is the one thing a client cannot reconstruct. None of them is the configuration a
+caller's command runs under; that travels with every `context.create` and is rebuilt per request. All three
+print through `partcad_utils.config_report`, which is also where the redaction lives — the daemon scrubs a
+credential before logging it, so a value the client has no business holding never reaches the wire.
 
 ## Layout
 
@@ -134,8 +154,9 @@ at all).
 
 Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|assembly|scene|file`,
 `export.part|assembly|scene`, `ai.regenerate|change`, `add.part|assembly|scene`, `package.load|path|refresh`, `init`,
-`list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults`, `test`, `info`, `activate`, and
-`rpc.discover`. Server-to-client
+`list.all`, `bom`, `assembly.guide`, `supply.quote`, `cae.analyze|defaults`, `cam.route`, `test`, `info`,
+`activate`, and `rpc.discover`. One method mirrors no subcommand — `assembly.instantiate`, which a client
+calls on its own behalf as the second half of a two-phase assembly build (see below). Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,
 `stats`, `terminal`, `execute`, and the `*Done`/lifecycle signals).
 
@@ -158,9 +179,84 @@ an analysis is user configuration, not a property of the object on screen, so th
 answer to fill it from -- least of all when the answer is the failure of a solver that is not installed, which
 is exactly when the user needs to see what was tried.
 
+`cam.route` runs something too, and it is the one method whose unit is a *package* rather than an object. With
+no `object` it routes every sketch and part that declares a `cam:` section and passes over the rest, so the
+enumeration is here rather than in a client -- and it reports every failure instead of stopping at the first,
+because a route is a file and one object's broken section must not cost the other nineteen theirs. It has no
+`inline` twin: a route is text a machine reads, not something a webview draws.
+
+### An assembly is built in two phases
+
+An assembly is built out of other assemblies, and building one of those can take minutes. Done inside the
+request that asked for the parent, all of it is one request — for as long as the deepest tree takes, with
+nothing the client can do but wait.
+
+So the operations whose unit is one assembly look before they build: `inspect.assembly`, `export.assembly`,
+their scene counterparts, `inspect.object`, `render.objects` when it names one assembly or scene, and
+`assembly.instantiate` itself. What is staged is the shape being **instantiated**, which is the same work
+whatever is done with it afterwards — shown in the viewer, written as an export file, written as a render —
+so the first phase sits above that distinction and never asks which it is. The first phase reads the
+assembly's declaration and asks which of the assemblies it places are not cached yet
+(`Assembly.get_uncached_subassemblies_async`, which costs a declaration read and a `stat` per entry — never a
+payload). None, and the request proceeds exactly as it always did. Some, and **nothing is
+built**: the request comes back as the error code `-32004` naming them, and the client builds each one through
+`assembly.instantiate` with `cacheOnly` — which leaves the geometry in the daemon's cache and sends back a
+status — before asking again.
+
+Nesting needs nothing extra. A staging request is an assembly request, so a sub-assembly with sub-assemblies
+of its own answers `-32004` in its turn and the client recurses. The whole exchange takes longer than one
+request would; what it buys is that no single request is longer than one assembly's own work.
+
+Two things keep it from becoming a loop, and both are needed:
+
+* The daemon never names an assembly it has already built on request (`Session.staged`, weak so that an
+  evicted context takes its record with it). An entry too large to keep in memory and refused by every cache
+  tier would otherwise be reported as missing forever. Named once, built once, and after that the parent
+  builds it inline — slower than it should be, but an answer.
+* The client never stages the same entry twice for one call, and reports the error if a service asks for one
+  it has already built.
+
+The protocol — the code, the method name, the flag, the payload — is `partcad_utils.staging`, and both ends
+read it from there. The VS Code extension restates it in `ide/vscode/src/common/staging.ts` because it speaks
+JSON-RPC itself; that is the one copy, and it has to stay in step. A client that does not implement any of
+this gets an error message saying what to build first, which is the most a client that cannot act on it can be
+given.
+
+What is deliberately *not* staged: `bom`, `assembly.guide` and `supply.quote`, which walk the assembly tree
+without building geometry; a `render.objects` or `test.run` whose unit is a package (recursive, or naming no
+object) — what they would have to name is everything they are about to build, and they already report where
+they have got to, object by object, as they go; and `convert.object`, which rewrites a declaration rather than
+building the object it names.
+
 There is deliberately no prompt in the protocol. A daemon has nobody to ask, and a request that blocks
 waiting for an answer it cannot receive is a hang, not a question -- anything a command needs is either an
 argument or configured upfront in the user configuration (see `git.auth` for private Git dependencies).
+
+### `package`, `object` and the `...` suffix
+
+A `package` ending in `...` -- and an `object` whose package half ends in one, `...:bolt` or
+`//pub/examples...:bolt` -- means that package **and every package below it**, which is what the `recursive`
+parameter has always meant. It is read **here**, by `operations._request()`, and not by the CLI: the CLI is one
+of three clients, and a syntax each of them parsed for itself is a syntax they would each get slightly wrong.
+`partcad_utils.utils.split_recursive_object()` is the one implementation, in `partcad_utils` because the
+answer must not depend on a CAD kernel being importable.
+
+So an operation that takes a package reads it as `selected, object_name, recursive = _request(params)` rather
+than off `params` directly, and `recursive` is true when *either* spelling asked for it. Two consequences worth
+knowing:
+
+* The suffix can say **where** the walk starts, which the flag cannot, and an object name carrying one wins
+  over `package` -- the rule a fully qualified `//package:name` already follows.
+* A walk over a *named* object asks every package of the subtree for its own object of that name and passes
+  over the ones that declare none (`_targets()`, over `Project.declares_object()`, which reads the declaration
+  and builds nothing). Only a walk that found it nowhere is a failure, reported once by `_nowhere()`. Without
+  that filter a name like `bolt` fails in every package that has no bolt -- and a render of such a package
+  raises `EmptyShapesError`, which used to end the whole run.
+
+An operation whose answer is about **one** object -- `bom`, `assembly.guide`, `cae.analyze`, `supply.quote`,
+`inspect.object`, `convert.object` -- calls `_refuse_recursion()` and says so, rather than guessing between a
+merged answer and a sequence of them. Adding recursion to one of those is a decision about what its result
+becomes, not a parsing change.
 
 ## Commit
 

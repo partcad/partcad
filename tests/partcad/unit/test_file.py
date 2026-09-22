@@ -105,7 +105,11 @@ def test_file_url_without_url_1(tmp_path):
     # diagnostic is kept verbatim against the object it came from, which is
     # what the extension shows and what a bare 'get_part()' logs.
     ctx = pc.Context(str(pkg))
-    reason = ctx.get_project("//").get_broken_object_reason("part", "bolt")
+    project = ctx.get_project("//")
+    # A declaration is read when its kind is created, which is when something
+    # asks for that kind (see 'Project.LAZY_OBJECT_KINDS').
+    project.parts
+    reason = project.get_broken_object_reason("part", "bolt")
     assert reason is not None
     assert "'bolt' declares 'fileFrom: url' but no 'fileUrl'" in reason
     assert ctx.get_part(":bolt") is None

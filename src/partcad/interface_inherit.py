@@ -32,9 +32,14 @@ class InterfaceInherits:
     # nearly all of them.
     sketches: dict[str, str]
 
-    def __init__(self, name, project, config: dict = {}):
+    def __init__(self, name, project, config: dict = {}, ports: dict = None):
         self.instances = {}
         self.sketches = {}
+        # The ports of the object doing the inheriting, where it has any yet.
+        # An instance may place itself at one of them ('port:') instead of
+        # spelling out a location, which is how an assembly puts an interface
+        # exactly where a port its 'map:' externalized ended up.
+        self.owner_ports = ports or {}
         # Resolve the interface by name
         if ":" in name:
             self.source_project_name, self.source_interface_name = project.resolve(
@@ -97,6 +102,31 @@ class InterfaceInherits:
 
             if isinstance(instance_config, dict):
                 instance_location_config = instance_config.get("location", None)
+
+                # 'port:' places this instance at a port of the object that is
+                # inheriting - written instead of a location, not beside one.
+                # The ports of an object are known before its 'implements:' is
+                # read (see 'Interface.instantiate'), so what this names is its
+                # own 'ports:' section or whatever its 'map:' externalized.
+                port_name = instance_config.get("port", None)
+                if port_name is not None:
+                    if instance_location_config is not None:
+                        pc_logging.error(
+                            "%s: the instance '%s' states both a 'location' and a 'port'; the port wins"
+                            % (self.name, instance_name)
+                        )
+                    port = self.owner_ports.get(port_name)
+                    if port is None:
+                        pc_logging.error(
+                            "%s: the instance '%s' names the port '%s', which this object does not have"
+                            % (self.name, instance_name, port_name)
+                        )
+                        instance_location_config = None
+                    else:
+                        # A port that declares no location of its own is at the
+                        # origin of the object that declares it, which is what
+                        # the 'is None' branch below reads it as.
+                        instance_location_config = port.location
 
                 # 'sketch:' restates the boundary of the ports this instance
                 # brings in. The same opening drawn differently: a slotted hole

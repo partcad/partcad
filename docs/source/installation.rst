@@ -171,7 +171,7 @@ should be left alone, or if PartCAD is simply a tool to run rather than a librar
 Use the wheels instead if you want to ``import partcad`` from your own scripts.
 
 Install
-=======
+========
 
 On Linux and macOS:
 
@@ -226,7 +226,7 @@ this machine which builds such a release carries. Install the latest release, or
 ``--platform``.
 
 Options
-=======
+========
 
 Options go after ``sh -s --``:
 
@@ -508,7 +508,7 @@ have. If you already work in Visual Studio Code, install
 :ref:`the extension <vscode-extension>` there instead.
 
 Install
-=======
+========
 
 On Linux and macOS:
 
@@ -670,9 +670,9 @@ as the command line tools, so there is nothing extra to install.
     >>> import partcad as pc
     >>> ctx = pc.init()
 
-=======
+========
 Linting
-=======
+========
 
 The linter used by ``pc lint`` to check Python files is optional. Install the
 ``lint`` extra to enable it:

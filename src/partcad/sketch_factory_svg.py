@@ -11,6 +11,7 @@ import os
 
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, telemetry, wrapper
+from .process_crash import command_failure
 from .sketch_factory_python import SketchFactoryPython
 
 
@@ -85,7 +86,7 @@ class SketchFactorySvg(SketchFactoryPython):
                     request_serialized,
                 )
                 if exitcode != 0 and len(errors) == 0:
-                    errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+                    errors = command_failure(command, exitcode)
 
                 if errors:
                     pc_logging.error(errors)

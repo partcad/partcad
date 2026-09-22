@@ -1,0 +1,141 @@
+desc: Route files for the objects that declare one, and nothing for the objects that do not.
+
+docs:
+  intro: |
+    `pc cam` writes the program a machine cuts an object with: the object's own
+    outline, offset by the radius of the cutter, at a series of depths. An object
+    opts in by saying how it is made -- a machine under `manufacturing:`, or a
+    job parameter directly under it -- and that is the whole of the opt-in:
+    `pc cam` with nothing named produces a route for every object of the package
+    that says something and passes over every object that does not.
+
+    `spacer` below is here to be passed over. It is an ordinary part that says
+    nothing about being cut, and a run over this package neither routes it nor
+    complains about it: most objects are never cut, and a package where three
+    parts of five are is the ordinary case rather than a warning.
+
+    The three that are routed are the three operations. `panel` is cut out of
+    sheet stock (`profile`), `tray_recess` is material a cutter clears
+    (`pocket`), and `nameplate` is a flat sketch scored along its outline
+    (`engrave`). The package sets the feeds and the machine's clearance once,
+    under `cam: gcode:` at the bottom of this file; each object says only what
+    is true of itself.
+
+    PartCAD ships the implementation -- unlike an FEA solver, a route is
+    arithmetic on the object's own geometry -- so nothing has to be installed
+    and nothing has to be configured. `camImplementation` points somewhere else
+    when a machine wants a dialect of its own.
+
+  usage: |
+    ```shell
+    # Every object of this package that says how it is made
+    pc cam
+
+    # One of them
+    pc cam :panel
+    pc cam -s :nameplate
+
+    # Somewhere else, in a dialect of somebody else's
+    pc cam -O /tmp -i //some/package:gcode
+    ```
+
+parts:
+  panel:
+    type: build123d
+    path: panel.py
+    desc: |
+      A 300 x 200 x 18 mm panel with two cable holes, cut out of sheet stock.
+    manufacturing:
+      method: subtractive
+      source: stock
+      cnc:
+        # Around the outside of the panel and around the inside of each hole,
+        # so the panel comes off the machine at the size it is drawn. No
+        # `depth:`: an object that does not say is cut through, which for an
+        # 18 mm panel is 18 mm in six 3 mm passes.
+        operation: profile
+        diameter: 6 mm
+        speed: 18000 rpm
+
+  tray_recess:
+    type: build123d
+    path: tray.py
+    desc: |
+      The void of a tray: 160 x 100 mm, 8 mm deep, cleared by the cutter.
+    manufacturing:
+      method: subtractive
+      source: stock
+      cnc:
+        operation: pocket
+        # A bigger cutter, because this one is clearing an area rather than
+        # following a line, and a shallower pass because it is buried in the
+        # first ring of every level.
+        diameter: 8 mm
+        depth_per_pass: 2 mm
+        # Each ring moves in by 40% of the cutter, which is what leaves no
+        # ridge between passes with a cutter this size in a material this soft.
+        stepover: 0.4
+        speed: 16000 rpm
+
+  # The stock the two parts above are cut out of. Bought, so it describes no
+  # making of its own -- and says nothing about being cut, so `pc cam` passes
+  # over it like `spacer` below.
+  #
+  # A blank of its own rather than another copy of `panel`: stock has to
+  # enclose what comes out of it, which is what `pc test -f manufacturability`
+  # checks, and a `source:` pointing back at the part's own shape removes
+  # nothing at all.
+  stock:
+    type: build123d
+    path: stock.py
+    desc: The 320 x 220 x 18 mm sheet the panel and the tray recess come out of.
+
+  # Not routed, and that is the point. It says nothing about being cut, so
+  # `pc cam` passes over it without producing anything and without saying
+  # anything -- most objects are never cut, and a package where three parts of
+  # forty are is the ordinary case rather than thirty-seven warnings. Nothing
+  # else about it differs from `panel`.
+  spacer:
+    type: build123d
+    path: panel.py
+    desc: The same panel, saying nothing about being cut. Passed over rather than routed.
+
+sketches:
+  nameplate:
+    type: build123d
+    path: nameplate.py
+    desc: |
+      A flat outline, scored 0.4 mm deep along the line itself.
+    # A sketch's section has no `method:` and no `source:`: a drawing is not
+    # made from anything, it is a path a machine follows.
+    manufacturing:
+      cnc:
+        # `engrave` follows the outline exactly, so the cutter's diameter says
+        # nothing about where it goes -- which is what a V-bit or a drag knife
+        # wants.
+        operation: engrave
+        diameter: 0.5 mm
+        # Required here, and only here. A part has a thickness to be cut
+        # through and a sketch does not, so how deep to score is something this
+        # object has to answer.
+        depth: 0.4 mm
+        depth_per_pass: 0.2 mm
+        feed: 600 mm/min
+      speed: 20000 rpm
+
+# What this shop does by default, for every object above that does not say
+# otherwise. It is the `gcode` file type's own configuration -- the same
+# section a package would declare `path:` in to replace the implementation
+# altogether -- and every key here is a key an object may override for itself.
+#
+# `diameter:` is deliberately absent. Every other parameter has a defensible
+# default, and the diameter of the cutter is the one number that cannot be
+# guessed from the part: a route produced against a diameter nobody chose is
+# wrong by exactly the amount nobody noticed. Each object above names its own.
+cam:
+  gcode:
+    feed: 2400 mm/min
+    plunge: 600 mm/min
+    depth_per_pass: 3 mm
+    safe_z: 8 mm
+    direction: climb

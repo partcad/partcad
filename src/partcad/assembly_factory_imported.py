@@ -51,6 +51,7 @@ from .assembly import AssemblyChild
 from .assembly_factory_file import AssemblyFactoryFile
 from .geom import Location
 from .part_config import PartConfiguration
+from .process_crash import describe_exit_code
 from .scene_factory import SceneFactoryMixin
 
 # What a node of the reader's tree may say about the shape it becomes. A reader
@@ -216,7 +217,7 @@ class AssemblyFactoryImported(AssemblyFactoryFile):
         # runtime clears stderr for a run it forgave, but decides that before
         # normalizing the Windows fault codes, so stderr alone is not a failure.
         if exitcode != 0:
-            errors = errors or "reading the %s failed with exit code %s" % (self.noun, exitcode)
+            errors = errors or "reading the %s failed: %s" % (self.noun, describe_exit_code(exitcode))
             pc_logging.error(errors)
             raise Exception(errors)
 

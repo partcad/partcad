@@ -407,9 +407,19 @@ is not a thing to insist on, so install into the checkout and run everything dir
 
   $ ./dev-tools/setup-native.sh
 
-That runs ``poetry install``, installs OpenSCAD, checks for the one thing a parallel install can get wrong (below),
-and reports what else this machine has. Afterwards, every command in the rest of this page works with its
-``devcontainer exec`` prefix dropped and its ``poetry run`` kept.
+That installs git-lfs, runs ``poetry install``, installs OpenSCAD, checks for the one thing a parallel install can
+get wrong (below), and reports what else this machine has. Afterwards, every command in the rest of this page works
+with its ``devcontainer exec`` prefix dropped and its ``poetry run`` kept.
+
+git-lfs is installed first, and it is the one step whose absence costs something you cannot see. ``.gitattributes``
+routes every ``.png``, ``.jpg`` and ``.svg`` through the ``lfs`` filter, and git resolves a ``filter=`` attribute naming a
+driver that no config defines by storing the file *verbatim* — no warning, no error, nothing in the commit to look
+at afterwards. So an image committed from a machine without git-lfs is raw bytes at a path declared to hold a
+pointer, and it surfaces on somebody else's machine as ``Encountered N files that should have been pointers, but
+weren't``, with N files that ``git checkout`` cannot clean: git keeps cleaning their real bytes into a pointer and
+comparing that against a raw blob. The four images under ``examples/feature_render/images/`` were committed that
+way and have since been repaired. Repairing one is ``git add --renormalize <path>`` and a commit. The exceptions to
+the rule are listed in ``.gitattributes`` with a reason beside each; read them before adding one.
 
 OpenSCAD is installed rather than merely reported because PartCAD treats it as part of the toolchain and not as an
 optional extra: the standalone bundles carry one, ``pc healthcheck`` asks after it, and a ``.scad`` part raises
@@ -512,7 +522,7 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
 .. code-block::
 
-  Installing the current project: partcad (0.8.89)
+  Installing the current project: partcad (0.8.123)
 
 .. warning::
 
@@ -702,21 +712,60 @@ regenerated ``README.md`` is a tracked file and stages itself with ``git add
 tree changed at all; that check runs on one cell of the matrix, because what is
 checked in is one rendering.
 
-Everything PartCAD implements itself can be a baseline, including the DXF --
-which a CAD tool would otherwise stamp with the time it was written and a fresh
-pair of GUIDs. The built-in DXF renderer writes fixed values for those instead,
-and pins the order of the ``CLASSES`` section, which ezdxf otherwise derives
-from a ``set`` and so emits differently per process. That is the
-``reproducible`` parameter of the ``dxf`` file type, on by default; a drawing
-that has to record when it was really written sets ``reproducible: false``, and
-stops being diffable.
+Everything PartCAD implements itself can be a baseline, and what asks for one is
+``reproducible: true`` on the file type -- the flag every ``export:`` and
+``render:`` file type takes (see :ref:`the reproducible flag <reproducible>`).
+Every drawing under ``examples/`` sets it, and a new example has to set it too,
+or what it checks in is a file that differs from itself on the next run.
+
+It buys three things. The SVG projection goes through OpenCASCADE's exact
+hidden-line algorithm rather than the polygonal one, which projects a
+triangulation and so draws a slightly different silhouette on a different
+architecture. Every number written into the drawing is rounded to the
+``precision`` the file type claims, which is what stops a stroke width that
+differs in its sixteenth digit from being a diff. And a DXF -- which a CAD tool
+would otherwise stamp with the time it was written and a fresh pair of GUIDs --
+gets fixed values for those and a pinned order for its ``CLASSES`` section,
+which ezdxf otherwise derives from a ``set`` and so emits differently per
+process.
+
+It is ``false`` by default, because the exact projection is much the slower of
+the two on anything large and is the one that can take the sandbox down; a
+picture produced only to be looked at should be the fastest correct one. And it
+is a floor rather than a promise -- it settles everything PartCAD chooses, and
+what is left is the kernel's own arithmetic, on which two architectures can
+still disagree along a curved silhouette. That is the other reason this check
+runs on one cell of the matrix.
+
+That cell is ``ubuntu-latest`` on x86_64, rendering in the ``docker`` Python
+sandbox -- so that is the machine the checked-in drawings belong to, and the one
+to re-render them on. A render from anywhere else is a true drawing of the same
+object and still not the file the check compares against: twenty-seven of them
+came back from an arm64 laptop differing along a curve, and the job stayed red
+for everybody until they were rendered again on Linux. A machine with a
+container runtime already picks that sandbox by itself; a configuration that has
+said otherwise is overruled for one run with ``PC_PYTHON_SANDBOX=docker``.
 
 An implementation another package supplies is not PartCAD's to fix, and one of
 them may well write a different file every time. Those files are named in the
 CI check's ``UNSTABLE`` list, which is deliberately short: every entry is a file
 nobody is watching any more, so it needs a reason there and the same reason
-where a reader of that package will meet it. See ``examples/feature_render_custom``,
-whose SVG and PDF are the only entries today.
+where a reader of that package will meet it.
+
+Four of the five entries today are the raster projections of
+``examples/feature_render``, and what they drift on is the encoding rather than
+the picture: PartCAD's own SVG goes into svglib, reportlab and Pillow, and that
+stack is resolved into the sandbox when it is provisioned. ``reproducible``
+settles the projection they are drawn from and cannot settle what a new release
+of an encoder does with it.
+
+The fifth is ``examples/feature_render_custom/bracket.svg``. Its PDF sibling was
+there too and came off once the implementation started passing ``reproducible``
+through to draftwright's own flag of the same name; the SVG is still there
+because draftwright writes the x-axis rotation of an elliptical arc at whatever
+the float came out as, and two architectures disagree about it in the last bit.
+PartCAD rounds its own drawings to the precision the file type claims, which is
+what makes those comparable -- those bytes are not PartCAD's.
 
 Coverage
 ^^^^^^^^
@@ -790,7 +839,7 @@ pre-commit
 
     `pre-commit`_ is a framework for managing and maintaining multi-language pre-commit hooks.
 
-Configuration file is located at ``.devcontainer/.pre-commit-config.yaml`` where you can see all supported hooks.
+Configuration file is located at ``dev-tools/pre-commit-config.yaml`` where you can see all supported hooks.
 
 In rare cases, you might need to temporarily disable hooks. There are two options:
 
@@ -811,9 +860,9 @@ Remember: These hooks are required to pass in CI before PR merge.
     .. code-block:: bash
 
       # To remove hooks:
-      pre-commit uninstall --config .devcontainer/.pre-commit-config.yaml
+      pre-commit uninstall --config dev-tools/pre-commit-config.yaml
       # To restore hooks later:
-      pre-commit install --config .devcontainer/.pre-commit-config.yaml
+      pre-commit install --config dev-tools/pre-commit-config.yaml
 
     Option 2: Manual removal (use with caution):
 

@@ -59,6 +59,39 @@ The 3D view arrives over the viewer protocol from whichever ``partcad`` asked fo
 other tabs are questions put to the PartCAD daemon, fetched the first time the tab is looked at and cached
 until the next object is shown. An object that belongs to no package gets the 3D view alone.
 
+Down the left of the 3D view is a list of **what is on screen**, with a checkbox on every line: unticking one
+hides that line and everything under it, and ticking it again brings back exactly what was showing before.
+**Animate** and **Opacity** are at the bottom of the same pane.
+
+The list is the object itself. Every object PartCAD can show is a tree, and the pane is that tree:
+
+- a **part** or a **sketch** is one line — itself;
+- an **assembly** or a **scene** is a line per thing it holds, named as the ``.assy`` file names it, as deeply
+  as the file nests them;
+- an **interface** is a line per port it is drawn with, with a line per interface it inherits holding the whole
+  of that one (see :doc:`assy`).
+
+Under each of those lines is what that object says about connections: a line per **interface** instance with the
+ports it is made of underneath it, and a ``ports`` line for the ports that belong to no interface. Every port is
+listed once and drawn as a coordinate frame — the same frames ``pc render --with-ports`` draws on a projection
+(see :doc:`cli`). An assembly's own ports are the ones it declares and the ones its ``map:`` externalizes, so
+they are listed on the assembly's own line rather than on the things inside it.
+
+A port that is drawn with a sketch — the circle of a hole, the profile of a rail — shows that too, in the blue of
+the ``+Z`` line of its own frame: the shape the connection happens across, which is what makes an opening
+readable as one. It is half see-through, so the opening it covers still reads as one, and the **Opacity** slider
+leaves it alone — that slider is about the shape rather than about what is drawn on top of it. It is part of the
+port, so the port's checkbox draws or hides both.
+
+The ``ports`` and ``interfaces`` lines start folded up — for an assembly they run to hundreds of rows, and
+unfolded they bury the hierarchy they hang off. Pointing at a part or a sub-assembly makes it **flicker** in the
+3D view, which is how to tell which of the shapes on screen a line is without moving the camera.
+
+An object's own ports start out drawn. The ports of everything inside it do not: an assembly of forty parts has
+a frame at every hole of every one of them, and all of it at once shows nothing. A line whose tick is grey
+rather than solid is one that is showing while something under it is hidden — which is how a folded-up line says
+so.
+
 The two analysis tabs are the exception to "questions": looking at one *runs* the analysis. A field over the
 model names which implementation runs it — pre-filled with the configured default, and editable, so a machine
 whose solver is elsewhere is one line away from an answer rather than stuck on an error. The model is drawn
@@ -141,7 +174,7 @@ A **relative** package name here -- ``calculix:fea`` rather than
 that name, and is resolved from the package the declaration is written in. That
 is not where a name a *user* types is resolved from: ``pc cae fea -i
 calculix:fea`` means the ``calculix`` beside the user, like every other name a
-command line carries. The difference matters under ``pc test -r`` over a tree of
+command line carries. The difference matters under ``pc test -P //...`` over a tree of
 packages, which runs with the tree's root current while every part in it sits one
 or more packages below.
 
@@ -195,6 +228,89 @@ past. The declaration is written out beside the part, and that example's
 ``README.md`` has the measurement.
 
 See :ref:`pc cae <cae>` for the command and the units it accepts.
+
+============
+Route files
+============
+
+An object can say what is cut out of it and how, and ``pc cam`` writes the
+program a machine does it with. The job lives on the object, in its
+``manufacturing:``
+section, because it is a property of the object rather than of whoever cuts it
+-- a panel is 18 mm thick and has to be cut through whichever router is asked:
+
+.. code-block:: yaml
+
+  # partcad.yaml
+
+  parts:
+    panel:
+      type: build123d
+      path: panel.py
+      manufacturing:
+        method: subtractive
+        source: sheet         # the stock it is cut out of
+        cnc:
+          operation: profile  # around the outside of it, and inside every hole
+          diameter: 6 mm      # the cutter
+          depth_per_pass: 3 mm
+          feed: 2400 mm/min
+          speed: 18000 rpm
+
+Saying something about being cut is the object's **opt-in**, and the whole of it. ``pc cam`` with
+nothing named produces a route for every sketch and part of the package that
+declares one and passes over every object that does not, silently -- most
+objects are never cut, and a package where three parts of forty are is the
+ordinary case rather than thirty-seven warnings. Naming an object that declares
+nothing is an error, because naming one is asking about it.
+
+Unlike a solver, PartCAD **ships an implementation**: ``//builtin/cam`` writes
+G-code, and ``camImplementation`` names it by default. A route is arithmetic on
+the object's own outline rather than somebody else's program with a release
+cycle of its own, which is the test ``export:`` and ``render:`` already pass and
+``cae:`` does not -- so it ships here for the same reason DXF does. A controller
+that wants a dialect of its own is a package declaring a file type in its own
+``cam:`` section (see :ref:`cam-section`), named by that option, by the object's
+own ``implementation:``, or by ``-i`` for one run.
+
+Every key of the object's section is also a parameter of that file type, which
+makes the two of them three layers of one namespace: the built-in package
+underneath, the package's own ``cam:`` section, then the object's
+``manufacturing:``. A package
+cutting twenty parts from one sheet sets the tool once; the one part that needs
+a smaller cutter says so for itself. Lengths, feeds and speeds may each carry a
+unit and are converted at every layer, so a ``mm/min`` written by the package is
+understood as surely as one written on the object.
+
+What comes back is a file beside the package -- ``panel.nc`` -- and what it
+counted: how many passes, how deep, how far the tool travels in the cut. The
+route is the object's outline **sectioned at the bottom of the cut**, offset by
+the radius of the cutter, and that is both what makes it right for a prismatic
+object and the limit worth knowing about every other one: where the
+cross-section changes over the cut, no single outline is right, and the route
+follows the bottom and says so as a warning naming how much the two ends differ
+by. A route produced from an outline nobody expected is the one failure that
+looks like a success all the way to the machine.
+
+``pc test`` runs the same thing as its ``cam`` check -- it produces the route
+and passes the object only if one came back -- and applies it to an object that
+declares the section and to nothing else, so a package of bolts pays nothing for
+it. Unlike the analyses it does not keep what it produced: a route a check wrote
+would be indistinguishable from the one ``pc cam`` writes, so it routes into a
+temporary directory and deletes it.
+
+The check that used to be called ``cam`` is ``manufacturability``. It asks
+whether an object can be made or bought *at all* -- whether its geometry suits
+the method it declares, whether what it is made from is reproducible, whether a
+supplier could be found -- which is a different question from whether a
+post-processor can produce a program for it. One word answered both until
+``pc cam`` existed. ``-f`` filters by name prefix, so ``-f manufacturability``
+selects that check and its three method-specific siblings and ``-f cam`` selects
+the route check alone.
+
+``examples/feature_cam`` is the three operations on three objects, and a fourth
+that declares no section and is passed over. See :ref:`pc cam <cam>` for the
+command and the units it accepts.
 
 =============================
 Procurement and Manufacturing
@@ -486,9 +602,9 @@ what you have installed, so ``pc system prune`` leaves it alone.
 
 .. _caching:
 
-=======
+========
 Caching
-=======
+========
 
 PartCAD is capable of caching intermediate and final results of all model compilations.
 This can be particularly useful when working with large models or when scripting languages
@@ -612,6 +728,24 @@ You can also change telemetry settings using CLI:
     pc system set telemetry env <you-org-name>
     pc system set telemetry sentryDsn <your-sentry-dsn>
 
+How deep the traces go is a separate setting. By default PartCAD reports the
+operations it names for itself -- the process a command is, and the action each
+object it works on is -- and nothing below them:
+
+  .. code-block:: bash
+
+    pc system set telemetry detail actions   # the default
+    pc system set telemetry detail methods
+
+``methods`` adds a span for every instrumented method underneath those, which is
+what a trace needs to answer "where inside this did the time go". It is
+expensive in a way that is easy to miss: creating one part passes through a
+dozen instrumented methods, so a package of eight thousand of them costs a
+quarter of a million spans to list. Turn it on while you are looking at
+something, not for good.
+
+``pc system telemetry info`` reports both settings.
+
 Private Repositories
 --------------------
 
@@ -712,6 +846,47 @@ to the ~/.partcad/config.yaml:
       overrides:
         url:
           "git@github.com:": "https://github.com/"
+
+.. _proxy-configuration:
+
+====================
+Fetching via a Proxy
+====================
+
+On many networks a proxy is not a preference but the only route out. PartCAD
+reads the usual environment variables, and everything it downloads goes through
+them: packages imported from a git repository, packages imported from a
+tarball, and the individual files an object pulls with ``fileFrom: url``.
+
+  .. code-block:: bash
+
+    export HTTPS_PROXY=http://proxy.example.com:3128
+    export NO_PROXY=git.internal.example.com,localhost
+
+    pc update
+
+``HTTPS_PROXY`` covers ``https://`` remotes and ``HTTP_PROXY`` covers ``http://``
+ones; the lowercase spellings work equally. ``NO_PROXY`` exempts the hosts it
+names, which is what an internal git server reachable only *without* the proxy
+needs. A proxy that wants credentials takes them in the URL
+(``http://user:password@proxy.example.com:3128``).
+
+Nothing has to be configured in PartCAD for any of this. A proxy that should
+apply to git imports alone -- rather than to everything this shell runs -- can be
+set as a git configuration option instead, and it takes precedence over the
+environment:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    git:
+      config:
+        "http.proxy": "http://proxy.example.com:3128"
+
+Note that a proxy re-terminating TLS presents its own certificate, which has to
+be trusted or every fetch fails to verify it. That is a property of the machine
+rather than of PartCAD: point ``SSL_CERT_FILE`` (and ``REQUESTS_CA_BUNDLE``) at
+the proxy's CA bundle, or install it into the system trust store.
 
 ===================================
 Personally Identifiable Information

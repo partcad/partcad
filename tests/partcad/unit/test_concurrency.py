@@ -22,7 +22,7 @@ from partcad.test.test import Test
 def test_nested_admission_does_not_deadlock():
     """A gated call made from inside a gated call must pass straight through.
 
-    Regression (the 'Examples (PartCAD)' hang on 'ubuntu-24.04-arm'): 'CamTest'
+    Regression (the 'Examples (PartCAD)' hang on 'ubuntu-24.04-arm'): 'ManufacturabilityTest'
     runs the whole suite over every object an assembly is procured from, from
     inside the call the gate has already admitted. While the gate was a plain
     'asyncio.Semaphore', as many of those as the limit allowed would each hold a
@@ -118,7 +118,7 @@ def test_each_loop_gets_its_own_semaphore():
 
 
 class _RecursiveTest(Test):
-    """A stand-in for 'CamTest', which tests the objects an assembly is made of."""
+    """A stand-in for 'ManufacturabilityTest', which tests the objects an assembly is made of."""
 
     async def test(self, tests_to_run, ctx, shape, test_ctx={}):
         children = shape.get("children", [])
@@ -138,7 +138,7 @@ class _NoCacheShape(dict):
 
 
 def test_recursive_test_cached_completes():
-    """The real 'Test.test_cached' wrapper, nested the way 'CamTest' nests it."""
+    """The real 'Test.test_cached' wrapper, nested the way 'ManufacturabilityTest' nests it."""
     Test.MAX_CONCURRENT_TESTS = 4
     suite = [_RecursiveTest("cam")]
 

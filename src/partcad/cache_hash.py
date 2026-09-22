@@ -27,7 +27,23 @@ from . import logging as pc_logging
 #      _NON_GEOMETRIC_CONFIG_KEYS in shape.py). Entries written under 2 were
 #      keyed on too little - parts that differ only in a key the allow-list did
 #      not name shared one - so none of them may be read back.
-VERSION = 3
+#   4: a shape entry carries what was recorded about the geometry as it was
+#      built - its measurements, what its source file stated, what that file
+#      said about individual elements - in the entry itself rather than in
+#      sibling entries keyed on the same hash with a suffix (see cache_shape.py).
+#      An entry written under 3 holds the geometry and nothing else, and there
+#      is no way to tell that from one whose producer recorded nothing; reading
+#      one back would report a part as having no size rather than as one nobody
+#      has measured.
+#   5: the tree an assembly is stored as changed shape twice over. An ASSY file's
+#      root node is the assembly itself rather than a container inside it, so a
+#      tree written under 4 has a level in it that nobody declared; and every node
+#      now carries what its object declares about connections, which an entry
+#      written under 4 has nowhere to have recorded (see shape_envelope.py). Both
+#      are the payload's shape rather than the key's, so nothing about a
+#      declaration changes when PartCAD does and an old entry would go on being
+#      served: a viewer showing an assembly with two roots and no ports in it.
+VERSION = 5
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.

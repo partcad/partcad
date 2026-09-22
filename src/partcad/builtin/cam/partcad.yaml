@@ -1,0 +1,125 @@
+# The route implementations PartCAD ships with: the machine programs `pc cam`
+# writes.
+#
+# The structure is identical to `//builtin/export` and `//builtin/render` -- see
+# `//builtin/export` for what each field means. The only difference is which
+# section a package declares these in: `cam:` rather than `export:`/`render:`.
+#
+# Every field below that is not `path`, `extension` or `pythonRequirements` is a
+# parameter of the file type. That is the layering: what is written here is what
+# this machine shop does by default, and what a package writes in its own `cam:`
+# section is what that package's parts are cut with.
+#
+# The **job** half of them is also a key an *object* may set in its own `cam:`
+# section, and the object is the topmost layer -- `partcad.cam.KEYS` is the list,
+# and it is closed, which is what lets a typo there be a sentence rather than a
+# route cut to a default. The rest of what is below describes the *file* rather
+# than the cut (`units`, `precision`, `tolerance`, `comments`) and is set here or
+# by a package, not by an object. The line between them is not tidiness: this is
+# one implementation of many, an object's section has to be checkable against a
+# list PartCAD knows, and PartCAD cannot know the parameters of an
+# implementation somebody else writes. `direction` is on the job side because
+# which way round a contour is cut is a property of how the object is made.
+#
+# There is no default `diameter:`, and there must not be. Every other parameter has
+# a defensible default -- a feed that is slow, a pass that is shallow, a
+# clearance that is generous -- but the diameter of the cutter is the one number
+# that cannot be guessed from the part, and a route produced against a diameter
+# nobody chose is a route that is wrong by exactly the amount nobody noticed. A
+# request that reaches the implementation without one is refused.
+
+name: //builtin/cam
+desc: |
+  The route implementations PartCAD ships with: the machine programs `pc cam`
+  writes. A package replaces any of them, or adds one of its own, by declaring
+  that file type in its own `cam:` section.
+
+# What the implementation below imports. build123d does the sectioning and the
+# 2D offsetting; OCP is asserted after it for the reason `//builtin/render`
+# gives -- build123d pulls `cadquery-ocp-novtk`, which overwrites the very same
+# OCP native module.
+pythonRequirements:
+  - build123d==0.11.1
+  - cadquery-ocp==7.9.3.1.1
+
+cam:
+  gcode:
+    desc: RS-274 (G-code), what a CNC router or mill runs.
+    path: cam_gcode.py
+    # `.nc` rather than `.gcode`: it is what the machine controllers and the
+    # senders in this space read by default, and what the file is called on
+    # every shop floor that has one.
+    extension: nc
+
+    # --- what the tool does with the outline ------------------------------
+    # 'profile' cuts around the outside of the material and around the inside
+    # of every hole, so the object survives at its nominal size. 'pocket'
+    # clears what is inside the outline; 'engrave' follows the outline itself.
+    operation: profile
+    # 'climb' puts the material on the tool's right, which is what a CNC router
+    # with no backlash to speak of wants and what leaves the better edge.
+    # 'conventional' reverses every path.
+    direction: climb
+    # How far each successive ring of a pocket moves in, as a fraction of the
+    # tool diameter. Ignored by the other two operations.
+    stepover: 0.5
+
+    # --- how deep, and how fast -------------------------------------------
+    # No 'depth': an object that does not say is cut through, from the top of
+    # its bounding box to the bottom of it, which is what cutting a part out of
+    # a sheet means. An object that is not being cut through says how far down.
+    depth_per_pass: 3
+    feed: 1000
+    plunge: 300
+    # No 'speed': a spindle that is not commanded is one the operator set, and
+    # a router with a manual dial is still the common case. An object or a
+    # package that names one gets an `M3 S...` and an `M5`.
+    #
+    # 'safe_z' is a clearance *above the top of the object*, not an absolute
+    # height, so it means the same thing wherever the object sits in Z. An
+    # absolute one would be right for an object whose top is at Z0 and a rapid
+    # through the work for every other one.
+    safe_z: 5
+
+    # --- the machines other than a router ---------------------------------
+    # The same file type writes for all three. Which one it writes for is not a
+    # parameter here and cannot be: it comes from the part's own
+    # `manufacturing:` section (`laser:` or `drill:`, or neither for a
+    # router), because what a part is made on is a property of the part rather
+    # than a setting of the run -- and a route written for a laser by a file
+    # type that could be re-pointed would be a program for a machine nobody
+    # owns. The two parameters below are the ones those machines need and a
+    # router does not.
+    #
+    # `power` is what a laser fires at, written as the S-word its controller
+    # reads. No default: a power that nobody chose is a cut that either does
+    # not go through or sets fire to the job, and unlike a feed there is no
+    # value that is merely slow and safe. Left unset, the beam is gated with a
+    # bare `M3`, which is what a machine whose power is set at the panel wants.
+    #
+    # `peck` is how deep a drill goes before it comes back out to clear the
+    # swarf. No default either, and here the absence means something ordinary:
+    # a hole drilled in one go, which is right for anything shallow.
+    #
+    # A laser reads neither `tool` nor `depth_per_pass`: its width is the
+    # `kerf` its machine declares and it cuts through in one pass.
+
+    # --- what the file says -----------------------------------------------
+    # The units the file is written in, and so whether it opens with G21 or
+    # G20. It converts: a part 18 mm thick is cut 18 mm deep whichever this is.
+    units: mm
+    # Decimal places every coordinate is written to. Three is a micron in
+    # millimetres, which is finer than any router positions to. It is not
+    # adapted to `units` on purpose -- one number, one meaning -- so a program
+    # written in inches wants 4 here, which is a ten-thousandth of an inch and
+    # the same resolution.
+    precision: 3
+    # How far a linearized arc may depart from the true curve, in millimetres.
+    # Every curve is emitted as G1 moves, because an arc that is an arc in the
+    # XY plane stops being one the moment a post-processor is asked for
+    # something else, and because this is the one number that says what the
+    # approximation costs.
+    tolerance: 0.01
+    # Whether the file opens with comment lines naming the object, the tool and
+    # the job. Off for a controller that chokes on parenthesized comments.
+    comments: true

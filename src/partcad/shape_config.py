@@ -60,9 +60,9 @@ def is_a_length(value) -> bool:
     converts to 1.0.
 
     NaN is the one that has to be kept out rather than merely tidied away.
-    'CamTest.tolerance_failure()' takes a NaN to mean "the file tolerances this
-    part feature by feature" and passes it - so a NaN a *declaration* produced
-    would be reported as something no file ever said. Whatever states a
+    'ManufacturabilityTest.tolerance_failure()' takes a NaN to mean "the file
+    tolerances this part feature by feature" and passes it - so a NaN a
+    *declaration* produced would be reported as something no file ever said. Whatever states a
     tolerance goes through here first, and NaN stays
     'tolerance_inspect.reduce()'s alone to produce.
     """
@@ -91,6 +91,87 @@ def final_config(obj) -> dict:
     except Exception as e:  # pylint: disable=broad-except
         pc_logging.debug("Failed to resolve the configuration of %s: %s" % (getattr(obj, "name", obj), e))
         return obj.config
+
+
+def object_type_parameter(config: dict, accepted: dict, name: str, kind: str = "object", object_name: str = ""):
+    """The value of one object-type parameter, with the type's default applied.
+
+    'accepted' is what the type that produces the shape contributes, mapped to
+    the default each reads back as when nothing declares it (see
+    'PartFactory.ACCEPTED_OBJECT_TYPE_PARAMETERS').
+
+    The default is applied *here*, on the way out, and is deliberately never
+    written into 'config["parameters"]'. 'Shape.__init__' hashes that dictionary
+    into the shape's cache key, so injecting a default would move the key of
+    every homogeneous part that never mentioned a tolerance - a mass
+    invalidation of existing cache entries for a value nobody set. Read this
+    way, an undeclared tolerance stays out of the hash entirely, while a
+    tolerance somebody did declare keys the cache like any other input, because
+    it is one.
+
+    The default doubles as the parameter's type witness:
+
+    * a numeric default means the parameter is numeric, so a declared value is
+      coerced to a number;
+    * a list default means the parameter is a list, and a value that arrived as
+      text is split on commas - which is how it arrives from a reference, where
+      everything after the ';' is one string by the time the name has been read
+      ('bends;include=BEND_UP,BEND_DOWN').
+
+    A value that will not coerce is reported and the default is used instead,
+    which is how 'PartConfigManufacturing' treats a manufacturing method it does
+    not recognize.
+
+    Reads the configuration it is handed rather than the resolved final one, the
+    same as 'get_mcftt()' does, so an alias reports what the alias itself
+    declares. That is a pre-existing property of that reader, not something
+    decided here.
+    """
+    if name not in accepted:
+        # Not a parameter this type contributes at all.
+        return None
+    default = accepted[name]
+    fallback = None if isinstance(default, _NoDefault) else default
+
+    parameters = (config or {}).get("parameters") or {}
+    declared = parameters.get(name) if isinstance(parameters, dict) else None
+    if not isinstance(declared, dict) or "default" not in declared:
+        return fallback
+
+    value = declared["default"]
+    if isinstance(default, float):
+        # Before 'float()' rather than after: by then 'True' is an ordinary 1.0
+        # and nothing can tell it from a number somebody wrote. Said here, of
+        # numeric object-type parameters in general, because a boolean is not a
+        # number for any of them.
+        if isinstance(value, bool):
+            pc_logging.error("%s '%s' has a non-numeric '%s': %r" % (kind.capitalize(), object_name, name, value))
+            return fallback
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            pc_logging.error("%s '%s' has a non-numeric '%s': %r" % (kind.capitalize(), object_name, name, value))
+            return fallback
+    if isinstance(default, list):
+        return as_list(value)
+    return value
+
+
+def as_list(value) -> list:
+    """A list-valued parameter, however it was written.
+
+    A list stays one; text is the spelling a reference has to use, because the
+    whole parameter section of a name is text, so it is split on commas. Empty
+    entries are dropped rather than kept as empty names: a trailing comma is a
+    typo, not a layer called ''.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    if isinstance(value, (list, tuple)):
+        return [item for item in value if item not in (None, "")]
+    return [value]
 
 
 class ShapeConfiguration:
@@ -179,18 +260,28 @@ class ShapeConfiguration:
                 # By default, the parameter is not set
                 value = None
 
-            if value:
-                if "parameters" not in self.config:
-                    self.config["parameters"] = {}
-                self.config["parameters"][property] = {
-                    "type": "string",
-                    "enum": [value],
-                    "default": value,
-                }
-            else:
+            if value is None:
                 kind = getattr(self, "kind", "object").capitalize()
                 pc_logging.warning(f"{kind} '{self.name}' has no '{property}'")
 
+            # Answered on the way out and never written into
+            # 'config["parameters"]', for the same two reasons
+            # 'object_type_parameter()' above gives - and this one had a third.
+            #
+            # That dictionary is what the factories hand to the wrapper as the
+            # model's build parameters, one name per declared parameter. A
+            # 'finish' synthesized here is not a parameter of the model, so the
+            # next build of that object was rejected outright:
+            #
+            #     Cannot set value 'finish': not a parameter of the model.
+            #
+            # Which build that was depended on timing. 'pc test' runs an
+            # object's checks concurrently, so the manufacturability check
+            # asking for the finish raced the CAD check building the shape, and
+            # the write landed first only sometimes. It also moved the shape's
+            # cache key ('Shape.__init__' hashes this dictionary), so the answer
+            # to "has this already been built" changed underneath an object that
+            # nobody had re-declared.
             return value
 
         if (
@@ -311,52 +402,15 @@ class ShapeConfiguration:
         declared: the default comes from the type that produces the shape, not
         from here.
 
-        The default is applied *here*, on the way out, and is deliberately never
-        written into 'config["parameters"]'. 'Shape.__init__' hashes that
-        dictionary into the shape's cache key, so injecting a default would move
-        the key of every homogeneous part that never mentioned a tolerance - a
-        mass invalidation of existing cache entries for a value nobody set. Read
-        this way, an undeclared tolerance stays out of the hash entirely, while a
-        tolerance somebody did declare keys the cache like any other input,
-        because it is one.
-
-        The default doubles as the parameter's type witness: a numeric default
-        means the parameter is numeric, so a declared value is coerced to a
-        number. A value that will not coerce is reported and the default is used
-        instead, which is how 'PartConfigManufacturing' treats a manufacturing
-        method it does not recognize.
-
-        Reads 'self.config' rather than the resolved final configuration, the
-        same as 'get_mcftt()' does, so an alias reports what the alias itself
-        declares. That is a pre-existing property of both readers, not something
-        decided here.
+        The rules are 'object_type_parameter()' above, which is module-level
+        because a factory has to read the same answer out of a configuration
+        before there is an object to ask it of (see 'SketchFactoryDxf', which
+        needs its layer filters while it is still deciding what to build).
         """
-        accepted = self.object_type_parameters
-        if name not in accepted:
-            # Not a parameter this type contributes at all.
-            return None
-        default = accepted[name]
-        fallback = None if isinstance(default, _NoDefault) else default
-
-        parameters = self.config.get("parameters") or {}
-        declared = parameters.get(name) if isinstance(parameters, dict) else None
-        if not isinstance(declared, dict) or "default" not in declared:
-            return fallback
-
-        value = declared["default"]
-        if isinstance(default, float):
-            # Before 'float()' rather than after: by then 'True' is an ordinary
-            # 1.0 and nothing can tell it from a number somebody wrote. Said
-            # here, of numeric object-type parameters in general, because a
-            # boolean is not a number for any of them.
-            if isinstance(value, bool):
-                kind = getattr(self, "kind", "object").capitalize()
-                pc_logging.error(f"{kind} '{self.name}' has a non-numeric '{name}': {value!r}")
-                return fallback
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                kind = getattr(self, "kind", "object").capitalize()
-                pc_logging.error(f"{kind} '{self.name}' has a non-numeric '{name}': {value!r}")
-                return fallback
-        return value
+        return object_type_parameter(
+            self.config,
+            self.object_type_parameters,
+            name,
+            getattr(self, "kind", "object"),
+            self.name,
+        )

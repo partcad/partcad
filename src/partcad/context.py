@@ -54,7 +54,7 @@ def _is_within(name: str, parent_name: Optional[str]) -> bool:
     just a prefix: '//foo' is not the parent of '//foobar', and matching it as
     one made a listing of '//foo' include its neighbour -- and now also send a
     round trip to that neighbour's repository plugin (see
-    '_prefetch_object_configs'). The root, '//', is the parent of everything,
+    'prefetch_object_configs'). The root, '//', is the parent of everything,
     which falls out of the same rule once the trailing separator is stripped.
     """
     if parent_name is None:
@@ -205,17 +205,22 @@ class Context:
     own. It holds the root package in 'self.root' and adopts its name instead.
     """
 
+    # Two numbers per kind, and two questions: how many objects the loaded
+    # packages *declare*, and how many of them have been *instantiated* - built
+    # into geometry, which is what 'instantiate' means everywhere else here.
+    #
+    # They used to be one number and a half: the "declared" one was a counter
+    # the factories incremented as they made objects, which equalled the
+    # declared count only for as long as loading a package made everything in
+    # it. It no longer does (see 'Project.LAZY_OBJECT_KINDS'), so the declared
+    # half is counted from the declarations and the instantiated half stays a
+    # counter - nothing can count a build that has not happened.
     stats_packages: int
     stats_packages_instantiated: int
-    stats_sketches: int
     stats_sketches_instantiated: int
-    stats_interfaces: int
     stats_interfaces_instantiated: int
-    stats_parts: int
     stats_parts_instantiated: int
-    stats_assemblies: int
     stats_assemblies_instantiated: int
-    stats_scenes: int
     stats_scenes_instantiated: int
     stats_plugins: int
     stats_plugin_queries: int
@@ -348,15 +353,17 @@ class Context:
 
         self.stats_packages = 0
         self.stats_packages_instantiated = 0
-        self.stats_interfaces = 0
         self.stats_interfaces_instantiated = 0
-        self.stats_sketches = 0
+        # The four kinds that are shapes have no counter of their own: they are
+        # counted from what the loaded packages declare, when somebody asks (see
+        # the properties below). A counter was a count of what had been
+        # *created*, which was the same number only for as long as loading a
+        # package created everything in it -- it no longer does (see
+        # 'Project.LAZY_OBJECT_KINDS'), and a 'pc info' reporting no parts in a
+        # package full of them would be the price of that.
         self.stats_sketches_instantiated = 0
-        self.stats_parts = 0
         self.stats_parts_instantiated = 0
-        self.stats_assemblies = 0
         self.stats_assemblies_instantiated = 0
-        self.stats_scenes = 0
         self.stats_scenes_instantiated = 0
         self.stats_plugins = 0
         self.stats_plugin_queries = 0
@@ -465,6 +472,36 @@ class Context:
         ):
             current_project_path = self.name
         self.current_project_path = current_project_path
+
+    def _stats_declared(self, kind: str) -> int:
+        """How many objects of a kind the packages loaded here declare.
+
+        Counted on demand rather than accumulated, so that the answer does not
+        depend on which objects some earlier command happened to create. Only
+        what each package already knows it declares, never an enumeration of its
+        own (see 'Project.object_count_known').
+        """
+        return sum(project.object_count_known(kind) for project in list(self.projects.values()))
+
+    @property
+    def stats_sketches_declared(self) -> int:
+        return self._stats_declared("sketch")
+
+    @property
+    def stats_interfaces_declared(self) -> int:
+        return self._stats_declared("interface")
+
+    @property
+    def stats_parts_declared(self) -> int:
+        return self._stats_declared("part")
+
+    @property
+    def stats_assemblies_declared(self) -> int:
+        return self._stats_declared("assembly")
+
+    @property
+    def stats_scenes_declared(self) -> int:
+        return self._stats_declared("scene")
 
     def stats_recalc(self, verbose=False):
         self.stats_memory = total_size(self, verbose)
@@ -901,14 +938,21 @@ class Context:
             # is a round trip to the plugin. Warm them here instead: every
             # package and every kind at once, on the traversal's event loop, so
             # what follows reads a memo. See Project.prefetch_object_configs_async.
-            self._prefetch_object_configs(parent_name, HAS_STUFF_KINDS)
+            self.prefetch_object_configs(parent_name, HAS_STUFF_KINDS)
         return self.get_packages(parent_name=parent_name, has_stuff=has_stuff)
 
-    def _prefetch_object_configs(self, parent_name, kinds):
+    def prefetch_object_configs(self, parent_name, kinds):
         """Warm 'kinds' across every loaded package, concurrently.
 
         A no-op for the packages that are local, which is most of them; what it
         is for is the plugin-backed ones, where the enumerations are remote.
+
+        Public because a command that is about to walk a tree for one kind
+        should say so: this is one round trip for the whole tree instead of one
+        per package, and the difference is the whole of the wait. 'pc list
+        interfaces -r' over LDraw's ninety-odd categories asked each of them in
+        turn - the walk is not gated on 'has_stuff', so nothing had warmed them
+        (see 'list_objects').
         """
         projects = [p for p in self.projects.values() if _is_within(p.name, parent_name)]
         projects = [p for p in projects if not p.skipped]
@@ -1505,6 +1549,11 @@ class Context:
         should not pay for an answer it does not use. 'runtime.docker_available'
         caches, so a command that does build one asks once.
 
+        'runtime.docker_enabled' is both halves of the question -- whether
+        containers are allowed here and whether one would start -- and is the
+        same call the 'DockerAvailable' healthcheck makes, so that what the
+        check reports is what the sandbox will do.
+
         A stated preference is obeyed. That is the whole point of tracking
         whether there was one: a machine with Docker running is not thereby a
         machine whose owner wants their parts rendered in it.
@@ -1525,7 +1574,7 @@ class Context:
                 )
             return "docker"
 
-        if self.user_config.use_docker and runtime.docker_available():
+        if runtime.docker_enabled(self.user_config):
             return "docker"
         return self.user_config.python_sandbox
 
@@ -1741,11 +1790,43 @@ class Context:
             return
         os.makedirs(path)
 
-    def ensure_dirs_for_file(self, filename):
-        if not self.option_create_dirs:
-            return
+    def ensure_dirs_for_file(self, filename, name=None):
+        """Create the directories the file about to be written needs.
+
+        '--create-dirs' ('option_create_dirs') is what lets PartCAD create a
+        directory the user configured but has not made: without it, a missing
+        output directory is an error rather than something to invent.
+
+        The sub-directories an object's own *name* asks for are not that, which
+        is what 'name' is for. A part called '<assembly>/<component>' -- what a
+        STEP assembly, a URDF or a Gazebo world materializes, and what a package
+        may well declare itself -- is written to a file of that name, and a name
+        with a '/' in it is a file in a directory however the command was
+        invoked (see 'output.name_to_path()'). So those components are created
+        under the directory the file was landing in anyway, and nothing above
+        that directory is: where the output goes is still the user's decision
+        and still '--create-dirs' to make up.
+        """
         path = os.path.dirname(filename)
-        if path:
+        if not path:
+            return
+        if self.option_create_dirs:
+            os.makedirs(path, exist_ok=True)
+            return
+
+        subdirs = output.name_dirs(name) if name else ""
+        if not subdirs:
+            return
+        base = path
+        for _ in range(subdirs.count(os.sep) + 1):
+            base = os.path.dirname(base)
+        if os.path.join(base, subdirs) != path:
+            # This path is not the one the name resolved to: a caller that named
+            # the file itself ('pc export' with a path, a document with a
+            # 'path:' of its own) puts it where it said, '/' in the object's
+            # name or not.
+            return
+        if os.path.isdir(base or "."):
             os.makedirs(path, exist_ok=True)
 
     def get_all_tests(self):

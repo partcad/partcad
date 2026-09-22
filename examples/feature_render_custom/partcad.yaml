@@ -79,31 +79,46 @@ parts:
     path: bracket.py
     desc: A mounting plate, drawn rather than projected.
 
-# Re-rendering this example dirties the working tree, and that is expected.
-# None of draftwright's three formats is byte-reproducible, each for its own
-# reason, and no parameter of its own can settle it: 'build_drawing()' takes
-# what to draw, 'Drawing.export()' takes which formats and a raster DPI.
-# Measured by rendering each format twice in a row from the same input:
+# 'reproducible: true' below is not this example decorating itself. Re-rendering
+# used to dirty the working tree every time, and each of draftwright's three
+# formats had its own reason - measured by rendering each twice from the same
+# input:
 #
 #   svg  Two faces of one glyph - the stem and the tittle of an 'i' in the
-#        title block - swap places from one run to the next. Same paths, same
-#        coordinates, different order. It follows the process's hash seed: with
-#        the seed pinned, two runs are byte-identical, and two different seeds
-#        differ. A sandbox wrapper cannot pin it, because it runs under '-I',
-#        which makes Python ignore PYTHONHASHSEED.
-#   pdf  Carries the moment it was written in '/CreationDate'.
-#   dxf  Carries it twice, in the '$TDCREATE' and 'TDUPDATE' header variables.
+#        title block - swapped places from one run to the next. Same paths, same
+#        coordinates, different order, following the process's hash seed, which
+#        a sandbox wrapper cannot pin because it runs under '-I'.
+#   pdf  Carried the moment it was written in '/CreationDate'.
+#   dxf  Carried it twice, in the '$TDCREATE' and 'TDUPDATE' header variables.
 #
-# So the two committed files are re-committed only when the drawing itself
-# changes. The CI job that renders the examples skips exactly these paths and
-# says so where it does (.github/workflows/test.yml, "The rendered examples
-# must match what is checked in"). If you see them modified after 'pc render'
-# and the drawing is the same, throw the change away: 'git checkout -- .'
+# draftwright settles all three behind its own 'reproducible=', and the
+# implementation passes PartCAD's flag straight to it - the same word on both
+# sides, which is where PartCAD took the name from. So two renders here are two
+# identical files, and 'bracket.pdf' came off the 'UNSTABLE' list of the CI job
+# that renders the examples (.github/workflows/test.yml, "The rendered examples
+# must match what is checked in"): the file in this repository was reproduced
+# byte for byte on a second platform.
+#
+# 'bracket.svg' stays on that list, for what is left rather than for the reason
+# it was put there. draftwright writes the x-axis rotation of an elliptical arc
+# at whatever the float came out as, and two architectures disagree about it in
+# the last bit - an arc rotated by -7.8e-16 degrees against one rotated by 0.
+# The same drawing, a different file. PartCAD rounds its own drawings to the
+# precision the file type claims, which is what makes those comparable; these
+# bytes are draftwright's, and that pass never sees them.
+#
+# So: modified after 'pc render' on the platform it was rendered on is a
+# regression. Modified on a different one may be only that.
 render:
   # The package document, assembled by PartCAD out of the images below.
   readme:
 
   svg: &drawing
+    # This drawing is checked in, so it has to be the same file every time it
+    # is rendered. See 'reproducible' in '//builtin/render', and the note at
+    # the top of 'examples/partcad.yaml' for what that settles and what it
+    # cannot.
+    reproducible: true
     # Where the implementation lives and which script in it produces the file.
     # 'package' is what makes this someone else's implementation rather than
     # this package's own; without it PartCAD looks for 'path' in '//builtin'.

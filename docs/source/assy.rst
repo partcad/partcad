@@ -19,7 +19,7 @@ external assembly, or a container for such references.
 Containers
 ----------
 
-The top-level node of an ASSY file is a container node.
+A container node is a node that holds other nodes rather than placing an object.
 The container nodes have the following syntax:
 
   .. code-block:: yaml
@@ -32,6 +32,13 @@ The container nodes have the following syntax:
       - <other node>
       - <other node>
       - <other node>
+
+The top-level node of an ASSY file is such a node, and it **is the assembly**:
+what it holds is held by the assembly directly, not by anything in between. So an
+assembly declared from a file whose root lists three parts has three nodes in it
+and not one, and `location` on that root moves all three - there is no node of its
+own for it to move instead. A `links:` list *inside* the file is a node like any
+other: it is addressable by `name` from a `map:`, and what it holds belongs to it.
 
 Parts
 -----
@@ -62,6 +69,13 @@ The following syntax is used to create a node that places a part in the assembly
       comment: <(optional) free form text, see "Comment" below>
       how: <(optional) assembly instructions, see "How" below>
       exploded: <(optional) the gap to show in the exploded view of this step, in mm>
+
+The `name` a node is given is how everything else in and around this assembly
+refers to it: the `name` of a `connect`/`connectPorts` names a node, and so does
+the first element of the `map:` section that decides which of the ports inside
+this assembly the assembly itself has (see :ref:`assembly-ports`). A node with no
+`name` of its own is known by the name of the part or assembly it places, which
+is enough until the same one is placed twice.
 
 One and only one method for placing the object is acceptable.
 Therefore the sections `location`, `connectPorts` and `connect` are mutually exclusive.
@@ -152,6 +166,8 @@ and so is the section itself: an omitted field means the default below.
       pushDistance: <(optional) staging distance, in mm, derived from the object by default>
       turnDirection: <(optional) "cw" (clockwise) or "ccw" (counterclockwise), default: "cw">
       turnTorqueMax: <(optional) maximum torque, in N*m, default: 0>
+      snapIn: <(optional) whether the object is pushed past a feature that springs back behind it>
+      selfScrew: <(optional) whether this joint cuts its own thread, default: from the interfaces>
       threadStep: <(optional) axial distance per full turn, in mm, default: 0.00>
       holdWith: <(optional) interface, or list of interfaces, to hold this object by>
       holdWithInstance: <(optional) instance of each interface listed in "holdWith">

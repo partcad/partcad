@@ -7,8 +7,23 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from . import interface_config, telemetry
-from .interface import Interface
+from . import assembly_ports, interface_config, telemetry
+from .interface import Interface, port_location
+
+
+def port_info(port) -> dict:
+    """What 'pc info' says about one port.
+
+    The location as the packed form a configuration file spells it with - plain
+    data, so that it survives the trip to a client over JSON-RPC - and the
+    boundary sketch only where the port has one. A port may have neither: a port
+    declared by name alone is a frame at the origin of whatever declares it, and
+    nothing else.
+    """
+    info = {"location": port_location(port).as_packed()}
+    if port.sketch is not None:
+        info["sketch"] = f"{port.sketch.project_name}:{port.sketch.name}"
+    return info
 
 
 @telemetry.instrument(exclude=["info"])
@@ -23,13 +38,67 @@ class WithPorts(Interface):
     ):
         super().__init__(name, project, config, config_section="implements")
         self.interfaces = None
+        # What this object's 'map:' externalizes, once somebody has resolved it.
+        # None until then, and None forever for the objects that declare no
+        # 'map:' at all - which is every part, every sketch, and every assembly
+        # that states its ports itself. See 'partcad.assembly_ports'.
+        self.mapped = None
+
+    def map_resolved(self) -> bool:
+        """Whether somebody has already worked out what this object's 'map:' names."""
+        return self.mapped is not None
+
+    def has_loose_ports(self) -> bool:
+        """Whether this object has ports that belong to no interface it implements.
+
+        Asked where a connection is being worked out from one end: an object
+        that implements exactly one interface and nothing else is unambiguous,
+        and one that also carries a port of its own is not. A mapped port is
+        such a port - the map's two-element form externalizes a port rather than
+        an interface - so it counts the same way a 'ports:' section does.
+        """
+        if "ports" in self.config:
+            return True
+        return bool(self.mapped.ports) if self.mapped is not None else False
+
+    def set_mapped(self, mapped) -> None:
+        """Take the resolved 'map:' and let the ports be built again with it.
+
+        Resetting rather than merging: an object whose ports were read before
+        its map was resolved read them without it, and those are the very
+        dictionaries the map has to appear in. Rebuilding them is what
+        'get_ports()' does for an object that has none yet, so this is the same
+        work rather than a second way of doing it.
+        """
+        with self.lock:
+            self.mapped = mapped
+            self.ports = None
+            self.interfaces = None
+            self.inherits = None
+
+    def inherited_from_elsewhere(self) -> dict:
+        """The interfaces this object implements because something inside it does."""
+        return self.mapped.inherits if self.mapped is not None else {}
+
+    def instantiate_ports(self):
+        """This object's ports: the ones it externalizes, then the ones it declares."""
+        # Externalized first, declared second: 'ports:' and 'implements:' are
+        # this object's own statements about itself and get the last word, and
+        # they are entitled to name what the map has produced (an 'implements:'
+        # instance may sit at a mapped port - see 'InterfaceInherits').
+        self.ports = {}
+        if self.mapped is not None:
+            self.ports.update(self.mapped.ports)
+        self.instantiate_declared_ports()
 
     # A shape's declaration is not an interface's: 'desc' is prose, 'fileUrl'
     # is a URL that may be percent-encoded, and neither has parameters
     # substituted into it. What a shape does declare about connections is where
-    # its ports are and which interfaces it implements, and those two are worth
-    # writing in terms of the shape's own dimensions.
-    EXPRESSION_SECTIONS = ("ports", "implements")
+    # its ports are, which interfaces it implements, and - for an assembly -
+    # which of the ones inside it are its own; all three are worth writing in
+    # terms of the shape's own parameters, since an assembly parametrized by how
+    # many of something it holds names its nodes after them.
+    EXPRESSION_SECTIONS = ("ports", "implements", assembly_ports.MAP)
 
     def declared_construction_params(self, config: dict) -> dict:
         """A shape's 'parameters:', all of it.
@@ -68,7 +137,7 @@ class WithPorts(Interface):
         self.interfaces = {}
 
         # Recursively merge the inherited interfaces
-        @telemetry.start_as_current_span("WithPorts.instantiate_interfaces.merge_inherits")
+        @telemetry.instrument_function("WithPorts.instantiate_interfaces.merge_inherits")
         def merge_inherits(inherits, interface_state: str = "", top_level=False):
             if not top_level and len(inherits.keys()) == 1 and (len(list(inherits.values())[0].instances.keys()) == 1):
                 compatible = True
@@ -133,14 +202,5 @@ class WithPorts(Interface):
                 )
                 for interface_name, interface in self.get_interfaces().items()
             ),
-            "ports": dict(
-                (
-                    port_name,
-                    {
-                        "location": port.location,
-                        "sketch": f"{port.sketch.project_name}:{port.sketch.name}",
-                    },
-                )
-                for port_name, port in self.get_ports().items()
-            ),
+            "ports": dict((port_name, port_info(port)) for port_name, port in self.get_ports().items()),
         }

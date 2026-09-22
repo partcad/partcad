@@ -20,6 +20,7 @@ import docker
 
 from . import logging as pc_logging
 from . import sandbox_lock
+from .process_crash import describe_termination
 from .process_output import decode as decode_output
 from .runtime_json_rpc import RuntimeJsonRpcClient
 
@@ -187,6 +188,37 @@ def docker_available() -> bool:
 _docker_available = None
 
 
+def docker_enabled(config=None) -> bool:
+    """Whether PartCAD may start a container here: allowed *and* possible.
+
+    Two different questions, and everything that runs something in a container
+    has to ask both. `useDocker` is the machine's owner saying whether PartCAD
+    is to use containers at all -- a machine that has a daemon and should not
+    be using it, or an image built without one, says so once here rather than
+    failing per part. `docker_available` is whether one would start if PartCAD
+    tried.
+
+    Written once because the two were being combined by hand, in one place
+    (`Context.preferred_python_sandbox`) and forgotten in the others, and a
+    second spelling of "can we use Docker" is a second answer: the KiCad
+    importer asked only the first half and went on to `docker.from_env()` on
+    machines that had nothing to answer it, and `pc healthcheck` would have
+    reported on a machine other than the one the parts render on.
+
+    `config` is the user configuration to ask, for the callers that hold one --
+    a daemon serves a context whose configuration is not this process's. The
+    global one is the default, which is what a healthcheck and anything else
+    outside a context wants.
+    """
+    if config is None:
+        # Imported here rather than at the top of the module: `user_config`
+        # builds the whole configuration on import, and `runtime` is imported
+        # early enough that doing so from here would fix the order the two are
+        # initialized in.
+        from .user_config import user_config as config
+    return bool(config.use_docker) and docker_available()
+
+
 class Runtime:
     @staticmethod
     def get_internal_state_dir(internal_state_dir):
@@ -341,6 +373,11 @@ class Runtime:
         wrapper's sandbox deliberately moves everything that prints onto stderr
         so that it cannot corrupt the response (see wrappers/wrapper_common.py).
         That makes the exit code the only thing that says whether a run worked.
+
+        And when it says the process was killed rather than that it ended, that
+        is said in words rather than left as the bare number the caller would
+        otherwise report: which signal it was, and what that signal is called
+        (see process_crash).
         """
         if stdout:
             pc_logging.debug("Output of %s: %s" % (cmd, stdout))
@@ -371,6 +408,15 @@ class Runtime:
         # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
         if returncode in [3221226356, 3221225477]:
             returncode = 0
+        else:
+            crash = describe_termination(
+                cmd,
+                returncode,
+                where=self.path,
+                silent=not stdout and not stderr,
+            )
+            if crash:
+                stderr = crash if not stderr else stderr.rstrip() + "\n" + crash
         return returncode, stdout, stderr
 
     @staticmethod
@@ -448,6 +494,7 @@ class Runtime:
                     # TODO(clairbee): add timeout
                 )
             returncode = p.returncode
+            return self._finished(cmd, stdout, stderr, returncode)
 
         return self._finished(cmd, stdout, stderr, returncode)
 
@@ -494,5 +541,6 @@ class Runtime:
             stdout = decode_output(stdout)
             stderr = decode_output(stderr)
             returncode = p.returncode
+            return self._finished(cmd, stdout, stderr, returncode)
 
         return self._finished(cmd, stdout, stderr, returncode)

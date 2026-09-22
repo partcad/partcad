@@ -6,3 +6,16 @@
 .inspector table tr:nth-child(even) {
   background-color: darkblue;
 }
+
+/*
+ * The PartCAD version in the context view, when it is not the version this
+ * extension was published with. `PartcadContext.versionsDiffer` decides.
+ *
+ * `--vscode-errorForeground` rather than a literal red: it is the colour the
+ * active theme already uses to say "this is wrong", and it stays readable on a
+ * light theme, where a fixed red does not. The fallback is what VS Code's own
+ * dark themes resolve it to, for a theme that leaves it unset.
+ */
+.version.mismatch {
+  color: var(--vscode-errorForeground, #f14c4c);
+}

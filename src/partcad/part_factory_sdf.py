@@ -3,6 +3,7 @@ import os
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, transform, wrapper
 from .part_factory_python import PartFactoryPython
+from .process_crash import describe_exit_code
 
 
 class PartFactorySdf(PartFactoryPython):
@@ -84,7 +85,11 @@ class PartFactorySdf(PartFactoryPython):
                 session=self.session,
             )
             if exitcode != 0 and not errors:
-                errors = "%s: %s: Failed to instantiate (exit code %s)" % (part.project_name, part.name, exitcode)
+                errors = "%s: %s: Failed to instantiate (%s)" % (
+                    part.project_name,
+                    part.name,
+                    describe_exit_code(exitcode),
+                )
 
             if errors:
                 for line in errors.split("\n"):
