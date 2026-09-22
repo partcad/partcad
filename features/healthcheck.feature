@@ -47,6 +47,31 @@ Feature: 'pc healthcheck' command
     Then STDOUT should not contain "Suggested healthcheck: LongPathsEnabledCheck - "
     Then STDOUT should not contain "Suggested healthcheck: NoDefaultCurrentDirectoryCheck - "
 
+  # The three checks that report what a part can be rendered in. Listed rather
+  # than run: what they answer depends on the machine, and what is pinned here
+  # is that all three are discovered and that they share the 'sandbox' tag --
+  # which is how a user asks "can this machine render anything" in one command.
+  @success @sandbox @filters
+  Scenario: Run healthcheck command with dry run and the sandbox filter
+    When I run partcad healthcheck with options "--dry-run --filters=sandbox"
+    Then the command should exit with a status code of "0"
+    Then STDOUT should contain "Suggested healthcheck: CondaAvailable - "
+    Then STDOUT should contain "Suggested healthcheck: DockerAvailable - "
+    Then STDOUT should contain "Suggested healthcheck: SandboxAvailable - "
+    Then STDOUT should not contain "Suggested healthcheck: PythonVersion - "
+
+  # The container runtime check, run for real. What it finds depends on the
+  # runner, so what is asserted is that it ran and that the command still
+  # succeeded: a missing container runtime is a warning, because a machine
+  # with conda renders every part without one. (Any runner of this suite has
+  # conda or a daemon -- a scenario that renders anything builds a sandbox --
+  # so 'SandboxAvailable', which shares the 'docker' tag, passes here.)
+  @success @docker @filters
+  Scenario: Running the container runtime health check
+    When I run partcad healthcheck with options "--filters=docker"
+    Then the command should exit with a status code of "0"
+    Then STDOUT should contain "Healthcheck: DockerAvailable: "
+
   @success @windows-registry @filters
   Scenario: Run healthcheck command with dry run and filter
     Given the system is running on Windows

@@ -30,6 +30,31 @@ async def get_runtime(ctx):
         kicad_runtime = runtime.Runtime(ctx, "shell")
         kicad_runtime_uses_docker = ctx.user_config.use_docker_kicad
         if kicad_runtime_uses_docker:
+            # Asked before the client is built. Without it, a machine with no
+            # container runtime got whatever 'docker.from_env()' raises on its
+            # way to a socket that is not there -- "Error while fetching server
+            # API version: ('Connection aborted.', FileNotFoundError(2, 'No
+            # such file or directory'))" -- which names neither the PCB being
+            # imported nor either of the two things the user can do about it.
+            # 'pc render', 'pc export' and 'pc inspect' all arrive here, and all
+            # three said that.
+            #
+            # 'SandboxUnavailable' rather than a plain exception because it
+            # already means exactly this and is already handled as an answer
+            # rather than a fault -- 'pc test' skips on it, the daemon reports
+            # it to the IDE without a traceback (see
+            # 'partcad_service_json_rpc.core.operations').
+            #
+            # 'docker_available' and not a check of its own: this has to agree
+            # with what the sandbox and 'pc healthcheck' say about this machine.
+            # 'use_docker_kicad' has already folded in 'useDocker', so only the
+            # other half is left to ask.
+            if not runtime.docker_available():
+                raise runtime.SandboxUnavailable(
+                    "a KiCad PCB is imported by running 'kicad-cli' in a container, and no container "
+                    "runtime is available here. Start Docker, or install KiCad on this machine and set "
+                    "'useDockerKicad: false' so that PartCAD runs the 'kicad-cli' you installed."
+                )
             await kicad_runtime.use_docker(
                 # The release, unless CI is running the images built out of
                 # this commit rather than the ones the release published -- the

@@ -1549,6 +1549,11 @@ class Context:
         should not pay for an answer it does not use. 'runtime.docker_available'
         caches, so a command that does build one asks once.
 
+        'runtime.docker_enabled' is both halves of the question -- whether
+        containers are allowed here and whether one would start -- and is the
+        same call the 'DockerAvailable' healthcheck makes, so that what the
+        check reports is what the sandbox will do.
+
         A stated preference is obeyed. That is the whole point of tracking
         whether there was one: a machine with Docker running is not thereby a
         machine whose owner wants their parts rendered in it.
@@ -1569,7 +1574,7 @@ class Context:
                 )
             return "docker"
 
-        if self.user_config.use_docker and runtime.docker_available():
+        if runtime.docker_enabled(self.user_config):
             return "docker"
         return self.user_config.python_sandbox
 

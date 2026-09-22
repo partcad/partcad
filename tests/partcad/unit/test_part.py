@@ -13,10 +13,10 @@ import os
 import shutil
 import sys
 
-import docker
 import pytest
 
 import partcad as pc
+from partcad import runtime as pc_runtime
 
 test_config_local = {
     "name": "//primitive_local",
@@ -256,16 +256,19 @@ def test_part_example_kicad():
     # container was *asked for*, not whether one can be started (see
     # 'partcad.tags').
     #
-    # Asked before the client is built, not inside the failure path: a host whose
-    # DOCKER_HOST points at something unreachable makes 'from_env().ping()' sit
-    # out the SDK's sixty-second API timeout, and waiting a minute to reach a
-    # skip that was already decided is a minute per run for nothing.
-    if not pc.user_config.use_docker:
-        pytest.skip("Docker is turned off here (useDocker), so there is nothing to run 'kicad-cli' in")
-    try:
-        docker.from_env().ping()
-    except Exception as e:
-        pytest.skip("No Docker daemon to run 'kicad-cli' in: %s" % e)
+    # Asked of 'runtime.docker_enabled', which is the same call the factory
+    # itself makes a moment later and the same one 'pc healthcheck' reports on.
+    # Asking it here in another spelling -- 'from_env().ping()', as this used to
+    # -- is how a test comes to skip on a machine the factory would have run on,
+    # or run on one it would not: a daemon that answers a ping but runs Windows
+    # containers is not a daemon that can run 'kicad-cli' in a Linux image.
+    #
+    # It checks 'useDocker' first and only then pings, which is what keeps a
+    # host whose DOCKER_HOST points at something unreachable from sitting out
+    # the SDK's sixty-second API timeout to reach a skip that was already
+    # decided.
+    if not pc_runtime.docker_enabled():
+        pytest.skip("No container runtime to run 'kicad-cli' in (Docker is off here, or none is answering)")
     nano = ctx.get_part("//produce_part_kicad:Arduino_Nano")
     assert nano is not None
 

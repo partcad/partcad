@@ -188,6 +188,37 @@ def docker_available() -> bool:
 _docker_available = None
 
 
+def docker_enabled(config=None) -> bool:
+    """Whether PartCAD may start a container here: allowed *and* possible.
+
+    Two different questions, and everything that runs something in a container
+    has to ask both. `useDocker` is the machine's owner saying whether PartCAD
+    is to use containers at all -- a machine that has a daemon and should not
+    be using it, or an image built without one, says so once here rather than
+    failing per part. `docker_available` is whether one would start if PartCAD
+    tried.
+
+    Written once because the two were being combined by hand, in one place
+    (`Context.preferred_python_sandbox`) and forgotten in the others, and a
+    second spelling of "can we use Docker" is a second answer: the KiCad
+    importer asked only the first half and went on to `docker.from_env()` on
+    machines that had nothing to answer it, and `pc healthcheck` would have
+    reported on a machine other than the one the parts render on.
+
+    `config` is the user configuration to ask, for the callers that hold one --
+    a daemon serves a context whose configuration is not this process's. The
+    global one is the default, which is what a healthcheck and anything else
+    outside a context wants.
+    """
+    if config is None:
+        # Imported here rather than at the top of the module: `user_config`
+        # builds the whole configuration on import, and `runtime` is imported
+        # early enough that doing so from here would fix the order the two are
+        # initialized in.
+        from .user_config import user_config as config
+    return bool(config.use_docker) and docker_available()
+
+
 class Runtime:
     @staticmethod
     def get_internal_state_dir(internal_state_dir):
