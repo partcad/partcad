@@ -295,9 +295,9 @@ See ``examples/plugin_repository_basic`` (a package backed by a local file),
 
 .. _objects:
 
-=======
+========
 Objects
-=======
+========
 
 PartCAD :ref:`packages` may contain the following objects:
 
