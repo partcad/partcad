@@ -53,6 +53,15 @@
 # DXF, the store's parts) two platforms can still differ, which is why the
 # 'Examples (PartCAD)' job renders on one cell and not on all of them.
 #
+# That cell is 'ubuntu-latest' on x86_64, in the 'docker' Python sandbox, so
+# that is the machine these files belong to and the one to re-render them on. A
+# render from anywhere else is a true drawing of the same object and still not
+# this file: twenty-seven of them came back from an arm64 laptop differing along
+# a curve, which is a red 'Examples (PartCAD)' for everybody until somebody
+# renders them again on Linux. On a machine with a container runtime the sandbox
+# is already the right one; a configuration that has said otherwise is overruled
+# for one run with 'PC_PYTHON_SANDBOX=docker'.
+#
 # See 'reproducible' in '//builtin/render', and 'output.REPRODUCIBLE_KEY' for
 # what it means to an implementation.
 
