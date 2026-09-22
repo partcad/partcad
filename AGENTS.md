@@ -205,6 +205,14 @@ This is still a fallback and not a second supported environment. What it does no
   it just cannot provision an *interpreter version*, so a package asking for a Python this host does not have
   renders on the host's and says so. See `pythonSandbox` in `src/partcad_utils/user_config.py`.
 
+`pc healthcheck --filters sandbox` says which of those two this machine has. Missing conda and a missing
+container runtime are each a warning, since either one alone renders everything; `SandboxAvailable` is the
+one check that exits non-zero. It asks "conda or a container" only where nothing was declared, which is
+where PartCAD is the one choosing; a stated `pythonSandbox` is checked against what that sandbox needs, so
+`PC_PYTHON_SANDBOX=venv` passes on a machine with neither. Whatever asks "can we use Docker here" asks
+`runtime.docker_enabled()` — permission (`useDocker`) and a real ping, cached — so the healthcheck, the
+sandbox default and the KiCad importer cannot come to different conclusions about the same machine.
+
 **Never run the whole `behave` suite here — run the one feature a change touches.** Every scenario takes a
 throwaway `$HOME` (the `Given I have temporary $HOME` in each feature's `Background`), so a scenario that
 renders anything builds a CAD sandbox of its own from nothing and deletes it afterwards: ~2.7 GB and minutes

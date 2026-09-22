@@ -86,6 +86,63 @@ In order to selectively execute only a subset of the healthchecks tests, the ``h
 
     pc healthcheck --filters python,windows
 
+Most of what ``healthcheck`` finds is reported as a warning and the command
+still succeeds, because most of it is a machine missing something it can do
+without. There is one exception, and it is about sandboxes.
+
+Can this machine render anything?
+---------------------------------
+
+PartCAD imports no CAD kernel of its own. Every part is produced by a script
+run in a sandbox, and there are two mechanisms that can provide one on a
+machine that starts with nothing: conda, which installs an interpreter and the
+CAD stack beside it, and a container runtime, which carries both already. Three
+checks report on this, and they share the ``sandbox`` tag:
+
+  .. code-block:: shell
+
+    pc healthcheck --filters sandbox
+
+* ``CondaAvailable`` -- a warning when conda or mamba cannot be found. PartCAD
+  builds a virtual environment instead, which works wherever the host has a
+  usable Python.
+* ``DockerAvailable`` -- a warning when no container runtime answers. Note that
+  a Docker daemon running *Windows* containers counts as none here: every image
+  PartCAD uses is a Linux image. Set ``useDocker: false`` (or
+  ``PC_USE_DOCKER=false``) on a machine that has a daemon and should not use it,
+  and the check stops looking.
+* ``SandboxAvailable`` -- an **error**, and the only check that makes
+  ``pc healthcheck`` exit non-zero.
+
+A stated ``pythonSandbox`` is obeyed, and that is most of what
+``SandboxAvailable`` does. "Is there conda or a container" is the right
+question only when nobody has said which sandbox to use, because that is when
+PartCAD is the one choosing between them. If you wrote ``pythonSandbox: venv``
+-- a CI job that builds a virtual environment from the interpreter it already
+has, an air-gapped machine, a container image with no conda in it -- nothing is
+misconfigured, and the check passes:
+
+  .. code-block:: shell
+
+    pythonSandbox: venv       # in ~/.partcad/config.yaml
+    PC_PYTHON_SANDBOX=venv    # or in the environment
+
+A declared sandbox is then checked against what *it* needs and nothing else:
+``conda`` needs a conda, ``docker`` needs a container runtime, and ``venv``,
+``pypy`` and ``none`` need only the Python PartCAD is running under.
+(``remote`` needs a reachable ``partcad-service-remote-docker``, which is a
+network address this check does not ping.) Asking for ``conda`` on a machine
+that has none is a failure -- being unable to do what was asked is not a reason
+to quietly do something else.
+
+Three things need a container specifically, and say so when they are reached
+rather than in advance: an implementation whose package declares ``container:``,
+importing a KiCad PCB (``useDockerKicad``), and the ``docker`` Python sandbox
+when it was asked for by name. If ``pc render``, ``pc export`` or ``pc inspect``
+reports that no container runtime is available, start Docker or take the other
+route the message names -- for KiCad that is installing KiCad on this machine
+and setting ``useDockerKicad: false``.
+
 Typical problems
 ----------------
 
