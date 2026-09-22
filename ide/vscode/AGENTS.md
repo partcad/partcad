@@ -146,6 +146,18 @@ into geometry -- a node's `location` places its geometry, its children and its p
 them down the tree (see "Coordinates and units" in
 [docs/partcad-viewer.md](./docs/partcad-viewer.md), which also says what starts out checked).
 
+**The geometry itself arrives once per distinct shape, not once per node.** PartCAD sends it as a table on the
+root keyed by a digest of the exact shape, with every node naming an entry (`gltfRef`), so an assembly that
+places one bolt a hundred times is a hundred nodes and one piece of geometry. `PartcadViewer.inflate` therefore
+decompresses the table rather than the tree, `scene.ts` parses each entry once into a `THREE.Group`, and each
+node after the first adds a `clone()` of it -- fresh `Object3D`s over the same `BufferGeometry` and the one
+shared `MeshPhongMaterial`, which is one upload and one material for the lot while every node keeps its own
+object to switch on and off. It is the arrangement the port sketches already had ("cloned per port, so forty
+holes drawn with one circle upload one geometry"), applied to the model. Two consequences worth keeping: the
+loading readout is a fraction of the *table* (`totalSize`), because counting a shared shape once per node would
+report a download that never happened; and nothing may dispose a parsed group that has been handed out, since
+its geometry is the geometry of every clone of it.
+
 None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote` and `cae.analyze` are the CLI's
 own operations (`pc bom`, the book `pc render -t html` writes, the cart `pc supply quote` fills, the analysis
 `pc cae fea`/`pc cae cfd` runs), asked for as data rather

@@ -636,6 +636,35 @@ at all).
   its ports, and whoever realizes or draws the tree composes them down it (`shape_envelope.placed()` is the one
   composition, shared by an assembly placing a child and an interface placing a sketch on a port).
 
+  **How fine the tessellation is, is a budget in pixels rather than a distance in millimetres**
+  (`shape_gltf.SCREEN_PIXELS`/`PIXEL_BUDGET`, applied by `wrapper_gltf._budget`). What decides whether a preview
+  is smooth enough is how far a facet lands from the surface *on the screen*, so the linear deflection is the
+  bounding box diagonal of the whole tree over a thousand pixels at half a pixel each — measured in the sandbox,
+  because that is where the geometry is, with the placements composed, because eight parts 50 mm across are 50 mm
+  stacked and 2 m spread out. A part and an assembly then get the same answer to "smooth enough" and deflections
+  three orders apart to reach it. Clamped at both ends; a caller that passes `tolerance` in mm overrides the lot.
+
+  Two things about it are counter-intuitive enough to be worth stating. **It has to be absolute**, and
+  `build123d.export_gltf` is not: it reaches OCCT through `Shape.mesh()`, which passes `isRelative=True`, so the
+  number means a fraction of *each edge* — which holds a 3 mm hole to the same fraction of 3 mm whether the
+  assembly around it is 30 mm or 30 m, and is exactly the wrong scale for something looked at whole. So
+  `wrapper_gltf._mesh` meshes absolutely first and `_export` tells the exporter to leave that mesh alone. And
+  **the angular cap is where the cost actually is** (`DEFAULT_ANGULAR_TOLERANCE`, 0.4 rad): it is the one term
+  that does not scale with the object, so it is what over-tessellates a large assembly — at 0.2 rad a 3 mm hole
+  is drawn with 31 segments whether it covers two hundred pixels or two. Measured on the 8-part
+  `AeroAssembly_connected`, holding the linear budget: 0.2 rad is 48304 triangles, 0.4 is 23480, 0.5 is 19752.
+  `tests/partcad/unit/test_shape_gltf.py` tessellates a real cylinder to hold both facts, because nothing else
+  would notice either of them breaking — the preview would simply be coarse, or enormous, at every setting.
+
+  **One entry per distinct geometry, however many nodes are made of it** (`shape_envelope.KEY_GEOMETRY`, with
+  each node naming its entry in `KEY_GLTF_REF`). An assembly places the same bolt a hundred times; that bolt is
+  tessellated once, sent once, and parsed and uploaded to the GPU once, with a hundred nodes naming it. What
+  makes it possible is that a placement was never part of the geometry — which is the same property the whole
+  two-form design rests on. The table is keyed by a digest of the exact BREP (`ocp_serialize.payload_digest`),
+  content and not identity, because nodes arrive as separately deserialized dicts and the same shape is never
+  the same object. It is the arrangement `KEY_SKETCHES` already had, one level up, and sketches now name this
+  table too.
+
   **The sketches the ports are drawn with come with the representation** (`./src/partcad/port_sketches.py`), on
   the root node, keyed by the reference the ports already name. A port is a coordinate frame and is drawn as a
   triad; most ports also name a `sketch:`, which is the shape the connection happens across, and a viewer draws
