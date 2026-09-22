@@ -839,7 +839,7 @@ pre-commit
 
     `pre-commit`_ is a framework for managing and maintaining multi-language pre-commit hooks.
 
-Configuration file is located at ``.devcontainer/.pre-commit-config.yaml`` where you can see all supported hooks.
+Configuration file is located at ``dev-tools/pre-commit-config.yaml`` where you can see all supported hooks.
 
 In rare cases, you might need to temporarily disable hooks. There are two options:
 
@@ -860,9 +860,9 @@ Remember: These hooks are required to pass in CI before PR merge.
     .. code-block:: bash
 
       # To remove hooks:
-      pre-commit uninstall --config .devcontainer/.pre-commit-config.yaml
+      pre-commit uninstall --config dev-tools/pre-commit-config.yaml
       # To restore hooks later:
-      pre-commit install --config .devcontainer/.pre-commit-config.yaml
+      pre-commit install --config dev-tools/pre-commit-config.yaml
 
     Option 2: Manual removal (use with caution):
 

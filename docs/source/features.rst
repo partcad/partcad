@@ -569,9 +569,9 @@ what you have installed, so ``pc system prune`` leaves it alone.
 
 .. _caching:
 
-=======
+========
 Caching
-=======
+========
 
 PartCAD is capable of caching intermediate and final results of all model compilations.
 This can be particularly useful when working with large models or when scripting languages

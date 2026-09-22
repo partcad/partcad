@@ -943,9 +943,9 @@ msgstr "`pre-commit`_ 是一个用于管理和维护多语言 pre-commit 钩子�
 
 #: ../../source/contributing.rst:548
 msgid ""
-"Configuration file is located at ``.devcontainer/.pre-commit-"
-"config.yaml`` where you can see all supported hooks."
-msgstr "配置文件位于 ``.devcontainer/.pre-commit-config.yaml`` ，你可以在其中看到所有受支持的钩子。"
+"Configuration file is located at ``dev-tools/pre-commit-config.yaml`` where "
+"you can see all supported hooks."
+msgstr "配置文件位于 ``dev-tools/pre-commit-config.yaml`` ，你可以在其中看到所有受支持的钩子。"
 
 #: ../../source/contributing.rst:550
 msgid ""
