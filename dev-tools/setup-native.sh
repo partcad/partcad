@@ -14,20 +14,23 @@
 #
 # What it does, and why each step is not just `poetry install`:
 #
-#   1. `poetry install`, which is the same command the container runs.
-#   2. Installs OpenSCAD, which `poetry install` cannot: it is not a Python
+#   1. Installs git-lfs and points this checkout at it. Without it the checkout
+#      does not degrade, it silently writes the wrong thing -- see the step
+#      itself for what that costs and which four files paid it.
+#   2. `poetry install`, which is the same command the container runs.
+#   3. Installs OpenSCAD, which `poetry install` cannot: it is not a Python
 #      package. PartCAD treats it as part of the toolchain rather than as an
 #      optional extra -- the standalone bundles carry one, `pc healthcheck`
 #      asks after it, and a `.scad` part *fails* without it rather than
 #      degrading -- so an environment without one is not set up, and this stops
 #      rather than leaving that to be discovered by a test run.
-#   3. Checks for a file two wheels both installed. `poetry install` installs in
+#   4. Checks for a file two wheels both installed. `poetry install` installs in
 #      parallel, so any two distributions shipping one path can have both
 #      workers write it at once, and what lands is a blend of the two: an
 #      `import` of a native module like that takes SIGSEGV inside the dynamic
 #      loader, with no Python traceback anywhere. `check_installed_files.py`
 #      explains it at length.
-#   4. Says what else is missing and what it costs, rather than letting a suite
+#   5. Says what else is missing and what it costs, rather than letting a suite
 #      fail thirty minutes later for a reason that has nothing to do with the
 #      change under test.
 #
@@ -51,6 +54,73 @@ if [ "$(id -u)" -ne 0 ]; then
   fi
 fi
 
+APT_UPDATED=""
+apt_install() {
+  # `update` first, and not as an optimisation: an image whose package lists
+  # have gone stale resolves point releases that the archive has already
+  # superseded, and the fetch 404s on them rather than falling back. Once per
+  # run, though -- this has two callers now, and the second update is a minute
+  # spent re-reading what the first one just read.
+  if [ -z "$APT_UPDATED" ]; then
+    $SUDO apt-get update
+    APT_UPDATED="yes"
+  fi
+  $SUDO apt-get install -y --no-install-recommends "$@"
+}
+
+# Installed and *required*, for the reason OpenSCAD is below: without it this
+# checkout does not degrade, it silently commits the wrong bytes.
+# `.gitattributes` routes every `.png`, `.jpg` and `.svg` through the `lfs`
+# filter, and git resolves a `filter=` attribute naming a driver that no config defines by
+# storing the file verbatim -- no warning, no error, nothing in the commit to
+# look at afterwards. So a commit made here without git-lfs puts raw image
+# bytes at a path declared to hold a pointer, and the next person who *has*
+# git-lfs configured gets "Encountered N files that should have been pointers,
+# but weren't" and N files that `git checkout` cannot clean, because git keeps
+# cleaning their real bytes into a pointer and comparing it against a raw blob.
+# That is exactly how the four images under `examples/feature_render/images/`
+# came to be stored the wrong way (since repaired), and this script is the kind
+# of environment it happened in: no dev container, so nothing supplying git-lfs.
+# Repairing such a file is `git add --renormalize <path>` and a commit.
+echo "==> git-lfs"
+if git lfs version >/dev/null 2>&1; then
+  echo "    already installed: $(git lfs version 2>&1 | head -n 1)"
+elif command -v apt-get >/dev/null 2>&1; then
+  apt_install git-lfs
+elif command -v brew >/dev/null 2>&1; then
+  HOMEBREW_NO_AUTO_UPDATE=1 brew install git-lfs
+else
+  echo "    no apt-get and no brew here, so git-lfs has to be installed by hand:" >&2
+  echo "    https://git-lfs.com/ -- then re-run this script." >&2
+  exit 1
+fi
+
+# `--local` rather than the usual global install: this script prepares one
+# checkout, and `.git/config` is the file that belongs to it -- which is also
+# the one that survives a dev container being recreated, being in the
+# bind-mounted workspace. It writes the filter driver and the hooks, and
+# re-running it is a no-op.
+git lfs install --local
+
+if [ -z "$(git config --get filter.lfs.clean || true)" ]; then
+  # An install can half-succeed, so ask the question that matters rather than
+  # trusting the exit code above: it is the `clean` filter, and nothing else,
+  # that stands between a commit here and a raw blob at a pointer's path.
+  echo "    git-lfs is installed but 'filter.lfs.clean' is unset, so commits from" >&2
+  echo "    this checkout would still store raw bytes where a pointer belongs." >&2
+  exit 1
+fi
+
+# Best-effort, unlike everything above it: the objects are rendered output that
+# no build here reads back, and a machine with no network or no LFS quota left
+# is still a machine that can run the tests. Left unfetched they are pointer
+# text files on disk, which is what every CI checkout in this repository has
+# too -- none of them passes `lfs: true`.
+if ! git lfs pull; then
+  echo "    could not fetch the LFS objects; the files LFS tracks are pointer" >&2
+  echo "    files on disk until 'git lfs pull' succeeds. Nothing here reads them." >&2
+fi
+
 echo "==> poetry install"
 poetry install
 
@@ -58,11 +128,7 @@ echo "==> OpenSCAD"
 if command -v openscad >/dev/null 2>&1; then
   echo "    already installed: $(openscad --version 2>&1 | head -n 1)"
 elif command -v apt-get >/dev/null 2>&1; then
-  # `update` first, and not as an optimisation: an image whose package lists
-  # have gone stale resolves point releases that the archive has already
-  # superseded, and the fetch 404s on them rather than falling back.
-  $SUDO apt-get update
-  $SUDO apt-get install -y --no-install-recommends openscad
+  apt_install openscad
 elif command -v brew >/dev/null 2>&1; then
   # The snapshot cask, and not `openscad`: Homebrew disabled the latter in
   # September 2026 (the pinned 2021.01 release fails the macOS Gatekeeper

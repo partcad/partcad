@@ -407,9 +407,19 @@ is not a thing to insist on, so install into the checkout and run everything dir
 
   $ ./dev-tools/setup-native.sh
 
-That runs ``poetry install``, installs OpenSCAD, checks for the one thing a parallel install can get wrong (below),
-and reports what else this machine has. Afterwards, every command in the rest of this page works with its
-``devcontainer exec`` prefix dropped and its ``poetry run`` kept.
+That installs git-lfs, runs ``poetry install``, installs OpenSCAD, checks for the one thing a parallel install can
+get wrong (below), and reports what else this machine has. Afterwards, every command in the rest of this page works
+with its ``devcontainer exec`` prefix dropped and its ``poetry run`` kept.
+
+git-lfs is installed first, and it is the one step whose absence costs something you cannot see. ``.gitattributes``
+routes every ``.png``, ``.jpg`` and ``.svg`` through the ``lfs`` filter, and git resolves a ``filter=`` attribute naming a
+driver that no config defines by storing the file *verbatim* — no warning, no error, nothing in the commit to look
+at afterwards. So an image committed from a machine without git-lfs is raw bytes at a path declared to hold a
+pointer, and it surfaces on somebody else's machine as ``Encountered N files that should have been pointers, but
+weren't``, with N files that ``git checkout`` cannot clean: git keeps cleaning their real bytes into a pointer and
+comparing that against a raw blob. The four images under ``examples/feature_render/images/`` were committed that
+way and have since been repaired. Repairing one is ``git add --renormalize <path>`` and a commit. The exceptions to
+the rule are listed in ``.gitattributes`` with a reason beside each; read them before adding one.
 
 OpenSCAD is installed rather than merely reported because PartCAD treats it as part of the toolchain and not as an
 optional extra: the standalone bundles carry one, ``pc healthcheck`` asks after it, and a ``.scad`` part raises
