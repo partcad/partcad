@@ -414,6 +414,33 @@ class Shape(ShapeConfiguration):
 
         return self.components
 
+    async def get_representation(self, ctx, form=shape_envelope.FORM_BREP):
+        """This shape as a tree of nodes, with the geometry at each in 'form'.
+
+        The one way to ask a shape for itself as a whole. Every shape is such a
+        tree: an assembly is a node per thing it holds, and a part or a sketch is
+        a tree of depth one - itself, its geometry, and what it says about
+        connections. Nothing about the hierarchy depends on the form; the form
+        decides only what sits at a node that has geometry (see
+        'shape_envelope.FORM_BREP' / 'FORM_GLTF').
+
+        BREP is the tree the core builds, composes and caches, so that is what
+        this is in the ordinary case and it costs a cache lookup. glTF is that
+        same tree tessellated, in one sandbox, for a caller that has to draw it
+        rather than compute with it - a browser has no CAD kernel. It is not
+        cached: it is derived from the form that is, in one pass, and caching a
+        second copy of every assembly would cost more disk than it saves.
+
+        The sketches this object's ports are drawn with come with it, on the root
+        node, in the same form (see 'port_sketches'). They are not in what is
+        cached, because what a node records about a port is the reference and not
+        the geometry.
+        """
+        from . import port_sketches, shape_gltf
+
+        tree = await port_sketches.attach_async(ctx, await self.get_wrapped(ctx))
+        return await shape_gltf.in_form_async(ctx, tree, form)
+
     def prepare(self):
         return asyncio.run(self.prepare_async())
 
@@ -532,6 +559,15 @@ class Shape(ShapeConfiguration):
             # (see 'take_cache_key_from'). Costs one flag test once it has
             # happened.
             await self.prepare_async()
+
+            # And before the layer this shape stamps on whatever comes back means
+            # anything: that layer carries the shape's ports, and an assembly's
+            # 'map:' is what turns a declaration into ports. It is resolved here
+            # rather than on the way to 'get_shape()' because the cache hit below
+            # stamps the same layer without ever getting there. A no-op - one
+            # dictionary lookup - for everything that declares no 'map:', which
+            # is every part, every sketch, and most assemblies.
+            await shape_ports.prepare_async(self, ctx)
 
             is_cacheable = self.get_cacheable() and ctx
             if is_cacheable:
@@ -819,12 +855,18 @@ class Shape(ShapeConfiguration):
         lives here rather than in the cache - see ShapeCache. That includes what
         the shape reports about itself: two parts cut from the same solid may
         well be made of different materials, and each has to get its own back.
+
+        And what it says about connections, for the same reason: two parts cut
+        from one solid may have their ports in different places, or none at all,
+        so where this shape's ports are and which interfaces they form is
+        re-stamped here rather than stored inside the entry they share.
         """
         full_name, label = self._shape_metadata()
         metadata = {"name": full_name, "label": label}
         properties = self._shape_properties()
         if properties:
             metadata[shape_envelope.KEY_PROPERTIES] = properties
+        metadata.update(shape_ports.connection_metadata(self))
         return metadata
 
     async def convert(self, part_type: str, ctx=None, **kwargs):
@@ -997,36 +1039,32 @@ class Shape(ShapeConfiguration):
         return await self.convert("build123d", ctx)
 
     async def show_async(self, ctx=None):
-        # Remove this workaround when the VSCode extension is updated to pass 'ctx'
-        if ctx is None:
-            from .globals import _partcad_context
+        from . import viewer
 
-            ctx = _partcad_context
+        # A caller that cannot pass one gets the process-wide context; one that
+        # passes None where there is no global is told so rather than left to
+        # discover it from the first thing that needs one. See 'viewer.context'.
+        ctx = viewer.context(ctx, self.name)
+        if ctx is None:
+            return
 
         with pc_logging.Action("Show", self.project_name, self.name):
-            components = []
+            # The whole object, as the tree it is, with every node's geometry
+            # tessellated: the viewer is a browser and has no CAD kernel, so the
+            # glTF form is what it can draw (see 'shape_gltf'). Nothing about the
+            # tree is built for the viewer - it is the same hierarchy, with the
+            # same names, placements, ports and interfaces, that this shape
+            # answers with for every other purpose.
+            tree = None
             # TODO(clairbee): consider removing this exception handler permanently
             # Comment out the below exception handler for easier troubleshooting in CLI
             try:
-                components = await self.get_components(ctx)
+                tree = await self.get_representation(ctx, shape_envelope.FORM_GLTF)
             except Exception as e:
                 pc_logging.exception(e)
 
-            if len(components) != 0:
-                # The components are BREP envelopes and stay that way here: the
-                # viewer is a browser, so tessellation into glTF happens in a
-                # sandbox and the core never decodes a live OCP object to show one.
-                from . import viewer
-
-                # A port is a coordinate frame with no geometry, so it cannot be
-                # tessellated; it travels beside the geometry for the viewer to
-                # draw a triad at.
-                await shape_ports.prepare_async(self, ctx)
-                markers = self.with_ports.get_markers() if self.with_ports is not None else []
-
-                await viewer.show(
-                    ctx, components, name=self.name, kind=self.kind, package=self.project_name, markers=markers
-                )
+            if tree is not None:
+                await viewer.show(ctx, tree, name=self.name, kind=self.kind, package=self.project_name)
 
     def show(self, ctx=None):
         asyncio.run(self.show_async(ctx))

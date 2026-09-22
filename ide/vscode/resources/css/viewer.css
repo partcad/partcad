@@ -75,16 +75,114 @@ body {
     overflow: auto;
 }
 
-/* The canvas fills its pane and never scrolls: the model is moved with the
-   camera, not with a scrollbar. */
+/* The 3D pane is the control pane and the canvas, side by side. The canvas never
+   scrolls: the model is moved with the camera, not with a scrollbar. */
 .pane-3d {
+    display: flex;
     overflow: hidden;
 }
 
+/*
+ * The control pane: what is on screen, and how it is drawn.
+ *
+ * The tree takes whatever is left after the two controls at the bottom, which is
+ * most of it - an assembly is a hierarchy and a part has a row per port, so the
+ * list is the tall thing here and Animate and Opacity are two lines under it.
+ * It shrinks on a narrow panel rather than pushing the canvas out of one.
+ */
+.controls {
+    display: flex;
+    flex: 0 1 16rem;
+    flex-direction: column;
+    min-width: 7rem;
+    border-right: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.tree {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.4rem 0.3rem;
+    user-select: none;
+}
+
+.tree-line {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+/* Every row is indented from its parent by the width of one twisty, so a child's
+   label starts where its parent's does. */
+.tree-children {
+    margin-left: 0.9rem;
+}
+
+.tree-label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    padding: 0.05rem 0.15rem;
+    cursor: pointer;
+}
+
+.tree-line:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.tree-name {
+    overflow: hidden;
+    white-space: nowrap;
+    /* The names are long and the pane is narrow, so a name that does not fit is
+       cut off with the whole of it in the tooltip rather than wrapped: a wrapped
+       row is two rows, and the rows are what a reader counts. */
+    text-overflow: ellipsis;
+}
+
+/* The groups are the sections of a declaration rather than things of their own. */
+.tree-ports > .tree-line > .tree-label > .tree-name,
+.tree-interfaces > .tree-line > .tree-label > .tree-name {
+    color: var(--vscode-descriptionForeground);
+}
+
+.tree-twisty {
+    flex: 0 0 auto;
+    width: 0.9rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--vscode-descriptionForeground);
+    font-family: inherit;
+    font-size: 0.8em;
+    line-height: 1;
+    text-align: center;
+    cursor: pointer;
+}
+
+.tree-twisty-empty {
+    cursor: default;
+}
+
+.tree-twisty:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.tree input[type='checkbox'] {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+/* The canvas takes whatever the control pane leaves. 'min-width: 0', because a
+   flex item's basis is its content and the canvas is sized from this element -
+   without it the two would push each other. */
 .viewer {
     position: relative;
-    width: 100%;
-    height: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
 }
 
 .viewer canvas {
@@ -106,17 +204,6 @@ body {
     font-size: var(--vscode-font-size);
     text-align: center;
     white-space: pre-line;
-    pointer-events: none;
-}
-
-/* The name of what is being shown, out of the way in a corner. */
-.label {
-    position: absolute;
-    top: 0.5rem;
-    left: 0.75rem;
-    color: var(--vscode-descriptionForeground);
-    font-family: var(--vscode-font-family);
-    font-size: var(--vscode-font-size);
     pointer-events: none;
 }
 
@@ -575,40 +662,34 @@ a {
     font-family: var(--vscode-editor-font-family, monospace);
 }
 
-/* Opacity slider controls in the 3D viewer */
+/* How the model is drawn, under the tree of what is drawn: the bottom of the
+   control pane, and the only part of it that is there before anything is shown. */
 .viewer-controls {
-    position: absolute;
-    bottom: 1rem;
-    left: 0;
-    right: 0;
-    z-index: 10;
+    flex: 0 0 auto;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 3rem;
-    padding: 0.5rem 1rem;
-    background: transparent;
-    pointer-events: auto;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.5rem;
+    border-top: 1px solid var(--vscode-panel-border, transparent);
 }
 
 .control-label {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
     color: var(--vscode-foreground);
     font-family: var(--vscode-font-family);
     font-size: var(--vscode-font-size);
     white-space: nowrap;
-    padding: 0.5rem 0.75rem;
-    background: var(--vscode-editor-background);
-    border: 1px solid var(--vscode-panel-border, transparent);
-    border-radius: 4px;
+    cursor: pointer;
 }
 
 .opacity-slider {
-    width: 150px;
+    /* Whatever the row has left: the pane is resizable by the editor and the
+       slider is the part of the row that can give. */
+    flex: 1 1 3rem;
+    min-width: 0;
     cursor: pointer;
-    accent-color: #00ffff;
 }
 
 .control-value {

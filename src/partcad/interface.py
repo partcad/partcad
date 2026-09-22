@@ -13,7 +13,7 @@ import threading
 from . import config as pc_config
 from . import expr, interface_config
 from . import logging as pc_logging
-from . import telemetry
+from . import shape_envelope, shape_ports, telemetry
 from .geom import Location
 from .interface_inherit import InterfaceInherits
 from .sketch import Sketch
@@ -986,8 +986,11 @@ class Interface:
     async def get_components(self, ctx):
         """This interface's port sketches, each moved onto its port.
 
-        This is a viewer-only path (Interface.show); 'render_overlay' does the
-        same for a projection. The sketch components stay BREP envelopes - see
+        The flat spelling of what 'get_representation()' below gives as a tree, and
+        the one every *shape* that implements an interface reaches: a shape's
+        components are its own geometry plus the boundaries of its ports, which is
+        what 'pc render --with-interfaces' draws (see 'Shape.get_components' and
+        'render_overlay'). The sketch components stay BREP envelopes - see
         'place_components()' above for why.
         """
         components = []
@@ -997,30 +1000,74 @@ class Interface:
                 components.append(place_components(sketch_components, port_location(port)))
         return components
 
-    def get_markers(self):
-        """The ports' coordinate frames, as packed locations.
+    async def get_representation(self, ctx, form=shape_envelope.FORM_BREP):
+        """This interface as a tree of nodes, with the geometry at each in 'form'.
 
-        A port is a frame, and a frame has no geometry to tessellate - glTF has
-        no primitive for one. They are sent to the viewer alongside the geometry
-        so it can draw axes at each, which is what showing a bare 'port.location'
-        used to produce.
+        An interface is its ports, and each of those is drawn with a sketch that
+        comes along on the root node exactly as a part's do (see 'port_sketches'):
+        one frame and one boundary per port, which is the whole of what an interface
+        is. What the interface *inherits* is a node: a sub-assembly per instance of
+        each inherited interface, at the instance's location, with the whole of that
+        interface inside it, which is what makes an inherited bolt pattern something
+        a reader can switch off in one go.
+
+        The same tree, and the same two forms, as any other shape - an interface is
+        not a special kind of subject to whatever draws it. See
+        'Shape.get_representation'.
         """
-        return [{"name": name, "location": port_location(port).as_packed()} for name, port in self.get_ports().items()]
+        from . import port_sketches, shape_gltf
+
+        tree = await port_sketches.attach_async(ctx, await self._tree_async(ctx))
+        return await shape_gltf.in_form_async(ctx, tree, form)
+
+    async def _tree_async(self, ctx, seen: set = None):
+        """The BREP tree of this interface, built once and converted at the top.
+
+        'seen' stops an interface that reaches itself through what it inherits.
+        The inheritance is a DAG and a cycle in it is a broken package rather than
+        something to support, but a cycle here would recurse until the stack ran
+        out, which reports nothing about the package that caused it.
+        """
+        seen = set() if seen is None else seen
+        seen.add(self.full_name)
+
+        # No node per port: a port is drawn where it is, with the sketch it names,
+        # by whoever draws the tree. A node of its own would be that same sketch a
+        # second time, under a second checkbox.
+        children = []
+        for inherited in (self.get_parents() or {}).values():
+            parent = inherited.interface
+            if parent is None or parent.full_name in seen:
+                continue
+            subtree = await parent._tree_async(ctx, set(seen))
+            for instance_name, location in (inherited.instances or {}).items():
+                children.append(
+                    shape_envelope.placed(
+                        subtree,
+                        location,
+                        label=instance_name or parent.name,
+                    )
+                )
+
+        node = {"name": self.full_name, "label": self.name, shape_envelope.KEY_ASSEMBLY: children}
+        node.update(shape_ports.connection_metadata(self))
+        return node
 
     async def show_async(self, ctx=None):
-        components = []
+        from . import viewer
+
+        ctx = viewer.context(ctx, self.name)
+        if ctx is None:
+            return
+
+        tree = None
         try:
-            components = await self.get_components(ctx)
+            tree = await self.get_representation(ctx, shape_envelope.FORM_GLTF)
         except Exception as e:
             pc_logging.error(e)
 
-        markers = self.get_markers()
-        if len(components) != 0 or len(markers) != 0:
-            from . import viewer
-
-            await viewer.show(
-                ctx, components, name=self.name, kind="interface", package=self.project.name, markers=markers
-            )
+        if tree is not None:
+            await viewer.show(ctx, tree, name=self.name, kind="interface", package=self.project.name)
 
     def show(self, ctx=None):
         asyncio.run(self.show_async(ctx))

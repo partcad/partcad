@@ -419,10 +419,16 @@ async def _collect_section(ctx, assembly, nodes, seen, top=False):
 def _step_source(assembly):
     """The assembly whose children are the items that get assembled.
 
-    The root node of an ASSY file is itself a container, so the assembly a
-    package declares holds one embedded assembly with everything inside it. That
-    wrapper is neither a step nor a sub-assembly of its own - it is the same
-    thing under another name - so it is looked through rather than documented.
+    An assembly that holds nothing but one embedded 'links:' container holds
+    everything inside that - a file that wrapped its contents in a nested list
+    rather than listing them. Such a wrapper is neither a step nor a sub-assembly
+    of its own - it is the same thing under another name - so it is looked
+    through rather than documented.
+
+    It used to be every assembly's shape: the root node of an ASSY file became a
+    container of its own, so a package's assembly held exactly one embedded
+    assembly. It is the assembly itself now (see 'AssemblyFactoryAssy'), and this
+    is left for the files that nest anyway.
     """
     while len(assembly.children) == 1:
         child = assembly.children[0]

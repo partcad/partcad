@@ -183,24 +183,25 @@ def is_available() -> bool:
 
 
 def show(
-    objects,
+    obj,
     name=None,
     kind=None,
     package=None,
     keep_camera=False,
-    markers=None,
     reply_timeout: float = REPLY_TIMEOUT,
 ) -> dict:
-    """Display already-tessellated objects in the IDE's PartCAD Viewer.
+    """Display one already-tessellated object in the IDE's PartCAD Viewer.
 
-    'objects' is a list of '{"name", "label", "gltf"}' dicts as produced by
-    'protocol.make_object()' - the glTF is compressed and base64-encoded there,
-    not here, so a caller that already holds an encoded payload (PartCAD's
+    'obj' is the root node of the object's tree, as PartCAD's
+    'Shape.get_representation(ctx, "gltf")' produces it: nodes carrying geometry,
+    where each sits, and what each declares about connections. One shape of
+    payload for every kind of subject - a part, a sketch, an assembly, a scene,
+    an interface - so nothing here or on the far side asks which it is. The
+    protocol module documents the node.
+
+    The glTF of each node is compressed and base64-encoded by whoever produced
+    it, not here, so a caller that already holds an encoded payload (PartCAD's
     sandbox does) never has to decode it just to hand it over.
-
-    'markers' are coordinate frames with no geometry of their own - PartCAD's
-    interface ports - as packed '[[tx,ty,tz], [ax,ay,az], angle]' locations. The
-    viewer draws axes at each; there is no glTF primitive for "a frame".
 
     'package' is the package the shown object belongs to. The viewer has more to
     say about an object than its geometry - what an assembly is made of, how it
@@ -212,10 +213,8 @@ def show(
     'keep_camera' asks the viewer to leave the camera where the user put it,
     which is what makes re-showing the same part after an edit not jump.
     """
-    objects = list(objects or [])
-    for obj in objects:
-        if not protocol.is_object(obj):
-            raise TypeError("not a displayable object (no %r key): %r" % (protocol.KEY_GLTF, obj))
+    if not protocol.is_node(obj):
+        raise TypeError("not a shape tree (no %r and no %r key): %r" % (protocol.KEY_GLTF, protocol.KEY_ASSEMBLY, obj))
 
     return _send(
         {
@@ -225,8 +224,7 @@ def show(
             "kind": kind,
             "package": package,
             "keepCamera": bool(keep_camera),
-            "objects": objects,
-            "markers": [protocol.make_marker(marker) for marker in (markers or [])],
+            protocol.KEY_OBJECT: obj,
         },
         reply_timeout=reply_timeout,
     )

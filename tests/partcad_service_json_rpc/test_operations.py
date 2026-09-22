@@ -155,6 +155,11 @@ class FakeShape:
 
     def show(self, ctx=None):
         self.shown = True
+        # Which context it was shown in, and not merely that it was shown. A
+        # 'show()' with none falls back to a module-level context that a daemon
+        # cannot count on having, and a fake that dropped the argument is what let
+        # that go unnoticed.
+        self.shown_in = ctx
 
     def render(self, ctx, export_type, filepath=None):
         self.rendered = (export_type, filepath)
@@ -207,6 +212,7 @@ class FakeObject:
 
     def show(self, ctx=None):
         self.shown = True
+        self.shown_in = ctx
 
 
 class FakeProject:
@@ -575,6 +581,37 @@ def test_inspect_part_shows_the_part_and_signals_done():
     assert ("part", "//:foo", None) in session.partcad_ctx.requested
     assert part.shown is True
     assert seen[-1] == (events.SHOW_PART_DONE, None)
+
+
+@pytest.mark.parametrize(
+    "operation, kind",
+    [
+        (operations.inspect_part, "part"),
+        (operations.inspect_sketch, "sketch"),
+        (operations.inspect_interface, "interface"),
+        (operations.inspect_assembly, "assembly"),
+        (operations.inspect_scene, "scene"),
+    ],
+)
+def test_inspect_shows_the_object_in_this_session_s_context(operation, kind):
+    """Every kind, in the context the request is about.
+
+    'Shape.show_async()' falls back to a module-level context when it is given
+    none, and that fallback is a workaround for a client that cannot pass one. This
+    daemon can: it has the context in hand, it may be serving several, and whether
+    the global is set at all depends on how the session was brought up. Dropping it
+    is how showing a sketch from the IDE's Explorer came to answer "A context is
+    required to tessellate a shape tree" while 'pc inspect' - which goes through
+    'inspect_object', and always passed it - worked.
+    """
+    session, _seen = make_session()
+    shape = FakeShape(kind=kind)
+    session.partcad_ctx.shapes[(kind, "//:foo")] = shape
+
+    operation(session, {"package": "//", "name": "foo"})
+
+    assert shape.shown is True
+    assert shape.shown_in is session.partcad_ctx
 
 
 def test_inspect_part_without_context_is_a_silent_noop():

@@ -598,6 +598,15 @@ at all).
   `ports_async(deep=True)` (`pc render --with-internals`) is the one caller that looks inside anyway, plus
   `cae.py`, whose boundary conditions are applied to a face of one of the parts.
 
+- **An ASSY file's root node is the assembly** (`./src/partcad/assembly_factory_assy.py`): what the file's
+  top-level `links:` holds is held by the assembly directly. It used to be wrapped in a container node, which
+  gave every assembly's tree two roots with one name between them — a level nobody declared, nobody can name in
+  a `connect:`, and every reader of the tree had to know to ignore. A `links:` list *inside* the file is still a
+  node of its own: it is addressable by `name` from a `map:`, and what it holds belongs to it. `location:` on
+  the root is composed onto every item the file holds rather than onto the assembly's own placement, because
+  that one is re-stamped from the declaration on every materialization — including a cache hit, where nothing
+  has read the file at all.
+
 - **`map:`** (`./src/partcad/assembly_ports.py`): what an assembly externalizes of what it is made of. Two
   elements are a node and one of its ports, three are a node, an interface it implements and the instance of
   it — by ASSY *node* name, because an assembly places the same part six times. A mapped interface instance
@@ -607,6 +616,44 @@ at all).
   asynchronous (`shape_ports.prepare_async()`, a no-op for everything that declares no `map:`) and every
   reader of an object's ports calls it first. It runs *before* `ports:` and `implements:` are read, which is
   what lets an `implements:` instance sit at a mapped port (`port:` on the instance).
+
+- **One shape, one tree, two forms** (`./src/partcad/shape_envelope.py`,
+  `./src/partcad/shape_gltf.py`): every shape is a tree of nodes, and
+  `Shape.get_representation(ctx, form)` is the one way to ask for it. A part or a sketch is that tree one node
+  deep; an assembly is a node per thing it holds, nested as deeply as it goes, which is the very hierarchy
+  `Assembly._get_shape_real()` instantiates; an interface is a node per port, with what it inherits as
+  sub-assemblies (`Interface.get_representation`). Every node carries its geometry, where it sits, and what it
+  declares about connections — its ports, each naming the interface instance it belongs to, and those
+  instances, each naming its ports (`shape_ports.connection_metadata`). The ports are partitioned between the
+  interfaces and the ones that belong to none, so a reader lists each port once.
+
+  **The form is a parameter, not a second hierarchy.** `FORM_BREP` is what the core composes and caches because
+  it is exact; `FORM_GLTF` is that same tree tessellated, for a caller that has to draw it rather than compute
+  with it — a browser has no CAD kernel. One sandbox converts the whole tree (`shape_gltf.convert_async` →
+  `wrappers/wrapper_gltf.py`), not one per node: starting an interpreter and importing OCP is seconds, so an
+  assembly of five hundred parts converted a node at a time would cost longer than building it. Placements are
+  never baked into the geometry in either form — a node's `location` places its geometry, its children *and*
+  its ports, and whoever realizes or draws the tree composes them down it (`shape_envelope.placed()` is the one
+  composition, shared by an assembly placing a child and an interface placing a sketch on a port).
+
+  **The sketches the ports are drawn with come with the representation** (`./src/partcad/port_sketches.py`), on
+  the root node, keyed by the reference the ports already name. A port is a coordinate frame and is drawn as a
+  triad; most ports also name a `sketch:`, which is the shape the connection happens across, and a viewer draws
+  that too. One entry per sketch however many ports point at it — a bolt pattern is four ports and one circle —
+  and it is attached *after* `get_wrapped()` rather than recorded in a node, because what a node records about a
+  port is the reference: reading a declaration is a lookup and building a sketch is not.
+
+  **The connection layer is re-stamped rather than stored.** It rides in `get_cache_metadata()`, the layer
+  `apply_metadata()` puts back around every payload as it is materialized, for the reason `properties:` does: a
+  cache entry is keyed on geometry and shared by every object whose geometry is identical, and two parts cut
+  from one solid need not have their ports in the same places. That is also why `get_wrapped()` resolves a
+  `map:` (`shape_ports.prepare_async`) before it reads the cache — a no-op for everything that declares none.
+
+  That covers the node a shape answers for. The nodes *inside* a cached assembly carry what was written when it
+  was built, exactly as their names and labels already did, and a declaration cannot have changed under them:
+  `ports:`, `implements:` and `map:` are all in the shape hash — `_NON_GEOMETRIC_CONFIG_KEYS` does not name
+  them, and what it does not name is hashed. Editing an *interface definition* is the gap that leaves, and it
+  is the one it already left for everything else derived from one.
 
 - **Drawing ports and interfaces** (`./src/partcad/render_overlay.py`, `./src/partcad/wrappers/stroke_text.py`):
   `pc render --with-ports`/`--with-interfaces` draws the connection metadata on top of a projection.

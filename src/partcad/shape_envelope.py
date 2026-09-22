@@ -59,6 +59,22 @@ except ImportError:  # pragma: no cover - exercised on the other interpreter
 KEY_BREP = "brep"
 KEY_ASSEMBLY = "assembly"
 KEY_BYTES = "__bytes__"
+# The geometry of a node, in the other form it can take: deflate-compressed,
+# base64 binary glTF. A node carries one form or the other and never both - see
+# FORM_BREP/FORM_GLTF below.
+KEY_GLTF = "gltf"
+# What a node's object declares about connections, as plain data: where its ports
+# are, and which interface instance each belongs to. Stamped by the shape itself
+# (see 'Shape.get_cache_metadata'), so it is re-applied every time a payload is
+# materialized and cannot be served stale out of a cache entry that several
+# objects of identical geometry share.
+KEY_PORTS = "ports"
+KEY_INTERFACES = "interfaces"
+# On the root node of a tree: the sketches the ports anywhere in it are drawn with,
+# keyed by the reference those ports name. One entry per sketch however many ports
+# point at it - a bolt pattern is four ports drawn with one circle. Attached by
+# 'port_sketches', which says why it is not on the ports themselves.
+KEY_SKETCHES = "sketches"
 # Optional placement on a shape/assembly object, carried opaquely by the core
 # and turned into a real location by the geometry-side codec (ocp_serialize).
 KEY_LOCATION = "location"
@@ -136,12 +152,75 @@ MAX_BREP_EXPANSION = 100
 MAX_BREP_EXPANSION_FLOOR = 1 << 20
 
 
+# The two forms a node's geometry can take, and the key each one rides under.
+#
+# One tree, two payloads. BREP is what the core carries everywhere and what is
+# cached: it is exact, it is what every wrapper reads, and it is what an assembly
+# is composed out of. glTF is tessellated and is what a renderer can draw - a
+# browser has no CAD kernel - so it is what the IDE viewer is sent. Which one a
+# caller wants is a parameter of 'Shape.get_representation()'; the hierarchy
+# itself is built once, by one piece of code, whichever form its leaves hold.
+FORM_BREP = KEY_BREP
+FORM_GLTF = KEY_GLTF
+FORMS = (FORM_BREP, FORM_GLTF)
+
+
+def geometry_key(form: str) -> str:
+    """The node key the geometry of 'form' rides under."""
+    if form not in FORMS:
+        raise ValueError("There is no '%s' form of a shape; it is one of %s" % (form, ", ".join(FORMS)))
+    return form
+
+
+def placed(node, location=None, name=None, label=None) -> dict:
+    """A node re-stamped for where it sits inside another one.
+
+    The node keeps its own geometry and, if it holds anything, its own internal
+    location; the placement being applied is composed onto that - placement
+    first, then the node's own - and carried as data. Nothing is realized here:
+    that is what makes composing a tree free of a CAD kernel, and it is why every
+    consumer of a tree composes the locations down it (see
+    'ocp_serialize.decode_shape', which does it for the BREP form).
+
+    The one piece of code that puts a node inside a node, so that an assembly
+    placing a child and an interface placing a sketch on one of its ports cannot
+    come to disagree about what a placement means.
+    """
+    from .geom import Location
+
+    entry = dict(node)
+    if name is not None:
+        entry["name"] = name
+    if label is not None:
+        entry["label"] = label
+    if location is not None:
+        location = location if isinstance(location, Location) else Location(location)
+        own = node.get(KEY_LOCATION)
+        entry[KEY_LOCATION] = (location if own is None else location * Location(own)).as_packed()
+    return entry
+
+
 def is_shape_object(obj) -> bool:
     return isinstance(obj, dict) and KEY_BREP in obj
 
 
 def is_assembly_object(obj) -> bool:
     return isinstance(obj, dict) and KEY_ASSEMBLY in obj
+
+
+def is_gltf_object(obj) -> bool:
+    """Whether 'obj' is a node whose geometry is tessellated rather than exact."""
+    return isinstance(obj, dict) and KEY_GLTF in obj
+
+
+def is_node(obj) -> bool:
+    """Whether 'obj' is a node of a shape tree at all, in either form.
+
+    A node has geometry, or children, or both. One that has neither is still a
+    node - an assembly with nothing in it, an interface with no ports - and is
+    recognised by the key that says which of the two it would carry.
+    """
+    return is_shape_object(obj) or is_assembly_object(obj) or is_gltf_object(obj)
 
 
 def is_shape_envelope(obj) -> bool:
@@ -437,7 +516,7 @@ def serialize(obj, name=None, label=None) -> str:
     return dumps(obj, name=name, label=label)
 
 
-def deserialize(data) -> object:
+def deserialize(data) -> dict:
     """Deserialize the form produced by 'serialize()'.
 
     The response is taken as the last non-empty line of 'data', so any leading

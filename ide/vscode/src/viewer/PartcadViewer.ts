@@ -7,14 +7,21 @@
 import * as vscode from 'vscode';
 import { traceError, traceVerbose } from '../common/log/logging';
 import * as utils from '../utils';
-import { MSG_CLEAR, MSG_SHOW, ViewerMessage, decodeGltf } from './protocol';
+import { MSG_CLEAR, MSG_SHOW, ViewerMessage, ViewerNode, decodeGltf } from './protocol';
 
-/** What the webview is handed: the glTF, decompressed, as base64. */
-interface WebviewObject {
-    name: string;
-    label: string | null;
-    gltf: string;
-    size: number;
+/**
+ * One node as the webview is handed it: the same node, with its glTF
+ * decompressed into base64 and measured.
+ *
+ * Decompressed here, in the extension host, rather than in the webview: Node has
+ * zlib built in, a webview would need either a bundled inflater or
+ * DecompressionStream. The size travels because the renderer shows what it is
+ * loading, and it is the size of the buffer rather than of the payload.
+ */
+interface WebviewNode extends Omit<ViewerNode, 'assembly' | 'sketches'> {
+    size?: number;
+    assembly?: WebviewNode[];
+    sketches?: Record<string, WebviewNode>;
 }
 
 /**
@@ -95,20 +102,9 @@ export class PartcadViewer implements vscode.Disposable {
             return;
         }
 
-        let objects: WebviewObject[];
+        let object: WebviewNode | null;
         try {
-            objects = (message.objects ?? []).map((object, index) => {
-                // Decompressed here, in the extension host, rather than in the
-                // webview: Node has zlib built in, a webview would need either a
-                // bundled inflater or DecompressionStream.
-                const gltf = decodeGltf(object.gltf);
-                return {
-                    name: object.name ?? `object-${index}`,
-                    label: object.label ?? null,
-                    gltf: gltf.toString('base64'),
-                    size: gltf.length,
-                };
-            });
+            object = message.object ? inflate(message.object) : null;
         } catch (error: any) {
             traceError(`PartCAD Viewer: failed to decode the geometry: ${error.message}`);
             void vscode.window.showErrorMessage(`PartCAD Viewer: failed to decode the geometry: ${error.message}`);
@@ -132,8 +128,11 @@ export class PartcadViewer implements vscode.Disposable {
             // the renderer showing the 3D view alone.
             package: message.package ?? null,
             keepCamera: message.keepCamera === true,
-            objects,
-            markers: message.markers ?? [],
+            // The object as it arrived, geometry aside: the hierarchy, the
+            // placements, the ports and the interfaces are PartCAD's account of
+            // what is on screen, and this side knows nothing about assemblies,
+            // ports or interfaces.
+            object,
         });
     }
 
@@ -288,13 +287,15 @@ export class PartcadViewer implements vscode.Disposable {
 					<div id="tabs" class="tabs" hidden></div>
 					<div class="panes">
 						<div id="pane-3d" class="pane pane-3d">
-							<div id="viewer" class="viewer">
-								<div id="overlay" class="overlay">Nothing to display yet.</div>
-								<div id="label" class="label"></div>
+							<div class="controls">
+								<div id="tree" class="tree" role="tree"></div>
 								<div class="viewer-controls">
 									<label class="control-label"><input type="checkbox" id="animate-checkbox" checked> Animate</label>
-									<label class="control-label">Opacity: <input type="range" id="opacity-slider" min="0" max="100" value="100" class="opacity-slider"><span id="opacity-value">100%</span></label>
+									<label class="control-label">Opacity <input type="range" id="opacity-slider" min="0" max="100" value="100" class="opacity-slider"><span id="opacity-value" class="control-value">100%</span></label>
 								</div>
+							</div>
+							<div id="viewer" class="viewer">
+								<div id="overlay" class="overlay">Nothing to display yet.</div>
 							</div>
 						</div>
 						<div id="pane-bom" class="pane" hidden></div>
@@ -313,6 +314,27 @@ export class PartcadViewer implements vscode.Disposable {
         this.panel?.dispose();
         this.panel = undefined;
     }
+}
+
+/** A node, and everything under it, with its geometry decompressed and measured. */
+function inflate(node: ViewerNode): WebviewNode {
+    const inflated: WebviewNode = { ...node };
+    if (node.gltf !== undefined) {
+        const gltf = decodeGltf(node.gltf);
+        inflated.gltf = gltf.toString('base64');
+        inflated.size = gltf.length;
+    }
+    if (node.assembly !== undefined) {
+        inflated.assembly = node.assembly.map(inflate);
+    }
+    if (node.sketches !== undefined) {
+        // The sketches the ports are drawn with are nodes like any other, and
+        // carry their geometry the same way.
+        inflated.sketches = Object.fromEntries(
+            Object.entries(node.sketches).map(([reference, sketch]) => [reference, inflate(sketch)]),
+        );
+    }
+    return inflated;
 }
 
 function getNonce(): string {

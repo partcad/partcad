@@ -59,6 +59,39 @@ The 3D view arrives over the viewer protocol from whichever ``partcad`` asked fo
 other tabs are questions put to the PartCAD daemon, fetched the first time the tab is looked at and cached
 until the next object is shown. An object that belongs to no package gets the 3D view alone.
 
+Down the left of the 3D view is a list of **what is on screen**, with a checkbox on every line: unticking one
+hides that line and everything under it, and ticking it again brings back exactly what was showing before.
+**Animate** and **Opacity** are at the bottom of the same pane.
+
+The list is the object itself. Every object PartCAD can show is a tree, and the pane is that tree:
+
+- a **part** or a **sketch** is one line — itself;
+- an **assembly** or a **scene** is a line per thing it holds, named as the ``.assy`` file names it, as deeply
+  as the file nests them;
+- an **interface** is a line per port it is drawn with, with a line per interface it inherits holding the whole
+  of that one (see :doc:`assy`).
+
+Under each of those lines is what that object says about connections: a line per **interface** instance with the
+ports it is made of underneath it, and a ``ports`` line for the ports that belong to no interface. Every port is
+listed once and drawn as a coordinate frame — the same frames ``pc render --with-ports`` draws on a projection
+(see :doc:`cli`). An assembly's own ports are the ones it declares and the ones its ``map:`` externalizes, so
+they are listed on the assembly's own line rather than on the things inside it.
+
+A port that is drawn with a sketch — the circle of a hole, the profile of a rail — shows that too, in the blue of
+the ``+Z`` line of its own frame: the shape the connection happens across, which is what makes an opening
+readable as one. It is half see-through, so the opening it covers still reads as one, and the **Opacity** slider
+leaves it alone — that slider is about the shape rather than about what is drawn on top of it. It is part of the
+port, so the port's checkbox draws or hides both.
+
+The ``ports`` and ``interfaces`` lines start folded up — for an assembly they run to hundreds of rows, and
+unfolded they bury the hierarchy they hang off. Pointing at a part or a sub-assembly makes it **flicker** in the
+3D view, which is how to tell which of the shapes on screen a line is without moving the camera.
+
+An object's own ports start out drawn. The ports of everything inside it do not: an assembly of forty parts has
+a frame at every hole of every one of them, and all of it at once shows nothing. A line whose tick is grey
+rather than solid is one that is showing while something under it is hidden — which is how a folded-up line says
+so.
+
 The two analysis tabs are the exception to "questions": looking at one *runs* the analysis. A field over the
 model names which implementation runs it — pre-filled with the configured default, and editable, so a machine
 whose solver is elsewhere is one line away from an answer rather than stuck on an error. The model is drawn

@@ -27,9 +27,8 @@ from .protocol import (
     ProtocolError,
     decode_gltf,
     encode_gltf,
-    is_object,
-    make_marker,
-    make_object,
+    is_node,
+    make_node,
 )
 
 __version__ = "0.8.120"
@@ -48,8 +47,7 @@ __all__ = [
     "disconnect",
     "encode_gltf",
     "is_available",
-    "is_object",
-    "make_marker",
-    "make_object",
+    "is_node",
+    "make_node",
     "show",
 ]

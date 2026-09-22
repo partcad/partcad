@@ -136,6 +136,16 @@ cannot ask itself -- the CSP forbids network access and the daemon is behind the
 so it asks the host (`fetchTab`) and the host answers (`tabData`), on first look. Which is why the show
 message carries the object's **package**: without it the panel offers the 3D view alone.
 
+**The 3D tab is a control pane and a canvas, over one node tree.** What arrives over the protocol is a single
+tree of nodes, whatever is being shown -- a part or a sketch is that tree one node deep, an assembly is a node
+per thing it holds, an interface is a node per port -- and it is PartCAD's own hierarchy with glTF at the nodes
+instead of BREP (`partcad/shape_envelope.py`). **So there is no per-kind case on this side and no depth-1
+special case**: `scene.ts` walks the tree into `THREE.Group`s and `tree.ts` walks it into rows, agreeing on what
+the drawables are called through `nodes.ts` and nothing else. Do not derive a structure here or bake a placement
+into geometry -- a node's `location` places its geometry, its children and its ports, and the renderer composes
+them down the tree (see "Coordinates and units" in
+[docs/partcad-viewer.md](./docs/partcad-viewer.md), which also says what starts out checked).
+
 None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote` and `cae.analyze` are the CLI's
 own operations (`pc bom`, the book `pc render -t html` writes, the cart `pc supply quote` fills, the analysis
 `pc cae fea`/`pc cae cfd` runs), asked for as data rather
@@ -177,9 +187,15 @@ Four things about it are load-bearing:
   the reason in the overlay; it lives there because every webview module imports it, and a module's
   dependencies are evaluated before its own body, so it is installed before anything can throw.
 - **Nothing is escaped on its way into a pane.** What the tabs display is text out of a package's
-  configuration -- a description, a part name, a supplier's answer -- so every pane builds its DOM node by
-  node through `src/webview/dom.ts` rather than assigning `innerHTML`. `textContent` cannot be talked into
-  being markup; a template literal can.
+  configuration -- a description, a part name, a supplier's answer, the name of a port -- so every pane builds
+  its DOM node by node through `src/webview/dom.ts` rather than assigning `innerHTML`. `textContent` cannot be
+  talked into being markup; a template literal can.
+- **The webview has one test suite, and it brings its own DOM.** `src/test/suite/viewerTree.test.ts` runs in the
+  extension host, which has none, so it installs a stand-in with the handful of methods `dom.ts` asks of an
+  element and exercises what the pane lists for a node tree, and which of it ends up drawn, through it. That is as far as this reaches: a test
+  that imported anything else of `src/webview` would import `scene.ts`, which builds a `WebGLRenderer` as it
+  loads. Note that `tsconfig.json` excludes `src/webview` as a *root* -- an imported module is still compiled,
+  which is why this works, and why what it imports has to be free of three.js.
 
 Geometry reaches the viewer already tessellated: `partcad` renders to binary glTF in a sandbox and sends it
 compressed, so the extension never needs a CAD library. It used to hand live OCP objects to the third-party

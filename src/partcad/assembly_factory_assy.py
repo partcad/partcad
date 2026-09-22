@@ -216,21 +216,62 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         with pc_logging.Action("ASSY", assembly.project_name, assembly.name):
             assy = self.read_assy()
 
-            # The root node of an ASSY file is a container like any other, and
-            # its "description" is what the file says about the assembly as a
-            # whole. The package that declares the assembly may say it better
-            # ("desc"), so that one wins; with neither, the assembly's documents
-            # would have nothing to say about it at all.
+            # The root node of an ASSY file says what the file says about the
+            # assembly as a whole. The package that declares the assembly may say
+            # it better ("desc"), so that one wins; with neither, the assembly's
+            # documents would have nothing to say about it at all.
             if not assembly.desc:
                 assembly.desc = self.node_description(assy)
 
-            result = await self.handle_node(assembly, assy)
-            if result is not None:
-                assembly.children.append(result)
+            # And the root node *is* this assembly rather than something inside
+            # it, so the file fills this assembly directly. Putting a container in
+            # between gave the tree two roots with one name between them - "logo"
+            # holding "logo:links" holding everything - which is a level nobody
+            # declared, nobody can name in a 'connect:', and every reader of the
+            # tree had to know to ignore.
+            if "links" in assy and assy["links"] is not None:
+                await self.handle_node_list(assembly, assy["links"])
+                self.apply_root_placement(assembly, assy)
             else:
+                # A file that is one part or one assembly and nothing else. It
+                # still has a node of its own, because that is what it is.
+                result = await self.handle_node(assembly, assy)
+                if result is not None:
+                    assembly.children.append(result)
+            if not assembly.children:
                 pc_logging.warning("Assembly is empty")
 
             self.count_instantiated()
+
+    def apply_root_placement(self, assembly, node) -> None:
+        """Move what the file holds by where its root node says it is.
+
+        The root node has no node of its own to carry a placement on any more, so
+        'location:' on it is composed onto every item it holds - which is what
+        moving the whole of it means, and keeps the connections between those items
+        exactly as they were resolved, since all of them move together.
+
+        Not composed onto the assembly's own location instead: that one is
+        re-stamped from the declaration every time a payload is materialized (see
+        'Assembly.get_cache_metadata'), including on a cache hit, where nothing has
+        read this file at all.
+
+        A 'connect:' on the root is reported rather than honoured. It names a
+        sibling to connect to and the root node has none, so there has never been
+        anything it could do - it used to be answered with "Target part not found",
+        which said nothing about where the mistake was.
+        """
+        for section in ("connect", "connectPorts"):
+            if section in node:
+                pc_logging.error(
+                    "%s: the root node of an ASSY file has nothing to '%s' to; ignoring it" % (self.name, section)
+                )
+        location = node.get("location")
+        if location is None:
+            return
+        placement = Location(location)
+        for child in assembly.children:
+            child.location = placement if child.location is None else placement * Location(child.location)
 
     async def handle_node_list(self, assembly, node_list):
         tasks = []
@@ -359,7 +400,11 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             item = Assembly(
                 assembly.project_name,
                 {
-                    "name": f"{self.name}:{name}",
+                    # An anonymous 'links:' list is named after what it is, not
+                    # after the nothing it was called: this name is what the node
+                    # carries into the tree, and a reader of that tree - the IDE
+                    # viewer draws it now - was being shown "<assembly>:None".
+                    "name": f"{self.name}:{name}" if name else f"{self.name}:links",
                     "child": True,
                     # A container node declares a sub-assembly, so what the node
                     # says it is is what that sub-assembly is: the same "desc"
