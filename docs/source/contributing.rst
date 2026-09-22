@@ -737,6 +737,15 @@ what is left is the kernel's own arithmetic, on which two architectures can
 still disagree along a curved silhouette. That is the other reason this check
 runs on one cell of the matrix.
 
+That cell is ``ubuntu-latest`` on x86_64, rendering in the ``docker`` Python
+sandbox -- so that is the machine the checked-in drawings belong to, and the one
+to re-render them on. A render from anywhere else is a true drawing of the same
+object and still not the file the check compares against: twenty-seven of them
+came back from an arm64 laptop differing along a curve, and the job stayed red
+for everybody until they were rendered again on Linux. A machine with a
+container runtime already picks that sandbox by itself; a configuration that has
+said otherwise is overruled for one run with ``PC_PYTHON_SANDBOX=docker``.
+
 An implementation another package supplies is not PartCAD's to fix, and one of
 them may well write a different file every time. Those files are named in the
 CI check's ``UNSTABLE`` list, which is deliberately short: every entry is a file

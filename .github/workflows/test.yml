@@ -1453,10 +1453,39 @@ jobs:
             ':(exclude)examples/feature_render/images/cylinder.jpg'
           )
 
-          if [ -n "$(git status --porcelain -- examples "${UNSTABLE[@]}")" ]; then
+          # Staged first, and that is not a formality: 'git status' and 'git
+          # diff' give different answers here, and the one this check used to
+          # ask is the one that is wrong.
+          #
+          # 'git status' decides that a file changed by comparing the size
+          # recorded in the index against the size on disk, and reports a
+          # difference there as a content change without reading either file.
+          # In a checkout where the LFS smudge never ran -- which is every
+          # checkout in this repository, since nothing here passes 'lfs: true',
+          # and the examples PartCAD *reads* are held out of LFS for exactly
+          # that reason -- each of these drawings on disk is a 130-byte pointer
+          # file. So the moment 'pc render' rewrites one with the very bytes it
+          # already had, its size goes from 130 to some tens of kilobytes and
+          # 'git status' calls that a modification. From the commit that moved
+          # 'examples/**/*.svg' into LFS onward, that was every drawing the
+          # render rewrote: 76 of them on the run that surfaced this, against
+          # the 27 that had really changed -- and this check could not pass at
+          # all, whatever anybody committed.
+          #
+          # 'git add' is what reads them: it runs the 'clean' filter, so what it
+          # stores is the pointer the bytes on disk actually hash to, and
+          # identical content stages as nothing. 'git diff --cached' is then the
+          # real answer -- and '-A' keeps the other half of what this check is
+          # for, a render that produces a *new* file or stops producing one.
+          #
+          # The index is a scratch file on a runner that never commits, so
+          # staging into it costs nothing and the next checkout undoes it.
+          git add -A -- examples "${UNSTABLE[@]}"
+
+          if ! git diff --cached --quiet -- examples "${UNSTABLE[@]}"; then
             echo "::error::'pc render -r' changed the checked-in examples. Re-render locally ('cd examples && pc render -r') and commit the result, or fix the regression."
-            git status --porcelain -- examples "${UNSTABLE[@]}"
-            git --no-pager diff -- examples "${UNSTABLE[@]}"
+            git diff --cached --name-status -- examples "${UNSTABLE[@]}"
+            git --no-pager diff --cached -- examples "${UNSTABLE[@]}"
             exit 1
           fi
 
