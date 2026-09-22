@@ -12,7 +12,7 @@ import tempfile
 import typing
 
 from . import logging as pc_logging
-from . import sandbox_versions, shape_envelope
+from . import sandbox_versions, shape_envelope, shape_ports
 from . import software as pc_software
 from . import telemetry, wrapper
 from .geom import Location
@@ -272,7 +272,10 @@ class Assembly(Shape):
         that every shape carries, an assembly carries its own placement: two
         assemblies of the same children in different places share the cached
         children but must not inherit each other's location. It carries what it
-        reports about itself for the same reason.
+        reports about itself, and what it says about connections, for the same
+        reason - an assembly's own ports are the ones its 'map:' externalizes,
+        and two assemblies of identical geometry need not externalize the same
+        ones.
         """
         name = ("%s:%s" % (self.project_name, self.name)) if self.name else self.project_name
         metadata = {"name": name, "label": self.name}
@@ -282,6 +285,7 @@ class Assembly(Shape):
         root = self._root_location()
         if root is not None:
             metadata[shape_envelope.KEY_LOCATION] = root.as_packed()
+        metadata.update(shape_ports.connection_metadata(self))
         return metadata
 
     def _root_location(self):
@@ -301,21 +305,14 @@ class Assembly(Shape):
         return name, label
 
     def _place(self, child_env, placement, name, label):
-        """The child's envelope re-stamped for this assembly.
+        """The child's node re-stamped for this assembly.
 
-        The child keeps its own geometry and, if it is a sub-assembly, its own
-        internal location; this assembly's placement of the child is composed
-        onto that (placement first, then the child's own) and carried as data.
+        'shape_envelope.placed()' is the composition, and is shared with
+        everything else that puts a node inside a node: the name and the label
+        are this assembly's account of the child, and the placement is composed
+        onto whatever the child already carried.
         """
-        entry = dict(child_env)
-        entry["name"] = name
-        entry["label"] = label
-        if placement is not None:
-            placement = placement if isinstance(placement, Location) else Location(placement)
-            own = child_env.get(shape_envelope.KEY_LOCATION)
-            composed = placement if own is None else (placement * Location(own))
-            entry[shape_envelope.KEY_LOCATION] = composed.as_packed()
-        return entry
+        return shape_envelope.placed(child_env, placement, name=name, label=label)
 
     def connected_children(self):
         """Every child of this assembly, including those of the sub-assemblies it embeds.

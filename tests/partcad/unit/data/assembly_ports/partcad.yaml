@@ -83,6 +83,13 @@ assemblies:
       inner: [frame/plate, handle]
       unnamed: [loose, handle]
 
+  # A file that says where the whole of what it holds is.
+  rooted:
+    type: assy
+    desc: Two plates, a hundred millimetres up
+    map:
+      held: [lower, handle]
+
   # A map written in terms of what the assembly is parametrized by.
   parametric:
     type: assy

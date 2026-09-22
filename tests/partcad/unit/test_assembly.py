@@ -132,6 +132,64 @@ def _child_offsets(envelope):
     return offsets
 
 
+def test_an_assembly_has_one_root_node():
+    """The file's root node is the assembly, not a container inside it.
+
+    An ASSY file used to be instantiated as a node holding a container holding
+    everything, so the tree had two roots with one name between them - a level
+    nobody declared, nobody can name in a 'connect:', and every reader of the tree
+    had to know to ignore.
+    """
+    ctx = pc.init("tests/partcad/unit/data/assembly_ports/partcad.yaml")
+    mount = ctx._get_assembly(":mount")
+    assert mount is not None
+    asyncio.run(mount.do_instantiate())
+
+    assert [child.name for child in mount.children] == ["lower", "upper"]
+
+
+def test_the_root_nodes_own_placement_moves_what_it_holds():
+    """It has no node of its own to carry one, so every item it holds moves.
+
+    Composed onto each item rather than onto the assembly's own location, which is
+    re-stamped from the declaration on every materialization - including a cache
+    hit, where nothing has read the file at all.
+    """
+    ctx = pc.init("tests/partcad/unit/data/assembly_ports/partcad.yaml")
+    rooted = ctx._get_assembly(":rooted")
+    assert rooted is not None
+    asyncio.run(rooted.do_instantiate())
+
+    # The file puts the whole of itself 100mm up, and its second plate 20mm above
+    # the first: 100 and 120, and the assembly's own location is untouched.
+    placements = {child.name: tuple(child.location.translation) for child in rooted.children}
+    assert placements == {"lower": (0.0, 0.0, 100.0), "upper": (0.0, 0.0, 120.0)}
+    assert rooted._root_location() is None
+
+
+def test_an_anonymous_links_list_is_named_after_what_it_is():
+    """An ASSY file's 'links:' becomes an assembly of its own inside the object.
+
+    It is no object of any package and nobody names it in a 'connect:', but it is
+    a node of the tree the assembly is instantiated as - the IDE viewer draws that
+    tree now - so it needs a name a reader can make sense of. An anonymous one used
+    to be called "<assembly>:None".
+    """
+    ctx = pc.init("tests/partcad/unit/data/assembly_ports/partcad.yaml")
+    grouped = ctx._get_assembly(":grouped")
+    assert grouped is not None
+    asyncio.run(grouped.do_instantiate())
+
+    # The file's root list is this assembly, and the two 'links:' lists inside it
+    # are nodes of their own: one named 'frame', one anonymous.
+    assert sorted(child.item.name for child in grouped.children) == ["grouped:frame", "grouped:links"]
+
+    # A 'links:' list inside the file is still seen through where it is what an
+    # assembly is made of: its connections are this assembly's own, which is what
+    # 'connected_children()' answers and the grouped bill of materials reads.
+    assert sorted(child.name for child in grouped.connected_children() if child.name) == ["frame", "loose", "plate"]
+
+
 def test_assembly_child_order_is_declaration_order():
     """Children are placed in declaration order, not in the order they finish.
 

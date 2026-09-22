@@ -42,9 +42,10 @@ import {
     TabId,
     isAnalysisTab,
 } from './messages';
-import { clearGeometry, resizeCanvas, showGeometry, setOpacity, setAutoRotate } from './scene';
+import { clearGeometry, flicker, resizeCanvas, showGeometry, setOpacity, setAutoRotate, showItems } from './scene';
 import { SupplyView } from './supply';
 import { TabSpec, Tabs } from './tabs';
+import { Tree } from './tree';
 
 const panes: Record<TabId, HTMLElement> = {
     // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -68,6 +69,17 @@ for (const tab of ANALYSIS_TABS) {
     caeViews[tab] = new CaeView(panes[tab], tab, (implementation) => runAnalysis(tab, implementation));
 }
 const tabs = new Tabs(byId('tabs'), onTabSelected);
+
+// What the 3D view is showing, as a tree of items to switch on and off. It lives
+// beside the canvas rather than over it, with the Animate box and the Opacity
+// slider under it: all three say what is drawn, so all three are one pane.
+const objectTree = new Tree(
+    byId('tree'),
+    () => showItems(objectTree.visible()),
+    // Pointing at a part or a sub-assembly flickers it, which is the one thing that
+    // says "this row is that shape" without moving the camera.
+    (items) => flicker(items),
+);
 
 // Initialize animation checkbox
 const animateCheckbox = document.getElementById('animate-checkbox') as HTMLInputElement;
@@ -194,6 +206,22 @@ async function show(message: ShowMessage): Promise<void> {
         caeViews[tab]?.setBusy('Select this tab to run the analysis.');
     }
 
+    // The pane first, and the visibility it asks for with it: an item that starts
+    // out unticked - the ports of everything inside an assembly - must not be
+    // drawn even for the one frame between the geometry arriving and the pane
+    // being built.
+    //
+    // What the user had switched off is kept when the camera is: both mean "the
+    // same object again", which is what a save and a re-render produce, and
+    // losing a selection to one is as unwelcome as losing the camera.
+    if (message.object === null) {
+        objectTree.clear();
+    } else {
+        const remembered = message.keepCamera ? objectTree.state() : undefined;
+        objectTree.setObject(message.object, remembered);
+    }
+    showItems(objectTree.visible());
+
     await showGeometry(message);
     // Newer show arrived while this one was loading; abandon it.
     if (generation !== mine) {
@@ -216,6 +244,7 @@ function clear(): void {
     requested.clear();
     instructions = undefined;
     clearGeometry();
+    objectTree.clear();
     for (const tab of DATA_TABS) {
         reset(tab);
     }

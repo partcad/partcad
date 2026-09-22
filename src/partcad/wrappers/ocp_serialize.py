@@ -175,6 +175,10 @@ def downcast(obj):
 # The three object shapes are told apart by which of these keys is present.
 KEY_BREP = "brep"
 KEY_ASSEMBLY = "assembly"
+# The other form a node's geometry can take: deflate-compressed base64 binary
+# glTF, written by 'wrapper_gltf.py'. The core's copy of this key, and the reason
+# there are two forms at all, is 'partcad.shape_envelope'.
+KEY_GLTF = "gltf"
 KEY_BYTES = "__bytes__"
 # Optional on a shape/assembly object: the placement, as the packed
 # [[tx,ty,tz], [ax,ay,az], angle] form, applied when the object is decoded.
@@ -318,6 +322,17 @@ def _brep_payload(value) -> bytes:
 
 def _shape_from_b64(brep_b64):
     return shape_from_brep(_decompress(_brep_payload(brep_b64)))
+
+
+def shape_from_payload(value):
+    """The TopoDS_Shape a node's "brep" field holds, however it travelled.
+
+    Public because a wrapper handed an *undecoded* tree has to open its leaves
+    itself: 'decode()' would rebuild the whole tree as one compound and drop the
+    names, the placements and everything else the tree is for. See
+    'wrapper_gltf.py' and 'wrapper_interference.py'.
+    """
+    return _shape_from_b64(value)
 
 
 def compound_of(shapes):

@@ -23,18 +23,65 @@ export function isAnalysisTab(tab: TabId): boolean {
     return ANALYSIS_TABS.includes(tab);
 }
 
-/** A displayable object: the glTF, decompressed by the host, as base64. */
-export interface ShowObject {
-    name: string;
-    label: string | null;
-    gltf: string;
-    size: number;
+/** A packed rigid placement: [[tx, ty, tz], [ax, ay, az], angleInDegrees]. */
+export type Placement = [[number, number, number], [number, number, number], number];
+
+/** One port a node declares: a coordinate frame, and what it is part of. */
+export interface ShowPort {
+    name?: string | null;
+    /** Where it is, in the frame of the object that declares it. */
+    location: Placement;
+    /** The interface instance it belongs to, or absent when it belongs to none. */
+    interface?: string | null;
+    instance?: string | null;
+    /** The sketch it is drawn with, as '<package>:<name>', where it has one. */
+    sketch?: string | null;
 }
 
-/** A bare coordinate frame (a PartCAD interface port), as a packed location. */
-export interface ShowMarker {
+/** One interface instance a node implements, and the ports it is made of. */
+export interface ShowInterface {
     name?: string | null;
-    location: [[number, number, number], [number, number, number], number];
+    instance?: string | null;
+    ports?: string[];
+}
+
+/**
+ * One node of the object being shown, as the host hands it over.
+ *
+ * Every subject is a tree of these and nothing else - a part or a sketch is one
+ * node deep, an assembly is a node per thing it holds, an interface is a node per
+ * port - so nothing in this renderer asks which kind it is looking at. PartCAD
+ * builds the tree (it is the hierarchy it instantiates an assembly as, with glTF
+ * at the nodes instead of BREP); 'src/viewer/protocol.ts' carries it, and
+ * 'src/partcad_ide_client/protocol.py' is the normative description.
+ *
+ * Placements are not baked in: 'gltf' is this node's own geometry in its own
+ * coordinate system and 'location' is where the node sits inside its parent, so
+ * the locations are composed down the tree as it is drawn. A port's location is
+ * in the same frame and moves with the node holding it.
+ */
+export interface ShowNode {
+    name?: string | null;
+    label?: string | null;
+    location?: Placement | null;
+    /** This node's geometry, decompressed by the host, as base64 binary glTF. */
+    gltf?: string;
+    /** How many bytes that is, for the loading readout. */
+    size?: number;
+    ports?: ShowPort[];
+    interfaces?: ShowInterface[];
+    /** What is inside this node, or absent for a leaf. */
+    assembly?: ShowNode[];
+    /**
+     * On the root node: the sketches the ports anywhere in the tree are drawn
+     * with, keyed by the reference those ports name in their own 'sketch'.
+     *
+     * A port is a coordinate frame, drawn as a triad, and most ports are also
+     * drawn *with* something - the circle of a hole, the profile of a rail. One
+     * entry per sketch however many ports point at it, so each is parsed once and
+     * drawn as an instance of itself per port.
+     */
+    sketches?: Record<string, ShowNode>;
 }
 
 export interface ShowMessage {
@@ -48,8 +95,8 @@ export interface ShowMessage {
      */
     package: string | null;
     keepCamera: boolean;
-    objects: ShowObject[];
-    markers: ShowMarker[];
+    /** The object itself, as the root node of its tree, or null when it is empty. */
+    object: ShowNode | null;
 }
 
 export interface ClearMessage {

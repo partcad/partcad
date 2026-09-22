@@ -458,8 +458,8 @@ def test_export_logo_to_urdf(tmp_path):
     # Exactly one root: a link that is no joint's child.
     assert len(links - set(children)) == 1
 
-    # The five placed parts of the logo carry meshes; the two structural links
-    # (the assembly and its ASSY container) do not.
+    # The five placed parts of the logo carry meshes; the assembly's own link,
+    # which is the one structural link its tree has, does not.
     meshes = robot.findall("link/visual/geometry/mesh")
     assert len(meshes) == 5
     # Five distinct meshes, because the five placed parts are five different

@@ -599,23 +599,19 @@ def test_measure_in_frame_moves_the_shape_into_the_frame():
 def _get_children(assembly):
     """The nodes of the ASSY file's top level 'links:', by name.
 
-    The top level container node of an ASSY file becomes an unnamed child
-    assembly of the object it defines, so the parts are one level down.
+    The file's root node is the assembly itself, so they are its own children.
     """
     asyncio.run(assembly.do_instantiate())
-    assert len(assembly.children) == 1
-    return {child.name: child for child in assembly.children[0].item.children}
+    return {child.name: child for child in assembly.children}
 
 
-def test_assy_connected_children_sees_through_the_links_container():
-    """The connections of an ASSY file belong to the object the file defines"""
+def test_assy_nodes_and_their_connections_belong_to_the_object_the_file_defines():
+    """The file's top level 'links:' is this assembly, not something inside it"""
     ctx = pc.init(CONNECT_HOW_PACKAGE)
     assembly = ctx._get_assembly(":connect_how")
     asyncio.run(assembly.do_instantiate())
 
-    # The file's top level "links:" is one unnamed child assembly...
-    assert [child.name for child in assembly.children] == [None]
-    # ...but its connections are reported as the assembly's own.
+    assert sorted(child.name for child in assembly.children) == ["plate", "screw-tl", "screw-tr"]
     named = [child.name for child in assembly.connected_children() if child.name is not None]
     assert sorted(named) == ["plate", "screw-tl", "screw-tr"]
     connected = [child.name for child in assembly.connected_children() if child.connect_info() is not None]
@@ -678,11 +674,12 @@ def test_assy_node_description_reaches_the_children():
 
 
 def test_assy_file_description_describes_the_assembly():
-    """The root container's 'description' is what the file says it is building
+    """The root node's 'description' is what the file says it is building
 
     A package that declares the assembly and describes it says it better, so its
     'desc' wins; the file's own description is what is left for a declaration
-    that carries none.
+    that carries none. The root node is the assembly, so it is the assembly's own
+    'desc' that either one lands in - there is no node in between to carry it.
     """
     ctx = pc.init(CONNECT_HOW_PACKAGE)
 
@@ -695,9 +692,9 @@ def test_assy_file_description_describes_the_assembly():
     asyncio.run(undescribed.do_instantiate())
     assert undescribed.desc.startswith("Two screws driven into a plate, described by the file itself.")
 
-    # Either way the container node the file's root becomes carries it, which is
-    # what describes a sub-assembly declared inline in a nested "links:".
-    assert declared.children[0].item.desc == undescribed.desc
+    # And the nodes it holds are the parts, each with its own description rather
+    # than the file's.
+    assert [child.item.desc for child in declared.children] != [undescribed.desc] * len(declared.children)
 
 
 def test_assy_connect_how_defaults_from_the_part_definition():

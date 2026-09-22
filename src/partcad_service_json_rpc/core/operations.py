@@ -364,7 +364,20 @@ def instantiate_assembly(session, params):
 
 
 def inspect_part(session, params):
-    """Instantiate and show a part in the connected CAD viewer."""
+    """Instantiate and show a part in the connected CAD viewer.
+
+    The context goes to 'show()' rather than being left to the module-level one
+    'Shape.show_async()' falls back to. That fallback is a workaround for a client
+    that cannot pass a context (see the comment on it), and this daemon is not one:
+    it has the context in hand, it may be serving several, and whether the global
+    happens to be set at all depends on how the session was brought up - which is
+    how showing a sketch from the Explorer came to answer "A context is required to
+    tessellate a shape tree" while the same sketch shown by 'pc inspect' worked.
+    That path ('inspect_object') passed the context all along.
+
+    Every one of the per-kind inspect operations below does the same, for the same
+    reason.
+    """
     ctx = _ctx(session, params)
     if ctx is None:
         return None
@@ -372,7 +385,7 @@ def inspect_part(session, params):
     with session.partcad.logging.Process("Inspect", package, name):
         part = ctx.get_part(_qualified(package, name), params.get("params"))
         if part:
-            part.show()
+            part.show(ctx)
     session.emitter.signal(events.SHOW_PART_DONE)
     return None
 
@@ -386,7 +399,7 @@ def inspect_sketch(session, params):
     with session.partcad.logging.Process("Inspect", package, name):
         sketch = ctx.get_sketch(_qualified(package, name), params.get("params"))
         if sketch:
-            sketch.show()
+            sketch.show(ctx)
     session.emitter.signal(events.SHOW_PART_DONE)
     return None
 
@@ -400,7 +413,7 @@ def inspect_interface(session, params):
     with session.partcad.logging.Process("Inspect", package, name):
         interface = ctx.get_interface(_qualified(package, name))
         if interface:
-            interface.show()
+            interface.show(ctx)
     session.emitter.signal(events.SHOW_PART_DONE)
     return None
 
@@ -415,7 +428,7 @@ def inspect_assembly(session, params):
         assembly = ctx.get_assembly(_qualified(package, name), params.get("params"))
         if assembly:
             _stage_subassemblies(session, ctx, assembly)
-            assembly.show()
+            assembly.show(ctx)
     session.emitter.signal(events.SHOW_PART_DONE)
     return None
 
@@ -432,7 +445,7 @@ def inspect_scene(session, params):
             # A scene is an assembly and is placed out of assemblies, so it is
             # staged like one.
             _stage_subassemblies(session, ctx, scene)
-            scene.show()
+            scene.show(ctx)
     session.emitter.signal(events.SHOW_PART_DONE)
     return None
 

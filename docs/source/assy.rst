@@ -19,7 +19,7 @@ external assembly, or a container for such references.
 Containers
 ----------
 
-The top-level node of an ASSY file is a container node.
+A container node is a node that holds other nodes rather than placing an object.
 The container nodes have the following syntax:
 
   .. code-block:: yaml
@@ -32,6 +32,13 @@ The container nodes have the following syntax:
       - <other node>
       - <other node>
       - <other node>
+
+The top-level node of an ASSY file is such a node, and it **is the assembly**:
+what it holds is held by the assembly directly, not by anything in between. So an
+assembly declared from a file whose root lists three parts has three nodes in it
+and not one, and `location` on that root moves all three - there is no node of its
+own for it to move instead. A `links:` list *inside* the file is a node like any
+other: it is addressable by `name` from a `map:`, and what it holds belongs to it.
 
 Parts
 -----

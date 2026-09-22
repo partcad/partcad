@@ -35,7 +35,15 @@ from . import logging as pc_logging
 #      is no way to tell that from one whose producer recorded nothing; reading
 #      one back would report a part as having no size rather than as one nobody
 #      has measured.
-VERSION = 4
+#   5: the tree an assembly is stored as changed shape twice over. An ASSY file's
+#      root node is the assembly itself rather than a container inside it, so a
+#      tree written under 4 has a level in it that nobody declared; and every node
+#      now carries what its object declares about connections, which an entry
+#      written under 4 has nowhere to have recorded (see shape_envelope.py). Both
+#      are the payload's shape rather than the key's, so nothing about a
+#      declaration changes when PartCAD does and an old entry would go on being
+#      served: a viewer showing an assembly with two roots and no ports in it.
+VERSION = 5
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.
