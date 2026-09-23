@@ -4088,10 +4088,11 @@ way whether it did or not -- a STEP assembly's components are the parts
 The separator in a *name* is always ``/``, whichever operating system reads it,
 so the same command produces the same tree on Linux, macOS and Windows.
 
-Those sub-directories are created whether or not ``-p``/``--create-dirs`` was
-given: a name with a ``/`` in it is a file in a directory however the command
-was invoked. ``--create-dirs`` is what creates the directory *around* them --
-the one ``-O``, ``prefix`` or ``output_dir`` asked for and nobody has made.
+Every directory an output file needs is created on the way to writing it: the
+sub-directories a name with a ``/`` in it asks for, and the directory around
+them that ``-O``, ``prefix`` or ``output_dir`` named and nobody has made. There
+is nothing to ask for -- the ``-p``/``--create-dirs`` flag that used to draw a
+line between those two halves of one path is gone, and both halves are made.
 
 Export parameters
 -----------------

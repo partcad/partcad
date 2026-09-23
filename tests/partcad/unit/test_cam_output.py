@@ -624,7 +624,7 @@ def test_two_alternatives_written_into_one_directory_get_two_files(package, tmp_
     part = _part(package, "two_machines")
     seen = []
 
-    def _record(path, name):
+    def _record(path):
         seen.append(path)
         raise RuntimeError("stop here")
 
@@ -650,7 +650,7 @@ def test_a_path_the_caller_named_is_the_path_it_gets(package, tmp_path, monkeypa
     part = _part(package, "two_machines")
     seen = []
 
-    def _record(path, name):
+    def _record(path):
         seen.append(path)
         raise RuntimeError("stop here")
 

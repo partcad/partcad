@@ -265,16 +265,6 @@ def name_to_path(name: str, suffix: str = "") -> str:
     return os.path.join(*directories, stem + suffix)
 
 
-def name_dirs(name: str) -> str:
-    """The directories an object's name asks for, or '' when it asks for none.
-
-    The counterpart of 'name_to_path()' for the caller that has the path already
-    and needs to know how much of its tail the name is responsible for.
-    """
-    directories = name.split("/")[:-1]
-    return os.path.join(*directories) if directories else ""
-
-
 def is_document_format(format_name: str, section_obj) -> bool:
     """Whether PartCAD assembles this file itself instead of running a script.
 
