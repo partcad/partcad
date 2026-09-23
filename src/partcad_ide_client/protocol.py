@@ -119,6 +119,16 @@ KEY_INTERFACES = "interfaces"
 # carries one circle. Each is an ordinary node, so it carries its geometry the same
 # way, in its own coordinate system, to be placed at the port by whoever draws it.
 KEY_SKETCHES = "sketches"
+# On the root node: every distinct piece of geometry in the tree, keyed by a digest
+# of the exact shape it was tessellated from, with each node - and each sketch above
+# - naming its entry in 'gltfRef' instead of carrying a copy of it. One entry
+# however many nodes are made of it: an assembly that places one bolt a hundred
+# times sends that bolt once and names it a hundred times, which is possible
+# because a node's placement was never part of its geometry. What draws the tree
+# resolves the reference, and can parse and upload each entry once for the same
+# reason. PartCAD's own copy of both keys is 'partcad.shape_envelope'.
+KEY_GEOMETRY = "geometry"
+KEY_GLTF_REF = "gltfRef"
 # On a show message: the object itself, as the root node of its tree.
 KEY_OBJECT = "object"
 # On a show message, beside 'name' and 'kind': the package the shown object
@@ -152,7 +162,7 @@ def is_node(obj) -> bool:
     still a node - an empty assembly, an interface whose ports carry no boundary -
     and is recognised by the keys it would carry either in.
     """
-    return isinstance(obj, dict) and (KEY_GLTF in obj or KEY_ASSEMBLY in obj)
+    return isinstance(obj, dict) and (KEY_GLTF in obj or KEY_GLTF_REF in obj or KEY_ASSEMBLY in obj)
 
 
 def make_node(glb: bytes = None, name=None, label=None, children=None) -> dict:

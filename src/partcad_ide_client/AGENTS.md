@@ -25,6 +25,12 @@ Two properties of this package are deliberate and easy to break:
   before it reaches here, so there is nothing to import. `partcad` imports *this*, lazily, from
   `partcad.viewer`.
 
+A node names its geometry (`KEY_GLTF_REF`) rather than carrying it, and the root holds one entry per distinct
+shape (`KEY_GEOMETRY`). An assembly that places the same bolt a hundred times therefore sends that bolt once and
+names it a hundred times — possible only because a node's placement was never part of its geometry, which is the
+same property that lets the tree be composed at all. `is_node()` recognises both spellings: a reader that only
+knew `KEY_GLTF` would stop seeing every node of an assembly the day the geometry was shared.
+
 The glTF payload codec (`encode_gltf`/`decode_gltf`) has two other implementations that have to agree with it:
 `ocp_serialize.encode_gltf` in the sandbox, and `decodeGltf` in the extension. Neither can import this package,
 which is why each carries its own copy; `tests/partcad/unit/test_viewer.py` and the extension's

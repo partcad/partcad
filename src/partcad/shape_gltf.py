@@ -29,10 +29,51 @@ from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, wrapper
 from .process_crash import describe_exit_code
 
-# The tessellation a preview gets. Coarser than a render's default would be worth:
-# this has to cross a socket and load in a webview, not print.
-DEFAULT_TOLERANCE = 0.1
-DEFAULT_ANGULAR_TOLERANCE = 0.2
+# The tessellation a preview gets, as a budget in *pixels* rather than a distance
+# in millimetres. A preview is looked at, so what decides whether it is fine
+# enough is how far a facet lands from the surface on the screen - and that is the
+# chord error divided by what a pixel is worth, which depends on the size of the
+# thing being shown. A part 5 mm across and an assembly 5 m across want the same
+# answer to "is this smooth enough" and two very different deflections to get it.
+#
+# So the linear deflection is derived, per tree, from the overall size of that
+# tree: SCREEN_PIXELS is the viewport this budget assumes, PIXEL_BUDGET is how much
+# of one pixel the tessellation may be out by, and the wrapper divides the
+# bounding box diagonal by the two of them together (see 'wrapper_gltf._budget').
+# At a half pixel over a thousand, a facet is out by a five-hundredth of what is on
+# screen, whatever the object is.
+#
+# It is a budget for the whole object shown at once, which is what the viewer shows
+# when a tree arrives, and deliberately not for a close-up: zoom far enough into
+# any tessellation and it is faceted. Trading that away is what makes an assembly
+# openable at all.
+SCREEN_PIXELS = 1000
+PIXEL_BUDGET = 0.5
+SCREEN_DIVISOR = SCREEN_PIXELS / PIXEL_BUDGET
+
+# What that budget may not exceed in either direction, in mm. The floor keeps a
+# tiny object from being tessellated to death for no visible gain, and the ceiling
+# keeps a bogus bounding box - a stray node a kilometre from the origin - from
+# flattening everything else into facets.
+MIN_TOLERANCE = 0.001
+MAX_TOLERANCE = 10.0
+
+# The angular cap, in radians, and the one number here that is *not* a function of
+# the object's size - which is exactly why it is the one that matters most on a
+# large assembly. A curve is tessellated to whichever is the finer of the linear
+# budget above and this angle between successive segments, and for a small radius
+# the angle always wins: at 0.2 rad a 3 mm hole is drawn with 31 segments whether
+# it covers two hundred pixels or two. So its job here is only to keep a circle
+# from degenerating into a triangle, and the linear budget above does the real
+# work.
+#
+# Measured on '//pub/examples/partcad/feature_import:AeroAssembly_assy_example/
+# AeroAssembly_connected' (8 parts, 413 mm diagonal), holding the linear budget at
+# diagonal/2000: 0.2 rad gives 48304 triangles, 0.3 gives 30624, 0.4 gives 23480,
+# 0.5 gives 19752. The knee is between 0.3 and 0.5; below it the extra triangles
+# are nearly all in small features that are a few pixels across when the whole
+# object is shown.
+DEFAULT_ANGULAR_TOLERANCE = 0.4
 
 # export_gltf is build123d's; cadquery-ocp comes last because build123d pulls
 # the VTK-less 'cadquery-ocp-novtk' build over it (see sandbox_versions).
@@ -55,7 +96,18 @@ async def in_form_async(ctx, tree, form):
 
 
 async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None):
-    """'tree' with every node's BREP replaced by tessellated glTF.
+    """'tree' with its geometry tessellated into glTF, one copy per distinct shape.
+
+    'tolerance' is the linear deflection in mm. Left at None - which is how the
+    viewer asks - it is derived in the sandbox from the overall size of this tree,
+    because that is where the geometry is and so where the size can be measured
+    without a second round trip; see the budget above and 'wrapper_gltf._budget'.
+    Passing one overrides that outright, for a caller that knows what it wants in
+    millimetres.
+
+    What comes back carries the geometry on the root, in KEY_GEOMETRY, with every
+    node naming its entry: a hundred instances of one bolt are one entry named a
+    hundred times.
 
     Raises if the sandbox could not be run or answered a failure. A single node
     whose geometry will not tessellate is not that: it comes back without
@@ -76,8 +128,14 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None):
 
     request = {
         "tree": tree,
-        "tolerance": DEFAULT_TOLERANCE if tolerance is None else tolerance,
+        # None means "work it out from the tree", which is the ordinary case; the
+        # policy travels with it so that the sandbox applies this module's numbers
+        # rather than a second copy of them.
+        "tolerance": tolerance,
         "angularTolerance": DEFAULT_ANGULAR_TOLERANCE if angular_tolerance is None else angular_tolerance,
+        "screenDivisor": SCREEN_DIVISOR,
+        "minTolerance": MIN_TOLERANCE,
+        "maxTolerance": MAX_TOLERANCE,
     }
 
     # argv[1] is mandatory for every wrapper (wrapper_common.handle_input reads
@@ -101,4 +159,17 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None):
     converted = result.get("tree")
     if not shape_envelope.is_node(converted):
         raise Exception("The tessellation produced no shape tree")
+
+    # Worth one line in the log: it is the number that decides both how long this
+    # took and how big what it produced is, and it is not in the configuration
+    # anywhere to be read off.
+    pc_logging.debug(
+        "Tessellated %s: %s"
+        % (
+            tree.get("name") or "a shape tree",
+            ", ".join(
+                "%s=%s" % (key, result[key]) for key in ("tolerance", "angularTolerance", "size") if key in result
+            ),
+        )
+    )
     return converted

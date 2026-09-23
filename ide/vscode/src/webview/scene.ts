@@ -391,6 +391,110 @@ function addPorts(
 }
 
 /**
+ * Every distinct piece of geometry in this tree, parsed once and handed out per use.
+ *
+ * PartCAD sends the geometry as a table on the root with the nodes naming entries
+ * in it (see 'messages.ts'), so this parses the table - not the tree - and a shape
+ * the tree holds a hundred times is parsed, and uploaded to the GPU, once.
+ *
+ * 'take' is what turns one parsed group into what a node adds to the stage: the
+ * group itself for the first node that names it, and a clone for every node after
+ * that. A clone is a fresh set of Object3Ds over the *same* BufferGeometry and the
+ * same material, which is the whole point - one upload, one material, one instance
+ * per node, and each node's own Object3D to switch on and off. Nothing is disposed
+ * here: every group handed out ends up under the content group, and 'disposeTree'
+ * frees it from there when the show is replaced.
+ *
+ * One material for all of it, for the same reason: every part of every PartCAD
+ * model is drawn in this one blue, and a material per node is a material per node
+ * for the renderer to set up.
+ */
+class Geometry {
+    private readonly parsed = new Map<string, THREE.Group>();
+    private readonly used = new Set<string>();
+    readonly material = new THREE.MeshPhongMaterial({ color: 0x87ceeb, side: THREE.DoubleSide });
+
+    /** Parse the table, reporting progress as it goes. Returns what failed to parse. */
+    async load(root: ShowNode, total: number, superseded: () => boolean): Promise<number> {
+        let failed = 0;
+        let bytes = 0;
+        for (const [digest, entry] of Object.entries(root.geometry ?? {})) {
+            try {
+                const group = await parseGltf(base64ToArrayBuffer(entry.gltf));
+                // Part.js replaces whatever material the file carries with a plain
+                // MeshPhongMaterial, which is what gives every PartCAD model the
+                // same look regardless of how it was authored. Done here, once per
+                // distinct geometry, rather than per node that draws it.
+                //
+                // Both sides of every face. A part is a closed solid and would look
+                // the same either way, but a sketch and a port's boundary are
+                // laminae: drawn front-side only, one whose face winds away from the
+                // camera is not drawn at all, and the camera orbits past both sides
+                // of it. Nothing says which way a sketch's one face points - the
+                // ones in 'examples' happen to point up.
+                group.traverse((child) => {
+                    const mesh = child as THREE.Mesh;
+                    if (!mesh.isMesh) {
+                        return;
+                    }
+                    const previous = mesh.material as THREE.Material | THREE.Material[] | undefined;
+                    mesh.material = this.material;
+                    disposeMaterials(previous);
+                });
+                this.parsed.set(digest, group);
+            } catch (error: any) {
+                reportError(`failed to parse a shape of this object: ${error}`);
+                failed += 1;
+            }
+            if (superseded()) {
+                this.dispose();
+                return failed;
+            }
+            bytes += entry.size ?? 0;
+            const percent = total > 0 ? Math.round((bytes / total) * 100) : 100;
+            overlay.textContent = `Model size: ${(total / 1048576.0).toFixed(2)}MB\n${percent}% loaded`;
+        }
+        return failed;
+    }
+
+    has(digest: string): boolean {
+        return this.parsed.has(digest);
+    }
+
+    /** What the node naming 'digest' should add to the stage, or undefined. */
+    take(digest: string): THREE.Group | undefined {
+        const group = this.parsed.get(digest);
+        if (group === undefined) {
+            return undefined;
+        }
+        if (this.used.has(digest)) {
+            return group.clone();
+        }
+        this.used.add(digest);
+        return group;
+    }
+
+    /**
+     * Everything parsed but never handed out - only reached when a show is dropped.
+     *
+     * What *was* handed out is not touched: its geometry is the geometry of every
+     * clone of it, and those are under the content group, which 'disposeTree' frees
+     * when the show is replaced. The material goes here because on this path
+     * nothing is left holding it; 'dispose()' is idempotent, so the case where a
+     * discarded group has already taken it with it costs nothing.
+     */
+    dispose(): void {
+        for (const [digest, group] of this.parsed) {
+            if (!this.used.has(digest)) {
+                disposeTree(group);
+            }
+        }
+        this.parsed.clear();
+        this.material.dispose();
+    }
+}
+
+/**
  * The sketches the ports of this object are drawn with, parsed once each.
  *
  * Keyed by the reference the ports name, which is how PartCAD sends them: one
@@ -398,9 +502,18 @@ function addPorts(
  * sketch that will not parse is left out, and the ports that name it keep their
  * triads.
  */
-async function parseSketches(node: ShowNode): Promise<Map<string, THREE.Group>> {
+async function parseSketches(node: ShowNode, geometry: Geometry): Promise<Map<string, THREE.Group>> {
     const parsed = new Map<string, THREE.Group>();
     for (const [reference, sketch] of Object.entries(node.sketches ?? {})) {
+        // A sketch names its geometry in the root's table like any node, so it is
+        // already parsed; one that carries it outright is parsed here.
+        if (sketch.gltfRef !== undefined) {
+            const group = geometry.take(sketch.gltfRef);
+            if (group !== undefined) {
+                parsed.set(reference, group);
+            }
+            continue;
+        }
         if (sketch.gltf === undefined) {
             continue;
         }
@@ -443,57 +556,55 @@ async function buildNode(
     path: number[],
     superseded: () => boolean,
     loaded: Loaded,
-    total: number,
+    geometry: Geometry,
 ): Promise<THREE.Group | null> {
     const group = transformed(placement(node.location));
     group.name = node.label || node.name || nodeId(path);
 
-    if (node.gltf !== undefined) {
-        let parsed: THREE.Group | undefined;
+    // Already parsed: the geometry of every node arrived in one table and was
+    // parsed before the tree was walked, so what is left here is to take an
+    // instance of it and put it where this node sits.
+    let drawn: THREE.Group | undefined;
+    if (node.gltfRef !== undefined) {
+        drawn = geometry.take(node.gltfRef);
+        if (drawn === undefined) {
+            // Its entry failed to parse; reported once, where that happened.
+            loaded.failed += 1;
+        }
+    } else if (node.gltf !== undefined) {
+        // A node carrying its geometry outright, which PartCAD no longer sends and
+        // a hand-written message still can.
         try {
-            parsed = await parseGltf(base64ToArrayBuffer(node.gltf));
+            drawn = await parseGltf(base64ToArrayBuffer(node.gltf));
+            drawn.traverse((child) => {
+                const mesh = child as THREE.Mesh;
+                if (mesh.isMesh) {
+                    const previous = mesh.material as THREE.Material | THREE.Material[] | undefined;
+                    mesh.material = geometry.material;
+                    disposeMaterials(previous);
+                }
+            });
         } catch (error: any) {
             reportError(`failed to parse '${node.name ?? group.name}': ${error}`);
             loaded.failed += 1;
         }
         if (superseded()) {
-            if (parsed !== undefined) {
-                disposeTree(parsed);
+            if (drawn !== undefined) {
+                disposeTree(drawn);
             }
             disposeTree(group);
             return null;
         }
-        if (parsed !== undefined) {
-            parsed.traverse((child) => {
-                const mesh = child as THREE.Mesh;
-                if (!mesh.isMesh) {
-                    return;
-                }
-                // Part.js replaces whatever material the file carries with a plain
-                // MeshPhongMaterial, which is what gives every PartCAD model the
-                // same look regardless of how it was authored.
-                const previous = mesh.material as THREE.Material | THREE.Material[] | undefined;
-                // Both sides of every face. A part is a closed solid and would
-                // look the same either way, but a sketch and a port's boundary are
-                // laminae: drawn front-side only, one whose face winds away from
-                // the camera is not drawn at all, and the camera orbits past both
-                // sides of it. Nothing says which way a sketch's one face points -
-                // the ones in 'examples' happen to point up.
-                mesh.material = new THREE.MeshPhongMaterial({ color: 0x87ceeb, side: THREE.DoubleSide });
-                disposeMaterials(previous);
-            });
-            group.add(parsed);
-            drawnByItem(nodeId(path), parsed);
-            loaded.parsed += 1;
-        }
-        loaded.bytes += node.size ?? 0;
-        const percent = total > 0 ? Math.round((loaded.bytes / total) * 100) : 100;
-        overlay.textContent = `Model size: ${(total / 1048576.0).toFixed(2)}MB\n${percent}% loaded`;
+    }
+    if (drawn !== undefined) {
+        group.add(drawn);
+        drawnByItem(nodeId(path), drawn);
+        loaded.parsed += 1;
     }
 
     const children = node.assembly ?? [];
     for (let index = 0; index < children.length; index++) {
-        const child = await buildNode(children[index], [...path, index], superseded, loaded, total);
+        const child = await buildNode(children[index], [...path, index], superseded, loaded, geometry);
         if (child === null) {
             disposeTree(group);
             return null;
@@ -521,15 +632,26 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
 
     drawnBy.clear();
     flickering = undefined;
-    const sketches = await parseSketches(object);
+
+    // Parsed before the tree is walked, and once per distinct shape: this is where
+    // the time of opening a large assembly goes, and it is the step that does not
+    // grow with the number of times a shape is placed.
+    const geometry = new Geometry();
+    const failedToParse = await geometry.load(object, total, superseded);
     if (superseded()) {
+        return;
+    }
+    const sketches = await parseSketches(object, geometry);
+    if (superseded()) {
+        geometry.dispose();
         sketches.forEach(disposeTree);
         return;
     }
 
-    const loaded: Loaded = { parsed: 0, failed: 0, bytes: 0, built: [] };
-    const root = await buildNode(object, [], superseded, loaded, total);
+    const loaded: Loaded = { parsed: 0, failed: failedToParse, bytes: total, built: [] };
+    const root = await buildNode(object, [], superseded, loaded, geometry);
     if (root === null) {
+        geometry.dispose();
         return;
     }
 
