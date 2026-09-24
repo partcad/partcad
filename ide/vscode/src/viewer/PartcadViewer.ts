@@ -18,10 +18,12 @@ import { MSG_CLEAR, MSG_SHOW, ViewerMessage, ViewerNode, decodeGltf } from './pr
  * DecompressionStream. The size travels because the renderer shows what it is
  * loading, and it is the size of the buffer rather than of the payload.
  */
-interface WebviewNode extends Omit<ViewerNode, 'assembly' | 'sketches'> {
+interface WebviewNode extends Omit<ViewerNode, 'assembly' | 'sketches' | 'geometry'> {
     size?: number;
     assembly?: WebviewNode[];
     sketches?: Record<string, WebviewNode>;
+    /** The root's geometry table, decompressed: each entry measured as it is inflated. */
+    geometry?: Record<string, { gltf: string; size: number }>;
 }
 
 /**
@@ -316,22 +318,41 @@ export class PartcadViewer implements vscode.Disposable {
     }
 }
 
-/** A node, and everything under it, with its geometry decompressed and measured. */
+/** A node, and everything under it, with its geometry decompressed and measured.
+ *
+ * The geometry is decompressed once per distinct shape rather than once per node,
+ * because that is how it arrives: the table on the root holds one entry however
+ * many nodes name it, and the nodes themselves carry only the name. An assembly
+ * that places one bolt a hundred times is a hundred nodes and one inflate.
+ */
 function inflate(node: ViewerNode): WebviewNode {
-    const inflated: WebviewNode = { ...node };
+    // The three that change shape on the way through are taken out of the spread
+    // rather than overwritten after it: a compressed table and an inflated one are
+    // different types under one name, and spreading the first into the second is
+    // the kind of mismatch TypeScript resolves optimistically on a recursive type.
+    const { geometry, assembly, sketches, ...rest } = node;
+    const inflated: WebviewNode = { ...rest };
     if (node.gltf !== undefined) {
         const gltf = decodeGltf(node.gltf);
         inflated.gltf = gltf.toString('base64');
         inflated.size = gltf.length;
     }
-    if (node.assembly !== undefined) {
-        inflated.assembly = node.assembly.map(inflate);
+    if (geometry !== undefined) {
+        inflated.geometry = Object.fromEntries(
+            Object.entries(geometry).map(([digest, payload]) => {
+                const gltf = decodeGltf(payload);
+                return [digest, { gltf: gltf.toString('base64'), size: gltf.length }];
+            }),
+        );
     }
-    if (node.sketches !== undefined) {
+    if (assembly !== undefined) {
+        inflated.assembly = assembly.map(inflate);
+    }
+    if (sketches !== undefined) {
         // The sketches the ports are drawn with are nodes like any other, and
-        // carry their geometry the same way.
+        // name their geometry the same way.
         inflated.sketches = Object.fromEntries(
-            Object.entries(node.sketches).map(([reference, sketch]) => [reference, inflate(sketch)]),
+            Object.entries(sketches).map(([reference, sketch]) => [reference, inflate(sketch)]),
         );
     }
     return inflated;

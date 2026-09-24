@@ -112,7 +112,14 @@ export interface ViewerNode {
     name?: string | null;
     label?: string | null;
     location?: ViewerLocation | null;
-    /** This node's own geometry, compressed and base64-encoded, or absent. */
+    /** Which entry of the root's 'geometry' table is this node's geometry. */
+    gltfRef?: string;
+    /**
+     * This node's own geometry, compressed and base64-encoded, or absent.
+     *
+     * What 'gltfRef' resolves to. PartCAD sends the reference and the table; a
+     * node carries the payload itself only where nothing built a table.
+     */
     gltf?: string;
     ports?: ViewerPort[];
     interfaces?: ViewerInterface[];
@@ -124,6 +131,12 @@ export interface ViewerNode {
      * entry per sketch however many ports point at it.
      */
     sketches?: Record<string, ViewerNode>;
+    /**
+     * On the root node: every distinct piece of geometry in the tree, compressed
+     * and base64-encoded, keyed by a digest of the exact shape it came from. One
+     * entry however many nodes name it through 'gltfRef'.
+     */
+    geometry?: Record<string, string>;
 }
 
 export interface ViewerMessage {

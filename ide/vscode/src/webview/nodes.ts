@@ -153,9 +153,20 @@ export function walk(root: ShowNode, visit: (node: ShowNode, path: number[]) => 
     descend(root, []);
 }
 
-/** How many bytes of glTF the whole tree carries, for the loading readout. */
+/**
+ * How many bytes of glTF this tree carries, for the loading readout.
+ *
+ * The table on the root, plus whatever a node carries outright - which is what
+ * there is to parse, and it is deliberately not a sum over the nodes: a shape the
+ * tree holds a hundred times arrives once and is parsed once, so counting it a
+ * hundred times would report a download that never happened and a progress bar
+ * that reached 1%.
+ */
 export function totalSize(root: ShowNode): number {
     let total = 0;
+    for (const entry of Object.values(root.geometry ?? {})) {
+        total += entry.size ?? 0;
+    }
     walk(root, (node) => {
         total += node.size ?? 0;
     });

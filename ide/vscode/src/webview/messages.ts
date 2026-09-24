@@ -64,7 +64,21 @@ export interface ShowNode {
     name?: string | null;
     label?: string | null;
     location?: Placement | null;
-    /** This node's geometry, decompressed by the host, as base64 binary glTF. */
+    /**
+     * Which entry of the root's 'geometry' table is this node's geometry.
+     *
+     * A reference rather than a copy, because one shape can be in the tree many
+     * times over: an assembly places the same bolt a hundred times and a hundred
+     * nodes then name one entry. What differs between them is 'location', which
+     * was never part of the geometry.
+     */
+    gltfRef?: string;
+    /**
+     * This node's geometry outright, as base64 binary glTF.
+     *
+     * What 'gltfRef' resolves to, and what a node carries when nothing built a
+     * table - a hand-written message, a test. A node has one or the other.
+     */
     gltf?: string;
     /** How many bytes that is, for the loading readout. */
     size?: number;
@@ -82,6 +96,23 @@ export interface ShowNode {
      * drawn as an instance of itself per port.
      */
     sketches?: Record<string, ShowNode>;
+    /**
+     * On the root node: every distinct piece of geometry in the tree, decompressed
+     * by the host, keyed by a digest of the exact shape it was tessellated from.
+     *
+     * One entry however many nodes name it, so it is parsed and uploaded to the GPU
+     * once and drawn as an instance of itself per node - the same arrangement the
+     * port sketches above have always had, applied to the model itself. The
+     * digests are opaque: nothing here computes or checks one, it only looks them
+     * up.
+     */
+    geometry?: Record<string, ShowGeometry>;
+}
+
+/** One entry of that table: the geometry, and how many bytes it is. */
+export interface ShowGeometry {
+    gltf: string;
+    size: number;
 }
 
 export interface ShowMessage {

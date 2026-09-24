@@ -70,6 +70,7 @@ license:
 # a TopoDS_Shape and "assembly" into a compound.
 
 import base64
+import hashlib
 import json
 import sys
 from io import BytesIO
@@ -179,6 +180,13 @@ KEY_ASSEMBLY = "assembly"
 # glTF, written by 'wrapper_gltf.py'. The core's copy of this key, and the reason
 # there are two forms at all, is 'partcad.shape_envelope'.
 KEY_GLTF = "gltf"
+# On the root of a converted tree: every distinct piece of tessellated geometry in
+# it, keyed by 'payload_digest()' of the exact geometry it came from, with whatever
+# had geometry naming its entry through KEY_GLTF_REF. One entry however many nodes
+# are made of it. The core's copy of both, and what the sharing buys, is
+# 'partcad.shape_envelope'.
+KEY_GEOMETRY = "geometry"
+KEY_GLTF_REF = "gltfRef"
 KEY_BYTES = "__bytes__"
 # Optional on a shape/assembly object: the placement, as the packed
 # [[tx,ty,tz], [ax,ay,az], angle] form, applied when the object is decoded.
@@ -322,6 +330,20 @@ def _brep_payload(value) -> bytes:
 
 def _shape_from_b64(brep_b64):
     return shape_from_brep(_decompress(_brep_payload(brep_b64)))
+
+
+def payload_digest(value) -> str:
+    """A stable name for one piece of exact geometry: a digest of its bytes.
+
+    Of the compressed BREP as it arrived, not of anything derived from it, so that
+    two nodes built from one cached shape are recognised as one geometry without
+    either of them being decoded first - which is the whole point, since decoding
+    and tessellating are what the sharing is meant to avoid.
+
+    Content and not identity: nodes arrive as separately deserialized dicts, so the
+    same geometry is the same bytes and never the same object.
+    """
+    return hashlib.sha256(_brep_payload(value)).hexdigest()
 
 
 def shape_from_payload(value):

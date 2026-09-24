@@ -75,6 +75,28 @@ KEY_INTERFACES = "interfaces"
 # point at it - a bolt pattern is four ports drawn with one circle. Attached by
 # 'port_sketches', which says why it is not on the ports themselves.
 KEY_SKETCHES = "sketches"
+# On the root node of a tree in the glTF form: the tessellated geometry of every
+# node in it, keyed by a digest of the exact geometry it was made from, with each
+# node naming its entry through KEY_GLTF_REF instead of carrying a copy.
+#
+# One entry per distinct geometry, however many nodes are made of it. An assembly
+# places the same bolt a hundred times and a hundred nodes then name one table
+# entry: tessellated once rather than a hundred times, sent once rather than a
+# hundred times, and parsed and uploaded to the GPU once by whoever draws it. The
+# placements are what differ between those nodes, and placements were never in the
+# geometry (see 'placed()' below) - which is what makes the sharing possible at
+# all.
+#
+# It is the same arrangement as KEY_SKETCHES above, one level up: a table on the
+# root and a reference from everything that uses it. Sketches keep their own table
+# because they are keyed by the PartCAD reference the ports already name, which is
+# the identity a *declaration* has; this one is keyed by content, which is the only
+# identity two independently built solids can share.
+KEY_GEOMETRY = "geometry"
+# On a node: which entry of that table is this node's geometry. A node carries this
+# or KEY_GLTF, never both - a sketch in the KEY_SKETCHES table carries the geometry
+# itself, since its table already holds one copy per sketch.
+KEY_GLTF_REF = "gltfRef"
 # Optional placement on a shape/assembly object, carried opaquely by the core
 # and turned into a real location by the geometry-side codec (ocp_serialize).
 KEY_LOCATION = "location"
@@ -209,8 +231,13 @@ def is_assembly_object(obj) -> bool:
 
 
 def is_gltf_object(obj) -> bool:
-    """Whether 'obj' is a node whose geometry is tessellated rather than exact."""
-    return isinstance(obj, dict) and KEY_GLTF in obj
+    """Whether 'obj' is a node whose geometry is tessellated rather than exact.
+
+    Either spelling of it: the geometry itself, or a reference into the root's
+    table of it (KEY_GEOMETRY). A reader that only knew the first would stop
+    recognising every node of an assembly the moment the geometry was shared.
+    """
+    return isinstance(obj, dict) and (KEY_GLTF in obj or KEY_GLTF_REF in obj)
 
 
 def is_node(obj) -> bool:

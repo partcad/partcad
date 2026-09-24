@@ -214,7 +214,10 @@ def show(
     which is what makes re-showing the same part after an edit not jump.
     """
     if not protocol.is_node(obj):
-        raise TypeError("not a shape tree (no %r and no %r key): %r" % (protocol.KEY_GLTF, protocol.KEY_ASSEMBLY, obj))
+        raise TypeError(
+            "not a shape tree (no %r, %r or %r key): %r"
+            % (protocol.KEY_GLTF, protocol.KEY_GLTF_REF, protocol.KEY_ASSEMBLY, obj)
+        )
 
     return _send(
         {
