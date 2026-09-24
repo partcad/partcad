@@ -112,8 +112,8 @@ async def convert_async(ctx, tree, tolerance=None, angular_tolerance=None):
     Raises if the sandbox could not be run or answered a failure. A single node
     whose geometry will not tessellate is not that: it comes back without
     geometry and with the reason logged, because the rest of the tree is still
-    worth looking at - a sketch made of edges alone has no triangles to write and
-    is the ordinary case of it.
+    worth looking at. A sketch made of edges alone is not such a node: its edges
+    are drawn as line segments (see 'wrapper_gltf._to_glb').
     """
     if ctx is None:
         raise ValueError("A context is required to tessellate a shape tree")

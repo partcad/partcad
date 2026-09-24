@@ -42,7 +42,16 @@ import {
     TabId,
     isAnalysisTab,
 } from './messages';
-import { clearGeometry, flicker, resizeCanvas, showGeometry, setOpacity, setAutoRotate, showItems } from './scene';
+import {
+    clearGeometry,
+    flicker,
+    resizeCanvas,
+    showGeometry,
+    setOpacity,
+    setAutoRotate,
+    setShowMetadata,
+    showItems,
+} from './scene';
 import { SupplyView } from './supply';
 import { TabSpec, Tabs } from './tabs';
 import { Tree } from './tree';
@@ -71,8 +80,9 @@ for (const tab of ANALYSIS_TABS) {
 const tabs = new Tabs(byId('tabs'), onTabSelected);
 
 // What the 3D view is showing, as a tree of items to switch on and off. It lives
-// beside the canvas rather than over it, with the Animate box and the Opacity
-// slider under it: all three say what is drawn, so all three are one pane.
+// beside the canvas rather than over it, with the Show metadata and Animate boxes
+// and the Opacity slider under it: all of them say what is drawn, so all of them
+// are one pane.
 const objectTree = new Tree(
     byId('tree'),
     () => showItems(objectTree.visible()),
@@ -80,6 +90,18 @@ const objectTree = new Tree(
     // says "this row is that shape" without moving the camera.
     (items) => flicker(items),
 );
+
+// What a shape's metadata says about its elements - the angle and direction of a
+// sheet metal bend, written against its line - pinned to them as callouts. On by
+// default: it is information the geometry cannot show, and a drawing that states
+// none of it shows none.
+const metadataCheckbox = document.getElementById('metadata-checkbox') as HTMLInputElement;
+if (metadataCheckbox) {
+    setShowMetadata(metadataCheckbox.checked);
+    metadataCheckbox.addEventListener('change', (event) => {
+        setShowMetadata((event.target as HTMLInputElement).checked);
+    });
+}
 
 // Initialize animation checkbox
 const animateCheckbox = document.getElementById('animate-checkbox') as HTMLInputElement;

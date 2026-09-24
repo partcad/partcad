@@ -29,8 +29,10 @@
 # draws it.
 
 import hashlib
+import json
 import math
 import os
+import struct
 import sys
 import tempfile
 
@@ -110,10 +112,206 @@ def _export(shape, angular_tolerance):
             pass
 
 
+# The glTF constants the line primitive below is written with: the component type
+# of a 32-bit float, the target of a vertex buffer, and the 'LINES' draw mode (each
+# consecutive pair of positions is one segment).
+_GLTF_FLOAT = 5126
+_GLTF_ARRAY_BUFFER = 34962
+_GLTF_LINES = 1
+
+# The two chunk types of a binary glTF, as the little-endian integers they are
+# written as: b"JSON" and b"BIN\0".
+_GLB_JSON = 0x4E4F534A
+_GLB_BIN = 0x004E4942
+
+
+def _has_faces(shape) -> bool:
+    """Whether 'shape' holds a face - which is what export_gltf is able to write."""
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+
+    return TopExp_Explorer(shape, TopAbs_FACE).More()
+
+
+def _free_edges(shape) -> list:
+    """The edges of 'shape' that bound no face.
+
+    What a sketch of open lines is made of - the bend lines of a sheet metal
+    drawing, a centre line, a path - and what glTF's triangles have no way to
+    carry, so export_gltf drops them without a word. The edges of a face are not
+    among them: the face already draws its outline, and a part would otherwise be
+    drawn as a wireframe over itself.
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp
+    from OCP.TopoDS import TopoDS
+    from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
+
+    ancestors = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_EDGE, TopAbs_FACE, ancestors)
+    edges = []
+    for index in range(1, ancestors.Extent() + 1):
+        if ancestors.FindFromIndex(index).Size() > 0:
+            continue
+        edge = TopoDS.Edge_s(ancestors.FindKey(index))
+        if BRep_Tool.Degenerated_s(edge):
+            continue
+        edges.append(edge)
+    return edges
+
+
+def _segments(edges, tolerance, angular_tolerance) -> list:
+    """'edges' as line segments, in glTF's frame: a flat list of x, y, z floats.
+
+    Discretized to the same deflection the faces are meshed to, so that a curve
+    drawn as a line is as smooth as the same curve drawn as the rim of a face.
+    Converted the way export_gltf converts what it writes - millimetres to metres,
+    Z up to Y up - because these go into the same file as its triangles and the
+    viewer converts neither (see 'frames.ts').
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GCPnts import GCPnts_TangentialDeflection
+
+    positions = []
+    for edge in edges:
+        try:
+            points = GCPnts_TangentialDeflection(BRepAdaptor_Curve(edge), angular_tolerance, tolerance)
+        except Exception:
+            continue
+        previous = None
+        for index in range(1, points.NbPoints() + 1):
+            point = points.Value(index)
+            # PartCAD's (x, y, z) mm is glTF's (x, z, -y) m: a rotation of -90
+            # degrees about X, which is what export_gltf applies to the shape.
+            current = (point.X() / 1000.0, point.Z() / 1000.0, -point.Y() / 1000.0)
+            if previous is not None:
+                positions.extend(previous)
+                positions.extend(current)
+            previous = current
+    return positions
+
+
+def _read_glb(glb: bytes):
+    """The JSON and the binary chunk of a binary glTF, as (dict, bytes)."""
+    magic, _, length = struct.unpack_from("<III", glb, 0)
+    if magic != 0x46546C67:
+        raise Exception("not a binary glTF")
+    meta, binary = None, b""
+    offset = 12
+    while offset < length:
+        size, kind = struct.unpack_from("<II", glb, offset)
+        data = glb[offset + 8 : offset + 8 + size]
+        if kind == _GLB_JSON:
+            meta = json.loads(data.decode("utf-8"))
+        elif kind == _GLB_BIN:
+            binary = bytes(data)
+        offset += 8 + size
+    if meta is None:
+        raise Exception("a binary glTF with no JSON chunk")
+    return meta, binary
+
+
+def _write_glb(meta: dict, binary: bytes) -> bytes:
+    """A binary glTF of this JSON and this binary chunk, each padded as the spec asks."""
+    text = json.dumps(meta, separators=(",", ":")).encode("utf-8")
+    text += b" " * (-len(text) % 4)
+    binary += b"\0" * (-len(binary) % 4)
+    chunks = struct.pack("<II", len(text), _GLB_JSON) + text
+    if binary:
+        chunks += struct.pack("<II", len(binary), _GLB_BIN) + binary
+    return struct.pack("<III", 0x46546C67, 2, 12 + len(chunks)) + chunks
+
+
+def _with_lines(glb, positions) -> bytes:
+    """'glb' with one more node, drawing 'positions' as line segments.
+
+    'glb' is what export_gltf wrote, or None when there was nothing for it to
+    write - a sketch of open lines has no face - in which case the file is
+    started from nothing. The segments go into a mesh of their own, one 'LINES'
+    primitive in the scene's own frame, beside whatever the file already draws:
+    a viewer's glTF loader makes line segments out of it, and anything reading
+    only the triangles of a file sees exactly the triangles it saw before.
+    """
+    if glb:
+        meta, binary = _read_glb(glb)
+    else:
+        meta = {"asset": {"version": "2.0", "generator": "PartCAD"}, "scene": 0, "scenes": [{"nodes": []}]}
+        binary = b""
+
+    binary += b"\0" * (-len(binary) % 4)
+    offset = len(binary)
+    data = struct.pack("<%df" % len(positions), *positions)
+    binary += data
+
+    buffers = meta.setdefault("buffers", [])
+    if buffers:
+        buffers[0]["byteLength"] = len(binary)
+    else:
+        buffers.append({"byteLength": len(binary)})
+
+    views = meta.setdefault("bufferViews", [])
+    views.append({"buffer": 0, "byteOffset": offset, "byteLength": len(data), "target": _GLTF_ARRAY_BUFFER})
+
+    # 'min' and 'max' are required of a POSITION accessor, and are what a loader
+    # takes the bounds of the geometry from.
+    xs, ys, zs = positions[0::3], positions[1::3], positions[2::3]
+    accessors = meta.setdefault("accessors", [])
+    accessors.append(
+        {
+            "bufferView": len(views) - 1,
+            "componentType": _GLTF_FLOAT,
+            "count": len(positions) // 3,
+            "type": "VEC3",
+            "min": [min(xs), min(ys), min(zs)],
+            "max": [max(xs), max(ys), max(zs)],
+        }
+    )
+
+    meshes = meta.setdefault("meshes", [])
+    meshes.append(
+        {"name": "edges", "primitives": [{"attributes": {"POSITION": len(accessors) - 1}, "mode": _GLTF_LINES}]}
+    )
+    nodes = meta.setdefault("nodes", [])
+    nodes.append({"name": "edges", "mesh": len(meshes) - 1})
+    scenes = meta.setdefault("scenes", [{"nodes": []}])
+    scenes[meta.get("scene", 0)].setdefault("nodes", []).append(len(nodes) - 1)
+    return _write_glb(meta, binary)
+
+
+def _draws_lines(glb: bytes) -> bool:
+    """Whether export_gltf already wrote line segments into 'glb'.
+
+    OCCT's writer does write the free edges of a shape that also has faces, as a
+    'LINES' primitive beside the triangles - and writes nothing at all for a shape
+    that has only edges. Which is the gap '_with_lines' fills, and it fills only
+    that one: adding the same edges a second time would draw each twice.
+    """
+    meta, _ = _read_glb(glb)
+    return any(
+        primitive.get("mode") == _GLTF_LINES
+        for mesh in meta.get("meshes", [])
+        for primitive in mesh.get("primitives", [])
+    )
+
+
 def _to_glb(shape, tolerance, angular_tolerance):
-    """Tessellate one shape into a binary glTF buffer, at an absolute deflection."""
+    """Tessellate one shape into a binary glTF buffer, at an absolute deflection.
+
+    Faces become triangles and the edges that bound no face become line segments,
+    so that a sketch of open lines is drawn rather than dropped: glTF can carry
+    both, and export_gltf writes the second only beside the first. A shape with neither - a point,
+    an empty compound - is reported rather than sent as a file that draws nothing.
+    """
     _mesh(shape, tolerance, angular_tolerance)
-    return _export(shape, angular_tolerance)
+    glb = _export(shape, angular_tolerance) if _has_faces(shape) else None
+    if glb is None or not _draws_lines(glb):
+        positions = _segments(_free_edges(shape), tolerance, angular_tolerance)
+        if positions:
+            glb = _with_lines(glb, positions)
+    if glb is None:
+        raise Exception("there are no faces or edges to draw")
+    return glb
 
 
 def _shape(brep, shapes):
@@ -209,8 +407,8 @@ def _convert(value, tolerance, angular_tolerance, errors, shapes, geometry, fail
 
     A shape that will not tessellate loses its geometry and keeps its place, with
     the reason collected for the caller to report - once per distinct shape rather
-    than once per node that names it. A sketch of nothing but edges is the ordinary
-    case of that: glTF carries triangles, and there are none.
+    than once per node that names it. A sketch of nothing but edges is not that: its
+    edges are drawn as lines (see '_to_glb').
     """
     if isinstance(value, list):
         return [_convert(item, tolerance, angular_tolerance, errors, shapes, geometry, failed) for item in value]

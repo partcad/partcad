@@ -85,9 +85,10 @@ body {
 /*
  * The control pane: what is on screen, and how it is drawn.
  *
- * The tree takes whatever is left after the two controls at the bottom, which is
+ * The tree takes whatever is left after the controls at the bottom, which is
  * most of it - an assembly is a hierarchy and a part has a row per port, so the
- * list is the tall thing here and Animate and Opacity are two lines under it.
+ * list is the tall thing here and Show metadata, Animate and Opacity are three
+ * lines under it.
  * It shrinks on a narrow panel rather than pushing the canvas out of one.
  */
 .controls {
@@ -205,6 +206,72 @@ body {
     text-align: center;
     white-space: pre-line;
     pointer-events: none;
+}
+
+/*
+ * What a shape's metadata says about its elements, pinned to them: a dot on the
+ * element, a leader line up and to the right, and the text at the end of it.
+ *
+ * The layer is laid over the canvas and lets every pointer event through to it -
+ * a callout is something to read, and one that took the drag would stop the
+ * camera orbiting whenever the pointer crossed it.
+ */
+.callouts {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+}
+
+/* Anchored by its bottom-left corner (see 'addCallouts'), where the leader starts. */
+.callout {
+    --leader: 1.25rem;
+    padding: 0 0 var(--leader) var(--leader);
+    pointer-events: none;
+}
+
+.callout::before {
+    /* The leader: the diagonal of the padding square, from the anchor to the box. */
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: calc(var(--leader) * 1.4142);
+    border-top: 1px solid var(--vscode-editorWidget-border, var(--vscode-foreground));
+    transform: rotate(-45deg);
+    transform-origin: 0 0;
+}
+
+.callout::after {
+    /* The dot on the element the callout is about. */
+    content: '';
+    position: absolute;
+    left: -3px;
+    bottom: -3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--vscode-foreground);
+}
+
+.callout-box {
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border, transparent));
+    border-radius: 3px;
+    background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+    color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+    font-family: var(--vscode-font-family);
+    font-size: calc(var(--vscode-font-size) * 0.9);
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.callout-title {
+    font-weight: 600;
+}
+
+.callout-line {
+    font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
 }
 
 /*
