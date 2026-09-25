@@ -286,6 +286,18 @@ def test_a_cut_that_takes_nothing_off_fails(ctx, monkeypatch, caplog):
     assert "Cut #1" in caplog.text and "takes nothing off" in caplog.text
 
 
+def test_a_cut_that_removes_only_a_rounding_error_takes_nothing_off(ctx, monkeypatch, caplog):
+    """A plane that misses the stock leaves a floating-point sliver, not an exact zero."""
+    _arrange(
+        monkeypatch,
+        {"part_volume": 3000.0, "extra_volume": 0.0, "missing_volume": 0.0, "removed": [1e-9], "planes": [PLANE]},
+    )
+    check = ManufacturabilityCutTest()
+    with caplog.at_level("ERROR"):
+        assert _verdict(check, ctx, "sawn") is check.TEST_FAILED
+    assert "takes nothing off" in caplog.text
+
+
 def test_the_cut_check_only_applies_to_a_part_that_named_a_saw(ctx, monkeypatch):
     _arrange(monkeypatch, {"part_volume": 1.0, "extra_volume": 99.0, "removed": [0.0], "planes": [PLANE]})
     check = ManufacturabilityCutTest()

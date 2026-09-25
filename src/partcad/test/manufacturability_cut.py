@@ -101,8 +101,13 @@ class ManufacturabilityCutTest(ManufacturabilityMachineTest):
 
     def judge_cut(self, shape, reference: str, measured: dict) -> bool:
         """The verdict on what cutting the stock left, against the part."""
+        # One allowance for every comparison here: the volumes are OCCT's
+        # floating point, so a plane that misses the stock leaves a sliver of
+        # the order of the modelling tolerance rather than an exact zero.
+        part_volume = measured.get("part_volume") or 0.0
+        allowance = max(part_volume, 1.0) * DIFFERENCE_FRACTION
         for index, removed in enumerate(measured.get("removed") or []):
-            if removed <= 0.0:
+            if removed <= allowance:
                 plane = (measured.get("planes") or [{}])[index]
                 return self.failed(
                     shape,
@@ -112,8 +117,6 @@ class ManufacturabilityCutTest(ManufacturabilityMachineTest):
                     reference,
                 )
 
-        part_volume = measured.get("part_volume") or 0.0
-        allowance = max(part_volume, 1.0) * DIFFERENCE_FRACTION
         extra = measured.get("extra_volume") or 0.0
         missing = measured.get("missing_volume") or 0.0
         if extra > allowance or missing > allowance:

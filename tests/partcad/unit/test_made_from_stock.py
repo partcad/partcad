@@ -241,3 +241,12 @@ def test_a_saw_cut_is_said_in_millimetres_and_inches():
         "1. Cut across Y, 743.744 mm (29.281 in) from the -Y end of the stock.",
         "2. Cut along the plane through (0, 0, 10) mm facing (0, 0, -1); what is on the side it faces is the offcut.",
     ]
+
+
+def test_a_part_whose_stock_is_missing_is_reported_by_the_cart():
+    """Named, as the stock of the part that names it -- not an assertion failure."""
+    ctx = _context()
+    blank = _part(ctx, "blank")
+    blank.config = dict(blank.config, manufacturing={"method": "subtractive", "source": "gone"})
+    with pytest.raises(ValueError, match="'//:gone', which '//:blank' is made from, is not found"):
+        asyncio.run(ProviderCart().add_object(ctx, "//:blank"))

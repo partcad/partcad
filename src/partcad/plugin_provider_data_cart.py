@@ -104,7 +104,11 @@ class ProviderCartItem:
         self.name, self.count = resolve_cart_item(spec)
 
         object = resolve_cart_object(ctx, self.name)
-        assert object is not None, f"Part or assembly '{self.name}' not found"
+        if object is None:
+            # Raised rather than asserted: a stock reference that resolves to
+            # nothing reaches here from a bill of materials, and an assertion
+            # is neither a message for a user nor there at all under '-O'.
+            raise ValueError(f"Part or assembly '{self.name}' not found")
         self._set_store_data(object)
 
         self.material = await object.get_mcftt("material")
@@ -193,6 +197,10 @@ class ProviderCart:
             from . import procurement
 
             for procured in await procurement.procured_as(ctx, part):
+                if procured != name and resolve_cart_object(ctx, procured) is None:
+                    # What 'procured_as' keeps a missing stock as, so that it
+                    # is said here, against the part that names it.
+                    raise ValueError(f"'{procured}', which '{name}' is made from, is not found")
                 pc_logging.debug(f"Adding '{procured}' to the cart for part '{object_name}'")
                 item = ProviderCartItem()
                 await item.set_spec(ctx, procured)
