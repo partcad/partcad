@@ -418,8 +418,9 @@ Feature: `pc test` command
   Scenario: The example package passes every manufacturability check
     # End to end, against the checked-in example: two stocks, two laser parts,
     # a routed block whose chamfer only a router can make, and a drilled plate
-    # whose straight sides came with its stock. Each part names the machine it
-    # is made on, so between them they exercise all three.
+    # whose straight sides came with its stock, and a rail cut to length off a
+    # board. Each part names the machine it is made on, so between them they
+    # exercise all four.
     When I run command
       """
       pc --no-ansi -p $PARTCAD_ROOT/examples test --package //produce_part_subtractive -f manufacturability

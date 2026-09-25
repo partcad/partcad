@@ -1,7 +1,7 @@
 desc: >
   This example demonstrates parts that are made by taking material away from a
   piece of stock. Each one names the stock it is cut from with `source:`, and
-  each names the machine that cuts it -- a router, a laser or a drill -- which
+  each names the machine that cuts it -- a router, a laser, a drill or a saw -- which
   is what decides both the checks `pc test` applies to it and the program
   `pc cam` writes for it.
 
@@ -13,6 +13,7 @@ docs:
     pc inspect gasket
     pc inspect bearing_block
     pc inspect drilled_plate
+    pc inspect rail
     pc test -f manufacturability
     ```
 
@@ -142,6 +143,39 @@ parts:
         safe_z: 5
     parameters:
       tolerance: 0.1
+
+  stock_board:
+    type: build123d
+    desc: >
+      A board, bought by the length: a 38 x 89 mm section as long as its
+      `length` parameter says. Like the sheet and the plate it declares no
+      `manufacturing:`, because nobody here makes it.
+    parameters:
+      length:
+        type: float
+        default: 600
+      tolerance: 0.1
+
+  rail:
+    type: enrich
+    desc: >
+      A 250 mm piece of the board, cut off its end by a saw. A saw makes
+      nothing but the stock with its ends cut off, so `cut:` says where it
+      cuts rather than how -- the dimension of the board and how long a
+      piece, where `$length` is the value of this part's own `length` -- and
+      `manufacturability-cut` checks that cutting the stock there leaves
+      exactly this part. `pc cam` writes nothing for it: a saw runs no
+      program.
+    source: stock_board
+    with:
+      length: 250
+    manufacturing:
+      method: subtractive
+      source: stock_board
+      cut:
+        cuts:
+          - along: +Y
+            length: $length
 
 render:
   readme:

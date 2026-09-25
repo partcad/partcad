@@ -2362,9 +2362,9 @@ route is written, so the program is in the coordinates the part is fixtured in.
 
 ``examples/produce_part_subtractive`` is the whole of the above in one package:
 two stocks, a laser-cut blank and gasket, a routed block whose chamfer is the
-one feature only a router can make, and a drilled plate. The blank is what
-:ref:`sheet-metal` bends. The desk in ``//pub/furniture/workspace/basic`` is
-cut, every piece of it, with ``cut:``.
+one feature only a router can make, a drilled plate, and a rail cut to length
+off a board. The blank is what :ref:`sheet-metal` bends. The desk in
+``//pub/furniture/workspace/basic`` is cut, every piece of it, with ``cut:``.
 
 .. _subtractive-cut:
 
