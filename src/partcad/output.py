@@ -901,6 +901,21 @@ async def materialize_script(ctx, impl) -> str:
             % (impl.format_name, builtin_package)
         )
 
+    # A 'path' names a script that is about to be executed with 'runpy', so one
+    # that is not Python is a configuration error and not a missing file. Saying
+    # so here is what tells a reader which of the two it is: the field is easily
+    # read as the *output* name (it is not - see 'prefix', 'extension' and
+    # 'output_dir'), and pointing it at a document is answered by compiling that
+    # document. A 'render: readme: path: readme.md' was reported as "leading zeros
+    # in decimal integer literals are not permitted (readme.md, line 20)", which
+    # names the file and nothing else, for every object in the package.
+    if os.path.splitext(impl.script)[1].lower() != ".py":
+        raise Exception(
+            "The implementation of '%s' is not a Python file: %s. A 'path' in a '%s:' section names the "
+            "script that writes the file, which PartCAD executes; the name of the file it writes is set "
+            "by 'prefix', 'extension' and 'output_dir'" % (impl.format_name, impl.script, impl.section)
+        )
+
     # 'stamp()' fills 'package' in for every layer that names a 'path', so the
     # fallback is only reached by a file type whose implementation is the
     # built-in one. A section with no built-in - 'cae:' and 'simulation:' -

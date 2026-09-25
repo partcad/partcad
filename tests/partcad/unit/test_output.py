@@ -1178,3 +1178,31 @@ def test_the_dxf_renderer_writes_fixed_metadata_only_when_asked():
         node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "convert_svg_to_dxf"
     )
     assert ast.literal_eval(convert.args.defaults[-1]) is False
+
+
+def test_an_implementation_path_that_is_not_python_is_refused(ctx):
+    """'path' names the script, and a 'path' of a document is a stated mistake.
+
+    The field is easily read as the name of the file to write - it is not; that
+    is 'prefix'/'extension'/'output_dir' - and pointing it at a markdown document
+    used to be answered by *compiling that document*: a package whose readme was
+    called 'readme.md' and which wrote 'render: readme: path: readme.md' failed
+    every object with "leading zeros in decimal integer literals are not
+    permitted (readme.md, line 20)".
+    """
+    impl = output.Implementation(output.RENDER, "readme", {"path": "readme.md", "package": "//builtin/render"})
+    with pytest.raises(Exception) as caught:
+        asyncio.run(output.materialize_script(ctx, impl))
+    message = str(caught.value)
+    assert "not a Python file" in message
+    assert "readme.md" in message
+    # Says what does set the output name, since that is what was being attempted.
+    assert "extension" in message
+
+
+def test_an_implementation_path_that_is_python_gets_as_far_as_the_file(ctx):
+    """The check is about the extension and nothing else: a missing .py still reports missing."""
+    impl = output.Implementation(output.RENDER, "svg", {"path": "nowhere.py", "package": "//builtin/render"})
+    with pytest.raises(Exception) as caught:
+        asyncio.run(output.materialize_script(ctx, impl))
+    assert "is not found" in str(caught.value)
