@@ -83,6 +83,11 @@ It is also the one part here that says it could be made *either* way. Those are 
 <td valign=top><img src="././rail.svg" alt="rail" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
 <td valign=top>A 250 mm piece of the board, cut off its end by a saw. A saw makes nothing but the stock with its ends cut off, so `cut:` says where it cuts rather than how -- the dimension of the board and how long a piece, where `$length` is the value of this part's own `length` -- and `manufacturability-cut` checks that cutting the stock there leaves exactly this part. `pc cam` writes nothing for it: a saw runs no program.
 </td>
+<td valign=top>Parameters:<br/><ul>
+<li>length: 250.0</li>
+<li>tolerance: 0.1</li>
+</ul>
+</td>
 </tr></table>
 
 ### stock_board
