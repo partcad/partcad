@@ -273,6 +273,16 @@ def parse_length(value, what: str = "value") -> float:
     return amount
 
 
+def parse_coordinate(value, what: str = "value") -> float:
+    """One coordinate, in millimetres: a length that may be zero or negative.
+
+    The same spellings `parse_length` accepts, without its demand that the value
+    be positive. A tool diameter of zero is a mistake; a cutting plane through
+    the origin, or behind it, is an ordinary place to cut.
+    """
+    return _parse_scaled(value, what, _LENGTH_UNITS, _LENGTH_NAMES, "a length")
+
+
 def parse_feed(value, what: str = "value") -> float:
     """One feed rate, in millimetres per minute.
 
@@ -623,6 +633,7 @@ def declared_config(shape, machine: Optional[str] = None) -> Optional[dict]:
             program for the wrong machine.
     """
     from .part_config import PartConfiguration
+    from .part_config_manufacturing import ROUTED_MACHINES
 
     data = PartConfiguration.get_manufacturing_data(shape)
     if data is None:
@@ -637,6 +648,10 @@ def declared_config(shape, machine: Optional[str] = None) -> Optional[dict]:
         # while looking straight at the subsection saying how it is.
         raise CamConfigError(data.machine_error)
 
+    # Only the machines a program is written for. A saw cutting stock to length
+    # runs none, so a part that is only cut has no route, and a part that could
+    # be cut or routed has one choice fewer to make.
+    routed = [kind for kind in data.machine_choices() if kind in ROUTED_MACHINES]
     chosen = None
     if machine is not None:
         chosen = data.machine_named(machine)
@@ -645,13 +660,20 @@ def declared_config(shape, machine: Optional[str] = None) -> Optional[dict]:
                 "it is not made on a '%s'; it names %s"
                 % (machine, ", ".join("'%s'" % kind for kind in data.machine_choices()) or "no machine")
             )
-    elif len(data.machines) > 1:
+        if machine not in ROUTED_MACHINES:
+            raise CamConfigError(
+                "a '%s' runs no program: where it cuts is the whole of what it is told, and the part's own"
+                " declaration already says so" % machine
+            )
+    elif len(routed) > 1:
         raise CamConfigError(
-            "it could be made on %s, so one of them has to be chosen"
-            % " or ".join("'%s'" % kind for kind in data.machine_choices())
+            "it could be made on %s, so one of them has to be chosen" % " or ".join("'%s'" % kind for kind in routed)
         )
-    else:
-        chosen = data.machine
+    elif routed:
+        chosen = data.machine_named(routed[0])
+    elif data.machines:
+        # Made on machines none of which runs a program.
+        return None
 
     # The opt-in: an object is routed when it has said something about being
     # cut, either by naming a machine or by declaring a job parameter. A
@@ -690,9 +712,12 @@ def declares_job(shape) -> bool:
         # Broken, and therefore visited: the sentence belongs to whoever tries
         # to route it, against the object it is about.
         return True
-    if data.job:
+    from .part_config_manufacturing import ROUTED_MACHINES
+
+    routed = [machine for machine in data.machines.values() if machine.kind in ROUTED_MACHINES]
+    if data.job and (routed or not data.machines):
         return True
-    return any(machine.declared for machine in data.machines.values())
+    return any(machine.declared for machine in routed)
 
 
 def dysfunction_report(name: str, implementation: str, error: Exception, remedy: Optional[str] = None) -> str:

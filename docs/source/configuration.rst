@@ -2262,6 +2262,11 @@ adding its own subsection:
 | ``drill:``     | A drilling machine. It goes in and comes out, so the only  |
 |                | thing it makes is a **round** hole along its own axis.     |
 +----------------+------------------------------------------------------------+
+| ``cut:``       | A saw that cuts the stock across -- a board to length, a   |
+|                | sheet to size. It makes **nothing but the stock with its   |
+|                | ends cut off**, at the planes it declares. See             |
+|                | :ref:`subtractive-cut`.                                    |
++----------------+------------------------------------------------------------+
 
 Naming none of them means CNC. That is the machine that can make anything the
 other two can, so it is the answer that is never wrong -- and it is what every
@@ -2287,7 +2292,7 @@ router's read by accident. A *sketch* is the one section with no ``method:`` in
 it: a drawing is not made out of anything, so it names the machine and the job
 and nothing else.
 
-Every machine takes a ``toolAxis``, which is the axis the tool, the beam or the
+Every machine but ``cut:`` takes a ``toolAxis``, which is the axis the tool, the beam or the
 drill approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
 or ``-Z``. It defaults to ``-Z``: the part sits on the bed and the tool comes
 down to it. It is **not** ``direction:``, which says which way round a
@@ -2310,6 +2315,8 @@ part that named that machine**:
   is asked of what the machine **took away** rather than of the part, where the
   part names a ``source``: a drilled plate's straight sides came with the stock,
   and asking the part's own walls would fail every plate for having them.
+- ``manufacturability-cut`` -- the stock, cut at every declared plane, **is**
+  the part. See :ref:`subtractive-cut`.
 
 Both are measured by sampling each face's own normal against the axis, not by
 reading its surface type. The type is not the question: a cylinder is a wall
@@ -2344,6 +2351,10 @@ would be a route written for a machine nobody owns.
 |                | retract, broken into steps where ``peck:`` says.           |
 +----------------+------------------------------------------------------------+
 
+A ``cut:`` gets no program: a saw cutting stock to size is told where to cut
+and nothing else, and the part's declaration already says that. ``pc cam``
+passes over a part that is only cut, and refuses ``-m cut``.
+
 ``power`` (a laser's S-word) and ``peck`` (how deep a drill goes before clearing
 the swarf) join the other :ref:`cam job keys <cam-section>`. A part declaring a
 ``toolAxis`` other than ``-Z`` is rotated into the machine's frame before the
@@ -2352,7 +2363,61 @@ route is written, so the program is in the coordinates the part is fixtured in.
 ``examples/produce_part_subtractive`` is the whole of the above in one package:
 two stocks, a laser-cut blank and gasket, a routed block whose chamfer is the
 one feature only a router can make, and a drilled plate. The blank is what
-:ref:`sheet-metal` bends.
+:ref:`sheet-metal` bends. The desk in ``//pub/furniture/workspace/basic`` is
+cut, every piece of it, with ``cut:``.
+
+.. _subtractive-cut:
+
+Cutting stock to size
+^^^^^^^^^^^^^^^^^^^^^
+
+``cut:`` is the machine most parts that are cut at all are cut on: a saw taking
+a stud off an eight foot 2x4, or a shelf out of a sheet of plywood. It follows
+no outline, so it is described by **where** it cuts -- a list of planes in the
+part's own coordinates, which are also its stock's:
+
+.. code-block:: yaml
+
+  parts:
+    leg:
+      type: enrich
+      source: //pub/std/imperial/dimensional-lumber:lumber
+      with:
+        width: 4
+        height: 4
+      manufacturing:
+        method: subtractive
+        source: //pub/svc/commerce/homedepot:lumber/4x4x8
+        cut:
+          cuts:
+            # The dimension to cut, and how long a piece to cut along it.
+            - along: +Y
+              length: $length in
+            # ...or a plane: a point on it, and its normal, facing the offcut.
+            # - plane: [[0, 1219.2, 0], [0, 1, 0]]
+
+Each cut is one of two things:
+
+- ``plane: [[x, y, z], [nx, ny, nz]]`` (or ``{origin: ..., normal: ...}``) -- a
+  point on the plane and its normal. The normal points at the **offcut**: what
+  is on that side is cut off, what is behind it is the part.
+- ``along:`` and ``length:`` -- the dimension of the stock to cut, as an axis
+  (``+Y``) or a vector (``[0, 1, 0]``), and how long a piece to cut along it.
+  The length is measured from where the stock *starts* in that direction, the
+  way a board is measured from its end, so ``along: -Y`` counts from the other
+  end.
+
+Any number in a cut may be written as ``$name`` -- the value of the part's own
+parameter of that name, with a unit after it if it needs one (``$length in``).
+A part cut to length is nearly always parametric, and a cut written as a number
+would be right for one instance and wrong for every other.
+
+``pc test`` runs ``manufacturability-cut`` over it, which cuts the stock at each
+plane in turn and compares what is left with the part. Whatever the part has
+that the cut stock does not is a feature no saw made; whatever the cut stock has
+that the part does not is a notch, a hole or a cut in the wrong place; and a cut
+that takes nothing off the stock is a plane that misses it. Each of the three is
+a failure that says which plane it was about.
 
 .. _sheet-metal:
 

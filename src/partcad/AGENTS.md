@@ -357,6 +357,22 @@ at all).
   example bends -- named across packages, so the piece that goes into the brake is a part whose own making is
   described rather than one asserted to exist.
 
+  The fourth machine, **`cut:`**, is a saw cutting the stock across -- a board to length, a sheet to size -- and
+  it is described by *where* it cuts rather than how: `cuts:` is a list of planes in the part's (and so the
+  stock's) coordinates, each either `plane: [[x, y, z], [nx, ny, nz]]` with the normal facing the offcut, or
+  `along:` + `length:`, measured from where the stock starts along that direction. Any number may be `$name`, the
+  part's own parameter (`parse_cuts`), because a part cut to length is nearly always parametric. It takes no
+  `toolAxis:` and no job keys, and it is not in `ROUTED_MACHINES`: `pc cam` passes over a part that is only cut
+  and refuses `-m cut`, and a saw beside a laser leaves the laser as the one route. `manufacturability-cut`
+  (`test/manufacturability_cut.py`, `wrapper_manufacturability.cut`) cuts the stock at each plane and requires
+  the result to *be* the part, and every cut to take something off. The furniture desk in
+  `partcad-furniture-basic` is built this way from `//pub/svc/commerce/homedepot` lumber.
+
+  An **alias or enrich may state how its object is made**: `PartFactoryAlias.get_final_config` layers the
+  reference's own `manufacturing:` over the source's, whole, the way the purchasing record is -- which is what
+  lets a package say "this 4x4 of the standard's is cut off a store's 8 ft. one". And a reference answers
+  `get_tolerance()` with its source's, since it has nothing of its own to state one in.
+
 - **A sheet metal part names what is bent and how** (`part_config_manufacturing.py`,
   `test/manufacturability_sheet_metal.py`, `wrappers/dxf_metadata.py`): `sheet_metal` is the one manufacturing
   method that is not described by the part alone. The others say how a shape comes out of stock; this one says

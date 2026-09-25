@@ -88,3 +88,15 @@ async def wall_alignment(ctx, envelope, tool_axis_vector, source_envelope=None) 
     """
     extra = {} if source_envelope is None else {"source": source_envelope}
     return await _analyze(ctx, envelope, "wall_alignment", tool_axis_vector=list(tool_axis_vector), **extra)
+
+
+async def cut(ctx, envelope, source_envelope, cuts: list) -> dict:
+    """What cutting the stock across at 'cuts' leaves, compared with the part.
+
+    'extra_volume' is what the part has beyond the cut stock and
+    'missing_volume' what the cut stock has beyond the part; a part a saw can
+    make has neither. 'removed' is what each cut took off, and 'planes' where
+    each one was, resolved against the stock. See
+    'wrappers/wrapper_manufacturability.cut'.
+    """
+    return await _analyze(ctx, envelope, "cut", source=source_envelope, cuts=cuts)

@@ -366,6 +366,52 @@ Feature: `pc test` command
     And STDOUT should contain "manufacturability-laser"
     And STDOUT should contain "cannot make it"
 
+  @failure @pc-test @pc-test-subtractive
+  Scenario: A part cut to the wrong length is not what the saw leaves
+    # A saw cuts the stock across and does nothing else, so a part declared as
+    # cut is the stock with everything beyond each plane taken off -- and a
+    # cut declared 100 mm from the end of a board does not leave a 60 mm piece.
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      parts:
+        board:
+          type: build123d
+          path: board.py
+          parameters:
+            length: 300
+            tolerance: 0.1
+        piece:
+          type: enrich
+          source: board
+          with:
+            length: 60
+          manufacturing:
+            method: subtractive
+            source: board
+            cut:
+              cuts:
+                - along: +Y
+                  length: 100 mm
+      """
+    And a file named "board.py" with content:
+      """
+      import build123d as bd
+
+      length = 300.0
+
+      with bd.BuildPart() as result:
+          with bd.Locations((20, length / 2, 10)):
+              bd.Box(40, length, 20)
+
+      show_object(result.part.wrapped, name="board")
+      """
+    When I run "pc test -f manufacturability-cut piece"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "manufacturability-cut"
+    And STDOUT should contain "does not make it"
+
   @success @pc-test @pc-test-subtractive
   Scenario: The example package passes every manufacturability check
     # End to end, against the checked-in example: two stocks, two laser parts,

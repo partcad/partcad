@@ -66,6 +66,73 @@
       },
       "additionalProperties": false
     },
+    "subtractive-cut": {
+      "description": "A saw that cuts the stock across, to length or to size, and does nothing else. It is described by where it cuts: 'manufacturability-cut' cuts the 'source:' at each plane and checks that what is left is the part. 'pc cam' writes no program for it.",
+      "type": "object",
+      "properties": {
+        "cuts": {
+          "description": "The planes the saw goes through, in the part's own coordinates (which are the stock's). Each is either 'plane:' -- a point on it and its normal, which points at the offcut -- or 'along:' and 'length:': the dimension of the stock to cut, and how long a piece to cut along it, measured from where the stock starts in that direction. Any number may be written as '$name', the value of the part's own parameter of that name ('$length in').",
+          "oneOf": [
+            { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/subtractive-cut-plane" } },
+            { "$ref": "#/definitions/subtractive-cut-plane" }
+          ]
+        },
+        "desc": { "type": "string", "maxLength": 1000 }
+      },
+      "required": ["cuts"],
+      "additionalProperties": false
+    },
+    "subtractive-cut-plane": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "plane": {
+              "oneOf": [
+                {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": [{ "$ref": "#/definitions/cut-point" }, { "$ref": "#/definitions/cut-direction" }]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "origin": { "$ref": "#/definitions/cut-point" },
+                    "normal": { "$ref": "#/definitions/cut-direction" }
+                  },
+                  "required": ["origin", "normal"],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": ["plane"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "along": { "$ref": "#/definitions/cut-direction" },
+            "length": { "$ref": "#/definitions/cam-length", "description": "How long a piece to cut, as a length ('1219.2', '48 in', '$length in')" }
+          },
+          "required": ["along", "length"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "cut-point": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "oneOf": [{ "type": "number" }, { "type": "string", "minLength": 1 }] }
+    },
+    "cut-direction": {
+      "oneOf": [
+        { "$ref": "#/definitions/machine-axis" },
+        { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } }
+      ]
+    },
     "sketch-manufacturing": {
       "type": "object",
       "description": "How a machine follows this drawing: which machine, and the job it runs. A sketch has no 'method:' and no 'source:' -- it is not made from anything, it is a path -- so this is the machine subsections and the job keys and nothing else. Scoped the same way a part's is: what is written here is shared by every machine named below, and what is written inside one of them is that machine's own.",
@@ -1374,6 +1441,7 @@
                     "cnc": { "$ref": "#/definitions/subtractive-cnc" },
                     "drill": { "$ref": "#/definitions/subtractive-drill" },
                     "laser": { "$ref": "#/definitions/subtractive-laser" },
+                    "cut": { "$ref": "#/definitions/subtractive-cut" },
                     "diameter": { "$ref": "#/definitions/cam-length", "description": "Shared by every machine named below that reads one: the cutter on a router, the bit in a drill. A laser has none and ignores it" },
                     "depth": { "$ref": "#/definitions/cam-length", "description": "How far down from the top of the object the cut goes. An object that does not say is cut through" },
                     "depth_per_pass": { "$ref": "#/definitions/cam-length", "description": "How deep each pass goes" },
@@ -1412,6 +1480,7 @@
                           "cnc": false,
                           "drill": false,
                           "laser": false,
+                          "cut": false,
                           "diameter": false,
                           "depth": false,
                           "depth_per_pass": false,
