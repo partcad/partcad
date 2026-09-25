@@ -607,7 +607,11 @@ async function parseSketches(node: ShowNode, geometry: Geometry): Promise<Map<st
             continue;
         }
         try {
-            parsed.set(reference, await parseGltf(base64ToArrayBuffer(sketch.gltf)));
+            const group = await parseGltf(base64ToArrayBuffer(sketch.gltf));
+            // Its lines drawn like every other line; its faces are given the
+            // boundary material per port, in 'addPorts'.
+            restyle(group, geometry.material, geometry.lineMaterial);
+            parsed.set(reference, group);
         } catch (error: any) {
             reportError(`failed to parse the port sketch '${reference}': ${error}`);
         }
