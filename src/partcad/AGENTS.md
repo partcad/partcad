@@ -373,6 +373,17 @@ at all).
   lets a package say "this 4x4 of the standard's is cut off a store's 8 ft. one". And a reference answers
   `get_tolerance()` with its source's, since it has nothing of its own to state one in.
 
+- **A made part is procured as its stock** (`procurement.py`): a part with a `manufacturing:` method is made, and
+  the user is taken at their word that they can make it -- so no supplier is asked for it. `procured_as` is the
+  one rule: bought -> itself; made -> the `source:` of its `manufacturing:` section, followed down the chain; made
+  from nothing it names -> nothing; neither -> itself. `get_supply_bom(ctx)` (the cart), the grouped BOM's `stock`
+  and `manufactured` sections (the readme and the instruction book), the detailed BOM's `stock` line items and
+  `madeFrom`, and `ManufacturabilityTest.stock_failure` all go through it. `get_supply_bom()` *without* a context
+  is still "what has to be had", parts as themselves, and is what the manufacturability test walks, because a
+  made part is something it tests too. A part with both a vendor/SKU and instructions is tried as bought first
+  and falls back to being made. One piece of stock per part: nesting is not modelled yet. The instruction book's
+  "Parts to Manufacture" pages repeat each part's instructions as text (`manufacturing_instructions.py`).
+
 - **A sheet metal part names what is bent and how** (`part_config_manufacturing.py`,
   `test/manufacturability_sheet_metal.py`, `wrappers/dxf_metadata.py`): `sheet_metal` is the one manufacturing
   method that is not described by the part alone. The others say how a shape comes out of stock; this one says

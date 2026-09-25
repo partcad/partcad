@@ -758,9 +758,10 @@ class Project(project_config.Configuration):
 
         A listing wants two columns and neither of them needs the object: the
         name is the declaration's, and the description is the declaration's
-        too, apart from the reference types - an alias, an enrich and a
-        compound are described by what they point at, and that is resolved from
-        the declaration as well (see 'partcad.reference').
+        too, apart from the reference types that declare none - an alias, an
+        enrich and a compound are then described by what they point at, and
+        that is resolved from the declaration as well (see
+        'partcad.reference').
 
         So a listing does not build a package to print it, which is the whole
         point: 'pc list parts -r //pub' over a catalog of twenty thousand parts
@@ -776,7 +777,9 @@ class Project(project_config.Configuration):
                 descriptions[name] = None
                 continue
             desc = config.get("desc")
-            if config.get("type") in reference.REFERENCE_TYPES:
+            # A reference that says what it is keeps its own word for it, the
+            # same answer 'PartFactoryAlias' gives the object.
+            if config.get("type") in reference.REFERENCE_TYPES and not desc:
                 try:
                     desc = reference.describe(config["type"], self.name, self._reference_source(config))
                 except Exception as e:

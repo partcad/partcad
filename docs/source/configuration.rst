@@ -2581,6 +2581,43 @@ These values are passed on to providers of the type ``store`` as
 ``request["vendor"]``, ``request["sku"]`` and ``request["count_per_sku"]``
 (see :ref:`providers`).
 
+.. _made-from-stock:
+
+Parts that are made
+^^^^^^^^^^^^^^^^^^^
+
+A part with manufacturing instructions -- a ``manufacturing:`` section naming a
+method -- is **made**, and whoever builds the assembly is taken at their word
+that they can make it: PartCAD has the instructions, and for now assumes the
+capabilities to follow them. So nobody is asked to supply such a part. What has
+to be procured is what it is made *from*: the ``source:`` of its
+``manufacturing:`` section, which is procured by the same rule in turn -- a
+bracket bent from a blank that is cut from a sheet is procured as the sheet. A
+part made from nothing it names (``additive``, ``forming``) needs nothing
+procured at all.
+
+- **The bills of materials** list every part that goes into the assembly, and
+  beside them a **Stock** section: what the made parts are made from, one piece
+  for each part made from it, and which parts each is for. Cutting several parts
+  out of one piece is a question of layout that PartCAD does not answer yet, so
+  the count is what buying for each part separately would take -- an upper
+  bound, never short. The detailed bill of materials lists the stock as line
+  items of kind ``stock``, with the vendor and the SKU to order them by, and
+  each made part names what it is made from in ``madeFrom``.
+- **The assembly instructions** open, after the bill of materials, with the
+  parts to manufacture: each one, how many of it, what it is made from, and its
+  manufacturing instructions written out in full.
+- **pc supply** puts the stock in the cart instead of the part.
+- **pc test** does not look for a supplier of a made part. It checks that its
+  instructions are complete (a tolerance), and that its stock can be had -- by
+  running the same tests over the stock, which for a bought one is a supplier
+  that carries it.
+
+A part that has manufacturing instructions **and** a ``vendor`` and an ``sku``
+can be had either way. It is tried as bought first: ``pc test`` asks for a
+supplier, and only if no supplier confirms it does it check that the part can be
+made instead. The bills of materials and the cart list it as bought.
+
 Note that ``count_per_sku`` is a property of how the part is packaged for sale,
 not of the CAD model. If the same part is sold by several vendors in different
 pack sizes, declare one part per (vendor, SKU) pair, for example using

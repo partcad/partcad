@@ -289,7 +289,7 @@ class _FakeHolder(_FakeLeaf):
     def is_declared_purchasable(self):
         return True
 
-    async def get_supply_bom(self):
+    async def get_supply_bom(self, ctx=None):
         return dict(self._bom)
 
     async def get_bom(self):

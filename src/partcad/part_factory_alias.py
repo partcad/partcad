@@ -59,7 +59,10 @@ class PartFactoryAlias(pf.PartFactory):
                 self.source = self.source_project_name + ":" + self.source_part_name
             config["source_resolved"] = self.source
 
-            self.part.desc = reference.describe(config["type"], target_project.name, self.source)
+            # What the reference says it is, where it says: an enrich of a
+            # standard size is usually a part of its own ("a leg") and not
+            # merely another name for the size.
+            self.part.desc = config.get("desc") or reference.describe(config["type"], target_project.name, self.source)
 
             # pc_logging.debug("Initialized an alias to %s" % self.source)
 
