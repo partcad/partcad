@@ -11,15 +11,38 @@ subtractive part is cut out of -- so they all have to turn a reference into the
 object it names. One copy of that, here, because the rule it implements is one
 rule and a second copy is a second answer to "what does `source: blank` mean".
 
-What the rule is: the reference is resolved against the package the *part* is
-declared in, like every other reference a part makes, so a blank beside the part
-is named by its bare name and one somewhere else carries its package. A
-reference may also carry parameters -- `panel;include=BEND_UP` -- and the
-accessors read them, which is the whole reason the layer filters are parameters.
+What the rule is: the reference is resolved against the package the declaration
+it was written in belongs to, like every other reference a part makes, so a blank
+beside the part is named by its bare name and one somewhere else carries its
+package. A reference may also carry parameters -- `panel;include=BEND_UP` -- and
+the accessors read them, which is the whole reason the layer filters are
+parameters.
+
+For an `alias` or an `enrich` that is not the package the part is *reached*
+through. Such a part resolves to another object's configuration and inherits the
+whole of its `manufacturing:` section, references included -- so a part aliased
+into a second package named a blank that does not exist there, and the check
+reported the blank of somebody else's part as missing. The upstream namespace is
+where an aliased declaration's names live, which is the same rule
+`/pc:add-interfaces` states for an enriched part's `implements:`.
 """
 
 from .. import logging as pc_logging
 from ..utils import resolve_resource_path
+
+
+def declaring_project_name(shape) -> str:
+    """The package whose declaration this part's resolved configuration is.
+
+    Itself for a part declared where it is used, and the source's package for an
+    `alias` or an `enrich`, which is where the names in the configuration they
+    resolve to were written.
+    """
+    config = getattr(shape, "config", None) or {}
+    source = config.get("source_resolved") or config.get("source")
+    if config.get("type") in ("alias", "enrich") and source and ":" in source:
+        return resolve_resource_path(shape.project_name, source)[0]
+    return shape.project_name
 
 
 async def resolve_reference(ctx, shape, reference: str, kind: str = "part"):
@@ -39,7 +62,7 @@ async def resolve_reference(ctx, shape, reference: str, kind: str = "part"):
             without parameters.
         kind: 'part' or 'sketch' -- which accessor answers.
     """
-    project_name, object_name = resolve_resource_path(shape.project_name, reference)
+    project_name, object_name = resolve_resource_path(declaring_project_name(shape), reference)
     project = ctx.get_project(project_name)
     if project is None:
         pc_logging.debug("Package '%s' not found" % project_name)

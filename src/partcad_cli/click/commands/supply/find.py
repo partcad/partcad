@@ -52,7 +52,11 @@ def cli(cli_ctx: CliContext, api: bool, qos: str, provider: str, recursive: bool
         ctx: pc.Context = cli_ctx.get_partcad_context()
 
         with pc.logging.Process("SupplyFind", "this"):
-            cart = pc.ProviderCart()
+            # The quality of service belongs to the cart, which is what every
+            # provider is asked about it: 'ProviderCart(qos=...)' is how
+            # 'pc supply quote' does it, and passing it to 'find_suppliers'
+            # instead raised a TypeError on every run of this command.
+            cart = pc.ProviderCart(qos=qos)
             asyncio.run(cart.add_objects(ctx, specs, recursive=recursive))
 
             suppliers = {}
@@ -71,7 +75,7 @@ def cli(cli_ctx: CliContext, api: bool, qos: str, provider: str, recursive: bool
                         return
                     suppliers[str(part_spec)].append(provider.name)
             else:
-                suppliers = asyncio.run(ctx.find_suppliers(cart, qos))
+                suppliers = asyncio.run(ctx.find_suppliers(cart))
                 pc.logging.debug(f"Suppliers: {suppliers}")
 
             if api:

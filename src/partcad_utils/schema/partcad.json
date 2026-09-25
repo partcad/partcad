@@ -1126,6 +1126,11 @@
     "docs": {
       "type": ["object", "null"],
       "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "The title of the generated document, where the package's own path is not what a reader of it should see. Read by 'Project.render_readme()'; absent from this schema until a package tried to use it."
+        },
         "intro": { "type": "string", "maxLength": 5000 },
         "usage": { "type": "string", "maxLength": 5000 }
       },
@@ -1948,6 +1953,10 @@
           "properties": {
             "type": { "type": "string", "enum": ["store", "manufacturer", "enrich"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "path": {
+              "$ref": "#/definitions/file_path",
+              "description": "The script that implements this provider. Defaults to the provider's own name plus '.py', which is why most providers do not state it; a package that keeps its providers in a directory of their own does."
+            },
             "source": { "type": "string", "minLength": 1 },
             "package": { "type": "string", "minLength": 1 },
             "with": {
