@@ -5,7 +5,7 @@ Example of KiCad integration using Arduino Nano from KiCad Templates
 ## Parts
 
 ### Arduino_Nano
-<a href="Arduino_Nano.kicad"><img src="././Arduino_Nano.svg" alt="Arduino_Nano" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a>
+<img src="././Arduino_Nano.svg" alt="Arduino_Nano" style="width: auto; height: auto; max-width: 200px; max-height: 200px;">
 
 ## Software
 

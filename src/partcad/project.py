@@ -3351,6 +3351,11 @@ class Project(project_config.Configuration):
                         path += ".scad"
                     else:
                         path += "." + config["type"]
+            # Linked only where there is a file to follow. An alias, an enrich
+            # or a compound has no file of its own -- it points at another
+            # object -- and a guessed '<name>.<type>' is a link to nothing.
+            if not os.path.isfile(os.path.join(self.config_dir, path)):
+                path = None
 
             columns = []
             img_text, test_image_path = self._readme_image(name, render_cfg, return_path, config)
