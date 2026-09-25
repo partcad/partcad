@@ -49,13 +49,6 @@ _OPTIONS = (
         show_envvar=True,
     ),
     click.option(
-        "-p",
-        "--create-dirs",
-        help="Create the necessary directory structure if it is missing",
-        is_flag=True,
-        show_envvar=True,
-    ),
-    click.option(
         "--json",
         "as_json",
         help="Print the findings as the JSON array they are, instead of as a table",
@@ -76,7 +69,7 @@ def analysis_options(command):
     return command
 
 
-def analysis_command(cli_ctx, analysis, package, implementation, output_dir, create_dirs, as_json, object):
+def analysis_command(cli_ctx, analysis, package, implementation, output_dir, as_json, object):
     """Run one analysis on the daemon and let it report.
 
     The findings are printed by the daemon through PartCAD logging, exactly as
@@ -95,7 +88,6 @@ def analysis_command(cli_ctx, analysis, package, implementation, output_dir, cre
             # Resolved to absolute so the model lands in the user's working
             # directory rather than the daemon's, which is somewhere else.
             "output_dir": os.path.abspath(output_dir) if output_dir else None,
-            "create_dirs": create_dirs,
             "json": as_json,
         },
         needs_context=True,

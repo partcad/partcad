@@ -3114,7 +3114,7 @@ class Project(project_config.Configuration):
         document = await assembly_guide.build_readme_document_async(self, assembly, images, dir_path)
 
         lines = pc_document.render_markdown(document)
-        self.ctx.ensure_dirs_for_file(path, assembly.name)
+        self.ctx.ensure_dirs_for_file(path)
         with open(path, "w") as f:
             f.writelines(map(lambda s: s + "\n", lines))
         return path
@@ -3151,7 +3151,7 @@ class Project(project_config.Configuration):
         async with assembly_guide.guide_document_async(
             self.ctx, self, assembly, format.upper(), dir_path, ignore_manufacturability
         ) as document:
-            self.ctx.ensure_dirs_for_file(path, assembly.name)
+            self.ctx.ensure_dirs_for_file(path)
             if format == "html":
                 with open(path, "w") as f:
                     f.write(pc_document.render_html(document))

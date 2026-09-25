@@ -158,9 +158,11 @@ at all).
   pieces with `os.path.join`, so the tree is the same one on Windows as on Linux and macOS: the separator in a
   *name* is always `/`, and no filesystem takes one in a file name.
 
-  The directories are created when the file is written, `--create-dirs` or not. That flag is about a directory
-  the *user* named and has not made -- an output directory -- while these are part of the file's own name; a
-  file the caller named itself (`filepath=`) is still written exactly where it said. `pc export`/`pc render`
+  The directories are created when the file is written, and so is every directory above them: where the file
+  goes is settled by then, and a directory nobody has made yet is the last thing between that decision and the
+  file. There used to be a `--create-dirs` flag drawing a line through the middle of one path -- the
+  sub-directories the *name* asked for were made, the output directory the *user* named was not -- and it is
+  gone. A file the caller named itself (`filepath=`) is still written exactly where it said. `pc export`/`pc render`
   of such a part is also the one lookup in `Project._enumerate_shapes_async()` that has to be awaited
   (`get_part_async`): the part does not exist until the object that produces it has been built.
 
