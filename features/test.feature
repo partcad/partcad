@@ -214,8 +214,10 @@ Feature: `pc test` command
     #   tolerated is tolerated feature by feature, 0.05 on one face and 0.2 on
     #             another: no single number is true of it, and none is invented
     #
-    # All three lack a supplier, so all three fail -- on that, which is what
-    # proves the tolerance check let two of them through.
+    # None of them is asked for a supplier: a part with manufacturing
+    # instructions is made, and whoever builds it is taken at their word that
+    # they can make it. So the two with a tolerance pass, and the one without
+    # fails on that and nothing else.
     Given a file named "partcad.yaml" with content:
       """
       manufacturable: true
@@ -224,8 +226,8 @@ Feature: `pc test` command
         bracket:
           type: step
           manufacturing:
-            # 'additive' because this scenario is about the tolerance check and
-            # the supplier search, not about how the part is made. 'subtractive'
+            # 'additive' because this scenario is about the tolerance check,
+            # not about how the part is made. 'subtractive'
             # would drag in the stock it is cut from, which is a second failure
             # against three parts that are here to demonstrate a different one.
             method: additive
@@ -274,8 +276,8 @@ Feature: `pc test` command
     When I run "pc test -f manufacturability"
     Then the command should exit with a status code of "1"
     And STDOUT should contain "//:plain: manufacturability: No manufacturing tolerance is specified"
-    And STDOUT should contain "//:bracket: manufacturability: No suppliers found"
-    And STDOUT should contain "//:tolerated: manufacturability: No suppliers found"
+    And STDOUT should not contain "//:bracket: manufacturability"
+    And STDOUT should not contain "//:tolerated: manufacturability"
 
   @success @pc-test @pc-test-subtractive
   Scenario: A subtractive part that does not fit the stock it names
