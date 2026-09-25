@@ -328,6 +328,23 @@ class ShapeConfiguration:
         if self._tolerance is not None:
             return self._tolerance
 
+        # What the object this one is another name for said. An 'alias' and an
+        # 'enrich' are built by a factory that accepts no tolerance field of its
+        # own, so the field the *source* declared never reaches this object -
+        # and the tolerance of a part is the tolerance of the part it is another
+        # name for. Without this, aliasing a machined part failed 'pc test' with
+        # "the part type 'alias' does not accept one" about a part whose
+        # resolved configuration states 0.02.
+        #
+        # Only the declared field, not the file: reading the source's file from
+        # here would need its format and its path, which is what the factory
+        # that built it knows and this object does not.
+        final_config = self.get_final_config()
+        if final_config is not self.config:
+            inherited = final_config.get("tolerance")
+            if inherited is not None:
+                return float(inherited)
+
         stated = await self._get_file_tolerance()
         if stated is not None:
             return stated

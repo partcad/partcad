@@ -126,10 +126,17 @@ def test_render_assembly_readme():
     assert "PartCAD logo using embedded assemblies" in lines
     assert "## Parts" in lines
     assert "### //pub/examples/partcad/produce_part_cadquery_logo" in lines
-    assert "| Part | Count | Description |" in lines
-    assert "| bone | 2 | Plate used as one of the bones on PartCAD logo |" in lines
-    assert "| head_half | 2 | Bracket used as one side of the head on PartCAD logo |" in lines
-    assert "| bolt | 1 | M8x35-screw |" in lines
+    # A column appears where a row in that table has something to say in it, so
+    # the two tables of this document do not have the same columns: the printed
+    # parts state a material and a tolerance and are made, the bolt is bought
+    # from a catalogue and states a vendor and a SKU instead.
+    assert "| Part | Count | Material | Method | Tolerance | Description |" in lines
+    assert "| bone | 2 | PLA | additive | ±0.2 mm | Plate used as one of the bones on PartCAD logo |" in lines
+    assert (
+        "| head_half | 2 | PLA | additive | ±0.2 mm | Bracket used as one side of the head on PartCAD logo |" in lines
+    )
+    assert "| Part | Count | Vendor | SKU | Description |" in lines
+    assert "| bolt | 1 | iso | ISO 4014 M8x35 | M8x35-screw |" in lines
     # No sub-assembly of this assembly is an object of a package.
     assert "## Sub-Assemblies" not in lines
 
