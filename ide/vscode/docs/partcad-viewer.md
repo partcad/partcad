@@ -25,7 +25,7 @@ cannot drift apart.
 ## The 3D view
 
 The pane is a control pane on the left and the canvas beside it. The control pane is a **tree of what is on
-screen**, with a checkbox on every item, and the Show metadata and Animate boxes and the Opacity slider at the
+screen**, with a checkbox on every item, and the Metadata and Animate boxes and the Opacity slider at the
 bottom of it — all of them say what is drawn, so all of them are one pane. There is no name in the corner of the canvas: the first item
 of the tree is the object, and it says the same thing where it can also be switched off.
 
@@ -71,7 +71,8 @@ line: the angle, the radius and the direction of a bend. Every record with somet
 callout at the middle of its element's points, headed by its layer where it has one (`callouts.ts`, tested by
 `src/test/suite/viewerCallouts.test.ts`). The callouts are DOM over the canvas (`CSS2DRenderer`), built node by
 node like every other pane, and belong to the node's own item, so the box that hides a node hides what is said
-about it; **Show metadata**, on by default, hides all of them at once.
+about it; the **Metadata** box, on by default, hides all of them at once. The box is offered only while the model on
+screen has at least one callout (`hasCallouts`), and keeps its state from one object to the next.
 
 The sketches arrive on the **root node**, keyed by the reference the ports name (`port_sketches.py`): one entry
 per sketch however many ports point at it, so a bolt pattern of four holes carries one circle, parsed once and

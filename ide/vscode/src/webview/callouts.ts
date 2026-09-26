@@ -26,6 +26,7 @@
 //
 
 import { ShowNode } from './messages';
+import { walk } from './nodes';
 
 /** One callout: where it is pinned, and what it says. */
 export interface Callout {
@@ -97,4 +98,23 @@ export function calloutsOf(node: ShowNode): Callout[] {
         callouts.push(callout);
     }
     return callouts;
+}
+
+/**
+ * Whether anything in this object's tree has a callout to show.
+ *
+ * What decides whether the Metadata box is offered at all: a box that switches
+ * nothing on or off is a question the model has no answer to. Every node the
+ * renderer draws is asked, not just the root, because an assembly's metadata is
+ * its parts'.
+ */
+export function hasCallouts(root: ShowNode | null | undefined): boolean {
+    if (!root) {
+        return false;
+    }
+    let found = false;
+    walk(root, (node) => {
+        found = found || calloutsOf(node).length > 0;
+    });
+    return found;
 }

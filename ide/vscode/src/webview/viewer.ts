@@ -27,6 +27,7 @@
 //
 
 import { renderBom } from './bom';
+import { hasCallouts } from './callouts';
 import { CaeView } from './cae';
 import { DocumentView } from './document';
 import { el, empty, placeholder } from './dom';
@@ -80,9 +81,9 @@ for (const tab of ANALYSIS_TABS) {
 const tabs = new Tabs(byId('tabs'), onTabSelected);
 
 // What the 3D view is showing, as a tree of items to switch on and off. It lives
-// beside the canvas rather than over it, with the Show metadata and Animate boxes
-// and the Opacity slider under it: all of them say what is drawn, so all of them
-// are one pane.
+// beside the canvas rather than over it, with the Metadata and Animate boxes and
+// the Opacity slider under it: all of them say what is drawn, so all of them are
+// one pane.
 const objectTree = new Tree(
     byId('tree'),
     () => showItems(objectTree.visible()),
@@ -93,8 +94,10 @@ const objectTree = new Tree(
 
 // What a shape's metadata says about its elements - the angle and direction of a
 // sheet metal bend, written against its line - pinned to them as callouts. On by
-// default: it is information the geometry cannot show, and a drawing that states
-// none of it shows none.
+// default: it is information the geometry cannot show. The box is offered only
+// while the model on screen has something to pin (see 'offerMetadata'), and its
+// state is kept across shows, so switching it off stays off for the next object.
+const metadataControl = document.getElementById('metadata-control') as HTMLElement | null;
 const metadataCheckbox = document.getElementById('metadata-checkbox') as HTMLInputElement;
 if (metadataCheckbox) {
     setShowMetadata(metadataCheckbox.checked);
@@ -121,6 +124,13 @@ if (opacitySlider && opacityValue) {
         setOpacity(opacity);
         opacityValue.textContent = `${value}%`;
     });
+}
+
+/** Offer the Metadata box when, and only when, the object on screen has callouts. */
+function offerMetadata(object: ShowMessage['object'] | undefined): void {
+    if (metadataControl) {
+        metadataControl.hidden = !hasCallouts(object);
+    }
 }
 
 /** What the panel is showing, or undefined when it is empty. */
@@ -243,6 +253,7 @@ async function show(message: ShowMessage): Promise<void> {
         objectTree.setObject(message.object, remembered);
     }
     showItems(objectTree.visible());
+    offerMetadata(message.object);
 
     await showGeometry(message);
     // Newer show arrived while this one was loading; abandon it.
@@ -267,6 +278,7 @@ function clear(): void {
     instructions = undefined;
     clearGeometry();
     objectTree.clear();
+    offerMetadata(undefined);
     for (const tab of DATA_TABS) {
         reset(tab);
     }

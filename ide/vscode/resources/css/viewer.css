@@ -87,8 +87,8 @@ body {
  *
  * The tree takes whatever is left after the controls at the bottom, which is
  * most of it - an assembly is a hierarchy and a part has a row per port, so the
- * list is the tall thing here and Show metadata, Animate and Opacity are three
- * lines under it.
+ * list is the tall thing here and Metadata, Animate and Opacity are up to three
+ * lines under it (Metadata only for a model that has any).
  * It shrinks on a narrow panel rather than pushing the canvas out of one.
  */
 .controls {

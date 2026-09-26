@@ -15,7 +15,7 @@
 
 import * as assert from 'assert';
 
-import { calloutsOf } from '../../webview/callouts';
+import { calloutsOf, hasCallouts } from '../../webview/callouts';
 import { ShowNode } from '../../webview/messages';
 
 /** The node the sheet metal example's drawing arrives as, as far as this reads it. */
@@ -117,5 +117,19 @@ suite('The callouts a node pins to its elements', () => {
         assert.deepStrictEqual(calloutsOf({ name: 'plain' }), []);
         assert.deepStrictEqual(calloutsOf({ metadata: { measurements: {} } }), []);
         assert.deepStrictEqual(calloutsOf({ metadata: { annotations: 'not a list' as unknown as [] } }), []);
+    });
+
+    test('the Metadata box is offered for a model with something to pin, and only then', () => {
+        assert.strictEqual(hasCallouts(bends()), true);
+        assert.strictEqual(hasCallouts({ name: 'plain', gltfRef: 'solid' }), false);
+        assert.strictEqual(hasCallouts(null), false);
+        assert.strictEqual(hasCallouts(undefined), false);
+        // Annotated elements that say nothing are not something to pin.
+        assert.strictEqual(hasCallouts({ metadata: { annotations: [{ points: [[0, 0, 0]], metadata: {} }] } }), false);
+    });
+
+    test('an assembly offers it when any part it holds has something to pin', () => {
+        const assembly: ShowNode = { name: 'bracket-assembly', assembly: [{ name: 'bolt' }, bends()] };
+        assert.strictEqual(hasCallouts(assembly), true);
     });
 });
