@@ -292,6 +292,7 @@ export class PartcadViewer implements vscode.Disposable {
 							<div class="controls">
 								<div id="tree" class="tree" role="tree"></div>
 								<div class="viewer-controls">
+									<label class="control-label" id="metadata-control" hidden><input type="checkbox" id="metadata-checkbox" checked> Metadata</label>
 									<label class="control-label"><input type="checkbox" id="animate-checkbox" checked> Animate</label>
 									<label class="control-label">Opacity <input type="range" id="opacity-slider" min="0" max="100" value="100" class="opacity-slider"><span id="opacity-value" class="control-value">100%</span></label>
 								</div>

@@ -382,3 +382,103 @@ class TestDeflectionTakesEffect:
 
         assert as_fraction > 0
         assert as_distance > as_fraction * 2
+
+
+def line_primitives(glb: bytes) -> list:
+    """The 'LINES' primitives of a binary glTF, each as its list of (x, y, z) positions."""
+    meta, binary = wrapper_gltf._read_glb(glb)
+    accessors, views = meta.get("accessors", []), meta.get("bufferViews", [])
+    found = []
+    for mesh in meta.get("meshes", []):
+        for primitive in mesh.get("primitives", []):
+            if primitive.get("mode") != 1:
+                continue
+            accessor = accessors[primitive["attributes"]["POSITION"]]
+            view = views[accessor["bufferView"]]
+            start = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
+            values = struct.unpack_from("<%df" % (accessor["count"] * 3), binary, start)
+            found.append([tuple(values[i : i + 3]) for i in range(0, len(values), 3)])
+    return found
+
+
+def edge(start, end):
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+    from OCP.gp import gp_Pnt
+
+    return BRepBuilderAPI_MakeEdge(gp_Pnt(*start), gp_Pnt(*end)).Edge()
+
+
+class TestEdges:
+    """What becomes of the edges that bound no face.
+
+    A sketch of open lines - the bend lines of a sheet metal drawing - has no face,
+    so it has no triangles, and export_gltf writes nothing for it. It is drawn all
+    the same, as glTF line segments, or the viewer shows nothing where the drawing
+    has something to say.
+    """
+
+    def test_a_sketch_of_lines_alone_is_drawn_as_lines(self):
+        shape = ocp_serialize.compound_of([edge((30, 0, 0), (30, 40, 0)), edge((80, 0, 0), (80, 40, 0))])
+        glb = wrapper_gltf._to_glb(shape, 0.1, 0.4)
+
+        assert triangles(glb) == 0
+        (segments,) = line_primitives(glb)
+        # Two straight edges are two segments, which is four positions.
+        assert len(segments) == 4
+
+    def test_the_lines_are_in_the_frame_the_triangles_are_in(self):
+        """Metres, and Y up: what export_gltf does to a face, done to a line.
+
+        PartCAD's (30, 40, 0) mm is glTF's (0.03, 0, -0.04) m. The viewer converts
+        neither, so a line left in millimetres would be drawn a thousand times too
+        big and lying on its side beside a face that is not.
+        """
+        glb = wrapper_gltf._to_glb(edge((0, 0, 0), (30, 40, 0)), 0.1, 0.4)
+        (segments,) = line_primitives(glb)
+        assert segments[0] == pytest.approx((0.0, 0.0, 0.0))
+        assert segments[1] == pytest.approx((0.03, 0.0, -0.04))
+
+    def test_a_curve_is_drawn_to_the_tolerance(self):
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+        from OCP.gp import gp_Ax2, gp_Circ, gp_Dir, gp_Pnt
+
+        circle = BRepBuilderAPI_MakeEdge(gp_Circ(gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), 10.0)).Edge()
+        coarse = line_primitives(wrapper_gltf._to_glb(circle, 1.0, 1.0))[0]
+        fine = line_primitives(wrapper_gltf._to_glb(circle, 0.01, 1.0))[0]
+        assert len(coarse) >= 6
+        assert len(fine) > len(coarse) * 2
+
+    def test_a_solid_is_not_drawn_as_a_wireframe(self):
+        """The edges of a face are the face's outline, and are not added again."""
+        assert line_primitives(wrapper_gltf._to_glb(box(), 0.1, 0.4)) == []
+
+    def test_lines_beside_a_face_are_drawn_once(self):
+        """The exporter draws free edges beside a face itself; they are not added twice."""
+        shape = ocp_serialize.compound_of([box(), edge((0, 0, 20), (10, 0, 20))])
+        glb = wrapper_gltf._to_glb(shape, 0.1, 0.4)
+
+        assert triangles(glb) > 0
+        assert sum(len(segments) for segments in line_primitives(glb)) == 2
+
+    def test_a_node_of_lines_alone_gets_its_geometry(self):
+        errors, geometry = [], {}
+        tree = node(ocp_serialize.compound_of([edge((0, 0, 0), (10, 0, 0))]), name="bends")
+        converted = wrapper_gltf._convert(tree, 0.1, 0.4, errors, {}, geometry, set())
+
+        assert errors == []
+        assert list(geometry) == [converted[ocp_serialize.KEY_GLTF_REF]]
+
+    def test_what_the_drawing_says_about_its_lines_goes_with_them(self):
+        """The metadata is not geometry, so it is carried through untouched.
+
+        It is what the viewer pins to the lines - the angle and direction of each
+        bend - so a tessellation that dropped it would leave the lines unlabelled.
+        """
+        annotations = [{"points": [[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]], "metadata": {"angle": "90"}}]
+        tree = node(
+            ocp_serialize.compound_of([edge((0, 0, 0), (10, 0, 0))]),
+            metadata=ocp_serialize.make_metadata(annotations=annotations),
+        )
+        converted = wrapper_gltf._convert(tree, 0.1, 0.4, [], {}, {}, set())
+
+        assert converted[ocp_serialize.KEY_METADATA][ocp_serialize.METADATA_ANNOTATIONS] == annotations

@@ -48,8 +48,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
+import { calloutsOf } from './callouts';
+import { el } from './dom';
 import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { reportError } from './host';
 import { ShowMessage, ShowNode } from './messages';
@@ -70,6 +73,15 @@ renderer.setClearColor(0x000000, 0);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 container.appendChild(renderer.domElement);
+
+// The text pinned to the model - what its metadata says about its elements - is
+// DOM laid over the canvas rather than geometry drawn into it: text drawn as
+// geometry would be a texture per callout, blurred at every zoom but one, and
+// the DOM already knows how to set text in the editor's font and colours. Three
+// places each element where its anchor projects on every frame.
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.domElement.className = 'callouts';
+container.appendChild(labelRenderer.domElement);
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 10000);
@@ -107,6 +119,17 @@ const hemisphereLight = new THREE.HemisphereLight(0x40c040, 0x000000, 0.7);
 // Part.js: <pointLight intensity={1} />, at the scene origin.
 const partPointLight = new THREE.PointLight(0xffffff, 1, 0, 0);
 scene.add(ambientLight, spotLight, stagePointLight, hemisphereLight, partPointLight);
+
+/**
+ * Whether what a shape's metadata says about its elements is pinned to them.
+ *
+ * The "Show metadata" box. One switch over the whole layer rather than a flag per
+ * callout, so that it holds for every show that follows without each of them
+ * having to be told.
+ */
+export function setShowMetadata(enabled: boolean): void {
+    labelRenderer.domElement.style.display = enabled ? '' : 'none';
+}
 
 /** Everything the current show put on the stage; replaced wholesale by the next. */
 let content: THREE.Group | undefined;
@@ -264,6 +287,13 @@ function disposeMaterials(material: THREE.Material | THREE.Material[] | undefine
 
 function disposeTree(root: THREE.Object3D): void {
     root.traverse((node) => {
+        // A callout is an element in the DOM, not in the scene, and three removes
+        // it only when the callout itself is what was removed - not when, as
+        // here, something above it was. Left in place it would go on showing
+        // where it last was, over a model that has gone.
+        if (node instanceof CSS2DObject) {
+            node.element.remove();
+        }
         const mesh = node as THREE.Mesh;
         if (mesh.geometry) {
             mesh.geometry.dispose();
@@ -391,6 +421,70 @@ function addPorts(
 }
 
 /**
+ * One node's callouts: what its metadata says about its elements, pinned to them.
+ *
+ * Placed like a port's triad, under a group converting PartCAD's frame into the
+ * scene's, because what the metadata locates an element by is a PartCAD point in
+ * millimetres. Registered under the node's own item, so the box that hides a
+ * node's shape hides what is said about it too.
+ *
+ * Every element is built node by node through 'dom.ts': what a callout says is
+ * text out of the drawing a package ships, and must not become markup.
+ */
+function addCallouts(parent: THREE.Group, node: ShowNode, path: number[]): void {
+    const callouts = calloutsOf(node);
+    if (callouts.length === 0) {
+        return;
+    }
+    const frame = transformed(TO_GLTF);
+    for (const callout of callouts) {
+        const box = el('div', 'callout-box');
+        if (callout.title !== undefined) {
+            box.appendChild(el('div', 'callout-title', callout.title));
+        }
+        for (const line of callout.lines) {
+            box.appendChild(el('div', 'callout-line', line));
+        }
+        const element = el('div', 'callout');
+        element.appendChild(box);
+        const label = new CSS2DObject(element);
+        // Pinned by its bottom-left corner, where the leader line starts: the text
+        // sits above and to the right of the element rather than over it.
+        label.center.set(0, 1);
+        label.position.set(callout.position[0], callout.position[1], callout.position[2]);
+        frame.add(label);
+    }
+    parent.add(frame);
+    drawnByItem(nodeId(path), frame);
+}
+
+/**
+ * Give what a glTF draws the materials this viewer draws everything with.
+ *
+ * Part.js replaces whatever material the file carries with a plain
+ * MeshPhongMaterial, which is what gives every PartCAD model the same look
+ * regardless of how it was authored. Lines get one of their own: an edge that
+ * bounds no face - the bend lines of a sheet metal drawing - arrives as glTF line
+ * segments, and a lit material means nothing to a line.
+ */
+function restyle(group: THREE.Group, mesh: THREE.Material, line: THREE.Material): void {
+    group.traverse((child) => {
+        const drawable = child as THREE.Mesh | THREE.Line;
+        let material: THREE.Material;
+        if ((drawable as THREE.Mesh).isMesh) {
+            material = mesh;
+        } else if ((drawable as THREE.Line).isLine) {
+            material = line;
+        } else {
+            return;
+        }
+        const previous = drawable.material as THREE.Material | THREE.Material[] | undefined;
+        drawable.material = material;
+        disposeMaterials(previous);
+    });
+}
+
+/**
  * Every distinct piece of geometry in this tree, parsed once and handed out per use.
  *
  * PartCAD sends the geometry as a table on the root with the nodes naming entries
@@ -413,6 +507,10 @@ class Geometry {
     private readonly parsed = new Map<string, THREE.Group>();
     private readonly used = new Set<string>();
     readonly material = new THREE.MeshPhongMaterial({ color: 0x87ceeb, side: THREE.DoubleSide });
+    // A deeper blue than the faces, so that a line lying on one - a bend line
+    // across the blank it bends - reads against it, and unlit and not tone-mapped
+    // so that it is that blue on a light theme and a dark one alike.
+    readonly lineMaterial = new THREE.LineBasicMaterial({ color: 0x2f80ed, toneMapped: false });
 
     /** Parse the table, reporting progress as it goes. Returns what failed to parse. */
     async load(root: ShowNode, total: number, superseded: () => boolean): Promise<number> {
@@ -421,10 +519,8 @@ class Geometry {
         for (const [digest, entry] of Object.entries(root.geometry ?? {})) {
             try {
                 const group = await parseGltf(base64ToArrayBuffer(entry.gltf));
-                // Part.js replaces whatever material the file carries with a plain
-                // MeshPhongMaterial, which is what gives every PartCAD model the
-                // same look regardless of how it was authored. Done here, once per
-                // distinct geometry, rather than per node that draws it.
+                // Done here, once per distinct geometry, rather than per node that
+                // draws it; see 'restyle'.
                 //
                 // Both sides of every face. A part is a closed solid and would look
                 // the same either way, but a sketch and a port's boundary are
@@ -432,15 +528,7 @@ class Geometry {
                 // camera is not drawn at all, and the camera orbits past both sides
                 // of it. Nothing says which way a sketch's one face points - the
                 // ones in 'examples' happen to point up.
-                group.traverse((child) => {
-                    const mesh = child as THREE.Mesh;
-                    if (!mesh.isMesh) {
-                        return;
-                    }
-                    const previous = mesh.material as THREE.Material | THREE.Material[] | undefined;
-                    mesh.material = this.material;
-                    disposeMaterials(previous);
-                });
+                restyle(group, this.material, this.lineMaterial);
                 this.parsed.set(digest, group);
             } catch (error: any) {
                 reportError(`failed to parse a shape of this object: ${error}`);
@@ -491,6 +579,7 @@ class Geometry {
         }
         this.parsed.clear();
         this.material.dispose();
+        this.lineMaterial.dispose();
     }
 }
 
@@ -518,7 +607,11 @@ async function parseSketches(node: ShowNode, geometry: Geometry): Promise<Map<st
             continue;
         }
         try {
-            parsed.set(reference, await parseGltf(base64ToArrayBuffer(sketch.gltf)));
+            const group = await parseGltf(base64ToArrayBuffer(sketch.gltf));
+            // Its lines drawn like every other line; its faces are given the
+            // boundary material per port, in 'addPorts'.
+            restyle(group, geometry.material, geometry.lineMaterial);
+            parsed.set(reference, group);
         } catch (error: any) {
             reportError(`failed to parse the port sketch '${reference}': ${error}`);
         }
@@ -576,14 +669,7 @@ async function buildNode(
         // a hand-written message still can.
         try {
             drawn = await parseGltf(base64ToArrayBuffer(node.gltf));
-            drawn.traverse((child) => {
-                const mesh = child as THREE.Mesh;
-                if (mesh.isMesh) {
-                    const previous = mesh.material as THREE.Material | THREE.Material[] | undefined;
-                    mesh.material = geometry.material;
-                    disposeMaterials(previous);
-                }
-            });
+            restyle(drawn, geometry.material, geometry.lineMaterial);
         } catch (error: any) {
             reportError(`failed to parse '${node.name ?? group.name}': ${error}`);
             loaded.failed += 1;
@@ -702,6 +788,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     boundaryMaterial.userData.annotation = true;
     for (const { node, path, group: into } of loaded.built) {
         addPorts(into, node, path, size, sketches, boundaryMaterial);
+        addCallouts(into, node, path);
     }
 
     if (superseded()) {
@@ -741,6 +828,7 @@ export function resizeCanvas(): void {
         return;
     }
     renderer.setSize(width, height, false);
+    labelRenderer.setSize(width, height);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
 }
@@ -801,6 +889,7 @@ function animate(): void {
         }
     }
     renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
 }
 
 window.addEventListener('resize', resizeCanvas);

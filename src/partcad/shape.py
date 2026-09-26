@@ -625,6 +625,7 @@ class Shape(ShapeConfiguration):
             # the core does not have to run build123d in-process to do it.
             if shape is not None and ("offset" in self.config or "scale" in self.config):
                 from . import transform
+                from .geom import Location
 
                 if "offset" in self.config:
                     shape = await transform.offset(ctx, shape, self.config["offset"])
@@ -648,6 +649,19 @@ class Shape(ShapeConfiguration):
                     shape_envelope.without_measurements(recorded),
                     shape_envelope.metadata_of(shape),
                 )
+
+                # And what the source said about each element goes where the
+                # element went, moved the way the geometry was and in the same
+                # order - or a bend line's angle would go on being pinned to
+                # the place the line was drawn rather than the place it is.
+                if "offset" in self.config:
+                    offset = Location(self.config["offset"])
+                    recorded = shape_envelope.moved_annotations(recorded, offset.transform_point)
+                if "scale" in self.config:
+                    factor = float(self.config["scale"])
+                    recorded = shape_envelope.moved_annotations(
+                        recorded, lambda point: [factor * axis for axis in point]
+                    )
 
             # Whatever produced the envelope - a factory, a wrapper, a
             # transform - the outer layer around it is this shape's own. It
