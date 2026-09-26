@@ -231,7 +231,13 @@ def test_a_saw_cut_is_said_in_millimetres_and_inches():
             "manufacturing": {
                 "method": "subtractive",
                 "source": "board",
-                "cut": {"cuts": [{"along": "+Y", "length": "$length in"}, {"length": 10}, {"toolAxis": [1, 1, 0], "length": 5}]},
+                "cut": {
+                    "cuts": [
+                        {"along": "+Y", "length": "$length in"},
+                        {"length": 10},
+                        {"toolAxis": [1, 1, 0], "length": 5},
+                    ]
+                },
             },
         }
     )
