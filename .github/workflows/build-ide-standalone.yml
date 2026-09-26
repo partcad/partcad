@@ -371,6 +371,11 @@ jobs:
           # bundles or an older commit's.
           GRACE_SECONDS: "300"
           POLL_SECONDS: "30"
+          # How long "Standalone" keeps its artifacts ("retention-days" in
+          # "build-standalone.yml"), and how far back the base branch fallback
+          # therefore looks; and how many pages of 100 runs it reads at most.
+          RETENTION_DAYS: "14"
+          MAX_PAGES: "3"
           # "true" when this run's scope also froze the bundles. When it did not,
           # the sibling "Standalone" run is there but empty by design, and the
           # base branch is where the bundles are.
@@ -421,12 +426,32 @@ jobs:
           # "devel". A run of this repository is a push to the branch, a
           # dispatch on it, or a pull request whose head is the branch itself,
           # and every one of those built what the branch holds.
+          #
+          # Paged, because that filter is applied after the API has chosen the
+          # page: a first page crowded with fork runs would otherwise hide a
+          # run of this repository on the second. Bounded by age rather than by
+          # count -- a run older than the artifacts' 14 days holds no bundles,
+          # so nothing past RETENTION_DAYS (with a day of slack) is listed, and
+          # no page is fetched once one reaches back that far -- and by
+          # MAX_PAGES besides, so a branch busy with forks costs at most that
+          # many requests.
           runs_on_branch() {
-            gh api "repos/${REPO}/actions/workflows/${workflow}/runs?branch=$1&status=completed&per_page=30" \
-              --jq '.workflow_runs
-                    | map(select(.head_repository.full_name == env.REPO))
+            local page runs cutoff
+            cutoff=$(date -u -d "$(( RETENTION_DAYS + 1 )) days ago" '+%Y-%m-%dT%H:%M:%SZ')
+            for (( page = 1; page <= MAX_PAGES; page++ )); do
+              runs=$(gh api "repos/${REPO}/actions/workflows/${workflow}/runs?branch=$1&status=completed&per_page=100&page=${page}")
+              CUTOFF="${cutoff}" jq -r '.workflow_runs
+                    | map(select(.head_repository.full_name == env.REPO
+                                 and .created_at >= env.CUTOFF))
                     | sort_by(.created_at) | reverse
-                    | .[] | [.id, .head_sha, .conclusion] | @tsv'
+                    | .[] | [.id, .head_sha, .conclusion] | @tsv' <<<"${runs}"
+              # A short page is the last one, and a page reaching past the
+              # cutoff has shown every run that could still hold bundles.
+              if [ "$(jq '.workflow_runs | length' <<<"${runs}")" -lt 100 ] \
+                || [ "$(jq -r '[.workflow_runs[].created_at] | min // ""' <<<"${runs}")" \< "${cutoff}" ]; then
+                break
+              fi
+            done
           }
 
           started=$(date +%s)
@@ -553,8 +578,8 @@ jobs:
             if [ -z "${use_run}" ]; then
               echo "::error::No \"Standalone\" workflow run has command line" \
                 "bundles to offer: none ran for ${HEAD_SHA}, and none of the" \
-                "last 30 finished runs on ${base} still has an unexpired" \
-                "partcad-standalone-* artifact (they are kept for 14 days)." \
+                "finished runs on ${base} from the last ${RETENTION_DAYS} days still" \
+                "has an unexpired partcad-standalone-* artifact." \
                 "The IDE cannot be built without them. Run the \"Standalone\"" \
                 "workflow on ${base} -- manually, or by landing a change there," \
                 "which bumps the version and freezes them -- and then re-run" \
