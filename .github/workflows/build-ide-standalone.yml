@@ -418,6 +418,50 @@ jobs:
                     | .[] | [.id, .head_sha, .conclusion] | @tsv'
           }
 
+          # The same question again, asked without the API's `branch` filter:
+          # the workflow's most recent finished runs, whatever their branch,
+          # with the branch picked out here. Each line ends with when the run
+          # was created, so that an answer can say how recent it was.
+          #
+          # This is the second opinion 'runs_on_branch' needs, because the
+          # filtered listing can be wrong without saying so. On 2026-09-25 it
+          # answered for a while with a page that began at a run from three
+          # weeks earlier -- every run on it past the 14 days its artifacts are
+          # kept -- while this listing had the newest run, two days old and
+          # holding every bundle, first. The job concluded there were no
+          # bundles on "devel" and failed with a message sending the reader to
+          # rebuild them. A page of 100 is wider than the 30 above because the
+          # branch is not filtered by the API here: pull request runs share it.
+          # Runs of this repository only, for the reason 'runs_on_branch'
+          # gives.
+          runs_on_branch_unfiltered() {
+            BRANCH="$1" gh api "repos/${REPO}/actions/workflows/${workflow}/runs?status=completed&per_page=100" \
+              --jq '.workflow_runs
+                    | map(select(.head_branch == env.BRANCH
+                                 and .head_repository.full_name == env.REPO))
+                    | sort_by(.created_at) | reverse
+                    | .[] | [.id, .head_sha, .conclusion, .created_at] | @tsv'
+          }
+
+          # The first run of a listing that still holds bundles, into the use_*
+          # variables. Reads 'runs_on_branch' lines on stdin; anything after
+          # the third column is ignored.
+          take_first_with_bundles() {
+            local id sha conclusion rest names
+            while IFS=$'\t' read -r id sha conclusion rest; do
+              [ -n "${id}" ] || continue
+              names=$(bundles_of "${id}")
+              [ -n "${names}" ] || continue
+              use_run="${id}"
+              use_conclusion="${conclusion}"
+              use_names="${names}"
+              use_sha="${sha}"
+              say "Run ${id} (${conclusion}, ${sha}) has: ${names}"
+              return 0
+            done
+            return 0
+          }
+
           started=$(date +%s)
           use_run=""
           use_conclusion=""
@@ -527,27 +571,37 @@ jobs:
             say "No \"Standalone\" run has bundles for ${HEAD_SHA} -- none ran," \
                 "or the one that did declined the commit. Falling back to ${base}."
             listing=$(runs_on_branch "${base}")
-            while IFS=$'\t' read -r id sha conclusion; do
-              [ -n "${id}" ] || continue
-              names=$(bundles_of "${id}")
-              [ -n "${names}" ] || continue
-              use_run="${id}"
-              use_conclusion="${conclusion}"
-              use_names="${names}"
-              use_sha="${sha}"
-              say "Run ${id} (${conclusion}, ${sha}) has: ${names}"
-              break
-            done <<<"${listing}"
+            take_first_with_bundles <<<"${listing}"
 
             if [ -z "${use_run}" ]; then
+              # Not a conclusion yet: the filtered listing can be stale (see
+              # 'runs_on_branch_unfiltered'). Ask the other way before failing.
+              say "None of the ${base} runs the API listed by branch has bundles." \
+                  "Asking again without the branch filter."
+              unfiltered=$(runs_on_branch_unfiltered "${base}")
+              take_first_with_bundles <<<"${unfiltered}"
+              if [ -n "${use_run}" ]; then
+                echo "::warning::The API's branch-filtered listing of \"Standalone\"" \
+                  "runs on ${base} did not offer run ${use_run}, which has bundles;" \
+                  "the unfiltered listing did. The filtered one was stale."
+              fi
+            fi
+
+            if [ -z "${use_run}" ]; then
+              # What was seen, so that "there are none" can be told apart from
+              # "the listing was out of date": a newest run from weeks ago on a
+              # branch that has been bumped since says the second.
+              newest=$(head -n 1 <<<"${unfiltered}" | cut -f 4)
               echo "::error::No \"Standalone\" workflow run has command line" \
-                "bundles to offer: none ran for ${HEAD_SHA}, and none of the" \
-                "last 30 finished runs on ${base} still has an unexpired" \
-                "partcad-standalone-* artifact (they are kept for 14 days)." \
-                "The IDE cannot be built without them. Run the \"Standalone\"" \
-                "workflow on ${base} -- manually, or by landing a change there," \
-                "which bumps the version and freezes them -- and then re-run" \
-                "this one."
+                "bundles to offer: none ran for ${HEAD_SHA}, and no finished run" \
+                "on ${base} that the API listed still has an unexpired" \
+                "partcad-standalone-* artifact (they are kept for 14 days). The" \
+                "newest ${base} run listed was created ${newest:-never}; if" \
+                "${base} has had a version bump since, the listing is what is" \
+                "out of date -- re-run this job. Otherwise the IDE cannot be" \
+                "built without them: run the \"Standalone\" workflow on ${base}" \
+                "-- manually, or by landing a change there, which bumps the" \
+                "version and freezes them -- and then re-run this one."
               exit 1
             fi
 
