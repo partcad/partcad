@@ -13,7 +13,6 @@ is normalized to named JSON-RPC params. Operations that require a loaded context
 silently no-op when none is loaded, exactly as the legacy server did.
 """
 
-import contextlib
 import hashlib
 import math
 import os
@@ -2017,7 +2016,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.124"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.125"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -2608,28 +2607,6 @@ def cae_defaults(session, params):
     return {analysis: config.cae_implementation(analysis) for analysis in pc.cae.ANALYSES}
 
 
-@contextlib.contextmanager
-def _creating_dirs(ctx, enabled):
-    """Turn `ctx.option_create_dirs` on for one request, and put it back.
-
-    The daemon holds a context per workspace and keeps it warm, so anything set
-    on it outlives the request that set it. `-p` on one `pc cam` would
-    therefore go on creating directories for every later request served by that
-    context -- including `pc export`, which never sets this at all and would
-    quietly start making the directories it used to refuse to.
-
-    A context manager rather than three `try:`/`finally:` blocks, because there
-    are three requests that take this flag and the bug is not noticing that a
-    fourth reads it.
-    """
-    previous = ctx.option_create_dirs
-    ctx.option_create_dirs = bool(enabled)
-    try:
-        yield
-    finally:
-        ctx.option_create_dirs = previous
-
-
 def cae_analyze(session, params):
     """Run a CAE analysis on a part and return the model it wrote and its findings.
 
@@ -2678,10 +2655,7 @@ def cae_analyze(session, params):
         # nothing about which of its members carries it.
         raise JsonRpcError(USAGE_ERROR, "Part %s is not found" % path)
 
-    with (
-        pc.logging.Process(analysis.upper(), package, object_name),
-        _creating_dirs(ctx, params.get("create_dirs", False)),
-    ):
+    with pc.logging.Process(analysis.upper(), package, object_name):
         try:
             result = asyncio.run(
                 shape.analyze_async(
@@ -2803,7 +2777,7 @@ def cam_route(session, params):
             return {"routes": [], "failed": [object_name]}
         packages = [target for target, _ in targets]
 
-    with pc.logging.Process("CAM", package), _creating_dirs(ctx, params.get("create_dirs", False)):
+    with pc.logging.Process("CAM", package):
         results, failures = asyncio.run(
             _route_packages_async(
                 pc,
@@ -3359,10 +3333,7 @@ def render_objects(session, params):
         internals=params.get("with_internals", False),
     )
 
-    with (
-        pc.logging.Process(params.get("label", "Render"), package),
-        _creating_dirs(ctx, params.get("create_dirs", False)),
-    ):
+    with pc.logging.Process(params.get("label", "Render"), package):
         try:
             _render_objects(
                 session,
