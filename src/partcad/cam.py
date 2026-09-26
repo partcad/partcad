@@ -273,16 +273,6 @@ def parse_length(value, what: str = "value") -> float:
     return amount
 
 
-def parse_coordinate(value, what: str = "value") -> float:
-    """One coordinate, in millimetres: a length that may be zero or negative.
-
-    The same spellings `parse_length` accepts, without its demand that the value
-    be positive. A tool diameter of zero is a mistake; a cutting plane through
-    the origin, or behind it, is an ordinary place to cut.
-    """
-    return _parse_scaled(value, what, _LENGTH_UNITS, _LENGTH_NAMES, "a length")
-
-
 def parse_feed(value, what: str = "value") -> float:
     """One feed rate, in millimetres per minute.
 

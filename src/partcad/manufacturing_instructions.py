@@ -85,21 +85,16 @@ def _axis(normal) -> str | None:
 
 
 def _cut_sentence(cut: dict) -> str:
-    """Where one saw cut goes."""
+    """Where one saw cut goes: how far the saw travels into the stock, and along what."""
     normal = cut["normal"]
     axis = _axis(normal)
-    if cut.get("length") is not None:
-        if axis is not None:
-            where = "across %s" % axis
-            end = "the %s%s end" % ("-" if max(normal, key=abs) > 0 else "+", axis)
-        else:
-            where = "square to %s" % _vector(normal)
-            end = "the end it starts from"
-        return "Cut %s, %s from %s of the stock." % (where, _length(cut["length"]), end)
-    return "Cut along the plane through %s mm facing %s; what is on the side it faces is the offcut." % (
-        _vector(cut["origin"]),
-        _vector(normal),
-    )
+    if axis is not None:
+        where = "across %s" % axis
+        end = "the %s%s end of the stock" % ("-" if max(normal, key=abs) > 0 else "+", axis)
+    else:
+        where = "square to %s" % _vector(normal)
+        end = "where the stock starts along it"
+    return "Cut %s, %s from %s." % (where, _length(cut["length"]), end)
 
 
 def _settings(options: dict) -> str | None:

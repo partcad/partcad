@@ -67,14 +67,18 @@
       "additionalProperties": false
     },
     "subtractive-cut": {
-      "description": "A saw that cuts the stock across, to length or to size, and does nothing else. It is described by where it cuts: 'manufacturability-cut' cuts the 'source:' at each plane and checks that what is left is the part. 'pc cam' writes no program for it.",
+      "description": "A saw that cuts the stock across, to length or to size, and does nothing else. It is described by where it cuts: for each cut, the axis the saw travels along and how far into the stock it goes before it cuts across. 'manufacturability-cut' makes those cuts in the 'source:' and checks that what is left is the part. 'pc cam' writes no program for it.",
       "type": "object",
       "properties": {
+        "toolAxis": {
+          "$ref": "#/definitions/machine-axis",
+          "description": "The axis the saw travels along, for every cut that does not name its own. It points at the offcut: the saw starts where the stock starts along it, travels each cut's 'length:', and everything further along is cut off. Defaults to '-Z'."
+        },
         "cuts": {
-          "description": "The planes the saw goes through, in the part's own coordinates (which are the stock's). Each is either 'plane:' -- a point on it and its normal, which points at the offcut -- or 'along:' and 'length:': the dimension of the stock to cut, and how long a piece to cut along it, measured from where the stock starts in that direction. Any number may be written as '$name', the value of the part's own parameter of that name ('$length in').",
+          "description": "The cuts, in the part's own coordinates (which are the stock's). Each is a 'length:' -- how far into the stock the saw travels before it cuts, measured from where the stock starts along its axis -- and, optionally, the axis: 'toolAxis:', or 'along:', which says the same. A cut that names neither travels along the machine's 'toolAxis:'. Any number may be written as '$name', the value of the part's own parameter of that name ('$length in').",
           "oneOf": [
-            { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/subtractive-cut-plane" } },
-            { "$ref": "#/definitions/subtractive-cut-plane" }
+            { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/subtractive-cut-one" } },
+            { "$ref": "#/definitions/subtractive-cut-one" }
           ]
         },
         "desc": { "type": "string", "maxLength": 1000 }
@@ -82,50 +86,16 @@
       "required": ["cuts"],
       "additionalProperties": false
     },
-    "subtractive-cut-plane": {
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "plane": {
-              "oneOf": [
-                {
-                  "type": "array",
-                  "minItems": 2,
-                  "maxItems": 2,
-                  "items": [{ "$ref": "#/definitions/cut-point" }, { "$ref": "#/definitions/cut-direction" }]
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "origin": { "$ref": "#/definitions/cut-point" },
-                    "normal": { "$ref": "#/definitions/cut-direction" }
-                  },
-                  "required": ["origin", "normal"],
-                  "additionalProperties": false
-                }
-              ]
-            }
-          },
-          "required": ["plane"],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "along": { "$ref": "#/definitions/cut-direction" },
-            "length": { "$ref": "#/definitions/cam-length", "description": "How long a piece to cut, as a length ('1219.2', '48 in', '$length in')" }
-          },
-          "required": ["along", "length"],
-          "additionalProperties": false
-        }
-      ]
-    },
-    "cut-point": {
-      "type": "array",
-      "minItems": 3,
-      "maxItems": 3,
-      "items": { "oneOf": [{ "type": "number" }, { "type": "string", "minLength": 1 }] }
+    "subtractive-cut-one": {
+      "type": "object",
+      "properties": {
+        "toolAxis": { "$ref": "#/definitions/cut-direction", "description": "The axis this cut travels along, pointing at the offcut. Defaults to the machine's 'toolAxis:'." },
+        "along": { "$ref": "#/definitions/cut-direction", "description": "The same as 'toolAxis:', said the way a saw cut usually is. Write one or the other." },
+        "length": { "$ref": "#/definitions/cam-length", "description": "How far into the stock the saw travels before it cuts, which is how long a piece it leaves ('1219.2', '48 in', '$length in')" }
+      },
+      "required": ["length"],
+      "not": { "required": ["toolAxis", "along"] },
+      "additionalProperties": false
     },
     "cut-direction": {
       "oneOf": [

@@ -371,7 +371,7 @@ Feature: `pc test` command
   @failure @pc-test @pc-test-subtractive
   Scenario: A part cut to the wrong length is not what the saw leaves
     # A saw cuts the stock across and does nothing else, so a part declared as
-    # cut is the stock with everything beyond each plane taken off -- and a
+    # cut is the stock with everything beyond each cut taken off -- and a
     # cut declared 100 mm from the end of a board does not leave a 60 mm piece.
     Given a file named "partcad.yaml" with content:
       """
@@ -393,9 +393,9 @@ Feature: `pc test` command
             method: subtractive
             source: board
             cut:
+              toolAxis: +Y
               cuts:
-                - along: +Y
-                  length: 100 mm
+                - length: 100 mm
       """
     And a file named "board.py" with content:
       """

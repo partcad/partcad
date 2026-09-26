@@ -12,10 +12,11 @@ so it is described by where it cuts:
       method: subtractive
       source: board_8ft          # the stock, in the part's own coordinates
       cut:
+        toolAxis: +Y             # the axis the saw travels along, pointing at the offcut
         cuts:
-          - along: +Y            # the dimension to cut...
-            length: $length in   # ...and how long a piece; '$length' is the part's own parameter
-          - plane: [[0, 0, 20], [0, 0, 1]]   # or a plane: a point, and a normal facing the offcut
+          - length: $length in   # how far into the stock; '$length' is the part's own parameter
+          - toolAxis: +Z         # a cut may travel along an axis of its own ('along:' says the same)
+            length: 20
 
 The measurement is exercised against real OCCT geometry here and the check with
 it stubbed, the way `test_subtractive.py` splits the other machines.
@@ -60,46 +61,58 @@ def _manufacturing(parameters=None, **section):
 #
 
 
-def test_a_cut_along_a_dimension_is_a_normal_and_a_length():
-    assert parse_cuts([{"along": "+Y", "length": "48 in"}]) == [{"normal": [0.0, 1.0, 0.0], "length": 48 * INCH}]
+def test_a_cut_is_a_tool_axis_and_a_length():
+    assert parse_cuts([{"toolAxis": "+Y", "length": "48 in"}]) == [{"normal": [0.0, 1.0, 0.0], "length": 48 * INCH}]
 
 
-def test_a_cut_may_be_a_plane_in_either_spelling():
-    as_list = parse_cuts([{"plane": [[0, 0, "10 mm"], [0, 0, 2]]}])
-    as_map = parse_cuts([{"plane": {"origin": [0, 0, 10], "normal": "+Z"}}])
-    assert as_list == as_map == [{"origin": [0.0, 0.0, 10.0], "normal": [0.0, 0.0, 1.0]}]
+def test_along_says_what_tool_axis_says():
+    assert parse_cuts([{"along": "+Y", "length": 10}]) == parse_cuts([{"toolAxis": "+Y", "length": 10}])
+    assert parse_cuts([{"along": [0, 2, 0], "length": 10}]) == parse_cuts([{"toolAxis": "+Y", "length": 10}])
 
 
-def test_a_plane_may_lie_behind_the_origin():
-    """A coordinate is not a tool size: zero and negative are ordinary places to cut."""
-    assert parse_cuts([{"plane": [[0, -5, 0], [0, -1, 0]]}])[0]["origin"] == [0.0, -5.0, 0.0]
+def test_a_cut_that_names_no_axis_travels_along_the_machine_s():
+    assert parse_cuts([{"length": 10}], tool_axis="-X") == [{"normal": [-1.0, 0.0, 0.0], "length": 10.0}]
+    # ...and the machine's is '-Z' where it names none, as for every other machine.
+    assert parse_cuts([{"length": 10}]) == [{"normal": [0.0, 0.0, -1.0], "length": 10.0}]
 
 
 def test_a_cut_follows_the_part_s_own_parameters():
     """A leg is as long as the desk is high, so its cut is too."""
     data = _manufacturing(
         parameters={"length": {"type": "float", "default": 30}},
-        cut={"cuts": [{"along": [0, 1, 0], "length": "$length in"}, {"plane": [[0, "${length}", 0], "+Y"]}]},
+        cut={"toolAxis": "+Y", "cuts": [{"length": "$length in"}, {"toolAxis": "-X", "length": "${length}"}]},
     )
     assert data.machine_error is None
     machine = data.machine
     assert machine.kind == MACHINE_CUT and machine.declared
-    assert machine.cuts[0]["length"] == pytest.approx(30 * INCH)
-    assert machine.cuts[1]["origin"] == [0.0, 30.0, 0.0]
+    assert machine.tool_axis == "+Y"
+    assert machine.cuts[0] == {"normal": [0.0, 1.0, 0.0], "length": pytest.approx(30 * INCH)}
+    assert machine.cuts[1] == {"normal": [-1.0, 0.0, 0.0], "length": 30.0}
+
+
+def test_a_saw_s_axis_is_part_of_what_it_is_handed():
+    data = _manufacturing(cut={"cuts": [{"length": 3}]})
+    assert data.machine.to_data() == {
+        "machine": MACHINE_CUT,
+        "tool_axis": "-Z",
+        "cuts": [{"normal": [0.0, 0.0, -1.0], "length": 3.0}],
+    }
 
 
 @pytest.mark.parametrize(
     "section, says",
     [
         ({}, "names no 'cuts:'"),
-        ({"cuts": [{"along": "+Y"}]}, "either 'plane:', or 'along:' and 'length:'"),
+        ({"cuts": [{"along": "+Y"}]}, "says no 'length:'"),
         ({"cuts": [{"along": "+Y", "length": "$height"}]}, "the parameter 'height'"),
-        ({"cuts": [{"plane": [[0, 0, 0], [0, 0, 0]]}]}, "zero vector"),
-        ({"cuts": [{"plane": [[0, 0, 0], [0, 0, 1]], "length": 3}]}, "takes nothing else"),
+        ({"cuts": [{"toolAxis": [0, 0, 0], "length": 3}]}, "zero vector"),
+        ({"cuts": [{"toolAxis": "+Y", "along": "+Y", "length": 3}]}, "both 'toolAxis:' and 'along:'"),
+        # There is no plane: every cut is a length along an axis.
+        ({"cuts": [{"plane": [[0, 0, 0], [0, 0, 1]]}]}, "says 'plane:'"),
         ({"cuts": [{"along": "+W", "length": 3}]}, "is not an axis"),
+        ({"toolAxis": "+W", "cuts": [{"length": 3}]}, "'cut: toolAxis:'"),
         ({"cuts": [{"along": "+Y", "length": 0}]}, "not a positive length"),
-        # A saw has no axis of its own, and nothing is routed for it.
-        ({"toolAxis": "-Z", "cuts": [{"along": "+Y", "length": 3}]}, "does not take toolAxis"),
+        # Nothing is routed for a saw, so it takes no job keys.
         ({"feed": 100, "cuts": [{"along": "+Y", "length": 3}]}, "does not take feed"),
     ],
 )
@@ -123,7 +136,8 @@ def test_the_cut_is_the_cache_key_of_the_claim():
     """Moving a cut by an inch changes nothing the part's own hash covers."""
     one = _manufacturing(cut={"cuts": [{"along": "+Y", "length": "24 in"}]}).machine.key()
     other = _manufacturing(cut={"cuts": [{"along": "+Y", "length": "25 in"}]}).machine.key()
-    assert one != other
+    turned = _manufacturing(cut={"toolAxis": "-Y", "cuts": [{"length": "24 in"}]}).machine.key()
+    assert len({one, other, turned}) == 3
 
 
 #
@@ -168,12 +182,7 @@ def test_cutting_the_other_end_counts_from_the_other_end():
 def test_a_sheet_cut_to_size_takes_two_cuts():
     sheet = _box(1219.2, 2438.4, 18.0)
     top = _box(914.4, 1828.8, 18.0)
-    cuts = parse_cuts(
-        [
-            {"along": "+X", "length": "36 in"},
-            {"plane": [[0, "72 in", 0], [0, 1, 0]]},
-        ]
-    )
+    cuts = parse_cuts([{"along": "+X", "length": "36 in"}, {"length": "72 in"}], tool_axis="+Y")
     measured = _measure(top, sheet, cuts)
     assert all(removed > 0 for removed in measured["removed"])
     assert measured["extra_volume"] + measured["missing_volume"] == pytest.approx(0.0, abs=1e-2)

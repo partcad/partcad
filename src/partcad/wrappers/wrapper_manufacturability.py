@@ -358,10 +358,10 @@ def cut(request):
     whether it is *that*: the part and the stock-after-the-cuts are the same
     solid.
 
-    Each cut arrives as a unit 'normal' pointing at the offcut, and either an
-    'origin' on the plane or a 'length' measured from where the stock starts
-    along the normal. The second is turned into the first here, because this is
-    where the stock is.
+    Each cut arrives as the unit vector the saw travels along -- its 'normal',
+    pointing at the offcut -- and the 'length' it travels into the stock before
+    it cuts, measured from where the stock starts along that vector. That is
+    turned into a plane here, because this is where the stock is.
 
     Returns the volumes a verdict needs, and each plane as it was resolved so a
     failure can say where it cut:
@@ -397,12 +397,8 @@ def cut(request):
     planes = []
     for one in cuts:
         normal = [float(component) for component in one["normal"]]
-        if one.get("origin") is not None:
-            origin = [float(component) for component in one["origin"]]
-        else:
-            start = _extent_along(stock, normal, reach)
-            offset = start + float(one["length"])
-            origin = [component * offset for component in normal]
+        offset = _extent_along(stock, normal, reach) + float(one["length"])
+        origin = [component * offset for component in normal]
         planes.append({"origin": origin, "normal": normal})
         remaining = _cut(remaining, _beyond(origin, normal, reach))
         after = _volume(remaining)

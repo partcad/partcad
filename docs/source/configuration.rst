@@ -2264,7 +2264,7 @@ adding its own subsection:
 +----------------+------------------------------------------------------------+
 | ``cut:``       | A saw that cuts the stock across -- a board to length, a   |
 |                | sheet to size. It makes **nothing but the stock with its   |
-|                | ends cut off**, at the planes it declares. See             |
+|                | ends cut off**, where its cuts say. See                    |
 |                | :ref:`subtractive-cut`.                                    |
 +----------------+------------------------------------------------------------+
 
@@ -2292,8 +2292,8 @@ router's read by accident. A *sketch* is the one section with no ``method:`` in
 it: a drawing is not made out of anything, so it names the machine and the job
 and nothing else.
 
-Every machine but ``cut:`` takes a ``toolAxis``, which is the axis the tool, the beam or the
-drill approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
+Every machine takes a ``toolAxis``, which is the axis the tool, the beam, the
+drill or the saw approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
 or ``-Z``. It defaults to ``-Z``: the part sits on the bed and the tool comes
 down to it. It is **not** ``direction:``, which says which way round a
 contour is cut (climb or conventional) -- the two reach one implementation in
@@ -2315,8 +2315,8 @@ part that named that machine**:
   is asked of what the machine **took away** rather than of the part, where the
   part names a ``source``: a drilled plate's straight sides came with the stock,
   and asking the part's own walls would fail every plate for having them.
-- ``manufacturability-cut`` -- the stock, cut at every declared plane, **is**
-  the part. See :ref:`subtractive-cut`.
+- ``manufacturability-cut`` -- the stock, cut where every declared cut says,
+  **is** the part. See :ref:`subtractive-cut`.
 
 Both are measured by sampling each face's own normal against the axis, not by
 reading its surface type. The type is not the question: a cylinder is a wall
@@ -2373,8 +2373,8 @@ Cutting stock to size
 
 ``cut:`` is the machine most parts that are cut at all are cut on: a saw taking
 a stud off an eight foot 2x4, or a shelf out of a sheet of plywood. It follows
-no outline, so it is described by **where** it cuts -- a list of planes in the
-part's own coordinates, which are also its stock's:
+no outline, so it is described by **where** it cuts, in the part's own
+coordinates, which are also its stock's:
 
 .. code-block:: yaml
 
@@ -2389,35 +2389,39 @@ part's own coordinates, which are also its stock's:
         method: subtractive
         source: //pub/svc/commerce/homedepot:lumber/4x4x8
         cut:
+          toolAxis: +Y          # the axis the saw travels along, for every cut
           cuts:
-            # The dimension to cut, and how long a piece to cut along it.
-            - along: +Y
-              length: $length in
-            # ...or a plane: a point on it, and its normal, facing the offcut.
-            # - plane: [[0, 1219.2, 0], [0, 1, 0]]
+            # How far into the stock the saw travels before it cuts across.
+            - length: $length in
+            # A cut may travel along an axis of its own; 'along:' says the same.
+            # - toolAxis: -X
+            #   length: 3 in
 
-Each cut is one of two things:
+A saw is written the way every other machine is: by its ``toolAxis``, which
+points at the **offcut**. Each cut starts where the stock starts along that
+axis -- the way a board is measured from its end -- travels ``length:`` into it,
+and cuts across; everything further along the axis is cut off, and what is
+behind the saw is the part. So ``toolAxis: -Y`` counts from the other end.
 
-- ``plane: [[x, y, z], [nx, ny, nz]]`` (or ``{origin: ..., normal: ...}``) -- a
-  point on the plane and its normal. The normal points at the **offcut**: what
-  is on that side is cut off, what is behind it is the part.
-- ``along:`` and ``length:`` -- the dimension of the stock to cut, as an axis
-  (``+Y``) or a vector (``[0, 1, 0]``), and how long a piece to cut along it.
-  The length is measured from where the stock *starts* in that direction, the
-  way a board is measured from its end, so ``along: -Y`` counts from the other
-  end.
+- ``length:`` is always there: it is the whole of *where*.
+- ``toolAxis:`` on a cut, or ``along:`` -- which says the same, the way a saw
+  cut is usually said; one or the other -- is the axis that cut travels along,
+  as an axis (``+Y``) or a vector (``[0, 1, 0]``).
+- A cut that names neither travels along the machine's ``toolAxis:``, and a
+  machine that names none has the default every machine has, ``-Z``.
 
 Any number in a cut may be written as ``$name`` -- the value of the part's own
 parameter of that name, with a unit after it if it needs one (``$length in``).
 A part cut to length is nearly always parametric, and a cut written as a number
 would be right for one instance and wrong for every other.
 
-``pc test`` runs ``manufacturability-cut`` over it, which cuts the stock at each
-plane in turn and compares what is left with the part. Whatever the part has
+``pc test`` runs ``manufacturability-cut`` over it, which makes each cut in the
+stock in turn and compares what is left with the part. Whatever the part has
 that the cut stock does not is a feature no saw made; whatever the cut stock has
 that the part does not is a notch, a hole or a cut in the wrong place; and a cut
-that takes nothing off the stock is a plane that misses it. Each of the three is
-a failure that says which plane it was about.
+that takes nothing off the stock is one that misses it -- usually a length
+longer than the board, or an axis pointing the wrong way. Each of the three is a
+failure that says which plane it was about.
 
 .. _sheet-metal:
 

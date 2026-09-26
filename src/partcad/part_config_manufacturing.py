@@ -87,9 +87,10 @@ SUBTRACTIVE_REQUIRED = ("source",)
 # The fourth, `cut:`, is the most limited of all and the most common: a saw that
 # cuts a piece of stock across, to length, and does nothing else. A stud cut
 # from an eight foot 2x4, a shelf cut from a sheet of plywood. It follows no
-# outline, so it is described by *where* it cuts rather than by how -- a list of
-# planes in the part's own coordinates -- and the only thing it can produce is
-# the stock with everything beyond those planes taken off. That is what
+# outline, so it is described by *where* it cuts: for each cut, the axis the saw
+# travels along ('toolAxis:', as for every other machine here) and how far into
+# the stock it goes before it cuts across. The only thing it can produce is the
+# stock with everything beyond those cuts taken off. That is what
 # `manufacturability-cut` checks, and it is why a cut part names its stock in
 # `source:` in the same coordinate space the part itself is modelled in.
 MACHINE_CNC = "cnc"
@@ -142,10 +143,11 @@ MACHINE_OWN_KEYS: dict[str, tuple] = {
     # it: a part cut to its nominal outline comes off a laser half a kerf small
     # all round.
     MACHINE_LASER: ("toolAxis", "kerf"),
-    # A saw has no axis of its own worth naming -- each cut says which way it
-    # faces -- so it takes no 'toolAxis:'. What it takes is the cuts. See
-    # 'parse_cuts' for how each one is written.
-    MACHINE_CUT: ("cuts",),
+    # A saw travels along its 'toolAxis:' like the others -- to the length of
+    # each cut, and everything beyond is the offcut -- and takes the cuts. A cut
+    # may name an axis of its own; the machine's is what one that does not
+    # travels along. See 'parse_cuts'.
+    MACHINE_CUT: ("toolAxis", "cuts"),
 }
 
 MACHINE_JOB_KEYS: dict[str, tuple] = {
@@ -291,38 +293,39 @@ def _direction(value, what: str) -> list:
     return [component / length for component in vector]
 
 
-def _point(value, parameters: dict, what: str) -> list:
-    """A point in the part's coordinates, in millimetres."""
-    if not isinstance(value, (list, tuple)) or len(value) != 3:
-        raise ValueError("%s is not a point: %r. Write three coordinates" % (what, value))
-    return [pc_cam.parse_coordinate(_substitute(component, parameters, what), what) for component in value]
-
-
-def parse_cuts(value, parameters: dict | None = None) -> list:
+def parse_cuts(value, parameters: dict | None = None, tool_axis: str = DEFAULT_TOOL_AXIS) -> list:
     """The cuts one 'cut:' subsection declares, as plain data.
 
-    Each cut is one plane the saw goes through, and it may be written two ways:
+    A cut is written the way every other subtractive machine is: by the axis the
+    tool travels along. The saw starts where the stock starts along that axis,
+    travels ``length:`` into it, and cuts across; everything further along the
+    axis is the offcut, and what is behind the saw is the part::
 
-    * ``plane: [[x, y, z], [nx, ny, nz]]`` -- a point on the plane and its
-      normal, in the part's own coordinates (``{origin: ..., normal: ...}`` says
-      the same). The normal points at the **offcut**: what is on that side of
-      the plane is cut off, and what is behind it is the part.
-    * ``along: +Y`` and ``length: 48 in`` -- the dimension of the stock to cut,
-      as an axis or a vector, and how long a piece to cut along it. The plane is
-      then across that direction, 'length' in from where the stock starts along
-      it; which is the only way a cut to length is ever measured on a saw: from
-      the end of the board.
+        cut:
+          toolAxis: +Y            # for every cut that does not say
+          cuts:
+            - length: $length in  # along +Y
+            - toolAxis: -X        # or 'along: -X', which says the same
+              length: 36 in
+
+    So ``length:`` is always there -- it is the whole of *where* -- and the
+    direction is optional: a cut's own ``toolAxis:`` or ``along:`` (one or the
+    other; 'along' is how a saw cut is usually said), else the machine's
+    ``toolAxis:``, else the default every machine has, '-Z'. The direction is an
+    axis ('+Y') or three numbers; a length is measured from the end of the stock,
+    which is the only way a cut to length is measured on a saw.
 
     Any number may be written as '$name', the value of the part's own parameter
     of that name, with or without a unit after it ('$length in').
 
-    What comes back is a list of ``{"normal": [...], "origin": [...]}`` and
-    ``{"normal": [...], "length": ...}``: unit normals, millimetres. A length is
-    only turned into a plane where the stock is known, which is not here.
+    What comes back is a list of ``{"normal": [...], "length": ...}``: the unit
+    vector the tool travels along, which is also the normal of the plane it cuts
+    and points at the offcut, and millimetres. A length is only turned into a
+    plane where the stock is known, which is not here.
 
     Raises:
-        ValueError: anything that cannot be read as one of the two, naming the
-            cut it is about.
+        ValueError: anything that cannot be read as a cut, naming the cut it is
+            about.
     """
     parameters = parameters or {}
     if value is None:
@@ -337,43 +340,32 @@ def parse_cuts(value, parameters: dict | None = None) -> list:
     for index, entry in enumerate(value):
         what = "'cut: cuts:' #%d" % (index + 1)
         if not isinstance(entry, dict):
-            raise ValueError("%s is not a cut: %r. Write 'plane:', or 'along:' and 'length:'" % (what, entry))
+            raise ValueError(
+                "%s is not a cut: %r. Write 'length:', and optionally 'toolAxis:' or 'along:'" % (what, entry)
+            )
         keys = set(entry)
-        if "plane" in keys:
-            if keys != {"plane"}:
-                raise ValueError(
-                    "%s is a plane, which takes nothing else; it also says %s"
-                    % (what, ", ".join("'%s:'" % key for key in sorted(keys - {"plane"})))
-                )
-            plane = entry["plane"]
-            if isinstance(plane, dict):
-                unknown = set(plane) - {"origin", "normal"}
-                if unknown or "origin" not in plane or "normal" not in plane:
-                    raise ValueError("%s 'plane:' is 'origin:' and 'normal:': %r" % (what, plane))
-                origin, normal = plane["origin"], plane["normal"]
-            elif isinstance(plane, (list, tuple)) and len(plane) == 2:
-                origin, normal = plane
-            else:
-                raise ValueError("%s 'plane:' is [[x, y, z], [nx, ny, nz]]: %r" % (what, plane))
-            cuts.append(
-                {
-                    "origin": _point(origin, parameters, "%s 'plane:' origin" % what),
-                    "normal": _direction(normal, "%s 'plane:' normal" % what),
-                }
+        unknown = keys - {"length", "toolAxis", "along"}
+        if unknown:
+            raise ValueError(
+                "%s says %s. A cut is 'length:', and optionally 'toolAxis:' or 'along:'"
+                % (what, ", ".join("'%s:'" % key for key in sorted(unknown)))
             )
-            continue
-        if keys == {"along", "length"}:
-            length_what = "%s 'length:'" % what
-            cuts.append(
-                {
-                    "normal": _direction(entry["along"], "%s 'along:'" % what),
-                    "length": pc_cam.parse_length(_substitute(entry["length"], parameters, length_what), length_what),
-                }
-            )
-            continue
-        raise ValueError(
-            "%s says %s. A cut is either 'plane:', or 'along:' and 'length:'"
-            % (what, ", ".join("'%s:'" % key for key in sorted(keys)) or "nothing")
+        if "length" not in keys:
+            raise ValueError("%s says no 'length:', so it does not say where the saw goes" % what)
+        if {"toolAxis", "along"} <= keys:
+            raise ValueError("%s says both 'toolAxis:' and 'along:', which are one thing; write one" % what)
+        if "toolAxis" in keys:
+            normal = _direction(entry["toolAxis"], "%s 'toolAxis:'" % what)
+        elif "along" in keys:
+            normal = _direction(entry["along"], "%s 'along:'" % what)
+        else:
+            normal = list(tool_axis_vector(tool_axis))
+        length_what = "%s 'length:'" % what
+        cuts.append(
+            {
+                "normal": normal,
+                "length": pc_cam.parse_length(_substitute(entry["length"], parameters, length_what), length_what),
+            }
         )
     return cuts
 
@@ -408,17 +400,8 @@ class MachineConfig:
         self.kind = kind
         self.declared = declared
         self.options = dict(config or {})
-        # The planes a saw cuts along, for a cut and for nothing else.
+        # The cuts a saw makes, for a cut and for nothing else.
         self.cuts: list = []
-        if kind == MACHINE_CUT:
-            # A saw has no axis to name: each cut says which way it faces. So
-            # there is no default standing in for one either -- a '-Z' here
-            # would be a direction every reader of the request had to know to
-            # ignore.
-            self.tool_axis = None
-            self.vector = None
-            self.cuts = parse_cuts(self.options.pop("cuts", None), parameters)
-            return
         self.tool_axis = str(self.options.pop("toolAxis", None) or DEFAULT_TOOL_AXIS)
         try:
             self.vector = tool_axis_vector(self.tool_axis)
@@ -427,6 +410,12 @@ class MachineConfig:
             # this class says which machine and which key without the caller
             # having to guess which of them already did.
             raise ValueError("'%s: toolAxis:' %s" % (kind, e)) from e
+        if kind == MACHINE_CUT:
+            # Each cut resolved against the machine's axis here, so what a cut
+            # travels along is decided once and everything downstream -- the
+            # check, the cache key, the instructions -- reads the same vector.
+            self.cuts = parse_cuts(self.options.pop("cuts", None), parameters, self.tool_axis)
+            return
         # Every value read the way PartCAD reads that kind of value, so "6",
         # "6 mm" and "0.25 in" are one cutter. 'CamConfigError' is a
         # 'ValueError', which is what the caller already catches to turn a bad
@@ -473,7 +462,7 @@ class MachineConfig:
         `job_options`, and they are merged further down.
         """
         if self.kind == MACHINE_CUT:
-            return {"machine": self.kind, "cuts": self.cuts}
+            return {"machine": self.kind, "tool_axis": self.tool_axis, "cuts": self.cuts}
         data = {"machine": self.kind, "tool_axis": self.tool_axis, "tool_axis_vector": list(self.vector)}
         own = MACHINE_OWN_KEYS[self.kind]
         data.update({key: value for key, value in self.options.items() if key in own and value is not None})

@@ -231,7 +231,7 @@ def test_a_saw_cut_is_said_in_millimetres_and_inches():
             "manufacturing": {
                 "method": "subtractive",
                 "source": "board",
-                "cut": {"cuts": [{"along": "+Y", "length": "$length in"}, {"plane": [[0, 0, 10], "-Z"]}]},
+                "cut": {"cuts": [{"along": "+Y", "length": "$length in"}, {"length": 10}, {"toolAxis": [1, 1, 0], "length": 5}]},
             },
         }
     )
@@ -239,7 +239,8 @@ def test_a_saw_cut_is_said_in_millimetres_and_inches():
         "Made by taking material away from `board`.",
         "Cut it to size with a saw:",
         "1. Cut across Y, 743.744 mm (29.281 in) from the -Y end of the stock.",
-        "2. Cut along the plane through (0, 0, 10) mm facing (0, 0, -1); what is on the side it faces is the offcut.",
+        "2. Cut across Z, 10 mm (0.394 in) from the +Z end of the stock.",
+        "3. Cut square to (0.707, 0.707, 0), 5 mm (0.197 in) from where the stock starts along it.",
     ]
 
 
