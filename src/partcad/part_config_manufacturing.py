@@ -125,29 +125,34 @@ ROUTED_MACHINES = (MACHINE_CNC, MACHINE_DRILL, MACHINE_LASER)
 # * a drill has no 'depth:' (how deep each hole goes is the geometry's to say),
 #   no 'feed:' (it never travels while cutting) and no 'operation:'.
 #
-# 'toolAxis' is common to all three, because it is the one thing every
-# subtractive machine has: the axis the tool, the beam or the drill approaches
+# 'toolAxis' is common to all four, because it is the one thing every
+# subtractive machine has: the axis the tool, the beam, the drill or the saw approaches
 # along. It is what "all cut walls are vertical" is measured against -- vertical
 # meaning parallel to it -- and it is why a part that is cut from the other side
 # is a different part to the machine even though it is the same solid.
+#
+# 'along' is the same key under another name, for every machine and for each
+# of a saw's cuts: "the laser cuts along -Z" and "cut along Y" are how these
+# are said. One or the other, never both -- two spellings of one axis that
+# could disagree are a declaration with no one answer. See 'written_axis'.
 #
 # Not 'direction', which is the one word this configuration cannot afford to
 # reuse: it already means climb or conventional, which way round a contour is
 # cut, and both would reach one implementation in one request.
 MACHINE_OWN_KEYS: dict[str, tuple] = {
-    MACHINE_CNC: ("toolAxis",),
-    MACHINE_DRILL: ("toolAxis",),
+    MACHINE_CNC: ("toolAxis", "along"),
+    MACHINE_DRILL: ("toolAxis", "along"),
     # 'kerf' is the width the beam itself removes. It belongs to the machine
     # rather than to the cut because it is a property of that machine and its
     # material, and because the check that the part fits its stock has to know
     # it: a part cut to its nominal outline comes off a laser half a kerf small
     # all round.
-    MACHINE_LASER: ("toolAxis", "kerf"),
+    MACHINE_LASER: ("toolAxis", "along", "kerf"),
     # A saw travels along its 'toolAxis:' like the others -- to the length of
     # each cut, and everything beyond is the offcut -- and takes the cuts. A cut
     # may name an axis of its own; the machine's is what one that does not
     # travels along. See 'parse_cuts'.
-    MACHINE_CUT: ("toolAxis", "cuts"),
+    MACHINE_CUT: ("toolAxis", "along", "cuts"),
 }
 
 MACHINE_JOB_KEYS: dict[str, tuple] = {
@@ -216,6 +221,24 @@ _AXES: dict[str, tuple] = {
 # sits on the bed and the tool comes to it from above, which is what all three
 # of these machines do unless somebody has gone out of their way.
 DEFAULT_TOOL_AXIS = "-Z"
+
+
+# The two names one axis may be written under. 'toolAxis' first: it is the one
+# every message names.
+AXIS_KEYS = ("toolAxis", "along")
+
+
+def written_axis(entry: dict, what: str):
+    """The axis 'entry' names, under 'toolAxis:' or 'along:', or None where neither.
+
+    Raises:
+        ValueError: it names both. Refused rather than preferring one, because
+            the two can disagree and neither reading is safer than the other.
+    """
+    named = [key for key in AXIS_KEYS if entry.get(key) is not None]
+    if len(named) > 1:
+        raise ValueError("%s says both 'toolAxis:' and 'along:', which are one thing; write one" % what)
+    return entry[named[0]] if named else None
 
 
 def tool_axis_vector(name: str) -> tuple:
@@ -352,12 +375,9 @@ def parse_cuts(value, parameters: dict | None = None, tool_axis: str = DEFAULT_T
             )
         if "length" not in keys:
             raise ValueError("%s says no 'length:', so it does not say where the saw goes" % what)
-        if {"toolAxis", "along"} <= keys:
-            raise ValueError("%s says both 'toolAxis:' and 'along:', which are one thing; write one" % what)
-        if "toolAxis" in keys:
-            normal = _direction(entry["toolAxis"], "%s 'toolAxis:'" % what)
-        elif "along" in keys:
-            normal = _direction(entry["along"], "%s 'along:'" % what)
+        axis = written_axis(entry, what)
+        if axis is not None:
+            normal = _direction(axis, "%s '%s:'" % (what, "toolAxis" if "toolAxis" in keys else "along"))
         else:
             normal = list(tool_axis_vector(tool_axis))
         length_what = "%s 'length:'" % what
@@ -402,14 +422,18 @@ class MachineConfig:
         self.options = dict(config or {})
         # The cuts a saw makes, for a cut and for nothing else.
         self.cuts: list = []
-        self.tool_axis = str(self.options.pop("toolAxis", None) or DEFAULT_TOOL_AXIS)
+        written_key = "along" if self.options.get("along") is not None else "toolAxis"
+        written = written_axis(self.options, "'%s:'" % kind)
+        for key in AXIS_KEYS:
+            self.options.pop(key, None)
+        self.tool_axis = str(written or DEFAULT_TOOL_AXIS)
         try:
             self.vector = tool_axis_vector(self.tool_axis)
         except ValueError as e:
             # Named here rather than by the caller, so that every message out of
             # this class says which machine and which key without the caller
             # having to guess which of them already did.
-            raise ValueError("'%s: toolAxis:' %s" % (kind, e)) from e
+            raise ValueError("'%s: %s:' %s" % (kind, written_key, e)) from e
         if kind == MACHINE_CUT:
             # Each cut resolved against the machine's axis here, so what a cut
             # travels along is decided once and everything downstream -- the

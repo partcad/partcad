@@ -314,7 +314,8 @@ at all).
   `depth:` or `safe_z:`; a drill has no `depth:`, `feed:` or `operation:`. Writing one of those in that
   machine's own subsection is an error naming what it does take; writing it in the shared scope is fine and
   simply not read. The axis is `toolAxis:` rather than `direction:` because `direction` already means climb or
-  conventional, and both would reach one implementation in one request.
+  conventional, and both would reach one implementation in one request. Every machine (and every saw cut) also
+  takes it as `along:`, a synonym; naming both is an error (`written_axis`).
 
   `_read_machines` reads none of this for a method that is not `subtractive`, and **refuses** the keys rather
   than dropping them: nothing takes a cut from an `additive` part, so a `diameter:` on one is a number somebody
@@ -363,7 +364,7 @@ at all).
   it is described by *where* it cuts rather than how, in the part's (and so the stock's) coordinates. It takes a
   `toolAxis:` like every other machine, pointing at the offcut, and `cuts:`, each of which is a `length:` -- how
   far the saw travels into the stock, from where the stock starts along the axis, before it cuts across -- and,
-  optionally, an axis of its own: `toolAxis:` or its synonym `along:`, never both. A cut naming neither travels
+  optionally, an axis of its own: `toolAxis:` or its synonym `along:`, never both, as for the machine itself. A cut naming neither travels
   along the machine's `toolAxis:` (default `-Z`). There is no plane syntax: every cut is a length. Any number may
   be `$name`, the part's own parameter (`parse_cuts`), because a part cut to length is nearly always parametric.
   It takes no job keys, and it is not in `ROUTED_MACHINES`: `pc cam` passes over a part that is only cut

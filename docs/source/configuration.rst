@@ -2246,7 +2246,7 @@ adding its own subsection:
     source: stock_sheet
     laser:
       kerf: 0.15         # what the beam itself removes
-      toolAxis: -Z       # the axis it fires along
+      toolAxis: -Z       # the axis it fires along ('along: -Z' says the same)
 
 +----------------+------------------------------------------------------------+
 | Subsection     | The machine, and what it cannot do                         |
@@ -2295,7 +2295,9 @@ and nothing else.
 Every machine takes a ``toolAxis``, which is the axis the tool, the beam, the
 drill or the saw approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
 or ``-Z``. It defaults to ``-Z``: the part sits on the bed and the tool comes
-down to it. It is **not** ``direction:``, which says which way round a
+down to it. Every machine also takes it as ``along:`` -- the same key, the way
+it is usually said ("the laser cuts along -Z") -- and a subsection writes one or
+the other, never both. It is **not** ``direction:``, which says which way round a
 contour is cut (climb or conventional) -- the two reach one implementation in
 one request, which is why they do not share a name. A laser also takes a ``kerf``, the width the beam itself removes,
 which is a property of that machine and that material rather than of the job --
@@ -2389,7 +2391,7 @@ coordinates, which are also its stock's:
         method: subtractive
         source: //pub/svc/commerce/homedepot:lumber/4x4x8
         cut:
-          toolAxis: +Y          # the axis the saw travels along, for every cut
+          toolAxis: +Y          # the axis the saw travels along, for every cut ('along:' too)
           cuts:
             # How far into the stock the saw travels before it cuts across.
             - length: $length in
@@ -2407,8 +2409,9 @@ behind the saw is the part. So ``toolAxis: -Y`` counts from the other end.
 - ``toolAxis:`` on a cut, or ``along:`` -- which says the same, the way a saw
   cut is usually said; one or the other -- is the axis that cut travels along,
   as an axis (``+Y``) or a vector (``[0, 1, 0]``).
-- A cut that names neither travels along the machine's ``toolAxis:``, and a
-  machine that names none has the default every machine has, ``-Z``.
+- A cut that names neither travels along the machine's ``toolAxis:`` (or
+  ``along:``), and a machine that names none has the default every machine
+  has, ``-Z``.
 
 Any number in a cut may be written as ``$name`` -- the value of the part's own
 parameter of that name, with a unit after it if it needs one (``$length in``).
