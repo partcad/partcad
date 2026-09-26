@@ -142,6 +142,30 @@ def test_a_misspelt_tool_axis_is_recorded_rather_than_defaulted():
     assert "is not an axis" in data.machine_error
 
 
+@pytest.mark.parametrize("kind", ["cnc", "laser", "drill", "cut"])
+def test_every_machine_takes_its_axis_as_along_too(kind):
+    """'along:' is 'toolAxis:' said the way it usually is, on every machine."""
+    extra = {"cuts": [{"length": 3}]} if kind == "cut" else {}
+    along = _manufacturing(**{kind: {"along": "+X", **extra}}).machines[kind]
+    tool_axis = _manufacturing(**{kind: {"toolAxis": "+X", **extra}}).machines[kind]
+    assert along.to_data() == tool_axis.to_data()
+    assert along.key() == tool_axis.key()
+
+
+@pytest.mark.parametrize("kind", ["cnc", "laser", "drill", "cut"])
+def test_a_machine_that_says_both_is_refused(kind):
+    """Two spellings of one axis can disagree, and neither reading is the safe one."""
+    extra = {"cuts": [{"length": 3}]} if kind == "cut" else {}
+    data = _manufacturing(**{kind: {"along": "+X", "toolAxis": "+X", **extra}})
+    assert "both 'toolAxis:' and 'along:'" in data.machine_error
+    assert data.machines == {}
+
+
+def test_a_misspelt_along_is_named_as_along():
+    data = _manufacturing(laser={"along": "up-ish"})
+    assert "'laser: along:'" in data.machine_error
+
+
 def test_a_kerf_is_a_length_like_every_other():
     assert _manufacturing(laser={"kerf": "0.008 in"}).machine.get("kerf") == pytest.approx(0.2032)
     assert _manufacturing(laser={"kerf": 0.2}).machine.get("kerf") == pytest.approx(0.2)

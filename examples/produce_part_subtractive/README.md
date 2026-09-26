@@ -1,6 +1,6 @@
 # //pub/examples/partcad/produce_part_subtractive
 
-This example demonstrates parts that are made by taking material away from a piece of stock. Each one names the stock it is cut from with `source:`, and each names the machine that cuts it -- a router, a laser or a drill -- which is what decides both the checks `pc test` applies to it and the program `pc cam` writes for it.
+This example demonstrates parts that are made by taking material away from a piece of stock. Each one names the stock it is cut from with `source:`, and each names the machine that cuts it -- a router, a laser, a drill or a saw -- which is what decides both the checks `pc test` applies to it and the program `pc cam` writes for it.
 
 ## Usage
 ```shell
@@ -9,6 +9,7 @@ pc inspect blank
 pc inspect gasket
 pc inspect bearing_block
 pc inspect drilled_plate
+pc inspect rail
 pc test -f manufacturability
 ```
 
@@ -72,6 +73,30 @@ pc cam -O ./routes -m cnc gasket     # writes gasket.cnc.nc
 It is also the one part here that says it could be made *either* way. Those are alternatives rather than stages -- `pc cam -m laser gasket` and `pc cam -m cnc gasket` are two programs for the same part, and `pc test` answers for both claims. A part that really is machined in stages is a chain of parts, each naming the previous as its `source`.
 </td>
 <td valign=top>Parameters:<br/><ul>
+<li>tolerance: 0.1</li>
+</ul>
+</td>
+</tr></table>
+
+### rail
+<table><tr>
+<td valign=top><img src="././rail.svg" alt="rail" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
+<td valign=top>A 250 mm piece of the board, cut off its end by a saw. A saw makes nothing but the stock with its ends cut off, so `cut:` says where it cuts rather than how -- the axis the saw travels along and how far into the board it goes, where `$length` is the value of this part's own `length` -- and `manufacturability-cut` checks that cutting the stock there leaves exactly this part. `pc cam` writes nothing for it: a saw runs no program.
+</td>
+<td valign=top>Parameters:<br/><ul>
+<li>length: 250.0</li>
+<li>tolerance: 0.1</li>
+</ul>
+</td>
+</tr></table>
+
+### stock_board
+<table><tr>
+<td valign=top><a href="stock_board.py"><img src="././stock_board.svg" alt="stock_board" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>A board, bought by the length: a 38 x 89 mm section as long as its `length` parameter says. Like the sheet and the plate it declares no `manufacturing:`, because nobody here makes it.
+</td>
+<td valign=top>Parameters:<br/><ul>
+<li>length: 600</li>
 <li>tolerance: 0.1</li>
 </ul>
 </td>

@@ -104,7 +104,11 @@ class ProviderCartItem:
         self.name, self.count = resolve_cart_item(spec)
 
         object = resolve_cart_object(ctx, self.name)
-        assert object is not None, f"Part or assembly '{self.name}' not found"
+        if object is None:
+            # Raised rather than asserted: a stock reference that resolves to
+            # nothing reaches here from a bill of materials, and an assertion
+            # is neither a message for a user nor there at all under '-O'.
+            raise ValueError(f"Part or assembly '{self.name}' not found")
         self._set_store_data(object)
 
         self.material = await object.get_mcftt("material")
@@ -187,10 +191,20 @@ class ProviderCart:
 
         part = await prj.get_part_async(object_name, quiet=True)
         if part:
-            pc_logging.debug(f"Adding part '{object_name}' to the cart")
-            item = ProviderCartItem()
-            await item.set_spec(ctx, name)
-            self.add_item(item, count)
+            # A part that is made is procured as what it is made from, and one
+            # made from nothing it names needs nothing procured at all (see
+            # 'partcad.procurement'). A bought part is procured as itself.
+            from . import procurement
+
+            for procured in await procurement.procured_as(ctx, part):
+                if procured != name and resolve_cart_object(ctx, procured) is None:
+                    # What 'procured_as' keeps a missing stock as, so that it
+                    # is said here, against the part that names it.
+                    raise ValueError(f"'{procured}', which '{name}' is made from, is not found")
+                pc_logging.debug(f"Adding '{procured}' to the cart for part '{object_name}'")
+                item = ProviderCartItem()
+                await item.set_spec(ctx, procured)
+                self.add_item(item, count)
         else:
             # Quietly, both of them: a name that is one is not the other, and
             # the failure worth reporting is the one at the end.
@@ -210,7 +224,10 @@ class ProviderCart:
                     return
 
                 pc_logging.debug(f"Adding the contents of assembly '{object_name}' to the cart")
-                bom = await (holder.get_bom() if recursive else holder.get_supply_bom())
+                if recursive:
+                    bom = await _procured(ctx, await holder.get_bom())
+                else:
+                    bom = await holder.get_supply_bom(ctx)
                 tasks = []
                 for item_name, item_count in bom.items():
                     pc_logging.debug(f"Adding '{item_name}' to the cart")
@@ -263,3 +280,20 @@ class ProviderCart:
 
     def __repr__(self):
         return str(self.compose())
+
+
+async def _procured(ctx, bom: dict) -> dict:
+    """A bill of materials of parts, as what each of them is procured as.
+
+    A module function rather than a method: '@telemetry.instrument()' wraps
+    the callables a class holds, and a static one comes back expecting 'self'.
+    """
+    from . import procurement
+
+    procured = {}
+    for name, count in bom.items():
+        part = await procurement.get_part_async(ctx, name)
+        names = [name] if part is None else await procurement.procured_as(ctx, part)
+        for one in names:
+            procured[one] = procured.get(one, 0) + count
+    return procured

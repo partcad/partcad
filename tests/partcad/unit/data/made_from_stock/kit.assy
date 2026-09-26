@@ -1,0 +1,15 @@
+links:
+  - part: bracket
+    name: bracket1
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: bracket
+    name: bracket2
+    location: [[0, 0, 10], [0, 0, 1], 0]
+  - part: blank
+    location: [[0, 0, 20], [0, 0, 1], 0]
+  - part: knob
+    location: [[0, 0, 30], [0, 0, 1], 0]
+  - part: spacer
+    location: [[0, 0, 40], [0, 0, 1], 0]
+  - part: plate
+    location: [[0, 0, 50], [0, 0, 1], 0]

@@ -2389,7 +2389,18 @@ class Shape(ShapeConfiguration):
             # sentence whichever of the two spoke it.
             raise pc_cam.CamConfigError(machine_error)
 
-        chosen = manufacturing_data.machine_named(machine) if machine else manufacturing_data.machine
+        from .part_config_manufacturing import ROUTED_MACHINES
+
+        if machine:
+            chosen = manufacturing_data.machine_named(machine)
+        else:
+            # The one machine a program could be written for. A saw beside it is
+            # an alternative with no program, so it does not make the choice
+            # ambiguous -- the same reading 'cam.declared_config' makes.
+            routed = [kind for kind in manufacturing_data.machine_choices() if kind in ROUTED_MACHINES]
+            chosen = manufacturing_data.machine_named(routed[0]) if len(routed) == 1 else None
+        if chosen is not None and chosen.kind not in ROUTED_MACHINES:
+            raise pc_cam.CamConfigError("a '%s' runs no program, so there is no route to write for it" % chosen.kind)
         if chosen is None:
             # Made some other way, so there is no machine to name and nothing
             # wrong with that: an implementation handed nothing writes what it

@@ -117,6 +117,8 @@ Feature: `pc inspect` command
     | /produce_part_subtractive | blank |
     | /produce_part_subtractive | drilled_plate |
     | /produce_part_subtractive | gasket |
+    | /produce_part_subtractive | rail |
+    | /produce_part_subtractive | stock_board |
     | /produce_part_subtractive | stock_plate |
     | /produce_part_subtractive | stock_sheet |
 

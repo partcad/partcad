@@ -13,7 +13,7 @@
       "additionalProperties": false
     },
     "machine-axis": {
-      "description": "The axis the tool, the beam or the drill approaches along, as one of '+X', '-X', '+Y', '-Y', '+Z' or '-Z'. Defaults to '-Z': the part sits on the bed and the tool comes down to it. It is what 'every cut wall is vertical' is measured against, and what 'pc cam' orients the part by. Not to be confused with 'direction:', which says which way round a contour is cut.",
+      "description": "The axis the tool, the beam, the drill or the saw approaches along ('toolAxis:', or 'along:', which says the same), as one of '+X', '-X', '+Y', '-Y', '+Z' or '-Z'. Defaults to '-Z': the part sits on the bed and the tool comes down to it. It is what 'every cut wall is vertical' is measured against, and what 'pc cam' orients the part by. Not to be confused with 'direction:', which says which way round a contour is cut.",
       "type": "string",
       "enum": ["+X", "-X", "+Y", "-Y", "+Z", "-Z", "+x", "-x", "+y", "-y", "+z", "-z", "X", "Y", "Z", "x", "y", "z"]
     },
@@ -22,6 +22,7 @@
       "type": "object",
       "properties": {
         "toolAxis": { "$ref": "#/definitions/machine-axis" },
+        "along": { "$ref": "#/definitions/machine-axis", "description": "The same as 'toolAxis:', said the way it usually is ('cuts along -Z'). Write one or the other." },
         "diameter": { "$ref": "#/definitions/cam-length", "description": "The cutter's diameter. Every contour is offset by half of it, so the part comes out at its nominal size" },
         "depth": { "$ref": "#/definitions/cam-length", "description": "How far down from the top of the object the cut goes. An object that does not say is cut through" },
         "depth_per_pass": { "$ref": "#/definitions/cam-length", "description": "How deep each pass goes" },
@@ -35,6 +36,7 @@
         "implementation": { "type": "string", "minLength": 1, "description": "Who produces this route, as '<package>:<file type>'" },
         "desc": { "type": "string", "maxLength": 1000 }
       },
+      "not": { "required": ["toolAxis", "along"] },
       "additionalProperties": false
     },
     "subtractive-laser": {
@@ -42,6 +44,7 @@
       "type": "object",
       "properties": {
         "toolAxis": { "$ref": "#/definitions/machine-axis" },
+        "along": { "$ref": "#/definitions/machine-axis", "description": "The same as 'toolAxis:', said the way it usually is ('cuts along -Z'). Write one or the other." },
         "kerf": { "$ref": "#/definitions/cam-length", "description": "How wide a cut the beam itself removes, as a length ('0.2', '0.2 mm', '0.008 in'). A property of the machine and the material rather than of the job. 'pc cam' offsets every contour by half of it so the part comes out at its nominal size" },
         "power": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }], "description": "How hard the beam fires, as the S-word its controller reads. A beam nobody commands is gated with a bare M3, which is what a machine whose power is set at the panel wants" },
         "feed": { "$ref": "#/definitions/cam-feed", "description": "How fast the head travels; a bare number is millimeters per minute" },
@@ -49,6 +52,7 @@
         "implementation": { "type": "string", "minLength": 1, "description": "Who produces this route, as '<package>:<file type>'" },
         "desc": { "type": "string", "maxLength": 1000 }
       },
+      "not": { "required": ["toolAxis", "along"] },
       "additionalProperties": false
     },
     "subtractive-drill": {
@@ -56,6 +60,7 @@
       "type": "object",
       "properties": {
         "toolAxis": { "$ref": "#/definitions/machine-axis" },
+        "along": { "$ref": "#/definitions/machine-axis", "description": "The same as 'toolAxis:', said the way it usually is ('cuts along -Z'). Write one or the other." },
         "diameter": { "$ref": "#/definitions/cam-length", "description": "The drill in the spindle. Checked against the holes it is sent to, so a bit that is not the size of them is reported rather than run" },
         "safe_z": { "$ref": "#/definitions/cam-length", "description": "The height rapid moves are made at, above the top of the object" },
         "peck": { "$ref": "#/definitions/cam-length", "description": "How deep the drill goes before it comes back out to clear the swarf. A hole with none is drilled in one go" },
@@ -64,7 +69,47 @@
         "implementation": { "type": "string", "minLength": 1, "description": "Who produces this route, as '<package>:<file type>'" },
         "desc": { "type": "string", "maxLength": 1000 }
       },
+      "not": { "required": ["toolAxis", "along"] },
       "additionalProperties": false
+    },
+    "subtractive-cut": {
+      "description": "A saw that cuts the stock across, to length or to size, and does nothing else. It is described by where it cuts: for each cut, the axis the saw travels along and how far into the stock it goes before it cuts across. 'manufacturability-cut' makes those cuts in the 'source:' and checks that what is left is the part. 'pc cam' writes no program for it.",
+      "type": "object",
+      "properties": {
+        "toolAxis": {
+          "$ref": "#/definitions/machine-axis",
+          "description": "The axis the saw travels along, for every cut that does not name its own. It points at the offcut: the saw starts where the stock starts along it, travels each cut's 'length:', and everything further along is cut off. Defaults to '-Z'."
+        },
+        "along": { "$ref": "#/definitions/machine-axis", "description": "The same as 'toolAxis:', said the way it usually is ('cuts along -Z'). Write one or the other." },
+        "cuts": {
+          "description": "The cuts, in the part's own coordinates (which are the stock's). Each is a 'length:' -- how far into the stock the saw travels before it cuts, measured from where the stock starts along its axis -- and, optionally, the axis: 'toolAxis:', or 'along:', which says the same. A cut that names neither travels along the machine's 'toolAxis:'. Any number may be written as '$name', the value of the part's own parameter of that name ('$length in').",
+          "oneOf": [
+            { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/subtractive-cut-one" } },
+            { "$ref": "#/definitions/subtractive-cut-one" }
+          ]
+        },
+        "desc": { "type": "string", "maxLength": 1000 }
+      },
+      "not": { "required": ["toolAxis", "along"] },
+      "required": ["cuts"],
+      "additionalProperties": false
+    },
+    "subtractive-cut-one": {
+      "type": "object",
+      "properties": {
+        "toolAxis": { "$ref": "#/definitions/cut-direction", "description": "The axis this cut travels along, pointing at the offcut. Defaults to the machine's 'toolAxis:'." },
+        "along": { "$ref": "#/definitions/cut-direction", "description": "The same as 'toolAxis:', said the way a saw cut usually is. Write one or the other." },
+        "length": { "$ref": "#/definitions/cam-length", "description": "How far into the stock the saw travels before it cuts, which is how long a piece it leaves ('1219.2', '48 in', '$length in')" }
+      },
+      "required": ["length"],
+      "not": { "required": ["toolAxis", "along"] },
+      "additionalProperties": false
+    },
+    "cut-direction": {
+      "oneOf": [
+        { "$ref": "#/definitions/machine-axis" },
+        { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } }
+      ]
     },
     "sketch-manufacturing": {
       "type": "object",
@@ -1374,6 +1419,7 @@
                     "cnc": { "$ref": "#/definitions/subtractive-cnc" },
                     "drill": { "$ref": "#/definitions/subtractive-drill" },
                     "laser": { "$ref": "#/definitions/subtractive-laser" },
+                    "cut": { "$ref": "#/definitions/subtractive-cut" },
                     "diameter": { "$ref": "#/definitions/cam-length", "description": "Shared by every machine named below that reads one: the cutter on a router, the bit in a drill. A laser has none and ignores it" },
                     "depth": { "$ref": "#/definitions/cam-length", "description": "How far down from the top of the object the cut goes. An object that does not say is cut through" },
                     "depth_per_pass": { "$ref": "#/definitions/cam-length", "description": "How deep each pass goes" },
@@ -1412,6 +1458,7 @@
                           "cnc": false,
                           "drill": false,
                           "laser": false,
+                          "cut": false,
                           "diameter": false,
                           "depth": false,
                           "depth_per_pass": false,

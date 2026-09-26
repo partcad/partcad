@@ -52,7 +52,7 @@ pc render -t dxf -O ./ :outline
 
 ### outline
 <table><tr>
-<td valign=top><a href="outline.basic"><img src="././outline.svg" alt="outline" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><img src="././outline.svg" alt="outline" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
 <td valign=top>A 2D shape, to show which file types are worth writing for one</td>
 </tr></table>
 

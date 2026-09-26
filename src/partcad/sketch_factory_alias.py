@@ -57,7 +57,9 @@ class SketchFactoryAlias(SketchFactory):
                 self.source = self.source_project_name + ":" + self.source_sketch_name
             config["source_resolved"] = self.source
 
-            self.sketch.desc = reference.describe(config["type"], target_project.name, self.source)
+            self.sketch.desc = config.get("desc") or reference.describe(
+                config["type"], target_project.name, self.source
+            )
 
             # pc_logging.debug("Initialized an alias to %s" % self.source)
 

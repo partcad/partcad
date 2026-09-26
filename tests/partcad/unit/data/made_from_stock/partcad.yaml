@@ -1,0 +1,62 @@
+desc: >
+  Parts that are made, from stock that is bought: a sheet somebody sells, a
+  blank cut out of it, a bracket bent from the blank, a knob printed from
+  nothing it names, a spacer that is both sold and could be cut, and a
+  plate that says neither.
+
+parts:
+  sheet:
+    type: cadquery
+    path: cube.py
+    desc: A sheet somebody sells
+    vendor: acme
+    sku: SHEET-1
+  blank:
+    type: cadquery
+    path: cube.py
+    desc: A blank cut out of the sheet
+    parameters:
+      tolerance: 0.1
+    manufacturing:
+      method: subtractive
+      source: sheet
+      laser:
+        kerf: 0.2
+  bracket:
+    type: cadquery
+    path: cube.py
+    desc: A bracket bent from the blank
+    parameters:
+      tolerance: 0.1
+    manufacturing:
+      method: sheet_metal
+      source: blank
+      instructions: bends
+  knob:
+    type: cadquery
+    path: cube.py
+    desc: A knob printed from nothing it names
+    parameters:
+      tolerance: 0.1
+    manufacturing:
+      method: additive
+  spacer:
+    type: cadquery
+    path: cube.py
+    desc: A spacer that is sold, and could be cut from the sheet
+    vendor: acme
+    sku: SPACER-1
+    parameters:
+      tolerance: 0.1
+    manufacturing:
+      method: subtractive
+      source: sheet
+  plate:
+    type: cadquery
+    path: cube.py
+    desc: A plate that says neither
+
+assemblies:
+  kit:
+    type: assy
+    desc: Two brackets, a blank, a knob, a spacer and a plate

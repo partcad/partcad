@@ -31,6 +31,7 @@ class PartFactoryAlias(pf.PartFactory):
 
             self.part.get_final_config = self.get_final_config
             self.part.get_cacheable = self.get_cacheable
+            self.part.get_tolerance = self.get_tolerance
 
             # A reference has no cache key of its own until it has taken the
             # one of the object it points at (see 'prepare_async'), and is not
@@ -58,7 +59,10 @@ class PartFactoryAlias(pf.PartFactory):
                 self.source = self.source_project_name + ":" + self.source_part_name
             config["source_resolved"] = self.source
 
-            self.part.desc = reference.describe(config["type"], target_project.name, self.source)
+            # What the reference says it is, where it says: an enrich of a
+            # standard size is usually a part of its own ("a leg") and not
+            # merely another name for the size.
+            self.part.desc = config.get("desc") or reference.describe(config["type"], target_project.name, self.source)
 
             # pc_logging.debug("Initialized an alias to %s" % self.source)
 
@@ -121,11 +125,40 @@ class PartFactoryAlias(pf.PartFactory):
         alias, and an enrich of an enrich, resolve through this same method and
         so see what the reference below them declared rather than only what the
         object at the end of the chain did.
+
+        And for how the object is *made*, which a reference may state for the
+        same reason: one piece of geometry is made different ways by different
+        packages. A 4x4 post is lumber in the package that defines lumber and a
+        board cut to length off a store's eight foot one in the package that
+        builds a desk from it -- which is what an enrich of it is for. A
+        'manufacturing:' section is one statement (a method, a stock, a machine
+        and where it cuts), so a reference that writes one replaces the
+        source's whole rather than key by key.
         """
         source = self.ctx._get_part(self.source)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")
-        return resolve_store_properties(source.get_final_config(), self.config)
+        resolved = resolve_store_properties(source.get_final_config(), self.config)
+        manufacturing = self.config.get("manufacturing") if isinstance(self.config, dict) else None
+        if manufacturing:
+            resolved = dict(resolved)
+            resolved["manufacturing"] = manufacturing
+        return resolved
+
+    async def get_tolerance(self):
+        """How precisely the object this points at has to be made.
+
+        The source's answer, because a reference declares no tolerance of its
+        own -- it has no file to read one from and no object-type parameters to
+        state one in -- and the geometry it stands for is the source's. Without
+        this every alias and every enrich of a part that is *made* answered
+        None, which the manufacturability test reads as a part type that cannot
+        say, and failed.
+        """
+        source = await self.ctx._get_part_async(self.source)
+        if not source:
+            return None
+        return await source.get_tolerance()
 
     def get_cacheable(self) -> bool:
         # Cacheable once it knows which entry it shares: a reference keys on

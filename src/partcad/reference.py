@@ -95,8 +95,9 @@ REFERENCE_TYPES = frozenset({"alias", "enrich", "compound"})
 def describe(config_type: str, target_project_name: str, source: str) -> str:
     """What a reference is called, given the reference it resolved to.
 
-    Its source, because that is what it is: a reference has nothing of its own
-    to describe. Here rather than in each factory because a listing needs the
+    Its source, because that is what it is -- unless the reference declares a
+    'desc' of its own, which its callers read first: an enrich of a standard
+    size is often a part in its own right ("a leg"). Here rather than in each factory because a listing needs the
     same answer without building anything (see 'Project.object_descriptions'),
     and two ways of producing one string is how they come to disagree.
 

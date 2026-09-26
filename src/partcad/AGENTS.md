@@ -314,7 +314,8 @@ at all).
   `depth:` or `safe_z:`; a drill has no `depth:`, `feed:` or `operation:`. Writing one of those in that
   machine's own subsection is an error naming what it does take; writing it in the shared scope is fine and
   simply not read. The axis is `toolAxis:` rather than `direction:` because `direction` already means climb or
-  conventional, and both would reach one implementation in one request.
+  conventional, and both would reach one implementation in one request. Every machine (and every saw cut) also
+  takes it as `along:`, a synonym; naming both is an error (`written_axis`).
 
   `_read_machines` reads none of this for a method that is not `subtractive`, and **refuses** the keys rather
   than dropping them: nothing takes a cut from an `additive` part, so a `diameter:` on one is a number somebody
@@ -358,6 +359,35 @@ at all).
   `examples/produce_part_subtractive` is the whole of it, and its laser-cut `blank` is what the sheet metal
   example bends -- named across packages, so the piece that goes into the brake is a part whose own making is
   described rather than one asserted to exist.
+
+  The fourth machine, **`cut:`**, is a saw cutting the stock across -- a board to length, a sheet to size -- and
+  it is described by *where* it cuts rather than how, in the part's (and so the stock's) coordinates. It takes a
+  `toolAxis:` like every other machine, pointing at the offcut, and `cuts:`, each of which is a `length:` -- how
+  far the saw travels into the stock, from where the stock starts along the axis, before it cuts across -- and,
+  optionally, an axis of its own: `toolAxis:` or its synonym `along:`, never both, as for the machine itself. A cut naming neither travels
+  along the machine's `toolAxis:` (default `-Z`). There is no plane syntax: every cut is a length. Any number may
+  be `$name`, the part's own parameter (`parse_cuts`), because a part cut to length is nearly always parametric.
+  It takes no job keys, and it is not in `ROUTED_MACHINES`: `pc cam` passes over a part that is only cut
+  and refuses `-m cut`, and a saw beside a laser leaves the laser as the one route. `manufacturability-cut`
+  (`test/manufacturability_cut.py`, `wrapper_manufacturability.cut`) makes each cut in the stock and requires
+  the result to *be* the part, and every cut to take something off. The furniture desk in
+  `partcad-furniture-basic` is built this way from `//pub/svc/commerce/homedepot` lumber.
+
+  An **alias or enrich may state how its object is made**: `PartFactoryAlias.get_final_config` layers the
+  reference's own `manufacturing:` over the source's, whole, the way the purchasing record is -- which is what
+  lets a package say "this 4x4 of the standard's is cut off a store's 8 ft. one". And a reference answers
+  `get_tolerance()` with its source's, since it has nothing of its own to state one in.
+
+- **A made part is procured as its stock** (`procurement.py`): a part with a `manufacturing:` method is made, and
+  the user is taken at their word that they can make it -- so no supplier is asked for it. `procured_as` is the
+  one rule: bought -> itself; made -> the `source:` of its `manufacturing:` section, followed down the chain; made
+  from nothing it names -> nothing; neither -> itself. `get_supply_bom(ctx)` (the cart), the grouped BOM's `stock`
+  and `manufactured` sections (the readme and the instruction book), the detailed BOM's `stock` line items and
+  `madeFrom`, and `ManufacturabilityTest.stock_failure` all go through it. `get_supply_bom()` *without* a context
+  is still "what has to be had", parts as themselves, and is what the manufacturability test walks, because a
+  made part is something it tests too. A part with both a vendor/SKU and instructions is tried as bought first
+  and falls back to being made. One piece of stock per part: nesting is not modelled yet. The instruction book's
+  "Parts to Manufacture" pages repeat each part's instructions as text (`manufacturing_instructions.py`).
 
 - **A sheet metal part names what is bent and how** (`part_config_manufacturing.py`,
   `test/manufacturability_sheet_metal.py`, `wrappers/dxf_metadata.py`): `sheet_metal` is the one manufacturing
