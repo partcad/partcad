@@ -412,9 +412,20 @@ jobs:
           }
 
           # The same, for the most recent finished runs on a branch.
+          #
+          # Of this repository only. The `branch` filter matches a run's head
+          # branch by *name*, and a pull request from a fork's own "devel" has
+          # a head branch called "devel" too -- so without the check, the IDE
+          # built here could embed command line bundles frozen from somebody
+          # else's unreviewed code, under a log line saying they came from
+          # "devel". A run of this repository is a push to the branch, a
+          # dispatch on it, or a pull request whose head is the branch itself,
+          # and every one of those built what the branch holds.
           runs_on_branch() {
             gh api "repos/${REPO}/actions/workflows/${workflow}/runs?branch=$1&status=completed&per_page=30" \
-              --jq '.workflow_runs | sort_by(.created_at) | reverse
+              --jq '.workflow_runs
+                    | map(select(.head_repository.full_name == env.REPO))
+                    | sort_by(.created_at) | reverse
                     | .[] | [.id, .head_sha, .conclusion] | @tsv'
           }
 
