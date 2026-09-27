@@ -106,12 +106,10 @@ suite('Workspace trust', () => {
         let activations = 0;
         const context = fakeContext(['partcadTest.trust.trusted']);
         let asked = 0;
-        await activateWhenTrusted(
-            context,
-            async () => void (activations += 1),
-            true,
-            async () => void (asked += 1),
-        );
+        await activateWhenTrusted(context, async () => void (activations += 1), {
+            isTrusted: true,
+            explain: async () => void (asked += 1),
+        });
         try {
             assert.strictEqual(activations, 1);
             assert.strictEqual(asked, 0);
@@ -126,12 +124,10 @@ suite('Workspace trust', () => {
         let activations = 0;
         let asked = 0;
         const context = fakeContext(['partcadTest.trust.untrusted']);
-        await activateWhenTrusted(
-            context,
-            async () => void (activations += 1),
-            false,
-            async () => void (asked += 1),
-        );
+        await activateWhenTrusted(context, async () => void (activations += 1), {
+            isTrusted: false,
+            explain: async () => void (asked += 1),
+        });
         try {
             assert.strictEqual(activations, 0);
             assert.strictEqual(asked, 1, 'the user is asked once, on activation');
@@ -141,4 +137,58 @@ suite('Workspace trust', () => {
             disposeAll(context);
         }
     });
+
+    test('granting trust starts PartCAD and takes the stand-ins away', async () => {
+        const granted = new vscode.EventEmitter<void>();
+        let activations = 0;
+        const context = fakeContext(['partcadTest.trust.granted']);
+        await activateWhenTrusted(context, async () => void (activations += 1), {
+            isTrusted: false,
+            onDidGrantTrust: granted.event,
+            explain: async () => undefined,
+        });
+        try {
+            assert.strictEqual(activations, 0);
+            await fireAndSettle(granted);
+            assert.strictEqual(activations, 1);
+            const registered = await vscode.commands.getCommands(true);
+            // Before the real activation registers the same ids, or it throws.
+            assert.ok(!registered.includes('partcadTest.trust.granted'), 'the stand-ins are gone');
+        } finally {
+            disposeAll(context);
+            granted.dispose();
+        }
+    });
+
+    test('a start that fails after trust was granted is reported, not dropped', async () => {
+        const granted = new vscode.EventEmitter<void>();
+        const failures: unknown[] = [];
+        const context = fakeContext(['partcadTest.trust.fails']);
+        await activateWhenTrusted(
+            context,
+            async () => {
+                throw new Error('no service');
+            },
+            {
+                isTrusted: false,
+                onDidGrantTrust: granted.event,
+                explain: async () => undefined,
+                onFailure: async (error) => void failures.push(error),
+            },
+        );
+        try {
+            await fireAndSettle(granted);
+            assert.strictEqual(failures.length, 1);
+            assert.match(String(failures[0]), /no service/);
+        } finally {
+            disposeAll(context);
+            granted.dispose();
+        }
+    });
 });
+
+/** Fire `emitter`, and let its asynchronous listeners run to completion. */
+async function fireAndSettle(emitter: vscode.EventEmitter<void>): Promise<void> {
+    emitter.fire();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+}

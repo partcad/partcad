@@ -274,8 +274,13 @@ What the untrusted window shows, and why each is there:
   are registered, and running an unregistered one is "command not found". The stand-ins explain and offer the
   trust editor, and are disposed before `activateTrusted` registers the real ones under the same ids.
 
-`npm test` opens its workspace trusted, so the untrusted path is tested through `activateWhenTrusted`'s
-`isTrusted` argument.
+**A failure to start after trust is granted is reported** (`reportTrustedActivationFailure`: the log, an error
+message, `partcad.failed`). On the trusted path the editor reports a rejected `activate`; this one happens in
+an event listener after activation returned, with the stand-ins already gone, so nothing else would.
+
+`npm test` opens its workspace trusted and nothing a test does can grant trust to a window, so the untrusted
+path and the grant are tested through `activateWhenTrusted`'s options (`isTrusted`, `onDidGrantTrust`,
+`explain`, `onFailure`).
 
 ## Installing a package's dependencies
 

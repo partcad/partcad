@@ -21,6 +21,8 @@
 
 import * as vscode from 'vscode';
 
+import { traceError } from './log/logging';
+
 /** The editor's own command: the Workspace Trust editor, with its "Trust" button. */
 export const MANAGE_TRUST_COMMAND = 'workbench.trust.manage';
 
@@ -62,6 +64,32 @@ export function registerUntrustedCommands(
 }
 
 /**
+ * PartCAD failed to start after the folder was trusted.
+ *
+ * On the trusted path a rejection from `activate` is the editor's to report;
+ * here it happens in an event listener, long after activation returned, so
+ * nobody else would -- and the command stand-ins are gone by then, so the
+ * window would be left with an Explorer saying nothing and commands that are
+ * "not found". `partcad.failed` is what the Explorer's failure message keys on.
+ */
+export async function reportTrustedActivationFailure(error: unknown): Promise<void> {
+    traceError(`PartCAD failed to start after the folder was trusted: ${error}`);
+    await vscode.commands.executeCommand('setContext', 'partcad.failed', true);
+    vscode.window.showErrorMessage(`PartCAD failed to start: ${error}`);
+}
+
+export interface TrustOptions {
+    /** Whether the folder is trusted now. */
+    isTrusted?: boolean;
+    /** The event that says it has become trusted. */
+    onDidGrantTrust?: vscode.Event<void>;
+    /** Ask for trust, and offer the way to grant it. */
+    explain?: () => Promise<void>;
+    /** What to do when activation fails after trust was granted. */
+    onFailure?: (error: unknown) => Promise<void>;
+}
+
+/**
  * Run `activateTrusted` now if the folder is trusted, and otherwise ask for
  * trust and run it once it is granted.
  *
@@ -70,12 +98,19 @@ export function registerUntrustedCommands(
  *
  * Trust is only ever *granted* within a window's lifetime: taking it away
  * reloads the window, so there is no event to undo what `activateTrusted` did.
+ *
+ * The options exist for the tests: the runner opens its workspace trusted, and
+ * nothing a test can do grants trust to a window.
  */
 export async function activateWhenTrusted(
     context: vscode.ExtensionContext,
     activateTrusted: (context: vscode.ExtensionContext) => Promise<void>,
-    isTrusted: boolean = vscode.workspace.isTrusted,
-    explain: () => Promise<void> = explainUntrusted,
+    {
+        isTrusted = vscode.workspace.isTrusted,
+        onDidGrantTrust = vscode.workspace.onDidGrantWorkspaceTrust,
+        explain = explainUntrusted,
+        onFailure = reportTrustedActivationFailure,
+    }: TrustOptions = {},
 ): Promise<void> {
     if (isTrusted) {
         await activateTrusted(context);
@@ -85,9 +120,13 @@ export async function activateWhenTrusted(
     const standIns = registerUntrustedCommands(contributedCommands(context.extension?.packageJSON), explain);
     context.subscriptions.push(standIns);
     context.subscriptions.push(
-        vscode.workspace.onDidGrantWorkspaceTrust(async () => {
+        onDidGrantTrust(async () => {
             standIns.dispose();
-            await activateTrusted(context);
+            try {
+                await activateTrusted(context);
+            } catch (error) {
+                await onFailure(error);
+            }
         }),
     );
     explain().catch(() => undefined);
