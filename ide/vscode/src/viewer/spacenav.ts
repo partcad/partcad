@@ -84,7 +84,9 @@ export type SpacenavEvent = { motion: number[] } | { button: number; pressed: bo
 export function socketPaths(env: NodeJS.ProcessEnv = process.env): string[] {
     const paths = ['/var/run/spnav.sock'];
     if (env.XDG_RUNTIME_DIR) {
-        paths.push(path.join(env.XDG_RUNTIME_DIR, 'spnav.sock'));
+        // POSIX whatever the host: spacenavd is a Unix daemon, and 'path.join'
+        // would spell this with backslashes on Windows.
+        paths.push(path.posix.join(env.XDG_RUNTIME_DIR, 'spnav.sock'));
     }
     return paths;
 }
