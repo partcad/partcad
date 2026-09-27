@@ -52,6 +52,7 @@ import {
     setAutoRotate,
     setShowMetadata,
     showItems,
+    spaceMouse,
 } from './scene';
 import { SupplyView } from './supply';
 import { TabSpec, Tabs } from './tabs';
@@ -402,6 +403,17 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
         show(message);
     } else if (message.type === 'tabData') {
         onTabData(message.tab, message.token, message.data, message.error, message.implementation);
+    } else if (message.type === 'spaceMouseState') {
+        spaceMouse.settings = message.settings;
+        spaceMouse.active = message.active;
+        spaceMouse.spacenavd = message.spacenavd;
+        spaceMouse.spacenavdDevice = message.spacenavdDevice;
+    } else if (message.type === 'spaceMouseEvent') {
+        if (message.motion !== undefined) {
+            spaceMouse.spacenavMotion(message.motion, performance.now());
+        } else if (message.button !== undefined) {
+            spaceMouse.spacenavButton(message.button, message.pressed === true);
+        }
     }
 });
 
