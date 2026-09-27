@@ -77,6 +77,11 @@ class ProviderCartItem:
     format: str = None
     binary: bytes = None
 
+    vendor: str = None
+    sku: str = None
+    count_per_sku: int = 1
+    item_in_sku: str = None
+
     def __init__(self):
         self.name = "none"
         self.count = 0
@@ -87,6 +92,7 @@ class ProviderCartItem:
         self.vendor = store_data.vendor
         self.sku = store_data.sku
         self.count_per_sku = store_data.count_per_sku
+        self.item_in_sku = getattr(store_data, "item_in_sku", None)
 
     def set_shape(self, shape, count: int = 1):
         """Populate the item from a shape object the caller already holds.
@@ -130,6 +136,8 @@ class ProviderCartItem:
             result["vendor"] = self.vendor
             result["sku"] = self.sku
             result["count_per_sku"] = self.count_per_sku
+            if getattr(self, "item_in_sku", None):
+                result["item_in_sku"] = self.item_in_sku
         return result
 
     def add_binary(self, format: str, binary: bytes):
@@ -271,10 +279,47 @@ class ProviderCart:
         return item
 
     def compose(self):
+        """The cart, as a provider is handed it.
+
+        'parts' is one entry per object. 'skus' is what to order: a list with
+        one entry per (vendor, SKU), with the number of that SKU to buy (see
+        'skus_to_order()'). A list rather than a mapping, because a vendor and
+        a SKU are free text and no key made of the two is safe from colliding
+        with another pair. The two differ where one SKU is a set of several
+        kinds of objects, and a store should order from 'skus' -- ordering
+        each of 'parts' on its own buys a set once for every kind in it.
+        """
+        from .shape_config_store import skus_to_order
+
         req = {"parts": {}, "qos": self.qos}
 
         for name, part in self.parts.items():
             req["parts"][name] = part.compose()
+
+        skus = skus_to_order(
+            (
+                getattr(part, "vendor", None),
+                getattr(part, "sku", None),
+                getattr(part, "item_in_sku", None),
+                getattr(part, "count_per_sku", 1),
+                part.count,
+            )
+            for part in self.parts.values()
+        )
+        req["skus"] = []
+        for (vendor, sku), order in sorted(skus.items()):
+            req["skus"].append(
+                {
+                    "vendor": vendor,
+                    "sku": sku,
+                    "count": order["count"],
+                    "parts": sorted(
+                        name
+                        for name, part in self.parts.items()
+                        if getattr(part, "vendor", None) == vendor and getattr(part, "sku", None) == sku
+                    ),
+                }
+            )
 
         return req
 

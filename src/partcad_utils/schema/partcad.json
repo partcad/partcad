@@ -1400,6 +1400,11 @@
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
+                "item_in_sku": {
+                  "description": "Which of the kinds of items that come under one SKU this is, where one SKU is a set of different things (a shaft and the clip that comes with it). Every object sold in the set names the set's 'vendor' and 'sku', and a different 'item_in_sku'; 'count_per_sku' is then how many of this one kind come in one set. Buying enough of every kind is buying the set as many times as the most demanding kind needs, not once per kind.",
+                  "type": "string",
+                  "minLength": 1
+                },
                 "manufacturing": {
                   "type": "object",
                   "properties": {
@@ -1511,6 +1516,11 @@
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
+                "item_in_sku": {
+                  "description": "Which of the kinds of items that come under one SKU this is, where one SKU is a set of different things (a shaft and the clip that comes with it). Every object sold in the set names the set's 'vendor' and 'sku', and a different 'item_in_sku'; 'count_per_sku' is then how many of this one kind come in one set. Buying enough of every kind is buying the set as many times as the most demanding kind needs, not once per kind.",
+                  "type": "string",
+                  "minLength": 1
+                },
                 "unless": { "$ref": "#/definitions/unless" }
               },
               "required": ["type"],
@@ -1598,6 +1608,11 @@
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
+                "item_in_sku": {
+                  "description": "Which of the kinds of items that come under one SKU this is, where one SKU is a set of different things (a shaft and the clip that comes with it). Every object sold in the set names the set's 'vendor' and 'sku', and a different 'item_in_sku'; 'count_per_sku' is then how many of this one kind come in one set. Buying enough of every kind is buying the set as many times as the most demanding kind needs, not once per kind.",
+                  "type": "string",
+                  "minLength": 1
+                },
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
                 "interference": { "$ref": "#/definitions/check-interference" },
                 "connectivity": { "$ref": "#/definitions/check-connectivity" },

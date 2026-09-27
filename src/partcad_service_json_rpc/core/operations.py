@@ -3013,6 +3013,7 @@ async def _supply_quote_async(pc, ctx, path, qos, recursive):
                 "vendor": cart_item.vendor,
                 "sku": cart_item.sku,
                 "count_per_sku": cart_item.count_per_sku,
+                "item_in_sku": getattr(cart_item, "item_in_sku", None),
                 "suppliers": options,
             }
         )
@@ -3123,14 +3124,44 @@ def _supply_totals(items):
     Kept per currency rather than added up into one number: two suppliers that
     quote in different currencies cannot be summed without an exchange rate, and
     PartCAD has none.
+
+    The items of one set - line items naming the same vendor and SKU, each as
+    the 'item_in_sku' it is - are counted once. Each was quoted on its own, and
+    each quote is for as many whole sets as that item needs: added up, a shaft
+    and the clip it comes with would pay for the set twice. What is ordered is
+    the set, as many times as the most demanding item needs (see
+    'skus_to_order()'), so what one supplier asks for it is the largest of its
+    quotes for the items. It is bought from one supplier, so it is priced by
+    one: the cheapest of those that quoted every item of it. A set that no one
+    supplier quoted whole is left out, as an item nobody priced is.
     """
     totals = {}
+    sets = {}
     for item in items:
+        if item.get("item_in_sku") and item.get("vendor") and item.get("sku"):
+            sets.setdefault((item["vendor"], item["sku"]), []).append(item)
+            continue
         best = item["suppliers"][0] if item["suppliers"] else None
         if best is None or best.get("price") is None:
             continue
         currency = best.get("currency") or ""
         totals[currency] = totals.get(currency, 0.0) + best["price"]
+    for members in sets.values():
+        quotes = {}
+        for item in members:
+            for option in item["suppliers"]:
+                if option.get("price") is None:
+                    continue
+                key = (option.get("name"), option.get("currency") or "")
+                quotes.setdefault(key, {})[item["name"]] = option["price"]
+        whole = [
+            (max(prices.values()), currency)
+            for (_name, currency), prices in quotes.items()
+            if len(prices) == len(members)
+        ]
+        if whole:
+            price, currency = min(whole)
+            totals[currency] = totals.get(currency, 0.0) + price
     return [{"currency": currency or None, "price": price} for currency, price in sorted(totals.items())]
 
 

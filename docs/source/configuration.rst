@@ -2559,6 +2559,7 @@ declared using the following syntax:
       vendor: <(optional) the name of the vendor selling the part>
       sku: <(optional) the vendor's stock keeping unit (SKU) of the part>
       count_per_sku: <(optional) the number of parts in one SKU, 1 by default>
+      item_in_sku: <(optional) which of the kinds of items in the SKU this is>
 
 - ``vendor``
 
@@ -2584,9 +2585,43 @@ declared using the following syntax:
   the number of SKUs a store has in stock into the number of parts it can
   supply.
 
+- ``item_in_sku``
+
+  Optional. Which item this is, where one SKU is a *set* of different things
+  rather than a pack of one: a shaft sold with the clip that goes on it, a
+  bracket that comes with its screws. Each of them is an object of its own --
+  used on its own, assembled on its own, possibly taken apart and put back
+  later -- so each is declared as a part of its own. Each names the set's
+  ``vendor`` and ``sku``, and says which item of the set it is:
+
+  .. code-block:: yaml
+
+    parts:
+      shaft_72mm:
+        type: step
+        vendor: gobilda
+        sku: "2106-4008-0720"
+        item_in_sku: shaft
+      shaft_72mm_clip:
+        type: step
+        vendor: gobilda
+        sku: "2106-4008-0720"   # the same set
+        item_in_sku: clip
+
+  ``count_per_sku`` is then how many of that one kind come in a set. What is
+  ordered is the set, as many times as the most demanding kind needs: two
+  shafts and two clips are two sets, not four. Objects of one SKU that do not
+  name an ``item_in_sku`` are one kind with each other, which is what a SKU of
+  one kind of thing is.
+
+  An object sold in more than one set -- the same clip comes with every length
+  of shaft -- is declared once for the geometry, with an ``alias`` of it for
+  each set it comes in, the way a part sold by several vendors is (below).
+
 These values are passed on to providers of the type ``store`` as
-``request["vendor"]``, ``request["sku"]`` and ``request["count_per_sku"]``
-(see :ref:`providers`).
+``request["vendor"]``, ``request["sku"]``, ``request["count_per_sku"]`` and
+``request["item_in_sku"]`` (see :ref:`providers`). A cart also says what to
+order, one line per SKU, in ``request["cart"]["skus"]``.
 
 .. _made-from-stock:
 
@@ -3953,6 +3988,8 @@ Store
     - `request["sku"]`: the SKU of the part
     - `request["count"]`: the requested quantity of the parts
     - `request["count_per_sku"]`: the known number of parts per SKU
+    - `request["item_in_sku"]`: which item of the SKU this is, where the SKU is
+      a set of several kinds of items, or `None`
     - `output["available"]`: boolean, whether it is available in this store
 
   - `request["api"] == "quote"`
@@ -3966,6 +4003,15 @@ Store
     - `request["cart"]["parts"][<id>]["sku"]`: the SKU of the part
     - `request["cart"]["parts"][<id>]["count"]`: the requested quantity of the parts
     - `request["cart"]["parts"][<id>]["count_per_sku"]`: the known number of parts per SKU
+    - `request["cart"]["parts"][<id>]["item_in_sku"]`: which item of the SKU the part is,
+      where the SKU is a set of several kinds of items (absent otherwise)
+    - `request["cart"]["skus"]`: what to order, a list with one entry per SKU
+    - `request["cart"]["skus"][<n>]["vendor"]`, `["sku"]`: the SKU
+    - `request["cart"]["skus"][<n>]["count"]`: how many of that SKU to order,
+      which is already worked out from `count_per_sku` and `item_in_sku`. Order
+      from here rather than once per part: a SKU that is a set of several parts
+      would otherwise be bought once for each of them.
+    - `request["cart"]["skus"][<n>]["parts"]`: the parts that SKU is for
     - `output["price"]`: the total price of the cart
     - `output["cartId"]`: the id of the cart (to be used for the order later)
 
