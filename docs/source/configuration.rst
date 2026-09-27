@@ -4005,14 +4005,13 @@ Store
     - `request["cart"]["parts"][<id>]["count_per_sku"]`: the known number of parts per SKU
     - `request["cart"]["parts"][<id>]["item_in_sku"]`: which item of the SKU the part is,
       where the SKU is a set of several kinds of items (absent otherwise)
-    - `request["cart"]["skus"]`: what to order, one entry per SKU, keyed by
-      `"<vendor>:<sku>"`
-    - `request["cart"]["skus"][<id>]["vendor"]`, `["sku"]`: the SKU
-    - `request["cart"]["skus"][<id>]["count"]`: how many of that SKU to order,
+    - `request["cart"]["skus"]`: what to order, a list with one entry per SKU
+    - `request["cart"]["skus"][<n>]["vendor"]`, `["sku"]`: the SKU
+    - `request["cart"]["skus"][<n>]["count"]`: how many of that SKU to order,
       which is already worked out from `count_per_sku` and `item_in_sku`. Order
       from here rather than once per part: a SKU that is a set of several parts
       would otherwise be bought once for each of them.
-    - `request["cart"]["skus"][<id>]["parts"]`: the parts that SKU is for
+    - `request["cart"]["skus"][<n>]["parts"]`: the parts that SKU is for
     - `output["price"]`: the total price of the cart
     - `output["cartId"]`: the id of the cart (to be used for the order later)
 

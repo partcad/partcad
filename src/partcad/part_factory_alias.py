@@ -94,6 +94,10 @@ class PartFactoryAlias(pf.PartFactory):
         # is never instantiated, and this is what tells it which entry that is.
         await obj.take_cache_key_from(source)
         self.keyed = True
+        # And its ports, now that it is at hand: a source that an assembly
+        # materializes cannot be looked up synchronously later, from a coroutine
+        if isinstance(obj.with_ports, _SourcePorts):
+            obj.with_ports.resolved(source)
         if source.path:
             obj.path = source.path
         obj.cacheable = source.cacheable and obj.cacheable
@@ -193,9 +197,24 @@ class _SourcePorts:
     def __init__(self, ctx, source: str):
         self._ctx = ctx
         self._source = source
+        self._part = None
+
+    def resolved(self, part) -> None:
+        """Take the source, resolved by somebody who could await it."""
+        self._part = part
+
+    async def resolve_async(self) -> None:
+        """Resolve the source, from a coroutine (see 'shape_ports.prepare_async').
+
+        Looked up by name otherwise, which is fine for a part a package
+        declares and not for one an assembly materializes: building that from
+        a synchronous lookup is refused on a thread that is running a loop.
+        """
+        if self._part is None:
+            self._part = await self._ctx._get_part_async(self._source)
 
     def _target(self):
-        source = self._ctx._get_part(self._source)
+        source = self._part if self._part is not None else self._ctx._get_part(self._source)
         if source is None or source.with_ports is None:
             raise Exception(f"The alias source {self._source} is not found")
         return source.with_ports

@@ -53,7 +53,7 @@ elif __name__ == "quote":
     # One line per SKU, with how many of it to order already worked out: a SKU
     # that is a set of several parts is ordered once for all of them.
     price = 0
-    for line in request["cart"]["skus"].values():
+    for line in request["cart"]["skus"]:
         vendor = line["vendor"]
         sku = line["sku"]
         items = line["count"]

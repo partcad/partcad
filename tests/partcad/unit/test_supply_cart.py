@@ -226,15 +226,31 @@ def test_set_is_ordered_once_for_all_of_its_kinds():
     }
     # ... and what to order is one line per SKU. Three spacers at two a set
     # need two sets, which is also what the shafts and clips need.
-    assert composed["skus"] == {
-        "acme:SHAFT-SET": {
+    assert composed["skus"] == [
+        {"vendor": "acme", "sku": "NUT-25", "count": 1, "parts": ["//:nut"]},
+        {
             "vendor": "acme",
             "sku": "SHAFT-SET",
             "count": 2,
             "parts": ["//:clip", "//:shaft", "//:spacer"],
         },
-        "acme:NUT-25": {"vendor": "acme", "sku": "NUT-25", "count": 1, "parts": ["//:nut"]},
-    }
+    ]
+
+
+def test_skus_do_not_collide():
+    """Two (vendor, SKU) pairs that spell the same when joined are two orders"""
+    from partcad.plugin_provider_data_cart import ProviderCartItem
+
+    cart = ProviderCart()
+    for name, vendor, sku in (("a", "a:b", "c"), ("b", "a", "b:c")):
+        item = ProviderCartItem()
+        item.name, item.count, item.vendor, item.sku = name, 1, vendor, sku
+        cart.add_item(item)
+
+    assert [(line["vendor"], line["sku"], line["count"]) for line in cart.compose()["skus"]] == [
+        ("a", "b:c", 1),
+        ("a:b", "c", 1),
+    ]
 
 
 def test_skus_to_order():

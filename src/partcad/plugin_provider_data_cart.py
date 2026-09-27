@@ -281,9 +281,11 @@ class ProviderCart:
     def compose(self):
         """The cart, as a provider is handed it.
 
-        'parts' is one entry per object. 'skus' is what to order: one entry per
-        (vendor, SKU), with the number of that SKU to buy (see
-        'skus_to_order()'). The two differ where one SKU is a set of several
+        'parts' is one entry per object. 'skus' is what to order: a list with
+        one entry per (vendor, SKU), with the number of that SKU to buy (see
+        'skus_to_order()'). A list rather than a mapping, because a vendor and
+        a SKU are free text and no key made of the two is safe from colliding
+        with another pair. The two differ where one SKU is a set of several
         kinds of objects, and a store should order from 'skus' -- ordering
         each of 'parts' on its own buys a set once for every kind in it.
         """
@@ -304,18 +306,20 @@ class ProviderCart:
             )
             for part in self.parts.values()
         )
-        req["skus"] = {}
-        for (vendor, sku), order in skus.items():
-            req["skus"]["%s:%s" % (vendor, sku)] = {
-                "vendor": vendor,
-                "sku": sku,
-                "count": order["count"],
-                "parts": sorted(
-                    name
-                    for name, part in self.parts.items()
-                    if getattr(part, "vendor", None) == vendor and getattr(part, "sku", None) == sku
-                ),
-            }
+        req["skus"] = []
+        for (vendor, sku), order in sorted(skus.items()):
+            req["skus"].append(
+                {
+                    "vendor": vendor,
+                    "sku": sku,
+                    "count": order["count"],
+                    "parts": sorted(
+                        name
+                        for name, part in self.parts.items()
+                        if getattr(part, "vendor", None) == vendor and getattr(part, "sku", None) == sku
+                    ),
+                }
+            )
 
         return req
 
