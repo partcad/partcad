@@ -14,9 +14,10 @@ public PartCAD index, which every new package starts with.
 The PartCAD Explorer, on the left, shows the same file as a tree: the packages
 it can reach, and the objects in them.
 
-The editor asks whether you trust the authors of a folder before it runs
-anything from it. This one it made for you, so the answer is yes -- and
-PartCAD stays quiet until you give it.
+PartCAD runs the code in the packages you open -- that is what building a
+part from a script means. The PartCAD IDE exists for that, so it does not ask
+whether you trust a folder before PartCAD opens it: open only packages you
+would run. (In Visual Studio Code, which asks, PartCAD waits for the answer.)
 
 Nothing here is special to the IDE. Copy the folder somewhere else, put it in
 git, or make another one with `pc init` -- it is a package either way.

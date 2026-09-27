@@ -19,6 +19,7 @@ import {
 } from './common/settings';
 import { updateServiceBundle } from './common/provision';
 import { refreshToolsPath } from './common/terminalPath';
+import { activateWhenTrusted } from './common/trust';
 import { loadServerDefaults } from './common/setup';
 import { getLSClientTraceLevel } from './common/utilities';
 import { createOutputChannel, isVirtualWorkspace, onDidChangeConfiguration, registerCommand } from './common/vscodeapi';
@@ -89,6 +90,13 @@ async function installPackageOnOpen(
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    // In Restricted Mode the extension stays visible and inert: the Explorer
+    // asks for trust (a `viewsWelcome` on `!isWorkspaceTrusted`) and everything
+    // below runs once it is granted. See `common/trust.ts`.
+    await activateWhenTrusted(context, activateTrusted);
+}
+
+async function activateTrusted(context: vscode.ExtensionContext): Promise<void> {
     await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
     await vscode.commands.executeCommand('setContext', 'partcad.failed', false);
     // Not yet known to be missing: `restartBackend` decides, and until it has,

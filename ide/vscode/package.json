@@ -47,8 +47,8 @@
   ],
   "capabilities": {
     "untrustedWorkspaces": {
-      "supported": false,
-      "description": "PartCAD does not support untrusted workspaces."
+      "supported": "limited",
+      "description": "Opening a PartCAD package runs the code its parts are written in, so in Restricted Mode the extension starts nothing: the PartCAD Explorer says the folder has to be trusted, and the extension starts once it is."
     },
     "virtualWorkspaces": {
       "supported": false,
@@ -960,7 +960,8 @@
           "icon": "resources/logo.svg",
           "contextualTitle": "PartCAD Context",
           "initialSize": 5,
-          "visibility": "collapsed"
+          "visibility": "collapsed",
+          "when": "isWorkspaceTrusted"
         },
         {
           "id": "partcadExplorer",
@@ -973,15 +974,21 @@
           "type": "webview",
           "name": "Inspector",
           "icon": "resources/logo.svg",
-          "contextualTitle": "PartCAD Inspector"
+          "contextualTitle": "PartCAD Inspector",
+          "when": "isWorkspaceTrusted"
         }
       ]
     },
     "viewsWelcome": [
       {
         "view": "partcadExplorer",
+        "contents": "PartCAD is turned off in this folder until you trust it.\n\nOpening a PartCAD package runs the code its parts are written in, and fetches the packages it imports. The editor has opened this folder in Restricted Mode, so PartCAD waits until you say the folder is one you trust.\n\n[Manage Workspace Trust](command:workbench.trust.manage)\n\nLearn more about [Workspace Trust](https://code.visualstudio.com/docs/editing/workspaces/workspace-trust).",
+        "when": "!isWorkspaceTrusted"
+      },
+      {
+        "view": "partcadExplorer",
         "contents": "Hang in there!\nThe PartCAD extension is being initialized...",
-        "when": "!partcad.activated && !partcad.failed && !partcad.serviceMissing"
+        "when": "isWorkspaceTrusted && !partcad.activated && !partcad.failed && !partcad.serviceMissing"
       },
       {
         "view": "partcadExplorer",
