@@ -568,13 +568,30 @@ log "==> Rebranding"
 # file nor `package.json` is listed in `product.json`'s `checksums`, so this does
 # not trip the "installation appears corrupt" warning; `out/main.js` is left
 # untouched.
-log "==> Enabling software WebGL"
+#
+# Workspace trust is turned off in the same place, for the same reason: every
+# way of starting the application goes through here. This IDE exists for
+# PartCAD, and PartCAD runs the code in the package it opens -- a Restricted
+# Mode window is a PartCAD IDE with PartCAD turned off, and the "Render" command
+# `pc init` writes into `.vscode/launch.json` is a debug configuration, which
+# Restricted Mode blocks as well. So every folder is trusted, for the whole
+# editor: trust cannot be granted to one extension. It is `--disable-workspace-trust`
+# pushed onto the command line `main.js` parses, not `security.workspace.trust.enabled`
+# in `product.overlay.json`'s `configurationDefaults`: the editor decides a
+# window's trust before product defaults apply, and that default was tried and
+# left the window restricted. A second launch that hands its folder to the
+# running instance goes through this file too, so the flag travels with it.
+log "==> Writing the PartCAD entry point"
 APP_MAIN_WRAPPER="${RESOURCES_DIR}/app/out/partcad-main.js"
 cat >"${APP_MAIN_WRAPPER}" <<'WRAPPER_EOF'
 // Added by the PartCAD IDE build (ide/standalone/build.sh). See the note there.
 import { app } from 'electron';
 
 app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+
+if (!process.argv.includes('--disable-workspace-trust')) {
+    process.argv.push('--disable-workspace-trust');
+}
 
 await import('./main.js');
 WRAPPER_EOF

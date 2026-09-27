@@ -56,12 +56,14 @@ def make_bundle(tmp_path, with_tools=True):
     )
     brand.brand_product(product, COMPONENT_ROOT / "product.overlay.json", "0.1.2")
 
-    # The entry point `build.sh` writes so that the 3D view works without a GPU.
+    # The entry point `build.sh` writes so that the 3D view works without a GPU,
+    # and so that no folder opens in Restricted Mode.
     out = resources / "app" / "out"
     out.mkdir()
     (out / "partcad-main.js").write_text(
         "import { app } from 'electron';\n"
         "app.commandLine.appendSwitch('enable-unsafe-swiftshader');\n"
+        "process.argv.push('--disable-workspace-trust');\n"
         "await import('./main.js');\n",
         encoding="utf-8",
     )
@@ -191,7 +193,8 @@ def test_an_extension_with_no_activity_bar_icon_is_not_reported(tmp_path, capsys
 
 # ---------------------------------------------------------------------------
 # The software-WebGL entry point. Both halves matter: `package.json` has to
-# point at the wrapper and the wrapper has to be there and contain the switch.
+# point at the wrapper and the wrapper has to be there and contain the switch --
+# and the workspace trust flag beside it.
 # Getting one without the other leaves an application that either starts with no
 # software WebGL (and a dead 3D view on a machine with no GPU driver) or does not
 # start at all.
@@ -200,7 +203,7 @@ def test_an_extension_with_no_activity_bar_icon_is_not_reported(tmp_path, capsys
 
 def test_the_entry_point_is_reported(tmp_path, capsys):
     assert run(make_bundle(tmp_path), tmp_path) == 0
-    assert "software WebGL enabled" in capsys.readouterr().out
+    assert "software WebGL enabled, workspace trust off" in capsys.readouterr().out
 
 
 def test_an_unpatched_entry_point_is_a_problem(tmp_path, capsys):
@@ -225,6 +228,19 @@ def test_a_wrapper_that_does_not_enable_it_is_a_problem(tmp_path, capsys):
 
     assert run(resources, tmp_path) != 0
     assert "does not enable software WebGL" in capsys.readouterr().out
+
+
+def test_a_wrapper_that_leaves_workspace_trust_on_is_a_problem(tmp_path, capsys):
+    resources = make_bundle(tmp_path)
+    (resources / "app" / "out" / "partcad-main.js").write_text(
+        "import { app } from 'electron';\n"
+        "app.commandLine.appendSwitch('enable-unsafe-swiftshader');\n"
+        "await import('./main.js');\n",
+        encoding="utf-8",
+    )
+
+    assert run(resources, tmp_path) != 0
+    assert "does not turn workspace trust off" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------

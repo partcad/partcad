@@ -242,6 +242,41 @@ listens -- so `partcad.installed` moves only through `loaded`/`packageLoaded`. D
 PartCAD Python module is installed"; that meaning belonged to the language server, along with the no-op
 `partcad.install` command.
 
+## Workspace trust
+
+**The extension supports untrusted workspaces as `limited`, and in one it is visible, inert, and asks.**
+Opening a package runs the code its parts are written in and fetches what it imports, so in Restricted Mode
+nothing starts -- no service, no terminal, no PATH change, no file of the package read -- and a notification
+asks for trust (`explainUntrusted`, not awaited) as soon as the extension activates. `activate` is `activateWhenTrusted` (`src/common/trust.ts`),
+which runs the real activation, `activateTrusted`, at once in a trusted folder and on
+`onDidGrantWorkspaceTrust` otherwise -- trust granted mid-session starts PartCAD without a reload. It is never
+*revoked* mid-session: the editor reloads the window for that.
+
+It used to declare them unsupported (`false`), and the editor then removes everything an extension contributes
+from a restricted window -- the activity bar icon, the views, the settings -- so a user who dismissed the trust
+dialog had no PartCAD at all and nothing saying why.
+
+**All of this is for a regular VS Code.** The PartCAD IDE starts with workspace trust turned off
+(`--disable-workspace-trust`, added by its entry point), so `vscode.workspace.isTrusted` is always true there
+and none of it runs; `ide/standalone/README.md` has why. Do not detect "am I in the IDE" here to skip the
+check: the IDE's answer belongs to the IDE, and an extension that trusted folders on its own say-so in some
+editors would be one a workspace could talk into it.
+
+What the untrusted window shows, and why each is there:
+
+- **A `viewsWelcome` on `!isWorkspaceTrusted`**, with a button running `workbench.trust.manage`. The Explorer has
+  no data provider until activation, so its welcome content is what shows. The "being initialized" message is
+  the only other one whose `when` needs no key that `activateTrusted` sets, so it carries `isWorkspaceTrusted`
+  too -- otherwise both would show at once. A new welcome message must keep that true; `trust.test.ts` checks.
+- **`when: isWorkspaceTrusted` on the two webview panes.** Nothing registers their providers until trust, and
+  an unresolved webview view is an empty pane forever.
+- **A stand-in for every contributed command.** The palette and the view menus list them whether or not they
+  are registered, and running an unregistered one is "command not found". The stand-ins explain and offer the
+  trust editor, and are disposed before `activateTrusted` registers the real ones under the same ids.
+
+`npm test` opens its workspace trusted, so the untrusted path is tested through `activateWhenTrusted`'s
+`isTrusted` argument.
+
 ## Installing a package's dependencies
 
 `partcad.installPackage` runs the daemon's `install` operation - the PartCAD counterpart of `npm install`: it
