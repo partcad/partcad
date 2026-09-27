@@ -209,6 +209,13 @@ Four things about it are load-bearing:
   loads. Note that `tsconfig.json` excludes `src/webview` as a *root* -- an imported module is still compiled,
   which is why this works, and why what it imports has to be free of three.js.
 
+**A SpaceMouse arrives by two roads, and `src/webview/spacemouse.ts` is the only file that knows what its axes
+mean.** On Windows and macOS the renderer reads it through the Gamepad API; on Linux the extension host reads
+spacenavd's socket (`src/viewer/spacenav.ts`) and forwards the events untouched, because Chromium does not see
+the device there. Do not convert spacenavd's values in the host: the test that holds the two roads to each other
+(`src/test/suite/viewerSpaceMouse.test.ts`) can only do so while both conversions sit side by side. See "A
+SpaceMouse" in [docs/partcad-viewer.md](./docs/partcad-viewer.md).
+
 Geometry reaches the viewer already tessellated: `partcad` renders to binary glTF in a sandbox and sends it
 compressed, so the extension never needs a CAD library. It used to hand live OCP objects to the third-party
 `OCP CAD Viewer` extension, which is why that dependency is gone.

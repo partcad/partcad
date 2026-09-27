@@ -111,6 +111,41 @@ locations down the tree — one `THREE.Group` per node, and a port's triad under
 glTF per node rather than one for the whole object, because a node is what a reader switches off, and what it
 switches off has to be its own buffer to be hideable.
 
+### A SpaceMouse
+
+A 3Dconnexion SpaceMouse moves the camera in 3Dconnexion's **object mode**, the one its own driver defaults
+to: the cap is the model. Push it left and the model goes left, push it in and the model goes away, twist or
+tilt it and the model turns about what the camera is looking at. The second button — the right one of two, or
+the key labelled **Fit** — frames the model again. Moving the cap pauses the Animate rotation without unticking
+it. `partcad.spaceMouse.enabled`, `partcad.spaceMouse.sensitivity` and `partcad.spaceMouse.invert` (a list of
+the axes to reverse: `tx`, `ty`, `tz`, `rx`, `ry`, `rz`) tune it.
+
+The device reaches the renderer by one of two roads, and the platform picks, not the user:
+
+| Where | Road |
+| --- | --- |
+| Windows, macOS | The **Gamepad API**, inside the webview. Chromium enumerates HID multi-axis controllers as gamepads there and does not blocklist 3Dconnexion's ids, and VS Code's webview iframe needs no `allow="gamepad"` because Chromium's default allowlist for it is `*`. No driver is needed, and it works for a remote workspace too, because the webview is always drawn locally. Chromium reveals a gamepad to a page only after it has been moved once with that page open. |
+| Linux | **spacenavd**, read by the extension host over its socket (`/var/run/spnav.sock`, then `$XDG_RUNTIME_DIR/spnav.sock`) and forwarded over `postMessage`. The kernel reports a SpaceMouse as relative motion rather than as a joystick, so Chromium never offers it as a gamepad there. The extension host is on the workspace's machine, so over Remote-SSH or in a container this road finds nothing. |
+
+While spacenavd is connected the Gamepad API is not consulted, so a device both roads can see does not move
+the model twice. spacenavd tells every client about every push, so the host forwards its events only to a
+panel that is visible in the focused window, and tells the renderer the same thing for the Gamepad API.
+
+The one place that knows what the device's axes mean is `src/webview/spacemouse.ts`. spacenavd's events are
+forwarded untouched, in its own frame and counts, and converted there (`fromSpacenav`), beside the Gamepad
+API's (`fromHid`); `src/test/suite/viewerSpaceMouse.test.ts` holds each road to the other through spacenavd's
+default axis map, because a reversed axis is plausible on screen and would not otherwise fail anything.
+
+Which button is **Fit** depends on the road and, for spacenavd, on the device. The Gamepad API numbers buttons
+in HID order, where the first two are Menu and Fit on every 3Dconnexion device, so Fit is always `1`.
+spacenavd renumbers the scattered buttons of a SpaceMouse Pro and an Enterprise into a range of its own (Fit is
+`5` and `13`), and a button event does not say which device it came from. So the host asks for spacenavd's
+protocol v1 and then for the device type, again whenever a device comes or goes; a spacenavd too old to answer
+predates the renumbering, so HID order is right for it too (`spacenavFit`).
+
+The orbit controls keep the camera's up direction, so the navigation is a turntable: a roll about the line of
+sight (`rz`) is dropped, and a tilt stops at the poles.
+
 ## How a shape gets onto the screen
 
 ```text
@@ -173,6 +208,8 @@ the protocol has no authentication.
 | `src/webview/nodes.ts` | The vocabulary the renderer and the pane share about the tree |
 | `src/webview/frames.ts` | PartCAD's frame against glTF's, and the one conversion between them |
 | `src/webview/tree.ts` | The 3D view's control pane: the rows, the boxes, and what is to be drawn |
+| `src/webview/spacemouse.ts` | A SpaceMouse: which gamepad is one, what its axes mean, and how it moves the camera |
+| `src/viewer/spacenav.ts` | spacenavd's socket, read in the extension host for Linux |
 | `src/webview/bom.ts` | The Bill of Materials tab |
 | `src/webview/document.ts` | The Instructions tab: `partcad/document.py`'s model, drawn |
 | `src/webview/supply.ts` | The Supply tab: the list, and one item's suppliers |

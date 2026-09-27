@@ -57,6 +57,7 @@ import { MM_TO_M, TO_GLTF, placement, transformed } from './frames';
 import { reportError } from './host';
 import { ShowMessage, ShowNode } from './messages';
 import { ItemId, PORT_COLOR, PORT_OPACITY, flickerOn, nodeId, portId, totalSize } from './nodes';
+import { SpaceMouse, navigate } from './spacemouse';
 
 // Part.js: <Stage intensity={0.5}> and MeshPhongMaterial with no arguments.
 const STAGE_INTENSITY = 0.5;
@@ -345,14 +346,44 @@ function frame(group: THREE.Group, keepCamera: boolean): void {
     camera.updateProjectionMatrix();
 
     if (!keepCamera) {
-        // Far enough back that the bounding sphere fits the vertical field of
-        // view, with the same slight elevation Stage's default camera has.
-        const distance = (radius * 1.6) / Math.tan((camera.fov * Math.PI) / 360);
-        camera.position.set(distance * 0.6, distance * 0.5, distance * 0.8);
-        controls.target.set(0, 0, 0);
+        placeCamera(radius);
     }
     controls.update();
 }
+
+/**
+ * Far enough back that the bounding sphere fits the vertical field of view, with
+ * the same slight elevation Stage's default camera has.
+ */
+function placeCamera(radius: number): void {
+    const distance = (radius * 1.6) / Math.tan((camera.fov * Math.PI) / 360);
+    camera.position.set(distance * 0.6, distance * 0.5, distance * 0.8);
+    controls.target.set(0, 0, 0);
+}
+
+/**
+ * Put the camera back where a show puts it, on the model as it is already placed.
+ *
+ * What a SpaceMouse's "Fit" button does. Not 'frame()': that centres the model as
+ * well, which a show does once and which a second time would do nothing but
+ * accumulate rounding.
+ */
+function fitView(): void {
+    if (content === undefined) {
+        return;
+    }
+    const box = new THREE.Box3().setFromObject(content);
+    if (box.isEmpty()) {
+        return;
+    }
+    const size = box.getSize(new THREE.Vector3());
+    placeCamera(Math.max(size.x, size.y, size.z) / 2 || 1);
+    controls.update();
+}
+
+/** The SpaceMouse, sampled once a frame; 'viewer.ts' hands it what the host says. */
+export const spaceMouse = new SpaceMouse(fitView);
+let lastFrame = performance.now();
 
 /**
  * One node's ports: each as a triad, and as the boundary it is drawn with.
@@ -833,7 +864,11 @@ export function resizeCanvas(): void {
     camera.updateProjectionMatrix();
 }
 
+/** What the Animate box says; a SpaceMouse being moved pauses it without unticking it. */
+let autoRotate = controls.autoRotate;
+
 export function setAutoRotate(enabled: boolean): void {
+    autoRotate = enabled;
     controls.autoRotate = enabled;
 }
 
@@ -874,6 +909,18 @@ export function setOpacity(opacity: number): void {
 }
 
 function animate(): void {
+    const now = performance.now();
+    // Clamped, so that the first frame after the panel was hidden - or after a
+    // stall - does not fling the model by however long that was.
+    const seconds = Math.min((now - lastFrame) / 1000, 0.1);
+    lastFrame = now;
+    const motion = spaceMouse.sample(now);
+    if (motion !== undefined) {
+        navigate(camera, controls.target, motion, seconds, spaceMouse.settings.sensitivity);
+    }
+    // The model turning on its own while somebody is turning it by hand is two
+    // hands on one wheel; it resumes when the cap is let go.
+    controls.autoRotate = autoRotate && motion === undefined;
     controls.update();
     if (flickering !== undefined) {
         const on = flickerOn(performance.now() - flickeringSince);
