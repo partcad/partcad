@@ -89,3 +89,14 @@ def test_part_alias_ports_from_a_resolved_source():
     ctx._get_part = refuse
     interface = next(iter(elsewhere.with_ports.get_interfaces()))
     assert set(elsewhere.with_ports.get_interface(interface)) == {"TL", "TR"}
+
+
+def test_part_alias_of_a_part_with_no_ports():
+    """An alias of a part that has no port carrier has no ports, rather than failing"""
+    ctx = pc.Context("tests/partcad/unit/data/alias_ports")
+    plate = ctx._get_part(":plate")
+    elsewhere = ctx._get_part(":plate-elsewhere")
+    plate.with_ports = None
+
+    assert elsewhere.with_ports.get_ports() == {}
+    assert elsewhere.with_ports.get_interfaces() == {}

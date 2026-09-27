@@ -198,6 +198,7 @@ class _SourcePorts:
         self._ctx = ctx
         self._source = source
         self._part = None
+        self._empty = None
 
     def resolved(self, part) -> None:
         """Take the source, resolved by somebody who could await it."""
@@ -215,8 +216,15 @@ class _SourcePorts:
 
     def _target(self):
         source = self._part if self._part is not None else self._ctx._get_part(self._source)
-        if source is None or source.with_ports is None:
+        if source is None:
             raise Exception(f"The alias source {self._source} is not found")
+        if source.with_ports is None:
+            # A source with no ports at all, which an alias has none of either
+            if self._empty is None:
+                from .port import WithPorts
+
+                self._empty = WithPorts(source.name, self._ctx.get_project(source.project_name), {})
+            return self._empty
         return source.with_ports
 
     def __getattr__(self, name):

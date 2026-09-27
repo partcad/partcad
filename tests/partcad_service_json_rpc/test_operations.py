@@ -2861,3 +2861,28 @@ def test_rendering_a_package_that_does_not_resolve_names_it():
             )
         )
     assert "//nosuch" in str(caught.value)
+
+
+def test_supply_totals_count_a_set_once():
+    """The items of one set were each quoted for whole sets: the set is paid for once"""
+
+    def line(name, price, vendor=None, sku=None, item_in_sku=None, currency="USD"):
+        return {
+            "name": name,
+            "vendor": vendor,
+            "sku": sku,
+            "item_in_sku": item_in_sku,
+            "suppliers": [{"price": price, "currency": currency}],
+        }
+
+    items = [
+        # Two shafts and two clips: each quote is for two sets
+        line("//:shaft", 10.0, "acme", "SET", "shaft"),
+        line("//:clip", 10.0, "acme", "SET", "clip"),
+        # A third spacer needs a third set
+        line("//:spacer", 15.0, "acme", "SET", "spacer"),
+        # Lines of a SKU of one kind still add up
+        line("//:nut", 1.0, "acme", "NUT"),
+        line("//:bolt", 2.0, "acme", "BOLT"),
+    ]
+    assert operations._supply_totals(items) == [{"currency": "USD", "price": 18.0}]

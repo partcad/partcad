@@ -3124,14 +3124,28 @@ def _supply_totals(items):
     Kept per currency rather than added up into one number: two suppliers that
     quote in different currencies cannot be summed without an exchange rate, and
     PartCAD has none.
+
+    The items of one set - line items naming the same vendor and SKU, each as
+    the 'item_in_sku' it is - are counted once. Each was quoted on its own, and
+    each quote is for as many whole sets as that item needs: added up, a shaft
+    and the clip it comes with would pay for the set twice. What is ordered is
+    the set, as many times as the most demanding item needs (see
+    'skus_to_order()'), and that is the largest of their quotes.
     """
     totals = {}
+    sets = {}
     for item in items:
         best = item["suppliers"][0] if item["suppliers"] else None
         if best is None or best.get("price") is None:
             continue
         currency = best.get("currency") or ""
+        if item.get("item_in_sku") and item.get("vendor") and item.get("sku"):
+            key = (currency, item["vendor"], item["sku"])
+            sets[key] = max(sets.get(key, 0.0), best["price"])
+            continue
         totals[currency] = totals.get(currency, 0.0) + best["price"]
+    for (currency, _vendor, _sku), price in sets.items():
+        totals[currency] = totals.get(currency, 0.0) + price
     return [{"currency": currency or None, "price": price} for currency, price in sorted(totals.items())]
 
 
