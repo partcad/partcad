@@ -4643,6 +4643,24 @@ PartCAD ships no implementation of it to replace. See
 ``examples/feature_render_custom``, where ``pdf``, ``svg`` and ``dxf`` are all
 technical drawings produced by an implementation another package publishes.
 
+The package's ``readme`` takes its text from the top-level ``docs:`` section,
+and its ``exclude`` also takes ``packages``, which leaves out the list of
+sub-packages -- where a package that depends on the public index would
+otherwise list the index:
+
+.. code-block:: yaml
+
+  docs:
+    name: <(optional) the title; the package's name by default>
+    intro: <(optional) a paragraph under the title>
+    usage: <(optional) a "Usage" section>
+  render:
+    readme:
+      exclude: [packages]
+
+``docs.name`` is only the title. The top-level ``name`` is the one that says
+which package this is.
+
 ``urdf`` is the one built-in file type that is not a single file: it writes a
 ``.urdf`` plus the directory of mesh files it references, which is why
 ``Shape.convert()`` refuses it (there is no single payload to hand back) and why

@@ -207,6 +207,23 @@ def test_schema_the_top_level_mates_section_is_accepted():
     validate({"mates": {"a": {"b": {"selfScrew": True}}}})
 
 
+def test_schema_the_docs_section_takes_the_readme_title():
+    """'render_readme_async' titles the README with 'docs.name', falling back to
+    the package name, and the schema rejected it: 'docs' is 'additionalProperties:
+    false' and knew only 'intro' and 'usage'. It is a heading rather than an
+    identity - the top-level 'name' is the one that renames a root package - so
+    it is free text: 'cq_warehouse for PartCAD' is one in the public index."""
+    validate({"docs": {"name": "cq_warehouse for PartCAD", "intro": "i", "usage": "u"}})
+    failure({"docs": {"name": ""}})
+
+
+def test_schema_the_readme_may_exclude_its_sub_packages():
+    """'render_readme_async' leaves the 'Sub-Packages' section out when 'exclude'
+    names 'packages' - which a package that depends on the public index needs,
+    since the index is listed there otherwise - and the enum left it out."""
+    validate({"render": {"readme": {"exclude": ["packages"]}}})
+
+
 def test_schema_a_top_level_mate_is_a_map_of_pairs():
     """'add_mates' iterates the value's items, so a list would not survive it."""
     failure({"mates": {"a": ["b"]}})
