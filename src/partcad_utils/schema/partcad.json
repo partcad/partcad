@@ -407,7 +407,7 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "enum": ["sketches", "interfaces", "parts", "assemblies", "scenes"]
+                "enum": ["packages", "sketches", "interfaces", "parts", "assemblies", "scenes"]
               },
               "uniqueItems": true
             }
@@ -1171,6 +1171,7 @@
     "docs": {
       "type": ["object", "null"],
       "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 255 },
         "intro": { "type": "string", "maxLength": 5000 },
         "usage": { "type": "string", "maxLength": 5000 }
       },
