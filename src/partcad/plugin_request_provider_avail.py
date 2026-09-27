@@ -18,8 +18,11 @@ class ProviderRequestAvail(PluginRequestProvider):
     count_per_sku: int
     count: int
 
-    def __init__(self, name: str, vendor: str, sku: str, count_per_sku: int, count: int):
+    item_in_sku: str = None
+
+    def __init__(self, name: str, vendor: str, sku: str, count_per_sku: int, count: int, item_in_sku: str = None):
         super().__init__()
+        self.item_in_sku = item_in_sku
         self.name = name
         self.vendor = vendor
         self.sku = sku
@@ -33,4 +36,5 @@ class ProviderRequestAvail(PluginRequestProvider):
             "sku": self.sku,
             "count_per_sku": self.count_per_sku,
             "count": self.count,
+            "item_in_sku": self.item_in_sku,
         }

@@ -64,6 +64,17 @@ class PartFactoryAlias(pf.PartFactory):
             # merely another name for the size.
             self.part.desc = config.get("desc") or reference.describe(config["type"], target_project.name, self.source)
 
+            # Where it connects, too, unless it says so itself. An alias is the
+            # geometry of its source, so it has the ports of its source: an
+            # alias that only restates what the object is bought as (the same
+            # E-clip under the SKU of each shaft it comes with) is otherwise a
+            # part that nothing can be connected to. One that declares ports or
+            # interfaces of its own keeps them, and so does one that moves or
+            # scales the geometry, which the source's ports would no longer
+            # sit on.
+            if not any(key in config for key in ("implements", "ports", "offset", "scale")):
+                self.part.with_ports = _SourcePorts(ctx, self.source)
+
             # pc_logging.debug("Initialized an alias to %s" % self.source)
 
     async def prepare_async(self, obj) -> None:
@@ -168,3 +179,26 @@ class PartFactoryAlias(pf.PartFactory):
         # user asking for this object not to be cached.
         obj = self.part
         return self.keyed and obj.cacheable and not obj.get_cache_dependencies_broken()
+
+
+class _SourcePorts:
+    """The ports of the object an alias points at, looked up when first needed.
+
+    Not when the alias is created: the source may be in a package nobody has
+    loaded yet, and loading it is what resolving it does (see 'prepare_async').
+    Everything is the source's own 'WithPorts', asked for by name, so there is
+    one set of ports for the one piece of geometry, however many names it has.
+    """
+
+    def __init__(self, ctx, source: str):
+        self._ctx = ctx
+        self._source = source
+
+    def _target(self):
+        source = self._ctx._get_part(self._source)
+        if source is None or source.with_ports is None:
+            raise Exception(f"The alias source {self._source} is not found")
+        return source.with_ports
+
+    def __getattr__(self, name):
+        return getattr(self._target(), name)

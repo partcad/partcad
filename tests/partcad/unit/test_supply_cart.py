@@ -184,3 +184,74 @@ def test_fixture_packages_pass_the_schema():
     for path in (SUPPLY_BOM_PACKAGE, "tests/partcad/unit/data/supply_bom/sub/partcad.yaml"):
         with open(path) as file:
             jsonschema.validate(instance=yaml.safe_load(file.read()), schema=schema)
+
+
+# A package where one SKU is a set of three kinds of parts - a shaft, the clip
+# that goes on it and two spacers - and another SKU is a bag of 25 nuts.
+SUPPLY_SET_PACKAGE = "tests/partcad/unit/data/supply_set/partcad.yaml"
+
+
+def _set_cart(spec: str) -> ProviderCart:
+    ctx = pc.Context(SUPPLY_SET_PACKAGE)
+    cart = ProviderCart()
+    asyncio.run(cart.add_object(ctx, spec))
+    return cart
+
+
+def test_item_in_sku_is_store_data():
+    """'item_in_sku' is read, carried by a cart item and handed to a provider"""
+    from partcad.shape_config_store import ShapeConfigStore
+
+    assert ShapeConfigStore({}).item_in_sku is None
+    assert ShapeConfigStore({"vendor": "acme", "sku": "S", "item_in_sku": "clip"}).item_in_sku == "clip"
+
+    item = _set_cart("//:clip").parts["//:clip"]
+    assert item.item_in_sku == "clip"
+    assert item.compose()["item_in_sku"] == "clip"
+
+    # A part of a SKU of one kind says nothing of it
+    assert "item_in_sku" not in _set_cart("//:nut").parts["//:nut"].compose()
+
+
+def test_set_is_ordered_once_for_all_of_its_kinds():
+    """Two shafts and two clips are two sets, not four"""
+    composed = _set_cart("//:drive").compose()
+
+    # Every object is still in the cart as itself
+    assert {name: part["count"] for name, part in composed["parts"].items()} == {
+        "//:shaft": 2,
+        "//:clip": 2,
+        "//:spacer": 3,
+        "//:nut": 1,
+    }
+    # ... and what to order is one line per SKU. Three spacers at two a set
+    # need two sets, which is also what the shafts and clips need.
+    assert composed["skus"] == {
+        "acme:SHAFT-SET": {
+            "vendor": "acme",
+            "sku": "SHAFT-SET",
+            "count": 2,
+            "parts": ["//:clip", "//:shaft", "//:spacer"],
+        },
+        "acme:NUT-25": {"vendor": "acme", "sku": "NUT-25", "count": 1, "parts": ["//:nut"]},
+    }
+
+
+def test_skus_to_order():
+    """The kind that needs the most sets decides how many sets to order"""
+    from partcad.shape_config_store import skus_to_order
+
+    ordered = skus_to_order(
+        [
+            ("acme", "SET", "shaft", 1, 3),
+            ("acme", "SET", "clip", 1, 1),
+            ("acme", "SET", "spacer", 2, 7),  # four sets' worth
+            ("acme", "BAG", None, 25, 30),
+            ("acme", "BAG", None, 25, 30),  # the same kind, named twice: 60 nuts
+            (None, None, None, 1, 5),  # not bought at all
+        ]
+    )
+    assert ordered == {
+        ("acme", "SET"): {"count": 4, "items": ["clip", "shaft", "spacer"]},
+        ("acme", "BAG"): {"count": 3, "items": [None]},
+    }

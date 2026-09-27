@@ -3013,6 +3013,7 @@ async def _supply_quote_async(pc, ctx, path, qos, recursive):
                 "vendor": cart_item.vendor,
                 "sku": cart_item.sku,
                 "count_per_sku": cart_item.count_per_sku,
+                "item_in_sku": getattr(cart_item, "item_in_sku", None),
                 "suppliers": options,
             }
         )
