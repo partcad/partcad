@@ -16,6 +16,8 @@ way, and so is a part read from a CAD file - the importer that turns a STEP file
 into a BREP is itself a script in a sandbox.
 """
 
+import os
+
 import pytest
 
 import partcad as pc
@@ -318,7 +320,11 @@ def test_an_assembly_has_no_environment_of_its_own(tmp_path, config):
 def _hash_for(tmp_path, config, name, partcad_yaml, filename):
     package = tmp_path / name
     package.mkdir()
-    return _part(package, config, partcad_yaml, filename).hash.get()
+    part = _part(package, config, partcad_yaml, filename)
+    # A file's modification time is in its key, and two files written a moment
+    # apart differ in it; what is compared here is the environment, not that.
+    os.utime(package / filename, ns=(1_000_000_000, 1_000_000_000))
+    return part.hash.get()
 
 
 def test_the_environment_moves_the_hash(tmp_path, config):
