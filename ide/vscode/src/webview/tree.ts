@@ -244,11 +244,20 @@ export class Tree {
             line.addEventListener('mouseleave', () => this.onHover(undefined));
         }
         const label = el('label', 'tree-label');
-        const name = el('span', 'tree-name', row.item.name);
+        let displayName = row.item.name;
+        // Add triangle count if performance debugging is enabled
+        const triangleCounts = (window as any).pcNodeTriangleCounts as Map<string, number> | undefined;
+        if (triangleCounts) {
+            const count = triangleCounts.get(row.item.id);
+            if (count !== undefined) {
+                displayName = `${row.item.name} (${count.toLocaleString()} triangles)`;
+            }
+        }
+        const name = el('span', 'tree-name', displayName);
         // The names are long (a port is 'inner-TL-3mm-thru-opening-m3') and the
         // pane is narrow, so a row is cut off with an ellipsis; this is where the
         // whole of it can still be read.
-        name.title = row.item.name;
+        name.title = displayName;
         label.append(row.box, name);
 
         if (row.children.length === 0) {

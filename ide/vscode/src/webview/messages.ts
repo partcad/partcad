@@ -161,6 +161,12 @@ export interface ShowMessage {
     keepCamera: boolean;
     /** The object itself, as the root node of its tree, or null when it is empty. */
     object: ShowNode | null;
+    /** Configuration for the viewer, sent from the extension. */
+    config?: {
+        viewer?: {
+            performanceDebug?: boolean;
+        };
+    };
 }
 
 export interface ClearMessage {

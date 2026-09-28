@@ -853,7 +853,25 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
 
     // Performance logging (behind config flag)
     const perfDebug = (window as any).partcadConfig?.viewer?.performanceDebug ?? false;
+    const nodeTriangleCounts = new Map<string, number>();
     if (perfDebug) {
+        // Count triangles per node
+        for (const { node, path, group: nodeGroup } of loaded.built) {
+            let nodeTriangles = 0;
+            nodeGroup.traverse((obj: any) => {
+                if (obj.isMesh && obj.geometry) {
+                    if (obj.geometry.index) {
+                        nodeTriangles += obj.geometry.index.count / 3;
+                    } else {
+                        nodeTriangles += obj.geometry.attributes.position.count / 3;
+                    }
+                }
+            });
+            nodeTriangleCounts.set(nodeId(path), Math.round(nodeTriangles));
+        }
+        // Store for access by tree display
+        (window as any).pcNodeTriangleCounts = nodeTriangleCounts;
+
         const stats = {
             name: message.name || '(unnamed)',
             kind: message.kind || 'object',
@@ -884,7 +902,7 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
 
         // Create on-screen stats display
         if (!(window as any).pcViewerStats) {
-            (window as any).pcViewerStats = { statsDisplay: null, geometryInfo: '' };
+            (window as any).pcViewerStats = { frameTimeHistory: [], lastLogTime: 0, statsDisplay: null, geometryInfo: '' };
         }
         if (!(window as any).pcViewerStats.statsDisplay) {
             const div = document.createElement('div');

@@ -16,9 +16,13 @@ Added configurable performance logging and on-screen metrics display to the Part
 
 ## What's Measured
 
-When `partcad.viewer.performanceDebug` is **enabled**, the viewer logs:
+When `partcad.viewer.performanceDebug` is **enabled**, the viewer shows:
 
-**On Load:**
+**In Control Tree:**
+- Triangle count for each node in parentheses (e.g., "reactor-core (45,000 triangles)")
+- Helps identify which parts are geometry-heavy
+
+**On Load (Console & On-Screen):**
 - Part name (e.g., "reactor-unit")
 - Assembly type (e.g., "assembly", "part")
 - Package name (e.g., "4tv", "local")
@@ -32,7 +36,12 @@ When `partcad.viewer.performanceDebug` is **enabled**, the viewer logs:
 
 ## Where Data Appears
 
-1. **Console** (F12 in viewer):
+1. **Control Tree** (left pane):
+   - Each node shows triangle count in parentheses
+   - Example: `reactor-core (45000 triangles)`
+   - Quickly identify heavy parts for optimization
+
+2. **Console** (F12 in viewer):
    ```
    [PartCAD Viewer] Performance Stats: {
      Part: "reactor-unit",
@@ -45,7 +54,7 @@ When `partcad.viewer.performanceDebug` is **enabled**, the viewer logs:
    [PartCAD Viewer] FPS: 60.0 (frame time: 16.67ms)
    ```
 
-2. **On-Screen Display** (top-right corner):
+3. **On-Screen Display** (top-right corner):
    ```
    reactor-unit (assembly)
    45000 triangles
@@ -55,7 +64,7 @@ When `partcad.viewer.performanceDebug` is **enabled**, the viewer logs:
    Frame: 16.7ms
    ```
 
-3. **VS Code Output Panel** (Ctrl+Shift+U):
+4. **VS Code Output Panel** (Ctrl+Shift+U):
    - Performance data sent via postMessage
    - Viewable in PartCAD extension output channel
 
