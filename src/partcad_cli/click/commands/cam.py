@@ -44,13 +44,6 @@ from ..service import run
     show_envvar=True,
 )
 @click.option(
-    "-p",
-    "--create-dirs",
-    help="Create the necessary directory structure if it is missing",
-    is_flag=True,
-    show_envvar=True,
-)
-@click.option(
     "-r",
     "--recursive",
     help="Produce the routes of all imported packages too (older spelling of '<package>...')",
@@ -81,7 +74,7 @@ from ..service import run
 )
 @click.argument("object", type=str, required=False)  # The object to route; all of them by default
 @click.pass_obj
-def cli(cli_ctx, package, implementation, output_dir, create_dirs, recursive, sketch, as_json, machine, object):
+def cli(cli_ctx, package, implementation, output_dir, recursive, sketch, as_json, machine, object):
     """Produce the program a machine cuts these objects with.
 
     With no object named this is a *package-level* command, which is what
@@ -110,7 +103,6 @@ def cli(cli_ctx, package, implementation, output_dir, create_dirs, recursive, sk
             # Resolved to absolute so the routes land in the user's working
             # directory rather than the daemon's, which is somewhere else.
             "output_dir": os.path.abspath(output_dir) if output_dir else None,
-            "create_dirs": create_dirs,
             "recursive": recursive,
             "sketch": sketch,
             "machine": machine,

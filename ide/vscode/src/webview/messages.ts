@@ -13,6 +13,8 @@
 // anyway. So the renderer asks ('fetchTab') and the host answers ('tabData').
 //
 
+import type { SpaceMouseSettings } from './spacemouse';
+
 /** The tabs the panel can show. '3d' is always the first one. */
 export type TabId = '3d' | 'bom' | 'instructions' | 'supply' | 'fea' | 'cfd';
 
@@ -107,6 +109,37 @@ export interface ShowNode {
      * up.
      */
     geometry?: Record<string, ShowGeometry>;
+    /**
+     * What was learnt about this node's shape as it was built, where anything was.
+     *
+     * PartCAD's own metadata, passed through untouched (see 'KEY_METADATA' in
+     * 'partcad/shape_envelope.py'). The viewer reads one section of it - the
+     * per-element 'annotations', which it pins to the elements as callouts (see
+     * 'callouts.ts') - and nothing else.
+     */
+    metadata?: ShowMetadata;
+}
+
+/** The part of a node's metadata the viewer reads. */
+export interface ShowMetadata {
+    /** What the source said about the shape's individual elements, one record each. */
+    annotations?: ShowAnnotation[];
+    [section: string]: unknown;
+}
+
+/**
+ * One element's record.
+ *
+ * The producing wrapper's own vocabulary; 'points' and 'metadata' are the two
+ * fields the viewer relies on, and 'layer' the one it uses as a heading.
+ */
+export interface ShowAnnotation {
+    /** Where the element is, in the node's own frame, in millimetres. */
+    points?: number[][];
+    /** What was said about it, as key/value pairs. */
+    metadata?: Record<string, unknown> | null;
+    layer?: string | null;
+    [field: string]: unknown;
 }
 
 /** One entry of that table: the geometry, and how many bytes it is. */
@@ -162,7 +195,38 @@ export interface TabDataMessage {
     implementation?: string;
 }
 
-export type HostMessage = ShowMessage | ClearMessage | TabDataMessage;
+/**
+ * How the SpaceMouse is to behave in this panel, sent on boot and whenever it changes.
+ *
+ * 'settings' is the user's 'partcad.spaceMouse.*'. 'active' is whether the panel
+ * is visible in the focused window: spacenavd tells every client about every
+ * push, so a panel that is not where the user is must not act on it. 'spacenavd'
+ * is whether the host is reading spacenavd, which then speaks for the device and
+ * the Gamepad API is left alone. 'spacenavdDevice' is the device spacenavd
+ * says it serves, which is what says which of its buttons is "Fit"; null when
+ * it has not said. See 'spacemouse.ts'.
+ */
+export interface SpaceMouseStateMessage {
+    type: 'spaceMouseState';
+    settings: SpaceMouseSettings;
+    active: boolean;
+    spacenavd: boolean;
+    spacenavdDevice: number | null;
+}
+
+/**
+ * One event from spacenavd, forwarded as it came: six axis values in spacenavd's
+ * own frame and scale, or a button. The conversion is the renderer's
+ * ('fromSpacenav'), so that every convention about the device is in one file.
+ */
+export interface SpaceMouseEventMessage {
+    type: 'spaceMouseEvent';
+    motion?: number[];
+    button?: number;
+    pressed?: boolean;
+}
+
+export type HostMessage = ShowMessage | ClearMessage | TabDataMessage | SpaceMouseStateMessage | SpaceMouseEventMessage;
 
 /** Renderer to host: fill this tab in, quoting 'token' back in the answer. */
 export interface FetchTabMessage {

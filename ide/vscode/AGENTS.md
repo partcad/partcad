@@ -209,6 +209,13 @@ Four things about it are load-bearing:
   loads. Note that `tsconfig.json` excludes `src/webview` as a *root* -- an imported module is still compiled,
   which is why this works, and why what it imports has to be free of three.js.
 
+**A SpaceMouse arrives by two roads, and `src/webview/spacemouse.ts` is the only file that knows what its axes
+mean.** On Windows and macOS the renderer reads it through the Gamepad API; on Linux the extension host reads
+spacenavd's socket (`src/viewer/spacenav.ts`) and forwards the events untouched, because Chromium does not see
+the device there. Do not convert spacenavd's values in the host: the test that holds the two roads to each other
+(`src/test/suite/viewerSpaceMouse.test.ts`) can only do so while both conversions sit side by side. See "A
+SpaceMouse" in [docs/partcad-viewer.md](./docs/partcad-viewer.md).
+
 Geometry reaches the viewer already tessellated: `partcad` renders to binary glTF in a sandbox and sends it
 compressed, so the extension never needs a CAD library. It used to hand live OCP objects to the third-party
 `OCP CAD Viewer` extension, which is why that dependency is gone.
@@ -241,6 +248,46 @@ Nothing emits `INSTALLED`/`INSTALL_FAILED` any more -- `events.py` still defines
 listens -- so `partcad.installed` moves only through `loaded`/`packageLoaded`. Do not read the name as "the
 PartCAD Python module is installed"; that meaning belonged to the language server, along with the no-op
 `partcad.install` command.
+
+## Workspace trust
+
+**The extension supports untrusted workspaces as `limited`, and in one it is visible, inert, and asks.**
+Opening a package runs the code its parts are written in and fetches what it imports, so in Restricted Mode
+nothing starts -- no service, no terminal, no PATH change, no file of the package read -- and a notification
+asks for trust (`explainUntrusted`, not awaited) as soon as the extension activates. `activate` is `activateWhenTrusted` (`src/common/trust.ts`),
+which runs the real activation, `activateTrusted`, at once in a trusted folder and on
+`onDidGrantWorkspaceTrust` otherwise -- trust granted mid-session starts PartCAD without a reload. It is never
+*revoked* mid-session: the editor reloads the window for that.
+
+It used to declare them unsupported (`false`), and the editor then removes everything an extension contributes
+from a restricted window -- the activity bar icon, the views, the settings -- so a user who dismissed the trust
+dialog had no PartCAD at all and nothing saying why.
+
+**All of this is for a regular VS Code.** The PartCAD IDE starts with workspace trust turned off
+(`--disable-workspace-trust`, added by its entry point), so `vscode.workspace.isTrusted` is always true there
+and none of it runs; `ide/standalone/README.md` has why. Do not detect "am I in the IDE" here to skip the
+check: the IDE's answer belongs to the IDE, and an extension that trusted folders on its own say-so in some
+editors would be one a workspace could talk into it.
+
+What the untrusted window shows, and why each is there:
+
+- **A `viewsWelcome` on `!isWorkspaceTrusted`**, with a button running `workbench.trust.manage`. The Explorer has
+  no data provider until activation, so its welcome content is what shows. The "being initialized" message is
+  the only other one whose `when` needs no key that `activateTrusted` sets, so it carries `isWorkspaceTrusted`
+  too -- otherwise both would show at once. A new welcome message must keep that true; `trust.test.ts` checks.
+- **`when: isWorkspaceTrusted` on the two webview panes.** Nothing registers their providers until trust, and
+  an unresolved webview view is an empty pane forever.
+- **A stand-in for every contributed command.** The palette and the view menus list them whether or not they
+  are registered, and running an unregistered one is "command not found". The stand-ins explain and offer the
+  trust editor, and are disposed before `activateTrusted` registers the real ones under the same ids.
+
+**A failure to start after trust is granted is reported** (`reportTrustedActivationFailure`: the log, an error
+message, `partcad.failed`). On the trusted path the editor reports a rejected `activate`; this one happens in
+an event listener after activation returned, with the stand-ins already gone, so nothing else would.
+
+`npm test` opens its workspace trusted and nothing a test does can grant trust to a window, so the untrusted
+path and the grant are tested through `activateWhenTrusted`'s options (`isTrusted`, `onDidGrantTrust`,
+`explain`, `onFailure`).
 
 ## Installing a package's dependencies
 

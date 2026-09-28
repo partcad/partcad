@@ -137,6 +137,12 @@ export interface ViewerNode {
      * entry however many nodes name it through 'gltfRef'.
      */
     geometry?: Record<string, string>;
+    /**
+     * What was learnt about this node's shape as it was built, passed through as
+     * PartCAD carries it. The viewer pins its 'annotations' to the elements they
+     * describe; see 'src/webview/callouts.ts'.
+     */
+    metadata?: Record<string, unknown>;
 }
 
 export interface ViewerMessage {

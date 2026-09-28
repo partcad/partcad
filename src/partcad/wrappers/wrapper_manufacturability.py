@@ -312,6 +312,110 @@ def wall_alignment(request):
     return counts
 
 
+def _extent_along(shape, normal, reach: float) -> float:
+    """Where a shape starts along a direction: the least of p.normal over it.
+
+    Exact rather than read off a bounding box, which only answers for the three
+    axes and is inflated by tolerances besides: it is the distance from a plane
+    well behind the shape to the shape itself, and a board cut to length is
+    measured from its very end.
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
+
+    far = -reach
+    plane = gp_Pln(gp_Pnt(normal[0] * far, normal[1] * far, normal[2] * far), gp_Dir(*normal))
+    face = BRepBuilderAPI_MakeFace(plane, -reach, reach, -reach, reach).Face()
+    distance = BRepExtrema_DistShapeShape(face, shape)
+    if not distance.IsDone():
+        raise Exception("could not measure where the stock starts along %s" % (normal,))
+    return far + distance.Value()
+
+
+def _beyond(origin, normal, reach: float):
+    """A block standing on a plane, filling everything in front of its normal.
+
+    Finite rather than a true half-space, because OCCT's booleans against a
+    half-space are the fragile kind; 'reach' is chosen to be larger than any
+    shape the block is used on.
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+    from OCP.gp import gp_Dir, gp_Pln, gp_Pnt, gp_Vec
+
+    plane = gp_Pln(gp_Pnt(*origin), gp_Dir(*normal))
+    face = BRepBuilderAPI_MakeFace(plane, -reach, reach, -reach, reach).Face()
+    return BRepPrimAPI_MakePrism(face, gp_Vec(normal[0] * reach, normal[1] * reach, normal[2] * reach)).Shape()
+
+
+def cut(request):
+    """What cutting the stock across at the declared planes leaves, against the part.
+
+    A saw cutting stock to size has exactly one thing it can produce: the stock,
+    with everything beyond each cut taken off. So the question is not whether
+    the part *could* come out of the stock -- 'enclosure' asks that -- but
+    whether it is *that*: the part and the stock-after-the-cuts are the same
+    solid.
+
+    Each cut arrives as the unit vector the saw travels along -- its 'normal',
+    pointing at the offcut -- and the 'length' it travels into the stock before
+    it cuts, measured from where the stock starts along that vector. That is
+    turned into a plane here, because this is where the stock is.
+
+    Returns the volumes a verdict needs, and each plane as it was resolved so a
+    failure can say where it cut:
+
+    * 'extra_volume' is what the part has that the cut stock does not -- a
+      feature a saw did not make.
+    * 'missing_volume' is what the cut stock has that the part does not -- a
+      hole, a notch, a cut in the wrong place.
+    * 'removed' is what each cut took off, in order. A cut that takes nothing
+      is a plane that misses the stock, which is a declaration that does not
+      say what somebody meant.
+    """
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+
+    part = request["shape"]
+    stock = request["source"]
+    cuts = request.get("cuts") or []
+
+    box = Bnd_Box()
+    BRepBndLib.Add_s(stock, box)
+    BRepBndLib.Add_s(part, box)
+    x0, y0, z0, x1, y1, z1 = box.Get()
+    # Big enough that every block and every measuring plane is well clear of
+    # both shapes, wherever they sit relative to the origin.
+    reach = 4.0 * (
+        math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2 + (z1 - z0) ** 2) + max(map(abs, (x0, y0, z0, x1, y1, z1))) + 1.0
+    )
+
+    remaining = stock
+    before = _volume(stock)
+    removed = []
+    planes = []
+    for one in cuts:
+        normal = [float(component) for component in one["normal"]]
+        offset = _extent_along(stock, normal, reach) + float(one["length"])
+        origin = [component * offset for component in normal]
+        planes.append({"origin": origin, "normal": normal})
+        remaining = _cut(remaining, _beyond(origin, normal, reach))
+        after = _volume(remaining)
+        removed.append(before - after)
+        before = after
+
+    return {
+        "part_volume": _volume(part),
+        "stock_volume": _volume(stock),
+        "cut_volume": before,
+        "extra_volume": _volume(_cut(part, remaining)),
+        "missing_volume": _volume(_cut(remaining, part)),
+        "removed": removed,
+        "planes": planes,
+    }
+
+
 # The analyses this wrapper performs, by the name the request asks for. Named
 # rather than one per wrapper because each is a few lines of OCCT over a shape
 # that has just been deserialized, and starting a second sandbox to run them
@@ -321,6 +425,7 @@ OPERATIONS = {
     "flatness": flatness,
     "enclosure": enclosure,
     "wall_alignment": wall_alignment,
+    "cut": cut,
 }
 
 

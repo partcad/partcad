@@ -451,9 +451,6 @@ def test_a_name_with_a_slash_names_a_file_in_a_sub_directory():
     # survives into the path: a directory called 'robot/base_link' is not
     # something Windows could read back, which is what makes the tree the same
     # one there as here.
-    assert output.name_dirs("robot/base_link") == "robot"
-    assert output.name_dirs("world/robot/base_link").split(os.sep) == ["world", "robot"]
-    assert output.name_dirs("bolt") == ""
 
 
 def test_the_output_path_of_a_name_with_a_slash_is_in_a_sub_directory(ctx, tmp_path):
@@ -480,45 +477,41 @@ def test_the_output_path_of_a_name_with_a_slash_is_in_a_sub_directory(ctx, tmp_p
 
 
 def test_the_sub_directories_a_name_asks_for_are_created(ctx, tmp_path):
-    """And without '--create-dirs', which is about a directory the user named."""
-    assert not ctx.option_create_dirs
-
+    """A part declared as '<dir>/<part>' gets the directory its name asks for."""
     target = os.path.join(str(tmp_path), "robot", "base_link.step")
-    ctx.ensure_dirs_for_file(target, "robot/base_link")
+    ctx.ensure_dirs_for_file(target)
     assert os.path.isdir(os.path.dirname(target))
 
     deeper = os.path.join(str(tmp_path), "world", "robot", "base_link.step")
-    ctx.ensure_dirs_for_file(deeper, "world/robot/base_link")
+    ctx.ensure_dirs_for_file(deeper)
     assert os.path.isdir(os.path.dirname(deeper))
 
 
-def test_only_the_sub_directories_the_name_asks_for_are_created(ctx, tmp_path):
-    """Where the output goes is still the user's decision, and still an error."""
-    assert not ctx.option_create_dirs
+def test_the_directory_the_output_lands_in_is_created_too(ctx, tmp_path):
+    """The whole path, not the half of it the object's name is responsible for.
 
-    # The directory the name's components hang off has to be there already,
-    # exactly as it does for an object whose name has no '/' in it.
+    Creation used to stop below the directory the *user* had named -- an
+    output directory, a 'prefix' -- and leave that one to '--create-dirs'. The
+    flag is gone, so the whole path a resolved file name asks for is made on
+    the way to writing it.
+    """
     missing = os.path.join(str(tmp_path), "nowhere", "robot", "base_link.step")
-    ctx.ensure_dirs_for_file(missing, "robot/base_link")
-    assert not os.path.exists(os.path.join(str(tmp_path), "nowhere"))
+    ctx.ensure_dirs_for_file(missing)
+    assert os.path.isdir(os.path.dirname(missing))
 
-    # A name that asks for no directory asks for nothing.
+    # A name that asks for no directory of its own still lands somewhere.
     plain = os.path.join(str(tmp_path), "elsewhere", "bolt.step")
-    ctx.ensure_dirs_for_file(plain, "bolt")
-    assert not os.path.exists(os.path.dirname(plain))
-
-    # Nor is a file the caller named itself second-guessed.
-    named = os.path.join(str(tmp_path), "deep", "somewhere.step")
-    ctx.ensure_dirs_for_file(named, "robot/base_link")
-    assert not os.path.exists(os.path.dirname(named))
-
-    # '--create-dirs' is what creates the rest.
-    ctx.option_create_dirs = True
-    try:
-        ctx.ensure_dirs_for_file(plain, "bolt")
-    finally:
-        ctx.option_create_dirs = False
+    ctx.ensure_dirs_for_file(plain)
     assert os.path.isdir(os.path.dirname(plain))
+
+    # And a directory that is already there is not an error.
+    ctx.ensure_dirs_for_file(plain)
+    assert os.path.isdir(os.path.dirname(plain))
+
+
+def test_a_file_with_no_directory_in_its_name_asks_for_nothing(ctx):
+    """A bare file name is a file in the current directory; there is nothing to make."""
+    ctx.ensure_dirs_for_file("bolt.step")
 
 
 def test_output_dir_is_a_section_setting_not_a_file_type(ctx):

@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import { traceError, traceVerbose } from '../common/log/logging';
 import * as utils from '../utils';
 import { MSG_CLEAR, MSG_SHOW, ViewerMessage, ViewerNode, decodeGltf } from './protocol';
+import { SpacenavClient } from './spacenav';
 
 /**
  * One node as the webview is handed it: the same node, with its glTF
@@ -65,8 +66,25 @@ export class PartcadViewer implements vscode.Disposable {
     private lastShow: ViewerMessage | undefined;
     /** The configured CAE implementations, once the daemon has been asked. */
     private caeDefaults: Record<string, string> | undefined;
+    /**
+     * spacenavd, while the panel exists and the SpaceMouse is enabled - on Linux,
+     * where the renderer cannot see the device itself. See 'spacenav.ts'.
+     */
+    private spacenav: SpacenavClient | undefined;
+    private readonly disposables: vscode.Disposable[] = [];
 
-    constructor(private readonly extensionUri: vscode.Uri) {}
+    constructor(private readonly extensionUri: vscode.Uri) {
+        this.disposables.push(
+            vscode.workspace.onDidChangeConfiguration((event) => {
+                if (event.affectsConfiguration('partcad.spaceMouse')) {
+                    this.updateSpaceMouse();
+                }
+            }),
+            // Whether this panel is where the user is changes with the window's focus
+            // as well as with the panel's own visibility.
+            vscode.window.onDidChangeWindowState(() => this.postSpaceMouseState()),
+        );
+    }
 
     /** Whether the viewer tab currently exists. */
     public get isOpen(): boolean {
@@ -237,25 +255,77 @@ export class PartcadViewer implements vscode.Disposable {
         panel.onDidDispose(() => {
             if (this.panel === panel) {
                 this.panel = undefined;
+                this.updateSpaceMouse();
             }
         });
+        panel.onDidChangeViewState(() => this.postSpaceMouseState());
         panel.webview.onDidReceiveMessage(
             (message: { type: string; message?: string; tab?: string; token?: number; implementation?: string }) => {
                 if (message.type === 'error') {
                     traceError(`PartCAD Viewer: ${message.message}`);
+                } else if (message.type === 'ready') {
+                    this.postSpaceMouseState();
+                    if (this.lastShow !== undefined) {
+                        // The webview finished booting after we had already been
+                        // asked to show something (a restored tab, or a show that
+                        // raced the panel's first paint).
+                        this.handle(this.lastShow);
+                    }
                 } else if (message.type === 'fetchTab') {
                     void this.fetchTab(message.tab ?? '', message.token ?? 0, message.implementation);
-                } else if (message.type === 'ready' && this.lastShow !== undefined) {
-                    // The webview finished booting after we had already been asked
-                    // to show something (a restored tab, or a show that raced the
-                    // panel's first paint).
-                    this.handle(this.lastShow);
                 } else {
                     traceVerbose(`PartCAD Viewer: ${message.type}`);
                 }
             },
         );
         this.panel = panel;
+        this.updateSpaceMouse();
+    }
+
+    /**
+     * Start or stop reading spacenavd, and tell the renderer how to behave.
+     *
+     * spacenavd is read only while there is a panel to move, and never on
+     * Windows, where there is no spacenavd and the Gamepad API sees the device.
+     */
+    private updateSpaceMouse(): void {
+        const wanted = this.panel !== undefined && spaceMouseSettings().enabled && process.platform !== 'win32';
+        if (wanted && this.spacenav === undefined) {
+            const client = new SpacenavClient();
+            client.onDidChangeState(() => {
+                traceVerbose(
+                    `PartCAD Viewer: spacenavd ${client.connected ? `connected, device ${client.device}` : 'disconnected'}`,
+                );
+                this.postSpaceMouseState();
+            });
+            client.onEvent((event) => {
+                // Only to the panel the user is looking at: spacenavd reports every
+                // push to every client, whichever window has the focus.
+                if (this.spaceMouseActive()) {
+                    void this.panel?.webview.postMessage({ type: 'spaceMouseEvent', ...event });
+                }
+            });
+            this.spacenav = client;
+        } else if (!wanted && this.spacenav !== undefined) {
+            this.spacenav.dispose();
+            this.spacenav = undefined;
+        }
+        this.postSpaceMouseState();
+    }
+
+    /** Whether the panel is visible in the focused window, which is where a SpaceMouse push is meant for. */
+    private spaceMouseActive(): boolean {
+        return this.panel?.visible === true && vscode.window.state.focused;
+    }
+
+    private postSpaceMouseState(): void {
+        void this.panel?.webview.postMessage({
+            type: 'spaceMouseState',
+            settings: spaceMouseSettings(),
+            active: this.spaceMouseActive(),
+            spacenavd: this.spacenav?.connected === true,
+            spacenavdDevice: this.spacenav?.device ?? null,
+        });
     }
 
     private webviewOptions(): vscode.WebviewPanelOptions & vscode.WebviewOptions {
@@ -292,6 +362,7 @@ export class PartcadViewer implements vscode.Disposable {
 							<div class="controls">
 								<div id="tree" class="tree" role="tree"></div>
 								<div class="viewer-controls">
+									<label class="control-label" id="metadata-control" hidden><input type="checkbox" id="metadata-checkbox" checked> Metadata</label>
 									<label class="control-label"><input type="checkbox" id="animate-checkbox" checked> Animate</label>
 									<label class="control-label">Opacity <input type="range" id="opacity-slider" min="0" max="100" value="100" class="opacity-slider"><span id="opacity-value" class="control-value">100%</span></label>
 								</div>
@@ -315,7 +386,21 @@ export class PartcadViewer implements vscode.Disposable {
     public dispose(): void {
         this.panel?.dispose();
         this.panel = undefined;
+        this.spacenav?.dispose();
+        this.spacenav = undefined;
+        this.disposables.forEach((disposable) => disposable.dispose());
     }
+}
+
+/** The 'partcad.spaceMouse.*' settings, in the shape the renderer takes them. */
+function spaceMouseSettings(): { enabled: boolean; sensitivity: number; invert: string[] } {
+    const config = vscode.workspace.getConfiguration('partcad.spaceMouse');
+    const sensitivity = config.get<number>('sensitivity', 1);
+    return {
+        enabled: config.get<boolean>('enabled', true),
+        sensitivity: Number.isFinite(sensitivity) && sensitivity > 0 ? sensitivity : 1,
+        invert: config.get<string[]>('invert', []),
+    };
 }
 
 /** A node, and everything under it, with its geometry decompressed and measured.

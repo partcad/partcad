@@ -2246,7 +2246,7 @@ adding its own subsection:
     source: stock_sheet
     laser:
       kerf: 0.15         # what the beam itself removes
-      toolAxis: -Z       # the axis it fires along
+      toolAxis: -Z       # the axis it fires along ('along: -Z' says the same)
 
 +----------------+------------------------------------------------------------+
 | Subsection     | The machine, and what it cannot do                         |
@@ -2261,6 +2261,11 @@ adding its own subsection:
 +----------------+------------------------------------------------------------+
 | ``drill:``     | A drilling machine. It goes in and comes out, so the only  |
 |                | thing it makes is a **round** hole along its own axis.     |
++----------------+------------------------------------------------------------+
+| ``cut:``       | A saw that cuts the stock across -- a board to length, a   |
+|                | sheet to size. It makes **nothing but the stock with its   |
+|                | ends cut off**, where its cuts say. See                    |
+|                | :ref:`subtractive-cut`.                                    |
 +----------------+------------------------------------------------------------+
 
 Naming none of them means CNC. That is the machine that can make anything the
@@ -2287,10 +2292,12 @@ router's read by accident. A *sketch* is the one section with no ``method:`` in
 it: a drawing is not made out of anything, so it names the machine and the job
 and nothing else.
 
-Every machine takes a ``toolAxis``, which is the axis the tool, the beam or the
-drill approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
+Every machine takes a ``toolAxis``, which is the axis the tool, the beam, the
+drill or the saw approaches along, written as one of ``+X``, ``-X``, ``+Y``, ``-Y``, ``+Z``
 or ``-Z``. It defaults to ``-Z``: the part sits on the bed and the tool comes
-down to it. It is **not** ``direction:``, which says which way round a
+down to it. Every machine also takes it as ``along:`` -- the same key, the way
+it is usually said ("the laser cuts along -Z") -- and a subsection writes one or
+the other, never both. It is **not** ``direction:``, which says which way round a
 contour is cut (climb or conventional) -- the two reach one implementation in
 one request, which is why they do not share a name. A laser also takes a ``kerf``, the width the beam itself removes,
 which is a property of that machine and that material rather than of the job --
@@ -2310,6 +2317,8 @@ part that named that machine**:
   is asked of what the machine **took away** rather than of the part, where the
   part names a ``source``: a drilled plate's straight sides came with the stock,
   and asking the part's own walls would fail every plate for having them.
+- ``manufacturability-cut`` -- the stock, cut where every declared cut says,
+  **is** the part. See :ref:`subtractive-cut`.
 
 Both are measured by sampling each face's own normal against the axis, not by
 reading its surface type. The type is not the question: a cylinder is a wall
@@ -2344,6 +2353,10 @@ would be a route written for a machine nobody owns.
 |                | retract, broken into steps where ``peck:`` says.           |
 +----------------+------------------------------------------------------------+
 
+A ``cut:`` gets no program: a saw cutting stock to size is told where to cut
+and nothing else, and the part's declaration already says that. ``pc cam``
+passes over a part that is only cut, and refuses ``-m cut``.
+
 ``power`` (a laser's S-word) and ``peck`` (how deep a drill goes before clearing
 the swarf) join the other :ref:`cam job keys <cam-section>`. A part declaring a
 ``toolAxis`` other than ``-Z`` is rotated into the machine's frame before the
@@ -2351,8 +2364,67 @@ route is written, so the program is in the coordinates the part is fixtured in.
 
 ``examples/produce_part_subtractive`` is the whole of the above in one package:
 two stocks, a laser-cut blank and gasket, a routed block whose chamfer is the
-one feature only a router can make, and a drilled plate. The blank is what
-:ref:`sheet-metal` bends.
+one feature only a router can make, a drilled plate, and a rail cut to length
+off a board. The blank is what :ref:`sheet-metal` bends. The desk in
+``//pub/furniture/workspace/basic`` is cut, every piece of it, with ``cut:``.
+
+.. _subtractive-cut:
+
+Cutting stock to size
+^^^^^^^^^^^^^^^^^^^^^
+
+``cut:`` is the machine most parts that are cut at all are cut on: a saw taking
+a stud off an eight foot 2x4, or a shelf out of a sheet of plywood. It follows
+no outline, so it is described by **where** it cuts, in the part's own
+coordinates, which are also its stock's:
+
+.. code-block:: yaml
+
+  parts:
+    leg:
+      type: enrich
+      source: //pub/std/imperial/dimensional-lumber:lumber
+      with:
+        width: 4
+        height: 4
+      manufacturing:
+        method: subtractive
+        source: //pub/svc/commerce/homedepot:lumber/4x4x8
+        cut:
+          toolAxis: +Y          # the axis the saw travels along, for every cut ('along:' too)
+          cuts:
+            # How far into the stock the saw travels before it cuts across.
+            - length: $length in
+            # A cut may travel along an axis of its own; 'along:' says the same.
+            # - toolAxis: -X
+            #   length: 3 in
+
+A saw is written the way every other machine is: by its ``toolAxis``, which
+points at the **offcut**. Each cut starts where the stock starts along that
+axis -- the way a board is measured from its end -- travels ``length:`` into it,
+and cuts across; everything further along the axis is cut off, and what is
+behind the saw is the part. So ``toolAxis: -Y`` counts from the other end.
+
+- ``length:`` is always there: it is the whole of *where*.
+- ``toolAxis:`` on a cut, or ``along:`` -- which says the same, the way a saw
+  cut is usually said; one or the other -- is the axis that cut travels along,
+  as an axis (``+Y``) or a vector (``[0, 1, 0]``).
+- A cut that names neither travels along the machine's ``toolAxis:`` (or
+  ``along:``), and a machine that names none has the default every machine
+  has, ``-Z``.
+
+Any number in a cut may be written as ``$name`` -- the value of the part's own
+parameter of that name, with a unit after it if it needs one (``$length in``).
+A part cut to length is nearly always parametric, and a cut written as a number
+would be right for one instance and wrong for every other.
+
+``pc test`` runs ``manufacturability-cut`` over it, which makes each cut in the
+stock in turn and compares what is left with the part. Whatever the part has
+that the cut stock does not is a feature no saw made; whatever the cut stock has
+that the part does not is a notch, a hole or a cut in the wrong place; and a cut
+that takes nothing off the stock is one that misses it -- usually a length
+longer than the board, or an axis pointing the wrong way. Each of the three is a
+failure that says which plane it was about.
 
 .. _sheet-metal:
 
@@ -2487,6 +2559,7 @@ declared using the following syntax:
       vendor: <(optional) the name of the vendor selling the part>
       sku: <(optional) the vendor's stock keeping unit (SKU) of the part>
       count_per_sku: <(optional) the number of parts in one SKU, 1 by default>
+      item_in_sku: <(optional) which of the kinds of items in the SKU this is>
 
 - ``vendor``
 
@@ -2512,9 +2585,80 @@ declared using the following syntax:
   the number of SKUs a store has in stock into the number of parts it can
   supply.
 
+- ``item_in_sku``
+
+  Optional. Which item this is, where one SKU is a *set* of different things
+  rather than a pack of one: a shaft sold with the clip that goes on it, a
+  bracket that comes with its screws. Each of them is an object of its own --
+  used on its own, assembled on its own, possibly taken apart and put back
+  later -- so each is declared as a part of its own. Each names the set's
+  ``vendor`` and ``sku``, and says which item of the set it is:
+
+  .. code-block:: yaml
+
+    parts:
+      shaft_72mm:
+        type: step
+        vendor: gobilda
+        sku: "2106-4008-0720"
+        item_in_sku: shaft
+      shaft_72mm_clip:
+        type: step
+        vendor: gobilda
+        sku: "2106-4008-0720"   # the same set
+        item_in_sku: clip
+
+  ``count_per_sku`` is then how many of that one kind come in a set. What is
+  ordered is the set, as many times as the most demanding kind needs: two
+  shafts and two clips are two sets, not four. Objects of one SKU that do not
+  name an ``item_in_sku`` are one kind with each other, which is what a SKU of
+  one kind of thing is.
+
+  An object sold in more than one set -- the same clip comes with every length
+  of shaft -- is declared once for the geometry, with an ``alias`` of it for
+  each set it comes in, the way a part sold by several vendors is (below).
+
 These values are passed on to providers of the type ``store`` as
-``request["vendor"]``, ``request["sku"]`` and ``request["count_per_sku"]``
-(see :ref:`providers`).
+``request["vendor"]``, ``request["sku"]``, ``request["count_per_sku"]`` and
+``request["item_in_sku"]`` (see :ref:`providers`). A cart also says what to
+order, one line per SKU, in ``request["cart"]["skus"]``.
+
+.. _made-from-stock:
+
+Parts that are made
+^^^^^^^^^^^^^^^^^^^
+
+A part with manufacturing instructions -- a ``manufacturing:`` section naming a
+method -- is **made**, and whoever builds the assembly is taken at their word
+that they can make it: PartCAD has the instructions, and for now assumes the
+capabilities to follow them. So nobody is asked to supply such a part. What has
+to be procured is what it is made *from*: the ``source:`` of its
+``manufacturing:`` section, which is procured by the same rule in turn -- a
+bracket bent from a blank that is cut from a sheet is procured as the sheet. A
+part made from nothing it names (``additive``, ``forming``) needs nothing
+procured at all.
+
+- **The bills of materials** list every part that goes into the assembly, and
+  beside them a **Stock** section: what the made parts are made from, one piece
+  for each part made from it, and which parts each is for. Cutting several parts
+  out of one piece is a question of layout that PartCAD does not answer yet, so
+  the count is what buying for each part separately would take -- an upper
+  bound, never short. The detailed bill of materials lists the stock as line
+  items of kind ``stock``, with the vendor and the SKU to order them by, and
+  each made part names what it is made from in ``madeFrom``.
+- **The assembly instructions** open, after the bill of materials, with the
+  parts to manufacture: each one, how many of it, what it is made from, and its
+  manufacturing instructions written out in full.
+- **pc supply** puts the stock in the cart instead of the part.
+- **pc test** does not look for a supplier of a made part. It checks that its
+  instructions are complete (a tolerance), and that its stock can be had -- by
+  running the same tests over the stock, which for a bought one is a supplier
+  that carries it.
+
+A part that has manufacturing instructions **and** a ``vendor`` and an ``sku``
+can be had either way. It is tried as bought first: ``pc test`` asks for a
+supplier, and only if no supplier confirms it does it check that the part can be
+made instead. The bills of materials and the cart list it as bought.
 
 Note that ``count_per_sku`` is a property of how the part is packaged for sale,
 not of the CAD model. If the same part is sold by several vendors in different
@@ -3844,6 +3988,8 @@ Store
     - `request["sku"]`: the SKU of the part
     - `request["count"]`: the requested quantity of the parts
     - `request["count_per_sku"]`: the known number of parts per SKU
+    - `request["item_in_sku"]`: which item of the SKU this is, where the SKU is
+      a set of several kinds of items, or `None`
     - `output["available"]`: boolean, whether it is available in this store
 
   - `request["api"] == "quote"`
@@ -3857,6 +4003,15 @@ Store
     - `request["cart"]["parts"][<id>]["sku"]`: the SKU of the part
     - `request["cart"]["parts"][<id>]["count"]`: the requested quantity of the parts
     - `request["cart"]["parts"][<id>]["count_per_sku"]`: the known number of parts per SKU
+    - `request["cart"]["parts"][<id>]["item_in_sku"]`: which item of the SKU the part is,
+      where the SKU is a set of several kinds of items (absent otherwise)
+    - `request["cart"]["skus"]`: what to order, a list with one entry per SKU
+    - `request["cart"]["skus"][<n>]["vendor"]`, `["sku"]`: the SKU
+    - `request["cart"]["skus"][<n>]["count"]`: how many of that SKU to order,
+      which is already worked out from `count_per_sku` and `item_in_sku`. Order
+      from here rather than once per part: a SKU that is a set of several parts
+      would otherwise be bought once for each of them.
+    - `request["cart"]["skus"][<n>]["parts"]`: the parts that SKU is for
     - `output["price"]`: the total price of the cart
     - `output["cartId"]`: the id of the cart (to be used for the order later)
 
@@ -4088,10 +4243,11 @@ way whether it did or not -- a STEP assembly's components are the parts
 The separator in a *name* is always ``/``, whichever operating system reads it,
 so the same command produces the same tree on Linux, macOS and Windows.
 
-Those sub-directories are created whether or not ``-p``/``--create-dirs`` was
-given: a name with a ``/`` in it is a file in a directory however the command
-was invoked. ``--create-dirs`` is what creates the directory *around* them --
-the one ``-O``, ``prefix`` or ``output_dir`` asked for and nobody has made.
+Every directory an output file needs is created on the way to writing it: the
+sub-directories a name with a ``/`` in it asks for, and the directory around
+them that ``-O``, ``prefix`` or ``output_dir`` named and nobody has made. There
+is nothing to ask for -- the ``-p``/``--create-dirs`` flag that used to draw a
+line between those two halves of one path is gone, and both halves are made.
 
 Export parameters
 -----------------
@@ -4532,6 +4688,24 @@ cannot be taken over in practice, not because it is held apart but because
 PartCAD ships no implementation of it to replace. See
 ``examples/feature_render_custom``, where ``pdf``, ``svg`` and ``dxf`` are all
 technical drawings produced by an implementation another package publishes.
+
+The package's ``readme`` takes its text from the top-level ``docs:`` section,
+and its ``exclude`` also takes ``packages``, which leaves out the list of
+sub-packages -- where a package that depends on the public index would
+otherwise list the index:
+
+.. code-block:: yaml
+
+  docs:
+    name: <(optional) the title; the package's name by default>
+    intro: <(optional) a paragraph under the title>
+    usage: <(optional) a "Usage" section>
+  render:
+    readme:
+      exclude: [packages]
+
+``docs.name`` is only the title. The top-level ``name`` is the one that says
+which package this is.
 
 ``urdf`` is the one built-in file type that is not a single file: it writes a
 ``.urdf`` plus the directory of mesh files it references, which is why

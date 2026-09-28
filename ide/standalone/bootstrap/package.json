@@ -21,7 +21,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": true,
-      "description": "This extension does not read or run anything from the workspace: it points the PartCAD extension at the tools shipped beside the editor, and creates the package the IDE starts in. It is supported in a restricted window so that the welcome window is there to explain the one asking to be trusted."
+      "description": "This extension does not read or run anything from the workspace: it points the PartCAD extension at the tools shipped beside the editor, and creates the package the IDE starts in. The IDE starts with workspace trust turned off (see ide/standalone/build.sh), so no window it opens is restricted; this is declared anyway, because it is true."
     }
   },
   "activationEvents": [

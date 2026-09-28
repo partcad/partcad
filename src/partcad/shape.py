@@ -625,6 +625,7 @@ class Shape(ShapeConfiguration):
             # the core does not have to run build123d in-process to do it.
             if shape is not None and ("offset" in self.config or "scale" in self.config):
                 from . import transform
+                from .geom import Location
 
                 if "offset" in self.config:
                     shape = await transform.offset(ctx, shape, self.config["offset"])
@@ -648,6 +649,19 @@ class Shape(ShapeConfiguration):
                     shape_envelope.without_measurements(recorded),
                     shape_envelope.metadata_of(shape),
                 )
+
+                # And what the source said about each element goes where the
+                # element went, moved the way the geometry was and in the same
+                # order - or a bend line's angle would go on being pinned to
+                # the place the line was drawn rather than the place it is.
+                if "offset" in self.config:
+                    offset = Location(self.config["offset"])
+                    recorded = shape_envelope.moved_annotations(recorded, offset.transform_point)
+                if "scale" in self.config:
+                    factor = float(self.config["scale"])
+                    recorded = shape_envelope.moved_annotations(
+                        recorded, lambda point: [factor * axis for axis in point]
+                    )
 
             # Whatever produced the envelope - a factory, a wrapper, a
             # transform - the outer layer around it is this shape's own. It
@@ -1254,8 +1268,8 @@ class Shape(ShapeConfiguration):
                 filepath = os.path.join(project.config_dir, filepath)
         filepath = os.path.normpath(filepath)
 
-        # A directory that does not exist yet is still a directory: '--create-dirs'
-        # is what creates it, and that happens once the name is known.
+        # A directory that does not exist yet is still a directory: it is
+        # created once the name is known, on the way to writing the file.
         if os.path.isdir(filepath) or not os.path.splitext(filepath)[1]:
             filepath = os.path.join(filepath, output.name_to_path(self.name, stem_suffix + extension))
         return filepath
@@ -1546,11 +1560,10 @@ class Shape(ShapeConfiguration):
         final_filepath = os.path.abspath(final_filepath)
         # Create the output directory for the resolved path (the incoming
         # 'filepath' is None when called from Project.render_async) using the
-        # 'ctx' passed in, so direct callers without a project get
-        # '--create-dirs' too. The name goes in with it: a '/' in it is a
-        # sub-directory of wherever the file lands, created whether or not
-        # '--create-dirs' was given.
-        ctx.ensure_dirs_for_file(final_filepath, self.name)
+        # 'ctx' passed in, so direct callers without a project get one too.
+        # Everything the path asks for is made, the sub-directories a '/' in the
+        # object's name asks for included.
+        ctx.ensure_dirs_for_file(final_filepath)
         pc_logging.debug("Rendering: %s:%s for format '%s'" % (self.project_name, self.name, format_name))
 
         script = await self._materialize_output_script(ctx, impl)
@@ -2142,7 +2155,7 @@ class Shape(ShapeConfiguration):
             # next run copies them; giving each run its own path instead would
             # take that name away from everyone who relies on it.
             async with self.locked():
-                ctx.ensure_dirs_for_file(final_filepath, self.name)
+                ctx.ensure_dirs_for_file(final_filepath)
                 # A model is the answer to *this* run, and the path it goes to
                 # is stable -- '<part>.<analysis>.<extension>', beside the
                 # package. So one an earlier run left there would satisfy the
@@ -2376,7 +2389,18 @@ class Shape(ShapeConfiguration):
             # sentence whichever of the two spoke it.
             raise pc_cam.CamConfigError(machine_error)
 
-        chosen = manufacturing_data.machine_named(machine) if machine else manufacturing_data.machine
+        from .part_config_manufacturing import ROUTED_MACHINES
+
+        if machine:
+            chosen = manufacturing_data.machine_named(machine)
+        else:
+            # The one machine a program could be written for. A saw beside it is
+            # an alternative with no program, so it does not make the choice
+            # ambiguous -- the same reading 'cam.declared_config' makes.
+            routed = [kind for kind in manufacturing_data.machine_choices() if kind in ROUTED_MACHINES]
+            chosen = manufacturing_data.machine_named(routed[0]) if len(routed) == 1 else None
+        if chosen is not None and chosen.kind not in ROUTED_MACHINES:
+            raise pc_cam.CamConfigError("a '%s' runs no program, so there is no route to write for it" % chosen.kind)
         if chosen is None:
             # Made some other way, so there is no machine to name and nothing
             # wrong with that: an implementation handed nothing writes what it
@@ -2437,7 +2461,7 @@ class Shape(ShapeConfiguration):
             # nested 'get_wrapped' and '_run_implementation_async' take the same
             # re-entrant lock without waiting for it.
             async with self.locked():
-                ctx.ensure_dirs_for_file(final_filepath, self.name)
+                ctx.ensure_dirs_for_file(final_filepath)
                 # A route is the answer to *this* run, and the path it goes to
                 # is stable. So one an earlier run left there would satisfy the
                 # check below and be handed back as the new result: last week's

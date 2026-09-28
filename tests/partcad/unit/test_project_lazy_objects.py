@@ -134,8 +134,9 @@ def test_a_listing_reads_the_declarations_and_builds_nothing():
 
     assert project.objects("part") == {}  # nothing was created to answer
     assert descriptions["cube"] == "This is a cube from examples"
-    assert descriptions["cube_alias"] == "Alias to cube"
-    assert descriptions["cube_enrich"] == "Alias to cube;height=7.5,length=10.0,width=20.0"
+    # A reference that declares a description of its own is listed by it...
+    assert descriptions["cube_alias"] == "This is an example of an alias to a part"
+    assert descriptions["cube_enrich"] == "This is an example of a part defined by enriching another part"
     # The alias a part's own 'aliases:' asks for has no declaration to read, and
     # is listed from what claimed it.
     assert descriptions["box"] == "Alias to cube"

@@ -390,10 +390,6 @@ class FakeContext:
         self.item_suppliers = {}
         self.provider_plugins = {}
         self.stats_git_ops = 0
-        # As on a real Context, which sets it in '__init__': a per-request flag
-        # that operations turn on and put back. The fake used not to have it
-        # because the operations only ever assigned it.
-        self.option_create_dirs = False
         self.user_config = FakeUserConfig()
         self.projects = {name: FakeProject(name=name)}
         # As on a real Context: the root package, and the only place the loaded
@@ -2691,7 +2687,6 @@ class FakeAnalysablePart(FakeObject):
                 "analysis": analysis,
                 "implementation": implementation,
                 "output_dir": output_dir,
-                "create_dirs": ctx.option_create_dirs,
             }
         )
         if self.error is not None:
@@ -2717,7 +2712,7 @@ def test_cae_analyze_runs_the_analysis_it_was_asked_for():
     result = operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea"})
 
     assert result["findings"] == []
-    assert part.calls == [{"analysis": "fea", "implementation": None, "output_dir": None, "create_dirs": False}]
+    assert part.calls == [{"analysis": "fea", "implementation": None, "output_dir": None}]
 
 
 def test_cae_analyze_passes_the_per_run_overrides_through():
@@ -2731,13 +2726,10 @@ def test_cae_analyze_passes_the_per_run_overrides_through():
             "analysis": "cfd",
             "implementation": "//pkg:cfd",
             "output_dir": "/w/out",
-            "create_dirs": True,
         },
     )
 
-    assert part.calls == [
-        {"analysis": "cfd", "implementation": "//pkg:cfd", "output_dir": "/w/out", "create_dirs": True}
-    ]
+    assert part.calls == [{"analysis": "cfd", "implementation": "//pkg:cfd", "output_dir": "/w/out"}]
 
 
 def test_cae_analyze_refuses_an_analysis_partcad_does_not_run():
@@ -2836,45 +2828,6 @@ def test_cae_defaults_answers_for_every_analysis():
     }
 
 
-# ---- the create_dirs flag is a per-request setting on a long-lived context --
-
-
-def test_creating_dirs_puts_the_flag_back_even_when_the_request_raises():
-    """`-p` belongs to one request; the context it is set on outlives thousands.
-
-    The daemon holds a context per workspace and keeps it warm, so a flag left
-    on is a flag every later request inherits -- including the ones that never
-    set it and have always refused to create directories.
-    """
-    ctx = types.SimpleNamespace(option_create_dirs=False)
-
-    with operations._creating_dirs(ctx, True):
-        assert ctx.option_create_dirs is True
-    assert ctx.option_create_dirs is False
-
-    with contextlib.suppress(RuntimeError):
-        with operations._creating_dirs(ctx, True):
-            raise RuntimeError("the request failed")
-    assert ctx.option_create_dirs is False
-
-
-def test_a_request_that_creates_directories_does_not_leave_the_next_one_doing_so():
-    """Asked of a real operation rather than of the helper alone.
-
-    `pc export` never sets this flag, so before it was restored a single
-    `pc cae -p` or `pc cam -p` left that daemon writing directories for every
-    export that followed it.
-    """
-    session, part = make_cae_session()
-
-    operations.cae_analyze(session, {"package": "//", "object": "bracket", "analysis": "fea", "create_dirs": True})
-
-    # It was on while the analysis ran...
-    assert part.calls[-1]["create_dirs"] is True
-    # ...and is off again for whatever the daemon serves next.
-    assert session.partcad_ctx.option_create_dirs is False
-
-
 def test_rendering_a_package_that_does_not_resolve_names_it():
     """A render aimed at a package that is not there, reported as what it is.
 
@@ -2908,3 +2861,54 @@ def test_rendering_a_package_that_does_not_resolve_names_it():
             )
         )
     assert "//nosuch" in str(caught.value)
+
+
+def test_supply_totals_count_a_set_once():
+    """The items of one set were each quoted for whole sets: the set is paid for once"""
+
+    def line(name, price, vendor=None, sku=None, item_in_sku=None, currency="USD", supplier="store"):
+        return {
+            "name": name,
+            "vendor": vendor,
+            "sku": sku,
+            "item_in_sku": item_in_sku,
+            "suppliers": [{"name": supplier, "price": price, "currency": currency}],
+        }
+
+    items = [
+        # Two shafts and two clips: each quote is for two sets
+        line("//:shaft", 10.0, "acme", "SET", "shaft"),
+        line("//:clip", 10.0, "acme", "SET", "clip"),
+        # A third spacer needs a third set
+        line("//:spacer", 15.0, "acme", "SET", "spacer"),
+        # Lines of a SKU of one kind still add up
+        line("//:nut", 1.0, "acme", "NUT"),
+        line("//:bolt", 2.0, "acme", "BOLT"),
+    ]
+    assert operations._supply_totals(items) == [{"currency": "USD", "price": 18.0}]
+
+
+def test_supply_totals_price_a_set_by_one_supplier():
+    """A set is bought from one supplier, so its price is not assembled from several"""
+
+    def line(name, quotes):
+        return {
+            "name": name,
+            "vendor": "acme",
+            "sku": "SET",
+            "item_in_sku": name,
+            # cheapest first, the way the listing sorts them
+            "suppliers": sorted(
+                ({"name": supplier, "price": price, "currency": "USD"} for supplier, price in quotes),
+                key=lambda option: option["price"],
+            ),
+        }
+
+    # 'a' asks 30 for the set, 'b' asks 40: the cheapest of each item (10 and
+    # 12) would add up to a set price of 12, which nobody offers
+    items = [line("shaft", [("a", 10.0), ("b", 40.0)]), line("clip", [("a", 30.0), ("b", 12.0)])]
+    assert operations._supply_totals(items) == [{"currency": "USD", "price": 30.0}]
+
+    # Nobody quoted the whole set: it is not priced
+    items = [line("shaft", [("a", 10.0)]), line("clip", [("b", 12.0)])]
+    assert operations._supply_totals(items) == []

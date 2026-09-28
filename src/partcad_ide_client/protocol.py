@@ -41,6 +41,12 @@ interface is a node per port. A node is
       "assembly":   [node, ...] - what is inside it, or absent for a leaf
       "sketches":   on the root node only: {reference -> node}, the sketches the
                     ports name, one per sketch however many ports point at it
+      "metadata":   what was learnt about this node's shape as it was built, or
+                    absent - passed through exactly as 'partcad.shape_envelope'
+                    carries it. The viewer reads its "annotations" (one record per
+                    element, each with "points" in the node's own frame and the
+                    key/value "metadata" said about it) and pins them to the
+                    elements as text callouts
     }
 
 Placements are **not** baked into the geometry. A node's "gltf" is its own shape
@@ -137,6 +143,9 @@ KEY_OBJECT = "object"
 # all of it by '<package>:<name>', which a name on its own cannot spell. Absent
 # or None for a shape that belongs to no package.
 KEY_PACKAGE = "package"
+# On a node: what was learnt about its shape as it was built. PartCAD's own
+# 'shape_envelope.KEY_METADATA', carried through the tessellation untouched.
+KEY_METADATA = "metadata"
 
 
 class ProtocolError(Exception):

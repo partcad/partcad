@@ -83,7 +83,12 @@ class CamTest(Test):
             data = PartConfiguration.get_manufacturing_data(shape)
         except Exception:  # pylint: disable=broad-except
             return [None]
+        from ..part_config_manufacturing import ROUTED_MACHINES
+
         choices = data.machine_choices() if data is not None else []
+        # A saw is an alternative with no program to produce, so it is not one
+        # this check answers for; 'manufacturability-cut' is.
+        choices = [kind for kind in choices if kind in ROUTED_MACHINES]
         return choices if len(choices) > 1 else [None]
 
     async def cache_key_suffix(self, ctx, shape) -> str:

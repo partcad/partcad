@@ -519,3 +519,79 @@ def test_a_drawing_that_annotates_nothing_lists_no_elements(tmp_path):
     read = dxf_metadata.read_file(path)
     assert read["annotations"]
     assert "Annotations" not in read["metadata"]
+
+
+def _moved_sketch(ctx, monkeypatch, annotations, **transform):
+    """A sketch declared with 'offset'/'scale', over a transform that moves nothing.
+
+    The geometry half of the transform runs in a sandbox and is not what is
+    checked here; what is checked is that the annotations are moved the way the
+    geometry is, in the core, on the way through.
+    """
+    from partcad import transform as pc_transform
+
+    async def unchanged(ctx, shape, _):
+        return shape
+
+    monkeypatch.setattr(pc_transform, "offset", unchanged)
+    monkeypatch.setattr(pc_transform, "scale", unchanged)
+    sketch = _CountingSketch("//test", {"name": "moved", "type": "dxf", **transform}, annotations)
+    sketch.hash.add_string("annotations-test-moved-%r" % (transform,))
+    return sketch
+
+
+def _bend(points):
+    return {"type": "LINE", "layer": "BEND_UP", "points": points, "metadata": {"angle": "90"}}
+
+
+def test_an_offset_moves_what_the_drawing_says_with_the_geometry(ctx, monkeypatch):
+    """A bend line moved 10 mm along X is still annotated where it now is."""
+    sketch = _moved_sketch(
+        ctx,
+        monkeypatch,
+        [_bend([[30.0, 0.0, 0.0], [30.0, 40.0, 0.0]])],
+        offset=[[10, 0, 0], [0, 0, 1], 0],
+    )
+    (record,) = asyncio.run(sketch.get_annotations(ctx))
+    assert record["points"] == [pytest.approx([40.0, 0.0, 0.0]), pytest.approx([40.0, 40.0, 0.0])]
+    # Nothing but where it is changes.
+    assert record["metadata"] == {"angle": "90"}
+    assert record["layer"] == "BEND_UP"
+
+
+def test_an_offset_turns_it_as_well_as_moving_it(ctx, monkeypatch):
+    """Rotated first, then moved: the order 'offset' moves the geometry in."""
+    sketch = _moved_sketch(
+        ctx,
+        monkeypatch,
+        [_bend([[10.0, 0.0, 0.0]])],
+        offset=[[0, 0, 5], [0, 0, 1], 90],
+    )
+    (record,) = asyncio.run(sketch.get_annotations(ctx))
+    assert record["points"][0] == pytest.approx([0.0, 10.0, 5.0], abs=1e-9)
+
+
+def test_a_scale_scales_it_about_the_origin(ctx, monkeypatch):
+    sketch = _moved_sketch(ctx, monkeypatch, [_bend([[30.0, 40.0, 0.0]])], scale=2)
+    (record,) = asyncio.run(sketch.get_annotations(ctx))
+    assert record["points"][0] == pytest.approx([60.0, 80.0, 0.0])
+
+
+def test_an_offset_is_applied_before_a_scale(ctx, monkeypatch):
+    """Both at once: moved, then scaled - the order the geometry goes through them."""
+    sketch = _moved_sketch(
+        ctx,
+        monkeypatch,
+        [_bend([[1.0, 0.0, 0.0]])],
+        offset=[[1, 0, 0], [0, 0, 1], 0],
+        scale=3,
+    )
+    (record,) = asyncio.run(sketch.get_annotations(ctx))
+    assert record["points"][0] == pytest.approx([6.0, 0.0, 0.0])
+
+
+def test_a_record_with_no_points_to_move_is_left_as_it_is():
+    records = [{"type": "LINE", "metadata": {"angle": "90"}}, "not a record", {"points": [["a", "b", "c"], [1, 2]]}]
+    metadata = shape_envelope.make_metadata(annotations=records)
+    moved = shape_envelope.moved_annotations(metadata, lambda point: [axis + 1 for axis in point])
+    assert moved[shape_envelope.METADATA_ANNOTATIONS] == records

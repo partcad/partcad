@@ -131,6 +131,13 @@ class PluginFactoryPython(PluginFactoryFile):
                 if not sku:
                     sku = "None"
                 extra = vendor + ":" + sku
+        elif isinstance(request, dict) and request.get("key"):
+            # A repository plugin is asked for many keys at once (one per
+            # sub-package and object kind, gathered concurrently). Without the
+            # key in it, every one of those actions has the same name, and the
+            # progress display, which tracks actions by name, loses count of
+            # them: "action_key not found" once per overlap.
+            extra = request["key"]
         timeout = self.ctx.user_config.plugin_query_timeout
         # What this particular query was for. A repository plugin serves a whole
         # tree of packages, so its name alone would not say which of them the

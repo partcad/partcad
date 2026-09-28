@@ -18,6 +18,7 @@ from .fea import FeaTest
 from .interference import InterferenceTest
 from .manufacturability import ManufacturabilityTest
 from .manufacturability_additive_solid import ManufacturabilityAdditiveSolidTest
+from .manufacturability_cut import ManufacturabilityCutTest
 from .manufacturability_drill import ManufacturabilityDrillTest
 from .manufacturability_forming import ManufacturabilityFormingTest
 from .manufacturability_laser import ManufacturabilityLaserTest
@@ -51,6 +52,7 @@ def tests(concurrency_cap: int) -> list[Test]:
                 ManufacturabilitySheetMetalTest(),
                 ManufacturabilityLaserTest(),
                 ManufacturabilityDrillTest(),
+                ManufacturabilityCutTest(),
                 ConnectTest(),
                 ConnectivityTest(),
                 DegenerateTest(),

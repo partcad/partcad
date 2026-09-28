@@ -381,6 +381,44 @@ def without_measurements(metadata):
     return {key: value for key, value in (metadata or {}).items() if key != METADATA_MEASUREMENTS}
 
 
+def moved_annotations(metadata, move_point):
+    """'metadata' with every annotation's points passed through 'move_point'.
+
+    For the caller that has just moved or scaled a shape: the annotations say
+    where each element *is*, and an element that moved with the geometry is no
+    longer where the source drew it. Left alone, what was said about a bend line
+    would go on pointing at the place the line used to be.
+
+    This is the one field of a record the core reads, and it reads it only to
+    keep it true: 'points' is a list of [x, y, z] in the shape's own frame, and
+    nothing else of the record is looked at or changed. A point that is not
+    three numbers is left as it stands rather than guessed at. The 'sections'
+    are not touched - they are what the source said about *itself*, reported as
+    it said it.
+    """
+    annotations = metadata_section(metadata, METADATA_ANNOTATIONS)
+    if not annotations:
+        return metadata
+
+    def moved(point):
+        if isinstance(point, (list, tuple)) and len(point) == 3:
+            try:
+                return [float(value) for value in move_point([float(axis) for axis in point])]
+            except (TypeError, ValueError):
+                return point
+        return point
+
+    records = []
+    for record in annotations:
+        if isinstance(record, dict) and isinstance(record.get("points"), list):
+            record = dict(record)
+            record["points"] = [moved(point) for point in record["points"]]
+        records.append(record)
+    result = dict(metadata)
+    result[METADATA_ANNOTATIONS] = records
+    return result
+
+
 def merge_metadata(base, overlay):
     """'base' with 'overlay''s sections laid over it, section by section.
 

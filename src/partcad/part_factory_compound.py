@@ -38,7 +38,7 @@ class PartFactoryCompound(pf.PartFactory):
             # Passed verbatim to the assembly, but only when declared.
             self.parameters = config.get("parameters", None)
 
-            self.part.desc = reference.describe(config["type"], target_project.name, self.source)
+            self.part.desc = config.get("desc") or reference.describe(config["type"], target_project.name, self.source)
 
     async def prepare_async(self, part) -> None:
         """Resolve the referenced assembly, then prepare it.

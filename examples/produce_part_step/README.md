@@ -35,14 +35,14 @@ pc inspect bolt
 
 ### fastener (alias to bolt)
 <table><tr>
-<td valign=top><a href="fastener.step"><img src="././fastener.svg" alt="fastener" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><img src="././fastener.svg" alt="fastener" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
 <td valign=top>M8x35-screw</td>
 <td valign=top>Aliases:<br/><ul><li>hexhead</li></ul></td>
 </tr></table>
 
 ### screw (alias to bolt)
 <table><tr>
-<td valign=top><a href="screw.step"><img src="././screw.svg" alt="screw" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><img src="././screw.svg" alt="screw" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
 <td valign=top>M8x35-screw</td>
 <td valign=top>Aliases:<br/><ul><li>hexhead</li></ul></td>
 </tr></table>

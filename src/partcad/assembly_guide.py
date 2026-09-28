@@ -672,8 +672,55 @@ def bom_blocks(project, grouped, dir_path, level=2) -> list:
                     ],
                 )
             )
+    blocks += stock_blocks(project, grouped.get("stock") or {}, dir_path, level=level)
     blocks += software_blocks(project, grouped.get("software") or {}, dir_path, level=level)
     return blocks
+
+
+def stock_blocks(project, packages, dir_path, level=2) -> list:
+    """What the parts that are made are made from.
+
+    The rest of the bill of materials is what goes into the assembly; this is
+    what has to be procured so that the made parts can be made -- one piece per
+    part, since cutting several parts out of one piece is a question of layout
+    PartCAD does not answer yet (see 'partcad.procurement'). Each line says
+    which parts it is for.
+    """
+    if not packages:
+        return []
+    blocks = [doc.Heading("Stock", level=level)]
+    blocks.append(doc.Paragraph("What the manufactured parts are made from: one piece for each part made from it."))
+    for package_name in sorted(packages.keys()):
+        entries = packages[package_name]
+        blocks.append(
+            doc.Heading(
+                package_name,
+                level=level + 1,
+                url=package_document_link(project, package_name, dir_path),
+            )
+        )
+        blocks.append(
+            doc.Table(
+                columns=["Stock", "Count", "For", "Description"],
+                aligns=["left", "right", "left", "left"],
+                rows=[
+                    [
+                        name,
+                        entries[name]["count"],
+                        ", ".join(_short_name(project, made) for made in entries[name].get("for") or []),
+                        entries[name].get("desc") or "",
+                    ]
+                    for name in sorted(entries.keys())
+                ],
+            )
+        )
+    return blocks
+
+
+def _short_name(project, name: str) -> str:
+    """An object's name, without its package where that is the document's own."""
+    package_name, _, object_name = name.partition(":")
+    return object_name if package_name == project.name else name
 
 
 def software_blocks(project, packages, dir_path, level=2) -> list:
@@ -824,6 +871,7 @@ async def build_guide_document_async(ctx, project, assembly, images: ImageSource
 
     pages = [composed[0]]
     pages.append(doc.Page(title="Bill of Materials", blocks=_bom_page_blocks(project, grouped, dir_path)))
+    pages += await _manufacturing_pages(ctx, project, grouped, images)
 
     for section_pages in composed[1:]:
         pages += section_pages
@@ -893,6 +941,65 @@ def _bom_page_blocks(project, grouped, dir_path):
     blocks = [doc.Heading("Bill of Materials", level=1)]
     blocks += bom_blocks(project, grouped, dir_path, level=2)
     return blocks
+
+
+async def _manufacturing_pages(ctx, project, grouped, images: ImageSource) -> list:
+    """The parts to make before anything is assembled, and how to make each.
+
+    The first thing the book asks of its reader after the bill of materials:
+    every part that is made rather than bought, how many of it, what it is made
+    from, and its manufacturing instructions written out in full (see
+    'partcad.manufacturing_instructions'). Text for now; a picture of each
+    method is for when PartCAD can draw one.
+    """
+    from . import procurement
+    from .manufacturing_instructions import describe
+    from .part_config import PartConfiguration
+
+    manufactured = grouped.get("manufactured") or {}
+    if not manufactured:
+        return []
+
+    entries = [
+        (package_name, name, manufactured[package_name][name])
+        for package_name in sorted(manufactured.keys())
+        for name in sorted(manufactured[package_name].keys())
+    ]
+    parts = await asyncio.gather(
+        *[procurement.get_part_async(ctx, "%s:%s" % (package_name, name)) for package_name, name, _ in entries]
+    )
+    pictures = await asyncio.gather(
+        *[
+            images.shape_image_async(part, alt=name) if part is not None else _nothing()
+            for (_, name, _), part in zip(entries, parts)
+        ]
+    )
+
+    blocks = [doc.Heading("Parts to Manufacture", level=1)]
+    blocks.append(
+        doc.Paragraph(
+            "Make these before assembling anything. Each is made from the stock listed in the bill of materials."
+        )
+    )
+    for (package_name, name, entry), part, picture in zip(entries, parts, pictures):
+        blocks.append(doc.Heading(name, level=2))
+        if picture is not None:
+            blocks.append(doc.ImageRow([picture], height=0.25))
+        blocks += _prose_blocks(entry.get("desc"))
+        properties = [("Package", package_name), ("Needed", str(entry["count"]))]
+        if entry.get("stock"):
+            properties.append(("Made from", entry["stock"]))
+        blocks.append(doc.Properties(properties))
+        if part is None:
+            continue
+        data = PartConfiguration.get_manufacturing_data(part)
+        for line in describe(data, entry.get("stock")):
+            blocks.append(doc.Paragraph(line))
+    return [doc.Page(title="Parts to Manufacture", blocks=blocks)]
+
+
+async def _nothing():
+    return None
 
 
 async def _section_pages(project, section: GuideSection, images: ImageSource, section_count):
@@ -1020,7 +1127,7 @@ def _supplier_packages(project, grouped):
     # Parts and sub-assemblies only: this counts what somebody has to source,
     # and the label below says "parts". Where a package's software comes from is
     # already a link of its own, in the software section of the BoM.
-    for kind in ("parts", "assemblies"):
+    for kind in ("parts", "assemblies", "stock"):
         for package_name, entries in (grouped.get(kind) or {}).items():
             if package_name == project.name:
                 continue

@@ -241,11 +241,23 @@ opens.
 build -- there is no `pc` to run, so the IDE says so in its output channel, shows the welcome window and
 starts in an empty window.
 
-One thing the IDE cannot do for the user: the folder it just created is still a folder the editor has not
-been told to trust, so the trust prompt appears on it. `bootstrap` supports untrusted workspaces (it reads
-nothing from the workspace), so the welcome window is there to explain what is asking. Turning workspace
-trust off in `product.overlay.json` would remove the prompt for every package the user ever opens, including
-the ones they download, and PartCAD runs the code in those.
+**Workspace trust is off in the PartCAD IDE.** The IDE exists for PartCAD, and PartCAD runs the code in the
+package it opens. With trust on, every folder the user opens -- the starter package first of all, which is
+untrusted by definition because the IDE has just created it -- would open in Restricted Mode, with the PartCAD
+extension waiting for an answer and the "Render" command `pc init` writes into `.vscode/launch.json` blocked,
+because it is a debug configuration. 0.8.123 shipped that way, and worse, since the extension then declared
+untrusted workspaces unsupported and the editor removed it from the window altogether: no PartCAD icon, and
+nothing saying why.
+
+Trust cannot be granted to one extension, so it is off for the whole editor: tasks, debugging and the other
+bundled extensions run in every folder too. It is `--disable-workspace-trust` added to the command line by the
+entry point (see "Software WebGL is on" in `AGENTS.md`), not `security.workspace.trust.enabled` in
+`product.overlay.json`: the editor decides a window's trust before product defaults apply, and that default
+was tried and left the window restricted. `tools/verify_bundle.py` fails a build whose entry point does not
+carry the flag.
+
+In a regular VS Code nothing of this applies: the extension supports untrusted workspaces as `limited`, asks
+for trust, and starts nothing until it has it -- "Workspace trust" in `../vscode/AGENTS.md`.
 
 ## Where things end up on the user's machine
 

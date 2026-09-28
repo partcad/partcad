@@ -380,7 +380,7 @@ def test_the_check_is_selected_by_its_own_name():
     """`pc test -f` filters by name prefix, and nothing else starts with `cam`.
 
     It is the half of the rename that makes the split usable: `-f
-    manufacturability` selects that check and its six siblings, `-f cam`
+    manufacturability` selects that check and its seven siblings, `-f cam`
     selects this one alone.
     """
     from partcad.test.all import tests as all_tests
@@ -391,6 +391,7 @@ def test_the_check_is_selected_by_its_own_name():
     assert sorted(name for name in names if name.startswith("manufacturability")) == [
         "manufacturability",
         "manufacturability-additive",
+        "manufacturability-cut",
         "manufacturability-drill",
         "manufacturability-forming",
         "manufacturability-laser",
@@ -624,7 +625,7 @@ def test_two_alternatives_written_into_one_directory_get_two_files(package, tmp_
     part = _part(package, "two_machines")
     seen = []
 
-    def _record(path, name):
+    def _record(path):
         seen.append(path)
         raise RuntimeError("stop here")
 
@@ -650,7 +651,7 @@ def test_a_path_the_caller_named_is_the_path_it_gets(package, tmp_path, monkeypa
     part = _part(package, "two_machines")
     seen = []
 
-    def _record(path, name):
+    def _record(path):
         seen.append(path)
         raise RuntimeError("stop here")
 

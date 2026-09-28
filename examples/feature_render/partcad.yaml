@@ -23,8 +23,8 @@ docs:
     The 3D and CAD files a package publishes are a different section --
     `export:` -- and a different example: see `feature_export`.
 
-    A `prefix` that points at a directory expects it to be there: PartCAD writes
-    the file, not the path to it, unless it is asked to with `--create-dirs`.
+    A `prefix` that points at a directory PartCAD has to make is fine: the
+    directories an output file needs are created on the way to writing it.
     Here `images/` already exists, because what is in it is checked in.
   usage: |
     ```shell

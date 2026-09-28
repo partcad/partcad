@@ -214,8 +214,10 @@ Feature: `pc test` command
     #   tolerated is tolerated feature by feature, 0.05 on one face and 0.2 on
     #             another: no single number is true of it, and none is invented
     #
-    # All three lack a supplier, so all three fail -- on that, which is what
-    # proves the tolerance check let two of them through.
+    # None of them is asked for a supplier: a part with manufacturing
+    # instructions is made, and whoever builds it is taken at their word that
+    # they can make it. So the two with a tolerance pass, and the one without
+    # fails on that and nothing else.
     Given a file named "partcad.yaml" with content:
       """
       manufacturable: true
@@ -224,8 +226,8 @@ Feature: `pc test` command
         bracket:
           type: step
           manufacturing:
-            # 'additive' because this scenario is about the tolerance check and
-            # the supplier search, not about how the part is made. 'subtractive'
+            # 'additive' because this scenario is about the tolerance check,
+            # not about how the part is made. 'subtractive'
             # would drag in the stock it is cut from, which is a second failure
             # against three parts that are here to demonstrate a different one.
             method: additive
@@ -274,8 +276,8 @@ Feature: `pc test` command
     When I run "pc test -f manufacturability"
     Then the command should exit with a status code of "1"
     And STDOUT should contain "//:plain: manufacturability: No manufacturing tolerance is specified"
-    And STDOUT should contain "//:bracket: manufacturability: No suppliers found"
-    And STDOUT should contain "//:tolerated: manufacturability: No suppliers found"
+    And STDOUT should not contain "//:bracket: manufacturability"
+    And STDOUT should not contain "//:tolerated: manufacturability"
 
   @success @pc-test @pc-test-subtractive
   Scenario: A subtractive part that does not fit the stock it names
@@ -366,12 +368,59 @@ Feature: `pc test` command
     And STDOUT should contain "manufacturability-laser"
     And STDOUT should contain "cannot make it"
 
+  @failure @pc-test @pc-test-subtractive
+  Scenario: A part cut to the wrong length is not what the saw leaves
+    # A saw cuts the stock across and does nothing else, so a part declared as
+    # cut is the stock with everything beyond each cut taken off -- and a
+    # cut declared 100 mm from the end of a board does not leave a 60 mm piece.
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      parts:
+        board:
+          type: build123d
+          path: board.py
+          parameters:
+            length: 300
+            tolerance: 0.1
+        piece:
+          type: enrich
+          source: board
+          with:
+            length: 60
+          manufacturing:
+            method: subtractive
+            source: board
+            cut:
+              toolAxis: +Y
+              cuts:
+                - length: 100 mm
+      """
+    And a file named "board.py" with content:
+      """
+      import build123d as bd
+
+      length = 300.0
+
+      with bd.BuildPart() as result:
+          with bd.Locations((20, length / 2, 10)):
+              bd.Box(40, length, 20)
+
+      show_object(result.part.wrapped, name="board")
+      """
+    When I run "pc test -f manufacturability-cut piece"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "manufacturability-cut"
+    And STDOUT should contain "does not make it"
+
   @success @pc-test @pc-test-subtractive
   Scenario: The example package passes every manufacturability check
     # End to end, against the checked-in example: two stocks, two laser parts,
     # a routed block whose chamfer only a router can make, and a drilled plate
-    # whose straight sides came with its stock. Each part names the machine it
-    # is made on, so between them they exercise all three.
+    # whose straight sides came with its stock, and a rail cut to length off a
+    # board. Each part names the machine it is made on, so between them they
+    # exercise all four.
     When I run command
       """
       pc --no-ansi -p $PARTCAD_ROOT/examples test --package //produce_part_subtractive -f manufacturability

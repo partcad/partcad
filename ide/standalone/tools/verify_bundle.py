@@ -207,7 +207,7 @@ def check_product(product_path: pathlib.Path, problems: list[str], notes: list[s
 
 
 def check_entry_point(app_dir: pathlib.Path, problems: list[str], notes: list[str]) -> None:
-    """The entry point that turns software WebGL on.
+    """The entry point that turns software WebGL on and workspace trust off.
 
     Without it the 3D view is dead on any machine whose GPU process does not
     start, and dead silently -- Chromium reports "webgl: disabled_off" and the
@@ -215,6 +215,9 @@ def check_entry_point(app_dir: pathlib.Path, problems: list[str], notes: list[st
     and points `package.json` at it; both halves are checked, because either one
     alone leaves the application running with the switch absent (or, worse,
     pointing at a file that is not there).
+
+    Without the second, every folder opens in Restricted Mode, where the PartCAD
+    extension starts nothing and the package's "Render" command does not run.
     """
     manifest_path = app_dir / "package.json"
     if not manifest_path.is_file():
@@ -234,11 +237,15 @@ def check_entry_point(app_dir: pathlib.Path, problems: list[str], notes: list[st
     if not wrapper.is_file():
         problems.append(f"package.json points main at {main!r}, but there is no file at {wrapper}")
         return
-    if "enable-unsafe-swiftshader" not in wrapper.read_text(encoding="utf-8"):
+    text = wrapper.read_text(encoding="utf-8")
+    if "enable-unsafe-swiftshader" not in text:
         problems.append(f"{wrapper} does not enable software WebGL")
         return
+    if "--disable-workspace-trust" not in text:
+        problems.append(f"{wrapper} does not turn workspace trust off; every folder would open with PartCAD disabled")
+        return
 
-    notes.append(f"entry point: {main} (software WebGL enabled)")
+    notes.append(f"entry point: {main} (software WebGL enabled, workspace trust off)")
 
 
 def check_macos_helpers(app_root: pathlib.Path, problems: list[str], notes: list[str]) -> None:

@@ -4,7 +4,7 @@
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.8.124-a",
+  "version": "0.8.131",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -47,8 +47,8 @@
   ],
   "capabilities": {
     "untrustedWorkspaces": {
-      "supported": false,
-      "description": "PartCAD does not support untrusted workspaces."
+      "supported": "limited",
+      "description": "Opening a PartCAD package runs the code its parts are written in, so in Restricted Mode the extension starts nothing: the PartCAD Explorer says the folder has to be trusted, and the extension starts once it is."
     },
     "virtualWorkspaces": {
       "supported": false,
@@ -323,6 +323,41 @@
             ],
             "scope": "machine",
             "type": "string"
+          }
+        }
+      },
+      {
+        "title": "PartCAD Viewer",
+        "order": 4,
+        "properties": {
+          "partcad.spaceMouse.enabled": {
+            "default": true,
+            "description": "Navigate the 3D view with a 3Dconnexion SpaceMouse: the cap moves the model the way it is pushed and twisted (3Dconnexion's \"object mode\"), and the \"Fit\" button frames it again. On Windows and macOS the viewer reads the device itself; on Linux it reads it from spacenavd, which has to be running.",
+            "type": "boolean"
+          },
+          "partcad.spaceMouse.sensitivity": {
+            "default": 1,
+            "minimum": 0.05,
+            "maximum": 20,
+            "description": "How fast a SpaceMouse moves the model. 1 is the default; 2 is twice as fast.",
+            "type": "number"
+          },
+          "partcad.spaceMouse.invert": {
+            "default": [],
+            "description": "SpaceMouse axes whose direction is reversed: 'tx' (push left/right: pan), 'ty' (pull up/push down: pan), 'tz' (push away/pull toward you: zoom), 'rx' (tilt forward/back), 'ry' (twist), 'rz' (tilt left/right). The view keeps its up direction, so 'rz' - a roll about the line of sight - has no effect of its own.",
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "tx",
+                "ty",
+                "tz",
+                "rx",
+                "ry",
+                "rz"
+              ]
+            }
           }
         }
       }
@@ -925,7 +960,8 @@
           "icon": "resources/logo.svg",
           "contextualTitle": "PartCAD Context",
           "initialSize": 5,
-          "visibility": "collapsed"
+          "visibility": "collapsed",
+          "when": "isWorkspaceTrusted"
         },
         {
           "id": "partcadExplorer",
@@ -938,15 +974,21 @@
           "type": "webview",
           "name": "Inspector",
           "icon": "resources/logo.svg",
-          "contextualTitle": "PartCAD Inspector"
+          "contextualTitle": "PartCAD Inspector",
+          "when": "isWorkspaceTrusted"
         }
       ]
     },
     "viewsWelcome": [
       {
         "view": "partcadExplorer",
+        "contents": "PartCAD is turned off in this folder until you trust it.\n\nOpening a PartCAD package runs the code its parts are written in, and fetches the packages it imports. The editor has opened this folder in Restricted Mode, so PartCAD waits until you say the folder is one you trust.\n\n[Manage Workspace Trust](command:workbench.trust.manage)\n\nLearn more about [Workspace Trust](https://code.visualstudio.com/docs/editing/workspaces/workspace-trust).",
+        "when": "!isWorkspaceTrusted"
+      },
+      {
+        "view": "partcadExplorer",
         "contents": "Hang in there!\nThe PartCAD extension is being initialized...",
-        "when": "!partcad.activated && !partcad.failed && !partcad.serviceMissing"
+        "when": "isWorkspaceTrusted && !partcad.activated && !partcad.failed && !partcad.serviceMissing"
       },
       {
         "view": "partcadExplorer",

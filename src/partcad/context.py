@@ -302,7 +302,6 @@ class Context:
         # Protect the critical sections from access in different threads
         self.lock = threading.RLock()
 
-        self.option_create_dirs = False
         # Directories outside the package that a sandbox still has to be able to
         # open, as absolute host paths.
         #
@@ -1785,49 +1784,33 @@ class Context:
                 self.runtimes_javascript[runtime_name] = runtime
             return self.runtimes_javascript[runtime_name]
 
-    def ensure_dirs(self, path):
-        if not self.option_create_dirs:
-            return
-        os.makedirs(path)
-
-    def ensure_dirs_for_file(self, filename, name=None):
+    def ensure_dirs_for_file(self, filename):
         """Create the directories the file about to be written needs.
 
-        '--create-dirs' ('option_create_dirs') is what lets PartCAD create a
-        directory the user configured but has not made: without it, a missing
-        output directory is an error rather than something to invent.
+        Unconditionally: where a file goes is settled by the time PartCAD is
+        writing it -- by the configuration, by '-O', or by the object's own
+        name -- and a directory nobody has made yet is the last thing standing
+        between that decision and the file. Refusing there produced no output
+        and no information the caller did not already have.
 
-        The sub-directories an object's own *name* asks for are not that, which
-        is what 'name' is for. A part called '<assembly>/<component>' -- what a
-        STEP assembly, a URDF or a Gazebo world materializes, and what a package
-        may well declare itself -- is written to a file of that name, and a name
-        with a '/' in it is a file in a directory however the command was
-        invoked (see 'output.name_to_path()'). So those components are created
-        under the directory the file was landing in anyway, and nothing above
-        that directory is: where the output goes is still the user's decision
-        and still '--create-dirs' to make up.
+        It used to be conditional, on a '--create-dirs' flag
+        ('option_create_dirs') that every writing command carried. Half of the
+        path was made whatever the flag said: a part called
+        '<assembly>/<component>' -- what a STEP assembly, a URDF or a Gazebo
+        world materializes, and what a package may declare itself -- is written
+        to a file of that name, and a name with a '/' in it is a file in a
+        directory however the command was invoked (see
+        'output.name_to_path()'). So the flag drew a line through the middle of
+        one path, and it drew it somewhere only the code could see.
+
+        A file the caller named itself ('pc export' with a path, a document
+        with a 'path:' of its own) is still written exactly where it said. What
+        changed is that the directory it named is made rather than demanded.
         """
         path = os.path.dirname(filename)
         if not path:
             return
-        if self.option_create_dirs:
-            os.makedirs(path, exist_ok=True)
-            return
-
-        subdirs = output.name_dirs(name) if name else ""
-        if not subdirs:
-            return
-        base = path
-        for _ in range(subdirs.count(os.sep) + 1):
-            base = os.path.dirname(base)
-        if os.path.join(base, subdirs) != path:
-            # This path is not the one the name resolved to: a caller that named
-            # the file itself ('pc export' with a path, a document with a
-            # 'path:' of its own) puts it where it said, '/' in the object's
-            # name or not.
-            return
-        if os.path.isdir(base or "."):
-            os.makedirs(path, exist_ok=True)
+        os.makedirs(path, exist_ok=True)
 
     def get_all_tests(self):
         return all_tests(self.user_config.threads_max)

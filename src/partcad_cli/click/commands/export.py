@@ -19,12 +19,6 @@ from ..service import run
     ),
 )
 @click.option(
-    "-p",
-    "--create-dirs",
-    help="Create the necessary directory structure if it is missing",
-    is_flag=True,
-)
-@click.option(
     "-O",
     "--output-dir",
     help="Create artifacts in the given output directory",
@@ -85,7 +79,6 @@ from ..service import run
 @click.pass_obj
 def cli(
     cli_ctx,
-    create_dirs,
     output_dir,
     format,
     package: str,
@@ -102,7 +95,6 @@ def cli(
         "render.objects",
         {
             "label": "Export",
-            "create_dirs": create_dirs,
             # Resolve to absolute so artifacts land in the user's cwd, not the daemon's.
             "output_dir": os.path.abspath(output_dir) if output_dir else None,
             "format": format,

@@ -77,6 +77,11 @@ class ProviderCartItem:
     format: str = None
     binary: bytes = None
 
+    vendor: str = None
+    sku: str = None
+    count_per_sku: int = 1
+    item_in_sku: str = None
+
     def __init__(self):
         self.name = "none"
         self.count = 0
@@ -87,6 +92,7 @@ class ProviderCartItem:
         self.vendor = store_data.vendor
         self.sku = store_data.sku
         self.count_per_sku = store_data.count_per_sku
+        self.item_in_sku = getattr(store_data, "item_in_sku", None)
 
     def set_shape(self, shape, count: int = 1):
         """Populate the item from a shape object the caller already holds.
@@ -104,7 +110,11 @@ class ProviderCartItem:
         self.name, self.count = resolve_cart_item(spec)
 
         object = resolve_cart_object(ctx, self.name)
-        assert object is not None, f"Part or assembly '{self.name}' not found"
+        if object is None:
+            # Raised rather than asserted: a stock reference that resolves to
+            # nothing reaches here from a bill of materials, and an assertion
+            # is neither a message for a user nor there at all under '-O'.
+            raise ValueError(f"Part or assembly '{self.name}' not found")
         self._set_store_data(object)
 
         self.material = await object.get_mcftt("material")
@@ -126,6 +136,8 @@ class ProviderCartItem:
             result["vendor"] = self.vendor
             result["sku"] = self.sku
             result["count_per_sku"] = self.count_per_sku
+            if getattr(self, "item_in_sku", None):
+                result["item_in_sku"] = self.item_in_sku
         return result
 
     def add_binary(self, format: str, binary: bytes):
@@ -187,10 +199,20 @@ class ProviderCart:
 
         part = await prj.get_part_async(object_name, quiet=True)
         if part:
-            pc_logging.debug(f"Adding part '{object_name}' to the cart")
-            item = ProviderCartItem()
-            await item.set_spec(ctx, name)
-            self.add_item(item, count)
+            # A part that is made is procured as what it is made from, and one
+            # made from nothing it names needs nothing procured at all (see
+            # 'partcad.procurement'). A bought part is procured as itself.
+            from . import procurement
+
+            for procured in await procurement.procured_as(ctx, part):
+                if procured != name and resolve_cart_object(ctx, procured) is None:
+                    # What 'procured_as' keeps a missing stock as, so that it
+                    # is said here, against the part that names it.
+                    raise ValueError(f"'{procured}', which '{name}' is made from, is not found")
+                pc_logging.debug(f"Adding '{procured}' to the cart for part '{object_name}'")
+                item = ProviderCartItem()
+                await item.set_spec(ctx, procured)
+                self.add_item(item, count)
         else:
             # Quietly, both of them: a name that is one is not the other, and
             # the failure worth reporting is the one at the end.
@@ -210,7 +232,10 @@ class ProviderCart:
                     return
 
                 pc_logging.debug(f"Adding the contents of assembly '{object_name}' to the cart")
-                bom = await (holder.get_bom() if recursive else holder.get_supply_bom())
+                if recursive:
+                    bom = await _procured(ctx, await holder.get_bom())
+                else:
+                    bom = await holder.get_supply_bom(ctx)
                 tasks = []
                 for item_name, item_count in bom.items():
                     pc_logging.debug(f"Adding '{item_name}' to the cart")
@@ -254,12 +279,66 @@ class ProviderCart:
         return item
 
     def compose(self):
+        """The cart, as a provider is handed it.
+
+        'parts' is one entry per object. 'skus' is what to order: a list with
+        one entry per (vendor, SKU), with the number of that SKU to buy (see
+        'skus_to_order()'). A list rather than a mapping, because a vendor and
+        a SKU are free text and no key made of the two is safe from colliding
+        with another pair. The two differ where one SKU is a set of several
+        kinds of objects, and a store should order from 'skus' -- ordering
+        each of 'parts' on its own buys a set once for every kind in it.
+        """
+        from .shape_config_store import skus_to_order
+
         req = {"parts": {}, "qos": self.qos}
 
         for name, part in self.parts.items():
             req["parts"][name] = part.compose()
 
+        skus = skus_to_order(
+            (
+                getattr(part, "vendor", None),
+                getattr(part, "sku", None),
+                getattr(part, "item_in_sku", None),
+                getattr(part, "count_per_sku", 1),
+                part.count,
+            )
+            for part in self.parts.values()
+        )
+        req["skus"] = []
+        for (vendor, sku), order in sorted(skus.items()):
+            req["skus"].append(
+                {
+                    "vendor": vendor,
+                    "sku": sku,
+                    "count": order["count"],
+                    "parts": sorted(
+                        name
+                        for name, part in self.parts.items()
+                        if getattr(part, "vendor", None) == vendor and getattr(part, "sku", None) == sku
+                    ),
+                }
+            )
+
         return req
 
     def __repr__(self):
         return str(self.compose())
+
+
+async def _procured(ctx, bom: dict) -> dict:
+    """A bill of materials of parts, as what each of them is procured as.
+
+    A module function rather than a method: '@telemetry.instrument()' wraps
+    the callables a class holds, and a static one comes back expecting 'self'.
+    """
+    from . import procurement
+
+    procured = {}
+    for name, count in bom.items():
+        part = await procurement.get_part_async(ctx, name)
+        names = [name] if part is None else await procurement.procured_as(ctx, part)
+        for one in names:
+            procured[one] = procured.get(one, 0) + count
+    return procured

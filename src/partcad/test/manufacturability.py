@@ -148,6 +148,17 @@ class ManufacturabilityTest(Test):
                 # would be handed back for a declaration that now passes. Line
                 # above folds it in for the shape's own file, for this reason.
                 declared.append("%s@%s@%s" % (ref, software.config.get("fileFrom"), software.declared_hash()))
+        if isinstance(shape, Part):
+            # What a made part is made from, whose own verdict this one now
+            # depends on (see 'stock_failure') -- 'manufacturing:' is one of the
+            # keys a shape's hash leaves out, so the stock does not move it. A
+            # part made from nothing it names keys as it always did.
+            from .. import procurement
+            from .manufacturability_reference import reference_key
+
+            if procurement.stock_name(shape) is not None:
+                data = PartConfiguration.get_manufacturing_data(shape)
+                declared.append("made:%s" % await reference_key(ctx, shape, data.source, "part"))
         if not declared:
             # Nothing beyond the shape itself was read, so nothing is added:
             # an object that declares neither keys exactly as it always has,
@@ -249,50 +260,91 @@ class ManufacturabilityTest(Test):
         return None
 
     async def test_part(self, tests_to_run: list[Test], ctx, part: Part, test_ctx: dict = {}) -> bool:
+        """Whether this part can be had: bought, or made from what can be had.
+
+        A part with a vendor and an SKU is bought, and a supplier has to
+        carry it. A part with manufacturing instructions is made, and whoever
+        builds the assembly is taken at their word that they can make it: what
+        is checked is that the instructions are complete (a tolerance), and
+        that what it is made *from* -- the stock its 'manufacturing:' section
+        names -- can be had in turn, by this same test. No supplier is asked
+        for the part itself (see 'partcad.procurement').
+
+        A part that says both is tried as bought first, and only if no
+        supplier confirms it is it asked whether it can be made instead. The
+        order is the one a person would take: buying the thing is cheaper than
+        making it, so making it is the fallback and not the default.
+        """
         self.debug(part, "Testing for manufacturability")
 
-        # Test if it can be purchased at a store
-        can_be_purchased = False
-        store_data = part.get_store_data()
-        if store_data.is_purchasable:
-            self.debug(part, "Can be purchased")
-            # TODO(clairbee): Verify that at least one provider is available
-            # TODO(clairbee): Verify that at least one provider is available where it is in stock
-            can_be_purchased = True
+        from .. import procurement
 
-        # Test if it can be manufactured
-        can_be_manufactured = False
-        manufacturing_data = PartConfiguration.get_manufacturing_data(part)
-        if manufacturing_data.method:
-            self.debug(part, "Can be manufactured")
-            # TODO(clairbee): Verify that at least one provider is available
-            can_be_manufactured = True
-
+        can_be_purchased = procurement.is_bought(part)
+        can_be_manufactured = procurement.is_made(part)
         if not can_be_purchased and not can_be_manufactured:
             return self.failed(part, "Cannot be purchased or manufactured")
 
-        if not can_be_purchased:
-            # Only what is actually made needs a manufacturing tolerance. A part
-            # that is bought comes as it comes, which is the same reason the
-            # MCFTT parameters are documented as having no effect on a part with
-            # a vendor and an SKU.
-            failure = await self.tolerance_failure(part)
-            if failure:
-                return self.failed(part, failure)
-
-        # Whatever this part ships with has to hold up too: the bill of
-        # materials of every assembly it ends up in lists that software beside
-        # the part, and a line item nobody can obtain is not a bill of materials
-        # anybody can work from.
+        # Whatever this part ships with has to hold up however the part is had:
+        # the bill of materials of every assembly it ends up in lists that
+        # software beside the part, and a line item nobody can obtain is not a
+        # bill of materials anybody can work from.
         failure = await self.software_failure(ctx, part)
         if failure:
             return self.failed(part, failure)
 
-        failure = await self.supply_failure(ctx, part)
+        if can_be_purchased:
+            self.debug(part, "Can be purchased")
+            failure = await self.supply_failure(ctx, part)
+            if failure is None:
+                return self.passed(part)
+            if not can_be_manufactured:
+                return self.failed(part, failure)
+            self.debug(part, "Not available to buy (%s): checking that it can be made instead" % failure)
+
+        self.debug(part, "Can be manufactured")
+        # Only what is actually made needs a manufacturing tolerance. A part
+        # that is bought comes as it comes, which is the same reason the MCFTT
+        # parameters are documented as having no effect on a part with a vendor
+        # and an SKU.
+        failure = await self.tolerance_failure(part)
+        if failure:
+            return self.failed(part, failure)
+
+        failure = await self.stock_failure(tests_to_run, ctx, part, test_ctx)
         if failure:
             return self.failed(part, failure)
 
         return self.passed(part)
+
+    async def stock_failure(self, tests_to_run: list[Test], ctx, part: Part, test_ctx: dict) -> str | None:
+        """Why the stock this part is made from cannot be had, or None if it can.
+
+        The stock is tested with every test this run asked for, the way an
+        assembly tests what it is procured from, and with the object's own
+        "not manufacturable" preference overridden for the same reason: it has
+        to be had, whatever it says about itself. A part made from nothing it
+        names -- printed, formed -- has nothing to check here.
+        """
+        from .. import procurement
+
+        stock = procurement.stock_name(part)
+        if stock is None:
+            return None
+        resolved = await procurement.get_part_async(ctx, stock)
+        if resolved is None:
+            return "The stock '%s' it is made from is not found" % stock
+
+        test_ctx = copy.deepcopy(test_ctx)
+        test_ctx["force_manufacturing"] = True
+        test_ctx["action_prefix"] = f"{part.project_name}:{part.name}"
+        if "log_wrapper" in test_ctx:
+            tasks = [t.test_log_wrapper(tests_to_run, ctx, resolved, test_ctx) for t in tests_to_run]
+        else:
+            tasks = [t.test(tests_to_run, ctx, resolved, test_ctx) for t in tests_to_run]
+        results = await asyncio.gather(*tasks)
+        if self.TEST_FAILED in results:
+            return "The stock '%s' it is made from cannot be had" % stock
+        return None
 
     async def test_assembly(self, tests_to_run: list[Test], ctx, assembly: Assembly, test_ctx: dict = {}) -> bool:
         self.debug(assembly, "Testing for manufacturability")

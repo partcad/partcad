@@ -46,6 +46,7 @@ class PluginFactoryProviderStore(PluginFactoryProvider):
             cart_item.sku,
             cart_item.count_per_sku,
             cart_item.count,
+            getattr(cart_item, "item_in_sku", None),
         )
         availability = await self.query_script(
             self.plugin,

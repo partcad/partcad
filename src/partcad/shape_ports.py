@@ -258,6 +258,13 @@ async def prepare_async(shape, ctx) -> None:
     """
     from . import assembly_ports
 
+    # An alias that reports the ports of what it points at has to have found
+    # it, and a coroutine is where that can be done for every kind of part
+    # (see 'part_factory_alias._SourcePorts')
+    resolve = getattr(type(getattr(shape, "with_ports", None)), "resolve_async", None)
+    if resolve is not None:
+        await shape.with_ports.resolve_async()
+
     if not (getattr(shape, "config", None) or {}).get(assembly_ports.MAP):
         return
     with_ports = getattr(shape, "with_ports", None)

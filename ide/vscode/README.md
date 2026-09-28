@@ -40,6 +40,16 @@ Only the 3D view comes over the viewer protocol. The others are questions about 
 extension puts to the PartCAD daemon, fetched the first time a tab is looked at and cached until the next
 object is shown — so an object belonging to no package gets the 3D view alone.
 
+### 3Dconnexion SpaceMouse
+
+The 3D view can be navigated with a 3Dconnexion SpaceMouse: the cap moves the model the way it is pushed and
+twisted, and the **Fit** button (the right-hand one on a two-button device) frames it again. On Windows and
+macOS the viewer reads the device on its own — move the cap once with the viewer open for the editor to notice
+it. On Linux it reads it from [spacenavd](https://spacenav.sourceforge.net/), which has to be installed and
+running (`sudo apt install spacenavd`, for example). Only the viewer in the focused window moves.
+`partcad.spaceMouse.sensitivity` sets the speed, `partcad.spaceMouse.invert` reverses individual axes, and
+`partcad.spaceMouse.enabled` turns it off.
+
 ## The command line in the integrated terminal
 
 While the extension is active, terminals opened in the window get the PartCAD command line tools on their
