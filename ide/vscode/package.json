@@ -358,6 +358,11 @@
                 "rz"
               ]
             }
+          },
+          "partcad.viewer.performanceDebug": {
+            "default": false,
+            "description": "Show performance metrics in the 3D viewer (top-right corner): part name, triangle count, file size, and FPS/frame time.",
+            "type": "boolean"
           }
         }
       }

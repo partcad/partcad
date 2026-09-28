@@ -851,38 +851,38 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     }
     overlay.style.display = 'none';
 
-    // Performance logging
-    const stats = {
-        name: message.name || '(unnamed)',
-        kind: message.kind || 'object',
-        package: message.package || '(local)',
-        triangleCount: 0,
-        vertexCount: 0,
-        bytesTransferred: total,
-    };
-    group.traverse((obj: any) => {
-        if (obj.isMesh && obj.geometry) {
-            if (obj.geometry.index) {
-                stats.triangleCount += obj.geometry.index.count / 3;
-            } else {
-                stats.triangleCount += obj.geometry.attributes.position.count / 3;
-            }
-            stats.vertexCount += obj.geometry.attributes.position.count;
-        }
-    });
-    const perfLog = {
-        'Part': stats.name,
-        'Type': stats.kind,
-        'Package': stats.package,
-        'Total triangles': stats.triangleCount.toFixed(0),
-        'Total vertices': stats.vertexCount.toFixed(0),
-        'Data transferred (KB)': (stats.bytesTransferred / 1024).toFixed(2),
-    };
-    console.log('[PartCAD Viewer] Performance Stats:', perfLog);
-
-    // Create/update on-screen stats display - store stats for FPS updates
+    // Performance logging (behind config flag)
     const perfDebug = (window as any).partcadConfig?.viewer?.performanceDebug ?? false;
     if (perfDebug) {
+        const stats = {
+            name: message.name || '(unnamed)',
+            kind: message.kind || 'object',
+            package: message.package || '(local)',
+            triangleCount: 0,
+            vertexCount: 0,
+            bytesTransferred: total,
+        };
+        group.traverse((obj: any) => {
+            if (obj.isMesh && obj.geometry) {
+                if (obj.geometry.index) {
+                    stats.triangleCount += obj.geometry.index.count / 3;
+                } else {
+                    stats.triangleCount += obj.geometry.attributes.position.count / 3;
+                }
+                stats.vertexCount += obj.geometry.attributes.position.count;
+            }
+        });
+        const perfLog = {
+            'Part': stats.name,
+            'Type': stats.kind,
+            'Package': stats.package,
+            'Total triangles': stats.triangleCount.toFixed(0),
+            'Total vertices': stats.vertexCount.toFixed(0),
+            'Data transferred (KB)': (stats.bytesTransferred / 1024).toFixed(2),
+        };
+        console.log('[PartCAD Viewer] Performance Stats:', perfLog);
+
+        // Create on-screen stats display
         if (!(window as any).pcViewerStats) {
             (window as any).pcViewerStats = { statsDisplay: null, geometryInfo: '' };
         }
@@ -909,13 +909,13 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
         const geometryInfo = `${stats.name} (${stats.kind})\n${stats.triangleCount.toFixed(0)} triangles\n${(stats.bytesTransferred / 1024).toFixed(1)}KB`;
         (window as any).pcViewerStats.geometryInfo = geometryInfo;
         (window as any).pcViewerStats.statsDisplay.textContent = geometryInfo;
-    }
 
-    // Post to extension for VS Code output panel
-    window.parent.postMessage({
-        command: 'log',
-        data: `[Viewer] ${stats.name} (${stats.kind}): ${stats.triangleCount.toFixed(0)} triangles, ${(stats.bytesTransferred / 1024).toFixed(2)}KB`,
-    }, '*');
+        // Post to extension for VS Code output panel
+        window.parent.postMessage({
+            command: 'log',
+            data: `[Viewer] ${stats.name} (${stats.kind}): ${stats.triangleCount.toFixed(0)} triangles, ${(stats.bytesTransferred / 1024).toFixed(2)}KB`,
+        }, '*');
+    }
 }
 
 export function resizeCanvas(): void {
