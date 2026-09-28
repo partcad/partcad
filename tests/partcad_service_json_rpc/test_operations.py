@@ -418,8 +418,9 @@ class FakeContext:
         ):
             setattr(self, name, 0)
 
-    def reload_changed_packages(self):
+    def reload_changed_packages(self, packages=None, recursive=False):
         self.reloads += 1
+        self.reload_targets = (packages, recursive)
         return []
 
     def _stats_declared(self, kind):

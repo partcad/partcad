@@ -41,6 +41,7 @@ BOOLEAN_OPTIONS = [
     ("cacheRemote", "PC_CACHE_REMOTE", "cache_remote"),
     ("cacheS3", "PC_CACHE_S3", "cache_s3"),
     ("cacheDependenciesIgnore", "PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
+    ("cacheBypass", "PC_CACHE_BYPASS", "cache_bypass"),
     ("ignoreBundledOpenscad", "IGNORE_BUNDLED_OPENSCAD", "ignore_bundled_openscad"),
     # The Docker family. These were settable in 'config.yaml' only until an
     # image built without a daemon needed a way to say so without writing a
@@ -175,6 +176,7 @@ def test_config_file_values_read_the_same_way(config_home, monkeypatch, key, att
         ("devel_index", False),
         ("offline", False),
         ("cache_dependencies_ignore", False),
+        ("cache_bypass", False),
         ("ignore_bundled_openscad", False),
     ],
 )

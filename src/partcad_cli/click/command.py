@@ -111,6 +111,7 @@ option_groups = [
             "--cache-s3-bucket",
             "--cache-s3-endpoint-url",
             "--cache-dependencies-ignore",
+            "--no-cache",
         ],
     },
     {
@@ -309,6 +310,15 @@ click.rich_click.COMMAND_GROUPS = {
     help="Ignore broken dependencies and cache at your own risk",
 )
 @click.option(
+    "--no-cache",
+    "cache_bypass",
+    is_flag=True,
+    default=None,
+    envvar="PC_CACHE_BYPASS",
+    show_envvar=True,
+    help="Bypass every cache tier: build everything afresh, and keep nothing that was built",
+)
+@click.option(
     "--python-sandbox",
     default=None,
     show_envvar=True,
@@ -460,6 +470,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
         ("PC_CACHE_S3_BUCKET", "cache_s3_bucket"),
         ("PC_CACHE_S3_ENDPOINT_URL", "cache_s3_endpoint_url"),
         ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
+        ("PC_CACHE_BYPASS", "cache_bypass"),
         ("PC_PYTHON_SANDBOX", "python_sandbox"),
         ("PC_JAVASCRIPT_SANDBOX", "javascript_sandbox"),
         ("IGNORE_BUNDLED_OPENSCAD", "ignore_bundled_openscad"),
@@ -487,6 +498,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                 pc_user_config.set(attrib, value)
             else:
                 setattr(pc_user_config, attrib, value)
+    _bypass_cache(pc_user_config, kwargs)
 
     # Initialize logging before using telemetry, as telemetry may use logging.
     # The remote-log client wraps logging_ansi_terminal (ANSI) or a plain stderr
@@ -567,6 +579,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             ("PC_CACHE_S3_BUCKET", "cache_s3_bucket"),
             ("PC_CACHE_S3_ENDPOINT_URL", "cache_s3_endpoint_url"),
             ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
+            ("PC_CACHE_BYPASS", "cache_bypass"),
             ("PC_PYTHON_SANDBOX", "python_sandbox"),
             ("PC_JAVASCRIPT_SANDBOX", "javascript_sandbox"),
             ("IGNORE_BUNDLED_OPENSCAD", "ignore_bundled_openscad"),
@@ -595,6 +608,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                     pc_user_config.set(attrib, value)
                 else:
                     setattr(pc_user_config, attrib, value)
+        _bypass_cache(pc_user_config, kwargs)
 
         # parse extra parameters and add them to the user_config
         for params in kwargs["extra_param"]:
@@ -630,6 +644,20 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             get_partcad_context=get_partcad_context,
             path=path,
         )
+
+
+def _bypass_cache(user_config, kwargs) -> None:
+    """Apply '--no-cache' where the daemon will see it too.
+
+    The loops above set attributes, which is all a context built in this
+    process reads. What travels to the daemon is the configuration's settings
+    (see 'UserConfig.to_dict'), and an attribute is not one of them - so the
+    flag is written there as well, or a command served by a warm daemon would
+    go on reading and writing the cache it was told to leave alone.
+    """
+    if kwargs.get("cache_bypass"):
+        user_config.set("cacheBypass", True)
+        user_config.cache_bypass = True
 
 
 cli.context_settings = {

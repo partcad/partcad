@@ -127,8 +127,9 @@ class FakeContext:
         # reloaded (see 'Context.reload_changed_packages').
         self.reloads = 0
 
-    def reload_changed_packages(self):
+    def reload_changed_packages(self, packages=None, recursive=False):
         self.reloads += 1
+        self.reload_targets = (packages, recursive)
         return []
 
     def get_all_packages(self, parent_name=None, has_stuff=True):
@@ -290,6 +291,31 @@ def test_an_operation_on_a_context_reloads_its_changed_packages_first(tmp_path):
     assert ctx.reloads == 1
     assert create_context(session, tmp_path) == context_id
     assert len(session.partcad.contexts_built) == 1
+
+
+@pytest.mark.parametrize(
+    "params, expected",
+    [
+        # Nothing named: the package the command runs in.
+        ({}, (["//"], False)),
+        ({"package": "//app"}, (["//app"], False)),
+        # '-r', and the '...' suffix that says the same.
+        ({"package": "//app", "recursive": True}, (["//app"], True)),
+        ({"package": "//app..."}, (["//app"], True)),
+        # An object that names its own package - from the CLI, and the editor.
+        ({"package": "//app", "object": "//lib:bolt"}, (["//lib"], False)),
+        ({"package": "//app", "name": "//lib:bolt"}, (["//lib"], False)),
+        # ...and one that does not.
+        ({"package": "//app", "object": "bolt"}, (["//app"], False)),
+    ],
+)
+def test_the_packages_checked_are_the_ones_the_request_is_about(tmp_path, params, expected):
+    session, _ = make_session()
+    context_id = create_context(session, tmp_path)
+
+    operations._ctx(session, {"context": context_id, **params})
+
+    assert session.contexts[context_id].reload_targets == expected
 
 
 def test_an_operation_on_the_session_context_reloads_its_changed_packages_first(tmp_path):

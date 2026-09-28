@@ -63,6 +63,20 @@ def _is_within(name: str, parent_name: Optional[str]) -> bool:
     return name == parent_name or name.startswith(parent_name.rstrip("/") + "/")
 
 
+# How long a package's 'partcad.yaml' is taken to be unchanged after it was
+# last checked (see 'Context.reload_changed_packages').
+CONFIG_CHECK_INTERVAL = 15.0
+
+
+def _dependency_package_name(parent: str, dependency: str, config) -> str:
+    """The name a declared dependency is loaded under, as '_get_project_recursive' loads it."""
+    if isinstance(config, dict) and config.get("onlyInRoot", False):
+        return "//" + dependency
+    if dependency.startswith("//"):
+        return dependency
+    return get_child_project_path(parent, dependency)
+
+
 def _package_of(full_name: str) -> str:
     """The package an object's full name ('//pkg:name') belongs to."""
     return full_name.split(":", 1)[0]
@@ -383,6 +397,9 @@ class Context:
         self.project_locks = {}
         self.project_locks_lock = threading.Lock()
         self._projects_being_loaded = {}
+        # When each package's 'partcad.yaml' was last compared with what was
+        # read, by package name (see 'reload_changed_packages').
+        self._config_checked_at = {}
         self.user_config = user_config
 
         # Computed once, here, rather than per package: every 'unless' in the
@@ -492,8 +509,8 @@ class Context:
         """
         return sum(project.object_count_known(kind) for project in list(self.projects.values()))
 
-    def reload_changed_packages(self) -> list[str]:
-        """Reload every package whose 'partcad.yaml' changed since it was read.
+    def reload_changed_packages(self, packages=None, recursive=False) -> list[str]:
+        """Reload the packages whose 'partcad.yaml' changed since it was read.
 
         A context reads each package's configuration once and keeps it, with
         every object created from it, for as long as it lives - which is the
@@ -501,23 +518,38 @@ class Context:
         daemon keeps warm between commands. The daemon calls this as a command
         comes in, so that an edited configuration is what that command sees.
 
+        Which packages are checked: 'packages', the ones the command is about,
+        and every package they declare as a dependency, transitively - with
+        'recursive', every loaded package underneath them too. None checks all
+        of them. A package something reaches without declaring it is not
+        checked, and may be answered from the configuration read before.
+
         Whether a configuration changed is its modification time and size: a
-        stat per loaded package, no reads. A changed package is dropped together
-        with every package underneath it (its sub-packages and the dependencies
-        it imports, which are loaded under its name), and is loaded again from
-        disk the next time something asks for it. Nothing else is: the packages
-        beside it, the sandboxes, and whatever the other packages have built
-        stay as they are. The root's children are every package, so a changed
-        root reloads them all - in this context, rather than in a new one.
+        stat, no read, and at most once per 'CONFIG_CHECK_INTERVAL' seconds per
+        package, so that a burst of commands does not stat the same files over
+        and over. A changed package is dropped together with every package
+        underneath it, and is loaded again from disk the next time something
+        asks for it. Nothing else is: the packages beside it, the sandboxes, and
+        whatever the other packages have built stay as they are. The root's
+        children are every package, so a changed root reloads them all - in this
+        context, rather than in a new one.
 
         Returns the names of the packages dropped.
         """
         with self.lock:
-            changed = [
-                project.name
-                for project in list(self.projects.values())
-                if hasattr(project, "config_stat") and file_stat(project.config_path) != project.config_stat
-            ]
+            names = list(self.projects) if packages is None else self._config_check_scope(packages, recursive)
+            now = time.monotonic()
+            changed = []
+            for name in names:
+                project = self.projects.get(name)
+                if project is None or not hasattr(project, "config_stat"):
+                    continue
+                checked_at = self._config_checked_at.get(name)
+                if checked_at is not None and now - checked_at < CONFIG_CHECK_INTERVAL:
+                    continue
+                self._config_checked_at[name] = now
+                if file_stat(project.config_path) != project.config_stat:
+                    changed.append(name)
             if not changed:
                 return []
 
@@ -531,6 +563,7 @@ class Context:
 
             for name in dropped:
                 self.projects.pop(name, None)
+                self._config_checked_at.pop(name, None)
             # What those packages declared about how interfaces mate: kept, it
             # would stop a reloaded package from declaring it differently (the
             # first declaration of a pair is the one that stays).
@@ -549,6 +582,30 @@ class Context:
 
         pc_logging.info("Reloaded the packages whose configuration changed: %s" % ", ".join(sorted(changed)))
         return dropped
+
+    def _config_check_scope(self, packages, recursive: bool) -> list[str]:
+        """The loaded packages 'packages' are, declare, or (recursively) hold."""
+        scope = []
+        seen = set()
+        queue = list(packages)
+        while queue:
+            name = queue.pop()
+            if name in seen:
+                continue
+            seen.add(name)
+            project = self.projects.get(name)
+            if project is None or not hasattr(project, "config_stat"):
+                # Not loaded, so it will be read from disk when it is - or not
+                # read from a file at all: a plugin-backed package, whose
+                # repository reports its children, and which is not asked here
+                # because asking can be a round trip.
+                continue
+            scope.append(name)
+            if recursive:
+                queue.extend(other for other in list(self.projects) if _is_within(other, name))
+            for dependency, config in project.dependencies().items():
+                queue.append(_dependency_package_name(project.name, dependency, config))
+        return scope
 
     @property
     def stats_sketches_declared(self) -> int:

@@ -324,6 +324,7 @@ OPTION_KEYS = (
     "cacheS3MaxEntrySize",
     "cacheS3MinEntrySize",
     "cacheDependenciesIgnore",
+    "cacheBypass",
     "pythonSandbox",
     "remoteSandbox",
     "remoteSandboxToken",
@@ -601,6 +602,7 @@ class UserConfig(vyper.Vyper):
         self.set_default("cacheS3MaxEntrySize", 100 * 1024 * 1024)
         self.set_default("cacheS3MinEntrySize", 100)
         self.set_default("cacheDependenciesIgnore", False)
+        self.set_default("cacheBypass", False)
 
         # Whether the *user* said which sandbox to use, as opposed to PartCAD
         # picking one below. Captured before the default is set, because
@@ -855,6 +857,15 @@ class UserConfig(vyper.Vyper):
         # default: False
         self.bind_env("cacheDependenciesIgnore", "PC_CACHE_DEPENDENCIES_IGNORE")
         self.cache_dependencies_ignore = self.get_bool("cacheDependenciesIgnore")
+
+        # option: cacheBypass
+        # description: neither read from nor write to any cache tier (files,
+        #              remote, S3) for this run: everything is built afresh and
+        #              nothing built is kept. What '--no-cache' sets.
+        # values: [True | False]
+        # default: False
+        self.bind_env("cacheBypass", "PC_CACHE_BYPASS")
+        self.cache_bypass = self.get_bool("cacheBypass")
 
         # option: pythonSandbox
         # description: sandboxing environment for invoking python scripts

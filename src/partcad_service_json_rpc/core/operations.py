@@ -79,8 +79,28 @@ def _ctx(session, params):
         # the point between commands, where nothing is using the packages a
         # reload replaces. A warm context would otherwise go on answering from
         # the 'partcad.yaml' it read first, until the daemon is stopped.
-        ctx.reload_changed_packages()
+        packages, recursive = _config_check_targets(ctx, params)
+        ctx.reload_changed_packages(packages, recursive=recursive)
     return ctx
+
+
+def _config_check_targets(ctx, params):
+    """The packages a request is about, and whether it reaches below them.
+
+    What 'reload_changed_packages' checks, together with what those packages
+    declare as dependencies. Read off the same parameters the operations read:
+    'package' (the current package when absent), and an object - 'object' from
+    the CLI, 'name' from the editor - that names a package of its own.
+    """
+    package, object_name, recursive = _request(params)
+    target = ctx.resolve_package_path(package)
+    for name in (object_name, params.get("name")):
+        if isinstance(name, str) and ":" in name:
+            object_package = name.split(":", 1)[0]
+            if object_package:
+                target = ctx.resolve_package_path(object_package)
+            break
+    return [target], recursive
 
 
 def _qualified(package: str, name: str) -> str:

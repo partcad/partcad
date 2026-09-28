@@ -115,28 +115,31 @@ def test_a_missing_dependency_is_not_the_same_as_an_empty_one(tmp_path):
     assert _files_key() != missing
 
 
-def test_a_file_is_keyed_on_its_modification_time(tmp_path):
-    """Same size, same content, touched: a different key."""
+def test_a_file_is_not_keyed_on_its_modification_time(tmp_path):
+    """Two clones of one repository have to find each other's entries.
+
+    A checkout writes every file at the time it happens, so a key that covered
+    the modification time would differ on every machine and in every clone, and
+    a shared tier would never be hit.
+    """
     path = tmp_path / "part.step"
     path.write_bytes(b"one")
     os.utime(path, ns=(1_000_000_000, 1_000_000_000))
     before = _files_key(str(path))
     os.utime(path, ns=(2_000_000_000, 2_000_000_000))
-    assert _files_key(str(path)) != before
+    assert _files_key(str(path)) == before
 
 
 def test_a_small_file_is_keyed_on_all_of_its_content(tmp_path):
     path = tmp_path / "part.step"
     path.write_bytes(b"one")
-    os.utime(path, ns=(1_000_000_000, 1_000_000_000))
     before = _files_key(str(path))
     path.write_bytes(b"two")
-    os.utime(path, ns=(1_000_000_000, 1_000_000_000))
     assert _files_key(str(path)) != before
 
 
 def _large(tmp_path, middle: bytes, head: bytes = b"h", tail: bytes = b"t"):
-    """A file over the sample size, with the same modification time every time."""
+    """A file over the sample size, with one byte set at each end and in the middle."""
     path = tmp_path / "large.step"
     size = cache_hash_module._SAMPLE_SIZE * 3
     body = bytearray(size)
@@ -144,7 +147,6 @@ def _large(tmp_path, middle: bytes, head: bytes = b"h", tail: bytes = b"t"):
     body[size // 2 : size // 2 + 1] = middle
     body[-1:] = tail
     path.write_bytes(bytes(body))
-    os.utime(path, ns=(1_000_000_000, 1_000_000_000))
     return str(path)
 
 
@@ -155,9 +157,10 @@ def test_a_large_file_is_keyed_on_its_head_and_its_tail(tmp_path):
 
 
 def test_a_large_file_is_not_read_in_the_middle(tmp_path):
-    """What the sample leaves out is covered by the size and the time, not read.
+    """What the sample leaves out is covered by the size alone, not read.
 
-    Asserted so that the saving is not quietly undone: an edit there with the
-    size and the time restored is the one change this cannot see.
+    Asserted so that the saving is not quietly undone - and so that what it
+    costs is written down: an edit there that keeps the size is not seen, and
+    '--no-cache' is the way past it.
     """
     assert _files_key(_large(tmp_path, b"m")) == _files_key(_large(tmp_path, b"M"))

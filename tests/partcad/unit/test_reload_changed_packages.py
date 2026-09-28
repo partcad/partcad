@@ -100,3 +100,73 @@ def test_a_part_file_edit_does_not_reload_anything(ctx, workspace):
     _touch(workspace / "left" / "a.step")
 
     assert ctx.reload_changed_packages() == []
+
+
+#
+# What a command's packages reach
+#
+
+
+@pytest.fixture
+def linked(tmp_path):
+    """'//app' declares 'lib', which declares 'base'; '//other' is unrelated.
+
+    'lib' and 'base' live beside 'app' rather than under it, which is what makes
+    them dependencies rather than sub-packages: they are loaded under the name
+    of the package that declares them.
+    """
+    for name in ("app", "lib", "base", "other"):
+        (tmp_path / name).mkdir()
+        _declare(tmp_path / name, [name])
+    (tmp_path / "partcad.yaml").write_text("dependencies:\n  app:\n    type: local\n    path: app\n")
+    with open(tmp_path / "app" / "partcad.yaml", "a") as f:
+        f.write("dependencies:\n  lib:\n    type: local\n    path: ../lib\n")
+    with open(tmp_path / "lib" / "partcad.yaml", "a") as f:
+        f.write("dependencies:\n  base:\n    type: local\n    path: ../base\n")
+    ctx = pc.Context(str(tmp_path))
+    for spec in ("//app:app", "//app/lib:lib", "//app/lib/base:base", "//other:other"):
+        assert _part(ctx, spec) is not None, spec
+    return tmp_path, ctx
+
+
+def test_a_transitive_dependency_of_the_target_is_checked(linked):
+    workspace, ctx = linked
+
+    _touch(workspace / "base" / "partcad.yaml")
+
+    assert ctx.reload_changed_packages(["//app"]) == ["//app/lib/base"]
+
+
+def test_a_package_the_target_does_not_declare_is_not_checked(linked):
+    workspace, ctx = linked
+    other = _part(ctx, "//other:other")
+
+    _touch(workspace / "other" / "partcad.yaml")
+
+    assert ctx.reload_changed_packages(["//app"]) == []
+    assert _part(ctx, "//other:other") is other
+    # ...until a command is about it.
+    assert ctx.reload_changed_packages(["//other"]) == ["//other"]
+
+
+def test_a_recursive_command_checks_every_package_underneath(ctx, workspace):
+    _touch(workspace / "left" / "deep" / "partcad.yaml")
+
+    assert ctx.reload_changed_packages(["//left"]) == []
+    assert ctx.reload_changed_packages(["//left"], recursive=True) == ["//left/deep"]
+
+
+def test_a_package_is_checked_at_most_once_per_interval(ctx, workspace, monkeypatch):
+    import partcad.context as context_module
+
+    now = [1000.0]
+    monkeypatch.setattr(context_module.time, "monotonic", lambda: now[0])
+
+    assert ctx.reload_changed_packages(["//right"]) == []
+    _touch(workspace / "right" / "partcad.yaml")
+
+    now[0] += context_module.CONFIG_CHECK_INTERVAL - 1
+    assert ctx.reload_changed_packages(["//right"]) == []
+
+    now[0] += 2
+    assert ctx.reload_changed_packages(["//right"]) == ["//right"]

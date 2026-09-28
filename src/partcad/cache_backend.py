@@ -255,6 +255,11 @@ def build(user_config, data_type: str) -> list[CacheBackend]:
     """
     backends = []
 
+    if getattr(user_config, "cache_bypass", False):
+        # '--no-cache': no tier at all, so every read misses and every write
+        # goes nowhere - for shapes, test results and lint results alike.
+        return backends
+
     if getattr(user_config, "cache", False):
         from .cache_backend_files import FilesCacheBackend
 

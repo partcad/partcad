@@ -49,8 +49,8 @@ from . import logging as pc_logging
 #      of a list, a dictionary's keys and values, and the files a shape depends
 #      on were simply concatenated, so 'offset: [1, 23, 0]' and
 #      'offset: [12, 3, 0]' were one key - two different parts, one entry.
-#      A file is hashed by its size, its modification time and a sample of its
-#      content rather than by all of it (see 'add_filename'). The keys an
+#      A file is hashed by its size and a sample of its content rather than by
+#      all of it (see 'add_filename'). The keys an
 #      extrude, a sweep, a compound part and an ASSY assembly are stored under
 #      also cover the keys of what they are built from now, so an entry written
 #      under 5 was keyed on less than it needed to be.
@@ -61,9 +61,12 @@ VERSION = 6
 _VERSION_TAG = ("partcad-cache-v%d" % VERSION).encode()
 
 # How much of a file's content is hashed, at most: all of a file up to this
-# size, and half of it from each end of a larger one. What is in between is
-# covered by the size and the modification time hashed beside it, which is what
-# keeps hashing a large STEP file from costing a read of all of it.
+# size, and half of it from each end of a larger one, which is what keeps
+# hashing a large STEP file from costing a read of all of it. What is in between
+# is covered by the size alone, so an edit there that keeps the size is not
+# seen. The modification time is not hashed, deliberately: it differs between
+# two clones of one repository, and a key that did would never be found by
+# another machine in a shared tier.
 _SAMPLE_SIZE = 1 << 20
 
 
@@ -204,13 +207,11 @@ class CacheHash:
 
         try:
             with open(filename, "rb") as f:
-                st = os.fstat(f.fileno())
-                # The size and the modification time first, and both framed:
-                # they are what tells two versions of a large file apart when
-                # an edit falls outside the sample of its content below.
-                self.hasher.update(_frame(b"f", str(st.st_size).encode()))
-                self.hasher.update(_frame(b"t", str(st.st_mtime_ns).encode()))
-                if st.st_size <= _SAMPLE_SIZE:
+                size = os.fstat(f.fileno()).st_size
+                # The size first: it is what tells two versions of a large file
+                # apart when an edit falls outside the sample below.
+                self.hasher.update(_frame(b"f", str(size).encode()))
+                if size <= _SAMPLE_SIZE:
                     self.hasher.update(_frame(b"c", f.read()))
                 else:
                     half = _SAMPLE_SIZE // 2
