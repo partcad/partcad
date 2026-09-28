@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""`pc --no-cache`: one run that neither reads from nor writes to any cache tier."""
+"""`pc --cache-bypass`: one run that neither reads from nor writes to any cache tier."""
 
 from partcad import cache_backend
 from partcad_cli.click.command import _bypass_cache, cli
@@ -12,7 +12,7 @@ from partcad_utils.user_config import UserConfig
 
 def test_the_flag_is_a_global_option():
     option = next(param for param in cli.params if param.name == "cache_bypass")
-    assert "--no-cache" in option.opts
+    assert "--cache-bypass" in option.opts
     assert option.envvar == "PC_CACHE_BYPASS"
 
 

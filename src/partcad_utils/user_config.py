@@ -861,7 +861,7 @@ class UserConfig(vyper.Vyper):
         # option: cacheBypass
         # description: neither read from nor write to any cache tier (files,
         #              remote, S3) for this run: everything is built afresh and
-        #              nothing built is kept. What '--no-cache' sets.
+        #              nothing built is kept. What '--cache-bypass' sets.
         # values: [True | False]
         # default: False
         self.bind_env("cacheBypass", "PC_CACHE_BYPASS")

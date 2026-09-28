@@ -678,7 +678,7 @@ in, and the files it is built from. A file contributes its size and its content
 never its modification time, so a fresh clone on another machine produces the
 same keys and a shared tier is shared. An edit confined to the middle of a file
 over 1 MB that leaves its size unchanged is therefore not seen; run that command
-with ``--no-cache``.
+with ``--cache-bypass``.
 
 An object made out of others is keyed on theirs as well: an ``extrude`` or
 ``sweep`` on its sketch, a ``compound`` part on its assembly, an ``assy``
@@ -686,8 +686,9 @@ assembly on everything it links to. Editing a part rebuilds every assembly that
 uses it, and an object with ``cache: false`` makes everything built out of it
 uncached too.
 
-``pc --no-cache <command>`` (or ``PC_CACHE_BYPASS=1``) bypasses every tier for
-one run: nothing is read from a cache and nothing built is written to one.
+``pc --cache-bypass <command>`` (or ``PC_CACHE_BYPASS=1``, or ``cacheBypass: True``)
+bypasses every tier for one run: nothing is read from a cache and nothing built
+is written to one.
 
 The daemon keeps packages loaded between commands. Before each command it
 compares the ``partcad.yaml`` of the packages the command is about, and of every

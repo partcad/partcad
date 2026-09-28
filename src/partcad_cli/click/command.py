@@ -111,7 +111,7 @@ option_groups = [
             "--cache-s3-bucket",
             "--cache-s3-endpoint-url",
             "--cache-dependencies-ignore",
-            "--no-cache",
+            "--cache-bypass",
         ],
     },
     {
@@ -310,7 +310,7 @@ click.rich_click.COMMAND_GROUPS = {
     help="Ignore broken dependencies and cache at your own risk",
 )
 @click.option(
-    "--no-cache",
+    "--cache-bypass",
     "cache_bypass",
     is_flag=True,
     default=None,
@@ -647,7 +647,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
 
 
 def _bypass_cache(user_config, kwargs) -> None:
-    """Apply '--no-cache' where the daemon will see it too.
+    """Apply '--cache-bypass' where the daemon will see it too.
 
     The loops above set attributes, which is all a context built in this
     process reads. What travels to the daemon is the configuration's settings

@@ -161,6 +161,6 @@ def test_a_large_file_is_not_read_in_the_middle(tmp_path):
 
     Asserted so that the saving is not quietly undone - and so that what it
     costs is written down: an edit there that keeps the size is not seen, and
-    '--no-cache' is the way past it.
+    '--cache-bypass' is the way past it.
     """
     assert _files_key(_large(tmp_path, b"m")) == _files_key(_large(tmp_path, b"M"))
