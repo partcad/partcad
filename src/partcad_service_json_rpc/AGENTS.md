@@ -14,9 +14,12 @@ The daemon owns two things its clients do not, and both decide what belongs on w
 
 1. **A warm PartCAD context** — the loaded package graph, so a client does not pay `import partcad` (~1.6s) and
    a package reload per command. It also means the daemon's copy of a package is the *authoritative* one: a
-   client that edits `partcad.yaml` behind the daemon's back leaves it serving stale contents, which is why a
    package-mutating command (`add`, `import`) must be a daemon client and evict the context it changed
-   (`_invalidate_context`).
+   (`_invalidate_context`). A `partcad.yaml` edited by hand is caught on the way in instead: `_ctx`, which every
+   operation on a context goes through, calls `Context.reload_changed_packages()`, and a package whose
+   configuration changed size or modification time is reloaded with the packages underneath it -- not the whole
+   context. An edit to a file a part is built from reloads nothing: a part hashes its files once, so a warm
+   context that has already keyed it keeps that key until its package is reloaded or the daemon is restarted.
    A **failed** load is not kept either, for a reason of its own: the errors saying why are logged while the
    context is being built, so a cached one would be a single command reporting "configuration file is not
    found" and exiting non-zero followed by any number of commands answering with nothing and exiting zero --

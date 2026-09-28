@@ -137,6 +137,11 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         # it served from the entry built before the edit.
         if not unresolved and not unkeyed:
             assembly.cache_dependencies_broken = False
+        if unkeyed:
+            # Something it links to has no key - 'cache: false', or made of
+            # something that is - so its content is in no key, and neither may
+            # this assembly be cached: it would be served with the old one.
+            assembly.cacheable = False
         if unresolved:
             raise Exception("Failed to resolve the links to: %s" % ", ".join(unresolved))
 

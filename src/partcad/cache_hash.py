@@ -49,17 +49,22 @@ from . import logging as pc_logging
 #      of a list, a dictionary's keys and values, and the files a shape depends
 #      on were simply concatenated, so 'offset: [1, 23, 0]' and
 #      'offset: [12, 3, 0]' were one key - two different parts, one entry.
-#      The keys an extrude, a sweep, a compound part and an ASSY assembly are
-#      stored under also cover the keys of what they are built from now, so an
-#      entry written under 5 was keyed on less than it needed to be.
+#      A file is hashed by its size, its modification time and a sample of its
+#      content rather than by all of it (see 'add_filename'). The keys an
+#      extrude, a sweep, a compound part and an ASSY assembly are stored under
+#      also cover the keys of what they are built from now, so an entry written
+#      under 5 was keyed on less than it needed to be.
 VERSION = 6
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.
 _VERSION_TAG = ("partcad-cache-v%d" % VERSION).encode()
 
-# How much of a file is read at once while it is hashed.
-_CHUNK_SIZE = 1 << 20
+# How much of a file's content is hashed, at most: all of a file up to this
+# size, and half of it from each end of a larger one. What is in between is
+# covered by the size and the modification time hashed beside it, which is what
+# keeps hashing a large STEP file from costing a read of all of it.
+_SAMPLE_SIZE = 1 << 20
 
 
 def _header(tag: bytes, length: int) -> bytes:
@@ -81,8 +86,7 @@ def file_stat(filename: str):
     """What a file looks like from outside, to tell later whether it changed.
 
     Modification time and size, which is what 'make' trusts too: a stat, not a
-    read, so it is cheap enough to ask of every file a context has hashed each
-    time the context is reused. None for a file that is not there.
+    read. None for a file that is not there.
     """
     try:
         st = os.stat(filename)
@@ -100,9 +104,6 @@ class CacheHash:
         # reached with caching disabled too (a disabled hash still answers
         # None, it just never hashes anything).
         self.dependencies = []
-        # The files hashed so far and what they looked like when they were
-        # read (see 'inputs_changed').
-        self.file_stats = {}
         if not cache:
             # Caching is disabled, no initialization needed
             self.hasher = None
@@ -197,21 +198,25 @@ class CacheHash:
             # Do not consider it not being empty
             return
 
-        # Recorded with caching disabled too: what is built is still kept in
-        # memory, and a warm context has to know when that went stale. Taken
-        # before the read, so that a write racing it leaves the stat looking
-        # older than the file and the next check sees a change.
-        self.file_stats[filename] = file_stat(filename)
         if not self.hasher:
             # Caching is disabled
             return
 
         try:
-            # Track changes to the file content
             with open(filename, "rb") as f:
-                self.hasher.update(_header(b"f", os.fstat(f.fileno()).st_size))
-                for chunk in iter(lambda: f.read(_CHUNK_SIZE), b""):
-                    self.hasher.update(chunk)
+                st = os.fstat(f.fileno())
+                # The size and the modification time first, and both framed:
+                # they are what tells two versions of a large file apart when
+                # an edit falls outside the sample of its content below.
+                self.hasher.update(_frame(b"f", str(st.st_size).encode()))
+                self.hasher.update(_frame(b"t", str(st.st_mtime_ns).encode()))
+                if st.st_size <= _SAMPLE_SIZE:
+                    self.hasher.update(_frame(b"c", f.read()))
+                else:
+                    half = _SAMPLE_SIZE // 2
+                    self.hasher.update(_frame(b"c", f.read(half)))
+                    f.seek(-half, os.SEEK_END)
+                    self.hasher.update(_frame(b"c", f.read(half)))
         except FileNotFoundError:
             # Hashed as missing rather than skipped: skipped, a dependency that
             # is not there and one that is empty or absent from the list are all
@@ -219,17 +224,6 @@ class CacheHash:
             # served once the file appears.
             self.hasher.update(_header(b"m", 0))
         self.touch()
-
-    def inputs_changed(self) -> bool:
-        """Whether a file this hash has read looks different now.
-
-        The hash is computed once, the first time it is asked for, and an
-        object that stays in memory - a warm daemon's context - would go on
-        answering with the key its files had then. This is how whoever holds
-        it finds out that the answer is stale, for the price of a stat per
-        file.
-        """
-        return any(file_stat(filename) != stat for filename, stat in list(self.file_stats.items()))
 
     def set_dependencies(self, dependencies: list[str]) -> None:
         self.dependencies = dependencies

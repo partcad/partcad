@@ -85,6 +85,10 @@ class PartFactorySweep(PartFactory):
             return
         if await part.add_cache_key_of(sketch):
             part.cache_dependencies_broken = False
+        else:
+            # A sketch with no key - 'cache: false' - has content nothing here
+            # can vouch for, so neither has what is built out of it.
+            part.cacheable = False
 
     async def instantiate(self, part):
         with pc_logging.Action("Sweep", part.project_name, part.name):

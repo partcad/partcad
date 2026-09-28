@@ -519,9 +519,9 @@ class Shape(ShapeConfiguration):
         this shape's key, and the entry stored under it, as they were. Their
         keys cover their content, so hashing those covers it here as well.
 
-        False when the source has no key, which leaves this shape's content
-        unaccounted for: the caller keeps it marked as having broken
-        dependencies (see 'get_cache_dependencies_broken').
+        False when the source has no key - it says 'cache: false', or is made
+        of something that does - which leaves this shape's content unaccounted
+        for: the caller must not cache it either.
         """
         await source.prepare_async()
         key = await source.get_cache_key_async()

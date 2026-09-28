@@ -111,14 +111,35 @@ def test_a_shape_keyed_on_its_whole_content_has_no_broken_dependencies(package):
     assert asyncio.run(check()) == (False, False)
 
 
-@pytest.mark.parametrize("edited", ["cube.step", "partcad.yaml"])
-def test_a_warm_context_notices_a_file_it_read_was_edited(package, edited):
-    """What the daemon asks before reusing a context it has kept warm."""
+def _key_of(ctx, kind, name):
+    async def get():
+        if kind == "assembly":
+            return await ctx._get_assembly(":" + name).get_cache_key_async()
+        return await (await ctx._get_part_async(":" + name)).get_cache_key_async()
+
+    return asyncio.run(get())
+
+
+def test_nothing_built_out_of_an_uncached_part_is_cached(package):
+    """'cache: false' on a part has to reach what it is part of.
+
+    Its content is in no key, so an assembly keyed on its own file would go on
+    being served, the part inside it as it was, after the part changed.
+    """
+    config = (package / "partcad.yaml").read_text()
+    (package / "partcad.yaml").write_text(config.replace("path: cube.step", "path: cube.step\n    cache: false"))
     ctx = pc.Context(str(package))
-    asyncio.run(ctx._get_assembly(":assembly").get_cache_key_async())
-    assert not ctx.sources_changed()
 
-    with open(package / edited, "a") as f:
-        f.write("\n# edited\n")
+    assert _key_of(ctx, "part", "cube") is None
+    assert _key_of(ctx, "assembly", "assembly") is None
+    assert _key_of(ctx, "part", "merged") is None
+    # ...and nothing else is dragged down with them.
+    assert _key_of(ctx, "part", "other") is not None
 
-    assert ctx.sources_changed()
+
+def test_nothing_extruded_from_an_uncached_sketch_is_cached(package):
+    config = (package / "partcad.yaml").read_text()
+    (package / "partcad.yaml").write_text(config.replace("path: outline.dxf", "path: outline.dxf\n    cache: false"))
+    ctx = pc.Context(str(package))
+
+    assert _key_of(ctx, "part", "slab") is None

@@ -63,6 +63,11 @@ def _is_within(name: str, parent_name: Optional[str]) -> bool:
     return name == parent_name or name.startswith(parent_name.rstrip("/") + "/")
 
 
+def _package_of(full_name: str) -> str:
+    """The package an object's full name ('//pkg:name') belongs to."""
+    return full_name.split(":", 1)[0]
+
+
 # How long the probe waits before concluding that there is no network.
 #
 # The two answers do not cost the same, which is what sets this. Waiting a
@@ -437,21 +442,25 @@ class Context:
         # '__version__' from it at module scope.
         version = sys.modules["partcad"].__version__
         with pc_logging.Process("InitCtx", self.config_dir, "v%s" % version):
-            self.root = self.import_project(
-                None,  # parent
-                {
-                    "name": consts.ROOT,
-                    "type": "local",
-                    "path": self.root_path,
-                    "canBeEmpty": True,
-                    "isRoot": True,
-                },
-            )
-            if self.root is None:
-                # Leave the provisional name in place. 'get_project()' returns
-                # None for every lookup in that state, which is how a failed
-                # root load has always been reported.
-                pc_logging.error("Failed to load the root package: %s" % self.root_path)
+            self._import_root()
+
+    def _import_root(self):
+        """Load the root package, under the provisional name set above."""
+        self.root = self.import_project(
+            None,  # parent
+            {
+                "name": consts.ROOT,
+                "type": "local",
+                "path": self.root_path,
+                "canBeEmpty": True,
+                "isRoot": True,
+            },
+        )
+        if self.root is None:
+            # Leave the provisional name in place. 'get_project()' returns
+            # None for every lookup in that state, which is how a failed
+            # root load has always been reported.
+            pc_logging.error("Failed to load the root package: %s" % self.root_path)
 
     def _recompute_current_project_path(self):
         """Derives 'current_project_path' from the (possibly adopted) root name.
@@ -483,29 +492,63 @@ class Context:
         """
         return sum(project.object_count_known(kind) for project in list(self.projects.values()))
 
-    def sources_changed(self) -> bool:
-        """Whether a file this context has read has changed since it read it.
+    def reload_changed_packages(self) -> list[str]:
+        """Reload every package whose 'partcad.yaml' changed since it was read.
 
-        A context reads each package's configuration once, and each object
-        hashes the files it is built from once, the first time its key is
-        asked for - and then keeps both, together with whatever it built, for
-        as long as it lives. That is the whole of a command for a context that
-        lives as long as one, and it is stale the moment a file is edited for
-        one a daemon keeps warm between commands. This is how the daemon tells:
-        a stat per file read, no reads and no hashing.
+        A context reads each package's configuration once and keeps it, with
+        every object created from it, for as long as it lives - which is the
+        whole of one command for most contexts, and indefinitely for the ones a
+        daemon keeps warm between commands. The daemon calls this as a command
+        comes in, so that an edited configuration is what that command sees.
 
-        Only objects that exist are asked; creating one never creates another.
+        Whether a configuration changed is its modification time and size: a
+        stat per loaded package, no reads. A changed package is dropped together
+        with every package underneath it (its sub-packages and the dependencies
+        it imports, which are loaded under its name), and is loaded again from
+        disk the next time something asks for it. Nothing else is: the packages
+        beside it, the sandboxes, and whatever the other packages have built
+        stay as they are. The root's children are every package, so a changed
+        root reloads them all - in this context, rather than in a new one.
+
+        Returns the names of the packages dropped.
         """
-        for project in list(self.projects.values()):
-            config_stat = getattr(project, "config_stat", None)
-            if config_stat is not None and file_stat(project.config_path) != config_stat:
-                return True
-            for objects in (project._sketches, project._parts, project._assemblies, project._scenes):
-                for shape in list(objects.values()):
-                    shape_hash = getattr(shape, "hash", None)
-                    if shape_hash is not None and shape_hash.inputs_changed():
-                        return True
-        return False
+        with self.lock:
+            changed = [
+                project.name
+                for project in list(self.projects.values())
+                if hasattr(project, "config_stat") and file_stat(project.config_path) != project.config_stat
+            ]
+            if not changed:
+                return []
+
+            if self.root is not None and self.root.name in changed:
+                # Everything but the built-in packages, which are PartCAD's own
+                # files: including the 'onlyInRoot' dependencies, which are
+                # the root's even though they are not named under it.
+                dropped = [name for name in self.projects if name not in output.BUILTIN_PATHS]
+            else:
+                dropped = [name for name in self.projects if any(_is_within(name, top) for top in changed)]
+
+            for name in dropped:
+                self.projects.pop(name, None)
+            # What those packages declared about how interfaces mate: kept, it
+            # would stop a reloaded package from declaring it differently (the
+            # first declaration of a pair is the one that stays).
+            for source in list(self.mates):
+                if _package_of(source) in dropped:
+                    del self.mates[source]
+                    continue
+                for target in list(self.mates[source]):
+                    if _package_of(target) in dropped:
+                        del self.mates[source][target]
+
+            if self.root is not None and self.root.name in changed:
+                self.name = consts.ROOT
+                self.current_project_path = consts.ROOT
+                self._import_root()
+
+        pc_logging.info("Reloaded the packages whose configuration changed: %s" % ", ".join(sorted(changed)))
+        return dropped
 
     @property
     def stats_sketches_declared(self) -> int:

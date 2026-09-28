@@ -9,6 +9,7 @@
 import hashlib
 import os
 
+from partcad import cache_hash as cache_hash_module
 from partcad.cache_hash import VERSION, CacheHash
 
 
@@ -114,37 +115,49 @@ def test_a_missing_dependency_is_not_the_same_as_an_empty_one(tmp_path):
     assert _files_key() != missing
 
 
-def test_a_file_edited_after_it_was_hashed_is_noticed(tmp_path):
-    """The hash is computed once; 'inputs_changed' is how a warm holder finds out."""
+def test_a_file_is_keyed_on_its_modification_time(tmp_path):
+    """Same size, same content, touched: a different key."""
     path = tmp_path / "part.step"
     path.write_bytes(b"one")
-    cache_hash = CacheHash("test", cache=True)
-    cache_hash.set_dependencies([str(path)])
-    cache_hash.get()
-    assert not cache_hash.inputs_changed()
-
-    path.write_bytes(b"three")
-    assert cache_hash.inputs_changed()
+    os.utime(path, ns=(1_000_000_000, 1_000_000_000))
+    before = _files_key(str(path))
+    os.utime(path, ns=(2_000_000_000, 2_000_000_000))
+    assert _files_key(str(path)) != before
 
 
-def test_a_file_that_appears_after_it_was_hashed_is_noticed(tmp_path):
-    path = tmp_path / "part.step"
-    cache_hash = CacheHash("test", cache=True)
-    cache_hash.set_dependencies([str(path)])
-    cache_hash.get()
-    assert not cache_hash.inputs_changed()
-
-    path.write_bytes(b"one")
-    assert cache_hash.inputs_changed()
-
-
-def test_edits_are_noticed_with_caching_disabled_too(tmp_path):
-    """What is built is still kept in memory, and goes stale all the same."""
+def test_a_small_file_is_keyed_on_all_of_its_content(tmp_path):
     path = tmp_path / "part.step"
     path.write_bytes(b"one")
-    cache_hash = CacheHash("test", cache=False)
-    cache_hash.set_dependencies([str(path)])
-    assert cache_hash.get() is None
+    os.utime(path, ns=(1_000_000_000, 1_000_000_000))
+    before = _files_key(str(path))
+    path.write_bytes(b"two")
+    os.utime(path, ns=(1_000_000_000, 1_000_000_000))
+    assert _files_key(str(path)) != before
 
-    os.utime(path, ns=(0, 0))
-    assert cache_hash.inputs_changed()
+
+def _large(tmp_path, middle: bytes, head: bytes = b"h", tail: bytes = b"t"):
+    """A file over the sample size, with the same modification time every time."""
+    path = tmp_path / "large.step"
+    size = cache_hash_module._SAMPLE_SIZE * 3
+    body = bytearray(size)
+    body[0:1] = head
+    body[size // 2 : size // 2 + 1] = middle
+    body[-1:] = tail
+    path.write_bytes(bytes(body))
+    os.utime(path, ns=(1_000_000_000, 1_000_000_000))
+    return str(path)
+
+
+def test_a_large_file_is_keyed_on_its_head_and_its_tail(tmp_path):
+    base = _files_key(_large(tmp_path, b"m"))
+    assert _files_key(_large(tmp_path, b"m", head=b"H")) != base
+    assert _files_key(_large(tmp_path, b"m", tail=b"T")) != base
+
+
+def test_a_large_file_is_not_read_in_the_middle(tmp_path):
+    """What the sample leaves out is covered by the size and the time, not read.
+
+    Asserted so that the saving is not quietly undone: an edit there with the
+    size and the time restored is the one change this cannot see.
+    """
+    assert _files_key(_large(tmp_path, b"m")) == _files_key(_large(tmp_path, b"M"))

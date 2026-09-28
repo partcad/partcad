@@ -123,12 +123,13 @@ class FakeContext:
         # the save/restore is that nothing else is.
         self.force_update_during_fetch = None
         self.get_all_packages_calls = 0
-        # What 'sources_changed()' answers: whether a file this context read
-        # has been edited since.
-        self.edited = False
+        # How many times a request asked for the changed packages to be
+        # reloaded (see 'Context.reload_changed_packages').
+        self.reloads = 0
 
-    def sources_changed(self):
-        return self.edited
+    def reload_changed_packages(self):
+        self.reloads += 1
+        return []
 
     def get_all_packages(self, parent_name=None, has_stuff=True):
         self.get_all_packages_calls += 1
@@ -279,25 +280,25 @@ def test_a_context_whose_root_did_not_load_is_read_again(tmp_path, state):
     assert session.partcad_ctx is session.contexts[second]
 
 
-def test_a_context_that_read_an_edited_file_is_read_again(tmp_path):
-    """A warm context hashed its files once and would go on serving the old key.
-
-    So an edit - to a part's source, or to 'partcad.yaml' by hand - is what
-    drops it, and the command after the edit is served from the files as they
-    are now rather than from the shapes built before it.
-    """
+def test_an_operation_on_a_context_reloads_its_changed_packages_first(tmp_path):
+    """The CLI's path: a context id, and the context kept rather than rebuilt."""
     session, _ = make_session()
+    context_id = create_context(session, tmp_path)
+    ctx = session.contexts[context_id]
 
-    first = create_context(session, tmp_path)
-    assert create_context(session, tmp_path) == first
+    assert operations._ctx(session, {"context": context_id}) is ctx
+    assert ctx.reloads == 1
+    assert create_context(session, tmp_path) == context_id
     assert len(session.partcad.contexts_built) == 1
 
-    session.contexts[first].edited = True
-    second = create_context(session, tmp_path)
 
-    assert second == first
-    assert len(session.partcad.contexts_built) == 2
-    assert session.partcad_ctx is session.partcad.contexts_built[1]
+def test_an_operation_on_the_session_context_reloads_its_changed_packages_first(tmp_path):
+    """The VS Code extension's path: no context id, the session's default."""
+    session, _ = make_session()
+    session.partcad_ctx = FakeContext(str(tmp_path), session.partcad.user_config)
+
+    assert operations._ctx(session, {}) is session.partcad_ctx
+    assert session.partcad_ctx.reloads == 1
 
 
 def test_a_request_without_a_url_uses_the_working_directory_as_a_real_uri(tmp_path, monkeypatch):

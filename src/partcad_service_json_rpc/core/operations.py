@@ -71,8 +71,16 @@ def _ctx(session, params):
             # Report it rather than no-op silently: the caller cannot otherwise
             # tell "unknown context" from "nothing to do".
             raise JsonRpcError(USAGE_ERROR, "Unknown context: %s" % context_id)
-        return ctx
-    return session.partcad_ctx
+    else:
+        ctx = session.partcad_ctx
+    if ctx is not None:
+        # Every operation on a context comes through here first, whichever
+        # client sent it, and requests are dispatched one at a time: this is
+        # the point between commands, where nothing is using the packages a
+        # reload replaces. A warm context would otherwise go on answering from
+        # the 'partcad.yaml' it read first, until the daemon is stopped.
+        ctx.reload_changed_packages()
+    return ctx
 
 
 def _qualified(package: str, name: str) -> str:
@@ -1900,15 +1908,6 @@ def context_create(session, params):
     # Nothing is paid for re-reading it: a root that did not load imported no
     # dependencies, so there is no package graph behind it to rebuild.
     if context_id in session.contexts and not _root_loaded(session.contexts[context_id]):
-        session.contexts.pop(context_id, None)
-
-    # And a context that has read a file edited since is dropped too. Each
-    # object hashes its files once and keeps what it built, so a warm context
-    # goes on answering with the cache key - and the shape - from before the
-    # edit, for every command until the daemon is stopped. Asking costs a stat
-    # per file read; rebuilding costs what the first command did, and the shape
-    # cache on disk still serves every object whose files did not change.
-    if context_id in session.contexts and session.contexts[context_id].sources_changed():
         session.contexts.pop(context_id, None)
 
     if context_id not in session.contexts:

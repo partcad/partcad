@@ -51,6 +51,11 @@ class ProjectLocal(Project):
             config_dir = os.path.dirname(os.path.abspath(path))
             config_path = path
         self.config_path = config_path
+        # What the file looked like when it was read - None if it was not there
+        # - so that a context kept warm can tell it has been edited, created or
+        # removed since (see 'Context.reload_changed_packages'). Taken before
+        # the read, so that an edit racing it is seen as one.
+        self.config_stat = file_stat(config_path)
 
         if not os.path.isfile(config_path):
             pc_logging.error("PartCAD configuration file is not found: '%s'" % config_path)
@@ -61,11 +66,6 @@ class ProjectLocal(Project):
             super().__init__(ctx, name, config_dir, config_obj={}, inherited_config=inherited_config)
             self.broken = True
             return
-
-        # What the file looked like when it was read, so that a context kept
-        # warm can tell it has been edited since (see 'Context.sources_changed').
-        # Taken before the read, so that an edit racing it is seen as one.
-        self.config_stat = file_stat(config_path)
 
         # Read the body of the configuration file
         fp = open(config_path, "r", encoding="utf-8")
