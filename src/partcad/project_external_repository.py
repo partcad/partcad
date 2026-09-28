@@ -284,6 +284,14 @@ class ProjectExternalRepository(ProjectPlugin):
         # A loop is already running in this thread: run the fetch to completion
         # on the shared, otel-context-preserving executor to avoid nesting event
         # loops (a raw ThreadPoolExecutor would drop the tracing context).
+        #
+        # Resolve the repository plugin here first, on this thread. Doing so
+        # takes 'ctx.lock', and this thread may be holding it already - a
+        # package's 'dependencies' are asked for from inside 'get_project' -
+        # which is fine for this thread, the lock being reentrant, and a
+        # deadlock for the worker: it would wait on the lock for as long as
+        # this thread waits on it.
+        self._get_repository()
         future = threadpool_manager.unconstrained_executor.submit(lambda: asyncio.run(self.get_data_async(key)))
         return future.result()
 

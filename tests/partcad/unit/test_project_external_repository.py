@@ -601,3 +601,43 @@ def test_each_kind_is_instantiated_on_its_own_first_access():
     # Read again: no second enumeration and no second instantiation pass.
     _ = repo.parts
     assert fake.keys == ["objects/assembly", "objects/part"]
+
+
+def test_a_fetch_from_inside_get_project_does_not_wait_on_itself():
+    # A package's 'dependencies' are asked for from inside 'get_project', which
+    # holds 'ctx.lock', and from inside a running event loop, which sends the
+    # fetch to a worker thread. Resolving the repository plugin takes the same
+    # lock: on the worker, that was a thread waiting for the one waiting for it,
+    # and 'pc render' of an assembly of LDraw parts hung until the client gave up.
+    import threading
+
+    ctx = pc.Context("examples")
+    repo = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", config_obj={}, plugin_ref=":repo")
+    fake = FakeRepository({"deadlock-probe": ["answer"]})
+
+    class Source:
+        def resolve(self, ref):
+            return "//src", "repo"
+
+        def get_repository(self, name):
+            return fake
+
+    def get_project(path):
+        with ctx.lock:  # as the real one does
+            return Source()
+
+    ctx.get_project = get_project
+    result = {}
+
+    def caller():
+        async def inside_a_loop():
+            with ctx.lock:
+                return repo.get_data("deadlock-probe")
+
+        result["value"] = asyncio.run(inside_a_loop())
+
+    thread = threading.Thread(target=caller, daemon=True)
+    thread.start()
+    thread.join(30)
+    assert not thread.is_alive(), "the fetch is waiting on the lock its own caller holds"
+    assert result["value"] == ["answer"]
