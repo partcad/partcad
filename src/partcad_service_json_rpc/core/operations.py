@@ -1902,6 +1902,15 @@ def context_create(session, params):
     if context_id in session.contexts and not _root_loaded(session.contexts[context_id]):
         session.contexts.pop(context_id, None)
 
+    # And a context that has read a file edited since is dropped too. Each
+    # object hashes its files once and keeps what it built, so a warm context
+    # goes on answering with the cache key - and the shape - from before the
+    # edit, for every command until the daemon is stopped. Asking costs a stat
+    # per file read; rebuilding costs what the first command did, and the shape
+    # cache on disk still serves every object whose files did not change.
+    if context_id in session.contexts and session.contexts[context_id].sources_changed():
+        session.contexts.pop(context_id, None)
+
     if context_id not in session.contexts:
         try:
             # Instantiate Context directly rather than via pc.init(): pc.init keeps

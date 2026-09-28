@@ -8,6 +8,7 @@
 #
 
 import hashlib
+import os
 
 from . import logging as pc_logging
 
@@ -43,11 +44,51 @@ from . import logging as pc_logging
 #      are the payload's shape rather than the key's, so nothing about a
 #      declaration changes when PartCAD does and an old entry would go on being
 #      served: a viewer showing an assembly with two roots and no ports in it.
-VERSION = 5
+#   6: every value is hashed with a type tag and a length in front of it, rather
+#      than as its bare bytes run together (see '_frame'). Under 5 the values
+#      of a list, a dictionary's keys and values, and the files a shape depends
+#      on were simply concatenated, so 'offset: [1, 23, 0]' and
+#      'offset: [12, 3, 0]' were one key - two different parts, one entry.
+#      The keys an extrude, a sweep, a compound part and an ASSY assembly are
+#      stored under also cover the keys of what they are built from now, so an
+#      entry written under 5 was keyed on less than it needed to be.
+VERSION = 6
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.
 _VERSION_TAG = ("partcad-cache-v%d" % VERSION).encode()
+
+# How much of a file is read at once while it is hashed.
+_CHUNK_SIZE = 1 << 20
+
+
+def _header(tag: bytes, length: int) -> bytes:
+    """What goes in front of every value: its type, and how long it is.
+
+    Without it the hash is of the values run together, and different values
+    run together into the same bytes: ["1", "23"] and ["12", "3"], a key "ab"
+    with the value "c" and a key "a" with the value "bc". The length is what
+    says where one value ends; the tag is what keeps 1 apart from "1".
+    """
+    return tag + length.to_bytes(8, "big")
+
+
+def _frame(tag: bytes, data: bytes) -> bytes:
+    return _header(tag, len(data)) + data
+
+
+def file_stat(filename: str):
+    """What a file looks like from outside, to tell later whether it changed.
+
+    Modification time and size, which is what 'make' trusts too: a stat, not a
+    read, so it is cheap enough to ask of every file a context has hashed each
+    time the context is reused. None for a file that is not there.
+    """
+    try:
+        st = os.stat(filename)
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
 
 
 class CacheHash:
@@ -59,6 +100,9 @@ class CacheHash:
         # reached with caching disabled too (a disabled hash still answers
         # None, it just never hashes anything).
         self.dependencies = []
+        # The files hashed so far and what they looked like when they were
+        # read (see 'inputs_changed').
+        self.file_stats = {}
         if not cache:
             # Caching is disabled, no initialization needed
             self.hasher = None
@@ -100,16 +144,28 @@ class CacheHash:
 
         def recurse(val):
             if isinstance(val, dict):
-                for k in sorted(val.keys()):
-                    self.hasher.update(str(k).encode())
+                self.hasher.update(_header(b"d", len(val)))
+                for k in sorted(val.keys(), key=str):
+                    self.hasher.update(_frame(b"k", str(k).encode()))
                     recurse(val[k])
             elif isinstance(val, str):
-                self.hasher.update(val.encode())
-            elif isinstance(val, (list, tuple, set)):
-                for item in sorted(val) if not isinstance(val, list) else val:
+                self.hasher.update(_frame(b"s", val.encode()))
+            elif isinstance(val, (list, tuple, set, frozenset)):
+                items = val if isinstance(val, (list, tuple)) else sorted(val, key=str)
+                self.hasher.update(_header(b"l", len(items)))
+                for item in items:
                     recurse(item)
+            elif val is None:
+                self.hasher.update(_header(b"n", 0))
+            elif isinstance(val, bool):
+                # Before 'int': a bool is one, and True is not 1 here.
+                self.hasher.update(_frame(b"t", str(val).encode()))
+            elif isinstance(val, int):
+                self.hasher.update(_frame(b"i", str(val).encode()))
+            elif isinstance(val, float):
+                self.hasher.update(_frame(b"r", repr(val).encode()))
             else:
-                self.hasher.update(str(val).encode())
+                self.hasher.update(_frame(b"o", str(val).encode()))
 
         recurse(data)
         self.touch()
@@ -122,7 +178,7 @@ class CacheHash:
             # Do not consider it not being empty
             return
 
-        self.hasher.update(string.encode())
+        self.hasher.update(_frame(b"s", string.encode()))
         self.touch()
 
     def add_bytes(self, bytes: bytes):
@@ -133,29 +189,47 @@ class CacheHash:
             # Do not consider it not being empty
             return
 
-        self.hasher.update(bytes)
+        self.hasher.update(_frame(b"b", bytes))
         self.touch()
 
     def add_filename(self, filename: str):
-        if not self.hasher:
-            # Caching is disabled
-            return
         if filename is None:
             # Do not consider it not being empty
+            return
+
+        # Recorded with caching disabled too: what is built is still kept in
+        # memory, and a warm context has to know when that went stale. Taken
+        # before the read, so that a write racing it leaves the stat looking
+        # older than the file and the next check sees a change.
+        self.file_stats[filename] = file_stat(filename)
+        if not self.hasher:
+            # Caching is disabled
             return
 
         try:
             # Track changes to the file content
             with open(filename, "rb") as f:
-                self.hasher.update(f.read())
-
-            # TODO(clairbee): optionally, track changes by file modification time only
-            # self.hasher.update(struct.pack("f", os.path.getmtime(filename)))
+                self.hasher.update(_header(b"f", os.fstat(f.fileno()).st_size))
+                for chunk in iter(lambda: f.read(_CHUNK_SIZE), b""):
+                    self.hasher.update(chunk)
         except FileNotFoundError:
-            # TODO(clairbee): trigger preload if content hashing is back
-            # This happens for all files that are not yet downloaded
-            return
+            # Hashed as missing rather than skipped: skipped, a dependency that
+            # is not there and one that is empty or absent from the list are all
+            # the same key, and the entry built without the file goes on being
+            # served once the file appears.
+            self.hasher.update(_header(b"m", 0))
         self.touch()
+
+    def inputs_changed(self) -> bool:
+        """Whether a file this hash has read looks different now.
+
+        The hash is computed once, the first time it is asked for, and an
+        object that stays in memory - a warm daemon's context - would go on
+        answering with the key its files had then. This is how whoever holds
+        it finds out that the answer is stale, for the price of a stat per
+        file.
+        """
+        return any(file_stat(filename) != stat for filename, stat in list(self.file_stats.items()))
 
     def set_dependencies(self, dependencies: list[str]) -> None:
         self.dependencies = dependencies

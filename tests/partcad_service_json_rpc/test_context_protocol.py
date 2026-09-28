@@ -123,6 +123,12 @@ class FakeContext:
         # the save/restore is that nothing else is.
         self.force_update_during_fetch = None
         self.get_all_packages_calls = 0
+        # What 'sources_changed()' answers: whether a file this context read
+        # has been edited since.
+        self.edited = False
+
+    def sources_changed(self):
+        return self.edited
 
     def get_all_packages(self, parent_name=None, has_stuff=True):
         self.get_all_packages_calls += 1
@@ -271,6 +277,27 @@ def test_a_context_whose_root_did_not_load_is_read_again(tmp_path, state):
     assert session.contexts[second] is session.partcad.contexts_built[1]
     # ...and the operations that follow this handshake get the fresh one.
     assert session.partcad_ctx is session.contexts[second]
+
+
+def test_a_context_that_read_an_edited_file_is_read_again(tmp_path):
+    """A warm context hashed its files once and would go on serving the old key.
+
+    So an edit - to a part's source, or to 'partcad.yaml' by hand - is what
+    drops it, and the command after the edit is served from the files as they
+    are now rather than from the shapes built before it.
+    """
+    session, _ = make_session()
+
+    first = create_context(session, tmp_path)
+    assert create_context(session, tmp_path) == first
+    assert len(session.partcad.contexts_built) == 1
+
+    session.contexts[first].edited = True
+    second = create_context(session, tmp_path)
+
+    assert second == first
+    assert len(session.partcad.contexts_built) == 2
+    assert session.partcad_ctx is session.partcad.contexts_built[1]
 
 
 def test_a_request_without_a_url_uses_the_working_directory_as_a_real_uri(tmp_path, monkeypatch):

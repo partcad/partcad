@@ -129,20 +129,27 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         """
         await super().prepare_async(assembly)
         unresolved = []
-        await self.prepare_node_async(self.read_assy(), unresolved)
+        unkeyed = []
+        await self.prepare_node_async(self.read_assy(), unresolved, assembly, unkeyed)
+        # The ASSY file says which objects this is made of, and its content is
+        # in the key already; what those objects contain is in it once each of
+        # their keys is. Until then an edited part left every assembly using
+        # it served from the entry built before the edit.
+        if not unresolved and not unkeyed:
+            assembly.cache_dependencies_broken = False
         if unresolved:
             raise Exception("Failed to resolve the links to: %s" % ", ".join(unresolved))
 
-    async def prepare_node_async(self, node, unresolved: list) -> None:
+    async def prepare_node_async(self, node, unresolved: list, assembly=None, unkeyed=None) -> None:
         if isinstance(node, list):
             for item in node:
-                await self.prepare_node_async(item, unresolved)
+                await self.prepare_node_async(item, unresolved, assembly, unkeyed)
             return
         if not isinstance(node, dict):
             return
 
         if "links" in node and node["links"] is not None:
-            await self.prepare_node_async(node["links"], unresolved)
+            await self.prepare_node_async(node["links"], unresolved, assembly, unkeyed)
             return
 
         if "assembly" in node:
@@ -158,6 +165,9 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             unresolved.append(name)
             return
         await item.prepare_async()
+        # In the order the file names them, which is the order the key needs.
+        if assembly is not None and not await assembly.add_cache_key_of(item):
+            unkeyed.append(name)
 
     async def subassemblies_async(self, assembly) -> list:
         """The assemblies this file links to, resolved but not built.

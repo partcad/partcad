@@ -61,12 +61,27 @@ class PartFactoryExtrude(PartFactoryHomogen):
             # shape itself (see Shape.__init__), so without it every extrude
             # part of a package that shares a depth shares a cache entry, and
             # whichever of them the cache is asked for first is what all of
-            # them get back. What is still missing is the sketch's *content*,
-            # which is what the broken-dependencies flag below stands for.
+            # them get back. The sketch's *content* is added once the sketch
+            # is resolved (see 'prepare_async').
             self.part.hash.add_string(self.source_sketch_spec)
             self.part.hash.add_string(str(self.depth))
-            # TODO(clairbee): add dependency tracking for Extrude (PC-313)
+            # Until the sketch's own key is folded in (see 'prepare_async'),
+            # what the sketch contains is not in this key.
             self.part.cache_dependencies_broken = True
+
+    async def prepare_async(self, part) -> None:
+        """Resolve the sketch, and key this part on what it contains too.
+
+        The name of the sketch is in the key already; its content is not, and
+        without it an edited sketch goes on being extruded from the entry
+        the old one produced.
+        """
+        sketch = self.ctx.get_sketch(self.source_sketch_spec)
+        if sketch is None:
+            # Reported by 'instantiate', which is where it always was.
+            return
+        if await part.add_cache_key_of(sketch):
+            part.cache_dependencies_broken = False
 
     async def instantiate(self, part):
         with pc_logging.Action("Extrude", part.project_name, part.name):

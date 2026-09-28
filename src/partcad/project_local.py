@@ -17,6 +17,7 @@ from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from . import config_template
 from . import logging as pc_logging
 from . import telemetry
+from .cache_hash import file_stat
 from .project import Project
 
 
@@ -60,6 +61,11 @@ class ProjectLocal(Project):
             super().__init__(ctx, name, config_dir, config_obj={}, inherited_config=inherited_config)
             self.broken = True
             return
+
+        # What the file looked like when it was read, so that a context kept
+        # warm can tell it has been edited since (see 'Context.sources_changed').
+        # Taken before the read, so that an edit racing it is seen as one.
+        self.config_stat = file_stat(config_path)
 
         # Read the body of the configuration file
         fp = open(config_path, "r", encoding="utf-8")

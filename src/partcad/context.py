@@ -29,6 +29,7 @@ from . import runtime, runtime_javascript_all, runtime_python_all, sandbox_versi
 from . import tags as pc_tags
 from . import telemetry
 from .cache import Cache
+from .cache_hash import file_stat
 from .cache_shape import ShapeCache
 from .mating import Mating
 from .part import Part
@@ -481,6 +482,30 @@ class Context:
         own (see 'Project.object_count_known').
         """
         return sum(project.object_count_known(kind) for project in list(self.projects.values()))
+
+    def sources_changed(self) -> bool:
+        """Whether a file this context has read has changed since it read it.
+
+        A context reads each package's configuration once, and each object
+        hashes the files it is built from once, the first time its key is
+        asked for - and then keeps both, together with whatever it built, for
+        as long as it lives. That is the whole of a command for a context that
+        lives as long as one, and it is stale the moment a file is edited for
+        one a daemon keeps warm between commands. This is how the daemon tells:
+        a stat per file read, no reads and no hashing.
+
+        Only objects that exist are asked; creating one never creates another.
+        """
+        for project in list(self.projects.values()):
+            config_stat = getattr(project, "config_stat", None)
+            if config_stat is not None and file_stat(project.config_path) != config_stat:
+                return True
+            for objects in (project._sketches, project._parts, project._assemblies, project._scenes):
+                for shape in list(objects.values()):
+                    shape_hash = getattr(shape, "hash", None)
+                    if shape_hash is not None and shape_hash.inputs_changed():
+                        return True
+        return False
 
     @property
     def stats_sketches_declared(self) -> int:
