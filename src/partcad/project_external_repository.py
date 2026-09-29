@@ -113,9 +113,16 @@ class ProjectExternalRepository(ProjectPlugin):
             return self._request_cache.setdefault(key, value)
 
     def _get_repository(self):
-        """Resolve the backing repository plugin, once, on first use."""
+        """Resolve the backing repository plugin, once, on first use.
+
+        The reference is resolved by this package itself rather than by looking
+        this package up again: 'get_project(self.name)' starts from the root,
+        takes 'ctx.lock', and answers None while the package is still loading -
+        the case 'get_project_from' is written for - to arrive at the object
+        that is already in hand.
+        """
         if self._repository is None and self._plugin_ref is not None:
-            package_name, repository_name = self.ctx.get_project(self.name).resolve(self._plugin_ref)
+            package_name, repository_name = self.resolve(self._plugin_ref)
             source = self.ctx.get_project(package_name)
             if source is not None:
                 self._repository = source.get_repository(repository_name)
@@ -285,12 +292,13 @@ class ProjectExternalRepository(ProjectPlugin):
         # on the shared, otel-context-preserving executor to avoid nesting event
         # loops (a raw ThreadPoolExecutor would drop the tracing context).
         #
-        # Resolve the repository plugin here first, on this thread. Doing so
-        # takes 'ctx.lock', and this thread may be holding it already - a
-        # package's 'dependencies' are asked for from inside 'get_project' -
-        # which is fine for this thread, the lock being reentrant, and a
-        # deadlock for the worker: it would wait on the lock for as long as
-        # this thread waits on it.
+        # This thread then blocks until the worker is done, and it may be doing
+        # so while holding 'ctx.lock': a package's 'dependencies' are asked for
+        # from inside 'get_project', under that lock. So the worker must not
+        # need it - the rule 'concurrency.py' states for its own lock, never
+        # waited on across a hand-off - and the one thing in the fetch that
+        # does, finding the repository plugin, is done here first, on this
+        # thread, where the lock is reentrant. The worker finds it resolved.
         self._get_repository()
         future = threadpool_manager.unconstrained_executor.submit(lambda: asyncio.run(self.get_data_async(key)))
         return future.result()

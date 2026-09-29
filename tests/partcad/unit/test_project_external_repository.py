@@ -616,9 +616,6 @@ def test_a_fetch_from_inside_get_project_does_not_wait_on_itself():
     fake = FakeRepository({"deadlock-probe": ["answer"]})
 
     class Source:
-        def resolve(self, ref):
-            return "//src", "repo"
-
         def get_repository(self, name):
             return fake
 
