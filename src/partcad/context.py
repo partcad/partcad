@@ -29,6 +29,7 @@ from . import runtime, runtime_javascript_all, runtime_python_all, sandbox_versi
 from . import tags as pc_tags
 from . import telemetry
 from .cache import Cache
+from .cache_hash import file_stat
 from .cache_shape import ShapeCache
 from .mating import Mating
 from .part import Part
@@ -60,6 +61,25 @@ def _is_within(name: str, parent_name: Optional[str]) -> bool:
     if parent_name is None:
         return True
     return name == parent_name or name.startswith(parent_name.rstrip("/") + "/")
+
+
+# How long a package's 'partcad.yaml' is taken to be unchanged after it was
+# last checked (see 'Context.reload_changed_packages').
+CONFIG_CHECK_INTERVAL = 15.0
+
+
+def _dependency_package_name(parent: str, dependency: str, config) -> str:
+    """The name a declared dependency is loaded under, as '_get_project_recursive' loads it."""
+    if isinstance(config, dict) and config.get("onlyInRoot", False):
+        return "//" + dependency
+    if dependency.startswith("//"):
+        return dependency
+    return get_child_project_path(parent, dependency)
+
+
+def _package_of(full_name: str) -> str:
+    """The package an object's full name ('//pkg:name') belongs to."""
+    return full_name.split(":", 1)[0]
 
 
 # How long the probe waits before concluding that there is no network.
@@ -377,6 +397,9 @@ class Context:
         self.project_locks = {}
         self.project_locks_lock = threading.Lock()
         self._projects_being_loaded = {}
+        # When each package's 'partcad.yaml' was last compared with what was
+        # read, by package name (see 'reload_changed_packages').
+        self._config_checked_at = {}
         self.user_config = user_config
 
         # Computed once, here, rather than per package: every 'unless' in the
@@ -436,21 +459,25 @@ class Context:
         # '__version__' from it at module scope.
         version = sys.modules["partcad"].__version__
         with pc_logging.Process("InitCtx", self.config_dir, "v%s" % version):
-            self.root = self.import_project(
-                None,  # parent
-                {
-                    "name": consts.ROOT,
-                    "type": "local",
-                    "path": self.root_path,
-                    "canBeEmpty": True,
-                    "isRoot": True,
-                },
-            )
-            if self.root is None:
-                # Leave the provisional name in place. 'get_project()' returns
-                # None for every lookup in that state, which is how a failed
-                # root load has always been reported.
-                pc_logging.error("Failed to load the root package: %s" % self.root_path)
+            self._import_root()
+
+    def _import_root(self):
+        """Load the root package, under the provisional name set above."""
+        self.root = self.import_project(
+            None,  # parent
+            {
+                "name": consts.ROOT,
+                "type": "local",
+                "path": self.root_path,
+                "canBeEmpty": True,
+                "isRoot": True,
+            },
+        )
+        if self.root is None:
+            # Leave the provisional name in place. 'get_project()' returns
+            # None for every lookup in that state, which is how a failed
+            # root load has always been reported.
+            pc_logging.error("Failed to load the root package: %s" % self.root_path)
 
     def _recompute_current_project_path(self):
         """Derives 'current_project_path' from the (possibly adopted) root name.
@@ -481,6 +508,119 @@ class Context:
         own (see 'Project.object_count_known').
         """
         return sum(project.object_count_known(kind) for project in list(self.projects.values()))
+
+    def reload_changed_packages(self, packages=None, recursive=False) -> list[str]:
+        """Reload the packages whose 'partcad.yaml' changed since it was read.
+
+        A context reads each package's configuration once and keeps it, with
+        every object created from it, for as long as it lives - which is the
+        whole of one command for most contexts, and indefinitely for the ones a
+        daemon keeps warm between commands. The daemon calls this as a command
+        comes in, so that an edited configuration is what that command sees.
+
+        Which packages are checked: 'packages', the ones the command is about,
+        and every package they declare as a dependency, transitively - with
+        'recursive', every loaded package underneath them too. None checks all
+        of them. A package something reaches without declaring it is not
+        checked, and may be answered from the configuration read before.
+
+        Whether a configuration changed is its modification time and size: a
+        stat, no read, and at most once per 'CONFIG_CHECK_INTERVAL' seconds per
+        package, so that a burst of commands does not stat the same files over
+        and over. A changed package is dropped together with every package
+        underneath it, and is loaded again from disk the next time something
+        asks for it. Nothing else is: the packages beside it, the sandboxes, and
+        whatever the other packages have built stay as they are. The root's
+        children are every package, so a changed root reloads them all - in this
+        context, rather than in a new one.
+
+        Returns the names of the packages dropped.
+        """
+        with self.lock:
+            names = list(self.projects) if packages is None else self._config_check_scope(packages, recursive)
+            now = time.monotonic()
+            changed = []
+            for name in names:
+                project = self.projects.get(name)
+                if project is None or not hasattr(project, "config_stat"):
+                    continue
+                checked_at = self._config_checked_at.get(name)
+                if checked_at is not None and now - checked_at < CONFIG_CHECK_INTERVAL:
+                    continue
+                self._config_checked_at[name] = now
+                if file_stat(project.config_path) != project.config_stat:
+                    changed.append(name)
+
+            # A root that is not loaded - the last reload of it failed, and
+            # there is no configuration left to compare - is loaded again every
+            # time, or the context would stay empty after the file was fixed.
+            root_changed = self.root is None or self.root.name not in self.projects
+            if root_changed:
+                changed.append(consts.ROOT if self.root is None else self.root.name)
+            elif self.root.name in changed:
+                root_changed = True
+            if not changed:
+                return []
+
+            if root_changed:
+                # Everything but the built-in packages, which are PartCAD's own
+                # files: including the 'onlyInRoot' dependencies, which are
+                # the root's even though they are not named under it.
+                dropped = [name for name in self.projects if name not in output.BUILTIN_PATHS]
+            else:
+                dropped = [name for name in self.projects if any(_is_within(name, top) for top in changed)]
+
+            for name in dropped:
+                self.projects.pop(name, None)
+                self._config_checked_at.pop(name, None)
+            # What those packages declared about how interfaces mate: kept, it
+            # would stop a reloaded package from declaring it differently (the
+            # first declaration of a pair is the one that stays).
+            for source in list(self.mates):
+                if _package_of(source) in dropped:
+                    del self.mates[source]
+                    continue
+                for target in list(self.mates[source]):
+                    if _package_of(target) in dropped:
+                        del self.mates[source][target]
+
+            if root_changed:
+                self.name = consts.ROOT
+                self.current_project_path = consts.ROOT
+                try:
+                    self._import_root()
+                except BaseException:
+                    # An unparseable file: nothing is loaded, and saying so is
+                    # what makes the next call try again (see above).
+                    self.root = None
+                    raise
+
+        pc_logging.info("Reloaded the packages whose configuration changed: %s" % ", ".join(sorted(changed)))
+        return dropped
+
+    def _config_check_scope(self, packages, recursive: bool) -> list[str]:
+        """The loaded packages 'packages' are, declare, or (recursively) hold."""
+        scope = []
+        seen = set()
+        queue = list(packages)
+        while queue:
+            name = queue.pop()
+            if name in seen:
+                continue
+            seen.add(name)
+            project = self.projects.get(name)
+            if project is None or not hasattr(project, "config_stat"):
+                # Not loaded, so it will be read from disk when it is - or not
+                # read from a file at all: a plugin-backed package, whose
+                # repository reports its children, and which is not asked here
+                # because asking can be a round trip.
+                continue
+            scope.append(name)
+            if recursive:
+                queue.extend(other for other in list(self.projects) if _is_within(other, name))
+            for dependency, config in project.dependencies().items():
+                queue.append(_dependency_package_name(project.name, dependency, config))
+        return scope
 
     @property
     def stats_sketches_declared(self) -> int:

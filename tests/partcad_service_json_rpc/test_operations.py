@@ -382,6 +382,9 @@ class FakeContext:
         # (parent, kinds) of every warm-up a listing asked for.
         self.prefetched = []
         self.mates = {}
+        # How many times an operation asked for the packages whose
+        # configuration changed to be reloaded (see '_ctx').
+        self.reloads = 0
         # What `ProviderCart.add_object()` puts in the cart, by object name: the
         # line items an object breaks down into.
         self.cart_contents = {}
@@ -414,6 +417,11 @@ class FakeContext:
             "stats_memory",
         ):
             setattr(self, name, 0)
+
+    def reload_changed_packages(self, packages=None, recursive=False):
+        self.reloads += 1
+        self.reload_targets = (packages, recursive)
+        return []
 
     def _stats_declared(self, kind):
         return sum(project.object_count_known(kind) for project in self.projects.values())

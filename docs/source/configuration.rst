@@ -2763,6 +2763,13 @@ The source file does not have to be a part of the package: ``fileFrom`` and
 :ref:`parts` (see :ref:`files`). This holds for every assembly type -- a vendor's
 STEP assembly is declared with its URL and read from there.
 
+``dependencies`` is for the files the source file pulls in by itself -- a Jinja
+macro file, another ``.assy`` it includes. The parts and assemblies an ``assy``
+file links to need no listing there: an assembly's cache key covers theirs, so
+editing one of them rebuilds every assembly using it. The same holds for the
+sketch of an ``extrude`` or ``sweep`` part, and for the assembly a ``compound``
+part is made from.
+
 .. _assembly-ports:
 
 Ports and interfaces of an assembly

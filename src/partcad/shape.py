@@ -510,6 +510,26 @@ class Shape(ShapeConfiguration):
         present = await ctx.cache_shapes.contains_data_async(self.hash, [self.kind])
         return present.get(self.kind, False)
 
+    async def add_cache_key_of(self, source: "Shape") -> bool:
+        """Key this shape on the key of a shape it is built from, too.
+
+        For a shape made *out of* others - an extrusion of a sketch, an
+        assembly of parts - its own configuration and files say which objects
+        it uses but not what they contain, so editing one of them would leave
+        this shape's key, and the entry stored under it, as they were. Their
+        keys cover their content, so hashing those covers it here as well.
+
+        False when the source has no key - it says 'cache: false', or is made
+        of something that does - which leaves this shape's content unaccounted
+        for: the caller must not cache it either.
+        """
+        await source.prepare_async()
+        key = await source.get_cache_key_async()
+        if key is None:
+            return False
+        self.hash.add_string(key)
+        return True
+
     async def take_cache_key_from(self, source: "Shape") -> None:
         """Key this shape on the shape it points at, plus what it adds to it.
 

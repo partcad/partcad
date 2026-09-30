@@ -111,6 +111,7 @@ option_groups = [
             "--cache-s3-bucket",
             "--cache-s3-endpoint-url",
             "--cache-dependencies-ignore",
+            "--cache-bypass",
         ],
     },
     {
@@ -309,6 +310,15 @@ click.rich_click.COMMAND_GROUPS = {
     help="Ignore broken dependencies and cache at your own risk",
 )
 @click.option(
+    "--cache-bypass",
+    "cache_bypass",
+    is_flag=True,
+    default=None,
+    envvar="PC_CACHE_BYPASS",
+    show_envvar=True,
+    help="Bypass every cache tier: build everything afresh, and keep nothing that was built",
+)
+@click.option(
     "--python-sandbox",
     default=None,
     show_envvar=True,
@@ -487,6 +497,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                 pc_user_config.set(attrib, value)
             else:
                 setattr(pc_user_config, attrib, value)
+    _bypass_cache(ctx, pc_user_config, kwargs)
 
     # Initialize logging before using telemetry, as telemetry may use logging.
     # The remote-log client wraps logging_ansi_terminal (ANSI) or a plain stderr
@@ -595,6 +606,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                     pc_user_config.set(attrib, value)
                 else:
                     setattr(pc_user_config, attrib, value)
+        _bypass_cache(ctx, pc_user_config, kwargs)
 
         # parse extra parameters and add them to the user_config
         for params in kwargs["extra_param"]:
@@ -630,6 +642,31 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             get_partcad_context=get_partcad_context,
             path=path,
         )
+
+
+def _bypass_cache(ctx: click.Context, user_config, kwargs) -> None:
+    """Apply '--cache-bypass' to this command, where the daemon will see it too.
+
+    Written into the configuration's settings as well as its attribute: a
+    context built in this process reads the attribute, and what travels to the
+    daemon is the settings (see 'UserConfig.to_dict'). Both belong to the
+    process-wide configuration, so both are put back as the command finishes -
+    or every later command run by the same process would bypass the cache too.
+    """
+    if not kwargs.get("cache_bypass") or ctx.meta.get("partcad.cache_bypass"):
+        # Not asked for, or applied already: 'cli' calls this twice, and a
+        # second pass would record the bypass as what to restore.
+        return
+    ctx.meta["partcad.cache_bypass"] = True
+    setting, attribute = user_config.get("cacheBypass"), user_config.cache_bypass
+    user_config.set("cacheBypass", True)
+    user_config.cache_bypass = True
+
+    def restore():
+        user_config.set("cacheBypass", setting)
+        user_config.cache_bypass = attribute
+
+    ctx.call_on_close(restore)
 
 
 cli.context_settings = {

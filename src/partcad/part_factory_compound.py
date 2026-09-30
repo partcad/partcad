@@ -53,6 +53,15 @@ class PartFactoryCompound(pf.PartFactory):
             raise Exception("compound source assembly not found: %s" % self.source)
         await assembly.prepare_async()
 
+        # The assembly's name is in this part's key already (it is in the
+        # configuration); what it is made of is not, and without that an
+        # edited part inside it would leave this compound served as it was.
+        if not await part.add_cache_key_of(assembly):
+            # An assembly with no key - 'cache: false', or made of something
+            # that is - has content nothing here can vouch for, so neither has
+            # a compound of it.
+            part.cacheable = False
+
     async def instantiate(self, part):
         with pc_logging.Action("Compound", part.project_name, part.name):
             params = self.parameters if self.parameters else None

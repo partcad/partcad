@@ -68,8 +68,27 @@ class PartFactorySweep(PartFactory):
             # otherwise hash the same and share one cache entry.
             self.part.hash.add_string(self.source_sketch_spec)
             self.part.hash.add_dict(sweep_config)
-            # TODO(clairbee): add dependency tracking for Sweep (PC-313)
+            # Until the sketch's own key is folded in (see 'prepare_async'),
+            # what the sketch contains is not in this key.
             self.part.cache_dependencies_broken = True
+
+    async def prepare_async(self, part) -> None:
+        """Resolve the sketch, and key this part on what it contains too.
+
+        The name of the sketch is in the key already; its content is not, and
+        without it an edited sketch goes on being swept from the entry
+        the old one produced.
+        """
+        sketch = self.ctx.get_sketch(self.source_sketch_spec)
+        if sketch is None:
+            # Reported by 'instantiate', which is where it always was.
+            return
+        if await part.add_cache_key_of(sketch):
+            part.cache_dependencies_broken = False
+        else:
+            # A sketch with no key - 'cache: false' - has content nothing here
+            # can vouch for, so neither has what is built out of it.
+            part.cacheable = False
 
     async def instantiate(self, part):
         with pc_logging.Action("Sweep", part.project_name, part.name):

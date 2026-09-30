@@ -123,6 +123,14 @@ class FakeContext:
         # the save/restore is that nothing else is.
         self.force_update_during_fetch = None
         self.get_all_packages_calls = 0
+        # How many times a request asked for the changed packages to be
+        # reloaded (see 'Context.reload_changed_packages').
+        self.reloads = 0
+
+    def reload_changed_packages(self, packages=None, recursive=False):
+        self.reloads += 1
+        self.reload_targets = (packages, recursive)
+        return []
 
     def get_all_packages(self, parent_name=None, has_stuff=True):
         self.get_all_packages_calls += 1
@@ -271,6 +279,71 @@ def test_a_context_whose_root_did_not_load_is_read_again(tmp_path, state):
     assert session.contexts[second] is session.partcad.contexts_built[1]
     # ...and the operations that follow this handshake get the fresh one.
     assert session.partcad_ctx is session.contexts[second]
+
+
+def test_an_operation_on_a_context_reloads_its_changed_packages_first(tmp_path):
+    """The CLI's path: a context id, and the context kept rather than rebuilt."""
+    session, _ = make_session()
+    context_id = create_context(session, tmp_path)
+    ctx = session.contexts[context_id]
+
+    assert operations._ctx(session, {"context": context_id}) is ctx
+    assert ctx.reloads == 1
+    assert create_context(session, tmp_path) == context_id
+    assert len(session.partcad.contexts_built) == 1
+
+
+@pytest.mark.parametrize(
+    "params, expected",
+    [
+        # Nothing named: the package the command runs in.
+        ({}, (["//"], False)),
+        ({"package": "//app"}, (["//app"], False)),
+        # '-r', and the '...' suffix that says the same.
+        ({"package": "//app", "recursive": True}, (["//app"], True)),
+        ({"package": "//app..."}, (["//app"], True)),
+        # An object that names its own package - from the CLI, and the editor.
+        ({"package": "//app", "object": "//lib:bolt"}, (["//lib"], False)),
+        ({"package": "//app", "name": "//lib:bolt"}, (["//lib"], False)),
+        # ...and one that does not.
+        ({"package": "//app", "object": "bolt"}, (["//app"], False)),
+    ],
+)
+def test_the_packages_checked_are_the_ones_the_request_is_about(tmp_path, params, expected):
+    session, _ = make_session()
+    context_id = create_context(session, tmp_path)
+
+    operations._ctx(session, {"context": context_id, **params})
+
+    assert session.contexts[context_id].reload_targets == expected
+
+
+def test_a_configuration_that_no_longer_parses_is_reported_as_one(tmp_path):
+    """As 'context.create' reports it, rather than as an internal error."""
+    import yaml
+
+    session, _ = make_session()
+    context_id = create_context(session, tmp_path)
+
+    def unparseable(packages=None, recursive=False):
+        yaml.safe_load("parts: [\n")
+
+    session.contexts[context_id].reload_changed_packages = unparseable
+
+    with pytest.raises(JsonRpcError) as raised:
+        operations._ctx(session, {"context": context_id})
+    assert raised.value.code == operations.INVALID_CONFIG
+    # Kept: its next request loads the root again.
+    assert context_id in session.contexts
+
+
+def test_an_operation_on_the_session_context_reloads_its_changed_packages_first(tmp_path):
+    """The VS Code extension's path: no context id, the session's default."""
+    session, _ = make_session()
+    session.partcad_ctx = FakeContext(str(tmp_path), session.partcad.user_config)
+
+    assert operations._ctx(session, {}) is session.partcad_ctx
+    assert session.partcad_ctx.reloads == 1
 
 
 def test_a_request_without_a_url_uses_the_working_directory_as_a_real_uri(tmp_path, monkeypatch):

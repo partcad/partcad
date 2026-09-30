@@ -41,6 +41,10 @@ class Mating:
 
         self.source = source
         self.target = target
+        # As declared, and which way round: what an assembly that connects
+        # through this mating is keyed on (see 'AssemblyFactoryAssy').
+        self.config = config
+        self.reverse = reverse
         self.desc = config["desc"] if "desc" in config else ""
         # Whether a thread gets *cut* by making this connection rather than
         # matched, which is what lets the two ends carry different threads - or
