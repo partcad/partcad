@@ -152,7 +152,13 @@ def test_another_context_reads_the_script_again(tmp_path):
 
 
 def test_the_old_place_to_say_it_is_named_when_it_is_still_used(caplog):
-    """The schema refuses the key; this says which key and what replaced it."""
+    """Says which key it was and what replaced it - and only warns about it.
+
+    The package carrying one is somebody else's, published before this changed.
+    Raising it to an error would end every command that reaches an unmigrated
+    dependency, which is how this was first noticed: the examples suite aborted
+    on a library three packages away.
+    """
 
     class Importer(pfe.ExternalImportConfiguration):
         def __init__(self, config_obj):
@@ -161,6 +167,7 @@ def test_the_old_place_to_say_it_is_named_when_it_is_still_used(caplog):
 
     Importer({"plugin": ":repo", "cacheVersion": 3})
     assert "cacheVersion" in caplog.text and pfe.CACHE_VERSION_NAME in caplog.text
+    assert [r.levelname for r in caplog.records] == ["WARNING"]
 
     caplog.clear()
     Importer({"plugin": ":repo"})

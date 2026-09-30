@@ -113,12 +113,18 @@ class ExternalImportConfiguration:
         # its requests within the repository. Empty for a top-level package.
         self.subfolder = self.config_obj.get("subfolder", "")
         # 'cacheVersion' used to be declared here, by whoever imported the
-        # plugin. Said by name, because the schema refuses an unknown key
-        # without saying which one or what replaced it.
+        # plugin. Said by name, because an unknown key is otherwise refused
+        # without saying which one it was or what replaced it.
+        #
+        # A warning and not an error: the package that still carries one is
+        # somebody else's, published before this changed, and whoever runs into
+        # it is usually in no position to fix it. Failing their command over it
+        # would make one unmigrated dependency anywhere in the tree the end of
+        # every command that reaches it.
         if "cacheVersion" in self.config_obj:
-            pc_logging.error(
-                "'cacheVersion' is no longer a property of a dependency: the plugin states it, "
-                "as a module-level '%s = <int>' in its own script." % CACHE_VERSION_NAME
+            pc_logging.warning(
+                "'cacheVersion' is no longer a property of a dependency and is ignored here: "
+                "a plugin states it itself, as a module-level '%s = <int>' in its own script." % CACHE_VERSION_NAME
             )
 
 
