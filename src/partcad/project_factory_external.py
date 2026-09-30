@@ -29,8 +29,9 @@ CACHE_VERSION_NAME = "CACHE_VERSION"
 # version)'. The root of a plugin-backed hierarchy is created before its
 # children and resolves the number first, so every child of it reads the same
 # answer here without resolving anything - it need only stat the path the root
-# found. Without that the children would compute a different namespace from the
-# root's and stop sharing its cache.
+# found, and re-read *that* path if it has moved on. Without this the children
+# would compute a different namespace from the root's and stop sharing its
+# cache. Only a script that was found is remembered; see 'declared_cache_version'.
 #
 # Guarded by a stat rather than held outright, because a daemon keeps a context
 # warm for as long as it runs and edits the packages under it in place: a memo
@@ -46,17 +47,15 @@ _declared_versions: "weakref.WeakKeyDictionary[object, dict[str, tuple]]" = weak
 _declared_versions_lock = threading.Lock()
 
 
-def _script_stat(path):
+def _script_stat(path: str):
     """What the plugin's script looks like from outside, to tell whether it changed.
 
-    Modification time and size: a stat, not a read. None for a path that is not
-    there, or for a repository that names no script at all.
+    Modification time and size: a stat, not a read. None for a file that is not
+    there, which is a script that has been deleted since it was read.
 
     The same notion as 'cache_hash.file_stat', which arrives with the caching
     work in #702; fold the two together once that lands.
     """
-    if path is None:
-        return None
     try:
         st = os.stat(path)
     except OSError:
@@ -64,11 +63,30 @@ def _script_stat(path):
     return (st.st_mtime_ns, st.st_size)
 
 
-def _read_declared_cache_version(ctx, parent: Project, plugin_ref: str):
-    """The version the plugin states in its own code, and the script it was read from.
+def _locate_plugin_script(ctx, parent: Project, plugin_ref: str):
+    """The file the repository plugin is written in, or None.
 
-    Returned as '(version, path)' - 0 and None when the plugin states none, has
-    no script, or cannot be reached. The path is what the memo above stats.
+    None when the repository names no script - an 'enrich' one, which rewrites
+    another repository's answers, has no code of its own - or when the package
+    that hosts it is not loaded.
+    """
+    package_name, repository_name = resolve_resource_path(parent.name, plugin_ref)
+    # The plugin almost always lives in the package that declares the dependency
+    # ('plugin: :name'), and that package is 'parent' - which is loaded, because
+    # it is what is being imported from. Reach for any other one only if asked.
+    source = parent if package_name == parent.name else ctx.get_project(package_name)
+    if source is None:
+        pc_logging.debug("Cannot version the plugin cache: package not loaded: %s" % package_name)
+        return None
+
+    config = (source.config_obj.get("repositories") or {}).get(repository_name)
+    if not isinstance(config, dict) or not config.get("path"):
+        return None
+    return os.path.join(source.config_dir, config["path"])
+
+
+def _read_declared_cache_version(path: str) -> int:
+    """The cache version the script states, or 0 if it states none.
 
     The number says when the plugin's answers stopped meaning what they used to
     mean. It belongs to the plugin and to nobody else: a package that imports a
@@ -80,29 +98,14 @@ def _read_declared_cache_version(ctx, parent: Project, plugin_ref: str):
     first question can be asked: it names both the cache the answers are kept in
     and the directory the plugin's own files are materialized into. The script is
     parsed, never executed - a module-level 'CACHE_VERSION = <int>' and nothing
-    else. A repository with no script of its own (an 'enrich' one, which rewrites
-    another repository's answers) has no code to version and gets 0.
+    else.
     """
-    package_name, repository_name = resolve_resource_path(parent.name, plugin_ref)
-    # The plugin almost always lives in the package that declares the dependency
-    # ('plugin: :name'), and that package is 'parent' - which is loaded, because
-    # it is what is being imported from. Reach for any other one only if asked.
-    source = parent if package_name == parent.name else ctx.get_project(package_name)
-    if source is None:
-        pc_logging.debug("Cannot version the plugin cache: package not loaded: %s" % package_name)
-        return 0, None
-
-    config = (source.config_obj.get("repositories") or {}).get(repository_name)
-    if not isinstance(config, dict) or not config.get("path"):
-        return 0, None
-    path = os.path.join(source.config_dir, config["path"])
-
     try:
         with open(path, "r", encoding="utf-8") as f:
             tree = ast.parse(f.read(), filename=path)
     except (OSError, SyntaxError, ValueError) as e:
         pc_logging.debug("Cannot version the plugin cache: %s: %s" % (path, e))
-        return 0, path
+        return 0
 
     for node in tree.body:
         if isinstance(node, ast.AnnAssign):
@@ -116,26 +119,40 @@ def _read_declared_cache_version(ctx, parent: Project, plugin_ref: str):
         value = node.value
         # 'bool' is an 'int' and 'CACHE_VERSION = True' is a typo, not a version.
         if isinstance(value, ast.Constant) and isinstance(value.value, int) and not isinstance(value.value, bool):
-            return value.value, path
+            return value.value
         pc_logging.error("%s: %s must be an integer literal" % (path, CACHE_VERSION_NAME))
-        return 0, path
-    return 0, path
+        return 0
+    return 0
 
 
 def declared_cache_version(ctx, parent: Project, plugin_ref: str) -> int:
-    """'_read_declared_cache_version', once per plugin reference per context.
+    """The version the plugin states, read once per reference per context.
 
-    Read again when the script it was read from has changed, so that a daemon
-    holding a context open does not hold an answer the script has withdrawn.
+    Read again when the script has changed, so that a daemon holding a context
+    open does not hold an answer the script has withdrawn - but re-read from the
+    path already found, never by resolving one again through whoever is asking.
+    Only the root of a hierarchy can resolve it; a child asks with its own parent
+    and would come back empty, and writing that back would leave every later
+    lookup, the root's included, reading 0 from a plugin that states a version.
+
+    For the same reason a failure to locate the script is not remembered: there
+    is nothing to stat, so the entry could never expire, and the first caller
+    that happened not to see the package would settle the answer for the rest.
     """
     with _declared_versions_lock:
         known = _declared_versions.setdefault(ctx, {})
         entry = known.get(plugin_ref)
     if entry is not None:
         path, stat, version = entry
-        if _script_stat(path) == stat:
+        if _script_stat(path) != stat:
+            version = _read_declared_cache_version(path)
+        else:
             return version
-    version, path = _read_declared_cache_version(ctx, parent, plugin_ref)
+    else:
+        path = _locate_plugin_script(ctx, parent, plugin_ref)
+        if path is None:
+            return 0
+        version = _read_declared_cache_version(path)
     with _declared_versions_lock:
         known[plugin_ref] = (path, _script_stat(path), version)
     return version

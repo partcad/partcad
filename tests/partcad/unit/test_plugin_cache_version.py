@@ -221,3 +221,21 @@ def test_the_old_place_to_say_it_is_named_when_it_is_still_used(caplog):
     caplog.clear()
     Importer({"plugin": ":repo"})
     assert "cacheVersion" not in caplog.text
+
+
+def test_a_child_that_cannot_resolve_the_script_does_not_lose_its_version(tmp_path):
+    """A stale memo must be refreshed from the script, not from whoever asked.
+
+    The root is the only caller that can resolve the script; a child of the
+    hierarchy asks with its own parent and cannot. So when the script changes,
+    the child must re-read the path the root found rather than resolving one of
+    its own - otherwise it gets 0, and writing that back leaves every later
+    lookup, the root's included, reading 0 from a plugin that says 9.
+    """
+    ctx, parent = _plugin(tmp_path, "CACHE_VERSION = 3\n")
+    assert pfe.declared_cache_version(ctx, parent, "//pkg:repo") == 3
+
+    _rewrite(tmp_path / "repo.py", "CACHE_VERSION = 9\n")
+    stranger = FakeProject("//ext", tmp_path, {})
+    assert pfe.declared_cache_version(ctx, stranger, "//pkg:repo") == 9
+    assert pfe.declared_cache_version(ctx, parent, "//pkg:repo") == 9
