@@ -1,0 +1,35 @@
+desc: Two kinds of parts sold together under one SKU, and a pack of one kind
+
+parts:
+  shaft:
+    type: cadquery
+    desc: A shaft, sold with a clip
+    vendor: acme
+    sku: SHAFT-SET
+    item_in_sku: shaft
+  clip:
+    type: cadquery
+    desc: The clip that comes with the shaft
+    vendor: acme
+    sku: SHAFT-SET
+    item_in_sku: clip
+  spacer:
+    type: cadquery
+    desc: Two spacers come with every shaft, too
+    path: clip.py
+    vendor: acme
+    sku: SHAFT-SET
+    item_in_sku: spacer
+    count_per_sku: 2
+  nut:
+    type: cadquery
+    desc: A nut, sold in bags of 25
+    path: clip.py
+    vendor: acme
+    sku: NUT-25
+    count_per_sku: 25
+
+assemblies:
+  drive:
+    type: assy
+    desc: Two shafts, each with its clip, and three spacers and a nut

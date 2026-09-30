@@ -1,0 +1,156 @@
+# The render implementations PartCAD ships with: the 2D projections that
+# `pc render` writes.
+#
+# The structure is identical to `//builtin/export` -- see that package for what
+# each field means. The only difference is which section a package declares
+# these in: `render:` rather than `export:`.
+#
+# `readme` is deliberately absent. It is not produced by a wrapper script at all
+# but assembled by PartCAD itself out of the images the other formats leave
+# behind, so there is nothing here for a package to replace.
+#
+# `reproducible` is the one field here that is worth reading twice. Unlike the
+# exporters, where it is so far only declared, every file type below acts on it:
+# it picks the hidden-line algorithm the projection goes through, and for DXF
+# the metadata that goes in the header. It is `false` on all four, which is the
+# default everywhere -- a picture produced to be looked at should be the fastest
+# correct one. A package that *keeps* its drawings, so that a diff answers
+# whether they changed, sets it to `true` on the file type; every example in
+# this repository does.
+
+name: //builtin/render
+desc: |
+  The render implementations PartCAD ships with: the 2D projections that
+  `pc render` writes. A package replaces any of them, or adds one of its own, by
+  declaring that file type in its own `render:` section.
+
+# What every script in this package imports. Declared for the package rather
+# than repeated on each of the file types below, because it is the same
+# projection underneath all four: `render_png.py`, `render_jpeg.py` and
+# `render_dxf.py` all call `render_svg.process()` and then convert what it
+# wrote. Each file type below adds only what its own conversion step needs.
+#
+# It also decides what a file type *another* package declares against these
+# scripts gets: `Implementation.python_requirements` reads a file type's
+# requirements from the package that implements it, and a file type that
+# package never heard of has none of its own - so the imports its script needs
+# have to be the package's, which is what this is. (See
+# `examples/feature_interface`, which declares two drawings of its own against
+# `render_svg.py`.)
+#
+# The order matters and is the order `PythonRuntime.once()` uses: build123d
+# pulls `cadquery-ocp-novtk`, which overwrites the OCP native module, so the
+# VTK-enabled `cadquery-ocp` is asserted after it.
+pythonRequirements:
+  - ocpsvg==0.6.0
+  - build123d==0.11.1
+  - cadquery-ocp==7.9.3.1.1
+
+render:
+  svg:
+    desc: A 2D projection of the shape, as SVG.
+    path: render_svg.py
+    extension: svg
+    line_weight: 1.0
+    # 'viewport_origin' and 'viewport_up' have no defaults here: the wrapper
+    # picks them from the kind of shape it was handed (a sketch is looked at
+    # head-on, a part from a corner). Set either to override that.
+    #
+    # How big the overlays `pc render --with-ports`/`--with-interfaces` draw
+    # are, as a fraction of the projection's largest dimension: the length of a
+    # port's +Z arrow, and the cap height of the names written beside it. A
+    # package whose port names are long, or whose ports are crowded, tunes them
+    # here. They cost nothing when neither option is given -- nothing is drawn.
+    port_marker_size: 0.1
+    port_label_size: 0.035
+    # How many decimal places every coordinate is written to. Ten is what this
+    # renderer has always written; lower it for a drawing that is kept in a
+    # repository, where the last six of them are bytes rather than information.
+    precision: 10
+    # Which hidden-line algorithm the projection goes through. 'false' - the
+    # default here as everywhere - picks the polygonal one: it works from the
+    # triangulation, it is the only one that does not read past the end of an
+    # OCCT allocation, and it draws a large assembly in seconds rather than
+    # minutes. What it costs is that the triangulation is floating point all the
+    # way down, so the same shape comes out with a slightly different silhouette
+    # on a different machine. 'true' picks the exact one, which works from the
+    # surfaces and draws the same bytes anywhere - which is what a drawing kept
+    # in a repository needs, and what every image under 'examples/' asks for.
+    # See 'render_svg.project()' for the whole trade.
+    reproducible: false
+
+  png:
+    desc: The SVG projection, rasterized.
+    path: render_png.py
+    extension: png
+    pythonRequirements:
+      - svglib==1.5.1
+      - reportlab==4.4.3
+      - rlpycairo==0.3.0
+    line_weight: 1.0
+    width: 512
+    height: 512
+    # See 'svg' above.
+    port_marker_size: 0.1
+    port_label_size: 0.035
+    # The projection underneath this one, so a raster asked for reproducibly is
+    # drawn from the projection that is. See 'svg' above. It settles the picture
+    # and not the encoding: what rasterizes the SVG is svglib, reportlab and
+    # Pillow, and a new release of any of the three moves the encoded bytes
+    # without moving the picture.
+    reproducible: false
+
+  jpeg:
+    # The format is named 'jpeg' but the file it writes is a '.jpg'.
+    desc: The SVG projection, rasterized and JPEG-compressed.
+    path: render_jpeg.py
+    extension: jpg
+    pythonRequirements:
+      - svglib==1.5.1
+      - reportlab==4.4.3
+      - rlpycairo==0.3.0
+    line_weight: 1.0
+    width: 512
+    height: 512
+    # See 'svg' above.
+    port_marker_size: 0.1
+    port_label_size: 0.035
+    # JPEG has no alpha channel, so the transparent SVG background has to be
+    # flattened onto some color.
+    background: "#ffffff"
+    quality: 85
+    progressive: false
+    optimize: false
+    # A projection is line art: 4:2:0 chroma subsampling (what Pillow picks
+    # below quality 95) smears color across the one-pixel-wide edges, so keep
+    # full chroma unless the package asks for something smaller.
+    subsampling: "4:4:4"
+    # See 'png' above.
+    reproducible: false
+
+  dxf:
+    desc: The SVG projection, converted to DXF.
+    path: render_dxf.py
+    extension: dxf
+    pythonRequirements:
+      - svgpathtools==1.7.2
+      - ezdxf==1.4.4
+    line_weight: 1.0
+    viewport_origin: [0, 0, 100]
+    viewport_up: [0, 1, 0]
+    # See 'svg' above.
+    port_marker_size: 0.1
+    port_label_size: 0.035
+    # Write the same bytes for the same drawing: the exact projection rather
+    # than the polygonal one (see 'svg' above), and a fixed creation time and
+    # the all-zero GUID pair instead of the wall clock and the fresh GUIDs a DXF
+    # is otherwise stamped with on every save.
+    #
+    # This was the one file type that had a flag of this name before it was one,
+    # and it was on by default. It is off now, with the rest: 'reproducible' is
+    # a protocol field with one meaning and one default everywhere it appears,
+    # and a DXF that alone among the file types wrote fixed metadata was a
+    # second answer to the question this field asks. A package that wants the
+    # old behaviour says so - 'examples/feature_render' does, and so does every
+    # example that keeps its drawing in the repository.
+    reproducible: false

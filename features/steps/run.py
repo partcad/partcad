@@ -4,6 +4,7 @@ import time
 import logging
 import os
 import subprocess
+from features.pristine_env import PYTHON_ENV  # type: ignore
 from features.utils import expandvars  # type: ignore # TODO: @alexanderilyin python.autoComplete.extraPaths
 
 
@@ -32,6 +33,9 @@ def run(context: Context, command: str):
     # We need to keep current environment variables
     # TODO-78: @alexanderilyin: merge this with features/steps/partcad-cli/commands/version.py
     env = dict(os.environ)
+    # Importing partcad swept the PYTHON* variables out of this process; the CLI
+    # is not a sandbox interpreter and still wants the ones CI exported for it.
+    env.update(PYTHON_ENV)
     if hasattr(context, "env"):
         env.update(context.env)
     if hasattr(context, "home_dir"):

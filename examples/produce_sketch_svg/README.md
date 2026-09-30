@@ -11,7 +11,7 @@ pc inspect -s svg_01
 ## Sketches
 
 ### svg_01
-<a href="svg_01.svg"><img src="././svg_01.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a>
+<a href="svg_01.svg"><img src="././svg_01.svg" alt="svg_01" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a>
 
 <br/><br/>
 

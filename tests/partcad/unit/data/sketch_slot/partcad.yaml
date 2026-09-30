@@ -1,0 +1,48 @@
+desc: |
+  Slots in "basic" sketches: a rectangle with semicircular ends, which is what a
+  slotted hole is, drawn as two arcs and two lines.
+
+sketches:
+  slot:
+    desc: 30mm long, 4mm wide, running along +X from the origin
+    type: basic
+    slot: { length: 30.0, width: 4.0 }
+
+  slot-placed:
+    desc: The same slot, turned upright and started somewhere else
+    type: basic
+    slot: { length: 30.0, width: 4.0, angle: 90.0, x: 5.0, y: 1.0 }
+
+  slot-as-long-as-it-is-wide:
+    desc: The degenerate case - a slot with no straight part is a circle
+    type: basic
+    slot: { length: 4.0, width: 4.0 }
+
+  circle:
+    desc: What the degenerate slot has to come out as
+    type: basic
+    circle: 2.0
+
+  plate-with-slots:
+    desc: Two slots cut out of a plate, one of them at an angle
+    type: basic
+    rectangle: { side-x: 60.0, side-y: 20.0 }
+    inner:
+      slots:
+        - { length: 20.0, width: 4.0, x: -23.0 }
+        - { length: 20.0, width: 4.0, x: 7.0 }
+
+  slotted:
+    desc: A parametric slot, the way an interface's port asks for one
+    type: basic
+    slot:
+      length: "%length%"
+      width: "%size%"
+    parameters:
+      size: 4.0
+      length: 30.0
+
+  slot-too-narrow:
+    desc: A length measured over the ends cannot be less than the width
+    type: basic
+    slot: { length: 2.0, width: 4.0 }

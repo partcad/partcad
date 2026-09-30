@@ -1,0 +1,11 @@
+# The route files, which are a result and not a checked-in artifact.
+#
+# `pc cam` writes them beside the package -- `panel.nc` here -- and the
+# `Examples (PartCAD)` job runs `pc render -r` and fails if anything under
+# `examples/` changed, so an untracked route left by a run would trip it.
+#
+# They are byte-stable, unlike the CAE models beside them, so checking them in
+# would work. They are not checked in because nothing regenerates them: the
+# examples job renders, it does not route, so a committed `.nc` would be a file
+# that silently stops matching the part it was cut from.
+*.nc

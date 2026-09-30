@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+#
+# OpenVMP, 2023
+#
+# Author: Roman Kuzmenko
+# Created: 2023-08-19
+#
+# Licensed under Apache License, Version 2.0.
+#
+
+import asyncio
+import os
+import sys
+
+import build123d as b3d
+from OCP.TopoDS import TopoDS_Iterator
+
+import partcad as pc
+from partcad.assembly import Assembly, AssemblyChild
+
+sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
+import ocp_serialize  # noqa: E402
+
+
+def test_assembly_primitive():
+    ctx = pc.init("examples")
+    part1 = ctx.get_part("//produce_part_cadquery_primitive:cube")
+    assert part1 is not None
+    part2 = ctx.get_part("//produce_part_cadquery_primitive:cylinder")
+    assert part2 is not None
+
+    model = pc.Assembly({"name": "example1"})
+    model.add(part1, loc=pc.Location((0, 0, 0), (0, 0, 1), 0))
+    model.add(part2, loc=pc.Location((0, 0, 1), (0, 0, 1), 0))
+    assert asyncio.run(model.get_wrapped(ctx)) is not None
+    assert asyncio.run(model.convert("build123d", ctx)) is not None
+
+
+def test_assembly_example_assy_primitive():
+    ctx = pc.init("examples")
+    primitive = ctx._get_assembly("//produce_assembly_assy:primitive")
+    assert primitive is not None
+    assert asyncio.run(primitive.get_wrapped(ctx)) is not None
+    assert asyncio.run(primitive.convert("build123d", ctx)) is not None
+
+
+def test_assembly_example_assy_logo():
+    ctx = pc.init("examples")
+    logo = ctx._get_assembly("//produce_assembly_assy:logo")
+    assert logo is not None
+    assert asyncio.run(logo.get_wrapped(ctx)) is not None
+    assert asyncio.run(logo.convert("build123d", ctx)) is not None
+
+
+def test_assembly_example_assy_logo_embedded():
+    ctx = pc.init("examples")
+    logo = ctx._get_assembly("//produce_assembly_assy:logo_embedded")
+    assert logo is not None
+    assert asyncio.run(logo.get_wrapped(ctx)) is not None
+    assert asyncio.run(logo.convert("build123d", ctx)) is not None
+
+
+def test_assembly_params_short_form():
+    """The short form of an assembly parameter is expanded on normalization"""
+    ctx = pc.Context("examples/produce_assembly_assy")
+    primitive = ctx._get_assembly(":primitive_parametrized")
+    assert primitive is not None
+    assert asyncio.run(primitive.get_wrapped(ctx)) is not None
+    assert primitive.config["parameters"]["offset"]["type"] == "float"
+    assert primitive.config["parameters"]["offset"]["default"] == 5.0
+
+
+def test_assembly_params_get():
+    """Instantiate an ASSY assembly with a parameter value passed in"""
+    ctx = pc.Context("examples/produce_assembly_assy")
+    primitive = ctx._get_assembly(":primitive_parametrized", {"offset": 12.0})
+    assert primitive is not None
+    assert asyncio.run(primitive.get_wrapped(ctx)) is not None
+    assert primitive.config["parameters"]["offset"]["default"] == 12.0
+
+
+def test_assembly_user_config_params_get():
+    """Load an ASSY assembly and see if the parameters changed from user_config"""
+    ctx = pc.Context("examples/produce_assembly_assy")
+    pc.user_config.parameter_config["//pub/examples/partcad/produce_assembly_assy:primitive_parametrized"] = {
+        "offset": 21.0
+    }
+    primitive = ctx._get_assembly(":primitive_parametrized")
+    assert primitive is not None
+    assert asyncio.run(primitive.get_wrapped(ctx)) is not None
+    assert primitive.config["parameters"]["offset"]["default"] == 21.0
+
+
+def test_assembly_example_assy_logo_bom():
+    ctx = pc.init("examples")
+    logo = ctx._get_assembly("//produce_assembly_assy:logo_embedded")
+    assert logo is not None
+    bom = asyncio.run(logo.get_bom())
+    assert bom is not None
+    assert len(bom.keys()) == 3
+    assert sum(bom.values()) == 5
+
+
+class _SlowChild:
+    """A stand-in for a part that takes a known amount of time to build.
+
+    Every instance produces the same unit box, so the only thing that tells the
+    children apart in the resulting compound is the location the assembly puts
+    them at.
+    """
+
+    def __init__(self, name, delay):
+        self.project_name = "test"
+        self.name = name
+        self.delay = delay
+
+    async def get_wrapped(self, ctx=None):
+        await asyncio.sleep(self.delay)
+        # Assembly now fetches child shapes as BREP envelopes, not build123d
+        # objects, so hand back the envelope of a unit box.
+        return ocp_serialize.encode_shape(b3d.Solid.make_box(1.0, 1.0, 1.0).wrapped, name=self.name, label=self.name)
+
+
+def _child_offsets(envelope):
+    """The X offset of every immediate child of the assembly, in tree order."""
+    compound = ocp_serialize.decode_shape(envelope)
+    offsets = []
+    it = TopoDS_Iterator(compound)
+    while it.More():
+        offsets.append(it.Value().Location().Transformation().TranslationPart().X())
+        it.Next()
+    return offsets
+
+
+def test_an_assembly_has_one_root_node():
+    """The file's root node is the assembly, not a container inside it.
+
+    An ASSY file used to be instantiated as a node holding a container holding
+    everything, so the tree had two roots with one name between them - a level
+    nobody declared, nobody can name in a 'connect:', and every reader of the tree
+    had to know to ignore.
+    """
+    ctx = pc.init("tests/partcad/unit/data/assembly_ports/partcad.yaml")
+    mount = ctx._get_assembly(":mount")
+    assert mount is not None
+    asyncio.run(mount.do_instantiate())
+
+    assert [child.name for child in mount.children] == ["lower", "upper"]
+
+
+def test_the_root_nodes_own_placement_moves_what_it_holds():
+    """It has no node of its own to carry one, so every item it holds moves.
+
+    Composed onto each item rather than onto the assembly's own location, which is
+    re-stamped from the declaration on every materialization - including a cache
+    hit, where nothing has read the file at all.
+    """
+    ctx = pc.init("tests/partcad/unit/data/assembly_ports/partcad.yaml")
+    rooted = ctx._get_assembly(":rooted")
+    assert rooted is not None
+    asyncio.run(rooted.do_instantiate())
+
+    # The file puts the whole of itself 100mm up, and its second plate 20mm above
+    # the first: 100 and 120, and the assembly's own location is untouched.
+    placements = {child.name: tuple(child.location.translation) for child in rooted.children}
+    assert placements == {"lower": (0.0, 0.0, 100.0), "upper": (0.0, 0.0, 120.0)}
+    assert rooted._root_location() is None
+
+
+def test_an_anonymous_links_list_is_named_after_what_it_is():
+    """An ASSY file's 'links:' becomes an assembly of its own inside the object.
+
+    It is no object of any package and nobody names it in a 'connect:', but it is
+    a node of the tree the assembly is instantiated as - the IDE viewer draws that
+    tree now - so it needs a name a reader can make sense of. An anonymous one used
+    to be called "<assembly>:None".
+    """
+    ctx = pc.init("tests/partcad/unit/data/assembly_ports/partcad.yaml")
+    grouped = ctx._get_assembly(":grouped")
+    assert grouped is not None
+    asyncio.run(grouped.do_instantiate())
+
+    # The file's root list is this assembly, and the two 'links:' lists inside it
+    # are nodes of their own: one named 'frame', one anonymous.
+    assert sorted(child.item.name for child in grouped.children) == ["grouped:frame", "grouped:links"]
+
+    # A 'links:' list inside the file is still seen through where it is what an
+    # assembly is made of: its connections are this assembly's own, which is what
+    # 'connected_children()' answers and the grouped bill of materials reads.
+    assert sorted(child.name for child in grouped.connected_children() if child.name) == ["frame", "loose", "plate"]
+
+
+def test_assembly_child_order_is_declaration_order():
+    """Children are placed in declaration order, not in the order they finish.
+
+    The children are given decreasing build times, so they always finish in the
+    exact reverse of the order they are declared in. Collecting them as they
+    complete would produce [40, 30, 20, 10, 0] every time.
+    """
+    assembly = Assembly("test", {"name": "order_test"})
+    expected = [0.0, 10.0, 20.0, 30.0, 40.0]
+    for i, x in enumerate(expected):
+        assembly.children.append(
+            AssemblyChild(
+                _SlowChild("child_%d" % i, delay=0.25 - i * 0.05),
+                "child_%d" % i,
+                pc.Location((x, 0.0, 0.0), (0, 0, 1), 0),
+            )
+        )
+
+    # _get_shape_real() now returns the nested assembly envelope; decode it to
+    # a compound to read the child placements back.
+    envelope = asyncio.run(assembly._get_shape_real(None))
+    assert _child_offsets(envelope) == expected

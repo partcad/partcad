@@ -887,12 +887,12 @@ msgstr "你也可以不激活环境，通过 Poetry 来运行 ``pytest`` ，例�
 
 #: ../../source/contributing.rst:518
 msgid ""
-"The tests for the core module are located in the ``./partcad/tests`` "
+"The tests for the core module are located in the ``./tests/partcad`` "
 "directory. The tests for the CLI module are located in the ``./partcad-"
 "cli/tests`` directory. The tests for the LSP server of VSCode plugin are "
-"located in the ``./partcad-ide-vscode/src/test/python_tests`` directory."
+"located in the ``./ide/vscode/src/test/python_tests`` directory."
 msgstr ""
-"核心模块的测试位于 ``./partcad/tests`` 目录中。CLI 模块的测试位于 ``./partcad-cli/tests`` "
+"核心模块的测试位于 ``./tests/partcad`` 目录中。CLI 模块的测试位于 ``./tests/partcad_cli`` "
 "目录中。VSCode 插件的 LSP 服务器的测试位于 ``./partcad-ide-"
 "vscode/src/test/python_tests`` 目录中。"
 
@@ -943,9 +943,9 @@ msgstr "`pre-commit`_ 是一个用于管理和维护多语言 pre-commit 钩子�
 
 #: ../../source/contributing.rst:548
 msgid ""
-"Configuration file is located at ``.devcontainer/.pre-commit-"
-"config.yaml`` where you can see all supported hooks."
-msgstr "配置文件位于 ``.devcontainer/.pre-commit-config.yaml`` ，你可以在其中看到所有受支持的钩子。"
+"Configuration file is located at ``dev-tools/pre-commit-config.yaml`` where "
+"you can see all supported hooks."
+msgstr "配置文件位于 ``dev-tools/pre-commit-config.yaml`` ，你可以在其中看到所有受支持的钩子。"
 
 #: ../../source/contributing.rst:550
 msgid ""

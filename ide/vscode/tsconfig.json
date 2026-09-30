@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "module": "Node16",
+        "moduleResolution": "Node16",
+        "target": "ES2022",
+        "lib": ["ES2022", "dom"],
+        "sourceMap": true,
+        "rootDir": "src",
+        "strict": true,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        "noUnusedParameters": true,
+        "skipLibCheck": true,
+    },
+    // The webview's renderer is compiled by tsconfig.webview.json instead: it
+    // needs an ES module target, which this CommonJS configuration cannot give it.
+    "exclude": ["src/webview"],
+}

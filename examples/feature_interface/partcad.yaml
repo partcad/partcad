@@ -1,11 +1,59 @@
 desc: |
   This example demonstrates how the same parametrized assembly
   can be defined in three slightly different ways
-  using three approaches to connect parts to each other.
+  using three approaches to connect parts to each other,
+  and a fourth one that carries the instructions to assemble it.
 cover:
   assembly: connect-mates
 
 docs:
+  intro: |
+    ## Seeing the ports and the interfaces
+
+    A port is a coordinate frame and an interface is a named set of them.
+    Neither is geometry, so neither shows up in a drawing - which is exactly
+    what makes them hard to get right. `pc render` draws them when asked:
+
+    <table><tr>
+    <td valign=top><b><code>--with-ports</code></b><br/>
+    <a href="./example-bracket.ports.svg"><img src="./example-bracket.ports.svg"
+    alt="The bracket's ports" width="430"></a></td>
+    <td valign=top><b><code>--with-interfaces</code></b><br/>
+    <a href="./example-bracket.interfaces.svg"><img src="./example-bracket.interfaces.svg"
+    alt="The bracket's interfaces" width="430"></a></td>
+    </tr></table>
+
+    `--with-ports` marks every port with its own coordinate frame - the long
+    arrow is `+Z`, the direction a part travels along when it is connected
+    through that port - and writes the name a `connectPorts:` would have to use.
+    `--with-interfaces` names each *instance* of an interface once and draws a
+    line out to each port that belongs to it, so a bolt pattern reads as the one
+    connection it is; the small circles are the port boundaries, the `m3` and
+    `m4` sketches this package defines.
+
+    An assembly is taken at its word: what is drawn is what it says its ports
+    are, and this one externalizes none of the ones inside it. `--with-internals`
+    draws those anyway, which is how a connection that went wrong is found - two
+    frames that should have met and did not:
+
+    <table><tr>
+    <td valign=top><b><code>--with-ports</code></b><br/>
+    <a href="./connect-mates.ports.svg"><img src="./connect-mates.ports.svg"
+    alt="The assembly's ports" width="430"></a></td>
+    <td valign=top><b><code>--with-interfaces</code></b><br/>
+    <a href="./connect-mates.interfaces.svg"><img src="./connect-mates.interfaces.svg"
+    alt="The assembly's interfaces" width="430"></a></td>
+    </tr></table>
+
+    All four are drawings rather than pictures — open any of them to read the
+    names at full size.
+
+    They are checked in, and `pc render` keeps them that way: `example-bracket`
+    and `connect-mates` each declare two file types of their own in
+    `partcad.yaml` that draw what the two options draw. `--with-ports` and
+    `--with-interfaces` are the same thing asked for once, on the command line,
+    for any object and any output format.
+
   usage: |
     ```shell
     # placement == "outer"
@@ -13,11 +61,24 @@ docs:
     pc inspect -a connect-interfaces
     pc inspect -a connect-mates
 
+    # the same mount, with the instructions needed to actually assemble it
+    pc info -a connect-instructions
+    pc test -a connect-instructions
+
     # placement == "inner"
     pc inspect -a -p placement=inner connect-ports
     pc inspect -a -p placement=inner connect-interfaces
     pc inspect -a -p placement=inner connect-mates
+
+    # where the ports are, and which interface each of them belongs to
+    pc render -t png --with-ports example-bracket
+    pc render -t png --with-interfaces example-bracket
+    pc render -a -t png --with-all --with-internals connect-mates
     ```
+
+    Every port drawn is also listed in the log, with the exact name to write in
+    an ASSY file - the names on the drawing are small, and there are a lot of
+    them.
 
 sketches:
   m3:
@@ -34,6 +95,7 @@ interfaces:
   m3:
     desc: Abstract 3mm circular interface
     abstract: True
+    threadStep: 0.5 # M3 x 0.5mm: the coarse pitch, inherited by everything below
     ports:
       m3:
         location: [[0, 0, 0], [0, 0, 1], 0] # redundant, for demonstration
@@ -59,6 +121,7 @@ interfaces:
   m4:
     desc: Abstract 4mm circular interface
     abstract: True
+    threadStep: 0.7 # M4 x 0.7mm
     ports:
       m4:
         sketch: m4
@@ -186,28 +249,98 @@ parts:
   socket-head-m3-screw-6mm:
     desc: M3 socket head screw, 6mm long
     url: https://www.gobilda.com/zinc-plated-steel-socket-head-screw-m3-x-0-5mm-6mm-length-6-pack/
+    vendor: gobilda
+    sku: 2800-0003-0006
     type: step
     implements:
       m3-screw-6mm: [[0.0, 0.0, -12.0], [0.0, 1.0, 0.0], 180.0]
+    connect:
+      # A screw is held by its own head, and gently: the driver has to be able
+      # to turn it.
+      hold: m3-screw-6mm
+      holdForceMin: 2.0
+      holdForceMax: 5.0
 
   socket-head-m4-screw-6mm:
     desc: M4 socket head screw, 6mm long
     url: https://www.gobilda.com/2800-series-zinc-plated-steel-socket-head-screw-m4-x-0-7mm-6mm-length-25-pack/
+    vendor: gobilda
+    sku: 2800-0004-0006
     type: step
     implements:
       m4-screw-6mm: [[0.0, 0.0, -6.0], [0.0, 1.0, 0.0], 180.0]
+    connect:
+      hold: m4-screw-6mm
+      holdForceMin: 2.0
+      holdForceMax: 6.0
 
   example-motor:
-    desc: NEMA 17 motor bracket
+    desc: NEMA 17 motor
     url: https://www.omc-stepperonline.com/nema-17-bipolar-1-8deg-65ncm-92oz-in-2-1a-3-36v-42x42x60mm-4-wires-17hs24-2104s
+    vendor: omc-stepperonline
+    sku: 17HS24-2104S
     type: step
     implements:
       nema-17-motor: [[0.0, 0.0, 60.0], [1.0, 0.0, 0.0], 180.0]
+    connect:
+      # The motor is held by its own mounting face, firmly: it is heavy.
+      hold: nema-17-motor-mount
+      holdForceMin: 8.0
+      holdForceMax: 20.0
 
   example-bracket:
     desc: NEMA 17 motor bracket
     url: https://www.omc-stepperonline.com/nema-17-bracket-for-stepper-motor-and-geared-stepper-motor-alloy-steel-bracket-st-m1
+    vendor: omc-stepperonline
+    sku: ST-M1
     type: step
+    # Two more drawings of this part, beside whatever else is rendered: the
+    # projection with its ports on it, and the projection with its interfaces
+    # on it. They are what `pc render --with-ports` and `--with-interfaces`
+    # draw, declared as file types so that `pc render` keeps them up to date
+    # with the geometry instead of leaving them to be redrawn by hand.
+    #
+    # Both name an implementation that lives in another package
+    # (`//builtin/render`, the one that implements `svg` itself) exactly as
+    # `feature_render_custom` names one - `package` says where, `path` says
+    # which script. `extension` is what keeps them apart from the plain `svg`
+    # drawing, which would otherwise be the very same file.
+    render: &connection-drawings
+      svg-with-ports:
+        desc: The projection, with every port marked and named.
+        package: //builtin/render
+        path: render_svg.py
+        extension: ports.svg
+        with_ports: true
+        # These two file types are declared once and used twice: by this part
+        # and by the `connect-mates` assembly below. `with_internals` means
+        # nothing for a part, which has nothing inside it; on the assembly it is
+        # what keeps this drawing a drawing of the whole mount. Without it an
+        # assembly draws the ports it externalizes and no others, and this one
+        # externalizes none.
+        with_internals: true
+        # A name is drawn as line segments, and there are a lot of names here,
+        # so these two files are several times the size of the plain drawing.
+        # Four decimal places is a tenth of a micron on a part measured in tens
+        # of millimetres, and it takes a quarter off the bytes of the ten this
+        # renderer writes by default -- which matters for a drawing that lives
+        # in a repository.
+        precision: 4
+      svg-with-interfaces:
+        desc: The projection, with every interface named and joined to its ports.
+        package: //builtin/render
+        path: render_svg.py
+        extension: interfaces.svg
+        with_interfaces: true
+        with_internals: true
+        precision: 4
+    connect:
+      # The bracket is the fixture everything else is connected to: it is held
+      # by its foot, which is the part of it nothing else needs.
+      hold: m4-slotted-30-thru-3
+      holdInstance: L
+      holdForceMin: 10.0
+      holdForceMax: 25.0
     implements:
       nema-17-motor-bracket-3:
         inner: [[0.0, 0.0, 3.0], [0.0, 1.0, 0.0], 180.0]
@@ -253,6 +386,10 @@ assemblies:
     desc: |
       Demonstrates how to provide the minimum information while letting PartCAD
       determine the rest using the interfaces' mating metadata.
+    # The same two drawings as `example-bracket` above, of the whole mount: on
+    # an assembly they walk every child, so what they show is where the parts'
+    # ports ended up once the assembly placed them.
+    render: *connection-drawings
     parameters:
       placement:
         type: string
@@ -264,6 +401,28 @@ assemblies:
         enum: [TR, TL, BR, BL]
         default: TR
 
+  connect-instructions:
+    type: assy
+    desc: |
+      The same motor mount, assembled rather than only placed: every connection
+      carries the instructions needed to actually perform it.
+    # A product that can be built, so "pc test" holds it to that: the parts have
+    # to be obtainable and the connection instructions have to be followable.
+    # The "assy" manufacturing method comes with the type.
+    manufacturable: true
+    parameters:
+      placement:
+        desc: Place the motor inside the bracket or outside
+        type: string
+        enum: [inner, outer]
+        default: outer
+
+# Where the purchased hardware comes from. This example is about interfaces, so
+# it defines no provider of its own: it buys from the store next door, which is
+# what "examples/provider_store" is for and which stocks these very parts.
+suppliers:
+  ../provider_store:myGarage:
+
 render:
   readme:
     exclude:
@@ -271,6 +430,11 @@ render:
       - interfaces
       - parts
   svg:
+    # This drawing is checked in, so it has to be the same file every time it
+    # is rendered. See 'reproducible' in '//builtin/render', and the note at
+    # the top of 'examples/partcad.yaml' for what that settles and what it
+    # cannot.
+    reproducible: true
     exclude:
       - sketches
       - interfaces

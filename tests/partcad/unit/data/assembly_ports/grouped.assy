@@ -1,0 +1,10 @@
+links:
+  - name: frame
+    links:
+      - part: plate
+        name: plate
+        location: [[1.0, 2.0, 3.0], [0.0, 0.0, 1.0], 0.0]
+  - links:
+      - part: plate
+        name: loose
+        location: [[0.0, 0.0, 7.0], [0.0, 0.0, 1.0], 0.0]

@@ -12,8 +12,10 @@ PartCAD runs this for every data request, with the generic key in
 The key space is uniform (see ProjectExternalRepository):
 
     deps                          -> child package names of the top package
+    meta                          -> the top package's properties
     objects/<kind>                -> the top package's objects of that kind
     <subfolder>/deps              -> child names under that subfolder
+    <subfolder>/meta              -> that subfolder's properties
     <subfolder>/objects/<kind>    -> that subfolder's objects
 
 So a child in 'motors' is served the same way as the top package, just under
@@ -35,15 +37,24 @@ _SCRIPTS = {
 # child external package, served under its own key prefix - which is how PartCAD
 # forwards a child's requests. The catalog is static; a real plugin would look
 # it up remotely.
+#
+# Each package's 'meta' declares 'objectKinds', which is worth doing in any
+# plugin serving more than a handful of packages. PartCAD has ten kinds of
+# object and asks after them one key at a time - a separate run of this script
+# each - so a package that says it has only parts is never asked about the other
+# nine. It narrows what is asked for and never what may be served.
 CATALOG = {
     "deps": ["brackets", "motors"],
+    "meta": {"objectKinds": []},  # the top package is a directory: children only
     # The 'brackets' sub-package.
     "brackets/deps": [],
+    "brackets/meta": {"objectKinds": ["part"]},
     "brackets/objects/part": {
         "l_bracket": {"type": "cadquery", "path": "l_bracket.py"},
     },
     # The 'motors' sub-package.
     "motors/deps": [],
+    "motors/meta": {"objectKinds": ["part"]},
     "motors/objects/part": {
         "shaft": {"type": "cadquery", "path": "shaft.py"},
     },

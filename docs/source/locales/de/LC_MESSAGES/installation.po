@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-03 15:22+0000\n"
+"POT-Creation-Date: 2026-08-22 10:40+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -17,7 +17,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/installation.rst:2
 msgid "Installation"
@@ -31,11 +31,11 @@ msgstr "Befehlszeilenwerkzeuge"
 msgid ""
 "PartCAD command line tools are implemented in Python and, in theory, "
 "available on all platforms where Python is available. However, it is only"
-" getting tested on Linux, MacOS and Windows."
+" getting tested on Linux, macOS and Windows."
 msgstr ""
 "Die PartCAD-Befehlszeilenwerkzeuge sind in Python implementiert und "
 "theoretisch auf allen Plattformen verfügbar, auf denen Python verfügbar "
-"ist. Sie werden jedoch nur unter Linux, MacOS und Windows getestet."
+"ist. Sie werden jedoch nur unter Linux, macOS und Windows getestet."
 
 #: ../../source/installation.rst:19
 msgid ""
@@ -52,11 +52,11 @@ msgstr ""
 #: ../../source/installation.rst:25
 msgid ""
 "PartCAD works best when `conda <https://docs.conda.io/>`_ is installed. "
-"If that doesn't help (e.g. MacOS+arm64) then try ``mamba``. On Windows, "
+"If that doesn't help (e.g. macOS+arm64) then try ``mamba``. On Windows, "
 "PartCAD must be used inside a ``conda`` environment."
 msgstr ""
 "PartCAD funktioniert am besten, wenn `conda <https://docs.conda.io/>`_ "
-"installiert ist. Falls das nicht hilft (z. B. bei MacOS+arm64), versuchen"
+"installiert ist. Falls das nicht hilft (z. B. bei macOS+arm64), versuchen"
 " Sie ``mamba``. Unter Windows muss PartCAD innerhalb einer "
 "``conda``-Umgebung verwendet werden."
 
@@ -145,8 +145,8 @@ msgid "Install"
 msgstr "Installieren"
 
 #: ../../source/installation.rst:111
-msgid "On Linux and MacOS:"
-msgstr "Unter Linux und MacOS:"
+msgid "On Linux and macOS:"
+msgstr "Unter Linux und macOS:"
 
 #: ../../source/installation.rst:117
 msgid ""
@@ -170,22 +170,22 @@ msgstr ""
 #: ../../source/installation.rst:123
 msgid ""
 "The bundle is around 875MB unpacked and 290MB to download on Linux, "
-"somewhat less on MacOS and Windows. Most of it is the OpenCASCADE "
+"somewhat less on macOS and Windows. Most of it is the OpenCASCADE "
 "geometry kernel, which the wheels download too, just at ``pip install`` "
 "time."
 msgstr ""
 "Das Bundle ist unter Linux entpackt etwa 875 MB groß und 290 MB zum "
-"Herunterladen, unter MacOS und Windows etwas weniger. Der größte Teil "
+"Herunterladen, unter macOS und Windows etwas weniger. Der größte Teil "
 "davon ist der OpenCASCADE-Geometriekern, den auch die Wheels "
 "herunterladen, nur eben zum Zeitpunkt von ``pip install``."
 
 #: ../../source/installation.rst:126
 msgid ""
-"Supported platforms are Linux on x86_64, and MacOS on Apple silicon. "
+"Supported platforms are Linux on x86_64, and macOS on Apple silicon. "
 "Windows is covered by the ``.zip`` archive under :ref:`manual "
 "installation <standalone-manual>`."
 msgstr ""
-"Unterstützte Plattformen sind Linux auf x86_64 und MacOS auf Apple "
+"Unterstützte Plattformen sind Linux auf x86_64 und macOS auf Apple "
 "Silicon. Windows wird über das ``.zip``-Archiv unter :ref:`manuelle "
 "Installation <standalone-manual>` abgedeckt."
 
@@ -397,12 +397,12 @@ msgstr ""
 
 #: ../../source/installation.rst:228
 msgid ""
-"On MacOS, downloading the archive with a browser marks it as quarantined,"
+"On macOS, downloading the archive with a browser marks it as quarantined,"
 " and Gatekeeper then refuses to run the unpacked commands. Installing "
 "with ``install.sh``, or downloading with ``curl``, avoids that. To clear "
 "it after the fact: ``xattr -dr com.apple.quarantine <directory>``."
 msgstr ""
-"Wird das Archiv unter MacOS mit einem Browser heruntergeladen, wird es "
+"Wird das Archiv unter macOS mit einem Browser heruntergeladen, wird es "
 "als unter Quarantäne stehend markiert, und Gatekeeper verweigert dann die"
 " Ausführung der entpackten Befehle. Die Installation mit ``install.sh`` "
 "oder das Herunterladen mit ``curl`` vermeidet dies. Um es nachträglich "
@@ -421,8 +421,8 @@ msgid ""
 msgstr ""
 "Das Bundle enthält alles, was die Wheels installieren würden, "
 "einschließlich der optionalen Extras, die die Wheels dem Nutzer "
-"überlassen: den Python-Linter (``lint``). Ein eingefrorenes Bundle kann"
-" nachträglich nicht erweitert werden, daher wird es vollständig "
+"überlassen: den Python-Linter (``lint``). Ein eingefrorenes Bundle kann "
+"nachträglich nicht erweitert werden, daher wird es vollständig "
 "ausgeliefert."
 
 #: ../../source/installation.rst:239
@@ -600,17 +600,40 @@ msgstr "Visual-Studio-Code-Erweiterung"
 msgid ""
 "This extension is available through the VS Code marketplace. The "
 "corresponding marketplace page is `here "
-"<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_."
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_."
 msgstr ""
 "Diese Erweiterung ist über den VS-Code-Marketplace verfügbar. Die "
 "zugehörige Marketplace-Seite finden Sie `hier "
-"<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_."
+"<https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_."
 
-#: ../../source/installation.rst:336
+#: ../../source/installation.rst:338
+msgid "FreeCAD add-on"
+msgstr ""
+
+#: ../../source/installation.rst:340
+msgid ""
+"The ``PartCAD`` workbench browses packages, parts and assemblies inside "
+"FreeCAD and imports them into the open document. It lives in the "
+"``cad/freecad`` directory of the repository; copy or link that "
+"directory into FreeCAD's ``Mod`` folder as ``PartCAD`` and restart "
+"FreeCAD:"
+msgstr ""
+
+#: ../../source/installation.rst:349
+msgid ""
+"The ``Mod`` folder is ``~/Library/Preferences/FreeCAD/Mod/`` on macOS and"
+" ``%APPDATA%\\FreeCAD\\Mod\\`` on Windows. No Python setup is needed: the"
+" add-on drives the standalone ``partcad-json-rpc`` service, using an "
+"existing standalone installation if there is one and offering to download"
+" a bundle if there is not. See ``cad/freecad/README.md`` for what"
+" it does and which environment variables it reads."
+msgstr ""
+
+#: ../../source/installation.rst:356
 msgid "Public PartCAD repository"
 msgstr "Öffentliches PartCAD-Repository"
 
-#: ../../source/installation.rst:338
+#: ../../source/installation.rst:358
 msgid ""
 "The public PartCAD repository is hosted at `GitHub "
 "<https://github.com/partcad/partcad-index>`_. If necessary, PartCAD tools"
@@ -624,7 +647,7 @@ msgstr ""
 "aller anderen benötigten Repositories und Pakete ab. Es ist keine "
 "manuelle Aktion nötig, um es zu `installieren`."
 
-#: ../../source/installation.rst:342
+#: ../../source/installation.rst:362
 msgid ""
 "However, if you suspect that something is wrong with locally cached "
 "files, use ``pc system status`` to investigate and to determine the "

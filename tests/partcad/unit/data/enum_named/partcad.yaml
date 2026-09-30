@@ -1,0 +1,15 @@
+# A package with one of each kind, for the "naming one object renders only that
+# object" case (see test_enumerate_shapes.py). Nothing here is ever built - the
+# enumeration only reads the configuration.
+sketches:
+  circle:
+    type: basic
+    circle: 1.0
+parts:
+  cube:
+    type: cadquery
+    path: cube.py
+assemblies:
+  logo:
+    type: assy
+    path: logo.assy

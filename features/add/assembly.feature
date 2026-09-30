@@ -98,6 +98,32 @@ Feature: `pc add assembly` command
 # # TODO-52: Success case: Adding multiple assemblies
 # # TODO-53: Success case: Adding an assembly with relative file paths
 
+  @urdf
+  Scenario: Add assembly from a `robot.urdf` file
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+      assemblies:
+      """
+    And I copy file "examples/feature_import/robot.urdf" to "robot.urdf" inside test workspace
+    When I run command:
+      """
+      pc add assembly urdf robot.urdf
+      """
+    Then the command should exit with a status code of "0"
+    # Declared, not converted: the package points at the URDF, and its links
+    # become parts of the package as it is read.
+    When I run command:
+      """
+      pc --no-ansi test -f cad -a robot
+      """
+    Then the command should exit with a status code of "0"
+    When I run command:
+      """
+      pc --no-ansi test -f cad robot/arm
+      """
+    Then the command should exit with a status code of "0"
+
   @wip @failure
   Scenario: Fail to add assembly with invalid YAML syntax
     Given a file named "invalid.assy" with content:

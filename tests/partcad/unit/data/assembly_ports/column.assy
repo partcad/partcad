@@ -1,0 +1,6 @@
+links:
+  - assembly: mount
+    name: bottom-mount
+  - assembly: mount
+    name: top-mount
+    location: [[0.0, 0.0, 50.0], [0.0, 0.0, 1.0], 0.0]

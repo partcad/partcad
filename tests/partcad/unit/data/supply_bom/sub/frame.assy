@@ -1,0 +1,15 @@
+links:
+  - part: cube
+    name: cube1
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  # An assembly embedded here, in the parent's own source file: it is not an
+  # object of the package, so it can never be ordered by name.
+  - links:
+      - part: bolt
+        name: bolt1
+        location: [[0, 0, 0], [0, 0, 1], 0]
+      - assembly: unit
+        name: unit1
+        location: [[0, 0, 2], [0, 0, 1], 0]
+    name: cluster
+    location: [[0, 0, 1], [0, 0, 1], 0]

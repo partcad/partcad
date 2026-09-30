@@ -1071,14 +1071,14 @@ msgstr ""
 
 #: ../../source/contributing.rst:518
 msgid ""
-"The tests for the core module are located in the ``./partcad/tests`` "
+"The tests for the core module are located in the ``./tests/partcad`` "
 "directory. The tests for the CLI module are located in the ``./partcad-"
 "cli/tests`` directory. The tests for the LSP server of VSCode plugin are "
-"located in the ``./partcad-ide-vscode/src/test/python_tests`` directory."
+"located in the ``./ide/vscode/src/test/python_tests`` directory."
 msgstr ""
 "Las pruebas del módulo central se encuentran en el directorio "
-"``./partcad/tests``. Las pruebas del módulo de la CLI se encuentran en el"
-" directorio ``./partcad-cli/tests``. Las pruebas del servidor LSP del "
+"``./tests/partcad``. Las pruebas del módulo de la CLI se encuentran en el"
+" directorio ``./tests/partcad_cli``. Las pruebas del servidor LSP del "
 "plugin de VSCode se encuentran en el directorio ``./partcad-ide-"
 "vscode/src/test/python_tests``."
 

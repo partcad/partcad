@@ -1,8 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
-<svg width="513.0mm" height="296.6033378219mm" viewBox="-3.005859375 -1.7379101826 6.01171875 3.4758203651" version="1.1" xmlns="http://www.w3.org/2000/svg">
+<svg width="513.0mm" height="513.0mm" viewBox="-3.005859375 -3.005859375 6.01171875 6.01171875" version="1.1" xmlns="http://www.w3.org/2000/svg">
   <g transform="scale(1,-1)" stroke-linecap="round">
     <g fill="none" stroke="rgb(64,192,64)" stroke-width="0.01171875" id="Visible">
-      <path d="M 2.1213203436,-1.2247448714 A 3.0000000000388374,1.7320508075913006 0.0 0,1 -2.1213203436,1.2247448714 A 3.0000000000388374,1.7320508075913006 0.0 0,1 2.1213203436,-1.2247448714" />
+      <circle cx="0.0" cy="0.0" r="3.0" />
     </g>
   </g>
 </svg>
