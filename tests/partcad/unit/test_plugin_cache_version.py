@@ -239,3 +239,16 @@ def test_a_child_that_cannot_resolve_the_script_does_not_lose_its_version(tmp_pa
     stranger = FakeProject("//ext", tmp_path, {})
     assert pfe.declared_cache_version(ctx, stranger, "//pkg:repo") == 9
     assert pfe.declared_cache_version(ctx, parent, "//pkg:repo") == 9
+
+
+def test_the_version_is_found_among_the_plugin_s_other_constants(tmp_path):
+    """Every real plugin states other things at module level, and states them first.
+
+    'ldraw_repo.py' sets some forty constants before anything else; the walk has
+    to pass over them rather than stop at the first assignment it sees.
+    """
+    ctx, parent = _plugin(
+        tmp_path,
+        "_LDU_MM = 0.4\n" "_STUD_MM = 8\n" "NAMES = {'brick': 1}\n" "CACHE_VERSION = 9\n" "_AFTERWARDS = None\n",
+    )
+    assert pfe.declared_cache_version(ctx, parent, "//pkg:repo") == 9
