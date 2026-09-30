@@ -10,7 +10,7 @@ start every check on every object of every package at once. The gate has to hold
 two properties that a bare :class:`asyncio.Semaphore` does not, and losing either
 one stops the event loop for good rather than slowing it down.
 
-**It is re-entrant.** A check may run the other checks itself: ``CamTest.test``
+**It is re-entrant.** A check may run the other checks itself: ``ManufacturabilityTest.test``
 walks everything an assembly is procured from and runs the whole suite over each
 of those objects, and it does that from inside the very call the gate has already
 admitted. A plain semaphore counts that nested call as a new arrival, so once as

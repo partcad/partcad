@@ -5,6 +5,7 @@ name: npm test
 on:
   pull_request:
   workflow_dispatch:
+  merge_group:
   push:
     branches:
       - main
@@ -12,8 +13,62 @@ on:
     paths:
       - ide/vscode/**
 
+# As in "test.yml" and "build.yml": a pull request is re-run on every push to it,
+# and there is no reason to keep three runners busy on a revision nobody is
+# looking at any more. The merge queue is keyed on its own ref, so a queued
+# commit is never superseded by a later push to the branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# "contents: read" is all of it: a checkout, an "npm install", and the API call
+# ".github/actions/changed-scopes" makes to ask which files this change touches.
+permissions:
+  contents: read
+
 jobs:
+  # The "pull_request" trigger above carries no "paths" filter, so it fires on
+  # every pull request in the repository, and "merge_group" cannot carry one at
+  # all -- GitHub filters that event on branches only. This is where the filter
+  # lives instead, which is also what makes it safe to point a required check
+  # at: a job skipped by an "if:" reports "skipped", which counts as passing,
+  # while a workflow skipped by a "paths:" filter never reports at all.
+  scope:
+    name: "Scope"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.scope.outputs.vsix }}
+      oses: ${{ steps.oses.outputs.oses }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Decide the depth
+        id: depth
+        uses: ./.github/actions/test-depth
+      - name: Decide what the change touches
+        id: scope
+        uses: ./.github/actions/changed-scopes
+        with:
+          deep: ${{ steps.depth.outputs.deep }}
+      - name: Set the OS axis
+        id: oses
+        env:
+          QUEUE: ${{ steps.depth.outputs.queue }}
+        run: |
+          # macOS bills at 10x and this suite starts a headless editor on each
+          # runner. A pull request runs the two platforms whose test hosts differ
+          # most from each other; the merge queue adds macOS back before the
+          # commit lands, as it does for every other matrix here.
+          if [ "${QUEUE}" = "true" ]; then
+            oses='["macos-latest", "ubuntu-latest", "windows-latest"]'
+          else
+            oses='["ubuntu-latest", "windows-latest"]'
+          fi
+          echo "oses=${oses}" >> "${GITHUB_OUTPUT}"
+
   build:
+    needs: scope
+    if: ${{ needs.scope.outputs.run == 'true' }}
     strategy:
       # Don't let one OS failing cancel the others: a green Linux run was being
       # reported as failed only because it was canceled when the macOS job
@@ -27,7 +82,9 @@ jobs:
         # window never closed. `.vscode-test.js` now tells the extension not to
         # ask (PARTCAD_EXTENSION_NO_PROMPTS), and the sample workspace the runner
         # opens is a directory that actually exists.
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        #
+        # Which of the three this run gets is decided in "scope" above.
+        os: ${{ fromJson(needs.scope.outputs.oses) }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout

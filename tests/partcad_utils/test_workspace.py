@@ -20,6 +20,7 @@ import tempfile
 import threading
 
 import pytest
+
 from partcad_utils import workspace
 from partcad_utils.framing import read_message, write_message
 

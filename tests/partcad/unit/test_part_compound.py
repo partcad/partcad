@@ -10,9 +10,15 @@ import sys
 
 import partcad as pc
 
-from OCP.TopoDS import TopoDS_Compound
+# 'partcad' before OCP, and 'isort: split' so it stays there: importing the
+# package pins the standard library's expat (see the comment on 'import
+# pyexpat' in partcad/__init__.py), and whatever loads first wins for the
+# process.
+# isort: split
+
 from OCP.BRepGProp import BRepGProp
 from OCP.GProp import GProp_GProps
+from OCP.TopoDS import TopoDS_Compound
 
 # get_wrapped() now returns a BREP envelope, not a live shape; decode it with
 # the sandbox codec to inspect the geometry.

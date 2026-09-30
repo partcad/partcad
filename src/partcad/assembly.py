@@ -7,18 +7,21 @@
 # Licensed under Apache License, Version 2.0.
 
 import asyncio
+import os
+import tempfile
 import typing
 
-from . import telemetry
-from . import shape_envelope
+from . import logging as pc_logging
+from . import sandbox_versions, shape_envelope, shape_ports
+from . import software as pc_software
+from . import telemetry, wrapper
 from .geom import Location
 from .plugin_provider_data_cart import ProviderCartItem
+from .process_crash import command_failure
 from .revision import package_revision
 from .shape import Shape
 from .shape_config import final_config as _final_config
-from . import software as pc_software
 from .sync_threads import threadpool_manager
-from . import logging as pc_logging
 
 # This module needs no CAD library at all: an assembly is built as a nested
 # BREP-envelope object with child placements carried as plain data, and the
@@ -35,16 +38,36 @@ class AssemblyChild:
     placed with 'location:', and for assemblies built through 'add()'.
     """
 
-    def __init__(self, item, name=None, location=None, comment=None, how=None, connection=None):
+    def __init__(
+        self,
+        item,
+        name=None,
+        location=None,
+        comment=None,
+        how=None,
+        connection=None,
+        description=None,
+        located=False,
+    ):
         self.item = item
         self.name = name
         self.location = location
+        # Whether the ASSY file placed this item with 'location:'. Not the same
+        # as 'location is not None', which every item has once it is placed,
+        # connected or not.
+        self.located = located
         # The non-geometric half of the 'connect'/'connectPorts' section that
         # placed this child: free-form context ('comment') and the assembly
         # instructions ('how'). Both are None unless the child was connected.
         self.comment = comment
         self.how = how
         self.connection = connection
+        # What the ASSY node that placed this child says the child is, in words
+        # (its 'description'). Unlike 'comment' it belongs to the node rather
+        # than to a connection, so an item placed by 'location:' carries one
+        # too. Like 'comment', nothing in PartCAD interprets it: it is what the
+        # assembly's generated documents say about this step (assembly_guide.py).
+        self.description = description
 
     def connect_info(self):
         """What the ASSY file says about connecting this child, or None.
@@ -75,6 +98,53 @@ class Assembly(Shape):
 
         # self.children contains all child parts and assemblies before they turn into 'self.shape'
         self.children = []
+
+        # Set by the factory (see AssemblyFactory._create): which assemblies
+        # this one is built out of, without building any of them. None for an
+        # assembly nobody declared - one put together in Python with 'add()' -
+        # which has no declaration to read them out of.
+        self._subassemblies = None
+
+    async def get_subassemblies_async(self) -> list["Assembly"]:
+        """The assemblies this one places, resolved but not built.
+
+        What a declaration points at, read from the declaration: an ASSY file's
+        'assembly:' links, the object an alias or an enrich stands for. Not the
+        parts, and not the sub-assemblies of the sub-assemblies - each of those
+        answers the same question about itself, which is what makes an assembly
+        tree walkable one level at a time.
+
+        Prepared first, because that is what resolves the references: a link
+        may name a package nothing has loaded yet, and an enrich does not know
+        which instance it points at until the parameter values have reached it.
+        """
+        await self.prepare_async()
+        if self._subassemblies is None:
+            return []
+        return await self._subassemblies(self)
+
+    async def get_uncached_subassemblies_async(self, ctx) -> list["Assembly"]:
+        """The distinct assemblies this one places that would have to be built.
+
+        The first phase of building an assembly in two: what is already cached
+        (or already in memory) costs nothing to use, so what is left is the
+        work this assembly is really about to do, one entry per assembly however
+        many times it is placed.
+
+        An assembly that links to itself is left out of its own list - the
+        recursion is reported where it is built, not here.
+        """
+        found = {}
+        for sub in await self.get_subassemblies_async():
+            # The kind is part of what identifies one: a package may declare an
+            # assembly and a scene of one name, and they are two objects.
+            key = (sub.kind, sub.project_name, sub.name)
+            if sub is self or key in found:
+                continue
+            if await sub.is_cached_async(ctx):
+                continue
+            found[key] = sub
+        return list(found.values())
 
     def get_async_instantiate_lock(self) -> asyncio.Lock:
         """The task lock 'do_instantiate' serializes on, one per thread.
@@ -158,7 +228,7 @@ class Assembly(Shape):
         This is also what get_wrapped() caches - no separate serialization pass.
         """
 
-        @telemetry.start_as_current_span_async("Assembly._get_shape_real.per_child")
+        @telemetry.instrument_function_async("Assembly._get_shape_real.per_child")
         async def per_child(child):
             envelope = await child.item.get_wrapped(ctx)
             if envelope is None:
@@ -202,7 +272,10 @@ class Assembly(Shape):
         that every shape carries, an assembly carries its own placement: two
         assemblies of the same children in different places share the cached
         children but must not inherit each other's location. It carries what it
-        reports about itself for the same reason.
+        reports about itself, and what it says about connections, for the same
+        reason - an assembly's own ports are the ones its 'map:' externalizes,
+        and two assemblies of identical geometry need not externalize the same
+        ones.
         """
         name = ("%s:%s" % (self.project_name, self.name)) if self.name else self.project_name
         metadata = {"name": name, "label": self.name}
@@ -212,6 +285,7 @@ class Assembly(Shape):
         root = self._root_location()
         if root is not None:
             metadata[shape_envelope.KEY_LOCATION] = root.as_packed()
+        metadata.update(shape_ports.connection_metadata(self))
         return metadata
 
     def _root_location(self):
@@ -231,21 +305,14 @@ class Assembly(Shape):
         return name, label
 
     def _place(self, child_env, placement, name, label):
-        """The child's envelope re-stamped for this assembly.
+        """The child's node re-stamped for this assembly.
 
-        The child keeps its own geometry and, if it is a sub-assembly, its own
-        internal location; this assembly's placement of the child is composed
-        onto that (placement first, then the child's own) and carried as data.
+        'shape_envelope.placed()' is the composition, and is shared with
+        everything else that puts a node inside a node: the name and the label
+        are this assembly's account of the child, and the placement is composed
+        onto whatever the child already carried.
         """
-        entry = dict(child_env)
-        entry["name"] = name
-        entry["label"] = label
-        if placement is not None:
-            placement = placement if isinstance(placement, Location) else Location(placement)
-            own = child_env.get(shape_envelope.KEY_LOCATION)
-            composed = placement if own is None else (placement * Location(own))
-            entry[shape_envelope.KEY_LOCATION] = composed.as_packed()
-        return entry
+        return shape_envelope.placed(child_env, placement, name=name, label=label)
 
     def connected_children(self):
         """Every child of this assembly, including those of the sub-assemblies it embeds.
@@ -276,6 +343,84 @@ class Assembly(Shape):
                 continue
             problems.extend([(child.name, problem) for problem in child.how.problems])
         return problems
+
+    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0):
+        """The pairs of parts in this assembly whose solids share space.
+
+        Returned as {"overlaps": [{"a", "b", "volume"}, ...], "unchecked": [...],
+        "parts": n}, or None when the assembly could not be realized. Measured
+        in a sandbox, like every other operation on geometry: the core has no
+        CAD library.
+
+        'unchecked' names the parts a boolean could not be asked about because
+        they are not valid solids. It is reported rather than hidden: a shape
+        that is inside out intersects things it is nowhere near, so leaving it
+        out is the only way the rest of the answer means anything - and a caller
+        that was told nothing would take "no interference" for "checked".
+
+        'min_volume' is a floor under the arithmetic: two surfaces that merely
+        touch bound nothing, and a boolean over tessellated faces answers with a
+        sliver rather than with zero. It is not a place to hide an overlap that
+        is meant to be there.
+        """
+        obj = await self.get_wrapped(ctx)
+        if obj is None:
+            return None
+
+        with pc_logging.Action("Interference", self.project_name, self.name):
+            # The tree travels as a JSON string rather than as itself. Anything
+            # recognisable as a shape or an assembly is turned into OCCT
+            # geometry on arrival (see ocp_serialize.decode), and a compound is
+            # exactly what this must not be given: the names go with it, and a
+            # report that two parts overlap has to be able to say which two.
+            # A string is left alone, so the wrapper decodes the tree itself,
+            # leaf by leaf, keeping each name attached to its solid.
+            request_serialized = shape_envelope.serialize(
+                {
+                    # shape_envelope.dumps, not json.dumps: the envelope carries
+                    # its BREP payloads as bytes, which stock JSON cannot encode
+                    # at all. Getting this wrong raised a TypeError that the
+                    # test caught and reported as a pass, so the check answered
+                    # "no interference" for every assembly without ever looking
+                    # at one.
+                    "assembly_json": shape_envelope.dumps(obj),
+                    "min_volume": min_volume,
+                    "min_fraction": min_fraction,
+                }
+            )
+
+            runtime = ctx.get_python_runtime(version="3.11")
+            await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+
+            # The wrapper writes nothing, but every wrapper is invoked with an
+            # output path; give it one inside a directory of our own.
+            with tempfile.TemporaryDirectory(prefix="partcad-interference-") as unused_dir:
+                command = [wrapper.get("interference.py"), os.path.join(unused_dir, "unused.txt")]
+                exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
+            if exitcode != 0 and len(errors) == 0:
+                errors = command_failure(command, exitcode)
+            if errors:
+                pc_logging.error(errors)
+                raise Exception(errors)
+
+            response_lines = response_serialized.strip().splitlines()
+            if not response_lines:
+                pc_logging.error("Empty response from wrapper: %s" % command[0])
+                return None
+            result = shape_envelope.deserialize(response_lines[-1].strip())
+
+            if not result.get("success", False):
+                pc_logging.error(
+                    "Interference failed for %s:%s: %s"
+                    % (self.project_name, self.name, result.get("exception", "Unknown error"))
+                )
+                return None
+            return {
+                "overlaps": result.get("overlaps", []),
+                "unchecked": result.get("unchecked", []),
+                "indeterminate": result.get("indeterminate", []),
+                "parts": result.get("parts", 0),
+            }
 
     async def resolve_connect_metadata(self, ctx):
         """Fill in the parts of the connection metadata that need the geometry.
@@ -361,7 +506,7 @@ class Assembly(Shape):
             return False
         return self.get_store_data().is_purchasable
 
-    async def get_supply_bom(self):
+    async def get_supply_bom(self, ctx=None):
         """The bill of materials to procure this assembly from.
 
         Same shape of result as 'get_bom()', but the walk stops at every
@@ -371,6 +516,13 @@ class Assembly(Shape):
         way is procured as the parts it is made of instead. Whether anybody
         actually has one available is a question for the suppliers and is not
         asked here.
+
+        Given 'ctx', a part is listed as what it is *procured* as (see
+        'partcad.procurement'): a part that is made is replaced by the stock it
+        is made from, one piece per part, so this is what has to be bought.
+        Without one, every part is listed as itself -- which is the list of
+        what has to be *had*, bought or made, and is what the manufacturability
+        test walks, because a made part is something it has to test too.
         """
         with self.lock:
             async with self.get_async_lock():
@@ -378,11 +530,13 @@ class Assembly(Shape):
                 if hasattr(self, "project_name"):
                     # This is the top level assembly
                     with pc_logging.Action("SupplyBoM", self.project_name, self.name):
-                        return await self._get_supply_bom_real()
+                        return await self._get_supply_bom_real(ctx)
                 else:
-                    return await self._get_supply_bom_real()
+                    return await self._get_supply_bom_real(ctx)
 
-    async def _get_supply_bom_real(self):
+    async def _get_supply_bom_real(self, ctx=None):
+        from . import procurement
+
         bom = {}
 
         def account_for(name, count):
@@ -395,8 +549,11 @@ class Assembly(Shape):
             item = child.item
             if isinstance(item, Assembly) and not item.is_declared_purchasable():
                 # Nobody sells it assembled: procure whatever it is made of
-                for child_name, child_count in (await item.get_supply_bom()).items():
+                for child_name, child_count in (await item.get_supply_bom(ctx)).items():
                     account_for(child_name, child_count)
+            elif ctx is not None and not isinstance(item, Assembly):
+                for name in await procurement.procured_as(ctx, item):
+                    account_for(name, 1)
             else:
                 account_for(item.project_name + ":" + item.name, 1)
 
@@ -439,7 +596,7 @@ class Assembly(Shape):
                 return await self._get_bom_grouped_real(ctx)
 
     async def _get_bom_grouped_real(self, ctx):
-        grouped = {"parts": {}, "assemblies": {}, "software": {}}
+        grouped = {"parts": {}, "assemblies": {}, "software": {}, "stock": {}, "manufactured": {}}
         # This assembly's own software first: an assembly that ships a firmware
         # image ships it whether or not any of its parts say so.
         _bom_grouped_add_software(grouped["software"], ctx, self)
@@ -452,6 +609,7 @@ class Assembly(Shape):
             else:
                 _bom_grouped_add(grouped["parts"], item)
                 _bom_grouped_add_software(grouped["software"], ctx, item)
+                await _bom_grouped_add_manufactured(grouped, ctx, item)
         return grouped
 
     async def get_bom_detailed_async(self, ctx=None, stop_at_purchasable: bool = False):
@@ -464,7 +622,8 @@ class Assembly(Shape):
         to order.
 
             {"//package:name": {"kind": "part", "count": 2, "desc": "...",
-                                "vendor": None, "sku": None, "count_per_sku": 1}}
+                                "vendor": None, "sku": None, "count_per_sku": 1,
+                                "item_in_sku": None}}
 
         Software the objects ship with is listed too, as entries of kind
         "software" (see 'get_bom_grouped_async'). A software line item is the
@@ -515,6 +674,7 @@ class Assembly(Shape):
             else:
                 _bom_detailed_add(bom, item, "part")
                 _bom_detailed_add_software(bom, ctx, item)
+                await _bom_detailed_add_stock(bom, ctx, item)
         return bom
 
 
@@ -523,6 +683,41 @@ def _bom_grouped_add(section: dict, item):
     entries = section.setdefault(item.project_name, {})
     entry = entries.setdefault(item.name, {"count": 0, "desc": getattr(item, "desc", None)})
     entry["count"] += 1
+
+
+async def _bom_grouped_add_manufactured(grouped: dict, ctx, item):
+    """Account for a part that is made rather than bought, and for its stock.
+
+    Two sections. 'manufactured' lists the parts to be made, each with the
+    stock it is made from, which is what the instruction book opens with.
+    'stock' lists what has to be procured to make them, followed to the end of
+    the chain (see 'partcad.procurement'), one piece per part -- and which parts
+    each piece is for, because "4 of these" is not a cut list.
+    """
+    from . import procurement
+
+    if ctx is None or procurement.is_bought(item) or not procurement.is_made(item):
+        return
+    stock = procurement.stock_name(item)
+    entries = grouped["manufactured"].setdefault(item.project_name, {})
+    entry = entries.setdefault(item.name, {"count": 0, "desc": getattr(item, "desc", None), "stock": stock})
+    entry["count"] += 1
+
+    for name in await procurement.procured_as(ctx, item):
+        package_name, _, object_name = name.partition(":")
+        stock_entries = grouped["stock"].setdefault(package_name, {})
+        stock_entry = stock_entries.get(object_name)
+        if stock_entry is None:
+            resolved = await procurement.get_part_async(ctx, name)
+            stock_entry = stock_entries[object_name] = {
+                "count": 0,
+                "desc": getattr(resolved, "desc", None),
+                "for": [],
+            }
+        stock_entry["count"] += 1
+        made = "%s:%s" % (item.project_name, item.name)
+        if made not in stock_entry["for"]:
+            stock_entry["for"].append(made)
 
 
 def _software_of(ctx, item):
@@ -571,8 +766,13 @@ def _bom_grouped_merge(grouped: dict, other: dict):
             for name, entry in entries.items():
                 if name in target:
                     target[name]["count"] += entry["count"]
+                    for made in entry.get("for") or []:
+                        if made not in target[name].setdefault("for", []):
+                            target[name]["for"].append(made)
                 else:
                     target[name] = dict(entry)
+                    if "for" in entry:
+                        target[name]["for"] = list(entry["for"])
 
 
 def _bom_detailed_add(bom: dict, item, kind: str):
@@ -588,8 +788,39 @@ def _bom_detailed_add(bom: dict, item, kind: str):
             "vendor": store_data.vendor,
             "sku": store_data.sku,
             "count_per_sku": store_data.count_per_sku,
+            "item_in_sku": store_data.item_in_sku,
         }
     entry["count"] += 1
+
+
+async def _bom_detailed_add_stock(bom: dict, ctx, item):
+    """Account for what a part that is made is made from, in a detailed BoM.
+
+    The part stays a line item of its own -- it is what goes into the assembly
+    -- and says what it is made from in 'madeFrom'. The stock is a line item of
+    kind "stock", carrying the vendor and the SKU it is ordered by, one piece
+    per part made from it (see 'partcad.procurement').
+    """
+    from . import procurement
+
+    if ctx is None or procurement.is_bought(item) or not procurement.is_made(item):
+        return
+    bom["%s:%s" % (item.project_name, item.name)]["madeFrom"] = procurement.stock_name(item)
+    for name in await procurement.procured_as(ctx, item):
+        entry = bom.get(name)
+        if entry is None:
+            resolved = await procurement.get_part_async(ctx, name)
+            store_data = resolved.get_store_data() if resolved is not None else None
+            entry = bom[name] = {
+                "kind": "stock",
+                "count": 0,
+                "desc": getattr(resolved, "desc", None),
+                "vendor": store_data.vendor if store_data else None,
+                "sku": store_data.sku if store_data else None,
+                "count_per_sku": store_data.count_per_sku if store_data else 1,
+                "item_in_sku": store_data.item_in_sku if store_data else None,
+            }
+        entry["count"] += 1
 
 
 def _bom_detailed_add_software(bom: dict, ctx, item):
@@ -607,6 +838,7 @@ def _bom_detailed_add_software(bom: dict, ctx, item):
                 "vendor": None,
                 "sku": None,
                 "count_per_sku": 1,
+                "item_in_sku": None,
                 "package": software.project_name,
                 "revision": package_revision(project),
                 "type": software.type,

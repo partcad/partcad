@@ -69,6 +69,13 @@ def _import_module():
     try:
         import FreeCADGui  # noqa: F401  pylint: disable=unused-import,import-outside-toplevel
 
+        # `isort: split` because the import above is a *probe*: it exists only
+        # to raise ImportError when FreeCAD is running headless, so that the
+        # fallback below is chosen for a reason this function states rather than
+        # by whatever `ImportGui` does when there is no GUI behind it. That the
+        # two happen to be in alphabetical order is a coincidence, and the blank
+        # line that used to keep them apart was one isort removes.
+        # isort: split
         import ImportGui  # pylint: disable=import-outside-toplevel
 
         return ImportGui

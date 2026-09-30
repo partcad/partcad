@@ -5,11 +5,12 @@
 #
 
 # This script is executed within the python sandbox environment (python runtime)
-# to build a "basic" sketch (a face made of circle/square/rectangle outlines)
-# with OCCT, so the core process never has to touch a live OCP object. The
-# shape parameters arrive as plain data and the resulting face goes back as a
-# BREP envelope.
+# to build a "basic" sketch (a face made of circle/square/rectangle/slot
+# outlines) with OCCT, so the core process never has to touch a live OCP object.
+# The shape parameters arrive as plain data and the resulting face goes back as
+# a BREP envelope.
 
+import math
 import os
 import sys
 
@@ -91,6 +92,81 @@ class Rect:
         return polygon.Wire() if polygon.IsDone() else None
 
 
+class Slot:
+    """A slot: a rectangle with semicircular ends, which is what a slotted hole is.
+
+    Two arcs and two lines, and the two dimensions a drawing gives it: the
+    overall 'length' from one rounded end to the other, and the 'width', which
+    is the diameter of those ends and the width of the straight part between
+    them. A slot of equal length and width is a circle, which is the degenerate
+    case rather than an error - the two lines are simply not there.
+
+    'x' and 'y' place the centre of the **first** rounded end, not the middle of
+    the slot, and 'angle' turns it about that point. That is where a slot comes
+    from: it is a hole that may also sit somewhere else, so it starts where the
+    hole would have been and runs 'length - width' from there. A port that used
+    to be a plain circle keeps its coordinates when the opening it marks is
+    slotted, and the freedom of movement that goes with it runs from zero
+    rather than from half a slot back.
+    """
+
+    def __init__(self, config):
+        self.x = self.y = self.angle = 0.0
+        self.length = self.width = 0.0
+        if isinstance(config, dict):
+            self.x = config.get("x", 0.0)
+            self.y = config.get("y", 0.0)
+            self.angle = config.get("angle", 0.0)
+            self.length = config.get("length", 0.0)
+            self.width = config.get("width", 0.0)
+
+    def _point(self, px, py):
+        """One point of the outline, turned by 'angle' and placed on the first end."""
+        from OCP.gp import gp_Pnt
+
+        radians = math.radians(self.angle)
+        cos, sin = math.cos(radians), math.sin(radians)
+        return gp_Pnt(self.x + px * cos - py * sin, self.y + px * sin + py * cos, 0.0)
+
+    def to_wire(self):
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
+        from OCP.GC import GC_MakeArcOfCircle
+
+        if self.width <= 0.0:
+            raise ValueError("A slot needs a width greater than zero")
+        if self.length < self.width:
+            raise ValueError(
+                "A slot %s long cannot be %s wide: its length is measured over its rounded ends"
+                % (self.length, self.width)
+            )
+
+        radius = self.width / 2.0
+        # The distance between the centres of the two rounded ends, measured
+        # from the first - which is the origin. Zero when the slot is as long as
+        # it is wide, which is a circle.
+        reach = self.length - self.width
+
+        top_left = self._point(0.0, radius)
+        top_right = self._point(reach, radius)
+        bottom_right = self._point(reach, -radius)
+        bottom_left = self._point(0.0, -radius)
+        right_end = self._point(reach + radius, 0.0)
+        left_end = self._point(-radius, 0.0)
+
+        builder = BRepBuilderAPI_MakeWire()
+        # The two lines only where there is a straight part to draw. At exactly
+        # zero they would run between identical points, which OCCT refuses
+        # ("BRepBuilderAPI_LineThroughIdenticPoints") rather than ignoring, so
+        # the degenerate case has to skip them rather than build them short.
+        if reach > 0.0:
+            builder.Add(BRepBuilderAPI_MakeEdge(top_left, top_right).Edge())
+        builder.Add(BRepBuilderAPI_MakeEdge(GC_MakeArcOfCircle(top_right, right_end, bottom_right).Value()).Edge())
+        if reach > 0.0:
+            builder.Add(BRepBuilderAPI_MakeEdge(bottom_right, bottom_left).Edge())
+        builder.Add(BRepBuilderAPI_MakeEdge(GC_MakeArcOfCircle(bottom_left, left_end, top_left).Value()).Edge())
+        return builder.Wire() if builder.IsDone() else None
+
+
 def _outer_wire(config):
     if "circle" in config:
         return Circle(config["circle"]).to_wire()
@@ -98,6 +174,8 @@ def _outer_wire(config):
         return Square(config["square"]).to_wire()
     if "rectangle" in config:
         return Rect(config["rectangle"]).to_wire()
+    if "slot" in config:
+        return Slot(config["slot"]).to_wire()
     return None
 
 
@@ -113,6 +191,9 @@ def _inner_wires(config):
     if "rectangle" in inner:
         shapes.append(Rect(inner["rectangle"]))
     shapes.extend(Rect(r) for r in inner.get("rectangles", []))
+    if "slot" in inner:
+        shapes.append(Slot(inner["slot"]))
+    shapes.extend(Slot(s) for s in inner.get("slots", []))
     wires = [s.to_wire() for s in shapes]
     return [w for w in wires if w is not None]
 

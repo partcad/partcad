@@ -19,6 +19,7 @@ import {
 } from './common/settings';
 import { updateServiceBundle } from './common/provision';
 import { refreshToolsPath } from './common/terminalPath';
+import { activateWhenTrusted } from './common/trust';
 import { loadServerDefaults } from './common/setup';
 import { getLSClientTraceLevel } from './common/utilities';
 import { createOutputChannel, isVirtualWorkspace, onDidChangeConfiguration, registerCommand } from './common/vscodeapi';
@@ -89,6 +90,13 @@ async function installPackageOnOpen(
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    // In Restricted Mode the extension stays visible and inert: the Explorer
+    // asks for trust (a `viewsWelcome` on `!isWorkspaceTrusted`) and everything
+    // below runs once it is granted. See `common/trust.ts`.
+    await activateWhenTrusted(context, activateTrusted);
+}
+
+async function activateTrusted(context: vscode.ExtensionContext): Promise<void> {
     await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
     await vscode.commands.executeCommand('setContext', 'partcad.failed', false);
     // Not yet known to be missing: `restartBackend` decides, and until it has,
@@ -1046,7 +1054,12 @@ location: [[100, 0, 0], [0, 0, 1], 0]
     await partcadViewerServer.start();
 
     /* Instantiate the context viewer */
-    partcadContext = new PartcadContext(context.extensionUri);
+    // The extension's own version comes along, so that the view can say when the
+    // PartCAD it is talking to is not the release this extension shipped with.
+    // `context.extension` is undefined in no supported host, but the version is
+    // read defensively all the same: a missing one is compared against nothing
+    // rather than reported as a mismatch against the empty string.
+    partcadContext = new PartcadContext(context.extensionUri, context.extension?.packageJSON?.version ?? '');
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(PartcadContext.viewType, partcadContext, {
             // webviewOptions: { retainContextWhenHidden: true },

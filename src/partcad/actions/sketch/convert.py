@@ -1,13 +1,11 @@
-from pathlib import Path
 import shutil
-import time
+from pathlib import Path
 from typing import Optional
 
 import partcad.logging as pc_logging
 from partcad.project import Project
 from partcad.shape import SKETCH_EXTENSION_MAPPING
 from partcad.utils import resolve_resource_path
-
 
 FILE_BASED_SKETCHES = ["dxf", "svg"]
 SHALLOW_COPY_SKETCH_TYPES = ["alias", "enrich"]

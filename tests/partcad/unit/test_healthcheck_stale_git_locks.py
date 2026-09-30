@@ -6,13 +6,11 @@
 """The StaleGitLocks healthcheck removes leftover git cache lock files that no
 process holds, and never touches a lock a process still holds."""
 
-import os
-
 import pytest
 from filelock import FileLock
 
-from partcad.user_config import user_config
 from partcad.healthcheck.stale_git_locks import StaleGitLocksCheck
+from partcad.user_config import user_config
 
 
 @pytest.fixture

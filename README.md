@@ -149,7 +149,20 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] Using a `STEP` file that stays the source
 - Scenes (3D) — placed arrangements of objects: a workcell, a table, a simulation world
   - [x] Stating where things are, rather than how they got there
-  - [x] Exporting to a `Gazebo` world (SDFormat), and opening it in Gazebo
+  - [x] Reading and writing an engine's own scene format through the package that implements it —
+        [`partcad-sim-gazebo`](https://github.com/partcad/partcad-sim-gazebo) for a `Gazebo` world
+        (SDFormat), [`partcad-sim-mujoco`](https://github.com/partcad/partcad-sim-mujoco) for `MJCF`, each
+        also declaring the reader, the exporter and the `pc open` entry for its engine
+- Simulation — what an object is supposed to do once the world is switched on
+  - [x] `simulate:` on a part or an assembly: a scene, where in it the object goes, and the condition that
+        says whether it went as it should
+  - [x] `pc sim`, which runs it and validates the result
+  - [x] Simulation plugins, declared the way export and render implementations are — a scene goes in,
+        `before` and `after` come out. The simulator is a package, not part of this wheel:
+        [`partcad-sim-mujoco`](https://github.com/partcad/partcad-sim-mujoco) runs one in `MuJoCo` and
+        [`partcad-sim-gazebo`](https://github.com/partcad/partcad-sim-gazebo) one in `Gazebo`
+  - [x] `mu` on a material, so that what a part is made of decides whether it stands up — written out as
+        SDFormat's `<mu>`, URDF's `<mu1>` and MJCF's `friction`
 - Part models (3D)
   - Using scripting languages
     - [x] [CadQuery]
@@ -175,7 +188,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `SVG`
 - Tooling for AI agents doing mechanical design
   - [x] Agent Skills any `SKILL.md`-aware coding agent can load ([`ai-agents/`](./ai-agents/README.md)),
-        distributed as the `pc` plugin
+        installed by `pc init`, and distributed as the `pc` plugin
     - [x] Generate a part, an assembly or a 2D sketch (`/pc:gen`, `/pc:gen-part`, `/pc:gen-assembly`,
           `/pc:gen-sketch`) -- the agent authors the CAD script and validates it by rendering
     - [x] Describe an existing object (`/pc:describe`), search the catalog (`/pc:search`), add interfaces
@@ -187,7 +200,8 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - Object-Oriented Programming approach to maintaining part interfaces and mating information
   - Live preview of 3D models while working in Visual Studio Code, with the bill of materials, the assembly
     instructions and supplier quotes on tabs beside the 3D view
-  - Open an object in the application that made it (`pc open`): `FreeCAD`, `Blender`, `Gazebo`, `KiCad` —
+  - Open an object in the application that made it (`pc open`): `FreeCAD`, `Blender`, `KiCad` — and
+    `Gazebo` or `MuJoCo` from the plugin package for that engine —
     installed locally, or run in a container when it is not; an object `Blender` cannot read is converted to
     a mesh on the way
   - Render 2D projections, from any viewing angle (`--view`, or an arbitrary one), with the connection
@@ -209,7 +223,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `IGES`
     - [x] `glTF`
     - [x] `URDF`
-    - [x] `Gazebo` world (SDFormat)
+    - [x] `Gazebo` world (SDFormat) and `MJCF` (MuJoCo), from the plugin package for that engine
   - Output types a package implements itself, for both `render:` and `export:`
 
 ## Installation
@@ -245,7 +259,10 @@ symlinks, which on Windows means `git config core.symlinks true`), and every
 `claude --plugin-url <url>` loads for a single session, to try one version without installing it.
 
 The skills are plain [Agent Skills](https://code.claude.com/docs/en/skills), so any `SKILL.md`-aware agent can
-read them out of [`ai-agents/`](./ai-agents/README.md) without the plugin.
+read them out of [`ai-agents/`](./ai-agents/README.md) without the plugin. They also ship inside the `partcad`
+wheel, and `pc init` installs them into the repository it creates a package in: the plugin for Claude Code, and
+`pc-`-prefixed skills for Cursor. Pass `--no-skills` to skip it, or `--skills-only` to install them into a
+repository that has a package already.
 
 ### PartCAD IDE
 

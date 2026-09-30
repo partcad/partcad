@@ -72,18 +72,77 @@ export const MSG_CLEAR = 'clear';
 export const MSG_PING = 'ping';
 export const MSG_ACK = 'ack';
 
-/** A displayable object: compressed glTF plus the names to label it with. */
-export interface ViewerObject {
+/** A packed rigid placement: [[tx, ty, tz], [ax, ay, az], angleInDegrees]. */
+export type ViewerLocation = [[number, number, number], [number, number, number], number];
+
+/** One port a node declares: a coordinate frame, and what it is part of. */
+export interface ViewerPort {
     name?: string | null;
-    label?: string | null;
-    gltf: string;
+    /** Where it is, in the frame of the object that declares it. */
+    location: ViewerLocation;
+    /** The interface instance it belongs to, or absent for a port that belongs to none. */
+    interface?: string | null;
+    instance?: string | null;
+    /** The sketch the port is drawn with, as '<package>:<name>', where it has one. */
+    sketch?: string | null;
 }
 
-/** A bare coordinate frame (a PartCAD interface port), as a packed location. */
-export interface ViewerMarker {
+/** One interface instance a node implements, and the ports it is made of. */
+export interface ViewerInterface {
     name?: string | null;
-    // [[tx, ty, tz], [ax, ay, az], angleInDegrees]
-    location: [[number, number, number], [number, number, number], number];
+    instance?: string | null;
+    ports?: string[];
+}
+
+/**
+ * One node of the object being shown.
+ *
+ * Every subject is a tree of these and nothing else: a part or a sketch is one
+ * node deep, an assembly is a node per thing it holds, an interface is a node per
+ * port. PartCAD builds it - it is the very hierarchy it instantiates an assembly
+ * as, with glTF at the nodes instead of BREP - and the normative description is
+ * in 'src/partcad_ide_client/protocol.py'.
+ *
+ * Placements are not baked in: 'gltf' is the node's own geometry in its own
+ * coordinate system and 'location' says where the node sits inside its parent, so
+ * whoever draws the tree composes the locations down it. A port's location is in
+ * the same frame, and moves with the node that holds it.
+ */
+export interface ViewerNode {
+    name?: string | null;
+    label?: string | null;
+    location?: ViewerLocation | null;
+    /** Which entry of the root's 'geometry' table is this node's geometry. */
+    gltfRef?: string;
+    /**
+     * This node's own geometry, compressed and base64-encoded, or absent.
+     *
+     * What 'gltfRef' resolves to. PartCAD sends the reference and the table; a
+     * node carries the payload itself only where nothing built a table.
+     */
+    gltf?: string;
+    ports?: ViewerPort[];
+    interfaces?: ViewerInterface[];
+    /** What is inside this node, or absent for a leaf. */
+    assembly?: ViewerNode[];
+    /**
+     * On the root node: the sketches the ports anywhere in the tree are drawn
+     * with, keyed by the reference those ports name in their own 'sketch'. One
+     * entry per sketch however many ports point at it.
+     */
+    sketches?: Record<string, ViewerNode>;
+    /**
+     * On the root node: every distinct piece of geometry in the tree, compressed
+     * and base64-encoded, keyed by a digest of the exact shape it came from. One
+     * entry however many nodes name it through 'gltfRef'.
+     */
+    geometry?: Record<string, string>;
+    /**
+     * What was learnt about this node's shape as it was built, passed through as
+     * PartCAD carries it. The viewer pins its 'annotations' to the elements they
+     * describe; see 'src/webview/callouts.ts'.
+     */
+    metadata?: Record<string, unknown>;
 }
 
 export interface ViewerMessage {
@@ -97,13 +156,13 @@ export interface ViewerMessage {
      * The viewer shows more than geometry - what an assembly is made of, how it
      * goes together, where to buy its parts - and asks the PartCAD daemon for
      * all of it by '<package>:<name>', which a name on its own cannot spell.
-     * Absent for a shape that belongs to no package, and for a 'partcad' too old
-     * to send it; the tabs that need it are then not offered.
+     * Absent for a shape that belongs to no package; the tabs that need it are
+     * then not offered.
      */
     package?: string | null;
     keepCamera?: boolean;
-    objects?: ViewerObject[];
-    markers?: ViewerMarker[];
+    /** The object itself, as the root node of its tree. */
+    object?: ViewerNode | null;
 }
 
 export class ProtocolError extends Error {}

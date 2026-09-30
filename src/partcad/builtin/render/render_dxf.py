@@ -26,7 +26,7 @@ import render_svg
 CURVE_SEGMENTS = 20
 
 
-def convert_svg_to_dxf(svg_file, dxf_file, reproducible=True):
+def convert_svg_to_dxf(svg_file, dxf_file, reproducible=False):
     paths, _attributes, _svg_attributes = svgpathtools.svg2paths2(svg_file)
 
     # A DXF is stamped, on every save, with the time it was written
@@ -101,10 +101,13 @@ def process(path, request):
                 "exception": f"SVG file was not created: {svg_path}",
             }
 
-        # 'reproducible' defaults on: see convert_svg_to_dxf(). A package that
-        # would rather have the real timestamps sets 'reproducible: false' on
-        # the 'dxf' file type.
-        reproducible = request.get("reproducible", True)
+        # The same flag the projection above was drawn with - PartCAD puts it in
+        # every request - so a DXF asked for reproducibly gets the reproducible
+        # projection *and* the fixed header, and one that was not gets neither.
+        # It used to default on here alone, which made 'dxf' the one file type
+        # where this word meant something different from what it means
+        # everywhere else; see 'output.REPRODUCIBLE_KEY'.
+        reproducible = bool(request.get("reproducible", False))
         convert_svg_to_dxf(svg_path, path, reproducible=reproducible)
 
         return {"success": True, "exception": None}

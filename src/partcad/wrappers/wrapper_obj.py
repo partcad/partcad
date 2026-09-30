@@ -18,23 +18,24 @@ from OCP.gp import gp_Pnt
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 
+
 def process(path, request):
     try:
         vertices = []
         faces = []
 
         # Read the OBJ file
-        with open(path, 'r') as file:
+        with open(path, "r") as file:
             for line in file:
-                if line.startswith('#'):
+                if line.startswith("#"):
                     continue
-                if line.startswith('v '):
+                if line.startswith("v "):
                     parts = line.strip().split()
                     vertex = tuple(map(float, parts[1:]))
                     vertices.append(vertex)
-                elif line.startswith('f '):
+                elif line.startswith("f "):
                     parts = line.strip().split()
-                    face = [int(part.split('/')[0]) for part in parts[1:]]
+                    face = [int(part.split("/")[0]) for part in parts[1:]]
                     faces.append(face)
 
         # Create a compound shape to store faces
@@ -65,6 +66,7 @@ def process(path, request):
         "exception": None,
         "shape": compound,
     }
+
 
 path, request = wrapper_common.handle_input()
 

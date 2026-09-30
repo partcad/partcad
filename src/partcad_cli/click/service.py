@@ -18,9 +18,10 @@ import logging
 import os
 from pathlib import Path
 
+import rich_click as click
+
 import partcad_utils.logging_remote_client as _remote_client
 import partcad_utils.telemetry as _telemetry
-import rich_click as click
 from partcad_client import client as _client
 from partcad_utils.user_config import user_config as _user_config
 

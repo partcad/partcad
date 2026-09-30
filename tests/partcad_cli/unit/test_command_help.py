@@ -36,7 +36,9 @@ import traceback
 
 import pytest
 import rich_click as click
-from partcad_cli.click.command import cli as root, command_groups
+
+from partcad_cli.click.command import cli as root
+from partcad_cli.click.command import command_groups
 
 # A few paths that have to be in the walk. Not an exhaustive list -- that would
 # be a second copy of the command tree -- just enough that a walk which silently

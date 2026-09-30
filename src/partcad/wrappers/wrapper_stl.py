@@ -21,6 +21,7 @@ from OCP.GProp import GProp_GProps
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 
+
 def process(path, request):
     try:
         try:
@@ -80,6 +81,7 @@ def process(path, request):
         return {"success": False, "exception": str(e), "shape": None}
 
     return {"success": True, "exception": None, "shape": shape}
+
 
 if __name__ == "__main__":
     path, request = wrapper_common.handle_input()

@@ -8,6 +8,7 @@ materials:
       A semi-crystalline thermoplastic made from cornstarch or sugarcane.
     url: https://en.wikipedia.org/wiki/Polylactic_acid
     density: 0.001320 # g/mm^3
+    mu: 0.35
     tags:
       - low-cost
       - biodegradable

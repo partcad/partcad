@@ -90,7 +90,7 @@ def unreproducible_reason(config) -> typing.Optional[str]:
 
     A declaration that does none of the three has no answer to "which one went
     in", which is why the manufacturing test refuses it (see
-    'CamTest.reproducibility_failure').
+    'ManufacturabilityTest.reproducibility_failure').
 
     'fileHash' stays optional in the declaration all the same, for every kind of
     object: a package that does not pin its download is not malformed, it has

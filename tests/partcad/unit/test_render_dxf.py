@@ -13,10 +13,15 @@ saves of one drawing differ, which would cost PartCAD a checked-in DXF: the
 examples are a regression canary only because rendering them twice produces the
 same bytes.
 
-These cover the 'reproducible' parameter that settles both, without the sandbox
-the implementation normally runs in. That the result really is byte-identical
-across processes is not something a unit test can show; 'examples/feature_render'
-checks its DXF in, and the "Examples (PartCAD)" CI job re-renders it.
+These cover the 'reproducible' flag that settles both, without the sandbox the
+implementation normally runs in. It is 'false' unless asked for, like every
+other file type's -- it used to be on here and here alone, which made 'dxf' the
+one place where the word meant something a package could not choose (see
+'output.REPRODUCIBLE_KEY'). 'examples/feature_render' asks for it, which is what
+lets its DXF be checked in.
+
+That the result really is byte-identical across processes is not something a
+unit test can show; the "Examples (PartCAD)" CI job re-renders that example.
 """
 
 import importlib.util
@@ -120,27 +125,33 @@ def _dxf_implementation(types_in_use=("LINE", "LAYOUT", "ACDBPLACEHOLDER", "DICT
     return module, ezdxf_stub, documents
 
 
-def test_the_builtin_dxf_is_reproducible_by_default():
-    """A package gets diffable DXF without asking for it."""
+def test_the_builtin_dxf_declares_the_flag_and_leaves_it_off():
+    """Off, like every other built-in file type, and stated rather than implied.
+
+    It was on here until 'reproducible' became a field of the protocol. One file
+    type whose default answer differed from every other file type's is one place
+    where the word did not mean what it says everywhere else, and a package
+    could not turn it on for its SVG and have its DXF follow.
+    """
     ctx = pc.init("examples")
     declared = output.builtin_formats(ctx, output.RENDER)["dxf"]
-    assert declared["reproducible"] is True
+    assert declared["reproducible"] is False
 
 
-def test_the_timestamp_and_the_guids_are_suppressed(tmp_path):
+def test_the_timestamp_and_the_guids_are_suppressed_when_asked(tmp_path):
     """ezdxf writes fixed metadata behind one option; it has to be set."""
     module, ezdxf_stub, _documents = _dxf_implementation()
 
-    module.convert_svg_to_dxf("in.svg", str(tmp_path / "out.dxf"))
+    module.convert_svg_to_dxf("in.svg", str(tmp_path / "out.dxf"), reproducible=True)
 
     assert ezdxf_stub.options.write_fixed_meta_data_for_testing is True
 
 
-def test_the_real_timestamp_can_be_asked_for(tmp_path):
-    """'reproducible: false' is what a drawing that records its own age sets."""
+def test_the_real_timestamp_is_what_a_drawing_gets_unasked(tmp_path):
+    """The default, which is a drawing that records when it was really written."""
     module, ezdxf_stub, _documents = _dxf_implementation()
 
-    module.convert_svg_to_dxf("in.svg", str(tmp_path / "out.dxf"), reproducible=False)
+    module.convert_svg_to_dxf("in.svg", str(tmp_path / "out.dxf"))
 
     assert ezdxf_stub.options.write_fixed_meta_data_for_testing is False
 
@@ -153,7 +164,7 @@ def test_the_classes_section_is_registered_in_a_settled_order(tmp_path):
     """
     module, _ezdxf_stub, documents = _dxf_implementation()
 
-    module.convert_svg_to_dxf("in.svg", str(tmp_path / "out.dxf"))
+    module.convert_svg_to_dxf("in.svg", str(tmp_path / "out.dxf"), reproducible=True)
 
     document = documents[0]
     _path, registered_before_save = document.saved_as
@@ -171,13 +182,22 @@ def test_nothing_is_pinned_when_reproducibility_is_off(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "requested, expected", [({}, True), ({"reproducible": True}, True), ({"reproducible": False}, False)]
+    "requested, expected", [({}, False), ({"reproducible": True}, True), ({"reproducible": False}, False)]
 )
-def test_the_request_carries_the_parameter_through(tmp_path, requested, expected, monkeypatch):
-    """'process()' is what the wrapper calls, and the parameter arrives in it."""
-    module, ezdxf_stub, _documents = _dxf_implementation()
+def test_the_request_carries_the_flag_through(tmp_path, requested, expected, monkeypatch):
+    """'process()' is what the wrapper calls, and the flag arrives in it.
 
-    def render_svg_process(path, _request):
+    Both halves of a DXF hang off it, which is why the projection's request is
+    checked here too: the header metadata this file writes, and the hidden-line
+    algorithm the SVG underneath it was drawn with. A DXF with fixed GUIDs drawn
+    through the algorithm that differs between machines would be reproducible in
+    the half nobody was worried about.
+    """
+    module, ezdxf_stub, _documents = _dxf_implementation()
+    projected = []
+
+    def render_svg_process(path, request):
+        projected.append(dict(request))
         with open(path, "w") as f:
             f.write("<svg/>")
         return {"success": True}
@@ -188,3 +208,6 @@ def test_the_request_carries_the_parameter_through(tmp_path, requested, expected
 
     assert response["success"] is True
     assert ezdxf_stub.options.write_fixed_meta_data_for_testing is expected
+    # Handed on untouched: 'render_svg.process()' reads the same key out of the
+    # same request, so the projection and the header cannot disagree.
+    assert projected[0].get("reproducible") == requested.get("reproducible")

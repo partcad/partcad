@@ -30,6 +30,14 @@ __pycache__
 allure-report/
 allure-results/
 behave-results/
+# What 'dev-tools/ci/coverage_report.py' writes: the merged report the
+# "Coverage" job uploads, its scratch space, the artifacts it downloads into,
+# and the pull request comment it renders. Reproducing that merge locally is
+# what 'docs/source/contributing.rst' documents, and it leaves all four here.
+coverage-comment.md
+coverage-data/
+coverage-report/
+coverage-work/
 docs/build
 # Compiled gettext catalogs — Sphinx auto-builds these from the .po files at build time
 docs/source/locales/**/*.mo

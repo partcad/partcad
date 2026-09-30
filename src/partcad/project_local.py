@@ -7,15 +7,29 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from jinja2 import Environment, FileSystemLoader, ChoiceLoader
 import json
-import math
 import os
-import yaml
+import sys
 
-from .project import Project
+import yaml
+from jinja2 import ChoiceLoader, Environment, FileSystemLoader
+
+from . import config_template
 from . import logging as pc_logging
 from . import telemetry
+from .project import Project
+
+
+def partcad_version() -> str:
+    """This PartCAD's version, read where it is defined rather than imported.
+
+    'partcad/__init__.py' imports this module on its way up, so a module-level
+    'from . import __version__' would be a circular import; 'sys.modules' is how
+    the rest of the package reads it for the same reason (see
+    'ProjectConfiguration', which checks a package's 'partcad:' requirement).
+    """
+    return sys.modules["partcad"].__version__
+
 
 DEFAULT_CONFIG_FILENAME = "partcad.yaml"
 
@@ -60,21 +74,10 @@ class ProjectLocal(Project):
             loaders.append(FileSystemLoader(include_path))
         loader = ChoiceLoader(loaders)
         template = Environment(loader=loader).from_string(config)
-        config = template.render(
-            {
-                "package_name": name,
-                "M_PI": math.pi,
-                "PI": math.pi,
-                "SQRT_2": math.sqrt(2),
-                "SQRT_3": math.sqrt(3),
-                "SQRT_5": math.sqrt(5),
-                "INCH": 25.4,
-                "INCHES": 25.4,
-                "FOOT": 304.8,
-                "FEET": 304.8,
-                "get_from_config": lambda: None,
-            }
-        )
+        # What the template may name, including which PartCAD is reading it -
+        # see 'partcad.config_template', which is also where a package that has
+        # to serve two of them is shown how.
+        config = template.render(config_template.render_context(name, partcad_version()))
 
         # Parse the config
         config_obj = None

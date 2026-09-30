@@ -39,10 +39,12 @@ DURATIONS = DEV_TOOLS / "behave_durations.json"
 CI_SHARDS = 4
 
 # The `timeout-minutes` on the Behave job, and what a shard has to fit inside
-# once job setup is paid. Setup measured at 5.3-6.3 minutes across the
-# windows-latest shards of run 33149121989.
-JOB_TIMEOUT_MINUTES = 60
-JOB_SETUP_MINUTES = 7
+# once job setup is paid. Setup measured at 5.8-9.0 minutes across the
+# windows-latest shards of run 34247284862, so the allowance is the top of that
+# range rather than the middle: an optimistic figure here buys a budget the job
+# does not actually have, which is the direction that ends in a cancelled run.
+JOB_TIMEOUT_MINUTES = 75
+JOB_SETUP_MINUTES = 9
 
 
 def _load_behave_shard():

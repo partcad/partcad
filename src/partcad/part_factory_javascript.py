@@ -17,10 +17,9 @@ moving once a render starts.
 
 import os
 
+from . import sandbox_versions, telemetry
 from .part_factory_file import PartFactoryFile
 from .runtime_javascript import JavaScriptRuntime, package_requirements, shape_requirements
-from . import sandbox_versions
-from . import telemetry
 
 
 @telemetry.instrument()

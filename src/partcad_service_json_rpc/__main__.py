@@ -18,6 +18,8 @@ import argparse
 import os
 import sys
 
+from partcad_utils import process_role
+
 from . import __version__
 from .core.session import Session
 from .rpc.methods import build_registry
@@ -129,6 +131,19 @@ def parse_host_port(address: str) -> tuple[str, int]:
 
 
 def _build_session(args: argparse.Namespace, log_dir: str = None) -> Session:
+    # A process that builds the session is one that serves: every channel below
+    # -- the socket daemon (in the detached grandchild, where this is called),
+    # the Windows pipe child, stdio and HTTP -- comes through here, and the
+    # launcher that merely starts a daemon and exits does not. Said once, here,
+    # rather than at each of those four call sites, which is four chances for
+    # the next channel to be added without it.
+    #
+    # What reads it is `partcad.context.probe_timeout()`: a daemon waits longer
+    # before concluding it has no network, because it is long-lived, it caches
+    # that conclusion for five minutes, and it holds it on behalf of every
+    # client of the workspace rather than one command.
+    process_role.mark_daemon()
+
     session = Session(settings=build_settings(args))
     # The per-workspace daemon keeps a rotating log file next to its socket; the
     # foreground channels (stdio/HTTP) stream to the client without a file.

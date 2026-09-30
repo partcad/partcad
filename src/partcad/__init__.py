@@ -5,7 +5,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-__version__: str = "0.8.50"
+__version__: str = "0.8.131"
 
 # Must come before anything that spawns a process: everything PartCAD executes
 # in a Python sandbox inherits this environment, so this is where the sandbox
@@ -92,6 +92,18 @@ from . import actions, exception, healthcheck, logging, tags, utils
 # while some other module happened to import it first, which is not something
 # to leave a request path depending on.
 from . import plugin  # noqa: F401
+
+# Imported for the binding as well: 'partcad.cae' is what the daemon's
+# 'cae.analyze'/'cae.defaults' operations reach the analyses through, and it is
+# what 'partcad.test.cae' and 'Shape.analyze_async()' read. It resolves
+# anyway because 'shape' imports it, and that is exactly the dependency the
+# 'plugin' line above exists not to have.
+from . import cae  # noqa: F401
+
+# And 'partcad.cam', for the same reason: it is what the daemon's 'cam.route'
+# operation reaches a route through, and what 'Shape.route_async()' reads.
+from . import cam  # noqa: F401
+from .ai_agents import install_agent_skills
 from .assembly import Assembly
 from .assembly_connect import ConnectHold, ConnectHow
 from .consts import *
@@ -183,6 +195,7 @@ __all__ = [
     "get_scene_build123d",
     "healthcheck",
     "init",
+    "install_agent_skills",
     "logging",
     "part",
     "shape",

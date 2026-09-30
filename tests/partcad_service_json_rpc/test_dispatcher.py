@@ -6,6 +6,7 @@
 """Tests for the JSON-RPC 2.0 dispatcher."""
 
 import pytest
+
 from partcad_service_json_rpc.rpc import dispatcher as d
 from partcad_service_json_rpc.rpc.dispatcher import Dispatcher, JsonRpcError
 

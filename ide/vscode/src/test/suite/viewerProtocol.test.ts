@@ -37,7 +37,13 @@ suite('PartCAD Viewer protocol', () => {
     test('a frame round-trips', () => {
         // 'package' is what the panel's tabs beside the 3D one are about: they
         // ask the daemon about '<package>:<name>', which a name cannot spell.
-        const message: ViewerMessage = { type: MSG_SHOW, id: 'abc', name: 'part', package: '//pkg', objects: [] };
+        const message: ViewerMessage = {
+            type: MSG_SHOW,
+            id: 'abc',
+            name: 'part',
+            package: '//pkg',
+            object: { name: '//pkg:part', label: 'part' },
+        };
         const frame = encodeFrame(message);
 
         const length = decodeHeader(frame.subarray(0, HEADER_LENGTH));
@@ -45,6 +51,50 @@ suite('PartCAD Viewer protocol', () => {
         const decoded = decodePayload(frame.subarray(HEADER_LENGTH));
         assert.deepStrictEqual(decoded, message);
         assert.strictEqual(decoded.package, '//pkg');
+    });
+
+    test('the object tree and everything on its nodes survive a frame', () => {
+        // One payload for every kind of subject: the hierarchy, the placements,
+        // the geometry of each node and what each declares about connections.
+        // PartCAD builds it ('partcad/shape_envelope.py'); this side only carries
+        // it, so what a frame must not do is lose any of it.
+        const message: ViewerMessage = {
+            type: MSG_SHOW,
+            name: 'mount',
+            kind: 'assembly',
+            object: {
+                name: '//pkg:mount',
+                label: 'mount',
+                ports: [{ name: 'hold', location: [[0, 0, 5], [0, 0, 1], 0] }],
+                assembly: [
+                    {
+                        name: '//pkg:plate',
+                        label: 'bottom',
+                        location: [[0, 0, 20], [0, 0, 1], 0],
+                        gltf: 'Z2xURg==',
+                        ports: [
+                            {
+                                name: 'TL-thru-m3',
+                                location: [[-10, 10, 0], [0, 0, 1], 0],
+                                interface: '//pkg:m3-thru',
+                                instance: 'TL',
+                                sketch: '//pkg:m3',
+                            },
+                        ],
+                        interfaces: [{ name: '//pkg:m3-thru', instance: 'TL', ports: ['TL-thru-m3'] }],
+                    },
+                ],
+            },
+        };
+
+        const frame = encodeFrame(message);
+        const decoded = decodePayload(frame.subarray(HEADER_LENGTH));
+
+        assert.deepStrictEqual(decoded, message);
+        // A node's placement is its own and is not baked into its geometry: the
+        // tree is composed as it is drawn, so losing one would put a part at the
+        // origin rather than fail.
+        assert.deepStrictEqual(decoded.object?.assembly?.[0].location, [[0, 0, 20], [0, 0, 1], 0]);
     });
 
     test('the header is self-describing', () => {

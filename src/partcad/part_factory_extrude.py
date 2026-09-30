@@ -7,13 +7,11 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .part_factory_homogen import PartFactoryHomogen
-from .sketch import Sketch
 from . import logging as pc_logging
-from . import wrapper
-from . import shape_envelope
-from . import sandbox_versions
-from . import telemetry
+from . import sandbox_versions, shape_envelope, telemetry, wrapper
+from .part_factory_homogen import PartFactoryHomogen
+from .process_crash import describe_exit_code
+from .sketch import Sketch
 
 
 # Homogeneous: an extrusion is one sketch swept into one solid, so a single
@@ -97,7 +95,7 @@ class PartFactoryExtrude(PartFactoryHomogen):
                     [wrapper_path, "extrude"], request_serialized
                 )
                 if exitcode != 0 and not errors:
-                    errors = "%s: %s: extrude failed with exit code %s" % (part.project_name, part.name, exitcode)
+                    errors = "%s: %s: extrude failed: %s" % (part.project_name, part.name, describe_exit_code(exitcode))
                 if errors:
                     pc_logging.error(errors)
                     raise Exception(errors)

@@ -7,8 +7,8 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .plugin_factory_enrich import PluginFactoryEnrich
 from . import telemetry
+from .plugin_factory_enrich import PluginFactoryEnrich
 
 
 @telemetry.instrument()

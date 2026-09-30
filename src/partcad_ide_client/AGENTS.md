@@ -25,6 +25,12 @@ Two properties of this package are deliberate and easy to break:
   before it reaches here, so there is nothing to import. `partcad` imports *this*, lazily, from
   `partcad.viewer`.
 
+A node names its geometry (`KEY_GLTF_REF`) rather than carrying it, and the root holds one entry per distinct
+shape (`KEY_GEOMETRY`). An assembly that places the same bolt a hundred times therefore sends that bolt once and
+names it a hundred times — possible only because a node's placement was never part of its geometry, which is the
+same property that lets the tree be composed at all. `is_node()` recognises both spellings: a reader that only
+knew `KEY_GLTF` would stop seeing every node of an assembly the day the geometry was shared.
+
 The glTF payload codec (`encode_gltf`/`decode_gltf`) has two other implementations that have to agree with it:
 `ocp_serialize.encode_gltf` in the sandbox, and `decodeGltf` in the extension. Neither can import this package,
 which is why each carries its own copy; `tests/partcad/unit/test_viewer.py` and the extension's
@@ -46,19 +52,27 @@ poetry run behave                                                               
 The client tests stand up a fake IDE on an ephemeral port and point the client at it with `PARTCAD_IDE_PORT`,
 so they never collide with a PartCAD IDE the developer actually has open.
 
-To exercise the whole path — a real part, tessellated in a sandbox, over a real socket — point a `partcad` at a
-listening socket and show something; `tests/partcad/unit/test_viewer.py` covers the core side with the sandbox
-stubbed out, and the sandbox side is covered by the render tests.
+To exercise the whole path — a real part, tessellated in a sandbox, over a real socket — run
+`dev-tools/fake_viewer.py`, which listens where the IDE listens, acknowledges every frame and prints each show
+with its control tree and the geometry and frames attributed to the items that draw them. Give it `--port` and
+the same port in `PARTCAD_IDE_PORT` to stay out of the way of a PartCAD IDE that is actually open, and remember
+that the process doing the show is usually the **daemon** rather than the `pc` you ran, one per workspace.
+`tests/partcad/unit/test_viewer.py` covers the core side with the sandbox stubbed out,
+`tests/partcad/unit/test_shape_tree.py` covers what the tree holds, and the sandbox side is covered by the
+render tests.
 
 ## Lint / format
 
 ```bash
 poetry run black --check src/partcad_ide_client tests/partcad_ide_client
+poetry run flake8 src/partcad_ide_client tests/partcad_ide_client
+poetry run isort --check --filter-files src/partcad_ide_client tests/partcad_ide_client
 ```
 
-Note that `flake8` reports E501 at 79 columns on every file in this repo (it does not read the 120-column
-setting from `pyproject.toml` without a plugin), and `isort` disagrees with the tree as committed; neither
-gates a PR. See the root [AGENTS.md](../../AGENTS.md).
+`black`, `flake8` and `isort` all gate now — each is a `pre-commit` hook and a `Lint (...)` job in `test.yml` —
+and the tree satisfies all three, so a finding from any of them is yours. flake8 only reads its configuration
+because `Flake8-pyproject` is installed; without it it checks at 79 columns. See the root
+[AGENTS.md](../../AGENTS.md).
 
 ## Commit
 

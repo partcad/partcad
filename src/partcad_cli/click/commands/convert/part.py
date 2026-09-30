@@ -10,7 +10,6 @@ import rich_click as click
 
 from ...service import run
 
-
 SUPPORTED_CONVERT_FORMATS = ["step", "brep", "stl", "3mf", "threejs", "obj", "gltf", "iges"]
 
 

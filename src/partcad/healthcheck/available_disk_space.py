@@ -4,11 +4,11 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from pathlib import Path
 import shutil
 
-from .tests import HealthCheckReport, HealthCheckTest
 from partcad.user_config import user_config
+
+from .tests import HealthCheckReport, HealthCheckTest
 
 
 class AvailableDiskSpaceCheck(HealthCheckTest):
@@ -39,7 +39,7 @@ class AvailableDiskSpaceCheck(HealthCheckTest):
                 self.findings.append(
                     f"Insufficient disk space. Need at least {self.min_space} GB free in {path}. Currently, only {free // (1024 * 1024 * 1024)} GB is available."
                 )
-        except Exception as e:
+        except Exception:
             self.findings.append("Error checking disk space")
 
         return HealthCheckReport(self.name, self.findings)

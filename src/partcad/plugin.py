@@ -8,9 +8,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from async_lru import alru_cache
 import itertools
 import typing
+
+from async_lru import alru_cache
 
 from . import logging as pc_logging
 

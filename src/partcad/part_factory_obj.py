@@ -1,10 +1,10 @@
 import os
 
-from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
-from . import wrapper
-from . import shape_envelope
+from . import shape_envelope, wrapper
 from .exception import PartFactoryError
+from .part_factory_file import PartFactoryFile
+from .process_crash import command_failure
 
 
 class PartFactoryObj(PartFactoryFile):
@@ -51,7 +51,7 @@ class PartFactoryObj(PartFactoryFile):
                 request_serialized,
             )
             if exitcode != 0 and not errors:
-                errors = "Failed to execute command '%s' with exit code %s" % (" ".join(command), exitcode)
+                errors = command_failure(command, exitcode)
             if errors:
                 pc_logging.error(errors)
                 raise Exception(errors)
@@ -59,8 +59,7 @@ class PartFactoryObj(PartFactoryFile):
             response = shape_envelope.deserialize(response_serialized)
             if not response.get("success", False):
                 message = response.get("exception") or (
-                    "the OBJ wrapper reported failure without a message for '%s:%s'"
-                    % (part.project_name, part.name)
+                    "the OBJ wrapper reported failure without a message for '%s:%s'" % (part.project_name, part.name)
                 )
                 pc_logging.error(message)
                 raise PartFactoryError(message)

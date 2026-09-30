@@ -4,8 +4,9 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import rich_click as click
 import os
+
+import rich_click as click
 
 import partcad as pc
 
@@ -21,6 +22,7 @@ def cli(cli_ctx) -> None:
                     id_value = file.read()
                     pc.logging.info(f"Telemetry ID: '{id_value}'")
             else:
-                pc.logging.info(f"Telemetry ID: None")
+                pc.logging.info("Telemetry ID: None")
         pc.logging.info(f"Telemetry type: '{pc.user_config.telemetry_config.type}'")
+        pc.logging.info(f"Telemetry detail: '{pc.user_config.telemetry_config.detail}'")
         pc.logging.info(f"Telemetry env: '{pc.user_config.telemetry_config.env}'")

@@ -9,13 +9,9 @@
 
 import os
 
-from .part_factory_python import PartFactoryPython
-from . import wrapper
-from . import shape_envelope
 from . import logging as pc_logging
-
-from . import sandbox_versions
-from . import telemetry
+from . import sandbox_versions, shape_envelope, telemetry, wrapper
+from .part_factory_python import PartFactoryPython
 
 
 @telemetry.instrument()
@@ -116,7 +112,10 @@ class PartFactoryBuild123d(PartFactoryPython):
             )
             if exitcode != 0 and len(errors) == 0:
                 errors = "%s: %s: Failed to instantiate" % (part.project_name, part.name)
-                pc_logging.debug("%s: %s: Failed to execute command: '%s' with exitcode %s" % (part.project_name, part.name, " ".join(command), exitcode))
+                pc_logging.debug(
+                    "%s: %s: Failed to execute command: '%s' with exitcode %s"
+                    % (part.project_name, part.name, " ".join(command), exitcode)
+                )
 
             if len(errors) > 0:
                 error_lines = errors.split("\n")

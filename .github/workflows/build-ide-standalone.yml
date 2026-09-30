@@ -20,24 +20,26 @@ on:
   merge_group:
   # Not on every change: this builds the standalone command line bundles first,
   # to put them inside the IDE, and those pull ~500MB of OpenCASCADE per runner.
-  # Only the changes that can alter what ships. The two lists are duplicated
-  # because GitHub Actions does not support YAML anchors.
+  # Only the changes that can alter what ships, and on "devel" only once per
+  # version.
+  #
+  # Nothing filters this trigger. On a pull request and in the merge queue the
+  # "set-matrix" job's gate decides, for the two reasons "build-standalone.yml"
+  # sets out beside its own trigger: "merge_group" supports no "paths:" filter,
+  # so this workflow used to build three IDEs in the queue for a change to a
+  # README; and a workflow skipped by "paths:" never creates the check run a
+  # required check waits for, while a skipped job does. On a push it is the
+  # version-bump clause of that same gate, which "build-standalone.yml" now
+  # carries too -- an IDE archive is stamped with a version, and the one built
+  # for the merge carried the version that merge replaced. The "paths:" list
+  # that used to be here would only hide that gate: a bump touches
+  # "ide/vscode/package.json" today, so it passed, and the day
+  # "dev-tools/bumpversion.toml" stops naming a file under one of those paths no
+  # IDE is ever built on "devel" again with nothing to say so.
   push:
     branches: ["devel"]
-    paths:
-      - "ide/standalone/**"
-      - "ide/vscode/**"
-      - ".vscode/extensions.json"
-      - "install.sh"
-      - ".github/workflows/build-ide-standalone.yml"
   pull_request:
     branches: ["main", "devel"]
-    paths:
-      - "ide/standalone/**"
-      - "ide/vscode/**"
-      - ".vscode/extensions.json"
-      - "install.sh"
-      - ".github/workflows/build-ide-standalone.yml"
 
 # `actions: read` is what lets the "build" job list and download the artifacts
 # of *another* workflow run -- the sibling "Standalone" run that froze the
@@ -135,9 +137,40 @@ jobs:
     name: "Set matrix"
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Only a version bump builds an IDE on a push to "devel", the same guard
+    # "build-standalone.yml", "test.yml", "build.yml" and "test-dev.yml" carry;
+    # the long note is in "test.yml" and the one beside this workflow's trigger
+    # says what it means here.
+    #
+    # It is not only about what an archive is stamped with. The "bundles" job
+    # below reads the sibling "Standalone" run for this commit, and that workflow
+    # now declines a push that is not a bump -- so an IDE built for one would be
+    # an IDE looking for bundles that, by design, were never frozen.
+    #
+    # `inputs.tools_in_this_run` leads for the reason `inputs.called` leads
+    # there: "deploy.yml" calls this workflow to build what a release carries,
+    # and a called instance runs whatever the caller's commit message says.
+    # `github.event_name` cannot be asked -- inside a called workflow the whole
+    # `github` context is the caller's, so it reads "push" on the release path --
+    # and only a push carries `head_commit`, which is why the event name comes
+    # before the message test rather than after it.
+    if: >-
+      ${{ toJSON(inputs.tools_in_this_run) != 'null'
+      || github.event_name != 'push'
+      || github.ref != 'refs/heads/devel'
+      || startsWith(github.event.head_commit.message, 'Version updated') }}
     outputs:
       build: ${{ steps.set-matrix.outputs.build }}
       install: ${{ steps.set-matrix.outputs.install }}
+      # Whether this change can alter what the IDE ships. Every job below needs
+      # this one, so this is the whole workflow's gate. See
+      # ".github/actions/changed-scopes".
+      ide: ${{ steps.scope.outputs.ide }}
+      # Whether this run's scope froze the command line bundles. The IDE build
+      # embeds them, so this is what says whether they can be expected for this
+      # commit or have to come from the base branch -- see "Find the
+      # \"Standalone\" run that built the bundles" below.
+      bundle: ${{ steps.scope.outputs.bundle }}
     steps:
       - uses: actions/checkout@v7
 
@@ -145,10 +178,17 @@ jobs:
         id: depth
         uses: ./.github/actions/test-depth
 
+      - name: Decide what the change touches
+        id: scope
+        uses: ./.github/actions/changed-scopes
+        with:
+          deep: ${{ steps.depth.outputs.deep }}
+
       - name: Set matrix
         id: set-matrix
         env:
           DEEP: ${{ steps.depth.outputs.deep }}
+          QUEUE: ${{ steps.depth.outputs.queue }}
         run: |
           if [ "${DEEP}" = "true" ]; then
             platforms=$(jq -cn --argjson core '${{ env.IDE_CORE }}' --argjson deep '${{ env.IDE_DEEP }}' '$core + $deep')
@@ -156,6 +196,15 @@ jobs:
           else
             platforms='${{ env.IDE_CORE }}'
             forward='${{ env.IDE_INSTALL_FORWARD_CORE }}'
+          fi
+          # A pull request builds no macOS IDE, matching "build-standalone.yml",
+          # which freezes no macOS bundle for one -- so asking for the macOS IDE
+          # here on a reduced run would be asking to unpack a bundle that nothing
+          # built. Restored by the merge queue and by "#deepTest".
+          if [ "${QUEUE}" != "true" ]; then
+            drop_macos='map(select(.os | startswith("macos") | not))'
+            platforms=$(jq -c "${drop_macos}" <<<"${platforms}")
+            forward=$(jq -c "${drop_macos}" <<<"${forward}")
           fi
           echo "Platforms: ${platforms}"
           echo 'build={"include": '"${platforms}"'}' >> "${GITHUB_OUTPUT}"
@@ -186,6 +235,8 @@ jobs:
   # of building does.
   tools:
     name: "Build tooling"
+    needs: set-matrix
+    if: ${{ needs.set-matrix.outputs.ide == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -255,6 +306,8 @@ jobs:
   # need, and the step inside it costs seconds when there is nothing to look up.
   bundles:
     name: "Command line tools"
+    needs: set-matrix
+    if: ${{ needs.set-matrix.outputs.ide == 'true' }}
     runs-on: ubuntu-latest
     # Long enough to sit out a whole "Standalone" run. The freeze itself is
     # ~35 minutes; the install, snap and examples jobs after it have taken the
@@ -273,6 +326,15 @@ jobs:
       # bare "Artifact not found" an unpacked editor later.
       artifacts: ${{ steps.resolve.outputs.artifacts }}
     steps:
+      # Note that a sibling run is no longer guaranteed even in the merge queue.
+      # "build-standalone.yml" is gated on what the change touches now, so a
+      # change to "ide/standalone" alone -- which is not a change to what gets
+      # frozen -- leaves this commit with no "Standalone" run anywhere; and on a
+      # push it is gated on the commit being a version bump, so a dispatch of
+      # this workflow at any other commit on "devel" finds a run that was
+      # skipped, which is the same thing wearing a conclusion. That is the case
+      # the base-branch fallback below was written for; what it costs is
+      # GRACE_SECONDS of waiting to establish that there is nothing to wait for.
       - name: Find the "Standalone" run that built the bundles
         id: resolve
         # `toJSON` rather than `inputs.tools_in_this_run == true`. Outside
@@ -309,6 +371,15 @@ jobs:
           # bundles or an older commit's.
           GRACE_SECONDS: "300"
           POLL_SECONDS: "30"
+          # How long "Standalone" keeps its artifacts ("retention-days" in
+          # "build-standalone.yml"), and how far back the base branch fallback
+          # therefore looks; and how many pages of 100 runs it reads at most.
+          RETENTION_DAYS: "14"
+          MAX_PAGES: "3"
+          # "true" when this run's scope also froze the bundles. When it did not,
+          # the sibling "Standalone" run is there but empty by design, and the
+          # base branch is where the bundles are.
+          BUNDLE_IN_THIS_RUN: ${{ needs.set-matrix.outputs.bundle }}
         run: |
           set -euo pipefail
 
@@ -346,10 +417,86 @@ jobs:
           }
 
           # The same, for the most recent finished runs on a branch.
+          #
+          # Of this repository only. The `branch` filter matches a run's head
+          # branch by *name*, and a pull request from a fork's own "devel" has
+          # a head branch called "devel" too -- so without the check, the IDE
+          # built here could embed command line bundles frozen from somebody
+          # else's unreviewed code, under a log line saying they came from
+          # "devel". A run of this repository is a push to the branch, a
+          # dispatch on it, or a pull request whose head is the branch itself,
+          # and every one of those built what the branch holds.
+          #
+          # Paged, because that filter is applied after the API has chosen the
+          # page: a first page crowded with fork runs would otherwise hide a
+          # run of this repository on the second. Bounded by age rather than by
+          # count -- a run older than the artifacts' 14 days holds no bundles,
+          # so nothing past RETENTION_DAYS (with a day of slack) is listed, and
+          # no page is fetched once one reaches back that far -- and by
+          # MAX_PAGES besides, so a branch busy with forks costs at most that
+          # many requests.
           runs_on_branch() {
-            gh api "repos/${REPO}/actions/workflows/${workflow}/runs?branch=$1&status=completed&per_page=30" \
-              --jq '.workflow_runs | sort_by(.created_at) | reverse
-                    | .[] | [.id, .head_sha, .conclusion] | @tsv'
+            local page runs cutoff
+            cutoff=$(date -u -d "$(( RETENTION_DAYS + 1 )) days ago" '+%Y-%m-%dT%H:%M:%SZ')
+            for (( page = 1; page <= MAX_PAGES; page++ )); do
+              runs=$(gh api "repos/${REPO}/actions/workflows/${workflow}/runs?branch=$1&status=completed&per_page=100&page=${page}")
+              CUTOFF="${cutoff}" jq -r '.workflow_runs
+                    | map(select(.head_repository.full_name == env.REPO
+                                 and .created_at >= env.CUTOFF))
+                    | sort_by(.created_at) | reverse
+                    | .[] | [.id, .head_sha, .conclusion] | @tsv' <<<"${runs}"
+              # A short page is the last one, and a page reaching past the
+              # cutoff has shown every run that could still hold bundles.
+              if [ "$(jq '.workflow_runs | length' <<<"${runs}")" -lt 100 ] \
+                || [ "$(jq -r '[.workflow_runs[].created_at] | min // ""' <<<"${runs}")" \< "${cutoff}" ]; then
+                break
+              fi
+            done
+          }
+
+          # The same question again, asked without the API's `branch` filter:
+          # the workflow's most recent finished runs, whatever their branch,
+          # with the branch picked out here. Each line ends with when the run
+          # was created, so that an answer can say how recent it was.
+          #
+          # This is the second opinion 'runs_on_branch' needs, because the
+          # filtered listing can be wrong without saying so. On 2026-09-25 it
+          # answered for a while with a page that began at a run from three
+          # weeks earlier -- every run on it past the 14 days its artifacts are
+          # kept -- while this listing had the newest run, two days old and
+          # holding every bundle, first. The job concluded there were no
+          # bundles on "devel" and failed with a message sending the reader to
+          # rebuild them. One page of 100 and no more: this is a second opinion
+          # on the newest runs, and the branch is not filtered by the API here,
+          # so pull request runs share the page.
+          # Runs of this repository only, for the reason 'runs_on_branch'
+          # gives.
+          runs_on_branch_unfiltered() {
+            BRANCH="$1" gh api "repos/${REPO}/actions/workflows/${workflow}/runs?status=completed&per_page=100" \
+              --jq '.workflow_runs
+                    | map(select(.head_branch == env.BRANCH
+                                 and .head_repository.full_name == env.REPO))
+                    | sort_by(.created_at) | reverse
+                    | .[] | [.id, .head_sha, .conclusion, .created_at] | @tsv'
+          }
+
+          # The first run of a listing that still holds bundles, into the use_*
+          # variables. Reads 'runs_on_branch' lines on stdin; anything after
+          # the third column is ignored.
+          take_first_with_bundles() {
+            local id sha conclusion rest names
+            while IFS=$'\t' read -r id sha conclusion rest; do
+              [ -n "${id}" ] || continue
+              names=$(bundles_of "${id}")
+              [ -n "${names}" ] || continue
+              use_run="${id}"
+              use_conclusion="${conclusion}"
+              use_names="${names}"
+              use_sha="${sha}"
+              say "Run ${id} (${conclusion}, ${sha}) has: ${names}"
+              return 0
+            done
+            return 0
           }
 
           started=$(date +%s)
@@ -374,6 +521,18 @@ jobs:
               if [ "${status}" != "completed" ]; then
                 pending="${pending} ${id}"
                 [ -n "${pending_first}" ] || pending_first="${id}"
+                continue
+              fi
+              # A run whose every job was skipped is not a run that failed to
+              # produce bundles -- it is "Standalone" declining the commit. Its
+              # push trigger is gated on a version bump now, so every other push
+              # to "devel" leaves exactly that behind, and so does a manual
+              # dispatch of *this* workflow at such a commit. Counting it as
+              # barren below would fail the job over a freeze nobody asked for.
+              # It is evidence of nothing, so it is passed over as if it did not
+              # exist, which lands on the base branch fallback.
+              if [ "${conclusion}" = "skipped" ]; then
+                say "Run ${id} was skipped: \"Standalone\" declined ${HEAD_SHA}."
                 continue
               fi
               names=$(bundles_of "${id}")
@@ -406,6 +565,19 @@ jobs:
             fi
 
             if [ -n "${barren}" ]; then
+              # A run with no bundles is not the same thing as a run that failed
+              # to produce them. Since the scope gate landed, "Standalone" runs
+              # on every pull request and *skips* its builds when the change
+              # does not warrant freezing -- so a change confined to "ide/" or
+              # "ide/vscode/" turns the IDE build on, leaves the freeze off, and
+              # leaves exactly this behind: a sibling run, concluded success,
+              # holding nothing. That is the case (2) below was written for,
+              # arriving as an empty run rather than as no run at all.
+              if [ "${BUNDLE_IN_THIS_RUN:-true}" != "true" ]; then
+                say "Run(s)${barren} hold no bundles, and this run's scope froze none." \
+                    "Taking them from ${base} instead."
+                break
+              fi
               echo "::error::The \"Standalone\" workflow run(s) for ${HEAD_SHA}" \
                 "--${barren} -- finished without leaving a single" \
                 "partcad-standalone-* artifact, so there is no command line" \
@@ -414,52 +586,67 @@ jobs:
               exit 1
             fi
 
-            # No run at all for this commit -- yet, or ever.
+            # Nothing usable for this commit -- yet, or ever. "Usable" rather
+            # than "no run at all" because a skipped run is passed over above
+            # and lands here, and a log that then says there is no run
+            # contradicts the line that just named one.
             if [ "${elapsed}" -lt "${GRACE_SECONDS}" ]; then
-              say "No run for ${HEAD_SHA} yet (${elapsed}s in, deciding at ${GRACE_SECONDS}s)."
+              say "No usable run for ${HEAD_SHA} yet (${elapsed}s in, deciding at ${GRACE_SECONDS}s)."
               sleep "${POLL_SECONDS}"
               continue
             fi
             break
           done
 
-          # (2) No run for this commit. That is legitimate: the two workflows
-          # have different path filters, and a change confined to
-          # "ide/standalone/**" fires this one and not that one. The
+          # (2) No run for this commit, or one that declined it. That is
+          # legitimate: the two workflows gate on different things, and a change
+          # confined to "ide/standalone/**" runs this one and not that one. The
           # IDE build only needs a working bundle to embed and smoke-test, so
           # the newest one on the base branch keeps that coverage -- as long as
           # nobody reading the log can mistake it for this commit's.
           if [ -z "${use_run}" ]; then
-            say "No \"Standalone\" run exists for ${HEAD_SHA}; falling back to ${base}."
+            say "No \"Standalone\" run has bundles for ${HEAD_SHA} -- none ran," \
+                "or the one that did declined the commit. Falling back to ${base}."
             listing=$(runs_on_branch "${base}")
-            while IFS=$'\t' read -r id sha conclusion; do
-              [ -n "${id}" ] || continue
-              names=$(bundles_of "${id}")
-              [ -n "${names}" ] || continue
-              use_run="${id}"
-              use_conclusion="${conclusion}"
-              use_names="${names}"
-              use_sha="${sha}"
-              say "Run ${id} (${conclusion}, ${sha}) has: ${names}"
-              break
-            done <<<"${listing}"
+            take_first_with_bundles <<<"${listing}"
 
             if [ -z "${use_run}" ]; then
+              # Not a conclusion yet: the filtered listing can be stale (see
+              # 'runs_on_branch_unfiltered'). Ask the other way before failing.
+              say "None of the ${base} runs the API listed by branch has bundles." \
+                  "Asking again without the branch filter."
+              unfiltered=$(runs_on_branch_unfiltered "${base}")
+              take_first_with_bundles <<<"${unfiltered}"
+              if [ -n "${use_run}" ]; then
+                echo "::warning::The API's branch-filtered listing of \"Standalone\"" \
+                  "runs on ${base} did not offer run ${use_run}, which has bundles;" \
+                  "the unfiltered listing did. The filtered one was stale."
+              fi
+            fi
+
+            if [ -z "${use_run}" ]; then
+              # What was seen, so that "there are none" can be told apart from
+              # "the listing was out of date": a newest run from weeks ago on a
+              # branch that has been bumped since says the second.
+              newest=$(head -n 1 <<<"${unfiltered}" | cut -f 4)
               echo "::error::No \"Standalone\" workflow run has command line" \
-                "bundles to offer: none ran for ${HEAD_SHA}, and none of the" \
-                "last 30 finished runs on ${base} still has an unexpired" \
-                "partcad-standalone-* artifact (they are kept for 14 days)." \
-                "The IDE cannot be built without them. Run the \"Standalone\"" \
-                "workflow on ${base} -- manually, or by pushing a change under" \
-                "one of its paths -- and then re-run this one."
+                "bundles to offer: none ran for ${HEAD_SHA}, and no finished run" \
+                "on ${base} that the API listed still has an unexpired" \
+                "partcad-standalone-* artifact (they are kept for ${RETENTION_DAYS} days). The" \
+                "newest ${base} run listed was created ${newest:-never}; if" \
+                "${base} has had a version bump since, the listing is what is" \
+                "out of date -- re-run this job. Otherwise the IDE cannot be" \
+                "built without them: run the \"Standalone\" workflow on ${base}" \
+                "-- manually, or by landing a change there, which bumps the" \
+                "version and freezes them -- and then re-run this one."
               exit 1
             fi
 
             echo "::warning::The command line bundles inside this IDE build are" \
               "NOT from ${HEAD_SHA}. They come from \"Standalone\" run ${use_run}," \
               "which built ${use_sha} on ${base}: $(run_url "${use_run}")." \
-              "\"Standalone\" never ran for this commit -- its path filters did" \
-              "not match it -- so an older bundle is the only one there is, and" \
+              "\"Standalone\" froze nothing for this commit -- its own gate did" \
+              "not select it -- so an older bundle is the only one there is, and" \
               "embedding it still exercises the IDE build end to end. Do not" \
               "read a green result as having tested this commit's command line" \
               "tools, though, because it has not."
@@ -761,6 +948,135 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install --yes xvfb
 
+      # The one check that runs the application the way the operating system
+      # runs it, and reads what it says.
+      #
+      # `partcad-ide --version` -- "Run what was installed", above -- does not
+      # do this and cannot: that launcher ends in `ELECTRON_RUN_AS_NODE=1`,
+      # which is Electron being Node. No browser process, no helper
+      # applications, no window. It printed a version out of a macOS bundle that
+      # could not launch, in every release from 0.8.33 on, and the job stayed
+      # green. Anything claiming to smoke-test the editor has to run the binary
+      # the bundle's `Contents/MacOS` (or the top of the directory, elsewhere)
+      # holds, and has to keep its output.
+      #
+      # Startup failures of this class are fatal in the first second and print
+      # one line to stderr, so a short wait and a look at what came out is the
+      # whole test. Whether a window appeared is not asked here: "Start it once"
+      # asks that, of the editor started the way a user starts it.
+      - name: Run the application binary
+        shell: bash
+        run: |
+          case "${{ runner.os }}" in
+            macOS)
+              # Asked of the bundle rather than hardcoded: `build.sh` leaves
+              # `CFBundleExecutable` as the upstream editor set it -- the macOS
+              # launcher finds the executable through the bundle, so there is
+              # nothing to rename -- and it is VSCodium's business what that is.
+              app="${HOME}/Applications/PartCAD IDE.app"
+              binary="${app}/Contents/MacOS/$(plutil -extract CFBundleExecutable raw "${app}/Contents/Info.plist")"
+              ;;
+            Windows) binary="$(dirname "$(dirname "$(readlink -f "${HOME}/partcad-bin/partcad-ide")")")/partcad-ide.exe" ;;
+            *)       binary="$(dirname "$(dirname "$(readlink -f "${HOME}/partcad-bin/partcad-ide")")")/partcad-ide" ;;
+          esac
+          test -x "${binary}" || {
+            echo "::error::no application binary at ${binary}"
+            exit 1
+          }
+          echo "running ${binary}"
+
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            Xvfb :98 -screen 0 1280x1024x24 >/dev/null 2>&1 &
+            export DISPLAY=:98
+            # The runner image restricts unprivileged user namespaces, which is
+            # what Chromium's sandbox is built on.
+            set -- --no-sandbox
+          else
+            set --
+          fi
+
+          # Backgrounded and killed rather than waited on: the editor has no
+          # argument that starts the browser process and then exits, so what is
+          # being tested is that it is still alive a little later.
+          "${binary}" "$@" --user-data-dir "${RUNNER_TEMP}/binary-user-data" >start.log 2>&1 &
+          binary_pid=$!
+          sleep 20
+
+          echo "--- what it printed:"
+          cat start.log || true
+
+          # Named explicitly, because it is the one this check was written for
+          # and "the process is gone" does not say it.
+          if grep -q "Unable to find helper app" start.log; then
+            echo "::error::the Electron helper applications are not named for this application;" \
+                 "see the rename in ide/standalone/build.sh and check_macos_helpers in verify_bundle.py"
+            exit 1
+          fi
+          # Chromium's own fatal format -- "[0904/041024.624061:FATAL:file.cc:66]"
+          # -- and not a bare "fatal", which appears in ordinary GPU and
+          # sandbox chatter on the Linux runners and would fail this step for
+          # a machine's properties rather than for the build's.
+          if grep -q ":FATAL:" start.log; then
+            echo "::error::the application logged a fatal error on startup"
+            exit 1
+          fi
+          if ! kill -0 "${binary_pid}" 2>/dev/null; then
+            echo "::error::the application binary exited within 20 seconds instead of running"
+            exit 1
+          fi
+
+          kill "${binary_pid}" 2>/dev/null || true
+          pkill -if "partcad.ide" || true
+
+      # The extension's own test suite, in the editor that ships.
+      #
+      # `npm-test.yml` runs the same suite against a downloaded stock VS Code,
+      # which checks this extension's logic and nothing the IDE puts around it:
+      # the built-in extension set, `product.json`'s `configurationDefaults`,
+      # the bootstrap extension, the embedded service, the branded shell. The
+      # two never met, so "the bundle is well-formed" was as far as any check
+      # here went, and an editor that could not start on macOS passed all of
+      # them.
+      #
+      # `.vscode-test.js` offers the `bundledIde` configuration only when
+      # `PARTCAD_IDE_PATH` names a build, so this is the only place it runs.
+      - name: Install Node.js
+        uses: actions/setup-node@v7
+        with:
+          # Node 24 is the current Active LTS; 22.x is in maintenance now.
+          node-version: 24.x
+          cache: "npm"
+          cache-dependency-path: ide/vscode/package-lock.json
+
+      - name: Run the extension test suite in the installed IDE
+        working-directory: ide/vscode
+        shell: bash
+        run: |
+          # The application binary, which is what `useInstallation.fromPath`
+          # wants -- not the bundle, and not the `bin/` launcher. Resolved the
+          # same way "Check the IDE ships what it is supposed to" resolves the
+          # resources directory, rather than assuming a layout `install.sh` owns.
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            # As in "Run the application binary": the executable's name belongs
+            # to the editor this was built from, so it is read, not assumed.
+            app="${HOME}/Applications/PartCAD IDE.app"
+            export PARTCAD_IDE_PATH="${app}/Contents/MacOS/$(plutil -extract CFBundleExecutable raw "${app}/Contents/Info.plist")"
+          else
+            app="$(dirname "$(dirname "$(readlink -f "${HOME}/partcad-bin/partcad-ide")")")"
+            export PARTCAD_IDE_PATH="${app}/partcad-ide"
+          fi
+          test -x "${PARTCAD_IDE_PATH}" || {
+            echo "::error::no application binary at ${PARTCAD_IDE_PATH}"
+            exit 1
+          }
+          npm ci
+          npm run pretest
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            xvfb-run -a npx vscode-test --label bundledIde
+          else
+            npx vscode-test --label bundledIde
+          fi
+
       # What the IDE does for someone who has just installed it: `pc init` a
       # package in ~/.partcad/projects/start and open it as the workspace.
       # Started the way a user starts it, with no arguments -- and with a user
@@ -768,30 +1084,33 @@ jobs:
       # times the job is re-run, and so that the state the editor writes is
       # somewhere this job can read it.
       - name: Start it once
-        # Blocking on Linux, where it works and is the signal this check exists
-        # for. Reporting only on macOS, and that is a stop-gap with a date on it.
+        # Blocking on every platform. It was reporting-only on macOS, where it
+        # had never once passed, and the comment here guessed at a hosted
+        # runner's session as the likelier suspect than anything wrong with the
+        # IDE. It was not the runner.
         #
-        # This check is new in #584 and has never once passed on macOS. What it
-        # gets there is a launcher that exits 0 in six seconds having printed
-        # nothing, no editor process, and -- the reason nobody has been able to
-        # say more than that -- not one line in the user data directory, so the
-        # "what the editor logged" dump below came back empty. The same
-        # commands, the same bundle, the same 'install.sh' pass on Linux and on
-        # Windows. There is no evidence yet of anything wrong with the IDE that
-        # a person installing it would meet; a hosted macOS runner's session is
-        # the far likelier suspect, and confirming that needs a run on one.
+        # The macOS bundle could not start at all. Electron resolves its helper
+        # applications from the outer bundle's 'CFBundleName', 'build.sh' brands
+        # that plist, and nothing renamed 'Contents/Frameworks/VSCodium
+        # Helper*.app' to match -- so every Mac got 'FATAL ... Unable to find
+        # helper app' and an editor that died before it opened a window, created
+        # a user data directory or wrote a line of log. That is the whole of
+        # "exits 0 in six seconds having printed nothing, and not one line in
+        # the user data directory": the launcher spawns the editor and returns,
+        # so its own zero says nothing, and the editor was gone before it could
+        # write anything down. It shipped in 0.8.33 and 0.8.49.
         #
-        # What is certain is the cost of leaving it blocking, because it was
-        # paid: "deploy.yml" makes 'publish-to-pypi' wait on this workflow, so
-        # this step held back the 0.8.32 wheel, the bundles, the extension and
-        # the plugin, and PyPI stayed on 0.8.27. A check that has never passed
-        # on a platform must not be what decides whether a release ships.
+        # Two things now stand between that and a release. "Verifying the
+        # bundle" checks the four helpers are named for the branded application,
+        # which is cheap and says which one is wrong; the step below runs the
+        # application binary and reads what it prints, which is what catches the
+        # next startup failure of a different kind. This step is the one that
+        # says the editor came up and did its work, and it is blocking again.
         #
-        # So it still runs on macOS, still prints its errors, and no longer
-        # fails the job there. Make it blocking again -- delete this expression
-        # -- the moment a macOS run gets past it, which the diagnostics added
-        # below are there to bring about.
-        continue-on-error: ${{ startsWith(matrix.platform, 'macos') }}
+        # Keep it blocking. It held back the 0.8.32 release once ("deploy.yml"
+        # makes 'publish-to-pypi' wait on this workflow) and was demoted for it
+        # -- and the two releases that followed were unlaunchable on macOS,
+        # which is the more expensive of the two failures by a distance.
         shell: bash
         run: |
           export PATH="${HOME}/partcad-bin:${PATH}"

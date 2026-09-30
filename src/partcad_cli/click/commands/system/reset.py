@@ -4,9 +4,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import rich_click as click
 import os
 import shutil
+
+import rich_click as click
 
 import partcad as pc
 from partcad.user_config import user_config

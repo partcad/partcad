@@ -1,6 +1,8 @@
-name: Upload Test Results & Coverage Reports
+name: Upload Test Results & Coverage Data
 
-description: Upload test results and coverage reports to GitHub and Codecov
+description: >
+  Upload a job's test results to GitHub, and its raw coverage data under a name
+  the "Coverage" job knows how to find.
 
 inputs:
   name:
@@ -10,25 +12,32 @@ inputs:
   path:
     description: Path to the test results to upload to GitHub.
     required: true
-  status:
-    description: The status of the job.
-    required: true
   retention-days:
     description: Number of days to retain the artifact on GitHub.
     required: false
     default: "7"
-  codecov-files:
-    description: Path to the test results file to upload to Codecov.
-    required: true
-  coverage-report:
-    description: Path to the coverage reports to upload to Codecov.
-    required: true
-  token:
-    description: Codecov token.
-    required: true
+  coverage-data:
+    description: >
+      Glob matching the raw coverage.py data this job produced, if it produced
+      any -- ".coverage*", not ".coverage". Uploaded separately from the test
+      results so that the merge in the "Coverage" job can ask for coverage data
+      and get only coverage data. Leave empty in a job that measures nothing.
+
+      A glob rather than a filename because a job that failed mid-suite has not
+      reached its own "coverage combine": what is on disk then is the
+      parallel-mode parts (".coverage.<host>.<pid>.<n>") and no combined
+      ".coverage" at all. Both are data files the merge can read, so the pattern
+      is what gets uploaded and the merge unions whatever arrives.
+
+      That holds for the jobs running "coverage run" themselves. The "Pytest"
+      job measures through pytest-cov, which writes nothing when its session
+      fails -- so there the glob matches nothing and the step says so, which is
+      the honest outcome rather than a broken one.
+    required: false
+    default: ""
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Upload test results to GitHub
       uses: actions/upload-artifact@v7
@@ -37,16 +46,51 @@ runs:
         path: ${{ inputs.path }}
         retention-days: ${{ inputs.retention-days }}
 
-    - name: Upload coverage reports to Codecov
-      if: ${{ inputs.status }} != 'cancelled'
-      uses: codecov/codecov-action@v7
-      with:
-        files: ${{ inputs.coverage-report }}
-        token: ${{ inputs.token }}
+    # Not every cell of every matrix writes one. The behave job traces on the
+    # lowest interpreter of each image only (see the note beside PC_BEHAVE_COVERAGE
+    # in "test.yml"), and a job that failed before its first test ran has nothing
+    # to hand over -- both of which are "no data", not "upload failed".
+    #
+    # A shell test rather than "hashFiles": the file is called ".coverage", and
+    # the glob library behind "hashFiles" does not reliably match a leading dot.
+    # Through the environment rather than by interpolating the input into the
+    # script, like every other such step in this repository (zizmor
+    # template-injection).
+    - name: Is there coverage data to upload?
+      id: probe
+      shell: bash
+      env:
+        COVERAGE_DATA: ${{ inputs.coverage-data }}
+      run: |
+        # Expanded unquoted on purpose: the input is a glob (see its
+        # description), and this is what asks whether it matches anything. An
+        # unmatched pattern comes back as itself, which "-e" then rejects.
+        set -- ${COVERAGE_DATA}
+        if [ -z "${COVERAGE_DATA}" ]; then
+          echo "found=false" >> "$GITHUB_OUTPUT"
+          echo "This job measures no coverage."
+        elif [ -e "$1" ]; then
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "Uploading: $*"
+        else
+          echo "found=false" >> "$GITHUB_OUTPUT"
+          echo "No coverage data matching '${COVERAGE_DATA}'."
+        fi
 
-    - name: Upload test results to Codecov
-      if: ${{ inputs.status }} != 'cancelled'
-      uses: codecov/test-results-action@v1
+    # "coverage-data-" prefixed, because that prefix is the contract: the
+    # "Coverage" job downloads "coverage-data-*" and merges whatever arrives, so
+    # a new job joins the merged report by uploading under this name and needs no
+    # other change anywhere.
+    #
+    # "include-hidden-files" is load-bearing. A coverage.py data file is called
+    # ".coverage", and "upload-artifact" has excluded dotfiles by default since
+    # v4.4 -- without this the step succeeds, uploads an empty artifact, and the
+    # merge silently loses this job.
+    - name: Upload raw coverage data
+      if: ${{ steps.probe.outputs.found == 'true' }}
+      uses: actions/upload-artifact@v7
       with:
-        files: ${{ inputs.codecov-files }}
-        token: ${{ inputs.token }}
+        name: coverage-data-${{ inputs.name }}
+        path: ${{ inputs.coverage-data }}
+        include-hidden-files: true
+        retention-days: ${{ inputs.retention-days }}

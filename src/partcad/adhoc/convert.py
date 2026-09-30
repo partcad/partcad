@@ -48,3 +48,31 @@ def convert_sketch_file(input_filename: str, input_type: str, output_filename: s
         output_type (str): Format of the output file (e.g., svg, dxf).
     """
     write_output_file(input_filename, input_type, output_filename, output_type, kind="sketch", verb="Convert")
+
+
+def convert_scene_file(input_filename: str, input_type: str, output_filename: str, output_type: str) -> None:
+    """Convert a scene file from one format to another using an ad-hoc context.
+
+    The same file-in, file-out operation as the two above, for the third kind of
+    object a file can hold.
+
+    Nothing asks for it today, and that is worth stating rather than leaving to
+    be discovered. The scene formats that are not `assy` all belong to a
+    simulation engine's plugin package, and a throwaway package has no dependency
+    on one -- so `pc open --with mujoco` refuses a file that is not already MJCF
+    instead of converting it (see `partcad_client.external._transcode_scene`).
+    This stays because the machinery is the part conversion's, not because there
+    is a caller: a scene format PartCAD itself implemented would convert here.
+
+    Args:
+        input_filename: Path to the input file.
+        input_type: Format of the input file (e.g. assy).
+        output_filename: Path to save the output file.
+        output_type: Format of the output file.
+    """
+    reject_package_only(
+        input_type,
+        output_type,
+        advice="Use 'pc export' on the scene in its package instead.",
+    )
+    write_output_file(input_filename, input_type, output_filename, output_type, kind="scene", verb="Convert")

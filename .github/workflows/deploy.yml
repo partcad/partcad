@@ -136,6 +136,14 @@ jobs:
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -c "
           import partcad, partcad_cli, partcad_client, partcad_utils, partcad_service_json_rpc, partcad_ide_client
           " && deactivate)
+          # And the data it ships, not only the code: this is the wheel that
+          # gets published, and `pc init` installs the AI agent skills out of
+          # it. See the same check in "build.yml".
+          (. .venv/install/${{ env.BIN_DIR }}/activate && python -c "
+          import partcad.ai_agents as ai_agents
+          assert ai_agents.available_skills(), 'the wheel carries no AI agent skills'
+          assert ai_agents.plugin_manifest()['name'], 'the wheel carries no plugin manifest'
+          " && deactivate)
           (. .venv/install/${{ env.BIN_DIR }}/activate && pc --no-ansi version && partcad-json-rpc --help >/dev/null && deactivate)
           # The shim brings the wheel in, and owns nothing of its own.
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=dist --find-links=dev-tools/shim/dist partcad-cli && deactivate)

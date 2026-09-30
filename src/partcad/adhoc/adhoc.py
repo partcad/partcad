@@ -16,9 +16,9 @@ built cannot mean one thing for a conversion and another for a projection.
 """
 
 import asyncio
-from pathlib import Path
 import shutil
 import tempfile
+from pathlib import Path
 
 from .. import logging as pc_logging
 from ..context import Context
@@ -30,6 +30,20 @@ from ..context import Context
 KINDS = {
     "part": ("parts", "input_part"),
     "sketch": ("sketches", "input_sketch"),
+    # A scene is the third thing a file can hold: an arrangement of objects
+    # rather than one shape. Only a self-contained scene format could reach here
+    # -- one that names its meshes by path, so that a throwaway package around it
+    # is enough -- and PartCAD implements none: an '.assy' names the parts of a
+    # package and is refused below, and an engine's own format is implemented by
+    # that engine's plugin package, which a throwaway package cannot reach.
+    "scene": ("scenes", "input_scene"),
+}
+
+# How the object of each kind is fetched out of the throwaway package.
+GETTERS = {
+    "part": "get_part",
+    "sketch": "get_sketch",
+    "scene": "get_scene",
 }
 
 
@@ -41,7 +55,7 @@ def generate_partcad_config(temp_dir: Path, input_type: str, temp_input_path: Pa
         temp_dir (Path): Temporary directory path.
         input_type (str): Input file format type.
         temp_input_path (Path): Path to the copied input file.
-        kind (str): Either "part" or "sketch" (default is "part")
+        kind (str): "part", "sketch" or "scene" (default is "part")
     """
     section, name = KINDS[kind]
 
@@ -107,7 +121,8 @@ def write_output_file(
         output_filename: Path to write.
         output_type: The file type to write - a part or sketch format for a
             conversion, a 2D projection for a render.
-        kind: "part" or "sketch", which decides how the input is declared.
+        kind: "part", "sketch" or "scene", which decides how the input is
+            declared and which section of the throwaway package declares it.
         verb: What is being done, for the progress label and the error message.
         options: Export parameters handed to the implementation, overriding what
             it would otherwise default to. This is where a render's viewport
@@ -120,15 +135,44 @@ def write_output_file(
     """
     _, object_name = KINDS[kind]
     input_path = Path(input_filename).resolve()
+
+    # An ordinary temporary directory. It is the context root, so a container
+    # sandbox has to mount it -- and it does: the temporary directory is one of
+    # the fixed mounts, precisely so that nothing here has to be careful about
+    # where it puts things.
     temp_dir = Path(tempfile.mkdtemp())
 
     try:
         generate_partcad_config(temp_dir, input_type, input_path, kind=kind)
 
         ctx = Context(root_path=temp_dir, search_root=False)
-        with pc_logging.Process(verb, "adhoc" if kind == "part" else "adhoc-sketch"):
+        # The generated package points at the user's file wherever it is, so
+        # neither the input nor the output is under the context root. A sandbox
+        # that runs on the host does not care; one that runs in a container sees
+        # only what is mounted, and without this it reports that it cannot read
+        # a file the user can see perfectly well.
+        #
+        # The directories rather than the files: an OpenSCAD or a CadQuery input
+        # may include a sibling, and the output's directory has to be writable
+        # for the export to land in it.
+        #
+        # Both, and both writable. Mounting the input read-only was tried and
+        # taken back out: it is one more way two containers of one image can
+        # differ, on a mount contract that is a stopgap rather than the
+        # isolation boundary -- the container is that. Either directory is
+        # usually under the home directory anyway, in which case naming it costs
+        # no mount at all.
+        ctx.sandbox_paths = [
+            str(Path(output_filename).resolve().parent),
+            str(input_path.parent),
+        ]
+        with pc_logging.Process(verb, "adhoc" if kind == "part" else "adhoc-" + kind):
             project = ctx.get_project("//")
-            obj = project.get_part(object_name) if kind == "part" else project.get_sketch(object_name)
+            # Looked up by name and fetched one at a time: a dictionary of bound
+            # methods would reach for all three, and a caller with a project that
+            # only answers the kind it is being asked about - which is every test
+            # that stubs one - would fail on the two it is not.
+            obj = getattr(project, GETTERS[kind])(object_name)
             if not obj:
                 raise RuntimeError(f"Failed to load the input {kind}: no {kind} returned")
 
@@ -146,7 +190,7 @@ def write_output_file(
                 pc_logging.info(f"Loaded input part: {input_path}")
                 pc_logging.info(f"Shape: {type(shape)}")
             else:
-                pc_logging.debug(f"Loaded input sketch: {input_path}")
+                pc_logging.debug(f"Loaded input {kind}: {input_path}")
 
             obj.render(
                 ctx=ctx,
@@ -157,7 +201,7 @@ def write_output_file(
             )
 
     except Exception as e:
-        subject = "" if kind == "part" else " sketch"
+        subject = "" if kind == "part" else " " + kind
         raise RuntimeError(f"Failed to {verb.lower()}{subject}: {e}") from e
     finally:
         shutil.rmtree(temp_dir)

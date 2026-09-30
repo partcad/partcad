@@ -7,8 +7,9 @@
 import os
 from pathlib import Path
 
-import partcad_utils.logging as pc_logging
 import rich_click as click
+
+import partcad_utils.logging as pc_logging
 
 from ...commands.convert.part import SUPPORTED_CONVERT_FORMATS
 from ...service import run

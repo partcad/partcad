@@ -9,19 +9,16 @@
 import contextlib
 import copy
 import importlib
+import json
 import os
 import shutil
 import subprocess
 import sys
-import json
 
 from partcad_utils import conda as pc_conda
 
-from . import runtime_python
-from . import sandbox_lock
-from . import sandbox_versions
 from . import logging as pc_logging
-from . import telemetry
+from . import runtime_python, sandbox_lock, sandbox_versions, telemetry
 
 # Conda/mamba failures that are the machine, not the request, and that a retry
 # has been observed to clear. Matched against the stderr of "conda create".
@@ -220,7 +217,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     if stderr is not None and stderr.strip() != "":
                         pc_logging.warning("conda venv check error: %s" % stderr)
                     else:
-                        pc_logging.warning(f"conda venv check error")
+                        pc_logging.warning("conda venv check error")
                     self.conda_initialized = False
                 elif stdout is None or stdout.strip() == "":
                     pc_logging.warning("conda venv check warning: empty version")

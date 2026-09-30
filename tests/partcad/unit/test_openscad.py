@@ -6,11 +6,11 @@
 
 import os
 import stat
+import sys
 
 import pytest
 
 import partcad.healthcheck.openscad as pc_openscad
-
 
 # The standalone bundle ships its own OpenSCAD and must run that one rather than
 # whatever the host happens to have installed. Nothing about that ordering is
@@ -50,7 +50,7 @@ def test_bundled_executable_is_none_outside_a_bundle(tmp_path, monkeypatch):
 
 
 def test_bundled_executable_is_none_when_the_bundle_carries_no_payload(bundle):
-    """macOS bundles, and hand-made ones, are built without OpenSCAD."""
+    """Linux arm64 bundles, and hand-made ones, are built without OpenSCAD."""
     assert pc_openscad.find_bundled_executable() is None
 
 
@@ -114,6 +114,12 @@ def homebrew(tmp_path, monkeypatch):
     installing, ``fix`` deletes cached ``*openscad*.dmg`` files out of the real
     Homebrew download directory, which is not something a unit test may do to
     the machine running it.
+
+    ``shutil.which`` is answered as well, because ``fix`` now asks whether
+    Homebrew is there before reaching for it -- and the machines this suite runs
+    on, the Linux CI runners included, mostly do not have it. Without this the
+    fixture would describe a Mac that cannot install anything, which is what the
+    two tests below are specifically not about.
     """
     calls = []
 
@@ -127,6 +133,7 @@ def homebrew(tmp_path, monkeypatch):
 
     monkeypatch.setattr(pc_openscad.subprocess, "run", _run)
     monkeypatch.setattr(pc_openscad.Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(pc_openscad.shutil, "which", lambda name: "/opt/homebrew/bin/brew")
     return calls
 
 
@@ -141,3 +148,67 @@ def test_macos_install_does_not_let_homebrew_update_itself(homebrew):
     pc_openscad.MacOpenSCADCheck().fix()
     _, kwargs = homebrew[0]
     assert kwargs["env"]["HOMEBREW_NO_AUTO_UPDATE"] == "1"
+
+
+# What the fix does when Homebrew is not there at all.
+#
+# The tests above replace `subprocess.run`, so they never exec anything and
+# never noticed that the real call raises `FileNotFoundError` on a Mac without
+# Homebrew -- which is most Macs that have just installed the standalone IDE.
+# `pc healthcheck --fix` ended in a PyInstaller traceback, and took every fix
+# after it down with it.
+
+
+def test_macos_says_what_to_do_when_homebrew_is_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr(pc_openscad.shutil, "which", lambda name: None)
+    monkeypatch.setattr(pc_openscad.Path, "home", staticmethod(lambda: tmp_path))
+
+    def _never(*args, **kwargs):
+        raise AssertionError("Homebrew is absent; nothing should have been executed")
+
+    monkeypatch.setattr(pc_openscad.subprocess, "run", _never)
+    assert pc_openscad.MacOpenSCADCheck().fix() is False
+
+
+def test_macos_fix_does_not_raise_when_brew_cannot_be_executed(monkeypatch, tmp_path):
+    """`which` found it and the exec still failed -- a race, or a bad +x bit."""
+    monkeypatch.setattr(pc_openscad.shutil, "which", lambda name: "/opt/homebrew/bin/brew")
+    monkeypatch.setattr(pc_openscad.Path, "home", staticmethod(lambda: tmp_path))
+
+    def _missing(*args, **kwargs):
+        raise FileNotFoundError(2, "No such file or directory: 'brew'")
+
+    monkeypatch.setattr(pc_openscad.subprocess, "run", _missing)
+    assert pc_openscad.MacOpenSCADCheck().fix() is False
+
+
+def test_macos_still_installs_when_homebrew_is_present(homebrew):
+    """The guard does not get in the way of the machines that can install."""
+    assert pc_openscad.MacOpenSCADCheck().fix() is True
+    assert [command for command, _ in homebrew] == [["brew", "install", "--cask", "openscad@snapshot"]]
+
+
+# Where each platform's payload sits inside the bundle. Every test above builds
+# its payload from BUNDLED_SUBPATH, so they would all agree with a wrong value;
+# what the layout *is* comes from an artifact none of them has, and on a platform
+# the test run is not on. So all three are pinned here, and `build.sh` stages and
+# asserts the same paths -- a change to one and not the other is a bundle whose
+# OpenSCAD PartCAD cannot find.
+
+
+@pytest.mark.parametrize(
+    "os_name, platform_name, expected",
+    [
+        ("nt", "win32", ("openscad", "openscad.exe")),
+        ("posix", "darwin", ("openscad", "OpenSCAD.app", "Contents", "MacOS", "OpenSCAD")),
+        ("posix", "linux", ("openscad", "AppRun")),
+    ],
+)
+def test_the_payload_layout_is_the_one_build_sh_stages(os_name, platform_name, expected):
+    """macOS keeps the whole '.app': the binary inside needs the bundle around it."""
+    assert pc_openscad.bundled_subpath(os_name, platform_name) == expected
+
+
+def test_the_layout_in_use_is_the_one_for_this_platform():
+    """The module-level constant is that function applied to this process."""
+    assert pc_openscad.BUNDLED_SUBPATH == pc_openscad.bundled_subpath(os.name, sys.platform)

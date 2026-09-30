@@ -10,9 +10,11 @@
 import typing
 
 from . import factory
+from . import logging as pc_logging
+from . import shape_envelope, telemetry
 from .part import Part
+from .shape_config import is_a_length
 from .shape_factory import ShapeFactory
-from . import telemetry
 
 
 @telemetry.instrument()
@@ -63,6 +65,32 @@ class PartFactory(ShapeFactory):
     # nothing about it.
     ACCEPTED_OBJECT_TYPE_PARAMETERS: typing.Dict[str, typing.Any] = {}
 
+    # Whether a part of this type may carry a 'tolerance:' field of its own, and
+    # which format's reader is used to see whether its file states one.
+    #
+    # A second way for a part to say what the 'tolerance' object-type parameter
+    # above says, for the types that cannot say it that way. A 'step' part
+    # rejects the object-type parameters because a STEP file may hold many
+    # solids and already states what each of them is (see 'PartFactoryHomogen'),
+    # and for 'material' and 'color' that is the end of it: the file answers. For
+    # 'tolerance' it is not, because plenty of STEP files carry no GD&T at all,
+    # and a part read from one of those has no way left to say how precisely it
+    # has to be made - which is what 'pc test' demands of anything that is going
+    # to be manufactured.
+    #
+    # So the field. It is a field rather than a parameter because it is not a
+    # request made of the type that produces the shape - nothing is built
+    # differently for it, and the file is read the same way either way - and
+    # because the parameter of that name stays rejected for the reason it always
+    # was.
+    #
+    # The two attributes are separate because they answer separate questions. A
+    # type could gain a file format that states a tolerance without gaining a
+    # field (the file would always answer), or a field without a format (nothing
+    # to read). Today one type sets both.
+    ACCEPTS_TOLERANCE_FIELD: bool = False
+    TOLERANCE_FILE_FORMAT: typing.Optional[str] = None
+
     def __init__(
         self,
         ctx,
@@ -76,6 +104,7 @@ class PartFactory(ShapeFactory):
         self.orig_name = config["orig_name"]
 
         self._validate_object_type_parameters(config)
+        self._validate_tolerance_field(config)
 
     def _validate_object_type_parameters(self, config: object) -> None:
         """Reject an object-type parameter this part type does not accept.
@@ -109,6 +138,92 @@ class PartFactory(ShapeFactory):
                 name,
             )
 
+    def _validate_tolerance_field(self, config: object) -> None:
+        """Reject a 'tolerance:' field on a part type that does not accept one.
+
+        The same shape of failure, raised from the same place and for the same
+        reason, as '_validate_object_type_parameters()' above: the schema takes
+        the field on any part because it has no per-part-type branching to hang
+        this on, so the factory layer - the one layer that knows what type is
+        being created - is what says no.
+
+        Policed rather than ignored because a part type that neither accepts the
+        field nor reads a tolerance out of its file would silently make no use of
+        it, and a part its author believed was tolerated would go to a
+        manufacturer without a tolerance. A homogeneous type is told to declare
+        the parameter instead, which is what it already accepts.
+        """
+        if not isinstance(config, dict) or "tolerance" not in config:
+            return
+        if self.ACCEPTS_TOLERANCE_FIELD:
+            return
+        if config.get("type") in ("alias", "enrich"):
+            # A second name for another object, which is the object that is
+            # made: what it is made to is the source's business, and such a
+            # declaration already ignores everything that says how its source is
+            # built (see 'enrich.ENRICH_IGNORED_PROPERTIES', which lists this
+            # field and warns about it). Refusing it here would report one
+            # mistake twice and contradict that warning while doing it.
+            return
+        raise factory.ObjectTypeParameterException(
+            "part",
+            config.get("type"),
+            config.get("name"),
+            "tolerance",
+            noun="field",
+        )
+
+    def declared_tolerance(self, config: object) -> typing.Optional[float]:
+        """The 'tolerance:' the declaration carried, as a number, or None.
+
+        None means nothing was declared, which is what leaves the file - and
+        after it the type's own default - to answer. A value that is not one is
+        reported and treated as absent, the way
+        'ShapeConfiguration.get_object_type_parameter()' treats a non-numeric
+        parameter: the declaration is wrong, not the part.
+
+        What counts as one is what the schema says: a finite number, not
+        negative. 'float()' is wider than that in four ways YAML can reach, and
+        each of them would declare its way past the manufacturability check:
+
+        * '.nan' is the answer that means "the file tolerances this feature by
+          feature", which 'pc test' accepts. NaN is
+          'tolerance_inspect.reduce()'s to produce, and nothing else's.
+        * '.inf' and '-.inf' are neither zero nor NaN, so they pass as though
+          they were a real tolerance.
+        * A negative number is the same, and the schema has said 'minimum: 0'
+          all along - it is simply not enforced while a package is loaded.
+        * 'true' is an int in Python and reads back as one millimetre. YAML
+          makes that one easy to write by accident, because 'yes' is 'True'
+          rather than the word, and a millimetre is plausible enough to go
+          unnoticed while quietly outranking what the file states.
+
+        None of the four is a tolerance anybody can be asked to hold, and
+        'shape_config.is_a_length()' is the one statement of that - the
+        'tolerance' object-type parameter of the homogeneous types is read
+        through it too, so the two ways a part can state one cannot come to
+        disagree about what one is.
+        """
+        if not isinstance(config, dict):
+            return None
+        value = config.get("tolerance")
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            # Tested before 'float()' rather than after, because by then it is
+            # an ordinary 1.0 and indistinguishable from a declared one.
+            pc_logging.error("Part '%s' has a 'tolerance' that is not a length: %r" % (config.get("name"), value))
+            return None
+        try:
+            tolerance = float(value)
+        except (TypeError, ValueError):
+            pc_logging.error("Part '%s' has a non-numeric 'tolerance': %r" % (config.get("name"), value))
+            return None
+        if not is_a_length(tolerance):
+            pc_logging.error("Part '%s' has a 'tolerance' that is not a length: %r" % (config.get("name"), value))
+            return None
+        return tolerance
+
     def object_type_parameter_names(self) -> list:
         """The object-type parameter names this part's type contributes.
 
@@ -127,13 +242,73 @@ class PartFactory(ShapeFactory):
         """
         return sorted(self.ACCEPTED_OBJECT_TYPE_PARAMETERS)
 
+    # Object-type parameters that are also something the shape reports about
+    # itself, mapped to the 'properties:' key each becomes.
+    #
+    # The two sections are not two spellings of one thing: 'parameters:' is what
+    # was *asked of* the type that produces the shape, and 'properties:' is what
+    # the shape *turned out to be* - which is why a 'step' part, whose file
+    # already states a material per solid, does not accept the parameter at all
+    # (see 'PartFactoryHomogen'). But for a type that does accept it, the answer
+    # to "what did this turn out to be made of" is exactly what was asked for,
+    # and nothing else is going to say so: a CadQuery script does not report a
+    # material.
+    #
+    # 'color' is deliberately absent. The parameter is free-form text ("red")
+    # and the property is '#RRGGBB', so promoting one would need a conversion,
+    # and inventing one here would write a colour nobody stated.
+    OBJECT_TYPE_PARAMETER_PROPERTIES = {"material": "material"}
+
+    def record_object_type_properties(self, config: object) -> None:
+        """Write what this part was asked to be into what it reports being.
+
+        The one place a *user* declaration becomes a 'properties:' entry, and it
+        is instantiation code doing it - which is the rule for that section:
+        'properties:' is filled in by whatever built the shape (a URDF reader
+        naming a link's material, a STEP reader reading one out of the file),
+        never written by hand in a package.
+
+        Only for the parameters this type accepts, so a type that rejects
+        'material' cannot acquire one by the back door, and only where nothing
+        has been recorded already - a reader that found the real answer in the
+        file outranks what the declaration asked for.
+        """
+        if not isinstance(config, dict):
+            return
+        parameters = config.get("parameters")
+        if not isinstance(parameters, dict):
+            return
+        for name, key in self.OBJECT_TYPE_PARAMETER_PROPERTIES.items():
+            if name not in self.ACCEPTED_OBJECT_TYPE_PARAMETERS:
+                continue
+            declared = parameters.get(name)
+            if not isinstance(declared, dict):
+                continue
+            value = declared.get("default")
+            if not isinstance(value, str) or not value:
+                continue
+            properties = config.get(shape_envelope.KEY_PROPERTIES)
+            if not isinstance(properties, dict):
+                properties = {}
+                config[shape_envelope.KEY_PROPERTIES] = properties
+            properties.setdefault(key, value)
+
     def _create_part(self, config: object) -> Part:
+        self.record_object_type_properties(config)
         part = Part(self.target_project.name, config)
         # What this part's type contributes, so that reading an object-type
         # parameter off the part applies the type's default without the reader
         # having to know which factory made it (see
         # 'ShapeConfiguration.get_object_type_parameter').
         part.object_type_parameters = self.ACCEPTED_OBJECT_TYPE_PARAMETERS
+        # ...and the same for the tolerance the declaration may state itself and
+        # the file it is read from may state instead (see 'get_tolerance()').
+        part.tolerance_field_accepted = self.ACCEPTS_TOLERANCE_FIELD
+        part.tolerance_file_format = self.TOLERANCE_FILE_FORMAT
+        # Only where the type takes the field. An alias and an enrich may carry
+        # it and ignore it (see '_validate_tolerance_field'), and reading it
+        # here would be the one place it was not ignored.
+        part._tolerance = self.declared_tolerance(config) if self.ACCEPTS_TOLERANCE_FIELD else None
         part.instantiate = lambda part_self: self.instantiate(part_self)
         part._prepare = lambda shape_self: self.prepare_async(shape_self)
         part.info = lambda: self.info(part)
@@ -146,8 +321,6 @@ class PartFactory(ShapeFactory):
 
         self.apply_environment_cache_key(self.part)
         self.post_create()
-
-        self.ctx.stats_parts += 1
 
     def post_create(self) -> None:
         # This is a base class catch-all method

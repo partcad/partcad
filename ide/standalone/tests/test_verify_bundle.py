@@ -8,12 +8,14 @@
 
 import json
 import os
+import plistlib
 import shutil
 import stat
 
 import brand
 import pytest
 import verify_bundle
+
 from conftest import COMPONENT_ROOT
 
 PLAN = {
@@ -54,12 +56,14 @@ def make_bundle(tmp_path, with_tools=True):
     )
     brand.brand_product(product, COMPONENT_ROOT / "product.overlay.json", "0.1.2")
 
-    # The entry point `build.sh` writes so that the 3D view works without a GPU.
+    # The entry point `build.sh` writes so that the 3D view works without a GPU,
+    # and so that no folder opens in Restricted Mode.
     out = resources / "app" / "out"
     out.mkdir()
     (out / "partcad-main.js").write_text(
         "import { app } from 'electron';\n"
         "app.commandLine.appendSwitch('enable-unsafe-swiftshader');\n"
+        "process.argv.push('--disable-workspace-trust');\n"
         "await import('./main.js');\n",
         encoding="utf-8",
     )
@@ -175,9 +179,7 @@ def test_the_activity_bar_is_reported(tmp_path, capsys):
     extensions = resources / "app" / "extensions"
     manifest = extensions / "PartCAD.partcad-official-1.0.0" / "package.json"
     package = json.loads(manifest.read_text(encoding="utf-8"))
-    package["contributes"] = {
-        "viewsContainers": {"activitybar": [{"id": "partcad-container", "title": "PartCAD"}]}
-    }
+    package["contributes"] = {"viewsContainers": {"activitybar": [{"id": "partcad-container", "title": "PartCAD"}]}}
     manifest.write_text(json.dumps(package), encoding="utf-8")
 
     assert run(resources, tmp_path) == 0
@@ -191,7 +193,8 @@ def test_an_extension_with_no_activity_bar_icon_is_not_reported(tmp_path, capsys
 
 # ---------------------------------------------------------------------------
 # The software-WebGL entry point. Both halves matter: `package.json` has to
-# point at the wrapper and the wrapper has to be there and contain the switch.
+# point at the wrapper and the wrapper has to be there and contain the switch --
+# and the workspace trust flag beside it.
 # Getting one without the other leaves an application that either starts with no
 # software WebGL (and a dead 3D view on a machine with no GPU driver) or does not
 # start at all.
@@ -200,7 +203,7 @@ def test_an_extension_with_no_activity_bar_icon_is_not_reported(tmp_path, capsys
 
 def test_the_entry_point_is_reported(tmp_path, capsys):
     assert run(make_bundle(tmp_path), tmp_path) == 0
-    assert "software WebGL enabled" in capsys.readouterr().out
+    assert "software WebGL enabled, workspace trust off" in capsys.readouterr().out
 
 
 def test_an_unpatched_entry_point_is_a_problem(tmp_path, capsys):
@@ -225,6 +228,19 @@ def test_a_wrapper_that_does_not_enable_it_is_a_problem(tmp_path, capsys):
 
     assert run(resources, tmp_path) != 0
     assert "does not enable software WebGL" in capsys.readouterr().out
+
+
+def test_a_wrapper_that_leaves_workspace_trust_on_is_a_problem(tmp_path, capsys):
+    resources = make_bundle(tmp_path)
+    (resources / "app" / "out" / "partcad-main.js").write_text(
+        "import { app } from 'electron';\n"
+        "app.commandLine.appendSwitch('enable-unsafe-swiftshader');\n"
+        "await import('./main.js');\n",
+        encoding="utf-8",
+    )
+
+    assert run(resources, tmp_path) != 0
+    assert "does not turn workspace trust off" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------
@@ -353,3 +369,87 @@ def test_a_bootstrap_extension_with_no_examples_manifest_fails(tmp_path, capsys)
 
     assert run(resources, tmp_path) == 1
     assert "no examples.json" in capsys.readouterr().out
+
+
+#
+# The macOS helper applications.
+#
+# Electron resolves them from the outer bundle's `CFBundleName`, so the rename
+# `build.sh` does is not cosmetic: without it the application dies at startup
+# with "Unable to find helper app" and every other check here still passes.
+#
+
+
+def make_app_bundle(tmp_path, bundle_name="PartCAD IDE", helper_name="PartCAD IDE"):
+    """A macOS `.app`, as far as `check_macos_helpers` can see one.
+
+    `helper_name` is separate from `bundle_name` so that a test can build the
+    bundle that shipped: branded outside, VSCodium's helpers inside.
+    """
+    app_root = tmp_path / f"{bundle_name}.app"
+    contents = app_root / "Contents"
+    contents.mkdir(parents=True)
+    with open(contents / "Info.plist", "wb") as handle:
+        plistlib.dump({"CFBundleName": bundle_name, "CFBundleExecutable": "VSCodium"}, handle)
+
+    frameworks = contents / "Frameworks"
+    frameworks.mkdir()
+    for suffix in verify_bundle.MACOS_HELPER_SUFFIXES:
+        name = f"{helper_name} Helper{suffix}"
+        executable = frameworks / f"{name}.app" / "Contents" / "MacOS" / name
+        executable.parent.mkdir(parents=True)
+        executable.write_text("#!/bin/sh\n", encoding="utf-8")
+        executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
+    return app_root
+
+
+def test_renamed_helpers_pass(tmp_path):
+    problems, notes = [], []
+    verify_bundle.check_macos_helpers(make_app_bundle(tmp_path), problems, notes)
+    assert problems == []
+    assert len(notes) == len(verify_bundle.MACOS_HELPER_SUFFIXES)
+
+
+def test_helpers_left_with_the_upstream_name_fail(tmp_path):
+    """0.8.33 and 0.8.49, exactly: branded bundle, VSCodium's helpers."""
+    problems, notes = [], []
+    verify_bundle.check_macos_helpers(make_app_bundle(tmp_path, helper_name="VSCodium"), problems, notes)
+    assert len(problems) == len(verify_bundle.MACOS_HELPER_SUFFIXES)
+    # The name that is there is worth saying: "no helper application at ..." on
+    # its own does not tell anyone the rename is what was missed.
+    assert "VSCodium Helper.app" in problems[0]
+
+
+def test_one_missing_helper_fails(tmp_path):
+    app_root = make_app_bundle(tmp_path)
+    shutil.rmtree(app_root / "Contents" / "Frameworks" / "PartCAD IDE Helper (Renderer).app")
+    problems, notes = [], []
+    verify_bundle.check_macos_helpers(app_root, problems, notes)
+    assert len(problems) == 1
+    assert "PartCAD IDE Helper (Renderer).app" in problems[0]
+
+
+def test_a_helper_executable_that_was_not_renamed_fails(tmp_path):
+    """The directory alone is not enough: macOS runs the file inside it."""
+    app_root = make_app_bundle(tmp_path)
+    helper = app_root / "Contents" / "Frameworks" / "PartCAD IDE Helper (GPU).app" / "Contents" / "MacOS"
+    (helper / "PartCAD IDE Helper (GPU)").rename(helper / "VSCodium Helper (GPU)")
+    problems, notes = [], []
+    verify_bundle.check_macos_helpers(app_root, problems, notes)
+    assert len(problems) == 1
+    assert "helper executable 'PartCAD IDE Helper (GPU)'" in problems[0]
+
+
+def test_a_bundle_with_no_bundle_name_fails(tmp_path):
+    app_root = make_app_bundle(tmp_path)
+    with open(app_root / "Contents" / "Info.plist", "wb") as handle:
+        plistlib.dump({"CFBundleExecutable": "VSCodium"}, handle)
+    problems, notes = [], []
+    verify_bundle.check_macos_helpers(app_root, problems, notes)
+    assert len(problems) == 1
+    assert "CFBundleName" in problems[0]
+
+
+def test_the_helpers_are_only_checked_when_an_app_root_is_given(tmp_path):
+    """Linux and Windows builds pass no `--app-root`, and have no helpers."""
+    assert run(make_bundle(tmp_path), tmp_path) == 0

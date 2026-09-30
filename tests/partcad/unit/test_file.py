@@ -13,9 +13,9 @@ import hashlib
 import os
 
 import pytest
+from http_server import serve as _serve
 
 import partcad as pc
-from http_server import serve as _serve
 
 
 def test_file_url_part_1():
@@ -43,11 +43,18 @@ def test_file_url_part_1():
     assert os.path.exists(bolt.path) is False
 
     bolt.cacheable = False
-    wrapped = asyncio.run(bolt.get_wrapped(ctx))
-    assert wrapped is not None
-
-    assert os.path.exists(bolt.path) is True
-    os.unlink(bolt.path)
+    try:
+        wrapped = asyncio.run(bolt.get_wrapped(ctx))
+        assert wrapped is not None
+        assert os.path.exists(bolt.path) is True
+    finally:
+        # Removed however this ended, not only when it worked. The download
+        # lands in 'examples', which is a checked-in tree that CI compares
+        # against what 'pc render -r' produces -- so a file left behind here by
+        # a failure fails a different job than the one that failed, in a run
+        # nobody would think to connect to this test.
+        if os.path.exists(bolt.path):
+            os.unlink(bolt.path)
 
 
 def test_file_url_assembly_1(tmp_path):
@@ -98,7 +105,11 @@ def test_file_url_without_url_1(tmp_path):
     # diagnostic is kept verbatim against the object it came from, which is
     # what the extension shows and what a bare 'get_part()' logs.
     ctx = pc.Context(str(pkg))
-    reason = ctx.get_project("//").get_broken_object_reason("part", "bolt")
+    project = ctx.get_project("//")
+    # A declaration is read when its kind is created, which is when something
+    # asks for that kind (see 'Project.LAZY_OBJECT_KINDS').
+    project.parts
+    reason = project.get_broken_object_reason("part", "bolt")
     assert reason is not None
     assert "'bolt' declares 'fileFrom: url' but no 'fileUrl'" in reason
     assert ctx.get_part(":bolt") is None

@@ -60,6 +60,13 @@ Feature: `pc convert part` command
     When I run "pc convert part :cube_build123d -t step"
     Then the command should exit with a status code of "2"
 
+  # A resolved part carries only the construction vocabulary. 'min' and 'max' are
+  # the freedom-of-movement one, and they used to be written in here as a side
+  # effect: 'InterfaceParameter.config_normalize' fills a missing bound in from
+  # the default *in place*, and a shape's 'parameters:' was being handed to it.
+  # The result was a 'partcad.yaml' that PartCAD's own schema rejects -- and
+  # nonsense besides, since enrich then overrides the default and leaves the
+  # bounds behind ("default: 4, min: 2, max: 2").
   @enrich @resolve
   Scenario: Resolving an enrich part
     When I run "pc convert part :cube_enrich"
@@ -90,14 +97,10 @@ Feature: `pc convert part` command
               type: int
               default: 4
               name: width
-              min: 2
-              max: 2
             height:
               type: int
               default: 4
               name: height
-              min: 2
-              max: 2
           manufacturable: True
 
         cube_alias:
@@ -187,14 +190,10 @@ Feature: `pc convert part` command
               type: int
               default: 10
               name: width
-              min: 2
-              max: 2
             height:
               type: int
               default: 10
               name: height
-              min: 2
-              max: 2
           manufacturable: True
       """
 

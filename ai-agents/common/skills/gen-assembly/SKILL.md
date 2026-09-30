@@ -171,16 +171,228 @@ assemblies:
 ```
 
 Do not add a `manufacturing:` section: `assy` is the only method an assembly has
-and it comes with the type. (`additive`/`subtractive`/`forming` are ways of
-making a *part* and mean nothing here.) Marking it manufacturable instead makes
-`pc test` require that every part in it can be bought or made from a declared
-supplier — only do that when that is true.
+and it comes with the type. (`additive`/`subtractive`/`forming`/`sheet_metal`
+are ways of making a *part* and mean nothing here.) Marking it manufacturable
+instead makes `pc test` require that every part in it can be bought or made from
+a declared supplier — only do that when that is true.
 
-## 4. Validate, render it from several angles, iterate
+## 4. Group what repeats into sub-assemblies
+
+An assembly of any size repeats itself, and a flat file hides that: a reader
+cannot see that four of those brackets are the same bracket, PartCAD builds each
+one from nothing, and the instruction book walks through the same six steps four
+times.
+
+So once the parts are in the right places, look at what recurs and give each
+recurring group a name of its own. Name them `<product>/<piece>` — an object
+whose name has a `/` in it is written into that sub-directory, so the pieces sit
+together beside the thing they belong to.
+
+```yaml
+assemblies:
+  gearbox/idler-stage:
+    type: assy
+    desc: One idler on its shaft, with the bearing either side
+```
+
+Three things follow from it, and they are the reason to do it rather than a
+tidiness argument:
+
+* **It is built once.** Every further use is a cache hit, and a change inside
+  one piece rebuilds that piece rather than the product.
+* **It is an object in its own right**, so it can be rendered, tested and
+  inspected alone — which matters most when the whole product is too big or too
+  slow to render at all.
+* **The instruction book documents it once**, and says how many to make.
+
+Judge the split by what the design actually repeats, not by carving the model
+into even parts. A group that occurs once is not a piece; a group that occurs
+eight times is, even if it is three parts.
+
+**Check the arithmetic**: the parts in each piece, multiplied by how many times
+the piece is used, plus whatever is left loose, has to come to what you started
+with. It is the cheapest test there is and it catches a piece that quietly
+gained or lost a part.
+
+## 5. Replace the coordinates with connections
+
+A part placed by `location:` is a part nothing holds up. The file says where it
+ended up, not what puts it there — so nothing can check it, an instruction book
+can only say "at (144, 9.6, 0)", and moving anything means recomputing
+everything downstream by hand. A part joined through its ports says the thing
+that is true: *this* feature of it meets *that* feature of what it sits on, and
+PartCAD works out the coordinates.
+
+Convert in this order, and verify after each step (§6).
+
+### Find the pairs by where the ports are
+
+Two ports are a joint when they are at the same point. That is the whole test,
+and it is the same test whatever the parts are:
+
+* Compute every port of the part in the pose it is already in.
+* Compute every port of the parts already placed.
+* A pair at the same point, within a tolerance that reflects how the
+  coordinates were written, is a joint.
+
+**Do not derive port names from a part's name or its nominal grid.** A part
+whose name says it is 2 by 2 may carry four ports on one face and one on the
+other; a part with a hollow middle has ports round its rim and none inside.
+Naming conventions are a convenience, not a contract — ask the part where its
+ports are (`pc info <part>`, or read `implements:` out of its configuration) and
+match on position.
+
+### Grow the order; do not follow the construction order
+
+A joint may only name a node placed before it, so the order the nodes are
+written in decides how many of them can be joined at all. Written in the order
+the thing is physically built, a whole first layer has nothing beneath it and
+all of it stays on coordinates.
+
+It does not have to be written that way. A part joins to what is under it *or*
+to what is over it, and the second breaks the deadlock: place one part of the
+first layer, add the part above that bridges it to its neighbour, and the
+neighbour then joins upward into that bridge. So grow the order — take whatever
+can be joined to what is already down, and only when nothing can, place another
+part by coordinates and carry on. Break ties by the original order, so a piece
+that needs no help still reads the way it was written.
+
+### The first node needs no location at all
+
+Neither coordinates nor a joint: it *is* the assembly's origin, and where that
+goes is for whatever places the assembly to decide. Saying it twice is how the
+two come to disagree.
+
+That moves the assembly's frame onto that node, so **whatever places the
+assembly has to take up the difference** — by the offset the node used to sit
+at, turned the way the assembly is turned. An assembly whose parts are all
+placed against one shared grid is the exception: leaving its first node's
+coordinates out moves that node and nothing else.
+
+### A turn is a difference, not an orientation
+
+When a part is joined to one that lies a different way, the joint carries the
+difference between the two — not how either of them lies on its own. A part
+turned a quarter turn, sitting on another turned the same quarter turn, is not
+turned relative to what it sits on and the joint needs no turn at all.
+
+Getting this backwards is the most expensive mistake in the conversion, because
+the result still *builds*: the part lands one feature away, which looks like a
+near miss rather than a wrong rule.
+
+Where a joint does need a turn, prefer a port pair that does not: parts usually
+meet over several features, and a pair that lies square avoids the question
+entirely. Take the turned pair only when it is the only one.
+
+### Let sub-assemblies join each other
+
+A port inside a sub-assembly is the sub-assembly's own business until it says
+otherwise. `map:` is how it says otherwise — a name of its choosing against the
+node inside it, the interface that node implements, and the instance:
+
+```yaml
+assemblies:
+  gearbox/idler-stage:
+    type: assy
+    map:
+      shaft-out: [bearing-b, //pub/std/bearing:bore, outer]
+```
+
+The interface is not renamed — it is a contract — but the instance name is the
+piece's to pick. The parent then connects to `shaft-out` like any other port.
+The map does not reach inside a sub-assembly of a sub-assembly: that one
+externalizes what it wants seen, and this one maps *that*. A boundary is crossed
+one object at a time, which is what keeps a piece free to be rearranged inside
+without breaking what connects to it.
+
+Note that a sub-assembly is joined through a port of a *part* inside it, and
+that part may lie differently from the sub-assembly itself — in which case the
+joint turns the whole piece by the difference. The rule above applies unchanged;
+it is just easier to miss one level up.
+
+### When a part has no port where the joint is
+
+Leave it on coordinates and say why. A joint through an interface a part has not
+got is not a joint, and one through a port in the wrong place is a joint that
+lies — it will place something silently wrong, which is worse than coordinates
+that are merely silent.
+
+Then fix it where it belongs: a part missing a mating feature it really has is a
+gap in the package that serves the part, not something to work around in the
+assembly. Report it or fix it there, and the assembly gets shorter for free.
+
+### Do not predict a mate; try it
+
+Where a joint comes out wrong and the geometry says it should not, stop
+reasoning about the kernel's mate arithmetic and ask it. Build a throwaway
+assembly holding every hypothesis — each candidate port of the part, against
+each candidate port of the target, at each candidate turn — beside the same part
+placed by the coordinates you are trying to reproduce. Instantiate it once and
+read back where everything landed. Whatever matches the reference is the answer.
+
+It costs one instantiation and it is not a guess. Two of the conversions this
+guidance came from were settled this way after several rounds of plausible
+reasoning had each produced a different wrong answer.
+
+## 6. Validate, render it from several angles, iterate
 
 ```sh
 pc --no-ansi test -a <name>          # build gate: geometry instantiates
 ```
+
+### Prove each step changed nothing
+
+Grouping into pieces and replacing coordinates with joints are both supposed to
+leave the product exactly as it was. Neither announces it when they do not: the
+assembly still builds, still renders, and a part one feature out of place looks
+like the design.
+
+So compare, rather than look. Instantiate the assembly before and after, walk it
+down to the parts, and check every part is the same part at the same place. No
+CLI command prints that — `pc info -a` gives the configuration, the ports and a
+hash of the source, which changes when the file is rewritten however little the
+geometry moved — so walk the tree yourself:
+
+```python
+import asyncio, json, sys
+import partcad as pc
+
+ctx = pc.init(".")
+assembly = ctx.get_assembly("//<package>:<name>")
+asyncio.run(assembly.do_instantiate())
+
+out = []
+def walk(node):
+    for child in node.children:
+        item = child.item
+        asyncio.run(item.do_instantiate())          # a sub-assembly is lazy
+        if getattr(item, "children", None):
+            walk(item)                              # compose the transform here
+        else:
+            out.append([item.name, child.location])
+json.dump(out, open(sys.argv[1], "w"), default=str)
+```
+
+Run it against the tree before the change and after it, and diff the two.
+
+A render is not the check. Two drawings of an assembly with one part moved are
+nearly identical pictures, and anti-aliasing alone will differ between two runs
+that are geometrically the same — so a pixel diff answers a question you did not
+ask. Compare the placements.
+
+Two cautions from doing this badly:
+
+* **Compare in world coordinates once a frame has moved.** Dropping the first
+  node's location moves the assembly's own frame, so every part inside it
+  "differs" while the product is untouched. Compose the transforms down through
+  the tree — rotations included — and compare where each part ends up in the
+  end.
+* **Compare as a multiset, not pairwise.** Sorted lists of *(part, position)*
+  shift wholesale when one entry changes, so a single misplaced part reads as
+  dozens of differences and buries what actually moved.
+
+Expect zero. A conversion that moves one part has a bug, not a rounding
+difference.
 
 That gate passes for an assembly whose parts are all in the wrong place, so the
 design is decided by looking at it — and one picture cannot decide it. An
@@ -277,11 +489,17 @@ assembly that uses it.
 Then adjust the placements or mates, re-test, and re-render. Iterate until every
 view matches. `pc inspect -a <name>` gives an interactive view.
 
-## 5. Finalize
+## 7. Finalize
 
 Summarize the structure — parts, sub-assemblies, key placements — and how to view
 it (`pc inspect -a <name>`, or `pc render -a -t png --with-all <name>` for a
 picture with the connection metadata on it).
+
+Say what is still placed by coordinates and why, one reason per case. "The rest
+use `location:`" tells the next reader nothing; "these four sit where nothing
+below them carries a port, and that part's package declares none on that face"
+tells them where to look and what would remove it. An assembly that is honest
+about its remaining coordinates is one somebody can finish.
 
 For an assembly whose connections are worth keeping a picture of, declare the
 drawing as a file type so `pc render` keeps it up to date along with everything

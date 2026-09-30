@@ -7,9 +7,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from . import logging as pc_logging
 from . import telemetry
 from .geom import Location
-from . import logging as pc_logging
+from .utils import format_parameterized_name, parse_parameterized_name
 
 
 @telemetry.instrument()
@@ -25,9 +26,20 @@ class InterfaceInherits:
     source_interface_name: str
     interface = None
     instances: dict[str, Location]
+    # The boundary an instance draws its ports with, where it does not draw
+    # them with the ones the inherited interface already has. Keyed by instance
+    # name, and absent for every instance that says nothing about it - which is
+    # nearly all of them.
+    sketches: dict[str, str]
 
-    def __init__(self, name, project, config: dict = {}):
+    def __init__(self, name, project, config: dict = {}, ports: dict = None):
         self.instances = {}
+        self.sketches = {}
+        # The ports of the object doing the inheriting, where it has any yet.
+        # An instance may place itself at one of them ('port:') instead of
+        # spelling out a location, which is how an assembly puts an interface
+        # exactly where a port its 'map:' externalized ended up.
+        self.owner_ports = ports or {}
         # Resolve the interface by name
         if ":" in name:
             self.source_project_name, self.source_interface_name = project.resolve(
@@ -36,6 +48,14 @@ class InterfaceInherits:
         else:
             self.source_project_name = project.name
             self.source_interface_name = name
+
+        # A parametrized reference is canonicalized here rather than wherever it
+        # was written: 'm-thru;depth=3,size=4' and 'm-thru;size=4,depth=3' name
+        # one interface, and two spellings of it would be two keys in
+        # 'Interface.inherits' and two entries in a part's 'implements' - the
+        # same connection reported twice, and neither matching the other side.
+        base_name, reference_params = parse_parameterized_name(self.source_interface_name)
+        self.source_interface_name = format_parameterized_name(base_name, reference_params)
 
         self.name = self.source_project_name + ":" + self.source_interface_name
         pc_logging.debug("Fetching the interface %s" % self.name)
@@ -82,6 +102,41 @@ class InterfaceInherits:
 
             if isinstance(instance_config, dict):
                 instance_location_config = instance_config.get("location", None)
+
+                # 'port:' places this instance at a port of the object that is
+                # inheriting - written instead of a location, not beside one.
+                # The ports of an object are known before its 'implements:' is
+                # read (see 'Interface.instantiate'), so what this names is its
+                # own 'ports:' section or whatever its 'map:' externalized.
+                port_name = instance_config.get("port", None)
+                if port_name is not None:
+                    if instance_location_config is not None:
+                        pc_logging.error(
+                            "%s: the instance '%s' states both a 'location' and a 'port'; the port wins"
+                            % (self.name, instance_name)
+                        )
+                    port = self.owner_ports.get(port_name)
+                    if port is None:
+                        pc_logging.error(
+                            "%s: the instance '%s' names the port '%s', which this object does not have"
+                            % (self.name, instance_name, port_name)
+                        )
+                        instance_location_config = None
+                    else:
+                        # A port that declares no location of its own is at the
+                        # origin of the object that declares it, which is what
+                        # the 'is None' branch below reads it as.
+                        instance_location_config = port.location
+
+                # 'sketch:' restates the boundary of the ports this instance
+                # brings in. The same opening drawn differently: a slotted hole
+                # *is* a through hole - it inherits one, mates as one and keeps
+                # its port - and what tells them apart is the outline, which is
+                # a slot rather than a circle. Written as a reference like any
+                # other, so the values go in the name:
+                # 'sketch: "m-slotted;size=4,length=30"'.
+                if instance_config.get("sketch", None) is not None:
+                    self.sketches[instance_name] = instance_config["sketch"]
 
                 params = instance_config.get("params", {})
                 for param_name, param_value in params.items():

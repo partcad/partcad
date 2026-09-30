@@ -26,6 +26,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import unquote
 
 import pytest
+
 from partcad_service_json_rpc.core import operations
 from partcad_service_json_rpc.rpc.dispatcher import JsonRpcError
 

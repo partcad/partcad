@@ -17,9 +17,10 @@ import sys
 import threading
 from typing import BinaryIO, Mapping
 
-from ..rpc.dispatcher import INVALID_PARAMS, Dispatcher, Handler
 from partcad_utils.framing import read_message, write_message
 from partcad_utils.logging_ansi_render import AnsiEventRenderer
+
+from ..rpc.dispatcher import INVALID_PARAMS, Dispatcher, Handler
 
 # The same opt-in the socket daemon answers; see the note on `LOG_MODE_METHOD`
 # in `socket_server.py`. Kept working here so that `partcad.serviceChannel:

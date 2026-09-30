@@ -100,6 +100,13 @@ class ObjectTypeParameterException(Exception):
     hang this on. Every name outside the policed registry stays free, because
     parameters are otherwise the object's own invention.
 
+    'noun' is what the declaration was written as, because one of these is not a
+    parameter: a 'step' part states its manufacturing tolerance as a field of its
+    own ('PartFactory.ACCEPTS_TOLERANCE_FIELD'), the parameter of that name being
+    rejected by that type for a reason of its own. The type-by-type question is
+    identical and so is what to do about it, so the two share this rather than
+    the message being wrong for one of them.
+
     Raised while the object is being created, like 'UnknownTypeException' above,
     so that 'Project.record_broken_object()' files it against that one object
     and the rest of the package goes on loading. It stays an error rather than
@@ -107,13 +114,14 @@ class ObjectTypeParameterException(Exception):
     whose author can correct it, not a feature PartCAD took away.
     """
 
-    def __init__(self, kind: str, t, name, parameter: str):
+    def __init__(self, kind: str, t, name, parameter: str, noun: str = "parameter"):
         self.kind = kind
         self.type = t
         self.name = name
         self.parameter = parameter
+        self.noun = noun
         super().__init__(
-            "the %s type '%s' does not accept the '%s' parameter declared by '%s'" % (kind, t, parameter, name)
+            "the %s type '%s' does not accept the '%s' %s declared by '%s'" % (kind, t, parameter, noun, name)
         )
 
 
@@ -134,8 +142,38 @@ all = {
 }
 
 
+# The key each kind's generic 'import:' factory is registered under. Reserved
+# rather than a real type name: nothing may be declared as '__imported__', so a
+# package cannot shadow the mechanism that resolves its own declarations.
+IMPORTED_KINDS = {
+    "assembly": "__imported__",
+    "scene": "__imported__",
+}
+
+
 def register(kind: str, t: str, factory_class: Factory.__class__):
     all[kind][t] = factory_class
+
+
+def accepted_object_type_parameters(kind: str, t) -> dict:
+    """The object-type parameters the factory for this type accepts.
+
+    An object-type parameter is one the *type* contributes rather than the
+    author of the object declaring it from nothing, so it exists whether or not
+    the declaration mentions it - which is what lets a reference set one on an
+    object that declares no 'parameters:' section at all
+    ('bends;include=BEND_UP,BEND_DOWN' on a plain DXF sketch). See
+    'Project.get_object', which is where that is put to use, and
+    'PartFactory.ACCEPTED_OBJECT_TYPE_PARAMETERS' for what the mapping means.
+
+    Empty for a type nothing is registered for, and for one whose factory
+    contributes none. A partType or an imported reader resolves to no registered
+    factory here, which is the same answer: its parameters are its own.
+    """
+    factory_class = all.get(kind, {}).get(t)
+    if factory_class is None:
+        return {}
+    return getattr(factory_class, "ACCEPTED_OBJECT_TYPE_PARAMETERS", None) or {}
 
 
 def instantiate(kind: str, t: str, ctx, source_project, target_project, config):
@@ -156,6 +194,32 @@ def instantiate(kind: str, t: str, ctx, source_project, target_project, config):
     # generic wrapper factory, which resolves the partType and runs it.
     if kind == "part" and isinstance(t, str) and ":" in t and "wrapper" in all[kind]:
         return all[kind]["wrapper"](ctx, source_project, target_project, config)
+
+    # An assembly or a scene 'type' nothing is registered for may still be a
+    # format somebody declared a reader for, in an 'import:' section - PartCAD's
+    # own ('urdf'), or a plugin package's, named by a package path exactly as a
+    # partType is ('sim-mujoco:mjcf'). The generic factory resolves the
+    # declaration and runs the reader; see 'assembly_factory_imported'.
+    #
+    # Tried after the registered types so that a built-in factory always wins,
+    # and only for these two kinds because those are the two an imported file
+    # becomes. The import is deferred: this module is loaded before the package
+    # machinery the resolution needs.
+    if kind in IMPORTED_KINDS and IMPORTED_KINDS[kind] in all[kind]:
+        from .assembly_factory_imported import ImportedKindError, ImportedTypeError
+
+        try:
+            return all[kind][IMPORTED_KINDS[kind]](ctx, source_project, target_project, config)
+        except ImportedKindError as e:
+            # Declared, but in the wrong section. That has a better message than
+            # the generic one below, which would list every type there is
+            # without mentioning the one the package actually named.
+            raise UnknownTypeException(kind, t, config.get("name"), message=str(e)) from e
+        except ImportedTypeError:
+            # Nothing declares it. That is an ordinary unknown type, so it falls
+            # through to the ordinary error - which also keeps a retired type
+            # below reported as retired rather than as an import that is missing.
+            pass
 
     # An unknown type is a bad declaration, not a bad package: it is raised so
     # the caller records it against the one object and carries on with the rest.

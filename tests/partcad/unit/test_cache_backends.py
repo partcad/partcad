@@ -419,3 +419,102 @@ def test_broken_dependency_offers_a_repair_rather_than_an_extra():
     # No extra to name: 'memcache' stopped being one when aiomcache became an
     # ordinary dependency.
     assert "[" not in message
+
+
+# ------------------------------------------------------ the existence check --
+#
+# "Would this have to be built?", asked without paying for the answer. What it
+# is asked about is a whole assembly, so a tier that can answer it without
+# handing the payload over is the difference between a stat and a download (see
+# Cache.contains_data_async).
+
+
+def test_a_missing_entry_is_not_contained(tmp_path):
+    async def main():
+        cache = Cache("shapes", CacheUserConfig(tmp_path))
+        return await cache.contains_data_async(_hash(), ["part", "cmps"])
+
+    assert asyncio.run(main()) == {"part": False, "cmps": False}
+
+
+def test_a_written_entry_is_contained(tmp_path):
+    async def main():
+        cache = Cache("shapes", CacheUserConfig(tmp_path))
+        await cache.write_data_async(_hash(), {"part": ZSTD_FRAME})
+        return await cache.contains_data_async(_hash(), ["part", "cmps"])
+
+    # Per key, not per hash: an assembly whose geometry is cached and whose
+    # components are not is half an answer, and the reader treats it as a miss.
+    assert asyncio.run(main()) == {"part": True, "cmps": False}
+
+
+def test_an_empty_entry_counts_as_absent(tmp_path):
+    """A tier that answers no bytes has spared nobody the build.
+
+    Which is what a read of one amounts to as well ('cache_shape.read_async'
+    treats an empty payload as a miss), so the two have to agree.
+    """
+    config = CacheUserConfig(tmp_path)
+    (tmp_path / "cache" / "shapes").mkdir(parents=True, exist_ok=True)
+
+    async def main():
+        cache = Cache("shapes", config)
+        (tmp_path / "cache" / "shapes" / ("%s.part" % _hash().get())).write_bytes(b"")
+        return await cache.contains_data_async(_hash(), ["part"])
+
+    assert asyncio.run(main()) == {"part": False}
+
+
+def test_a_hash_with_nothing_in_it_contains_nothing(tmp_path):
+    """No key to look under is not a hit, the way it is not a read."""
+
+    async def main():
+        cache = Cache("shapes", CacheUserConfig(tmp_path))
+        return await cache.contains_data_async(CacheHash("shape", cache=True), ["part"])
+
+    assert asyncio.run(main()) == {"part": False}
+
+
+def test_the_nearest_tier_holding_an_entry_answers_for_it(tmp_path):
+    """The tiers are walked nearest-first, exactly as a read walks them."""
+    with serve_memcached() as server:
+
+        async def main():
+            remote_only = _memcache_config(tmp_path, server)
+            await Cache("shapes", remote_only).write_data_async(_hash(), {"part": ZSTD_FRAME})
+
+            both = CacheUserConfig(
+                tmp_path,
+                cache_remote=True,
+                cache_remote_server="%s:%d" % (server.host, server.port),
+            )
+            return await Cache("shapes", both).contains_data_async(_hash(), ["part"])
+
+        # The local tier does not have it; the remote one does, and that is
+        # still "no need to build it".
+        assert asyncio.run(main()) == {"part": True}
+
+
+def test_s3_is_asked_with_a_head_rather_than_a_download(tmp_path, aws_credentials):
+    """The furthest tier, where fetching an object to look at it costs the most."""
+    with serve_s3() as (url, storage):
+
+        async def main():
+            cache = Cache("shapes", _s3_config(tmp_path, url))
+            await cache.write_data_async(_hash(), {"part": ZSTD_FRAME})
+            storage.requests.clear()
+            return await cache.contains_data_async(_hash(), ["part", "cmps"])
+
+        assert asyncio.run(main()) == {"part": True, "cmps": False}
+
+    assert {method for method, _ in storage.requests} == {"HEAD"}
+
+
+def test_a_tier_that_is_not_there_contains_nothing(tmp_path):
+    """A cache is an optimization: losing a tier must never fail a build."""
+
+    async def main():
+        config = CacheUserConfig(tmp_path, cache=False, cache_remote=True, cache_remote_server="127.0.0.1:1")
+        return await Cache("shapes", config).contains_data_async(_hash(), ["part"])
+
+    assert asyncio.run(main()) == {"part": False}

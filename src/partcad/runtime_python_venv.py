@@ -30,8 +30,7 @@ import subprocess
 import sys
 
 from . import logging as pc_logging
-from . import runtime_python
-from . import telemetry
+from . import runtime_python, telemetry
 
 
 @telemetry.instrument()

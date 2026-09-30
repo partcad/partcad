@@ -9,8 +9,8 @@
 
 import asyncio
 
-from .cache_hash import CacheHash
 from . import cache_backend
+from .cache_hash import CacheHash
 
 
 class Cache:
@@ -61,9 +61,7 @@ class Cache:
 
         async def task_backend(backend):
             accepted = {
-                self._name(hash_str, key): value
-                for key, value in items.items()
-                if backend.accepts(key, len(value))
+                self._name(hash_str, key): value for key, value in items.items() if backend.accepts(key, len(value))
             }
             if not accepted:
                 return {}
@@ -109,4 +107,41 @@ class Cache:
         # A key nobody had is reported as a miss, the way a missing file was.
         for key in pending:
             found[key] = None
+        return found
+
+    async def contains_data_async(self, hash: CacheHash, keys: list[str]) -> dict[str, bool]:
+        """Which of 'keys' some tier holds under 'hash', without reading them.
+
+        The question "would this have to be built?", asked without paying for
+        the answer: the tiers are walked nearest-first exactly as a read walks
+        them, but each is asked whether it holds the entry rather than for the
+        entry itself (see CacheBackend.contains_async). An entry with no bytes
+        in it counts as absent, because that is what a read of one amounts to.
+
+        A "yes" is a statement about now: nothing stops the entry being evicted
+        between this and the read that follows it, so a caller uses it to
+        decide what to do first, never to skip handling a miss.
+        """
+        found = {key: False for key in keys}
+        if not self.backends:
+            # Caching is disabled
+            return found
+
+        hash_str = hash.get()
+        if not hash_str:
+            # Hash is not produced
+            return found
+
+        pending = list(keys)
+        for backend in self.backends:
+            if not pending:
+                break
+            held = await backend.contains_async([self._name(hash_str, key) for key in pending])
+            still_pending = []
+            for key in pending:
+                if held.get(self._name(hash_str, key), False):
+                    found[key] = True
+                else:
+                    still_pending.append(key)
+            pending = still_pending
         return found

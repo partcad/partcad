@@ -28,7 +28,12 @@ include =
         */partcad_ide_client/*
         */partcad_service_json_rpc/*
         */cad/freecad/*
-disable_warnings = already-imported
+# `include-ignored` because pytest-cov passes `--cov=<package>` for each of the
+# six, which sets `source`, and `source` beats the `include` list above --
+# coverage says so once per run and then ignores `include`. That is expected
+# rather than a problem (the list and `include` name the same packages), and the
+# warning would otherwise be printed by every pytest run a developer makes.
+disable_warnings = already-imported, include-ignored
 parallel = True
 omit =
         */.partcad/*
@@ -36,3 +41,51 @@ omit =
 
 [report]
 ignore_errors = True
+
+# What `coverage combine` needs in order to recognise two recordings of one
+# source file as the same file. Without it the merge in the "Coverage" job is a
+# concatenation rather than a union: every OS and every suite records a
+# different absolute path for `partcad/shape.py`, so the report holds a dozen
+# copies of it, each covered by whichever job happened to import it, and the
+# rate that comes out is meaningless.
+#
+# Three spellings have to collapse into one, and they are the same two layouts
+# `include` above already has to know about, plus Windows:
+#
+#   * the checkout, which the pytest job imports from:
+#     `/home/runner/work/partcad/partcad/src/partcad/shape.py`
+#   * the install, which behave and the example sweeps drive through `pc`:
+#     `.../site-packages/partcad/shape.py`
+#   * either of those on Windows, with backslashes and a drive letter:
+#     `D:\a\partcad\partcad\src\partcad\shape.py`
+#
+# The first entry of a section is the result, and it is relative on purpose:
+# `coverage combine` resolves it against the directory it runs in, which is the
+# repository root, so the merged data names files that exist in the checkout and
+# the HTML report has source to show. A mapping to an absolute runner path would
+# make the report a list of paths with "no source for code" beside each one.
+#
+# Both separators are written out. coverage.py's glob translation accepts either
+# for a `/`, so the `*\...\` lines are belt and braces rather than load-bearing
+# -- but this file is read on three operating systems and a silent mismatch here
+# costs a whole platform's coverage.
+#
+# This section is only consulted by `coverage combine`, and only the merge
+# passes this file to one: the per-job `coverage combine` calls in the workflows
+# run without `--rcfile` (their data files come from one machine and need no
+# mapping), so adding this cannot change what any test job reports.
+[paths]
+source =
+        src/
+        */src/
+        *\src\
+        */site-packages/
+        *\site-packages\
+
+# The FreeCAD addon is not a package that gets installed -- pytest imports it
+# from its own directory -- so it has one layout and only needs the checkout
+# prefix stripped.
+freecad =
+        cad/freecad/
+        */cad/freecad/
+        *\cad\freecad\

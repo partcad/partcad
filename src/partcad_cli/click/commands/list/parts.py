@@ -9,13 +9,15 @@ import rich_click as click
 from ...service import run
 
 
-@click.command(help="List available parts")
+@click.command(
+    help="List available parts. PACKAGE may end in '...' to reach every package below it",
+)
 @click.option(
     "-r",
     "--recursive",
     "recursive",
     is_flag=True,
-    help="Recursively process all imported packages",
+    help="Recursively process all imported packages (older spelling of '<package>...')",
     show_envvar=True,
 )
 @click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'

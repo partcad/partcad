@@ -1,10 +1,10 @@
-import re
+from pathlib import Path
+
 import pytest
 import yaml
-from pathlib import Path
-from partcad.context import Context
-from partcad.actions.assembly import import_assy_action
 
+from partcad.actions.assembly import import_assy_action
+from partcad.context import Context
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 EXAMPLES_DIR = ROOT_DIR / "examples/feature_import"

@@ -10,10 +10,11 @@
 import copy
 import typing
 
-from . import part_factory as pf
 from . import logging as pc_logging
-from .utils import format_parameterized_name, get_child_project_path
-from . import telemetry
+from . import part_factory as pf
+from . import reference, telemetry
+from .shape_config_store import resolve_store_properties
+from .utils import format_parameterized_name
 
 
 @telemetry.instrument()
@@ -30,6 +31,7 @@ class PartFactoryAlias(pf.PartFactory):
 
             self.part.get_final_config = self.get_final_config
             self.part.get_cacheable = self.get_cacheable
+            self.part.get_tolerance = self.get_tolerance
 
             # A reference has no cache key of its own until it has taken the
             # one of the object it points at (see 'prepare_async'), and is not
@@ -37,30 +39,13 @@ class PartFactoryAlias(pf.PartFactory):
             # 'offset', which identifies nothing.
             self.keyed = False
 
-            if "source" in config:
-                self.source_part_name = config["source"]
-            else:
-                self.source_part_name = config["name"]
-                if "project" not in config and "package" not in config:
-                    raise Exception("Alias needs either the source part name or the source project name")
-
-            if "project" in config or "package" in config:
-                if "project" in config:
-                    self.source_project_name = config["project"]
-                else:
-                    self.source_project_name = config["package"]
-                if self.source_project_name == "this" or self.source_project_name == "":
-                    self.source_project_name = source_project.name
-                elif not self.source_project_name.startswith("//"):
-                    # Resolve the project name relative to the target project
-                    self.source_project_name = get_child_project_path(target_project.name, self.source_project_name)
-            else:
-                if ":" in self.source_part_name:
-                    self.source_project_name, self.source_part_name = source_project.resolve(
-                        self.source_part_name,
-                    )
-                else:
-                    self.source_project_name = source_project.name
+            # Where this points, by the rules every reference spells it with
+            # (see 'partcad.reference'). Recorded on the declaration as well,
+            # because 'pc convert' follows the stored configuration rather than
+            # the object, and a listing reads its description off it without
+            # building anything.
+            self.source = reference.source_of(source_project, target_project.name, config, "part")
+            self.source_project_name, self.source_part_name = reference.split(self.source)
             # Parameters handed to an alias are passed on to what it points
             # at. An alias declares no parameters of its own, so it has nothing
             # to apply them to - it is a reference, and a reference to an object
@@ -71,17 +56,24 @@ class PartFactoryAlias(pf.PartFactory):
             # 'with' when it parametrizes a reference).
             if config.get("with"):
                 self.source_part_name = format_parameterized_name(self.source_part_name, config["with"])
-
-            self.source = self.source_project_name + ":" + self.source_part_name
+                self.source = self.source_project_name + ":" + self.source_part_name
             config["source_resolved"] = self.source
 
-            if self.source_project_name == target_project.name:
-                self.part.desc = "Alias to %s" % self.source_part_name
-            else:
-                self.part.desc = "Alias to %s from %s" % (
-                    self.source_part_name,
-                    self.source_project_name,
-                )
+            # What the reference says it is, where it says: an enrich of a
+            # standard size is usually a part of its own ("a leg") and not
+            # merely another name for the size.
+            self.part.desc = config.get("desc") or reference.describe(config["type"], target_project.name, self.source)
+
+            # Where it connects, too, unless it says so itself. An alias is the
+            # geometry of its source, so it has the ports of its source: an
+            # alias that only restates what the object is bought as (the same
+            # E-clip under the SKU of each shaft it comes with) is otherwise a
+            # part that nothing can be connected to. One that declares ports or
+            # interfaces of its own keeps them, and so does one that moves or
+            # scales the geometry, which the source's ports would no longer
+            # sit on.
+            if not any(key in config for key in ("implements", "ports", "offset", "scale")):
+                self.part.with_ports = _SourcePorts(ctx, self.source)
 
             # pc_logging.debug("Initialized an alias to %s" % self.source)
 
@@ -102,6 +94,10 @@ class PartFactoryAlias(pf.PartFactory):
         # is never instantiated, and this is what tells it which entry that is.
         await obj.take_cache_key_from(source)
         self.keyed = True
+        # And its ports, now that it is at hand: a source that an assembly
+        # materializes cannot be looked up synchronously later, from a coroutine
+        if isinstance(obj.with_ports, _SourcePorts):
+            obj.with_ports.resolved(source)
         if source.path:
             obj.path = source.path
         obj.cacheable = source.cacheable and obj.cacheable
@@ -135,10 +131,49 @@ class PartFactoryAlias(pf.PartFactory):
             return wrapped
 
     def get_final_config(self):
+        """The declaration this reference resolves to, as this reference reports it.
+
+        The source's, but for the purchasing record: a reference may name a
+        vendor and an SKU of its own, and that is the one thing about the object
+        it is allowed to restate (see 'resolve_store_properties'). Applied here
+        rather than where the record is read, so that it travels: an alias of an
+        alias, and an enrich of an enrich, resolve through this same method and
+        so see what the reference below them declared rather than only what the
+        object at the end of the chain did.
+
+        And for how the object is *made*, which a reference may state for the
+        same reason: one piece of geometry is made different ways by different
+        packages. A 4x4 post is lumber in the package that defines lumber and a
+        board cut to length off a store's eight foot one in the package that
+        builds a desk from it -- which is what an enrich of it is for. A
+        'manufacturing:' section is one statement (a method, a stock, a machine
+        and where it cuts), so a reference that writes one replaces the
+        source's whole rather than key by key.
+        """
         source = self.ctx._get_part(self.source)
         if not source:
             raise Exception(f"The alias source {self.source} is not found")
-        return source.get_final_config()
+        resolved = resolve_store_properties(source.get_final_config(), self.config)
+        manufacturing = self.config.get("manufacturing") if isinstance(self.config, dict) else None
+        if manufacturing:
+            resolved = dict(resolved)
+            resolved["manufacturing"] = manufacturing
+        return resolved
+
+    async def get_tolerance(self):
+        """How precisely the object this points at has to be made.
+
+        The source's answer, because a reference declares no tolerance of its
+        own -- it has no file to read one from and no object-type parameters to
+        state one in -- and the geometry it stands for is the source's. Without
+        this every alias and every enrich of a part that is *made* answered
+        None, which the manufacturability test reads as a part type that cannot
+        say, and failed.
+        """
+        source = await self.ctx._get_part_async(self.source)
+        if not source:
+            return None
+        return await source.get_tolerance()
 
     def get_cacheable(self) -> bool:
         # Cacheable once it knows which entry it shares: a reference keys on
@@ -148,3 +183,49 @@ class PartFactoryAlias(pf.PartFactory):
         # user asking for this object not to be cached.
         obj = self.part
         return self.keyed and obj.cacheable and not obj.get_cache_dependencies_broken()
+
+
+class _SourcePorts:
+    """The ports of the object an alias points at, looked up when first needed.
+
+    Not when the alias is created: the source may be in a package nobody has
+    loaded yet, and loading it is what resolving it does (see 'prepare_async').
+    Everything is the source's own 'WithPorts', asked for by name, so there is
+    one set of ports for the one piece of geometry, however many names it has.
+    """
+
+    def __init__(self, ctx, source: str):
+        self._ctx = ctx
+        self._source = source
+        self._part = None
+        self._empty = None
+
+    def resolved(self, part) -> None:
+        """Take the source, resolved by somebody who could await it."""
+        self._part = part
+
+    async def resolve_async(self) -> None:
+        """Resolve the source, from a coroutine (see 'shape_ports.prepare_async').
+
+        Looked up by name otherwise, which is fine for a part a package
+        declares and not for one an assembly materializes: building that from
+        a synchronous lookup is refused on a thread that is running a loop.
+        """
+        if self._part is None:
+            self._part = await self._ctx._get_part_async(self._source)
+
+    def _target(self):
+        source = self._part if self._part is not None else self._ctx._get_part(self._source)
+        if source is None:
+            raise Exception(f"The alias source {self._source} is not found")
+        if source.with_ports is None:
+            # A source with no ports at all, which an alias has none of either
+            if self._empty is None:
+                from .port import WithPorts
+
+                self._empty = WithPorts(source.name, self._ctx.get_project(source.project_name), {})
+            return self._empty
+        return source.with_ports
+
+    def __getattr__(self, name):
+        return getattr(self._target(), name)

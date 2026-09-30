@@ -1,13 +1,12 @@
-import pytest
 import shutil
 from pathlib import Path
+
+import pytest
 import yaml
 
-import partcad as pc
-from partcad.context import Context
 from partcad.actions.sketch import convert_sketch_action
+from partcad.context import Context
 from partcad.shape import SKETCH_EXTENSION_MAPPING
-
 
 SKETCH_INPUTS = {
     "cylinder_svg": {"type": "svg", "path": "svg/cylinder.svg"},
@@ -26,7 +25,7 @@ SOURCE_DIR = Path("./examples/feature_convert_sketch")
 @pytest.mark.parametrize("target_format", sorted(ALLOWED_TARGETS))
 def test_sketch_conversion(sketch_name, target_format, tmp_path: Path):
     """Convert each supported sketch input to all allowed output formats."""
-    
+
     if "basic" in sketch_name:
         pytest.skip()
 

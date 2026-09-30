@@ -38,6 +38,7 @@ from .assembly import Assembly
 from .exception import NotAnAssemblyFileError, NotManufacturableError
 from .geom import Location
 from .render import render_cfg_merge
+from .sandbox_lock import process_slots
 
 # How far apart an exploded view pulls the two items of a step, as a fraction of
 # the largest dimension of the two, unless the step says otherwise.
@@ -58,6 +59,49 @@ MAX_ALIAS_DEPTH = 16
 
 # The formats an assembly instruction book is generated in.
 GUIDE_FORMATS = ("pdf", "html")
+
+
+def _sandbox_budget() -> asyncio.Semaphore:
+    """How much of one document may be drawn at once.
+
+    A document is built out of work that has nothing to say to itself: every
+    step of every assembly asks a sandbox how big its two items are, and every
+    page of the book is a projection or three of them. None of it waits on any
+    of the rest, and all of it used to be done one item at a time.
+
+    What it costs is a sandbox interpreter -- several hundred megabytes of CAD
+    kernel, not a thread -- so the ceiling is the machine's budget for those
+    processes, 'partcad.sandbox_lock.process_slots'. Enough of the document in
+    flight to keep that budget full is all the concurrency there is any use
+    for; more only piles up tasks polling for the same slots. This is the bound
+    a recursive render and a recursive route already take, for the same reason.
+
+    A new semaphore per document rather than one for the module: an
+    'asyncio.Semaphore' belongs to the loop it first blocks on, and PartCAD
+    runs an 'asyncio.run()' per worker thread and one per JSON-RPC request --
+    see 'partcad.concurrency' for what a shared one costs there.
+    """
+    return asyncio.Semaphore(max(1, process_slots.count))
+
+
+async def _gather_bounded(budget, coroutines) -> list:
+    """Await all of them, with at most 'budget' of them under way at once.
+
+    Results come back in the order the coroutines were given, whatever order
+    they finished in: a book is read in the order it was written.
+
+    The budget is held around one coroutine and released before the next is
+    admitted, so nothing that holds it may wait for something that needs it.
+    That is why it is spent here, on the leaves -- measuring a step, drawing an
+    illustration -- and never around the page or the section that asked for
+    them.
+    """
+
+    async def bounded(coroutine):
+        async with budget:
+            return await coroutine
+
+    return list(await asyncio.gather(*[bounded(coroutine) for coroutine in coroutines]))
 
 
 def resolve_alias(ctx, assembly):
@@ -148,6 +192,10 @@ class RenderedImages(ImageSource):
     An instruction book illustrates things that exist nowhere but in it - a pair
     of items pulled apart to show how they meet - so it cannot be assembled out
     of the pictures a package happens to have rendered.
+
+    The pages of a document are composed at the same time, so this is asked for
+    several illustrations at once. Two things follow from that, and neither was
+    needed while one page was drawn after another.
     """
 
     def __init__(self, ctx, project, directory):
@@ -155,25 +203,44 @@ class RenderedImages(ImageSource):
         self.project = project
         self.directory = directory
         self.rendered = {}
+        # One lock per illustration, not one over all of them: two pages showing
+        # different things have nothing to wait for from each other. What it
+        # rules out is two pages showing the *same* thing - the top assembly is
+        # on the title page and on its own, and an item is the counterpart of
+        # the step after the one that placed it - each finding nothing rendered
+        # and both starting a projection into the one file it is named by.
+        self._locks = {}
+        # And the machine's budget, spent around the projection itself rather
+        # than around the page that wanted it, so that a page waiting for a slot
+        # is never holding one. See '_sandbox_budget()'.
+        self._budget = _sandbox_budget()
 
     async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None):
         if key is None:
             key = "%s:%s" % (shape.project_name, shape.name)
 
-        path = self.rendered.get(key)
-        if path is None:
-            path = os.path.join(self.directory, _slug(key) + ".svg")
-            os.makedirs(self.directory, exist_ok=True)
-            await shape.render_svg_somewhere_async(
-                ctx=self.ctx,
-                project=self.project,
-                filepath=path,
-                annotations=annotations,
-            )
-            if not os.path.exists(path):
-                pc_logging.warning("Failed to render the illustration of %s" % key)
-                return None
-            self.rendered[key] = path
+        lock = self._locks.get(key)
+        if lock is None:
+            # Nothing is awaited between the lookup and the store, so two tasks
+            # of one loop cannot each install a lock of their own here.
+            lock = self._locks[key] = asyncio.Lock()
+
+        async with lock:
+            path = self.rendered.get(key)
+            if path is None:
+                path = os.path.join(self.directory, _slug(key) + ".svg")
+                os.makedirs(self.directory, exist_ok=True)
+                async with self._budget:
+                    await shape.render_svg_somewhere_async(
+                        ctx=self.ctx,
+                        project=self.project,
+                        filepath=path,
+                        annotations=annotations,
+                    )
+                if not os.path.exists(path):
+                    pc_logging.warning("Failed to render the illustration of %s" % key)
+                    return None
+                self.rendered[key] = path
 
         return doc.Image(file=path, alt=alt or key, caption=caption)
 
@@ -181,6 +248,31 @@ class RenderedImages(ImageSource):
 def _slug(text):
     """A file name that stands for an object name."""
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", text).strip("-") or "image"
+
+
+def _prose(text) -> list:
+    """Free-form text from an ASSY file, as the paragraphs of a document.
+
+    A 'description' or a 'comment' is written by hand in YAML, most often as a
+    block scalar hard-wrapped to fit the file it is in. Those line breaks belong
+    to the file rather than to the text, and the three output formats disagree
+    about them - HTML turns one into a '<br/>' and the PDF starts a new line,
+    while markdown folds it away - so they are folded here, once, and only a
+    blank line, which is the break that was meant, starts a new paragraph.
+    """
+    if not text:
+        return []
+    paragraphs = []
+    for chunk in re.split(r"\n\s*\n", str(text).strip()):
+        collapsed = " ".join(chunk.split())
+        if collapsed:
+            paragraphs.append(collapsed)
+    return paragraphs
+
+
+def _prose_blocks(text) -> list:
+    """The paragraphs of '_prose()', as blocks of a document."""
+    return [doc.Paragraph(paragraph) for paragraph in _prose(text)]
 
 
 #
@@ -200,6 +292,13 @@ class GuideStep:
     counterpart_name: str
     counterpart_location: Location
     connection: Optional[dict] = None
+    # What the ASSY file says about this step in words, as opposed to the
+    # sentence 'description()' composes out of the connection: the node's own
+    # 'description' (what the item being added is) and the 'comment' of the
+    # 'connect'/'connectPorts' section that placed it (context that is
+    # deliberately not an instruction - see docs/source/assy.rst).
+    item_description: Optional[str] = None
+    comment: Optional[str] = None
     # Where the two are pulled apart to, and the line that shows the gap.
     direction: tuple = (0.0, 0.0, 1.0)
     distance: float = FALLBACK_EXPLODED_DISTANCE
@@ -237,6 +336,16 @@ class GuideSection:
     name: str
     steps: list = field(default_factory=list)
     top: bool = False
+    # The item everything else is added to. No step places it - there is nothing
+    # yet to place it against - so it is named on the assembly's own page, and
+    # it is the only item whose 'description' has nowhere else to go.
+    base_name: Optional[str] = None
+    base_description: Optional[str] = None
+    # How many of this assembly the whole build needs. An assembly used more
+    # than once is documented once, so this is what says it has to be made
+    # again - and it counts the copies of whatever uses it too, since four
+    # towers with a spire each need four spires.
+    count: int = 1
 
 
 async def collect_sections_async(ctx, assembly) -> list:
@@ -245,18 +354,53 @@ async def collect_sections_async(ctx, assembly) -> list:
     Sub-assemblies come before the assembly that uses them - they have to exist
     before it can be put together - and the top level assembly comes last. An
     assembly used more than once is documented once.
+
+    The walk stays sequential, because that order and that "once" are the whole
+    of what it is for. What it finds is then built all at once: a section's
+    steps are measured in a sandbox, and no two of those measurements wait on
+    each other. 'asyncio.gather' hands the sections back in the order they were
+    walked in, so the book is still assembled bottom up.
     """
-    sections = []
+    nodes = []
     seen = set()
-    await _collect_section(ctx, assembly, sections, seen, top=True)
-    return sections
+    await _collect_section(ctx, assembly, nodes, seen, top=True)
+
+    budget = _sandbox_budget()
+    return list(
+        await asyncio.gather(*[_build_section(ctx, node, content, top, budget) for node, content, top in nodes])
+    )
+
+
+def count_sections(sections, grouped) -> None:
+    """Tell each section how many of its assembly the build needs.
+
+    From the bill of materials, which has counted them already: a BOM is a
+    count of what goes into the thing, and an assembly used four times goes
+    into it four times. Deriving it again by walking the tree would be a second
+    answer to a question that already has one, free to disagree with the BOM
+    printed two pages earlier.
+
+    An assembly embedded in the 'links:' of an ASSY file belongs to no package
+    and so is in no BOM; it is documented where it appears and built once.
+    """
+    counts = grouped.get("assemblies") or {}
+    for section in sections:
+        entry = (counts.get(section.assembly.project_name) or {}).get(section.assembly.name)
+        if entry:
+            section.count = entry.get("count", 1)
 
 
 def collect_sections(ctx, assembly) -> list:
     return asyncio.run(collect_sections_async(ctx, assembly))
 
 
-async def _collect_section(ctx, assembly, sections, seen, top=False):
+async def _collect_section(ctx, assembly, nodes, seen, top=False):
+    """Append what each section is made of, deepest first.
+
+    What is appended is the assembly, not the section: building the section
+    measures geometry, and every section's steps are measured together by the
+    caller rather than one section at a time on the way back up.
+    """
     await assembly.do_instantiate()
 
     key = _assembly_key(assembly)
@@ -267,18 +411,24 @@ async def _collect_section(ctx, assembly, sections, seen, top=False):
     content = _step_source(assembly)
     for child in content.children:
         if isinstance(child.item, Assembly):
-            await _collect_section(ctx, child.item, sections, seen)
+            await _collect_section(ctx, child.item, nodes, seen)
 
-    sections.append(await _build_section(ctx, assembly, content, top))
+    nodes.append((assembly, content, top))
 
 
 def _step_source(assembly):
     """The assembly whose children are the items that get assembled.
 
-    The root node of an ASSY file is itself a container, so the assembly a
-    package declares holds one embedded assembly with everything inside it. That
-    wrapper is neither a step nor a sub-assembly of its own - it is the same
-    thing under another name - so it is looked through rather than documented.
+    An assembly that holds nothing but one embedded 'links:' container holds
+    everything inside that - a file that wrapped its contents in a nested list
+    rather than listing them. Such a wrapper is neither a step nor a sub-assembly
+    of its own - it is the same thing under another name - so it is looked
+    through rather than documented.
+
+    It used to be every assembly's shape: the root node of an ASSY file became a
+    container of its own, so a package's assembly held exactly one embedded
+    assembly. It is the assembly itself now (see 'AssemblyFactoryAssy'), and this
+    is left for the files that nest anyway.
     """
     while len(assembly.children) == 1:
         child = assembly.children[0]
@@ -314,7 +464,18 @@ def _assembly_key(assembly):
     return (assembly.project_name, assembly.name)
 
 
-async def _build_section(ctx, assembly, content=None, top=False):
+async def _build_section(ctx, assembly, content=None, top=False, budget=None):
+    """The section documenting one assembly, steps measured.
+
+    Composing the steps is bookkeeping over what the ASSY file already says, and
+    it stays in order: each step is joined to what the steps before it have
+    placed. Measuring them is not - it is a sandbox process per item - and one
+    step's measurements tell the next step nothing, so they are all taken at
+    once.
+
+    'budget' is the caller's, when several sections are being built together, so
+    that the sections share one ceiling rather than take one each.
+    """
     if content is None:
         content = _step_source(assembly)
     section = GuideSection(assembly=assembly, name=_display_name(assembly), top=top)
@@ -324,6 +485,8 @@ async def _build_section(ctx, assembly, content=None, top=False):
         if not placed:
             # The first item is what everything else is added to; there is
             # nothing yet to connect it to.
+            section.base_name = child.name or child.item.name
+            section.base_description = child.description
             placed.append(child)
             continue
 
@@ -337,10 +500,16 @@ async def _build_section(ctx, assembly, content=None, top=False):
             counterpart_name=counterpart_name,
             counterpart_location=counterpart_location,
             connection=child.connection,
+            item_description=child.description,
+            comment=child.comment,
         )
-        await _resolve_step_geometry(ctx, step)
         section.steps.append(step)
         placed.append(child)
+
+    await _gather_bounded(
+        budget if budget is not None else _sandbox_budget(),
+        [_resolve_step_geometry(ctx, step) for step in section.steps],
+    )
 
     return section
 
@@ -388,8 +557,12 @@ async def _resolve_step_geometry(ctx, step: GuideStep):
     """
     connection = step.connection or {}
 
-    item_center = await _placed_center(ctx, step.item, step.location)
-    counterpart_center = await _placed_center(ctx, step.counterpart, step.counterpart_location)
+    # Both centers at once: each is a bounding box measured in a sandbox, and
+    # neither is an input to the other.
+    item_center, counterpart_center = await asyncio.gather(
+        _placed_center(ctx, step.item, step.location),
+        _placed_center(ctx, step.counterpart, step.counterpart_location),
+    )
     away = [item_center[i] - counterpart_center[i] for i in range(3)]
 
     direction = _normalized(connection.get("direction")) or _normalized(away)
@@ -405,10 +578,13 @@ async def _resolve_step_geometry(ctx, step: GuideStep):
 
     distance = connection.get("exploded")
     if distance is None:
-        dimensions = [
-            await step.item.get_max_dimension_async(ctx),
-            await step.counterpart.get_max_dimension_async(ctx),
-        ]
+        # Both bounding boxes were measured above and a shape remembers its own,
+        # so this is two dictionary lookups in the common case; it is gathered
+        # for the case where one of them could not be measured at all.
+        dimensions = await asyncio.gather(
+            step.item.get_max_dimension_async(ctx),
+            step.counterpart.get_max_dimension_async(ctx),
+        )
         dimensions = [dimension for dimension in dimensions if dimension]
         distance = EXPLODED_FRACTION * max(dimensions) if dimensions else FALLBACK_EXPLODED_DISTANCE
     step.distance = float(distance)
@@ -496,8 +672,55 @@ def bom_blocks(project, grouped, dir_path, level=2) -> list:
                     ],
                 )
             )
+    blocks += stock_blocks(project, grouped.get("stock") or {}, dir_path, level=level)
     blocks += software_blocks(project, grouped.get("software") or {}, dir_path, level=level)
     return blocks
+
+
+def stock_blocks(project, packages, dir_path, level=2) -> list:
+    """What the parts that are made are made from.
+
+    The rest of the bill of materials is what goes into the assembly; this is
+    what has to be procured so that the made parts can be made -- one piece per
+    part, since cutting several parts out of one piece is a question of layout
+    PartCAD does not answer yet (see 'partcad.procurement'). Each line says
+    which parts it is for.
+    """
+    if not packages:
+        return []
+    blocks = [doc.Heading("Stock", level=level)]
+    blocks.append(doc.Paragraph("What the manufactured parts are made from: one piece for each part made from it."))
+    for package_name in sorted(packages.keys()):
+        entries = packages[package_name]
+        blocks.append(
+            doc.Heading(
+                package_name,
+                level=level + 1,
+                url=package_document_link(project, package_name, dir_path),
+            )
+        )
+        blocks.append(
+            doc.Table(
+                columns=["Stock", "Count", "For", "Description"],
+                aligns=["left", "right", "left", "left"],
+                rows=[
+                    [
+                        name,
+                        entries[name]["count"],
+                        ", ".join(_short_name(project, made) for made in entries[name].get("for") or []),
+                        entries[name].get("desc") or "",
+                    ]
+                    for name in sorted(entries.keys())
+                ],
+            )
+        )
+    return blocks
+
+
+def _short_name(project, name: str) -> str:
+    """An object's name, without its package where that is the document's own."""
+    package_name, _, object_name = name.partition(":")
+    return object_name if package_name == project.name else name
 
 
 def software_blocks(project, packages, dir_path, level=2) -> list:
@@ -629,15 +852,29 @@ async def build_guide_document_async(ctx, project, assembly, images: ImageSource
     A title page, the bill of materials, then every assembly - sub-assemblies
     first - with a page showing what it should look like once it is together and
     a page for each of its steps, and a page of links to close.
+
+    Every page is composed at the same time. What a page costs is its
+    projections, one sandbox process each, and no page is an input to any other;
+    the ceiling on all of it is the one 'images' holds (see
+    '_sandbox_budget()'). 'asyncio.gather' returns results in the order it was
+    given them, so the book reads in the order it was written in whatever order
+    the projections land.
     """
     sections = await collect_sections_async(ctx, assembly)
     grouped = await assembly.get_bom_grouped_async(ctx)
+    count_sections(sections, grouped)
 
-    pages = [await _title_page(project, assembly, images, sections)]
+    composed = await asyncio.gather(
+        _title_page(project, assembly, images, sections),
+        *[_section_pages(project, section, images, len(sections)) for section in sections],
+    )
+
+    pages = [composed[0]]
     pages.append(doc.Page(title="Bill of Materials", blocks=_bom_page_blocks(project, grouped, dir_path)))
+    pages += await _manufacturing_pages(ctx, project, grouped, images)
 
-    for section in sections:
-        pages += await _section_pages(project, section, images, len(sections))
+    for section_pages in composed[1:]:
+        pages += section_pages
 
     pages.append(_links_page(project, assembly, grouped, dir_path))
 
@@ -686,8 +923,7 @@ async def _title_page(project, assembly, images, sections):
     if image is not None:
         blocks.append(doc.ImageRow([image], height=0.5))
 
-    if assembly.desc:
-        blocks.append(doc.Paragraph(assembly.desc))
+    blocks += _prose_blocks(assembly.desc)
 
     properties = [("Package", project.name)]
     author = package_author(project)
@@ -707,63 +943,142 @@ def _bom_page_blocks(project, grouped, dir_path):
     return blocks
 
 
+async def _manufacturing_pages(ctx, project, grouped, images: ImageSource) -> list:
+    """The parts to make before anything is assembled, and how to make each.
+
+    The first thing the book asks of its reader after the bill of materials:
+    every part that is made rather than bought, how many of it, what it is made
+    from, and its manufacturing instructions written out in full (see
+    'partcad.manufacturing_instructions'). Text for now; a picture of each
+    method is for when PartCAD can draw one.
+    """
+    from . import procurement
+    from .manufacturing_instructions import describe
+    from .part_config import PartConfiguration
+
+    manufactured = grouped.get("manufactured") or {}
+    if not manufactured:
+        return []
+
+    entries = [
+        (package_name, name, manufactured[package_name][name])
+        for package_name in sorted(manufactured.keys())
+        for name in sorted(manufactured[package_name].keys())
+    ]
+    parts = await asyncio.gather(
+        *[procurement.get_part_async(ctx, "%s:%s" % (package_name, name)) for package_name, name, _ in entries]
+    )
+    pictures = await asyncio.gather(
+        *[
+            images.shape_image_async(part, alt=name) if part is not None else _nothing()
+            for (_, name, _), part in zip(entries, parts)
+        ]
+    )
+
+    blocks = [doc.Heading("Parts to Manufacture", level=1)]
+    blocks.append(
+        doc.Paragraph(
+            "Make these before assembling anything. Each is made from the stock listed in the bill of materials."
+        )
+    )
+    for (package_name, name, entry), part, picture in zip(entries, parts, pictures):
+        blocks.append(doc.Heading(name, level=2))
+        if picture is not None:
+            blocks.append(doc.ImageRow([picture], height=0.25))
+        blocks += _prose_blocks(entry.get("desc"))
+        properties = [("Package", package_name), ("Needed", str(entry["count"]))]
+        if entry.get("stock"):
+            properties.append(("Made from", entry["stock"]))
+        blocks.append(doc.Properties(properties))
+        if part is None:
+            continue
+        data = PartConfiguration.get_manufacturing_data(part)
+        for line in describe(data, entry.get("stock")):
+            blocks.append(doc.Paragraph(line))
+    return [doc.Page(title="Parts to Manufacture", blocks=blocks)]
+
+
+async def _nothing():
+    return None
+
+
 async def _section_pages(project, section: GuideSection, images: ImageSource, section_count):
+    # The assembly's own picture and every one of its steps at once: they are
+    # separate projections of separate things, and which page each lands on is
+    # decided here rather than by whichever finished first.
+    image, *step_pages = await asyncio.gather(
+        images.shape_image_async(section.assembly, alt=section.name),
+        *[_step_page(section, step, images) for step in section.steps],
+    )
+
     title = "Assembly: %s" % section.name if not section.top else section.name
     blocks = [doc.Heading(title, level=1)]
 
-    image = await images.shape_image_async(section.assembly, alt=section.name)
     if image is not None:
         blocks.append(doc.ImageRow([image], height=0.5))
 
-    desc = getattr(section.assembly, "desc", None)
-    if desc:
-        blocks.append(doc.Paragraph(desc))
-    blocks.append(
-        doc.Properties(
-            [
-                ("Package", section.assembly.project_name),
-                ("Steps", str(len(section.steps))),
-            ]
+    blocks += _prose_blocks(getattr(section.assembly, "desc", None))
+    properties = [
+        ("Package", section.assembly.project_name),
+        ("Steps", str(len(section.steps))),
+    ]
+    if section.count > 1:
+        properties.append(("Needed", "%d" % section.count))
+    blocks.append(doc.Properties(properties))
+    if section.count > 1:
+        blocks.append(
+            doc.Paragraph(
+                "The build needs %d of these. Repeat this section %d times - the steps are the same every time."
+                % (section.count, section.count)
+            )
         )
-    )
     if section.top and section_count > 1:
         blocks.append(doc.Paragraph("Assemble the sub-assemblies documented above before starting on this one."))
+    if section.base_name:
+        blocks.append(doc.Paragraph("Start with %s." % section.base_name))
+        blocks += _prose_blocks(section.base_description)
 
-    pages = [doc.Page(title=section.name, blocks=blocks)]
-
-    for step in section.steps:
-        pages.append(await _step_page(section, step, images))
-
-    return pages
+    return [doc.Page(title=section.name, blocks=blocks)] + step_pages
 
 
 async def _step_page(section: GuideSection, step: GuideStep, images: ImageSource):
+    # The three pictures of a step - the item, what it is joined to, and the two
+    # of them pulled apart - are three unrelated projections, so they are drawn
+    # at once. Two of them may well be the same picture as one on another page,
+    # and 'images' is what makes that one render rather than three.
+    item_image, counterpart_image, exploded = await asyncio.gather(
+        images.shape_image_async(step.item, alt=step.item_name, caption=step.item_name),
+        images.shape_image_async(
+            step.counterpart,
+            key=_counterpart_key(section, step),
+            alt=step.counterpart_name,
+            caption=step.counterpart_name,
+        ),
+        images.shape_image_async(
+            exploded_assembly(step),
+            key="%s-step-%d-exploded" % (section.name, step.number),
+            alt="%s exploded" % step.item_name,
+            caption="Exploded view: the two are shown %.1fmm apart." % step.distance,
+            annotations=[step.gap] if step.gap else None,
+        ),
+    )
+
     blocks = [doc.Heading("%s: step %d of %d" % (section.name, step.number, len(section.steps)), level=1)]
 
-    row = []
-    item_image = await images.shape_image_async(step.item, alt=step.item_name, caption=step.item_name)
-    if item_image is not None:
-        row.append(item_image)
-    counterpart_image = await images.shape_image_async(
-        step.counterpart,
-        key=_counterpart_key(section, step),
-        alt=step.counterpart_name,
-        caption=step.counterpart_name,
-    )
-    if counterpart_image is not None:
-        row.append(counterpart_image)
+    row = [image for image in (item_image, counterpart_image) if image is not None]
     if row:
         blocks.append(doc.ImageRow(row, height=0.3))
 
+    blocks += _prose_blocks(step.item_description)
     blocks.append(doc.Paragraph(step.description()))
+    # Marked as a note, because it is one: a "comment" is context around the
+    # step and never the step itself, and the reader has to be able to tell
+    # which of the two paragraphs is the thing to do.
+    comment = _prose(step.comment)
+    if comment:
+        blocks.append(doc.Paragraph("Note: %s" % comment[0]))
+        blocks += [doc.Paragraph(paragraph) for paragraph in comment[1:]]
 
-    exploded = await images.shape_image_async(
-        exploded_assembly(step),
-        key="%s-step-%d-exploded" % (section.name, step.number),
-        alt="%s exploded" % step.item_name,
-        caption="Exploded view: the two are shown %.1fmm apart." % step.distance,
-        annotations=[step.gap] if step.gap else None,
-    )
     if exploded is not None:
         blocks.append(doc.ImageRow([exploded], height=0.45))
 
@@ -812,7 +1127,7 @@ def _supplier_packages(project, grouped):
     # Parts and sub-assemblies only: this counts what somebody has to source,
     # and the label below says "parts". Where a package's software comes from is
     # already a link of its own, in the software section of the BoM.
-    for kind in ("parts", "assemblies"):
+    for kind in ("parts", "assemblies", "stock"):
         for package_name, entries in (grouped.get(kind) or {}).items():
             if package_name == project.name:
                 continue

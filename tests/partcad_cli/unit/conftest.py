@@ -4,9 +4,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from typing import Iterator
+
 import pytest
 from click.testing import CliRunner, Result
-from typing import Iterator
 
 import partcad as pc
 

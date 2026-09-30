@@ -1,11 +1,12 @@
-import pytest
 import shutil
 from pathlib import Path
-import partcad.logging as pc_logging
-from partcad.context import Context
-from partcad.actions.part import convert_part_action
+
+import pytest
 import yaml
 
+import partcad.logging as pc_logging
+from partcad.actions.part import convert_part_action
+from partcad.context import Context
 from partcad.shape import PART_EXTENSION_MAPPING
 
 ALLOWED_TARGET_FORMATS = {"step", "brep", "stl", "3mf", "threejs", "obj", "gltf", "iges"}
@@ -75,8 +76,9 @@ def test_full_conversion_matrix(source_part: str, target_format: str, tmp_path: 
 
 def test_parse_parameters_in_source_name():
     """Test parsing of parameters embedded in the source name."""
-    from partcad.actions.part.convert import get_final_base_part_config, update_parameters_with_defaults
     from unittest.mock import Mock
+
+    from partcad.actions.part.convert import get_final_base_part_config, update_parameters_with_defaults
 
     mock_project = Mock()
     mock_project.name = "mock_project"
@@ -194,7 +196,7 @@ def test_convert_with_dry_run(tmp_path: Path):
 
     convert_part_action(project, part_name, "step", output_dir=str(output_dir), dry_run=True)
 
-    expected_files = list(output_dir.glob(f"*.step"))
+    expected_files = list(output_dir.glob("*.step"))
     assert not expected_files, "Dry-run mode should not create files."
 
     pc_logging.info("Dry-run conversion verified successfully.")

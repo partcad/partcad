@@ -25,6 +25,7 @@ import struct
 
 import make_icons
 import pytest
+
 from conftest import COMPONENT_ROOT
 
 ICON = COMPONENT_ROOT / "resources" / "partcad-ide.ico"

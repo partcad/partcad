@@ -13,16 +13,13 @@ import hashlib
 import os
 import pathlib
 import platform
-import signal
 import subprocess
 import sys
 
-from . import sandbox_lock
-from . import sandbox_versions
-from . import runtime
 from . import logging as pc_logging
+from . import runtime, sandbox_lock, sandbox_versions, telemetry
+from .process_crash import describe_exit_code, describe_termination  # noqa: F401  (re-exported)
 from .process_output import decode as decode_output
-from . import telemetry
 
 # Every session v-env directory is named this way, which is what lets the
 # environment lock recover the session hash from the path alone.
@@ -140,25 +137,6 @@ def clear_reassert(path: str, python_package: str) -> None:
         os.remove(get_reassert_path(path, python_package))
 
 
-def describe_exit_code(returncode: int) -> str:
-    """Describe a process exit code, naming the signal if it was killed by one."""
-    # POSIX reports a signal death as a negative returncode
-    if returncode < 0:
-        try:
-            name = signal.Signals(-returncode).name
-        except ValueError:
-            name = "unknown signal"
-        return "killed by signal %d (%s)" % (-returncode, name)
-    # Windows surfaces native crashes as large unsigned status codes
-    known_windows_faults = {
-        3221225477: "EXCEPTION_ACCESS_VIOLATION",
-        3221226356: "STATUS_HEAP_CORRUPTION",
-    }
-    if returncode in known_windows_faults:
-        return "exit code %d (%s)" % (returncode, known_windows_faults[returncode])
-    return "exit code %d" % returncode
-
-
 def package_requirements(project) -> list[str]:
     """What a package declares its Python sandbox needs.
 
@@ -197,6 +175,21 @@ def package_requirements(project) -> list[str]:
                     continue
                 dependencies.append(line)
     return [dep for dep in dependencies if dep]
+
+
+def shape_docker_image(config, project):
+    """The image one shape's sandbox is built from.
+
+    The shape's own declaration, then the package's. Same order as
+    'pythonVersion' and 'pythonRequirements', and for the same reason: what a
+    shape needs is nearer to it than what its package needs, and a package-wide
+    image is the fallback rather than the answer. Reading only the package's
+    meant a part naming an image was rendered without it -- in an environment
+    that could be missing exactly the native library the part named it for.
+
+    Module-level for the same reason 'shape_requirements' is.
+    """
+    return (config or {}).get("dockerImage") or getattr(project, "docker_image_declared", None)
 
 
 def shape_requirements(config) -> list[str]:
@@ -588,16 +581,22 @@ class PythonRuntime(runtime.Runtime):
                 sanitized_cmd = copy.copy(cmd)
                 sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
                 span.set_attribute("cmd", " ".join(sanitized_cmd))
+                argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, self._subprocess_env())
+                # Bytes rather than text, like 'run_async_onced' beside it: the
+                # output is decoded by 'process_output.decode', which replaces a
+                # byte it cannot read instead of raising on it. Asking Popen for
+                # 'encoding="utf-8"' would decode strictly, before that ever ran
+                # -- and it also made 'communicate' reject the encoded stdin two
+                # lines below, so this path raised on the way in as well as out.
                 p = subprocess.Popen(
-                    cmd,
+                    argv,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     shell=False,
-                    encoding="utf-8",
-                    env=self._subprocess_env(),
+                    env=spawn_env,
                     # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                    cwd=cwd,
+                    cwd=spawn_cwd,
                 )
                 stdout, stderr = p.communicate(
                     input=stdin.encode(),
@@ -629,22 +628,25 @@ class PythonRuntime(runtime.Runtime):
             # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
             exitcode = 0 if p.returncode in [3221226356, 3221225477] else p.returncode
 
-            if exitcode != 0 and not stdout and not stderr:
-                # Neither a traceback nor stderr means the interpreter died
-                # before it could report anything, which is what a native crash
-                # looks like: most often two incompatible OCP builds loaded into
-                # one process. Say so here, otherwise the only symptom is an
-                # unrelated AttributeError on a None shape much further away.
+            if exitcode != 0:
+                # A negative exit code means the interpreter was killed rather
+                # than that it failed, and the caller reports whatever comes
+                # back from here -- left to itself, the raw number, which names
+                # neither the signal nor the fact that there was one. So say it
+                # here, once, for every caller.
                 #
-                # Warning rather than error on purpose: pc_logging.error() sets
-                # the global had_errors flag that becomes a non-zero exit code,
-                # and the caller that consumes this exit code already reports
-                # the failure itself. This line only explains why it happened.
-                pc_logging.warning(
-                    "%s terminated abnormally (%s) without any output. This usually means conflicting "
-                    "native dependencies, such as mismatched cadquery-ocp versions, in %s"
-                    % (cmd, describe_exit_code(p.returncode), path if path else self.path)
+                # Saying nothing at all on the way out is the case worth
+                # guessing about: it is what a native crash looks like, and a
+                # fault in the CAD kernel and two incompatible OCP builds are
+                # the two things that produce it.
+                crash = describe_termination(
+                    cmd,
+                    p.returncode,
+                    where=path if path else self.path,
+                    silent=not stdout and not stderr,
                 )
+                if crash:
+                    stderr = crash if not stderr else stderr.rstrip() + "\n" + crash
 
             return exitcode, stdout, stderr
 
@@ -747,15 +749,17 @@ class PythonRuntime(runtime.Runtime):
                     sanitized_cmd = copy.copy(cmd)
                     sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
                     span.set_attribute("cmd", " ".join(sanitized_cmd))
+                    argv, spawn_cwd, spawn_env = self._spawn(cmd, cwd, self._subprocess_env())
+                    # See the note beside the same line in 'run_onced'.
                     p = await asyncio.create_subprocess_exec(
-                        *cmd,
+                        *argv,
                         stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         shell=False,
-                        env=self._subprocess_env(),
+                        env=spawn_env,
                         # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                        cwd=cwd,
+                        cwd=spawn_cwd,
                     )
                     stdout, stderr = await runtime.communicate(p, stdin.encode(), timeout)
 
@@ -784,22 +788,25 @@ class PythonRuntime(runtime.Runtime):
             # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
             exitcode = 0 if p.returncode in [3221226356, 3221225477] else p.returncode
 
-            if exitcode != 0 and not stdout and not stderr:
-                # Neither a traceback nor stderr means the interpreter died
-                # before it could report anything, which is what a native crash
-                # looks like: most often two incompatible OCP builds loaded into
-                # one process. Say so here, otherwise the only symptom is an
-                # unrelated AttributeError on a None shape much further away.
+            if exitcode != 0:
+                # A negative exit code means the interpreter was killed rather
+                # than that it failed, and the caller reports whatever comes
+                # back from here -- left to itself, the raw number, which names
+                # neither the signal nor the fact that there was one. So say it
+                # here, once, for every caller.
                 #
-                # Warning rather than error on purpose: pc_logging.error() sets
-                # the global had_errors flag that becomes a non-zero exit code,
-                # and the caller that consumes this exit code already reports
-                # the failure itself. This line only explains why it happened.
-                pc_logging.warning(
-                    "%s terminated abnormally (%s) without any output. This usually means conflicting "
-                    "native dependencies, such as mismatched cadquery-ocp versions, in %s"
-                    % (cmd, describe_exit_code(p.returncode), path if path else self.path)
+                # Saying nothing at all on the way out is the case worth
+                # guessing about: it is what a native crash looks like, and a
+                # fault in the CAD kernel and two incompatible OCP builds are
+                # the two things that produce it.
+                crash = describe_termination(
+                    cmd,
+                    p.returncode,
+                    where=path if path else self.path,
+                    silent=not stdout and not stderr,
                 )
+                if crash:
+                    stderr = crash if not stderr else stderr.rstrip() + "\n" + crash
 
             return exitcode, stdout, stderr
 
@@ -1013,7 +1020,7 @@ class PythonRuntime(runtime.Runtime):
         if path is None:
             if session is None or not session["dirty"]:
                 # Use the full interpreter path if known
-                if not self.exec_path is None:
+                if self.exec_path is not None:
                     return self.exec_path
                 # If the full path is not known, use the interpreter name
                 path = self.path

@@ -10,16 +10,15 @@
 import copy
 import typing
 
-from . import part_factory_alias as pfa
 from . import logging as pc_logging
+from . import part_factory_alias as pfa
+from . import telemetry
 from .enrich import (
     adopt_source_config,
     enriched_source_name,
     resolve_source_again,
     warn_about_ignored_properties,
 )
-
-from . import telemetry
 
 
 @telemetry.instrument()

@@ -31,6 +31,8 @@ develIndex: true
 offline: true
 threadsMax: 3
 pythonSandbox: pypy
+remoteSandbox: client.example:5050
+remoteSandboxToken: client-secret
 cacheFiles: false
 logLevel: error
 git:
@@ -59,6 +61,8 @@ develIndex: false
 offline: false
 threadsMax: 9
 pythonSandbox: none
+remoteSandbox: daemon.example:5050
+remoteSandboxToken: daemon-secret
 cacheFiles: true
 logLevel: debug
 git:
@@ -126,6 +130,30 @@ def test_every_option_travels(homes):
         assert key in data, "%s never reaches the daemon" % key
 
 
+def test_a_sandbox_nobody_declared_does_not_arrive_declared(tmp_path, monkeypatch):
+    """The value cannot say whether it was asked for.
+
+    Every process resolves a 'pythonSandbox', so the copy always carries one.
+    Read back as a statement, it made the daemon obey a startup default and
+    never upgrade to 'docker' -- while the same command run in the client did.
+    """
+    monkeypatch.delenv("PC_PYTHON_SANDBOX", raising=False)
+    monkeypatch.setenv("HOME", str(config_at(tmp_path, "quiet", "")))
+
+    data = UserConfig().to_dict()
+
+    assert data["pythonSandboxDeclared"] is False
+    assert UserConfig(settings=data).python_sandbox_declared is False
+
+
+def test_a_sandbox_somebody_declared_arrives_declared(homes):
+    build, client_home, _ = homes
+    data = build(client_home).to_dict()
+
+    assert data["pythonSandboxDeclared"] is True
+    assert UserConfig(settings=data).python_sandbox_declared is True
+
+
 def test_an_unset_option_is_left_out_rather_than_sent_as_null(tmp_path, monkeypatch):
     """Sending null would override the option with an empty value instead of
     letting it fall back to the same default. 'threadsMax' is the one that shows
@@ -150,6 +178,10 @@ def test_an_unset_option_is_left_out_rather_than_sent_as_null(tmp_path, monkeypa
         ("offline", True),
         ("threads_max", 3),
         ("python_sandbox", "pypy"),
+        # The one option with no default at all: unset it resolves to nothing
+        # and is left out of the copy, so the only way the daemon can learn
+        # where the caller's remote sandbox service is, is from the caller.
+        ("remote_sandbox", "client.example:5050"),
         ("cache", False),
         ("log_level", "error"),
         ("git_clone_timeout", 42),

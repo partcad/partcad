@@ -20,6 +20,7 @@ thing under test.
 import sys
 
 import pytest
+
 from partcad_client import client
 
 

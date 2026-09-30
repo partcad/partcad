@@ -13,7 +13,7 @@ from partcad_ide_client import protocol
 
 
 def test_frame_roundtrip():
-    message = {"type": protocol.MSG_SHOW, "id": "abc", "objects": []}
+    message = {"type": protocol.MSG_SHOW, "id": "abc", protocol.KEY_OBJECT: None}
     frame = protocol.encode_frame(message)
 
     header, payload = frame[: protocol.HEADER_LENGTH], frame[protocol.HEADER_LENGTH :]
@@ -47,16 +47,22 @@ def test_gltf_rejects_non_bytes():
         protocol.encode_gltf("not bytes")
 
 
-def test_make_object_and_is_object():
-    obj = protocol.make_object(b"glTF", name="//pkg:part", label="part")
+def test_make_node_and_is_node():
+    node = protocol.make_node(b"glTF", name="//pkg:part", label="part")
 
-    assert protocol.is_object(obj)
-    assert obj[protocol.KEY_NAME] == "//pkg:part"
-    assert obj[protocol.KEY_LABEL] == "part"
-    assert protocol.decode_gltf(obj[protocol.KEY_GLTF]) == b"glTF"
+    assert protocol.is_node(node)
+    assert node[protocol.KEY_NAME] == "//pkg:part"
+    assert node[protocol.KEY_LABEL] == "part"
+    assert protocol.decode_gltf(node[protocol.KEY_GLTF]) == b"glTF"
+    # A part is a tree one node deep: nothing inside it, and no key saying so.
+    assert protocol.KEY_ASSEMBLY not in node
 
-    assert not protocol.is_object({"name": "//pkg:part"})
-    assert not protocol.is_object("//pkg:part")
+    # A node that holds others rather than geometry is a node too - an assembly's
+    # own node is exactly that.
+    assert protocol.is_node(protocol.make_node(name="//pkg:mount", children=[]))
+
+    assert not protocol.is_node({"name": "//pkg:part"})
+    assert not protocol.is_node("//pkg:part")
 
 
 def test_decode_header_rejects_bad_magic():

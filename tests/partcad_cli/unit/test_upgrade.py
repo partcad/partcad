@@ -16,6 +16,7 @@ from collections.abc import Iterator
 
 import pytest
 from click.testing import CliRunner
+
 from partcad_cli.click.command import cli
 from partcad_client import selfupdate
 from partcad_utils.user_config import user_config

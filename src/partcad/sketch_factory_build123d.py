@@ -9,13 +9,9 @@
 
 import os
 
-from .sketch_factory_python import SketchFactoryPython
-from . import wrapper
-from . import shape_envelope
 from . import logging as pc_logging
-
-from . import sandbox_versions
-from . import telemetry
+from . import sandbox_versions, shape_envelope, telemetry, wrapper
+from .sketch_factory_python import SketchFactoryPython
 
 
 @telemetry.instrument()
@@ -109,7 +105,10 @@ class SketchFactoryBuild123d(SketchFactoryPython):
             )
             if exitcode != 0 and len(errors) == 0:
                 errors = "%s: %s: Failed to instantiate" % (sketch.project_name, sketch.name)
-                pc_logging.debug("%s: %s: Failed to execute command: '%s' with exitcode %s" % (sketch.project_name, sketch.name, " ".join(command), exitcode))
+                pc_logging.debug(
+                    "%s: %s: Failed to execute command: '%s' with exitcode %s"
+                    % (sketch.project_name, sketch.name, " ".join(command), exitcode)
+                )
 
             if len(errors) > 0:
                 error_lines = errors.split("\n")

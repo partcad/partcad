@@ -16,15 +16,12 @@ produces the shape(s) (see wrappers/wrapper_part_type.py).
 import base64
 import os
 
+from . import logging as pc_logging
+from . import sandbox_versions, shape_envelope, telemetry, transform, wrapper
 from .part_factory import PartFactory
+from .process_crash import describe_exit_code
 from .runtime_python import environment_requirements
 from .utils import resolve_resource_path
-from . import logging as pc_logging
-from . import sandbox_versions
-from . import shape_envelope
-from . import telemetry
-from . import transform
-from . import wrapper
 
 
 @telemetry.instrument()
@@ -35,12 +32,10 @@ class PartFactoryWrapper(PartFactory):
 
             # 'type' is '<package>:<partType>' by the time we get here.
             self.part_type_ref = config["type"]
-            self.part_type_package, self.part_type_name = resolve_resource_path(
-                target_project.name, self.part_type_ref
-            )
+            self.part_type_package, self.part_type_name = resolve_resource_path(target_project.name, self.part_type_ref)
 
             python_version = self.project.python_version or sandbox_versions.DEFAULT_PYTHON_VERSION
-            self.runtime = self.ctx.get_python_runtime(python_version)
+            self.runtime = self.ctx.get_python_runtime(python_version, image=self.project.docker_image_declared)
             self.session = self.runtime.get_session(source_project.name)
 
             self._create(config)
@@ -56,7 +51,15 @@ class PartFactoryWrapper(PartFactory):
         key - no more than a partType changing its wrapper script does today.
         """
         return sandbox_versions.environment_cache_key(
-            "python", self.runtime.version, environment_requirements(self.project, self.config)
+            "python",
+            self.runtime.version,
+            environment_requirements(self.project, self.config),
+            # What the sandbox was actually built in, not what was asked for: a
+            # 'dockerImage' that could not be pulled falls back to PartCAD's own
+            # (see 'Context.get_python_runtime'), and the shape then belongs to
+            # the image it was really built in. 'getattr' because only the
+            # container-backed runtimes have one.
+            image=getattr(self.runtime, "image", None),
         )
 
     async def _materialize_wrapper_script(self, pt_project, script_rel):
@@ -95,9 +98,7 @@ class PartFactoryWrapper(PartFactory):
 
             pt_config = pt_project.get_part_type_config(self.part_type_name)
             if pt_config is None:
-                part.error(
-                    "partType '%s' not found in '%s'" % (self.part_type_name, self.part_type_package)
-                )
+                part.error("partType '%s' not found in '%s'" % (self.part_type_name, self.part_type_package))
                 return None
 
             kind = pt_config.get("kind", "wrapper")
@@ -153,10 +154,10 @@ class PartFactoryWrapper(PartFactory):
                 session=self.session,
             )
             if exitcode != 0 and not errors:
-                errors = "%s: %s: partType wrapper failed (exit code %s)" % (
+                errors = "%s: %s: partType wrapper failed (%s)" % (
                     part.project_name,
                     part.name,
-                    exitcode,
+                    describe_exit_code(exitcode),
                 )
             if errors:
                 for line in errors.split("\n"):

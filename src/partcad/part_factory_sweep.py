@@ -7,12 +7,11 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .part_factory import PartFactory
-from .sketch import Sketch
 from . import logging as pc_logging
-from . import wrapper
-from . import shape_envelope
-from . import sandbox_versions
+from . import sandbox_versions, shape_envelope, wrapper
+from .part_factory import PartFactory
+from .process_crash import describe_exit_code
+from .sketch import Sketch
 
 
 class PartFactorySweep(PartFactory):
@@ -102,7 +101,7 @@ class PartFactorySweep(PartFactory):
                     [wrapper_path, "sweep"], request_serialized
                 )
                 if exitcode != 0 and not errors:
-                    errors = "%s: %s: sweep failed with exit code %s" % (part.project_name, part.name, exitcode)
+                    errors = "%s: %s: sweep failed: %s" % (part.project_name, part.name, describe_exit_code(exitcode))
                 if errors:
                     pc_logging.error(errors)
                     raise Exception(errors)

@@ -10,15 +10,15 @@
 import copy
 import typing
 
-from . import sketch_factory_alias as sfa
 from . import logging as pc_logging
+from . import sketch_factory_alias as sfa
+from . import telemetry
 from .enrich import (
     adopt_source_config,
     enriched_source_name,
     resolve_source_again,
     warn_about_ignored_properties,
 )
-from . import telemetry
 
 
 @telemetry.instrument()

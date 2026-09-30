@@ -17,39 +17,51 @@ docs:
     `connect*` sections are all available in it; `how` is not, because nothing
     in a scene was assembled and there is nothing to say about the assembling.
 
-    `warehouse` is a Gazebo world (SDFormat) used directly, the way
-    `produce_assembly_urdf` uses a URDF. Every shape its models place becomes a
-    part of this package, named `<scene>/<model>/<link>`:
+    ### A simulation engine's own format is somebody else's package
 
-    ```shell
-    pc inspect warehouse/pallet_a/link
-    pc info warehouse
+    A scene can equally be held in the format a simulation engine describes a
+    world in -- SDFormat for Gazebo, MJCF for MuJoCo -- and read from there
+    directly, the way `produce_assembly_urdf` reads a URDF. PartCAD implements
+    neither: reading such a file, writing one, launching the application on it
+    and running physics with it are one body of knowledge about one engine, and
+    each lives in that engine's package,
+    [partcad-sim-gazebo](https://github.com/partcad/partcad-sim-gazebo) and
+    [partcad-sim-mujoco](https://github.com/partcad/partcad-sim-mujoco).
+
+    A package that wants one imports it and names the type through it:
+
+    ```yaml
+    dependencies:
+      sim-gazebo:
+        type: git
+        url: https://github.com/partcad/partcad-sim-gazebo.git
+
+    scenes:
+      warehouse:
+        type: sim-gazebo:world
+        path: warehouse.world
     ```
 
-    Either scene exports to a Gazebo world, which is the format a scene has:
+    Every shape the world's models place then becomes a part of that package,
+    named `<scene>/<model>/<link>`, and `pc convert scene` rewrites the package
+    around it in either direction. Those repositories carry a world of their own
+    to try it on; this example stays self-contained on purpose, so that building
+    it needs nothing fetched from anywhere.
+
+    A scene exports to an engine's format the same way:
 
     ```shell
-    pc export -S -t world -O ./ bench
+    pc export -S -t sim-gazebo:world -O ./ bench
     ```
 
-    And `pc convert scene` rewrites the package around one, in either
-    direction: to `assy` it copies every shape the world places into the package
-    as a part of its own, and to `world` it writes the `.world` file and the
-    meshes it references.
-
-    ```shell
-    pc convert scene -t assy warehouse
-    ```
+# No 'dependencies:' on purpose. A scene held in an engine's own format needs
+# that engine's package (see the usage text above), and this example is one of
+# the packages 'Examples (PartCAD)' builds on every pull request -- so giving it
+# an external repository to fetch would put a network round trip, and somebody
+# else's release cycle, in front of a required check. The engine packages carry
+# a world of their own to demonstrate the same thing.
 
 scenes:
   bench:
     type: assy
     desc: Two primitives standing where they stand
-  warehouse:
-    type: world
-    desc: A Gazebo world (SDFormat) used directly as a PartCAD scene
-    # A link that states both a visual and a collision shape is built from the
-    # collision one, which is what a simulator resolves contact against.
-    # 'ignoreCollision: true' - or a list of link names - builds from the visual
-    # geometry instead.
-    ignoreCollision: false

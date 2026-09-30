@@ -133,9 +133,7 @@ def init(hook, log_file: str = None, file_level: int = logging.DEBUG) -> None:
         _forward_handler.set_hook(hook)
 
     if log_file is not None and _file_handler is None:
-        _file_handler = RotatingFileHandler(
-            log_file, maxBytes=FILE_MAX_BYTES, backupCount=FILE_BACKUP_COUNT
-        )
+        _file_handler = RotatingFileHandler(log_file, maxBytes=FILE_MAX_BYTES, backupCount=FILE_BACKUP_COUNT)
         _file_handler.setLevel(file_level)
         _file_handler.addFilter(_PcEventFilter())
         _file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))

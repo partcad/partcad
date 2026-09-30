@@ -427,8 +427,10 @@ Three things, at three levels:
 
 ## OpenSCAD
 
-The Linux and Windows bundles carry OpenSCAD, pinned to the version in `build.sh` and downloaded from
-`files.openscad.org` at build time (checksum-verified). `partcad.healthcheck.openscad.find_executable()` prefers it over
+Every bundle but Linux arm64 carries OpenSCAD, and they all carry **the same build** — that is what makes a
+`.scad` part render the same wherever `pc` runs. The three download URLs, their checksums and the version live
+in one block, `OPENSCAD BUILDS` at the top of `build.sh`, which is also where the reasoning below is written
+down for whoever bumps it next; nothing else in the build composes a URL of its own. `partcad.healthcheck.openscad.find_executable()` prefers it over
 any OpenSCAD on the host, and falls back to `shutil.which` when there is no bundled copy — which is what the
 wheels always do. A user can opt out of the bundled copy with `--ignore-bundled-openscad` /
 `IGNORE_BUNDLED_OPENSCAD=1` (`user_config.ignore_bundled_openscad`), which makes the resolver skip the
@@ -437,14 +439,88 @@ where the AppImage's library dependencies are absent.
 
 | | what ships | self-contained |
 | --- | --- | --- |
-| Linux x86_64 | the AppImage, unpacked | no — needs `libGL`, `libX11`, `libxcb`, fontconfig, freetype, glib, harfbuzz from the host |
+| Linux x86_64 | the AppImage, unpacked | no — needs `libGL`, `libX11`, `libxcb`, fontconfig, freetype, glib and harfbuzz from the host |
 | Linux arm64 | nothing | — |
-| Windows | the portable build | yes — one statically linked `openscad.exe`, no DLLs |
-| macOS, both architectures | nothing | — |
+| Windows | the portable zip | yes — `openscad.exe` and `openscad.com`, no DLLs |
+| macOS, both architectures | `OpenSCAD.app` out of the `.dmg` | yes — its Qt frameworks are inside the `.app` |
 
-Linux arm64 carries nothing because upstream publishes the pinned 2021.01 AppImage for x86_64 only; running it
-under emulation is not something a bundle should quietly require. `pc` there uses the host's OpenSCAD, exactly
-as the wheels do.
+Linux arm64 carries nothing because upstream builds no current arm64 snapshot. The only two aarch64 artifacts
+in the whole directory are one-offs from 2021 and 2023, under a naming scheme (`...ai-aarch64`) it no longer
+uses. `pc` there uses the host's OpenSCAD, exactly as the wheels do.
+
+### One build for every platform
+
+The requirement is stronger than "the same version number": every platform carries OpenSCAD built from the
+**same upstream source**, which the snapshot date in the filenames is what identifies. OpenSCAD's language and
+its exports both move between builds, so bundles built from different sources disagree about what a `.scad`
+file means — a part that renders on one machine could fail to parse, or render differently, on another. An
+older date that all three platforms share therefore beats a newer one that they do not, and no platform is
+ever bumped alone. `build.sh` carries the command that finds the newest date with all three artifacts, which
+is not the same as the newest date in the directory.
+
+### It is a development snapshot, and the pin expires
+
+**The version is a snapshot, not a release.** That is forced, not preferred. The last release, 2021.01, cannot
+be the one version every platform shares:
+
+* It is **x86_64 only**, so an arm64 Mac would need Rosetta 2, which a clean machine does not have. Homebrew's
+  `openscad` cask states this with a `requires_rosetta` caveat.
+* Homebrew **disabled that cask outright** on 2026-09-01, `because: :fails_gatekeeper_check`. It is also what
+  took every macOS CI job down until #583.
+
+So one version across platforms has to be a snapshot. Three consequences follow, and all three are the reason
+this section is long:
+
+1. **The pin expires.** Upstream prunes `snapshots/` on a rolling window of about a year — measured at 143
+   Linux and Windows builds spanning 368 days and 119 macOS builds spanning 365. A pin left alone for a year
+   stops resolving, and then **no bundle builds on any platform**, the release included. It fails loudly: the
+   fetch 404s, `fetch_and_verify` does not retry a 4xx, and `stage_openscad` prints what to do. This is the
+   single biggest maintenance liability in this file. The durable fix, not done here, is to mirror the three
+   artifacts somewhere the project controls.
+2. **A bump picks a date from the listing rather than constructing one.** Builds are not nightly — roughly one
+   every 2.6 days — and a given date can be missing a platform, with gaps up to 35 days on Linux and Windows
+   and 76 on macOS. The date has to be one where all three artifacts exist.
+3. **Checksums are pinned as literals, not read from the sidecars.** Upstream does publish a correct `.sha256`
+   (and `.sha512`) beside every snapshot, and the build could read those — but a snapshot directory is
+   rolling, and pinning the bytes rather than the name is what stops a rebuild of a given PartCAD version
+   picking up something republished under the date it asked for. So a bump moves four values together:
+   `OPENSCAD_VERSION` and the three `OPENSCAD_SHA256_*`. The conda payload still reads its sidecar; its
+   upstream is a tagged release, which does not move.
+
+The three artifact names have almost nothing in common — `-x86_64` on Linux, `-x86-64` on Windows, and no
+architecture token at all on macOS — and the Windows zip sits beside an `-x86-64-Installer.exe` that differs
+from it only by a suffix. They are spelled out in the `case` rather than composed, for that reason.
+
+### Per-platform staging
+
+**Windows** takes the portable zip. Its single top-level directory is named after the zip itself
+(`OpenSCAD-<version>-x86-64`), and `build.sh` derives it from the artifact name rather than hardcoding it.
+Worth knowing that the *release* zips did not follow this rule — 2021.01's inner directory was the lowercase
+`openscad-2021.01` — so a hardcoded name carried over from the release era would have moved nothing at all,
+silently.
+
+**macOS** takes the `.dmg`. `build.sh` attaches it read-only at an explicit mount point under `build/`, copies
+`OpenSCAD.app` out with `ditto`, and detaches — on the failure path too, and without a trap, since `set -e`
+unwinding a function does not reliably run a `RETURN` trap and an `EXIT` trap would displace the smoke test's.
+The explicit mount point is not fastidiousness: the volume is named `OpenSCAD` with no date in it, so every
+snapshot mounts at the same `/Volumes/OpenSCAD`, and a name already taken is silently suffixed
+(`/Volumes/OpenSCAD 1`) rather than refused — so a second build, or a stale mount from an interrupted one,
+would have the copy read whichever image got there first. `ditto` rather than `cp -R` because this app is
+signed and notarized, and that is macOS's own bundle copier.
+
+One `.dmg` serves both Mac architectures because it is a **Universal 2** binary: `lipo -archs` on
+`OpenSCAD.app/Contents/MacOS/OpenSCAD` prints `x86_64 arm64`. That was an open question in this file for a
+while and it is now measured, not inferred.
+
+The `.app` is carried entire rather than reduced to the binary inside it: that binary resolves its Qt
+frameworks through `@executable_path/../Frameworks`, so the layout around it is what makes it runnable — the
+same reason Linux keeps the whole AppImage tree. `BUNDLED_SUBPATH` in `partcad.healthcheck.openscad` and the
+staging in `build.sh` have to agree on that path; a unit test pins all three platforms' layouts, since the one
+being described is never the one the test run is on.
+
+What only a runner can answer is whether the signed `.app` survives `ditto` → `tar.xz` → download → untar and
+still launches. The `Run the bundled OpenSCAD after installation` step in `build-standalone.yml` is that check,
+and it runs on macOS as well as Linux x86_64.
 
 The AppImage ships *unpacked* because running it as an image needs FUSE, which a minimal host may not have.
 
@@ -455,21 +531,10 @@ and glib beside the ones Python needs, on the frozen application's own library s
 ~100MB. That means a bare `pyinstaller partcad.spec` produces a bundle without OpenSCAD; `build.sh` is the
 supported way to build one, as it already is for the dependency pre-flight.
 
-macOS is excluded because the 2021.01 release predates Apple silicon and ships an x86_64-only `.dmg`, which
-on the arm64 bundle would require Rosetta 2 — absent from a clean machine. Development snapshots may be
-universal binaries, but they are snapshots and their architecture has not been confirmed; `lipo -archs` on a
-mounted snapshot `.dmg` would settle it.
-
-The `macos-15-x86_64` bundle is the one where that argument does not apply — the pinned `.dmg` is for exactly
-that architecture — and it still carries nothing, deliberately. Two macOS bundles that differ in what is inside
-them are two behaviours to explain, to health-check and to support, on the architecture that is being retired;
-and `build.sh` would have to learn to mount and copy out of a `.dmg` to gain it. `pc` on an Intel Mac uses the
-host's OpenSCAD, exactly as the wheels do. If that changes, it is a one-architecture payload and this paragraph
-is where to say so.
-
-To move to a different OpenSCAD, change `OPENSCAD_VERSION` in `build.sh`. Upstream publishes a `.sha256` next
-to each artifact and the build verifies it, so nothing else needs updating — but note the published checksum
-files name a `releases/` path rather than the bare file, which is why the build compares the hash alone.
+To move to a different OpenSCAD, replace the `OPENSCAD BUILDS` block at the top of `build.sh` wholesale — the
+version, the three URLs and the three checksums, all naming one date. That block documents how to find a date
+that qualifies and how the three filenames differ; a startup check refuses a bump that moved the version but
+left a URL behind.
 
 That sandbox is also why `partcad/wrappers/*.py` are bundled as *data* rather than frozen as modules: they are
 handed to that other interpreter as a file path.

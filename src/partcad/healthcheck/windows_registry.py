@@ -6,8 +6,9 @@
 
 import platform
 
-from .tests import HealthCheckReport, HealthCheckTest
 import partcad.logging as pc_logging
+
+from .tests import HealthCheckReport, HealthCheckTest
 
 if platform.system() == "Windows":
     import winreg

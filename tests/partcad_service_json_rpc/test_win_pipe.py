@@ -27,6 +27,7 @@ import subprocess
 import sys
 
 import pytest
+
 from partcad_service_json_rpc import win_pipe
 from partcad_service_json_rpc.win_pipe import _launcher_argv, spawn_pipe_daemon
 from partcad_utils.win_pipe import pipe_name

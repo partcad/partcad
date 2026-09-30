@@ -15,12 +15,44 @@ pc inspect bone
 <table><tr>
 <td valign=top><a href="bone.py"><img src="././bone.svg" alt="bone" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Plate used as one of the bones on PartCAD logo</td>
+<td valign=top>Parameters:<br/><ul>
+<li>tolerance: 0.2</li>
+<li>bore: 7.188</li>
+</ul>
+</td>
+</tr></table>
+
+### bone_tapped
+<table><tr>
+<td valign=top><a href="bone.py"><img src="././bone_tapped.svg" alt="bone_tapped" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>The same plate, tapped M8 so the bolt takes hold in it</td>
+<td valign=top>Parameters:<br/><ul>
+<li>tolerance: 0.2</li>
+<li>bore: 8.0</li>
+</ul>
+</td>
 </tr></table>
 
 ### head_half
 <table><tr>
 <td valign=top><a href="head_half.py"><img src="././head_half.svg" alt="head_half" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Bracket used as one side of the head on PartCAD logo</td>
+<td valign=top>Parameters:<br/><ul>
+<li>tolerance: 0.2</li>
+<li>bore: 9.0</li>
+</ul>
+</td>
+</tr></table>
+
+### head_half_tapped
+<table><tr>
+<td valign=top><a href="head_half.py"><img src="././head_half_tapped.svg" alt="head_half_tapped" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>The same bracket, tapped M8 so the bolt takes hold in it</td>
+<td valign=top>Parameters:<br/><ul>
+<li>tolerance: 0.2</li>
+<li>bore: 8.0</li>
+</ul>
+</td>
 </tr></table>
 
 <br/><br/>

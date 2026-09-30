@@ -19,9 +19,9 @@ import os
 
 import pytest
 import yaml
+from http_server import serve
 
 import partcad as pc
-from http_server import serve
 from partcad.actions.add import (
     add_object_from_url_async,
     filename_from_url,

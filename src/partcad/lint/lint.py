@@ -1,12 +1,13 @@
 import json
-from enum import Enum
 from abc import ABC, abstractmethod
+from enum import Enum
 
-from ..project import Project
-from ..context import Context
+from partcad.cache_hash import CacheHash
+
 from .. import logging as pc_logging
 from ..concurrency import ReentrantGate
-from partcad.cache_hash import CacheHash
+from ..context import Context
+from ..project import Project
 
 # Separate from the tests' gate: the two limits are unrelated. Per loop for the
 # same reason, though -- the daemon runs one 'asyncio.run()' per request, so a
@@ -21,9 +22,11 @@ def semaphore_wrapper(f):
 
     return wrapper
 
+
 class Severity(Enum):
     FAILED = 1
     WARNING = 2
+
 
 class LintingReport:
     def __init__(self, package: str) -> None:
@@ -81,12 +84,7 @@ class Linting(ABC):
 
         result: LintingReport = await self.validate(ctx, package, target, lint_ctx)
 
-        await ctx.cache_lints.write_data_async(
-          hash,
-          {
-            cache_key: json.dumps(result.to_dict()).encode()
-          }
-        )
+        await ctx.cache_lints.write_data_async(hash, {cache_key: json.dumps(result.to_dict()).encode()})
 
         return result
 

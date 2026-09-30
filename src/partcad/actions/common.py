@@ -1,6 +1,7 @@
-from typing import Callable, Union
+from typing import Callable, Optional, Union
 
 from partcad import logging as pc_logging
+from partcad import shape_ports
 from partcad.context import Context
 from partcad.project import Project
 from partcad.shape import Shape
@@ -12,7 +13,17 @@ def _search(
     recursive: bool,
     keyword: str,
     get_items: Callable[[Project], list[Union[Project, Shape]]],
+    kind: Optional[str] = None,
+    interface: Optional[str] = None,
 ) -> list[Union[Project, Shape]]:
+    """The objects of a package (and, recursively, of those below it) that match.
+
+    'keyword' is matched against the declaration as text. 'interface' is matched
+    against what the object connects by: it selects the objects that implement
+    that interface or anything derived from it, read from the declarations
+    through 'shape_ports.interface_index' rather than by instantiating anything.
+    Both may be given, and then both have to hold.
+    """
     project = ctx.get_project(package)
     if project is None or project.broken:
         if project is None:
@@ -40,7 +51,8 @@ def _search(
             pc_logging.warning("Skipping unavailable or broken package: %s" % package_name)
             continue
 
-        for item in get_items(package):
+        items = shape_ports.implementers(ctx, package, kind, interface) if interface else get_items(package)
+        for item in items:
             if keyword and not item.matches(keyword):
                 continue
             result.append(item)

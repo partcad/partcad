@@ -25,6 +25,9 @@ Feature: `enrich` objects
 
   @success @pc-enrich @pc-enrich-ignored
   Scenario: Build-affecting properties on an enrich are ignored, and said so
+    # Asked of a command that resolves the object. A listing reads what the
+    # package declares and creates nothing, so it has nothing to say about how
+    # an object would be built (see 'Project.object_descriptions').
     Given a file named "partcad.yaml" with content:
       """
       parts:
@@ -46,7 +49,7 @@ Feature: `enrich` objects
             width:
               default: 30.0
       """
-    When I run "partcad list parts"
+    When I run "partcad info cube_wide"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "WARN: The enrich '//:cube_wide' ignores 'parameters', 'path', 'pythonRequirements'"
     And STDOUT should contain "cube_wide"
@@ -69,6 +72,6 @@ Feature: `enrich` objects
           with:
             width: 20.0
       """
-    When I run "partcad list parts"
+    When I run "partcad info cube_wide"
     Then the command should exit with a status code of "0"
     And STDOUT should not contain "WARN:"

@@ -10,12 +10,12 @@ fallback without touching the network by making the fake clone succeed only when
 the ambient config search path has been cleared."""
 
 import tempfile
+from unittest.mock import MagicMock, patch
 
-import pytest
 import pygit2
+import pytest
 from pygit2 import GitError
 from pygit2.enums import ConfigLevel
-from unittest.mock import MagicMock, patch
 
 import partcad as pc
 from partcad.user_config import UserConfig

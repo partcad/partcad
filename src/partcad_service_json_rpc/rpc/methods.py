@@ -14,6 +14,8 @@ summary taken from the operation's docstring.
 
 import functools
 
+from partcad_utils import staging
+
 from ..core import operations
 
 # CLI-shaped method name -> operation callable.
@@ -22,6 +24,12 @@ _OPERATIONS = {
     "inspect.sketch": operations.inspect_sketch,
     "inspect.interface": operations.inspect_interface,
     "inspect.assembly": operations.inspect_assembly,
+    # Not a CLI command: the second half of a two-phase assembly build, which
+    # a client calls on its own behalf after the first half told it to (see
+    # 'partcad_utils.staging'). Named from there rather than spelled out, so
+    # the name a client sends and the name the daemon answers to are one
+    # string.
+    staging.INSTANTIATE_METHOD: operations.instantiate_assembly,
     "inspect.scene": operations.inspect_scene,
     "inspect.file": operations.inspect_file,
     "export.part": operations.export_part,
@@ -45,15 +53,22 @@ _OPERATIONS = {
     "bom": operations.bom,
     "assembly.guide": operations.assembly_guide,
     "supply.quote": operations.supply_quote,
+    "cae.analyze": operations.cae_analyze,
+    "cae.defaults": operations.cae_defaults,
+    "cam.route": operations.cam_route,
     "search.objects": operations.search_objects,
     "render.objects": operations.render_objects,
     "convert.object": operations.convert_object,
+    "open.tools": operations.open_tools,
     "adhoc.convert": operations.adhoc_convert,
     "adhoc.render": operations.adhoc_render,
     "test.run": operations.test_run,
+    "simulate.run": operations.simulate_run,
     "lint.run": operations.lint_run,
     "daemon.reset": operations.daemon_reset,
     "daemon.status": operations.daemon_status,
+    "daemon.status.config": operations.daemon_status_config,
+    "daemon.status.env": operations.daemon_status_env,
     "daemon.set.telemetry": operations.daemon_set_telemetry,
     "test": operations.test,
     "info": operations.info,

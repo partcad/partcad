@@ -53,3 +53,16 @@ Feature: `pc export` command
   Examples: Media Type: .urdf
     |    type | filename              |
     |    urdf | logo_embedded.urdf    |
+
+  # A name with a "/" in it is a file in a sub-directory of that name, created
+  # on the way. `robot/wrist` is a part the URDF declares rather than
+  # `partcad.yaml`, so it is also the case where nothing in the package could
+  # have created that directory beforehand -- and it is the command the example
+  # tells its reader to run.
+  @type-object
+  Scenario: `pc export` of a part whose name has a "/" in it
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples export --package //produce_assembly_urdf -t step -O ./ :robot/wrist"
+    Then the command should exit with a status code of "0"
+    And a file named "robot/wrist.step" should be created
+    And a file named "partcad.yaml" should not exist
+    And STDERR should contain "DONE: Export: //pub/examples/partcad/produce_assembly_urdf:"

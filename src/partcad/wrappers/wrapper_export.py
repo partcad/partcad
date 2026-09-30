@@ -12,6 +12,10 @@ PartCAD sandbox (so the script it runs may import OCP / build123d / cadquery),
 executes that script with 'runpy', and serializes its verdict back to
 'Shape.render_async()'.
 
+The script to run is the wrapper's third argument, after the output path and the
+working directory; see SCRIPT_ARGUMENT below for why it is an argument rather
+than part of the request.
+
 The script is executed with these globals available:
 
     request  -- the shape ('request["wrapped"]') plus every export parameter
@@ -19,6 +23,29 @@ The script is executed with these globals available:
                 along with 'shape_name', 'shape_kind' and 'shape_type' so the
                 script can adapt to what it was handed
     path     -- the absolute path of the file to write
+
+A 'cae:' implementation is run through here too, and is handed three more keys:
+'analysis' ("fea"/"cfd"), the 'fix' and 'load' the part declared, and 'boundary',
+the ports each of them landed on with their locations (see 'partcad.cae'). It
+answers with the same dict plus one key of its own:
+
+    output = {"success": True, "findings": [...]}   # wrote the model, and found this
+
+'findings' is a JSON array - strings or objects with a 'message' and, optionally,
+a 'severity' and a 'where'. An empty one means the analysis found nothing to
+report, which is what "pc test" requires of a part.
+
+A 'cam:' implementation is run through here as well, and is handed the job the
+object declared merged with the file type's own parameters - the tool, the
+depths, the feeds, all of them numbers in millimetres and millimetres per minute
+by the time they arrive (see 'partcad.cam'). It answers with a key of its own
+too:
+
+    output = {"success": True, "stats": {...}}      # wrote the route, and it is this
+
+'stats' is whatever that implementation counted about the route. It is reported
+and never interpreted, so an implementation may put in it whatever a reader of
+its output would want to know.
 
 and reports what happened in one of two ways, whichever suits it:
 
@@ -37,6 +64,13 @@ reuse the SVG one.
 A format that declared 'properties: true' finds 'request["properties"]' holding
 what each shape reports about itself - its material, its colour, its physics -
 keyed by the full name the shape carries. See 'properties_index()'.
+
+Every request carries 'request["reproducible"]', a boolean, whether or not the
+file type declared it: whether the caller needs this file to come out the same
+every time it is written, from the same object. An
+implementation with nothing to decide ignores it; one that would otherwise stamp
+the file with the clock, or reach for the quicker of two algorithms that do not
+agree to the last bit, reads it and does the other thing. See REPRODUCIBLE_KEY.
 """
 
 import os
@@ -47,11 +81,19 @@ sys.path.append(os.path.dirname(__file__))
 import ocp_serialize
 import wrapper_common
 
-# The key the request carries the implementation script under. Passed in the
-# request rather than on the command line: 'wrapper_common.handle_input()'
-# already spends both positional arguments on the output path and the working
+# Where the implementation script's path is: the third argument, after the two
+# 'wrapper_common.handle_input()' spends on the output path and the working
 # directory.
-SCRIPT_KEY = "__script__"
+#
+# On the command line rather than in the request, and that is not a matter of
+# taste. An implementation may run in a container, and a container's arguments
+# are rewritten on the way in -- the directories PartCAD sent are unpacked
+# somewhere of the container's choosing, and every argument naming one is
+# adjusted to match (see 'tools/containers/_common/pc-container-json-rpc.py').
+# The request cannot be: it arrives on standard input as one opaque serialized
+# string. A script path inside it would name a directory on the machine that
+# sent it and would be a path to nothing here.
+SCRIPT_ARGUMENT = 3
 
 # The key that says whether the envelopes are rebuilt into live OCCT geometry
 # before the implementation sees them. It has to travel in the request and be
@@ -70,6 +112,34 @@ DECODE_KEY = "__decode__"
 # declares it and never sees the index.
 PROPERTIES_KEY = "properties"
 
+# Whether the file this implementation is about to write has to come out
+# byte-for-byte the same every time it is written, from the same object.
+#
+# It is in every request the core sends, whether or not the file type declared
+# it, and that is the point of naming it here: an implementation reads
+# 'request["reproducible"]' without first asking whether the key exists, and
+# means by it what every other implementation means. Its twin is
+# 'partcad.output.REPRODUCIBLE_KEY', spelled out separately for the reason
+# DECODE_KEY is - a wrapper runs in a sandbox and cannot import 'partcad'.
+#
+# A plain parameter rather than a reserved one, so a package declares it as
+# 'reproducible: true' on a file type like any other field, and so an
+# implementation that has nothing to decide is free to ignore it. The built-in
+# renderers do decide: it picks which of OCCT's two hidden-line algorithms the
+# projection goes through, because only one of the two draws the same bytes on
+# two machines - see 'builtin/render/render_svg.py'.
+REPRODUCIBLE_KEY = "reproducible"
+
+# The key the core puts what each shape inherits from its material under, keyed
+# by the same full name the index below is keyed by. A shape says what it is
+# made of by *name*, and turning ':aluminium' into a coefficient of friction
+# means resolving it against the package that wrote it and then loading the
+# package that catalogues it - which the core can do and a sandbox cannot. So
+# the facts arrive already resolved, per shape, and are merged into the index
+# below underneath whatever each shape said about itself. See
+# 'partcad.material.physics_by_shape()'.
+MATERIALS_KEY = "__materials__"
+
 
 def properties_index(request):
     """Full name -> what that shape reports about itself, over the whole request.
@@ -80,10 +150,26 @@ def properties_index(request):
     that walks the tree ('decode: false') *and* for one that is handed live
     geometry ('decode: true'), whose decoding throws every envelope away.
 
+    What the shape's *material* says is folded in here too, underneath what the
+    shape itself says: a part that states a friction of its own keeps it, and one
+    that only states what it is made of gets the material's. That way an exporter
+    reads 'physics' and never learns that materials exist - which is what keeps
+    all three of them (URDF, SDFormat, MJCF) agreeing about it for free.
+
     Only shapes that report something appear. A shape with no name cannot be
     looked up and is skipped, but its children are still walked.
     """
     index = {}
+    materials = request.get(MATERIALS_KEY) or {}
+
+    def resolved(name, properties):
+        """One shape's properties, with its material's physics under its own."""
+        facts = materials.get(name)
+        if not facts:
+            return properties
+        physics = dict(facts)
+        physics.update(properties.get("physics") or {})
+        return dict(properties, physics=physics)
 
     def walk(obj):
         if isinstance(obj, list):
@@ -97,14 +183,15 @@ def properties_index(request):
             properties = obj.get(PROPERTIES_KEY)
             name = obj.get("name")
             if name and isinstance(properties, dict) and properties:
-                index[name] = properties
+                index[name] = resolved(name, properties)
             for child in obj.get(ocp_serialize.KEY_ASSEMBLY) or []:
                 walk(child)
             return
         for key, value in obj.items():
             # Never the index itself: it is keyed by name, not by anything that
-            # holds an envelope, and walking it would be pointless.
-            if key != PROPERTIES_KEY:
+            # holds an envelope, and walking it would be pointless. Nor the
+            # material table, which is keyed by reference and holds no shapes.
+            if key not in (PROPERTIES_KEY, MATERIALS_KEY):
                 walk(value)
 
     walk(request)
@@ -116,6 +203,12 @@ def _failed(exception):
 
 
 def process(script, path, request):
+    """Run one implementation script and normalize whatever it answered with.
+
+    A script may set `output` or define `process(path, request)`; either way what
+    comes back here is reduced to the two consistent shapes the core expects,
+    plus the optional `warnings`, `unsupported` and `findings` it may carry.
+    """
     try:
         result = runpy.run_path(
             script,
@@ -150,7 +243,22 @@ def process(script, path, request):
     # What the implementation could not represent in the target format, which is
     # not a failure: the file is correct, it just says less than the package
     # does. Reported by 'Shape._render_one_async()'.
-    for key in ("warnings", "unsupported"):
+    #
+    # 'findings' is the second output of a 'cae:' implementation: what the
+    # analysis has to say about the part, beside the model it wrote. It travels
+    # here rather than in a file of its own because an analysis has exactly one
+    # verdict and two files would let them disagree - and because the IDE's FEA
+    # tab is a webview with no file system, so a finding has to arrive as data.
+    # Meaningless for an export or a render implementation, which never set it.
+    #
+    # 'stats' is the same arrangement for a 'cam:' implementation: what it
+    # counted about the route it wrote - how many passes, how far the tool
+    # travels in the cut - reported beside the file rather than parsed back out
+    # of it. Passed through as the implementation shaped it and never
+    # interpreted here, because what is worth counting differs between a router
+    # and a wire EDM, and a fixed set of keys in this line would be PartCAD
+    # deciding that on their behalf.
+    for key in ("warnings", "unsupported", "findings", "stats"):
         if output.get(key):
             result[key] = output[key]
     return result
@@ -161,11 +269,15 @@ if __name__ == "__main__":
     # envelopes become live geometry is the implementation's choice, and that
     # choice travels inside the request itself.
     path, request = wrapper_common.handle_input(decode=False)
-    script = request.pop(SCRIPT_KEY, None)
+    script = sys.argv[SCRIPT_ARGUMENT] if len(sys.argv) > SCRIPT_ARGUMENT else None
     # Before the decode, while the envelopes - and so the properties they carry
     # - are still there to be read.
     if request.get(PROPERTIES_KEY) is True:
         request[PROPERTIES_KEY] = properties_index(request)
+    # Read by 'properties_index' above and nothing else: an implementation is
+    # handed the physics of each shape, not a table of substances to look one up
+    # in. A format that declares no 'properties: true' never asked for either.
+    request.pop(MATERIALS_KEY, None)
     if request.pop(DECODE_KEY, True) is not False:
         request = ocp_serialize.decode(request)
     if script is None:

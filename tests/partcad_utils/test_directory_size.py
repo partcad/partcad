@@ -18,6 +18,7 @@ import os
 import pathlib
 
 import pytest
+
 from partcad_utils.utils import directory_size, directory_size_mb
 
 

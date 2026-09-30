@@ -457,6 +457,11 @@ def _key_node(node, key):
 # ---- schema violations -----------------------------------------------------
 
 
+# The 'expression' definition's pattern in 'partcad.json'. Named here so that a
+# failure against it can be reported as what it means rather than as a regex.
+EXPRESSION_PATTERN = "^%[^%]+%$"
+
+
 def _quoted(names) -> str:
     return ", ".join("'%s'" % name for name in names)
 
@@ -528,6 +533,14 @@ def _describe(error):
         names = _required_only(error.validator_value)
         if names:
             return "expected at least one of %s" % _quoted(names)
+    if error.validator == "pattern" and error.validator_value == EXPRESSION_PATTERN:
+        # A string where a number or a '%...%' expression belongs. Every use of
+        # the 'expression' definition is one branch of a 'oneOf' with a number,
+        # and 'best_match' descends into that branch because the value is a
+        # string - so jsonschema's own wording names only the pattern, and a
+        # reader who wrote a plain word is told about a regular expression
+        # rather than about the two things they could have written.
+        return "%r is neither a number nor a '%%...%%' expression over the object's parameters" % (error.instance,)
     return error.message
 
 

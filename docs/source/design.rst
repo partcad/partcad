@@ -30,8 +30,8 @@ arbitrary part metadata like camera view angles and so on).
 
 - Basic shapes
 
-  - Outer shape: `circle`, `rectangle`, `square`
-  - Optional inner shape: `circle`, `rectangle`, `square`
+  - Outer shape: `circle`, `rectangle`, `square`, `slot`
+  - Optional inner shape: `circle`, `rectangle`, `square`, `slot`
 
 - Files
 

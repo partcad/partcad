@@ -9,11 +9,11 @@
 
 import os
 
-from .plugin_factory import PluginFactory
-from .file_factory import FileFactory
 from . import factory
 from . import logging as pc_logging
 from . import telemetry
+from .file_factory import FileFactory
+from .plugin_factory import PluginFactory
 
 
 @telemetry.instrument()
@@ -71,7 +71,7 @@ class PluginFactoryFile(PluginFactory):
                 raise Exception("ERROR: The provider path (%s) must be a file" % self.path)
 
     async def prepare_script(self, provider) -> bool:
-        if not self.fileFactory is None and not os.path.exists(self.filePath):
+        if self.fileFactory is not None and not os.path.exists(self.filePath):
             with pc_logging.Action("File", self.target_project.name, provider.name):
                 await self.fileFactory.download(self.filePath)
 

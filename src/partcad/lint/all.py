@@ -22,7 +22,6 @@ def get_partcad_schema():
 
 
 def get_linting_checks(concurrency_cap: int) -> list[Linting]:
-    global _global_lint_checks
     if concurrency_cap is None:
         concurrency_cap = max(os.cpu_count(), 8)
     Linting.MAX_CONCURRENT_CHECKS = concurrency_cap

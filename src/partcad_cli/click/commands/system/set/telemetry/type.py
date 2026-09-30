@@ -22,7 +22,7 @@ def cli(cli_ctx, type: str) -> None:
     with pc.telemetry.set_context(cli_ctx.otel_context):
         with pc.logging.Process("SysSetTelType", "global"):
             yaml, config = pc_actions_config.system_config_get()
-            if not "telemetry" in config:
+            if "telemetry" not in config:
                 config["telemetry"] = {}
 
             if type == "none":

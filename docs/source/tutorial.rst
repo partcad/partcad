@@ -24,6 +24,14 @@ repository it is run in (next to the package, when there is no repository). It s
 it renders the package the same way ``pc render`` does from a terminal. An existing
 ``launch.json``, with commands and comments of your own in it, is added to rather than replaced.
 
+Into the same directory it installs the **AI agent skills** -- what teaches a coding agent to drive
+PartCAD rather than guess at it. Claude Code gets the ``pc`` plugin, in ``.claude/skills/``, so the
+skills are ``/pc:gen-part``, ``/pc:render`` and the rest; Cursor, which has no plugin to namespace
+them, gets the same skills in ``.cursor/skills/`` named ``pc-gen-part``, ``pc-render`` and so on.
+They come from the PartCAD you have installed, so they always match it. Pass ``--no-skills`` if you
+would rather not have them, and ``pc init --skills-only`` to install them into a package you created
+before this version -- that touches nothing else.
+
 Alternatively, manually create ``partcad.yaml`` with the following content:
 
   .. code-block:: yaml

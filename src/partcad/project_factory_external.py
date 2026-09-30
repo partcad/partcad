@@ -8,15 +8,15 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import os
 import hashlib
+import os
 
+from . import logging as pc_logging
 from . import project_factory as pf
+from . import telemetry
+from .cache import Cache
 from .project import Project
 from .project_external_repository import ProjectExternalRepository
-from .cache import Cache
-from . import logging as pc_logging
-from . import telemetry
 
 
 class ExternalImportConfiguration:

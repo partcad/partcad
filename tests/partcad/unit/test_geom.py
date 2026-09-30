@@ -8,7 +8,6 @@
 import math
 
 import pytest
-
 from OCP.gp import gp_Pnt
 
 import partcad as pc

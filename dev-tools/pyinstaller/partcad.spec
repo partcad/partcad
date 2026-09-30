@@ -141,6 +141,20 @@ datas += [
     (str(SRC / "partcad" / "builtin"), "partcad/builtin"),
     # Copied into new packages by `pc init`.
     (str(SRC / "partcad" / "template"), "partcad/template"),
+    # Also `pc init`: the AI agent skills and the Claude plugin manifest it
+    # installs into the repository around the new package. Markdown and JSON,
+    # copied out to disk, so they have to be files here too -- and the bundle is
+    # the install that needs them most, since it is the one whose user has no
+    # Python and therefore no other copy of them anywhere.
+    #
+    # Named at the paths the files really live at, under "ai-agents", rather
+    # than through the two symlinks in "src/partcad/ai_agents" that put them in
+    # the wheel. The destinations are what those symlinks are called, because
+    # that is where "partcad.ai_agents" reads them from. A checkout that did not
+    # materialize a symlink (Windows, without "core.symlinks") therefore still
+    # freezes a complete bundle.
+    (str(REPO_ROOT / "ai-agents" / "common" / "skills"), "partcad/ai_agents/skills"),
+    (str(REPO_ROOT / "ai-agents" / "claude" / ".claude-plugin" / "plugin.json"), "partcad/ai_agents"),
     # Read through `importlib.resources` by `pc lint`. Both schemas -- the ASSY
     # one and the `partcad.yaml` one -- are in `partcad_utils` because both ends
     # check both kinds of file: the daemon over a package, `pc lint --file` in
@@ -255,12 +269,15 @@ add_metadata("partcad")
 # OpenSCAD is deliberately NOT declared here, even though the bundle ships it:
 # `build.sh` copies it into the bundle after this spec has been built.
 #
-# Declaring the unpacked AppImage in `datas` does not keep PyInstaller's hands
-# off it. Shared libraries found among data files are reclassified as binaries
-# and collected into the top level of the bundle, so OpenSCAD's Qt, ICU and
-# glib end up beside the ones Python needs -- on the frozen application's own
-# library search path, and duplicated, at ~100MB. Copying the tree in
-# afterwards keeps OpenSCAD's libraries where only OpenSCAD will find them.
+# Declaring the payload in `datas` does not keep PyInstaller's hands off it --
+# the unpacked AppImage on Linux, the portable build on Windows, the
+# `OpenSCAD.app` on macOS. Shared libraries found among data files are
+# reclassified as binaries and collected into the top level of the bundle, so
+# OpenSCAD's Qt, ICU and glib end up beside the ones Python needs -- on the
+# frozen application's own library search path, and duplicated, at ~100MB.
+# Copying the tree in afterwards keeps OpenSCAD's libraries where only OpenSCAD
+# will find them, which on macOS is what `@executable_path/../Frameworks` inside
+# the `.app` resolves to.
 
 ############################################  COLLECTED TESTS  ###############################################
 

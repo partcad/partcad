@@ -68,10 +68,16 @@ def _make_app(storage: Storage, requests: list) -> Flask:
             del storage[name]
             return Response(status=204)
 
+        # The body, for a HEAD as well: werkzeug drops it on the way out and
+        # keeps the headers, which is what makes 'Content-Length' the object's
+        # real size the way S3 reports it. Returning nothing for a HEAD here
+        # instead leaves werkzeug recomputing a Content-Length of 0 for it, and
+        # a caller asking "is this object there and not empty" -- which is what
+        # the cache's existence check asks -- is answered wrongly.
         return Response(
-            b"" if request.method == "HEAD" else body,
+            body,
             status=200,
-            headers={"Content-Length": str(len(body)), "ETag": '"%s"' % hashlib.md5(body).hexdigest()},
+            headers={"ETag": '"%s"' % hashlib.md5(body).hexdigest()},
             mimetype="application/octet-stream",
         )
 

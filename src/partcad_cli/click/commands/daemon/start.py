@@ -14,6 +14,7 @@ and connects. One implementation of "where is the daemon", in
 import logging
 
 import rich_click as click
+
 from partcad_client import client
 
 

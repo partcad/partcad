@@ -1,0 +1,23 @@
+# The world that holds the thing being simulated, and nothing else.
+#
+# An ASSY file is a Jinja2 template (see 'AssemblyFactoryFile.render_template'),
+# which is the whole of how this scene works: the parameters declared beside it
+# in partcad.yaml reach it as 'param_<name>', and 'pc sim' sets them from the
+# object whose 'simulate:' is being run.
+#
+# With no subject the scene is empty rather than broken: this package is loaded
+# by any context that simulates anything, and a scene that failed to build
+# whenever nobody had asked it to place something would fail there.
+links:
+{%- if param_subject %}
+{#- Seven numbers - x y z, then the axis, then the angle - written back out as
+    the location PartCAD states everywhere else. They arrive without brackets or
+    commas because a parameter value has to be spellable in an instance name;
+    see the note beside 'subject_offset' in partcad.yaml. #}
+{%- set offset = param_subject_offset.split() %}
+  - {{ param_subject_kind }}: "{{ param_subject }}"
+    name: subject
+    location: [[{{ offset[0] }}, {{ offset[1] }}, {{ offset[2] }}], [{{ offset[3] }}, {{ offset[4] }}, {{ offset[5] }}], {{ offset[6] }}]
+{%- else %}
+  []
+{%- endif %}

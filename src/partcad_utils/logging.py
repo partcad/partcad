@@ -8,13 +8,20 @@
 # Licensed under Apache License, Version 2.0.
 
 import logging
-from logging import DEBUG, INFO, WARN, WARNING, ERROR, CRITICAL
 import threading
 import time
+from logging import (  # noqa: F401  # re-exported so callers use pc_logging.DEBUG etc.
+    CRITICAL,
+    DEBUG,
+    ERROR,
+    INFO,
+    WARN,
+    WARNING,
+)
 
 import sentry_sdk
-
 from opentelemetry import trace
+
 from . import telemetry
 
 # Track if any errors occurred during the execution for test purposes and for
@@ -178,9 +185,6 @@ class Process(object):
         self.__enter__()
 
     def __enter__(self):
-        global process_lock
-        global process_transaction
-        global process_span
 
         if process_lock.acquire():
             self.start = time.time()
@@ -205,8 +209,6 @@ class Process(object):
         self.__exit__(*args)
 
     def __exit__(self, *_args):
-        global process_lock
-        global info
 
         if self.succeeded:
             process_lock.release()

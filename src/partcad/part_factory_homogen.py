@@ -20,9 +20,18 @@ class PartFactoryHomogen(PartFactory):
     tolerance. A mesh is one body: an STL file is a surface with nothing inside
     it to vary, and the only way it has a material at all is for somebody to
     say so. A solid a script builds is one
-    body too - a CadQuery, build123d or SDF part is the result of one modelling
-    session, and PartCAD hands the whole of it to a manufacturer as one thing.
-    An extrusion of one sketch is the same case.
+    body too - a CadQuery, build123d, SDF or OpenSCAD part is the result of one
+    modelling session, and PartCAD hands the whole of it to a manufacturer as
+    one thing. An extrusion of one sketch is the same case.
+
+    'scad' arrived here later than the rest, and the case that brought it is
+    worth keeping: '//pub/std/metric/bosl2' generates a part per BOSL2 module by
+    parsing the module's signature, so a module argument called 'tolerance' -
+    the fit clearance several of BOSL2's bottlecap adapters take - became a
+    parameter of that name on a 'scad' part. The package was making no claim
+    about manufacturing at all, and the whole public-index sweep went red on it.
+    An OpenSCAD part was a homogeneous body the entire time; nothing but the
+    opt-in was missing.
 
     A STEP file is not. It can carry many solids, each with a material and a
     colour of its own already stated in the file, so naming one for the file

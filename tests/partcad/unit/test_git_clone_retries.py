@@ -1,9 +1,10 @@
-import pytest
 import tempfile
-import partcad as pc
-from pygit2 import GitError
 from unittest.mock import MagicMock, patch
 
+import pytest
+from pygit2 import GitError
+
+import partcad as pc
 from partcad.user_config import UserConfig
 
 repo_url = "https://github.com/partcad/partcad"
@@ -22,7 +23,7 @@ fake_git_errors = [
     GitError("failed to connect to github.com: Connection refused"),
     # Timeout, either the remote's own or the one PartCAD imposes
     GitError("could not read from socket: timed out"),
-    GitError(f"failed to connect to github.com: Operation timed out"),
+    GitError("failed to connect to github.com: Operation timed out"),
     # Partial data transfer issue
     GitError("early EOF"),
     GitError("unexpected disconnect while reading sideband packet"),

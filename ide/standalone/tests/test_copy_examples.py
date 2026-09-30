@@ -14,8 +14,9 @@ import json
 
 import copy_examples
 import pytest
-from conftest import COMPONENT_ROOT, REPO_ROOT
 from copy_examples import ManifestError
+
+from conftest import COMPONENT_ROOT, REPO_ROOT
 
 MANIFEST = COMPONENT_ROOT / "bootstrap" / "examples.json"
 

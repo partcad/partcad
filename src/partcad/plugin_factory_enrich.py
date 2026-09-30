@@ -11,10 +11,10 @@
 import copy
 import typing
 
-from .plugin_config import PluginConfiguration
-from .plugin_factory import PluginFactory
 from . import logging as pc_logging
 from . import telemetry
+from .plugin_config import PluginConfiguration
+from .plugin_factory import PluginFactory
 
 
 @telemetry.instrument()
@@ -32,7 +32,7 @@ class PluginFactoryEnrich(PluginFactory):
                 self.source_plugin_name = config["source"]
             else:
                 self.source_plugin_name = config["name"]
-                if not "project" in config:
+                if "project" not in config:
                     raise Exception("Enrich needs either the source plugin name or the source project name")
 
             if "project" in config:

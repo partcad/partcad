@@ -10,13 +10,19 @@ from ..service import run
 
 
 # TODO-94: @alexanderilyin: Replace -i, -a, -s, -S with --type; https://stackoverflow.com/a/37491504/25671117
-@click.command(help="Show detailed information about a part, assembly, scene, or software")
+@click.command(
+    help=(
+        "Show detailed information about a part, assembly, scene, or software. "
+        "OBJECT may be written '...:<name>' to mean every object of that name in this "
+        "package and in every package below it"
+    ),
+)
 @click.option(
     "-P",
     "--package",
     "package",
     type=str,
-    help="Package to retrieve the object from",
+    help="Package to retrieve the object from ('<package>...' for that package and every package below it)",
     default=None,
     show_envvar=True,
 )

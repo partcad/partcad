@@ -277,6 +277,55 @@ def test_the_scene_flavor_does_not_reach_a_configuration():
     assert schema_for_file("/pkg/logo.assy", FLAVOR_SCENE) is not get_schema(ASSY_SCHEMA)
 
 
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        "parameters:\n      - moveX\n      - moveY\n      - turnZ\n",  # the oldest spelling there is
+        "parameters:\n      - move-x\n      - turn-z\n",  # and its hyphenated form
+        "parameters:\n      moveZ: [0, 10, 0]\n",
+        "parameters:\n      size: 3.0\n",
+    ],
+)
+def test_the_linter_accepts_every_way_an_interface_declares_parameters(declaration):
+    """What the loader accepts, `pc lint` has to accept.
+
+    The bare list is the one this nearly lost: the loader was fixed to expand it
+    and the schema went on refusing it, so a package that has used the form since
+    interfaces existed loaded fine and failed its own linter.
+    """
+    source = "interfaces:\n  iface:\n    desc: an interface\n    %s" % declaration
+    assert validate_source(source, get_schema(PARTCAD_SCHEMA)) == []
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        "threadStep: 0.7\n",
+        'threadStep: "%pitch%"\n    parameters:\n      pitch: 0.7\n',
+        "selfScrew: true\n",
+        "multiConnect: true\n",
+        "multiConnect: false\n",
+    ],
+)
+def test_the_linter_accepts_what_an_interface_says_about_connecting_through_it(declaration):
+    """The other half of the same rule, for what an interface says about a connection.
+
+    'multiConnect' is the one this was written for. 'Interface' has read it since
+    it was added and hands it down a family through '_inherited', and the schema -
+    whose interface body is 'additionalProperties: false' - never listed it. So a
+    package could declare it and work, and failed its own 'pc lint' the moment
+    anybody ran one; the only packages it did not break were those that never did.
+    """
+    source = "interfaces:\n  iface:\n    desc: an interface\n    %s" % declaration
+    assert validate_source(source, get_schema(PARTCAD_SCHEMA)) == []
+
+
+def test_the_linter_still_wants_a_direction_for_a_name_it_does_not_know():
+    """The other half of the same rule: only those six may be named bare."""
+    source = "interfaces:\n  iface:\n    desc: an interface\n    parameters:\n      - slideAlongTheRail\n"
+    assert validate_source(source, get_schema(PARTCAD_SCHEMA)) != []
+
+
 def test_the_schemas_ship_with_the_package():
     schema = get_schema(ASSY_SCHEMA)
     assert schema["$schema"].startswith("http://json-schema.org/draft-07/")
@@ -321,6 +370,28 @@ def test_a_freshly_initialized_package_is_clean():
     """
     assert config_diagnostics("sketches:\nparts:\nassemblies:\ndependencies:\n") == []
     assert config_diagnostics("sketches:\nparts:\n  cube:\n    type: cadquery\nassemblies:\n") == []
+
+
+@pytest.mark.parametrize(
+    "section,body",
+    [
+        ("parts", "    type: build123d\n"),
+        ("assemblies", "    type: assy\n"),
+        ("sketches", "    type: build123d\n"),
+        ("interfaces", "    abstract: true\n"),
+    ],
+)
+def test_an_object_may_name_the_images_it_was_modeled_from(section, body):
+    """`images:` is what puts a drawing beside an object in the README.
+
+    `Project.generate_readme()` renders that list for every kind of object it
+    writes a section for, so all four of them accept it -- a key the renderer
+    reads and the schema rejected is one nobody could write down.
+    """
+    assert (
+        config_diagnostics("%s:\n  bracket:\n%s    images:\n      - drawing.png\n      - photo.jpg\n" % (section, body))
+        == []
+    )
 
 
 def test_jinja2_in_a_configuration_is_not_mistaken_for_broken_yaml():

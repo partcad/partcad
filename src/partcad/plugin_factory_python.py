@@ -12,16 +12,11 @@ import os
 import sys
 import typing
 
-from . import shape_envelope
-
+from . import logging as pc_logging
+from . import sandbox_versions, shape_envelope, telemetry, wrapper
 from .plugin import Plugin
 from .plugin_factory_file import PluginFactoryFile
-from .runtime_python import PythonRuntime
-
-from . import wrapper
-from . import logging as pc_logging
-from . import sandbox_versions
-from . import telemetry
+from .runtime_python import PythonRuntime, shape_docker_image
 
 
 async def query_with_deadline(plugin: Plugin, run, timeout: int, subject: typing.Optional[str] = None):
@@ -102,7 +97,7 @@ class PluginFactoryPython(PluginFactoryFile):
         # the stricter of the two floors.
         python_version = sandbox_versions.at_least(python_version, sandbox_versions.MIN_PYTHON_VERSION_CADQUERY)
 
-        self.runtime = self.ctx.get_python_runtime(python_version)
+        self.runtime = self.ctx.get_python_runtime(python_version, image=shape_docker_image(self.config, self.project))
         self.session = self.runtime.get_session(source_project.name)
 
     def info(self, plugin: Plugin):
@@ -136,6 +131,13 @@ class PluginFactoryPython(PluginFactoryFile):
                 if not sku:
                     sku = "None"
                 extra = vendor + ":" + sku
+        elif isinstance(request, dict) and request.get("key"):
+            # A repository plugin is asked for many keys at once (one per
+            # sub-package and object kind, gathered concurrently). Without the
+            # key in it, every one of those actions has the same name, and the
+            # progress display, which tracks actions by name, loses count of
+            # them: "action_key not found" once per overlap.
+            extra = request["key"]
         timeout = self.ctx.user_config.plugin_query_timeout
         # What this particular query was for. A repository plugin serves a whole
         # tree of packages, so its name alone would not say which of them the

@@ -60,6 +60,44 @@ def test_the_key_ignores_duplicates_and_blanks():
     )
 
 
+# --------------------------------------------------------------------------- #
+# The image, where the sandbox was built in one                                #
+# --------------------------------------------------------------------------- #
+
+
+def test_two_images_are_two_environments():
+    """An image is named precisely for what pip cannot install.
+
+    Same interpreter, same wheels, different native stack underneath -- a
+    different OpenCASCADE, a different solver. A shape built in one is not the
+    shape the other builds, so keying them alike hands back the wrong model
+    when a package changes its 'dockerImage'.
+    """
+    one = sandbox_versions.environment_cache_key("python", "3.11", ["a==1"], image="ghcr.io/x/a:1")
+    two = sandbox_versions.environment_cache_key("python", "3.11", ["a==1"], image="ghcr.io/x/b:1")
+
+    assert one != two
+    assert "ghcr.io/x/a:1" in one
+
+
+def test_no_image_keys_exactly_as_it_always_did():
+    """Every cached shape on every machine was built without one.
+
+    A key that changed shape for everybody would invalidate all of them, to
+    record something that is not true of any of them -- so the image is
+    appended only when there is one.
+    """
+    assert sandbox_versions.environment_cache_key("python", "3.11", ["a==1"]) == "python==3.11;a==1"
+    assert sandbox_versions.environment_cache_key("python", "3.11", ["a==1"], image=None) == "python==3.11;a==1"
+    assert sandbox_versions.environment_cache_key("python", "3.11", ["a==1"], image="") == "python==3.11;a==1"
+
+
+def test_an_image_is_not_mistaken_for_a_requirement():
+    """It is appended under its own name, not folded into the sorted set."""
+    key = sandbox_versions.environment_cache_key("python", "3.11", ["a==1"], image="ghcr.io/x/a:1")
+    assert key == "python==3.11;a==1;image=ghcr.io/x/a:1"
+
+
 @pytest.mark.parametrize(
     "left, right",
     [
@@ -96,6 +134,33 @@ def test_a_python_part_keys_on_the_interpreter_and_the_cad_stack(tmp_path, confi
     # versions, so all of it is what produced the shape.
     for requirement in sandbox_versions.PINNED_REQUIREMENTS:
         assert requirement in part.environment_cache_key
+
+
+def test_a_python_part_keys_on_the_image_its_sandbox_was_built_in(tmp_path, config, monkeypatch):
+    """The factory has to pass it on; the key alone knowing how is not enough.
+
+    Stamped onto whatever runtime the context hands back rather than by asking
+    for a container one: what is under test is the wiring from the runtime to
+    the key, and starting a real container sandbox needs a daemon this suite
+    does not assume.
+    """
+    real = pc.Context.get_python_runtime
+
+    def stamped(self, *args, **kwargs):
+        runtime = real(self, *args, **kwargs)
+        runtime.image = "ghcr.io/x/a:1"
+        return runtime
+
+    monkeypatch.setattr(pc.Context, "get_python_runtime", stamped)
+    part = _part(tmp_path, config, "parts:\n  thing:\n    type: build123d\n", "thing.py")
+
+    assert part.environment_cache_key.endswith(";image=ghcr.io/x/a:1")
+
+
+def test_a_sandbox_with_no_image_says_nothing_about_one(tmp_path, config):
+    """Which is every sandbox that is not container-backed."""
+    part = _part(tmp_path, config, "parts:\n  thing:\n    type: build123d\n", "thing.py")
+    assert "image=" not in part.environment_cache_key
 
 
 def test_a_python_part_keys_on_what_its_package_asks_for(tmp_path, config):

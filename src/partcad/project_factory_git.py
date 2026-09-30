@@ -8,13 +8,13 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import hashlib
-import re
-import os
-import shutil
-import time
 import contextlib
+import hashlib
+import os
+import re
+import shutil
 import threading
+import time
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
@@ -22,11 +22,11 @@ import pygit2
 from filelock import FileLock
 from pygit2.enums import CheckoutStrategy, ConfigLevel, CredentialType, ReferenceType, ResetMode
 
-from .project_local import ProjectLocal
 from . import consts
-from . import project_factory as pf
 from . import logging as pc_logging
+from . import project_factory as pf
 from . import telemetry
+from .project_local import ProjectLocal
 
 
 class GitCallbacks(pygit2.RemoteCallbacks):
@@ -450,9 +450,11 @@ def _clone(repo_url, cache_path, git_config, options: CloneOptions, user_config=
         # A commit id can be on any branch, so that search needs the wildcard
         # refspec a clone configures by default.
         remote=None if options.all_branches else _single_branch_remote(user_config),
-        # Honour http.proxy from the config written above and the http_proxy
-        # environment, the way the git command line did through curl. Without
-        # this libgit2 ignores both and talks to the remote directly.
+        # Honour http.proxy from the config written above and, failing that,
+        # HTTPS_PROXY/HTTP_PROXY and NO_PROXY from the environment, the way the
+        # git command line did through curl. Without this libgit2 ignores both
+        # and talks to the remote directly -- which on a machine whose only
+        # route out is a proxy means every import stalls until it times out.
         proxy=True,
     )
 
@@ -464,6 +466,7 @@ def _fetch(repo: pygit2.Repository, revision: str, depth: int = 1, user_config=N
         [revision],
         depth=depth if _supports_shallow(remote.url) else 0,
         callbacks=GitCallbacks(user_config),
+        # As in _clone: the proxy the configuration or the environment names.
         proxy=True,
     )
     return _fetched_commit(repo, revision)
@@ -598,7 +601,6 @@ def clone_single_commit(repo_url, cache_path, revision, git_config=(), user_conf
 
 
 def get_cache_lock(hash):
-    global global_cache_lock
     global_cache_lock.acquire()
     if hash not in cache_locks:
         cache_locks[hash] = threading.Lock()
@@ -953,7 +955,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 # No update was performed
                                 before = None
 
-                        if not before is None:
+                        if before is not None:
                             # Update was performed
                             after = repo.head.target
                             if before != after:
@@ -1029,7 +1031,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                             )
                             raise RuntimeError(f"Failed to clone repo: {e}") from e
                 attempt += 1
-        if not self.import_rel_path is None:
+        if self.import_rel_path is not None:
             cache_path = os.path.join(cache_path, self.import_rel_path)
 
         return cache_path

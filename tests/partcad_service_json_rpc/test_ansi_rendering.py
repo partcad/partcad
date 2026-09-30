@@ -120,9 +120,7 @@ def test_two_renderers_keep_their_own_footers():
 
 import base64
 import io
-import threading
 
-from partcad_service_json_rpc.rpc.dispatcher import Handler
 from partcad_service_json_rpc.transport import stdio
 from partcad_utils.framing import read_message, write_message
 

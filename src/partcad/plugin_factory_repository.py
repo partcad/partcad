@@ -7,9 +7,9 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from . import telemetry
 from .plugin_factory_python import PluginFactoryPython
 from .plugin_repository import Repository
-from . import telemetry
 
 
 @telemetry.instrument()

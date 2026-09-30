@@ -53,6 +53,29 @@ Feature: `pc daemon` commands
     When I run "pc --no-ansi daemon stop"
     Then the command should exit with a status code of "0"
 
+  @pc-daemon @pc-status @success @skip-windows
+  Scenario: Report the daemon's own configuration and environment
+    # The daemon inherits the environment of whatever starts it, which here is
+    # this command -- so the variables below are the daemon's own, and reading
+    # them back proves the report is the daemon's rather than the client's.
+    Given environment variable "PC_TAGS" is set to "daemon-side"
+    And environment variable "PC_REMOTE_SANDBOX_TOKEN" is set to "s3cr3t-do-not-print"
+    When I run "pc --no-ansi daemon status config"
+    Then the command should exit with a status code of "0"
+    And STDERR should contain "Configuration file: $HOME/.partcad/config.yaml" with path
+    And STDERR should contain "remote_sandbox_token: <set>"
+    And STDERR should not contain "s3cr3t-do-not-print"
+    And STDERR should contain "DONE: StatusConfig: global:"
+    When I run "pc --no-ansi daemon status env"
+    Then the command should exit with a status code of "0"
+    And STDERR should contain "PC_TAGS=daemon-side"
+    # Scrubbed in the daemon, so the value never reaches the wire.
+    And STDERR should contain "PC_REMOTE_SANDBOX_TOKEN=<scrubbed>"
+    And STDERR should not contain "s3cr3t-do-not-print"
+    And STDERR should contain "DONE: StatusEnv: global:"
+    When I run "pc --no-ansi daemon stop"
+    Then the command should exit with a status code of "0"
+
   @pc-daemon @pc-telemetry @success @skip-windows
   Scenario: Set the daemon's telemetry settings
     When I run "pc --no-ansi daemon set telemetry type none"
@@ -93,3 +116,32 @@ Feature: `pc daemon` commands
     When I run "pc --no-ansi daemon stop"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "PartCAD daemon stopped"
+
+  @pc-daemon @success @skip-windows
+  Scenario: A directory with no package is not remembered as having none
+    # The daemon answers from the context it keeps, and that context must never
+    # be a failed load: the errors explaining one are logged while it is built,
+    # so a cached failure is one command that says why followed by any number
+    # that quietly say nothing and exit zero.
+    When I run "pc --no-ansi list packages ..."
+    Then the command should exit with a non-zero status code
+    And STDERR should contain "PartCAD configuration file is not found"
+    When I run "pc --no-ansi list packages ..."
+    Then the command should exit with a non-zero status code
+    And STDERR should contain "PartCAD configuration file is not found"
+    # And a package written after that is read, rather than denied for as long as
+    # this daemon runs.
+    Given a file named "partcad.yaml" with content:
+      """
+      name: //
+      desc: Root Package
+      sketches:
+        circle:
+          type: basic
+          circle: 1
+      """
+    When I run "pc --no-ansi list packages ..."
+    Then the command should exit with a status code of "0"
+    And STDERR should contain "Root Package"
+    When I run "pc --no-ansi daemon stop"
+    Then the command should exit with a status code of "0"

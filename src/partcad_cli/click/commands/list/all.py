@@ -11,12 +11,12 @@ from ...cli_context import CliContext
 from .assemblies import cli as list_assemblies
 from .interfaces import cli as list_interfaces
 from .materials import cli as list_materials
-from .mates import cli as list_mates
+from .mates import cli as list_mates  # noqa: F401  # its runner.invoke() below is commented out (TODO there)
 from .packages import cli as list_packages
 from .parts import cli as list_parts
+from .providers import cli as list_providers
 from .scenes import cli as list_scenes
 from .sketches import cli as list_sketches
-from .providers import cli as list_providers
 from .software import cli as list_software
 
 
@@ -24,10 +24,12 @@ from .software import cli as list_software
     "-r",
     "--recursive",
     is_flag=True,
-    help="Recursively process all imported packages",
+    help="Recursively process all imported packages (older spelling of '<package>...')",
     show_envvar=True,
 )
-@click.command(help="List all available parts, assemblies and scenes")
+@click.command(
+    help="List all available parts, assemblies and scenes. PACKAGE may end in '...' to reach every package below it",
+)
 @click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
 def cli(cli_ctx: CliContext, recursive: bool, package: str) -> None:

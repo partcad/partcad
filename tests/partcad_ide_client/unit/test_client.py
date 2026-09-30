@@ -120,28 +120,39 @@ def no_ide(monkeypatch):
         client.disconnect()
 
 
-def test_show_sends_objects_and_returns_the_ack(ide):
-    obj = protocol.make_object(b"glTF-payload", name="//pkg:part", label="part")
+def test_show_sends_the_object_tree_and_returns_the_ack(ide):
+    obj = protocol.make_node(
+        b"glTF-payload",
+        name="//pkg:mount",
+        label="mount",
+        children=[protocol.make_node(b"child-glTF", name="//pkg:plate", label="bottom")],
+    )
 
-    ack = client.show([obj], name="//pkg:part", kind="part", package="//pkg", keep_camera=True)
+    ack = client.show(obj, name="//pkg:mount", kind="assembly", package="//pkg", keep_camera=True)
 
     assert ack["type"] == protocol.MSG_ACK
     assert ack["ok"] is True
 
     (message,) = ide.received
     assert message["type"] == protocol.MSG_SHOW
-    assert message["name"] == "//pkg:part"
-    assert message["kind"] == "part"
+    assert message["name"] == "//pkg:mount"
+    assert message["kind"] == "assembly"
     # What the viewer's other tabs are about: they ask the daemon about
     # '<package>:<name>', which a name on its own cannot spell.
     assert message[protocol.KEY_PACKAGE] == "//pkg"
     assert message["keepCamera"] is True
-    assert protocol.decode_gltf(message["objects"][0][protocol.KEY_GLTF]) == b"glTF-payload"
+
+    # One object, as the tree it is, nested as deeply as it goes.
+    sent = message[protocol.KEY_OBJECT]
+    assert protocol.decode_gltf(sent[protocol.KEY_GLTF]) == b"glTF-payload"
+    (child,) = sent[protocol.KEY_ASSEMBLY]
+    assert child[protocol.KEY_LABEL] == "bottom"
+    assert protocol.decode_gltf(child[protocol.KEY_GLTF]) == b"child-glTF"
 
 
 def test_show_without_a_package_says_so_rather_than_omitting_it(ide):
     """A shape belonging to no package still has geometry to show"""
-    client.show([protocol.make_object(b"glTF-payload")], name="widget")
+    client.show(protocol.make_node(b"glTF-payload"), name="widget")
 
     (message,) = ide.received
     # Present and null, not absent: the viewer reads it to decide which tabs to
@@ -149,16 +160,24 @@ def test_show_without_a_package_says_so_rather_than_omitting_it(ide):
     assert message[protocol.KEY_PACKAGE] is None
 
 
-def test_show_rejects_objects_without_geometry(ide):
+def test_show_rejects_anything_that_is_not_a_tree(ide):
     with pytest.raises(TypeError, match="gltf"):
-        client.show([{"name": "//pkg:part"}])
+        client.show({"name": "//pkg:part"})
     assert ide.received == []
 
 
+def test_show_accepts_a_node_that_only_holds_others(ide):
+    """An assembly's own node carries no geometry, and is a tree all the same."""
+    client.show(protocol.make_node(name="//pkg:mount", children=[]))
+
+    (message,) = ide.received
+    assert protocol.KEY_GLTF not in message[protocol.KEY_OBJECT]
+
+
 def test_show_reuses_one_connection(ide):
-    obj = protocol.make_object(b"glTF")
-    client.show([obj])
-    client.show([obj])
+    obj = protocol.make_node(b"glTF")
+    client.show(obj)
+    client.show(obj)
 
     assert len(ide.received) == 2
     # A show is interactive, so the second one must not pay for a fresh TCP
@@ -174,21 +193,21 @@ def test_clear_and_ping(ide):
 
 
 def test_show_reconnects_after_the_ide_restarts(ide):
-    obj = protocol.make_object(b"glTF")
-    client.show([obj])
+    obj = protocol.make_node(b"glTF")
+    client.show(obj)
 
     # Drop the connection under the client's feet, the way restarting the IDE
     # extension host does. The next show must transparently reconnect.
     client._shared_connection._socket.close()
 
-    client.show([obj])
+    client.show(obj)
     assert len(ide.received) == 2
     assert ide.connections == 2
 
 
 def test_missing_viewer_raises_rather_than_hanging(no_ide):
     with pytest.raises(client.ViewerNotAvailable):
-        client.show([protocol.make_object(b"glTF")])
+        client.show(protocol.make_node(b"glTF"))
 
 
 def test_is_available_is_false_without_a_viewer(no_ide):

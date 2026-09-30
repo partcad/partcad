@@ -21,6 +21,7 @@ import {
     ITEM_TYPE_PART,
     ITEM_TYPE_SOFTWARE,
     ITEM_TYPE_BROKEN,
+    bareType,
 } from './PartcadItem';
 
 /** An object the package declares that PartCAD could not create, and why. */
@@ -74,7 +75,6 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         vscode.commands.registerCommand(`partcad.exportToOBJ`, (item) => this.exportToOBJ(item));
         vscode.commands.registerCommand(`partcad.exportToIGES`, (item) => this.exportToIGES(item));
         vscode.commands.registerCommand(`partcad.exportToGLTF`, (item) => this.exportToGLTF(item));
-        vscode.commands.registerCommand(`partcad.exportToWorld`, (item) => this.exportToWorld(item));
 
         // One command per application rather than one that asks which: a context
         // menu is where the user says what they want, and a picker on top of a
@@ -83,6 +83,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         vscode.commands.registerCommand(`partcad.openInGazebo`, (item) => this.openWith('gazebo', item));
         vscode.commands.registerCommand(`partcad.openInKiCad`, (item) => this.openWith('kicad', item));
         vscode.commands.registerCommand(`partcad.openInBlender`, (item) => this.openWith('blender', item));
+        vscode.commands.registerCommand(`partcad.openInMuJoCo`, (item) => this.openWith('mujoco', item));
 
         vscode.commands.registerCommand(`partcad.test`, (item) => this.test(item));
 
@@ -368,7 +369,14 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         for (const scene of scenes) {
             let filepath = undefined;
             // The scene types that *are* a file, so the tree can open one.
-            if (scene.type === 'assy' || scene.type === 'world') {
+            // 'mjcf' belongs here for the same reason 'world' does: without a
+            // path 'PartcadItem' cannot tell it from a scene with no source,
+            // and "Open in > MuJoCo" has nothing to act on.
+            //
+            // Compared bare: both engine formats are declared through the
+            // package that implements them ('sim-gazebo:world'), which is the
+            // only spelling that resolves now that neither is in the wheel.
+            if (['assy', 'world', 'mjcf'].includes(bareType(scene.type))) {
                 filepath = scene.item_path;
             }
             elements.push(new PartcadItem(dir, scene.name, items.name, scene, filepath, ITEM_TYPE_SCENE));
@@ -477,12 +485,6 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
 
     public async exportToGLTF(item: PartcadItem) {
         await this.doExportItem('gltf', 'glTF files', 'json', item);
-        await vscode.commands.executeCommand('partcad.getStats');
-    }
-
-    /** Write a scene out as a Gazebo world (SDFormat) plus its mesh files. */
-    public async exportToWorld(item: PartcadItem) {
-        await this.doExportItem('world', 'Gazebo world files', 'world', item);
         await vscode.commands.executeCommand('partcad.getStats');
     }
 

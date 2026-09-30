@@ -1,0 +1,604 @@
+#!/usr/bin/env python3
+#
+# PartCAD, 2026
+#
+# Licensed under Apache License, Version 2.0.
+#
+"""What the 'interference' and 'degenerate' checks decide, and on what.
+
+The 'cad' test asks whether a shape was produced. These two ask whether what
+was produced is a solid anybody meant, and whether the parts ended up anywhere
+sensible - the questions an assembly is actually judged on, and the ones that
+have needed a person looking at a render.
+
+The geometry itself is exercised in the wrapper, which needs a CAD library and
+so is not reachable from here; what is covered here is the deciding: which
+verdict follows from which measurement, and what the configuration does.
+"""
+
+import asyncio
+
+import pytest
+
+from partcad.test.degenerate import DegenerateTest
+from partcad.test.interference import InterferenceTest, _is_expected, _matches
+
+
+class _Shape:
+    """The little a test needs of a shape: a config, a name, and a measurement."""
+
+    def __init__(self, config=None, box=(0, 0, 0, 10, 10, 10), overlaps=None, raises=None, unchecked=(), unbuilt=False):
+        self.config = config or {}
+        self.project_name = "pkg"
+        self.name = "thing"
+        self._box = box
+        self._unbuilt = unbuilt
+        self._overlaps = overlaps
+        self._unchecked = list(unchecked)
+        self._indeterminate = []
+        self._raises = raises
+
+    async def get_wrapped(self, ctx):
+        return None if self._unbuilt else object()
+
+    async def get_bounding_box_async(self, ctx):
+        if self._raises:
+            raise self._raises
+        return self._box
+
+    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0):
+        if self._raises:
+            raise self._raises
+        self.asked_with = (min_volume, min_fraction)
+        if self._overlaps is None:
+            return None
+        return {
+            "overlaps": self._overlaps,
+            "unchecked": self._unchecked,
+            "indeterminate": self._indeterminate,
+            "parts": 0,
+        }
+
+
+class _Assembly(_Shape):
+    pass
+
+
+class _Sketch(_Shape):
+    pass
+
+
+@pytest.fixture(autouse=True)
+def _assembly_is_an_assembly(monkeypatch):
+    """Both tests branch on isinstance(); the stubs stand in for the real classes."""
+    monkeypatch.setattr("partcad.test.interference.Assembly", _Assembly)
+    monkeypatch.setattr("partcad.test.degenerate.Assembly", _Assembly)
+    monkeypatch.setattr("partcad.test.degenerate.Sketch", _Sketch)
+
+
+def _run(test, shape):
+    """The repository drives its async work through asyncio.run(); so does this."""
+    return asyncio.run(test.test([], None, shape))
+
+
+# --- degenerate -------------------------------------------------------------
+
+
+def test_a_solid_with_size_in_every_direction_passes():
+    assert _run(DegenerateTest(), _Shape(box=(0, 0, 0, 8, 8, 9.6)))
+
+
+def test_a_part_flattened_to_a_sheet_fails():
+    """The regression: a 2 x 2 round brick 9.6 mm tall that meshed into a disc
+    about a millimetre thick because a subfile could not be fetched. It
+    rendered, it exported, and every test there was passed it."""
+    assert not _run(DegenerateTest(), _Shape(box=(0, 0, 0, 16, 16, 0.0)))
+
+
+def test_a_shape_with_no_extent_at_all_fails():
+    assert not _run(DegenerateTest(), _Shape(box=None))
+
+
+def test_a_part_cannot_declare_itself_flat():
+    """A part that collapsed in one direction fails whatever it says about itself.
+
+    There is no setting for this. A part that asked not to be measured used to
+    pass; the check now reads the bounding box and nothing else, because a part
+    that measured a millimetre where it should have measured ten is broken
+    however it came to be declared. A kind of object that is flat by nature - a
+    sketch - is still passed over, on what it is rather than on what it asks.
+    """
+    shape = _Shape(config={"degenerate": {"skip": True}}, box=(0, 0, 0, 10, 10, 0))
+    assert not _run(DegenerateTest(), shape)
+
+
+def test_the_tolerance_is_fixed():
+    """A part cannot move the line between a thin solid and a flat one.
+
+    'degenerate' measures against one constant, and a part asking for a
+    stricter rule is measured by the constant anyway - narrowing what counts as
+    a body is how a check stops reporting the parts that needed reporting.
+    """
+    thin = _Shape(box=(0, 0, 0, 10, 10, 0.05))
+    assert _run(DegenerateTest(), thin)  # thinner than a brick, but a solid
+    strict = _Shape(config={"degenerate": {"tolerance": 0.1}}, box=(0, 0, 0, 10, 10, 0.05))
+    assert _run(DegenerateTest(), strict)
+
+
+def test_an_assembly_is_checked_through_its_parts():
+    """Each part is tested in its own right; an assembly's box says nothing."""
+    assert _run(DegenerateTest(), _Assembly(box=None))
+
+
+def test_a_check_that_cannot_run_fails_rather_than_passes():
+    """The distinction this branch got wrong. A shape that did not build is
+    answered earlier and left to 'cad'; an exception here means the check
+    itself broke, and reporting that as a pass is how a TypeError in the
+    serialisation came to certify every assembly as free of interference."""
+    ctx = {}
+    assert not asyncio.run(DegenerateTest().test([], None, _Shape(raises=Exception("boom")), ctx))
+    assert ctx.get(DegenerateTest.NOT_CACHEABLE) is True
+
+
+# --- interference -----------------------------------------------------------
+
+
+def test_an_assembly_whose_parts_keep_to_themselves_passes():
+    assert _run(InterferenceTest(), _Assembly(overlaps=[]))
+
+
+def test_parts_sharing_space_fail():
+    overlaps = [{"a": "buttS8", "b": "gateW", "volume": 512.0}]
+    assert not _run(InterferenceTest(), _Assembly(overlaps=overlaps))
+
+
+def test_a_part_is_not_checked_against_itself_or_anything_else():
+    assert _run(InterferenceTest(), _Shape())
+
+
+def test_the_thresholds_reach_the_measurement():
+    """They are what separates a design fault from a design that fits together,
+    so a package that sets them has to have them honoured."""
+    shape = _Assembly(config={"interference": {"minVolume": 0.5, "minFraction": 0.01}}, overlaps=[])
+    _run(InterferenceTest(), shape)
+    assert shape.asked_with == (0.5, 0.01)
+
+
+def test_a_pair_meant_to_interfere_is_not_declared_against_the_pair():
+    """There is no list of pairs to excuse, and a package that writes one is
+    not quietly obeyed.
+
+    Two parts have exactly one relationship - the 'connect' that joins them -
+    so that is where an overlap which is meant to be there is stated. A list
+    kept beside the assembly says only "do not look", never why; it cannot be
+    checked, cannot be reused by anything else, and goes on excusing a pair
+    whose names were reused for something else entirely.
+    """
+    config = {"interference": {"ignore": [["shaft", "hub"]]}}
+    overlaps = [{"a": "shaft", "b": "hub", "volume": 90.0}]
+    assert not _run(InterferenceTest(), _Assembly(config=config, overlaps=overlaps))
+
+
+def test_an_assembly_nobody_is_making_is_told_rather_than_failed(caplog):
+    """'manufacturable: false' is the whole of the opt-out now.
+
+    An object that says nobody is building it is a record of something - an
+    import kept as it arrived, a model of a part somebody else makes. Editing
+    it until the checks are happy destroys the record; turning the check off
+    loses the finding. It is told what it contains, and it is not failed.
+    """
+    import logging
+
+    overlaps = [{"a": "a", "b": "b", "volume": 1000000.0}]
+    asm = _Assembly(overlaps=overlaps)
+    asm.is_manufacturable = False
+    with caplog.at_level(logging.WARNING):
+        assert _run(InterferenceTest(), asm)
+    assert "share 1000000.000 mm^3" in caplog.text
+
+
+def test_an_assembly_that_is_being_made_still_fails():
+    overlaps = [{"a": "a", "b": "b", "volume": 1000000.0}]
+    asm = _Assembly(overlaps=overlaps)
+    asm.is_manufacturable = True
+    assert not _run(InterferenceTest(), asm)
+
+
+def test_an_expected_pair_is_named_in_either_order():
+    """Which of the two the ASSY file happened to be adding is not the point."""
+    expected = {("hub", "shaft")}
+    assert _is_expected({"a": "shaft", "b": "hub"}, expected)
+    assert _is_expected({"a": "hub", "b": "shaft"}, expected)
+    assert not _is_expected({"a": "hub", "b": "casing"}, expected)
+
+
+def test_parts_that_are_not_valid_solids_are_reported_rather_than_hidden(caplog):
+    """A boolean against an inside-out solid returns a number unrelated to any
+    shared space - two LDraw bricks 100 mm apart came back sharing 2282 mm^3 -
+    so such parts are left out. An assembly built entirely from them is not
+    being checked at all, and a pass must not be read as a clean bill."""
+    import logging
+
+    shape = _Assembly(overlaps=[], unchecked=["lower", "upper"])
+    with caplog.at_level(logging.INFO):
+        assert _run(InterferenceTest(), shape)
+    assert "not valid solids" in caplog.text
+    assert "lower" in caplog.text
+
+
+def test_a_pair_is_named_without_saying_where_in_the_tree_it_sits():
+    assert _matches("gearbox/shaft", "shaft")
+    assert _matches("shaft", "shaft")
+    # ...but not by accident: a suffix is a whole path element.
+    assert not _matches("driveshaft", "shaft")
+
+
+def test_the_cache_key_moves_when_the_thresholds_do():
+    """A verdict reached under one threshold must not be read back under another."""
+    test = InterferenceTest()
+    loose = asyncio.run(test.cache_key_suffix(None, _Assembly(config={"interference": {"minVolume": 1.0}})))
+    strict = asyncio.run(test.cache_key_suffix(None, _Assembly(config={"interference": {"minVolume": 0.1}})))
+    assert loose != strict
+    fraction = asyncio.run(test.cache_key_suffix(None, _Assembly(config={"interference": {"minFraction": 0.01}})))
+    assert fraction != asyncio.run(test.cache_key_suffix(None, _Assembly()))
+
+
+# --- the request the core sends the wrapper ---------------------------------
+#
+# The tests above stub get_interference_async() out entirely, which is what let
+# a broken request reach CI: the core sent the assembly under "wrapped", where
+# ocp_serialize.decode turns anything shape-shaped into OCCT geometry, so the
+# wrapper was handed one TopoDS_Compound and died reaching for a name on it.
+# Nothing here exercised the handover. This does.
+
+
+def test_the_assembly_is_sent_as_json_rather_than_as_geometry():
+    import json as _json
+
+    from partcad.assembly import Assembly
+
+    envelope = {"name": "asm", "label": "asm", "assembly": [{"name": "a", "brep": "..."}]}
+    captured = {}
+
+    class _Runtime:
+        async def ensure_async(self, *args):
+            return None
+
+        async def run_async(self, command, request_serialized):
+            captured["request"] = request_serialized
+            return 0, '{"success": true, "overlaps": [], "unchecked": [], "parts": 0}', ""
+
+    class _Ctx:
+        def get_python_runtime(self, version=None):
+            return _Runtime()
+
+    assembly = Assembly.__new__(Assembly)
+    assembly.project_name = "pkg"
+    assembly.name = "asm"
+
+    async def _wrapped(ctx):
+        return envelope
+
+    assembly.get_wrapped = _wrapped
+    asyncio.run(assembly.get_interference_async(_Ctx()))
+
+    sent = _json.loads(captured["request"])
+    # Carried as a string: a dict shaped like an assembly would be decoded into
+    # a compound on arrival, and the names would go with it.
+    assert isinstance(sent["assembly_json"], str)
+    assert _json.loads(sent["assembly_json"]) == envelope
+    assert "wrapped" not in sent, "the geometry key is decoded on arrival; do not use it here"
+
+
+def test_an_envelope_carrying_bytes_can_still_be_sent():
+    """The regression, and the reason the test above did not catch it.
+
+    A real envelope carries its BREP payloads as bytes, which json.dumps
+    cannot encode at all. That is what shape_envelope.dumps is for. Using the
+    stock one raised a TypeError which the test caught and reported as a pass,
+    so 'interference' answered "nothing overlaps" for every assembly ever
+    given to it - including a 732-part model where two parts really did.
+
+    The envelope above is all strings, which is exactly why it proved nothing.
+    """
+    import json as _json
+
+    from partcad.assembly import Assembly
+
+    envelope = {
+        "name": "asm",
+        "label": "asm",
+        "assembly": [{"name": "a", "label": "a", "brep": b"\x00\x01 not text"}],
+    }
+    captured = {}
+
+    class _Runtime:
+        async def ensure_async(self, *args):
+            return None
+
+        async def run_async(self, command, request_serialized):
+            captured["request"] = request_serialized
+            return 0, '{"success": true, "overlaps": [], "unchecked": [], "parts": 0}', ""
+
+    class _Ctx:
+        def get_python_runtime(self, version=None):
+            return _Runtime()
+
+    assembly = Assembly.__new__(Assembly)
+    assembly.project_name = "pkg"
+    assembly.name = "asm"
+
+    async def _wrapped(ctx):
+        return envelope
+
+    assembly.get_wrapped = _wrapped
+
+    # The bug was a TypeError raised here, so simply getting an answer is the
+    # assertion; the payload has to survive the trip as well.
+    result = asyncio.run(assembly.get_interference_async(_Ctx()))
+    assert result is not None
+    assert isinstance(_json.loads(captured["request"])["assembly_json"], str)
+
+
+def test_an_indeterminate_pair_is_not_reported_as_no_overlap(caplog):
+    """A boolean that did not come back is not an answer of "they are clear".
+
+    Dropping such a pair silently is how a check comes to certify what it never
+    looked at, which is the failure mode this whole set of tests exists for.
+    """
+    import logging
+
+    shape = _Assembly(overlaps=[])
+    shape._indeterminate = [{"a": "shaft", "b": "hub", "reason": "the boolean did not complete"}]
+    with caplog.at_level(logging.INFO):
+        assert _run(InterferenceTest(), shape)
+    assert "could not decide" in caplog.text
+    assert "shaft" in caplog.text
+
+
+def test_the_interference_cache_key_covers_whether_it_is_being_made():
+    test = InterferenceTest()
+    assert asyncio.run(test.cache_key_suffix(None, _Assembly())) != asyncio.run(
+        test.cache_key_suffix(None, _made(False))
+    )
+
+
+def test_a_verdict_that_turned_on_the_machine_is_not_remembered():
+    ctx = {}
+    assert not asyncio.run(InterferenceTest().test([], None, _Assembly(raises=Exception("boom")), ctx))
+    assert ctx.get(InterferenceTest.NOT_CACHEABLE) is True
+
+
+def test_a_sketch_is_flat_because_that_is_what_a_sketch_is():
+    """Found by CI: 'circle' in examples/provider_manufacturer is a sketch,
+    20 x 20 x 0 mm, and this failed it for being what it was asked to be. A
+    check an object cannot pass and should not be taking is worse than none.
+    """
+    assert _run(DegenerateTest(), _Sketch(box=(0, 0, 0, 20, 20, 0.0)))
+
+
+def test_a_pass_reached_without_looking_at_everything_is_not_remembered():
+    """A cached verdict is returned before the test runs, so remembering this
+    would hand back a pass that was never earned and would not even repeat
+    what had gone unexamined."""
+    for partial in ({"indeterminate": [{"a": "x", "b": "y", "reason": "boom"}]}, {"unchecked": ["x"]}):
+        shape = _Assembly(overlaps=[])
+        shape._indeterminate = partial.get("indeterminate", [])
+        shape._unchecked = partial.get("unchecked", [])
+        ctx = {}
+        assert asyncio.run(InterferenceTest().test([], None, shape, ctx))
+        assert ctx.get(InterferenceTest.NOT_CACHEABLE) is True, partial
+
+    # ...while a check that looked at everything and found nothing is kept.
+    clean = _Assembly(overlaps=[])
+    ctx = {}
+    assert asyncio.run(InterferenceTest().test([], None, clean, ctx))
+    assert InterferenceTest.NOT_CACHEABLE not in ctx
+
+
+def test_a_shape_that_never_built_is_the_cad_tests_to_report():
+    """Found in CI: a third-party example whose script raises ImportError was
+    failed twice - once by 'cad' for not building, and once here for "having
+    no extent at all", which names a cause that is not the cause."""
+    ctx = {}
+    assert asyncio.run(DegenerateTest().test([], None, _Shape(box=None, unbuilt=True), ctx))
+    assert ctx.get(DegenerateTest.NOT_CACHEABLE) is True
+
+    # ...but a shape that did build and encloses nothing is still reported.
+    assert not _run(DegenerateTest(), _Shape(box=None))
+
+
+def test_the_default_floor_is_there_for_arithmetic_and_nothing_else():
+    """Two surfaces that merely touch bound no volume, but a boolean over
+    tessellated faces answers with a sliver rather than zero. The floor is set
+    just above that noise - not high enough to absorb an overlap anyone meant,
+    which belongs to the joint that describes it."""
+    from partcad.test.interference import DEFAULT_MIN_VOLUME
+
+    assert DEFAULT_MIN_VOLUME == 0.05
+
+    shape = _Assembly(overlaps=[])
+    _run(InterferenceTest(), shape)
+    assert shape.asked_with[0] == DEFAULT_MIN_VOLUME
+
+
+def test_an_assembly_may_ask_for_a_tighter_floor():
+    shape = _Assembly(config={"interference": {"minVolume": 0.001}}, overlaps=[])
+    _run(InterferenceTest(), shape)
+    assert shape.asked_with[0] == 0.001
+
+
+# --- an overlap the joint requires -------------------------------------------
+
+
+class _Iface:
+    def __init__(self, self_screw):
+        self._self_screw = self_screw
+
+    def get_self_screw(self):
+        return self._self_screw
+
+
+class _IfaceCtx:
+    """A context whose interfaces declare 'selfScrew' or do not."""
+
+    def __init__(self, screwing=()):
+        self._screwing = set(screwing)
+
+    def get_interface(self, spec):
+        return _Iface(spec in self._screwing)
+
+
+class _How:
+    def __init__(self, self_screw=False, snap_in=False):
+        self.self_screw = self_screw
+        self.snap_in = snap_in
+
+
+class _Child:
+    def __init__(self, name, connection=None, how=None):
+        self.name = name
+        self.connection = connection
+        self.how = how
+
+
+def _made(flag):
+    """An assembly that says whether anybody is building it."""
+    asm = _Assembly()
+    asm.is_manufacturable = flag
+    return asm
+
+
+class _ConnectedAssembly(_Assembly):
+    def __init__(self, children=(), **kwargs):
+        super().__init__(**kwargs)
+        self._children = list(children)
+
+    def connected_children(self):
+        return iter(self._children)
+
+
+def _joint(name, target, interface=None, how=None, interferes=None):
+    return _Child(
+        name,
+        {
+            "target": target,
+            "to_interface": interface,
+            "with_interface": None,
+            "interferes": interferes or [],
+        },
+        how,
+    )
+
+
+def test_a_self_tapping_screw_is_expected_to_bite():
+    """A thread it cuts itself can only be cut by occupying the material. The
+    interface says so; nothing in the assembly has to."""
+    overlaps = [{"a": "screw", "b": "bracket", "volume": 42.0}]
+    asm = _ConnectedAssembly(
+        children=[_joint("screw", "bracket", "//pub:self-tapping")],
+        overlaps=overlaps,
+    )
+    assert _run_with_ctx(InterferenceTest(), asm, _IfaceCtx({"//pub:self-tapping"}))
+
+
+def test_a_plain_screw_in_a_matching_thread_is_not():
+    overlaps = [{"a": "screw", "b": "bracket", "volume": 42.0}]
+    asm = _ConnectedAssembly(
+        children=[_joint("screw", "bracket", "//pub:m3")],
+        overlaps=overlaps,
+    )
+    assert not _run_with_ctx(InterferenceTest(), asm, _IfaceCtx())
+
+
+def test_only_the_joined_pair_is_excused():
+    """The screw may bite its bracket; it may not also be inside the housing."""
+    overlaps = [
+        {"a": "screw", "b": "bracket", "volume": 42.0},
+        {"a": "screw", "b": "housing", "volume": 90.0},
+    ]
+    asm = _ConnectedAssembly(
+        children=[_joint("screw", "bracket", "//pub:self-tapping")],
+        overlaps=overlaps,
+    )
+    assert not _run_with_ctx(InterferenceTest(), asm, _IfaceCtx({"//pub:self-tapping"}))
+
+
+def _run_with_ctx(test, shape, ctx):
+    return asyncio.run(test.test([], ctx, shape, {}))
+
+
+def test_a_plain_screw_into_soft_material_cuts_a_thread_there():
+    """The screw is ordinary; the joint is not. An M3 driven into printed PLA
+    forms its own thread in the plastic, which is a fact about this joint and
+    not about the screw - so it is the connection that says so."""
+    overlaps = [{"a": "bolt", "b": "bone1", "volume": 32.1}]
+    asm = _ConnectedAssembly(
+        children=[_joint("bolt", "bone1", "//pub:m3", _How(self_screw=True))],
+        overlaps=overlaps,
+    )
+    assert _run_with_ctx(InterferenceTest(), asm, _IfaceCtx())
+
+
+def test_a_snap_fit_passes_through_on_its_way_in():
+    """Getting past the barb means passing through it, and a model that holds
+    no springs holds them overlapping."""
+    overlaps = [{"a": "clip", "b": "housing", "volume": 18.0}]
+    asm = _ConnectedAssembly(
+        children=[_joint("clip", "housing", "//pub:clip", _How(snap_in=True))],
+        overlaps=overlaps,
+    )
+    assert _run_with_ctx(InterferenceTest(), asm, _IfaceCtx())
+
+
+def test_a_joint_that_claims_neither_is_still_reported():
+    overlaps = [{"a": "clip", "b": "housing", "volume": 18.0}]
+    asm = _ConnectedAssembly(
+        children=[_joint("clip", "housing", "//pub:clip", _How())],
+        overlaps=overlaps,
+    )
+    assert not _run_with_ctx(InterferenceTest(), asm, _IfaceCtx())
+
+
+def test_a_connection_may_name_the_further_items_it_drives_through():
+    """A screw joins two items and passes through more than two.
+
+    It is connected to the part its head bears on and cuts its thread in every
+    part underneath that as well, and nothing about those further parts is
+    derivable from the connection - so the connection names them.
+    """
+    overlaps = [
+        {"a": "screw", "b": "bracket", "volume": 103.0},
+        {"a": "screw", "b": "plate", "volume": 103.0},
+        {"a": "screw", "b": "backing", "volume": 79.0},
+    ]
+    asm = _ConnectedAssembly(
+        children=[_joint("screw", "bracket", "//pub:self-tapping", interferes=["plate", "backing"])],
+        overlaps=overlaps,
+    )
+    assert _run_with_ctx(InterferenceTest(), asm, _IfaceCtx({"//pub:self-tapping"}))
+
+
+def test_an_item_the_connection_did_not_name_is_still_reported():
+    """'interferes' excuses what it names and nothing else."""
+    overlaps = [
+        {"a": "screw", "b": "plate", "volume": 103.0},
+        {"a": "screw", "b": "casing", "volume": 12.0},
+    ]
+    asm = _ConnectedAssembly(
+        children=[_joint("screw", "bracket", "//pub:self-tapping", interferes=["plate"])],
+        overlaps=overlaps,
+    )
+    assert not _run_with_ctx(InterferenceTest(), asm, _IfaceCtx({"//pub:self-tapping"}))
+
+
+def test_naming_a_further_item_is_enough_on_its_own():
+    """Whatever made the joint itself expected - a self-tapping interface, a
+    'how' that says so - is a separate question from what else it goes through.
+    A plain screw through a stack says only the second."""
+    overlaps = [{"a": "screw", "b": "plate", "volume": 103.0}]
+    asm = _ConnectedAssembly(
+        children=[_joint("screw", "bracket", interferes=["plate"])],
+        overlaps=overlaps,
+    )
+    assert _run_with_ctx(InterferenceTest(), asm, _IfaceCtx(set()))

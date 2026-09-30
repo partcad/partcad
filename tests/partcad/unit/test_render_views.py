@@ -17,7 +17,7 @@ import asyncio
 import pytest
 
 import partcad as pc
-from partcad.render import VIEWS, VIEW_NAMES, resolve_viewport
+from partcad.render import VIEW_NAMES, VIEWS, resolve_viewport
 from partcad.shape import Shape
 
 # The names the thin CLI inlines for '--help' and for rejecting a typo without a
@@ -155,6 +155,8 @@ def test_the_overrides_reach_the_request_above_the_configuration():
     """
 
     class _Impl:
+        # No 'properties: true', so nothing here resolves a material and the
+        # context is never used -- which is why None is enough of one.
         parameters = {"viewport_origin": [0, 0, 100], "line_weight": 2.0}
 
     class _Fake:
@@ -166,7 +168,7 @@ def test_the_overrides_reach_the_request_above_the_configuration():
         _output_request = Shape._output_request
 
     request = asyncio.run(
-        _Fake()._output_request("wrapped", _Impl(), {"viewport_origin": [0, -100, 0], "viewport_up": None})
+        _Fake()._output_request(None, "wrapped", _Impl(), {"viewport_origin": [0, -100, 0], "viewport_up": None})
     )
     assert request["viewport_origin"] == [0, -100, 0]
     # What this run said nothing about is still what the package configured.

@@ -68,6 +68,14 @@ def _bare_project(assembly, owner="robot"):
     prj = Project.__new__(Project)
     prj.name = "//pkg"
     prj.parts = {}
+    # The package creates its shapes when something asks for them, and there is
+    # no configuration here to create any from: the parts this exercises are the
+    # ones an assembly materializes as it builds. Marking the kinds created is
+    # what says so, and it is what a read of 'prj.parts' below then finds.
+    prj._instantiated_kinds = {"sketch", "part", "assembly", "scene"}
+    prj._instantiating_kinds = set()
+    prj._instantiate_lock = threading.RLock()
+    prj._alias_index = {}
     prj._object_configs = {"assembly": {owner: {"type": "urdf"}}}
     prj._derived_parts_lock = threading.Lock()
     prj._derived_parts_attempted = set()

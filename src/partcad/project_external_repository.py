@@ -11,14 +11,22 @@ import asyncio
 import json
 import threading
 
+from . import logging as pc_logging
+from . import tags as pc_tags
 from .cache_hash import CacheHash
 from .project_plugin import ProjectPlugin
 from .sync_threads import threadpool_manager
-from . import logging as pc_logging
-from . import tags as pc_tags
 
 # Distinguishes "no cached value" from a cached value of None.
 _MISSING = object()
+
+# What a package's metadata calls the list of object kinds it holds. See
+# '_served_kinds()'.
+OBJECT_KINDS_KEY = "objectKinds"
+
+# Distinguishes "the metadata has not been parsed yet" from a parse that
+# concluded the package declares nothing.
+_UNPARSED = object()
 
 
 class ProjectExternalRepository(ProjectPlugin):
@@ -38,6 +46,10 @@ class ProjectExternalRepository(ProjectPlugin):
         objects/<kind>/<name>       -> config                (single fetch)
         deps                        -> [child package names]
         meta                        -> package-level metadata
+
+    A package's metadata may carry 'objectKinds' to say which kinds it holds at
+    all; the kinds it leaves out are then never asked for. See
+    '_served_kinds()'.
 
     'get_data(key)' is the single method a repository plugin must implement; the
     accessors below are expressed entirely in terms of it.
@@ -73,15 +85,11 @@ class ProjectExternalRepository(ProjectPlugin):
         self._cache_version = cache_version
         self._request_cache: dict[str, object] = {}
         self._request_lock = threading.Lock()
-        # Objects are instantiated once, lazily, the first time this package's
-        # 'parts'/'sketches'/'assemblies' are accessed (see '_lazy_objects').
-        # '_instantiating' is the reentrancy guard so factories can write into
-        # the backing dicts during instantiation without re-triggering it.
-        self._parts = {}
-        self._sketches = {}
-        self._assemblies = {}
-        self._objects_instantiated = False
-        self._instantiating = False
+        # The parsed 'objectKinds', once the metadata has arrived. Kept apart
+        # from the metadata memo so that parsing happens once per package
+        # rather than once per kind asked about - and so that a malformed
+        # declaration is complained about once rather than ten times.
+        self._served_kinds_parsed = _UNPARSED
         super().__init__(ctx, name, path, config_obj=config_obj, inherited_config=inherited_config)
 
     def request(self, key: str, handler):
@@ -167,6 +175,69 @@ class ProjectExternalRepository(ProjectPlugin):
         with self._request_lock:
             return self._request_cache.setdefault(scoped, value)
 
+    def _served_kinds(self):
+        """The object kinds this package holds, or None if it does not say.
+
+        A package has ten kinds of object (see 'Project.OBJECT_KINDS') and a
+        consumer that wants to know whether a package holds anything asks after
+        four of them - which, for a package served by a plugin, is four separate
+        runs of that plugin's script, one per kind, most of them to be told
+        'none'. 'pc list packages -r' over LDraw's 92 categories is 368 such
+        runs, and 276 of them are about kinds no LDraw category has ever had.
+
+        So a repository may say, in a package's metadata, which kinds that
+        package actually holds:
+
+            {"desc": "...", "objectKinds": ["part", "partType"]}
+
+        and every other kind is answered 'none' from here, without asking. This
+        narrows what is asked for and never what may be served: a repository
+        that says nothing is asked about everything exactly as before, and one
+        that lists a kind it turns out to have none of is merely asked a
+        question it answers emptily, as it is today.
+
+        Read from the metadata this package has *already* fetched, and never
+        fetched on its own account - a round trip to find out what not to ask
+        for would be a second round trip in the one case that today costs one:
+        a single package, reached without the traversal. Every traversal warms
+        'meta' as it goes (see 'ensure_enumerated_async'), which is every case
+        with enough packages in it for this to matter.
+        """
+        meta = self._peek_data("meta")
+        if meta is _MISSING:
+            # The metadata has not been read yet, so nothing is known about
+            # what this package holds: ask about every kind, as before. Not
+            # remembered - the answer changes as soon as 'meta' arrives.
+            return None
+        if self._served_kinds_parsed is _UNPARSED:
+            self._served_kinds_parsed = self._parse_served_kinds(meta)
+        return self._served_kinds_parsed
+
+    def _peek_data(self, key: str):
+        """The memoized value for 'key', or _MISSING - never a fetch."""
+        with self._request_lock:
+            return self._request_cache.get(self._scope(key), _MISSING)
+
+    def _parse_served_kinds(self, meta):
+        if not isinstance(meta, dict):
+            return None
+        kinds = meta.get(OBJECT_KINDS_KEY)
+        if kinds is None:
+            return None
+        if not isinstance(kinds, (list, tuple, set)) or not all(isinstance(k, str) for k in kinds):
+            # Not something to guess at: ask about every kind, as if it had not
+            # been said at all, and say why once.
+            pc_logging.warning(
+                "%s: ignoring '%s' in the package metadata: expected a list of strings, got %r"
+                % (self.name, OBJECT_KINDS_KEY, kinds)
+            )
+            return None
+        return frozenset(kinds)
+
+    def _serves_kind(self, kind: str) -> bool:
+        kinds = self._served_kinds()
+        return kinds is None or kind in kinds
+
     def _cache_hash(self, scoped_key: str) -> CacheHash:
         # The cache directory is already scoped to this repository instance, so
         # the scoped key alone identifies the entry within it.
@@ -187,9 +258,7 @@ class ProjectExternalRepository(ProjectPlugin):
 
     async def _write_cache(self, scoped_key: str, value):
         try:
-            await self._cache.write_data_async(
-                self._cache_hash(scoped_key), {"data": json.dumps(value).encode()}
-            )
+            await self._cache.write_data_async(self._cache_hash(scoped_key), {"data": json.dumps(value).encode()})
         except Exception as e:
             pc_logging.debug("%s: cache write failed for '%s': %s" % (self.name, scoped_key, e))
 
@@ -231,76 +300,33 @@ class ProjectExternalRepository(ProjectPlugin):
         sketches, assemblies) are NOT enumerated here: doing so eagerly for every
         package makes loading a large repository (thousands of parts across many
         sub-packages) prohibitively expensive. They are enumerated lazily, per
-        package, the first time that package's objects are actually accessed (see
-        the 'parts'/'sketches'/'assemblies' properties below).
+        package and per kind, the first time that package's objects of that kind
+        are actually asked for - by 'Project.object_names()', which is where the
+        round trip lives, and which a package creating that kind or answering a
+        single lookup goes through (see 'Project.LAZY_OBJECT_KINDS').
         """
         await self._materialize_meta_async()
         # Warm 'deps' so the synchronous 'dependencies()' is a cache hit.
         await self.get_data_async("deps")
 
-    def _instantiate_enumerated(self):
-        """Instantiate this package's enumerated objects into the eager dicts.
+    async def prefetch_object_configs_async(self, kinds) -> None:
+        """Fetch the enumerations of 'kinds' at once, concurrently.
 
-        Runs at most once, the first time a consumer reads 'parts'/'sketches'/
-        'assemblies' (see those properties). Each object is created
-        independently and defensively: one that cannot be built (an unsupported
-        type, a file-backed object whose file is absent) is skipped with a
-        warning instead of hiding every other object from a 'list'. Geometry is
-        not built here - only the factories.
+        Each key is a separate run of the plugin's script, so a caller that
+        reads several kinds through the synchronous accessors pays each round
+        trip end to end, one after another. Here they are in flight together and
+        land in the memo the accessors read, which is the whole difference
+        between 'pc list packages -r' over a plugin-backed hierarchy taking one
+        round trip per package and taking one per package per kind.
+
+        Only the kinds this package says it holds are asked for; the rest are
+        answered from '_served_kinds()' without a request at all.
         """
-        for kind, getter in (
-            ("sketch", self.get_sketch),
-            ("part", self.get_part),
-            ("assembly", self.get_assembly),
-        ):
-            for name in self.object_names(kind):
-                try:
-                    getter(name)
-                except Exception as e:
-                    pc_logging.warning("%s: could not instantiate %s '%s': %s" % (self.name, kind, name, e))
-
-    def _lazy_objects(self):
-        """Instantiate the enumerated objects on first access, once."""
-        if self._objects_instantiated or self._instantiating:
+        served = self._served_kinds()
+        wanted = [kind for kind in kinds if served is None or kind in served]
+        if not wanted:
             return
-        self._instantiating = True
-        try:
-            self._instantiate_enumerated()
-            self._objects_instantiated = True
-        finally:
-            self._instantiating = False
-
-    # The eager object dictionaries the synchronous consumers (the CLI 'list'
-    # commands, render, export, get_*) read. They are populated lazily, per
-    # package, so that loading a large repository does not enumerate every
-    # sub-package's objects up front. The reentrancy guard lets the factories
-    # write into the backing dict during instantiation without re-triggering.
-    @property
-    def parts(self):
-        self._lazy_objects()
-        return self._parts
-
-    @parts.setter
-    def parts(self, value):
-        self._parts = value
-
-    @property
-    def sketches(self):
-        self._lazy_objects()
-        return self._sketches
-
-    @sketches.setter
-    def sketches(self, value):
-        self._sketches = value
-
-    @property
-    def assemblies(self):
-        self._lazy_objects()
-        return self._assemblies
-
-    @assemblies.setter
-    def assemblies(self, value):
-        self._assemblies = value
+        await asyncio.gather(*(self.get_data_async("objects/" + kind) for kind in wanted))
 
     async def _materialize_meta_async(self):
         """Fill package-level metadata from the repository.
@@ -359,12 +385,16 @@ class ProjectExternalRepository(ProjectPlugin):
         return config
 
     def _enumerate_object_configs(self, kind):
+        if not self._serves_kind(kind):
+            return {}
         configs = self.get_data("objects/" + kind)
         if not configs:
             return {}
         return {name: self._augment(config) for name, config in configs.items()}
 
     def _fetch_object_config(self, kind, name):
+        if not self._serves_kind(kind):
+            return None
         return self._augment(self.get_data("objects/" + kind + "/" + name))
 
     def dependencies(self):

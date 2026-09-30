@@ -30,6 +30,7 @@ from collections.abc import Iterator
 
 import pytest
 from click.testing import CliRunner
+
 from partcad_cli.click.command import cli
 from partcad_cli.click.commands import open as open_command
 from partcad_client import external
@@ -342,3 +343,63 @@ def test_a_solid_is_the_one_case_that_connects(click_runner, installed_blender, 
     reported = json.loads(result.output)
     assert reported["source"] == str(solid)
     assert reported["path"] == sent[0][1]["output_filename"]
+
+
+def test_the_workspace_p_selected_is_the_one_asked_about(click_runner, installed_blender, monkeypatch, tmp_path):
+    """Which workspace declares an application is decided by `-p`, not by the cwd.
+
+    The `open.tools` call is made against `click_ctx.obj.path`, so the question
+    "is there a package here at all" has to be asked of the same place. Asking
+    the current directory instead skipped a workspace's own applications
+    whenever `-p` was used from outside it.
+    """
+    workspace = tmp_path / "elsewhere"
+    workspace.mkdir()
+    (workspace / "partcad.yaml").write_text("name: test\n")
+    mesh_file = tmp_path / "outside" / "cube.stl"
+    mesh_file.parent.mkdir()
+    mesh_file.write_text("solid cube\nendsolid cube\n")
+    asked = []
+    monkeypatch.setattr(
+        open_command,
+        "run",
+        lambda cli_ctx, method, params, **kw: asked.append(method) or {"tools": {}},
+    )
+
+    with click_runner.isolated_filesystem():
+        result = click_runner.invoke(
+            cli, ["--no-ansi", "-p", str(workspace), "open", "--json", "--with", "blender", str(mesh_file)]
+        )
+
+    assert result.exit_code == 0, result.output
+    assert asked == ["open.tools"]
+
+
+def test_no_package_at_the_selected_path_asks_nothing(click_runner, installed_blender, monkeypatch, tmp_path):
+    """And the other way round: a cwd that is a workspace does not make `-p` one.
+
+    `empty` is a sibling of the workspace rather than a directory inside it --
+    `determine_root_path` climbs out of a subdirectory to the workspace root on
+    purpose, so one under `ws` would resolve to `ws` and be right to.
+    """
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    (workspace / "partcad.yaml").write_text("name: test\n")
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    mesh_file = workspace / "cube.stl"
+    mesh_file.write_text("solid cube\nendsolid cube\n")
+    asked = []
+    monkeypatch.setattr(
+        open_command,
+        "run",
+        lambda cli_ctx, method, params, **kw: asked.append(method) or {"tools": {}},
+    )
+    monkeypatch.chdir(workspace)
+
+    result = click_runner.invoke(
+        cli, ["--no-ansi", "-p", str(empty), "open", "--json", "--with", "blender", str(mesh_file)]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert asked == []

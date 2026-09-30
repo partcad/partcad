@@ -30,8 +30,8 @@ anything has been built or fetched.
 import os
 
 from ..context import Context
-from ..project import Project
 from ..file_factory import unreproducible_reason
+from ..project import Project
 from .lint import Linting, LintingReport, Severity
 
 

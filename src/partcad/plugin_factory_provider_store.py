@@ -8,13 +8,13 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from . import logging as pc_logging
+from . import telemetry
+from .plugin_factory_provider import PluginFactoryProvider
+from .plugin_provider_data_cart import *
 from .plugin_request_provider_avail import ProviderRequestAvail
 from .plugin_request_provider_order import ProviderRequestOrder
 from .plugin_request_provider_quote import ProviderRequestQuote
-from .plugin_factory_provider import PluginFactoryProvider
-from .plugin_provider_data_cart import *
-from . import logging as pc_logging
-from . import telemetry
 
 
 @telemetry.instrument()
@@ -46,6 +46,7 @@ class PluginFactoryProviderStore(PluginFactoryProvider):
             cart_item.sku,
             cart_item.count_per_sku,
             cart_item.count,
+            getattr(cart_item, "item_in_sku", None),
         )
         availability = await self.query_script(
             self.plugin,

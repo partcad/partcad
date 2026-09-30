@@ -129,16 +129,47 @@ send (`PartcadViewer`). `src/webview/` is what runs *inside* that webview: `view
 `scene.ts` the three.js renderer, and one module per tab beside it.
 
 **The panel is a strip of tabs over one object, not a canvas.** 3D first, then the bill of materials and the
-assembly instructions for an assembly, then supply information for anything that can be bought. Only the 3D
+assembly instructions for an assembly, then FEA and CFD for a part, then supply information for anything that
+can be bought. Only the 3D
 view comes over the viewer protocol; every other tab is a question about `<package>:<name>` that the renderer
 cannot ask itself -- the CSP forbids network access and the daemon is behind the host's JSON-RPC connection --
 so it asks the host (`fetchTab`) and the host answers (`tabData`), on first look. Which is why the show
 message carries the object's **package**: without it the panel offers the 3D view alone.
 
-None of those three is implemented here. `bom`, `assembly.guide` and `supply.quote` are the CLI's own operations
-(`pc bom`, the book `pc render -t html` writes, the cart `pc supply quote` fills), asked for as data rather
+**The 3D tab is a control pane and a canvas, over one node tree.** What arrives over the protocol is a single
+tree of nodes, whatever is being shown -- a part or a sketch is that tree one node deep, an assembly is a node
+per thing it holds, an interface is a node per port -- and it is PartCAD's own hierarchy with glTF at the nodes
+instead of BREP (`partcad/shape_envelope.py`). **So there is no per-kind case on this side and no depth-1
+special case**: `scene.ts` walks the tree into `THREE.Group`s and `tree.ts` walks it into rows, agreeing on what
+the drawables are called through `nodes.ts` and nothing else. Do not derive a structure here or bake a placement
+into geometry -- a node's `location` places its geometry, its children and its ports, and the renderer composes
+them down the tree (see "Coordinates and units" in
+[docs/partcad-viewer.md](./docs/partcad-viewer.md), which also says what starts out checked).
+
+**The geometry itself arrives once per distinct shape, not once per node.** PartCAD sends it as a table on the
+root keyed by a digest of the exact shape, with every node naming an entry (`gltfRef`), so an assembly that
+places one bolt a hundred times is a hundred nodes and one piece of geometry. `PartcadViewer.inflate` therefore
+decompresses the table rather than the tree, `scene.ts` parses each entry once into a `THREE.Group`, and each
+node after the first adds a `clone()` of it -- fresh `Object3D`s over the same `BufferGeometry` and the one
+shared `MeshPhongMaterial`, which is one upload and one material for the lot while every node keeps its own
+object to switch on and off. It is the arrangement the port sketches already had ("cloned per port, so forty
+holes drawn with one circle upload one geometry"), applied to the model. Two consequences worth keeping: the
+loading readout is a fraction of the *table* (`totalSize`), because counting a shared shape once per node would
+report a download that never happened; and nothing may dispose a parsed group that has been handed out, since
+its geometry is the geometry of every clone of it.
+
+None of those tabs is implemented here. `bom`, `assembly.guide`, `supply.quote` and `cae.analyze` are the CLI's
+own operations (`pc bom`, the book `pc render -t html` writes, the cart `pc supply quote` fills, the analysis
+`pc cae fea`/`pc cae cfd` runs), asked for as data rather
 than as a file -- the same rule as everywhere else in this extension: extend the one backend, do not
 reimplement it in TypeScript.
+
+The FEA and CFD tabs are the one pair that *acts* rather than asks: selecting one runs a solver. The field
+over the model names which -- pre-filled from `cae.defaults` (the user configuration's
+`caeFeaImplementation`/`caeCfdImplementation`) and filled in even when the run failed, which is when a user
+most needs to see what was tried. The model is drawn by its extension, because the format is the
+implementation's choice: a mesh gets an orbit camera, a picture pans and zooms. See
+[docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
 Four things about it are load-bearing:
 
@@ -168,9 +199,22 @@ Four things about it are load-bearing:
   the reason in the overlay; it lives there because every webview module imports it, and a module's
   dependencies are evaluated before its own body, so it is installed before anything can throw.
 - **Nothing is escaped on its way into a pane.** What the tabs display is text out of a package's
-  configuration -- a description, a part name, a supplier's answer -- so every pane builds its DOM node by
-  node through `src/webview/dom.ts` rather than assigning `innerHTML`. `textContent` cannot be talked into
-  being markup; a template literal can.
+  configuration -- a description, a part name, a supplier's answer, the name of a port -- so every pane builds
+  its DOM node by node through `src/webview/dom.ts` rather than assigning `innerHTML`. `textContent` cannot be
+  talked into being markup; a template literal can.
+- **The webview has one test suite, and it brings its own DOM.** `src/test/suite/viewerTree.test.ts` runs in the
+  extension host, which has none, so it installs a stand-in with the handful of methods `dom.ts` asks of an
+  element and exercises what the pane lists for a node tree, and which of it ends up drawn, through it. That is as far as this reaches: a test
+  that imported anything else of `src/webview` would import `scene.ts`, which builds a `WebGLRenderer` as it
+  loads. Note that `tsconfig.json` excludes `src/webview` as a *root* -- an imported module is still compiled,
+  which is why this works, and why what it imports has to be free of three.js.
+
+**A SpaceMouse arrives by two roads, and `src/webview/spacemouse.ts` is the only file that knows what its axes
+mean.** On Windows and macOS the renderer reads it through the Gamepad API; on Linux the extension host reads
+spacenavd's socket (`src/viewer/spacenav.ts`) and forwards the events untouched, because Chromium does not see
+the device there. Do not convert spacenavd's values in the host: the test that holds the two roads to each other
+(`src/test/suite/viewerSpaceMouse.test.ts`) can only do so while both conversions sit side by side. See "A
+SpaceMouse" in [docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
 Geometry reaches the viewer already tessellated: `partcad` renders to binary glTF in a sandbox and sends it
 compressed, so the extension never needs a CAD library. It used to hand live OCP objects to the third-party
@@ -204,6 +248,46 @@ Nothing emits `INSTALLED`/`INSTALL_FAILED` any more -- `events.py` still defines
 listens -- so `partcad.installed` moves only through `loaded`/`packageLoaded`. Do not read the name as "the
 PartCAD Python module is installed"; that meaning belonged to the language server, along with the no-op
 `partcad.install` command.
+
+## Workspace trust
+
+**The extension supports untrusted workspaces as `limited`, and in one it is visible, inert, and asks.**
+Opening a package runs the code its parts are written in and fetches what it imports, so in Restricted Mode
+nothing starts -- no service, no terminal, no PATH change, no file of the package read -- and a notification
+asks for trust (`explainUntrusted`, not awaited) as soon as the extension activates. `activate` is `activateWhenTrusted` (`src/common/trust.ts`),
+which runs the real activation, `activateTrusted`, at once in a trusted folder and on
+`onDidGrantWorkspaceTrust` otherwise -- trust granted mid-session starts PartCAD without a reload. It is never
+*revoked* mid-session: the editor reloads the window for that.
+
+It used to declare them unsupported (`false`), and the editor then removes everything an extension contributes
+from a restricted window -- the activity bar icon, the views, the settings -- so a user who dismissed the trust
+dialog had no PartCAD at all and nothing saying why.
+
+**All of this is for a regular VS Code.** The PartCAD IDE starts with workspace trust turned off
+(`--disable-workspace-trust`, added by its entry point), so `vscode.workspace.isTrusted` is always true there
+and none of it runs; `ide/standalone/README.md` has why. Do not detect "am I in the IDE" here to skip the
+check: the IDE's answer belongs to the IDE, and an extension that trusted folders on its own say-so in some
+editors would be one a workspace could talk into it.
+
+What the untrusted window shows, and why each is there:
+
+- **A `viewsWelcome` on `!isWorkspaceTrusted`**, with a button running `workbench.trust.manage`. The Explorer has
+  no data provider until activation, so its welcome content is what shows. The "being initialized" message is
+  the only other one whose `when` needs no key that `activateTrusted` sets, so it carries `isWorkspaceTrusted`
+  too -- otherwise both would show at once. A new welcome message must keep that true; `trust.test.ts` checks.
+- **`when: isWorkspaceTrusted` on the two webview panes.** Nothing registers their providers until trust, and
+  an unresolved webview view is an empty pane forever.
+- **A stand-in for every contributed command.** The palette and the view menus list them whether or not they
+  are registered, and running an unregistered one is "command not found". The stand-ins explain and offer the
+  trust editor, and are disposed before `activateTrusted` registers the real ones under the same ids.
+
+**A failure to start after trust is granted is reported** (`reportTrustedActivationFailure`: the log, an error
+message, `partcad.failed`). On the trusted path the editor reports a rejected `activate`; this one happens in
+an event listener after activation returned, with the stand-ins already gone, so nothing else would.
+
+`npm test` opens its workspace trusted and nothing a test does can grant trust to a window, so the untrusted
+path and the grant are tested through `activateWhenTrusted`'s options (`isTrusted`, `onDidGrantTrust`,
+`explain`, `onFailure`).
 
 ## Installing a package's dependencies
 
@@ -340,7 +424,7 @@ squiggle on a working file, so anything PartCAD's own tooling writes has to vali
 ## Opening a file in a third-party application
 
 The Explorer's per-item **"Open in > ..."** menu hands the item's file to `partcad.openExternal`, which runs
-`pc --no-ansi open --with <tool> [--type <type>] [--use-docker] [--docker-image <image>] <path> --json`. Four
+`pc --no-ansi open --with <tool> [--type <type>] [--use-docker] [--docker-image <image>] <path> --json`. Five
 applications, each offered for the objects it can actually open:
 
 | Menu entry | Command | Shown for |
@@ -348,12 +432,17 @@ applications, each offered for the objects it can actually open:
 | FreeCAD | `partcad.openInFreeCAD` | parts and assemblies |
 | Blender | `partcad.openInBlender` | parts and assemblies |
 | Gazebo | `partcad.openInGazebo` | scenes of type `world` (`viewItem == sceneWorld`) |
+| MuJoCo | `partcad.openInMuJoCo` | scenes of type `mjcf` or `world` (`viewItem == sceneMjcf` or `sceneWorld`) |
 | KiCad | `partcad.openInKiCad` | parts of type `kicad` (`viewItem == partKicad`) |
 
-The two narrow ones are why `PartcadItem` gives those objects a context value of their own: `viewItem` is one
+The narrow ones are why `PartcadItem` gives those objects a context value of their own: `viewItem` is one
 string compared exactly, so "a scene Gazebo can open" and "a part KiCad can open" have to *be* separate
-values. Both are then added back to every other clause that names their kind, because a world scene is a scene
+values. Each is then added back to every other clause that names their kind, because a world scene is a scene
 everywhere else and a KiCad part is a part.
+
+MuJoCo is offered for both scene formats and Gazebo for only one, which is not an oversight: `pc open`
+converts a world to MJCF on the way (a scene conversion, the counterpart of the mesh one it does for
+Blender) and nothing converts the other way yet.
 
 **It never reaches the daemon, and there is no RPC method for it** -- a stronger version of the rule
 `pc lint --file` follows. A daemon can be remote: "open this in FreeCAD" sent to one would put a window on
@@ -418,6 +507,67 @@ disabled as "for some reason doesn't run test suite".
 belongs in a pure function that takes the platform (`pathKey`, `listenOptions`, `daemonEndpointIn`,
 `resolveServicePath`'s `searched` list) so a test can ask what it would do somewhere else. Everything in this
 file that starts "on Windows" was shipped broken at some point precisely because nothing asked.
+
+### Testing against the IDE, not against VS Code
+
+**`npm test` downloads stock VS Code, so it says nothing about the editor that ships.** That is the right
+default -- what it checks is this extension's logic -- but it is blind to everything the PartCAD IDE puts
+around it: the built-in extension set, `product.json`'s `configurationDefaults` (`partcad.backend`,
+`partcad.serviceChannel`), the bootstrap extension and the first-start workspace it creates, the embedded
+`partcad-json-rpc` the extension is meant to find without a dialog, and the branded application shell itself.
+Nothing here started that editor until #609, and it could not start at all on macOS for two releases without a
+single test in this repository noticing.
+
+So a change to any of those is tested against a **built** IDE. `.vscode-test.js` offers a second
+configuration, `bundledIde`, when `PARTCAD_IDE_PATH` names one. What it wants is the application *binary* --
+not the bundle, and not the `bin/` launcher:
+
+```bash
+# macOS. The executable's name belongs to the editor this was built from --
+# VSCodium's, today -- so it is read rather than written down here.
+app="$HOME/Applications/PartCAD IDE.app"
+export PARTCAD_IDE_PATH="$app/Contents/MacOS/$(plutil -extract CFBundleExecutable raw "$app/Contents/Info.plist")"
+
+# Linux. Resolved through the launcher `install.sh` symlinks, rather than
+# assuming the layout it owns.
+app="$(dirname "$(dirname "$(readlink -f "$HOME/partcad-bin/partcad-ide")")")"
+export PARTCAD_IDE_PATH="$app/partcad-ide"
+
+npm run pretest && npx vscode-test --label bundledIde        # xvfb-run -a ... on Linux
+```
+
+```powershell
+# Windows. There is no `install.sh` there -- the setup program puts the
+# application here -- and `fromPath` is read by Node, so it wants a native path.
+$env:PARTCAD_IDE_PATH = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE\partcad-ide.exe"
+npm run pretest; npx vscode-test --label bundledIde
+```
+
+The first two are the ones `build-ide-standalone.yml` uses, and neither hardcodes a name it can ask for. The
+first version of that step wrote `Contents/MacOS/VSCodium` and was right about today's bundle and wrong in
+principle; `ide/standalone/AGENTS.md` has which plist field means what.
+
+**CI runs this on macOS and Linux only.** The `install` job drops Windows from its matrix -- there is no shell
+installer there, and `install-windows` runs the setup program instead -- so the Windows form above is the one
+to use by hand and the one nothing checks. Do not reach it by running the Bash recipe under Git Bash: there is
+no `~/partcad-bin/partcad-ide` to resolve, and if there were, `readlink -f` answers with an MSYS path
+(`/c/...`) that `useInstallation.fromPath` cannot use.
+
+Unset, the configuration is not offered and `npm test` is unchanged, so nobody needs a bundle to work here.
+`.github/workflows/build-ide-standalone.yml` sets it after installing a build, which is the only place it runs
+in CI -- `ide/standalone/AGENTS.md` has how that bundle is made.
+
+Three things the bundled run needs, all of which have already cost a debugging session:
+
+- **`PARTCAD_EXTENSION_NO_PROMPTS=1` still applies.** The IDE *does* carry a service, so the download dialog is
+  not the risk it is under stock VS Code -- but a prompt of any kind is still something a headless run cannot
+  answer, and on Windows an unanswered modal keeps the window from ever closing.
+- **The built IDE already contains a released copy of this extension.** `--extensionDevelopmentPath`, which the
+  runner passes, is what makes the checkout win. A test asserting on extension *version* rather than behaviour
+  will read whichever copy it happened to get.
+- **A first `Display` provisions a conda environment**, which takes about three minutes on a clean machine
+  against roughly two seconds warm. A test that exercises geometry needs a warmed `~/.partcad/conda` or a
+  budget that admits the cold path; the 60s Mocha timeout is sized for activation, not for that.
 
 ## Build / package
 

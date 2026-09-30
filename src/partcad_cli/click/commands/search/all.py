@@ -16,7 +16,7 @@ from ...cli_context import CliContext
     "-r",
     "--recursive",
     is_flag=True,
-    help="Recursively search in all imported packages",
+    help="Recursively search in all imported packages (older spelling of '<package>...')",
     show_envvar=True,
 )
 @click.option(
@@ -32,7 +32,10 @@ from ...cli_context import CliContext
     type=str,
     default="//",
     show_envvar=True,
-    help="Package to search the objects in, defaults to '//'(the root package)",
+    help=(
+        "Package to search the objects in, defaults to '//'(the root package). "
+        "'<package>...' searches that package and every package below it"
+    ),
 )
 @click.pass_obj
 def cli(cli_ctx: CliContext, recursive: bool, package: str, keyword: str) -> None:

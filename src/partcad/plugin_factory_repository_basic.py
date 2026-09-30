@@ -7,12 +7,12 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .plugin_request_repository_list import PluginRequestRepositoryList
-from .plugin_request_repository_get import PluginRequestRepositoryGet
-from .plugin_request_repository_search import PluginRequestRepositorySearch
-from .plugin_factory_repository import PluginFactoryRepository
 from . import logging as pc_logging
 from . import telemetry
+from .plugin_factory_repository import PluginFactoryRepository
+from .plugin_request_repository_get import PluginRequestRepositoryGet
+from .plugin_request_repository_list import PluginRequestRepositoryList
+from .plugin_request_repository_search import PluginRequestRepositorySearch
 
 
 @telemetry.instrument()

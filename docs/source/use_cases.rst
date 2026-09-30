@@ -58,19 +58,19 @@ The command line tools are the easiest way to browse parts:
     pc list packages
 
     # List all sketches in all available packages
-    pc list sketches -r
+    pc list sketches //...
 
     # List all interfaces in all available packages
-    pc list interfaces -r
+    pc list interfaces //...
 
     # List all known matings of interfaces in all available packages
-    pc list mates -r
+    pc list mates //...
 
     # List all parts in all available packages
-    pc list parts -r
+    pc list parts //...
 
     # List all assemblies in all available packages
-    pc list assemblies -r
+    pc list assemblies //...
 
     # Try initializing the model, print some basic info without displaying it
     pc info //pub/std/metric/cqwarehouse:fastener/hexhead-din931

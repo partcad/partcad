@@ -26,6 +26,7 @@ import contextlib
 import os
 
 import pytest
+
 from partcad_service_json_rpc import daemon
 from partcad_service_json_rpc import win_pipe as service_win_pipe
 from partcad_utils import win_pipe as rendezvous

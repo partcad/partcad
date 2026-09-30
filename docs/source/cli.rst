@@ -31,6 +31,54 @@ that copy rather than from the configuration it was started with. So ``pc --deve
 says even when a daemon has been running since before you set it, and there is no daemon to restart after
 changing a setting.
 
+An assembly is built out of other assemblies, and the daemon builds those **one at a time, each in a request of
+its own**. So asking for an assembly whose sub-assemblies have not been built yet prints a line naming them::
+
+    Building these sub-assemblies first: //pub/examples/partcad/produce_assembly_assy:primitive
+
+and then builds each one before building what you asked for. You will see a ``DONE:`` line per step rather than
+one for the whole thing; nothing is built twice, since each one is cached as it is finished. This is why an
+assembly that takes many minutes no longer has to fit into a single request, and it is entirely automatic --
+there is nothing to turn on and no command of your own to run.
+
+.. _recursive-names:
+
+**********************************
+Naming a package and what is below
+**********************************
+
+A package name ending in ``...`` means **that package and every package below it**, transitively::
+
+    pc list parts //pub/examples...      # the parts of that package and of everything it imports
+    pc install -P //pub/examples...      # prepare all of them
+    pc test -P ...                       # test this package and everything below it
+
+``...`` on its own is the current package and everything below it, and ``//...`` is the whole workspace from
+the root down. The last path separator is optional, so ``//pub/examples/...`` is the same request as
+``//pub/examples...``.
+
+The suffix can also be written on an **object** name, in front of the ``:``, which is what makes it more than
+a flag::
+
+    pc render ...:bolt                   # every part named 'bolt', here and below
+    pc render //pub/examples...:bolt     # every part named 'bolt' in that subtree
+    pc export -a ...:frame               # every assembly named 'frame', here and below
+    pc info ...:bolt                     # what each of them is
+
+An object name that carries the suffix also says where the walk starts, so it wins over ``-P`` — the same rule
+a fully qualified ``//package:name`` already follows.
+
+A walk over a named object asks every package of the subtree for its **own** object of that name, and passes
+over the packages that declare none: a tree of forty packages in which three declare a ``bolt`` is three
+renders, not thirty-seven complaints. Finding it nowhere in the subtree is the one failure, and it is reported
+once.
+
+``-r``/``--recursive`` is the older spelling of a ``...`` on the package name and still works everywhere it
+did. It cannot say where the walk starts, it is not available on every command that could use one (``pc info``
+has none), and the rest of this page is written with ``...``. Note that ``pc supply find -r`` and
+``pc supply quote -r`` mean something else entirely — break every assembly down to its parts — and take no
+``...``.
+
 *************
 Host commands
 *************
@@ -46,8 +94,25 @@ Host commands
 
   - ``pc system status`` — Display the state of the internal data used by PartCAD, including the location of
     the local cache.
+  - ``pc system status config`` — Dump the configuration this installation resolved, with the configuration
+    file, the ``PC_*`` environment and the command line already applied. The same report as ``pc config``,
+    beside the two below so that "what is this machine doing" is one command with three answers. An option
+    whose value is a secret says only whether it is set; a ``git.auth`` entry keeps its host, username and
+    key path and loses its password and passphrase; and the ``user`` section is reported as which of its
+    fields are configured, never as the name and addresses in them.
+  - ``pc system status env`` — Dump the ``PC_*`` environment variables this ``pc`` process was started with.
+    Not the same thing as the report above: the configuration says what an option resolved to, this says what
+    the environment asked for, and they disagree whenever a command-line option won or a value was rejected.
+    A variable whose name says its value authenticates — ``PC_REMOTE_SANDBOX_TOKEN``, or anything else with
+    ``TOKEN``, ``KEY``, ``SECRET``, ``PASSWORD``, ``CREDENTIAL`` or ``AUTH`` between the underscores of its
+    name — is listed but printed as ``<scrubbed>``, so the report stays something you can paste into a bug.
   - ``pc system reset`` — Reset all internal state maintained by PartCAD, for example to clear a corrupted
     cache.
+  - ``pc system prune`` — Remove the containers and images PartCAD created for the ``docker`` sandbox.
+    Only what carries PartCAD's labels (see ``tools/containers/README.md``), so an image somebody else put on
+    the machine is never touched — and neither is a third-party sandbox image whose author did not adopt the
+    convention, which has to be removed by hand. ``--stale`` narrows it to what is out of date: images built
+    for another PartCAD release, and containers nothing is using.
   - ``pc system set`` — Set system-wide settings, such as the telemetry type, environment, and Sentry DSN.
   - ``pc system telemetry`` — Inspect or clear locally stored telemetry data (``info``, ``clear``).
 
@@ -81,11 +146,26 @@ Host commands
     once the daemon answers on it, so whoever reads it can connect straight away.
   - ``pc daemon stop`` — Stop the daemon serving this workspace, and say whether one was running.
   - ``pc daemon status`` — Display the state of the internal data the daemon holds.
+  - ``pc daemon status config`` — Dump the configuration the daemon itself resolved, the daemon-side
+    counterpart of ``pc system status config``. The two differ on purpose: a daemon is warm and shared per
+    workspace, so its own configuration is whatever its environment held when something first started it —
+    possibly days ago, possibly from a VS Code window. It is not what your command ran under (that travels
+    with the command, as explained above); it is what the daemon falls back on for a client that sends none.
+  - ``pc daemon status env`` — Dump the ``PC_*`` environment variables the daemon process is running with.
+    On POSIX this is the one report that cannot be worked out from this side at all, because the shared
+    socket daemon inherited the environment of whatever started it. On Windows the client connects to a
+    one-shot stdio service spawned as its own child rather than to the named-pipe daemon, so the answer is
+    usually the same as ``pc system status env`` — still the environment of the process doing the work, just
+    not a different one. Credentials are scrubbed on the far side, so the value never reaches the wire.
   - ``pc daemon reset`` — Drop that state. ``--repo-only``, ``--sandbox-only`` and ``--cache-only`` narrow it
     to the cached dependencies, the sandboxed runtime environments, or the filesystem cache respectively;
     without them all of it goes.
   - ``pc daemon set telemetry`` — Set the daemon's telemetry settings (``type``, ``env``, ``sentryDsn``),
     the daemon-side counterpart of ``pc system set``.
+
+  The three ``status`` reports reach the daemon serving this workspace and start one if none is answering yet
+  — there is no reading the configuration or the environment of a process that does not exist. A daemon such
+  a command started is one that inherited *this* shell, so ask when the daemon you mean is already up.
 
   There is no daemon to restart after changing a setting: every command hands the daemon its own resolved user
   configuration, as explained above. Stopping one is for upgrades and for clearing a wedged state.
@@ -104,12 +184,16 @@ Host commands
     pc open --use-docker cube.step          # or in a container, when there is none
     pc open --with blender cube.stl         # a mesh, in Blender
     pc open --with blender cube.step        # a solid, converted to STL for Blender first
-    pc open --with gazebo warehouse.world   # a scene, in Gazebo
+    pc open --with gazebo warehouse.world   # a scene, in Gazebo (from partcad-sim-gazebo)
+    pc open --with mujoco stack.xml         # a scene, in MuJoCo (from partcad-sim-mujoco)
     pc open --with kicad Arduino_Nano.step  # a board, in KiCad
 
-  ``--with`` names the application: ``freecad`` (the default), ``blender``, ``gazebo`` for a Gazebo world --
-  which is what a :ref:`scene <scenes>` of type ``world`` is, and what ``pc export -S -t world`` writes -- and
-  ``kicad`` for a board. A locally installed one is always
+  ``--with`` names the application: ``freecad`` (the default), ``blender`` and ``kicad`` for a board are the
+  ones PartCAD itself ships. ``gazebo`` and ``mujoco`` come from the plugin package for that engine
+  (`partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_,
+  `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_), beside the reader, the exporter and
+  the simulator for its scene format, so they are offered in a workspace that imports one and are an unknown
+  application anywhere else. A locally installed one is always
   used when there is one: the command looks on the ``PATH``, in ``/Applications`` on macOS, under
   ``Program Files`` on Windows, and for a flatpak on Linux. Gazebo is looked for under all three of the names
   it has had (``gz sim``, ``ign gazebo``, ``gazebo``), and whichever the machine has is the one used.
@@ -124,9 +208,16 @@ Host commands
   one -- and the VS Code extension passes the declared type of the object you clicked. A ``.blend`` is
   Blender's own file and is opened, not converted.
 
+  MuJoCo reads MJCF and no other model format, and a scene that is not already one is **not** converted here.
+  That is not an omission: MJCF is written by ``partcad-sim-mujoco``'s exporter and a Gazebo world is read by
+  ``partcad-sim-gazebo``'s reader, and a file handed to ``pc open`` has no package around it to reach either
+  through. So such a file is refused with the export that does work rather than converted wrongly. An
+  application's ``open:`` entry names the extensions its own format is stored in (``sceneExtensions``), which
+  is how a file that already is one goes straight over without any conversion at all.
+
   An object that only means something inside a package -- an ASSY file, a URDF -- has nothing to convert
-  ad-hoc, and is refused with that rather than converted wrongly: export it to a mesh first
-  (``pc export -t stl``) and open that.
+  ad-hoc, and is refused with that for the same reason: export it to a mesh first (``pc export -t stl``), or
+  a scene to its engine's format (``pc export -S -t sim-mujoco:mjcf``), and open that.
 
   KiCad is handed the board rather than the file named, when the two are not the same: a ``kicad`` part *is*
   the STEP file KiCad's command line writes out of the board, so ``pc open --with kicad`` on it opens the
@@ -136,16 +227,16 @@ Host commands
 
   With ``--use-docker``, a machine that has no local installation runs the application in a container instead
   — one container per application, named after it (``partcad-freecad``, ``partcad-blender``,
-  ``partcad-gazebo``, ``partcad-kicad``), created from the application's image
+  ``partcad-gazebo``, ``partcad-mujoco``, ``partcad-kicad``), created from the application's image
   (``--docker-image`` overrides it; FreeCAD's is ``linuxserver/freecad:latest``, since the FreeCAD project
-  publishes no image of its own, Blender's is ``linuxserver/blender:latest`` for the same reason, Gazebo's is
-  ``gazebosim/gz-harmonic:latest``, and KiCad's is the
-  ``ghcr.io/partcad/partcad-container-kicad`` image PartCAD already builds for ``kicad`` parts) the first
+  publishes no image of its own, Blender's is ``linuxserver/blender:latest`` for the same reason, KiCad's is
+  the ``ghcr.io/partcad/partcad-container-kicad`` image PartCAD already builds for ``kicad`` parts, and an
+  engine's is whatever its plugin package declares) the first
   time and reused afterwards, so a container you have prepared
   keeps being the one that is used. Without ``--use-docker``, a machine with neither the application nor
   Docker is told so rather than being left with a command that quietly did nothing. Remove the application's
   own container (``docker rm -f partcad-freecad``, ``partcad-blender``,
-  ``partcad-gazebo``, ``partcad-kicad``) to have the next ``pc open``
+  ``partcad-gazebo``, ``partcad-mujoco``, ``partcad-kicad``) to have the next ``pc open``
   create a fresh one. The workspace and the directory holding this workspace's daemon socket are mounted **at
   the paths they have on the host**, which is what lets one path mean the same thing on both sides. A file
   that is not in this workspace gets its own workspace mounted instead, so that whatever is mounted always
@@ -172,6 +263,24 @@ Package commands
   Create a new PartCAD package (a ``partcad.yaml`` file) in the current directory. Use ``-i`` for interactive
   mode, and options such as ``--desc``, ``--url``, and ``--manufacturable`` to prefill package metadata.
 
+  It also sets up the repository the package is in: a **Render** command in ``.vscode/launch.json``, and the
+  AI agent skills that teach a coding agent to drive PartCAD -- the ``pc`` plugin in
+  ``.claude/skills/`` for Claude Code, and ``pc-``-prefixed skills in ``.cursor/skills/`` for Cursor. Both come
+  out of the installed PartCAD, so they state the version that wrote them. Neither is a reason for the command
+  to fail.
+
+  ``--no-skills`` skips the skills. ``--skills-only`` installs *just* them and touches no package at all, which
+  is how a repository that has a package already gets them, or gets a newer PartCAD's -- there is nothing to
+  create, so an existing ``partcad.yaml`` is neither read nor replaced. ``--agents`` chooses which agents to
+  install for: ``all`` (the default), or a comma-separated list of ``claude`` and ``cursor``. An agent PartCAD
+  does not know is an error, because a typo that installs nothing looks exactly like an agent that is not
+  supported yet.
+
+  Installing again updates what is there and **removes the skills PartCAD has stopped shipping**: a retired
+  skill left behind describes a CLI that has moved on, which is worse than no skill at all because the agent
+  follows it anyway. Only PartCAD's own are removed -- the Cursor copies carry a ``metadata.partcad`` stamp
+  saying which release wrote them, and a ``pc-`` skill without one is somebody else's and is left alone.
+
 ``pc install``
   Download everything the current package needs to be built - the PartCAD counterpart of ``npm install``.
   It fetches all imported packages, then prepares every sketch, part and assembly by computing its cache key:
@@ -179,14 +288,16 @@ Package commands
   which loads the packages the objects really depend on. Every piece of :ref:`software` is prepared too, by
   fetching its file - it has no cache key, being a file rather than something built out of one. Nothing is
   built. Use ``-P`` to install a package
-  other than the current one and ``-r`` to prepare the objects of the imported packages too.
+  other than the current one, and name it as ``-P <package>...`` to prepare the objects of the packages below
+  it too (see :ref:`recursive-names`).
 
 ``pc update``
   Force update all imported packages to their latest versions. This updates the packages a package imports;
   to upgrade the PartCAD installation itself, use ``pc upgrade``.
 
 ``pc lint``
-  Run linting checks on the files within packages. Use ``-r`` to check imported packages recursively and
+  Run linting checks on the files within packages. Name the package as ``-P <package>...`` to check the
+  packages below it too (see :ref:`recursive-names`), and use
   ``-f`` to run only checks whose name starts with a given prefix. ``--file PATH`` (repeatable) checks the
   named files instead, in this process rather than through the daemon; add ``--json`` for machine-readable
   findings and ``--stdin`` to check unsaved content supplied on standard input. ``--schema`` says which schema
@@ -200,6 +311,9 @@ Object commands
 ``pc list``
   List components. Subcommands select what to list: ``all``, ``parts``, ``sketches``, ``assemblies``,
   ``scenes``, ``interfaces``, ``mates``, ``providers``, ``software``, and ``packages``.
+
+  Each takes the package to list as its argument, the current one by default. Name it as ``<package>...`` to
+  list the packages below it too — ``pc list parts //pub/examples...`` (see :ref:`recursive-names`).
 
 ``pc add``
   Add an object to a package. Subcommands: ``dep`` (a dependency), ``sketch``, ``part``, ``assembly``,
@@ -215,17 +329,46 @@ Object commands
 ``pc import``
   Import an existing object into a package. Subcommands: ``part`` (import an existing part and optionally
   convert its format), ``assembly`` (import an assembly from a file, creating the parts and an Assembly
-  YAML file), and ``scene`` (import a Gazebo world, creating the parts and an Assembly YAML scene).
+  YAML file), and ``scene`` (import an arrangement file -- a Gazebo world, an MJCF model -- creating the
+  parts and an Assembly YAML scene). ``pc import scene -t`` names the format where the file's extension does
+  not say, or says the wrong thing, and is how a format a *package* reads is named: ``sim-gazebo:world``,
+  ``sim-mujoco:mjcf``.
   ``pc import`` is a one-shot conversion; to keep reading the source file itself,
-  declare it as an assembly of the ``step`` type or a scene of the ``world`` type instead (see
+  declare it as an assembly of the ``step`` type or a scene of that reader's type instead (see
   :ref:`assembly_step` and :ref:`scenes`).
 
 ``pc test``
-  Run tests on a part, assembly, or scene. Use ``-r`` to test imported packages recursively, ``-f`` to filter
+  Run tests on a part, assembly, or scene. Name the package as ``-P <package>...`` to test the packages
+  below it too, or the object as ``...:<name>`` to test every object of that name from here down (see
+  :ref:`recursive-names`). Use ``-f`` to filter
   by name prefix, and ``-s``/``-i``/``-a``/``-S`` to indicate a sketch, interface, assembly, or scene.
   The tests cover whether the object builds (``cad``), whether it can be manufactured or purchased
-  (``cam`` and the methods below it), and whether an assembly's connection instructions can be followed
-  (``connect``); see "Testing the instructions" in :doc:`assy`.
+  (``manufacturability`` and the methods below it), whether an assembly's connection instructions can be
+  followed (``connect``; see "Testing the instructions" in :doc:`assy`), whether the route a machine would cut
+  it with can be produced (``cam``; see :ref:`pc cam <cam>`), and whether the engineering analyses a part asks
+  for come back clean (``fea`` and ``cfd``; see :ref:`pc cae <cae>`).
+
+  ``manufacturability`` answered to the name ``cam`` until :ref:`pc cam <cam>` existed, at which point one word
+  was answering two questions -- "can this be made at all" and "here is the program that makes it". They are
+  different checks now, and ``-f`` filters by name *prefix*: ``-f manufacturability`` selects that check and its
+  three method-specific siblings, and ``-f cam`` selects the route check alone.
+
+  Three of them ask something else: not whether the object built, but whether what was built is what
+  somebody meant. ``shell`` fails a part that came back as a *surface* rather than as a body -- a set of
+  faces with nothing said about which side of them is material, which renders and exports like the part
+  that was meant while every boolean against it comes back with no solid in it, so interference, CAM, FEA
+  and any mass computed from it are wrong. ``degenerate`` fails one that has no size left in some
+  direction: a 2 x 2 brick that meshed into a flat disc because a subfile could not be fetched. ``solidity``
+  fails one whose faces are oriented inward, which measures the right size and reports a *negative* volume.
+  All three are about an object that looks entirely correct in a picture, which is why they have to be asked
+  rather than noticed, and none of them needs a solver. ``shell`` needs nothing at all: its answer is read
+  straight out of the geometry the object has already produced, so it is asked of every part.
+
+  None of the three can be turned off on an object. A part that is a surface, or has collapsed in one
+  direction, or is inside out, is a part nothing downstream can compute with -- whatever it was meant to be --
+  and a check an object can exclude itself from is a check that reports on the objects that did not need
+  checking. A kind of object that is exempt is exempt on what it *is*: a sketch is not measured for having
+  size in every direction, and an assembly is checked through its parts.
 
   The manufacturability test asks for exactly what ``pc supply`` would order. An assembly that is sold
   assembled (see :ref:`procurement`) passes once a supplier carries it, and is not taken apart: the parts
@@ -239,12 +382,59 @@ Object commands
   :ref:`software` an object declares -- every reference has to resolve, and the file it resolves to has to be
   obtainable and be the one that was meant. A board nobody can flash is not a board anybody can make.
 
+``pc sim``
+  Run the simulations a part or an assembly declares in its ``simulate:`` section, and check the
+  ``validation:`` condition each of them states. Use ``-a`` when the object is an assembly, ``-P
+  <package>...`` or ``...:<name>`` to run everything the packages below declare too (see
+  :ref:`recursive-names`), ``-f`` to run only the simulation of a given name, and
+  ``--json`` to print the whole of what each simulation plugin reported. A validation that does not hold
+  exits non-zero.
+
+  Where ``pc test`` asks whether a part can be *made*, this asks whether it *works*: it places the object in
+  the scene the declaration names, at the ``offset:`` the declaration states, runs the scene through the
+  simulation plugin the declaration names, and evaluates the ``validation:`` expression over the ``before``
+  and ``after`` the plugin hands back. Nothing needs installing to run one -- the plugin runs in a PartCAD
+  sandbox that installs whatever it needs.
+
+  PartCAD implements no simulator: a package imports one and names it in ``simulation:``
+  (`partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_ is the MuJoCo one and
+  `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ the Gazebo one; each also declares
+  the reader, the writer and the ``pc open`` entry for that engine's own scene format). The *scene* does
+  have a built-in default -- an empty world holding the object -- so a simulation of a part standing on its
+  own is a few lines. See :doc:`simulation` and ``examples/feature_simulate``.
+
 ``pc inspect``
   View a part, assembly, or scene visually. Use ``-V`` for a verbal (text) description instead of a visual
   one, and ``-p <name>=<value>`` to set parameters.
 
 ``pc info``
-  Show detailed information about a part, assembly, scene, or software, including its parameters.
+  Show detailed information about a part, assembly, scene, or software, including its parameters. Name the
+  object as ``...:<name>`` to report every object of that name from here down, or pass ``<package>...`` as the
+  package with no object at all to report each package of a subtree (see :ref:`recursive-names`).
+
+  Where the object says what it is made of, the material it names is resolved and reported as
+  ``Material`` — the formal and full names, the density both ways round, the coefficient of friction and
+  the tags the catalogue states — rather than as the bare reference the configuration beside it already
+  shows. A reference nothing answers to is reported as it was written, with the error, which is why no
+  mass and no friction came from it. See :ref:`materials`.
+
+  For anything with geometry it also reports what PartCAD **measured** when it built it:
+  ``BoundingBox`` as ``min``, ``max`` and ``size`` in millimetres, and -- for anything holding a solid --
+  its ``Volume`` in cubic millimetres with ``Solids`` saying how many solids that is the volume of. Neither
+  can be read off a declaration: a part is a script, a file or a boolean of two others, and the only way to
+  know how big it is, is to have built it. A sketch, a shell or a wire has a box and no volume; a negative
+  volume means the faces are oriented inward and is reported as it stands.
+
+  For an object read from a **file**, it also reports what the file itself states -- a STEP part or assembly
+  (and a ``kicad`` part, which produces one) its header, products, layers and user-defined properties; a DXF
+  sketch its layers, units and the elements carrying extended data. That last is where a sheet metal bend
+  states its ``angle``, ``radius`` and ``direction``; see :ref:`sketch-annotations` and :ref:`sheet-metal`.
+  Both formats report those pairs the same way, keys lower-cased and values as the file states them, so what
+  reads them need not know which format answered.
+
+  Reporting every layer rather than only the ones a sketch reads is deliberate: a layer filter that matched
+  nothing and a layer that is not in the file both produce a sketch with nothing in it, and this is what
+  tells them apart.
 
 ``pc bom``
   Print the bill of materials of an assembly or a scene: every part it is made of, recursively, with how many of each
@@ -263,45 +453,280 @@ Object commands
   package, because a firmware image — unlike a bracket — is a different file once its package publishes
   again.
 
+.. _cae:
+
+``pc cae``
+  Run an engineering analysis on a part and report what it found. Subcommands: ``fea`` (finite element
+  analysis) and ``cfd`` (computational fluid dynamics). Both take one part::
+
+      pc cae fea :bracket
+      pc cae cfd -i //pub/feature/cae/openfoam:cfd :duct
+
+  The part says what it is held by and what it carries, in a section named after the analysis. ``fix:`` names
+  what is held still — a list of interface types, or a map from an interface type to the instances of it that
+  are held. ``load:`` names what is pulled on — a map from an interface type to one value for all of its
+  instances, or a nested map naming the instance::
+
+      parts:
+        bracket:
+          type: build123d
+          path: bracket.py
+          fea:
+            fix:
+              - m3-screw          # every instance of it is held
+            load:
+              hook: 5 kg          # every instance carries this
+              rail:
+                left: 30 N        # one named instance carries this
+                right: 30 N
+
+  A ``load`` value is a **force**. It may be written as a number and a unit — ``n``, ``nm``, ``mn``, ``kn`` or
+  ``newton`` for force, ``mg``, ``g``, ``kg``, ``ton``, ``tonne``, ``lb`` or ``pound`` for mass — matched
+  case-insensitively, with or without a space in front of it and with or without a plural ``s``. A bare number
+  is a **mass in kilograms**, which is what "the shelf carries 5" means. A mass is weighed into a force at
+  9.8 N/kg, so what is stored and handed to the solver is always newtons. ``cfd:`` takes the same two keys with
+  the same meaning: what is held still, and what force the flow puts on it.
+
+  The model the analysis produces is written to ``<part>.<analysis>.<extension>`` and saved as it stands.
+  Which format that is — 3D or 2D — is the implementation's choice, and PartCAD does not convert it. The
+  **findings** are the other half of the answer: a JSON array of what the analysis has to say about the part,
+  printed as a table, or as the array itself with ``--json``. ``pc cae`` exits non-zero when there is at least
+  one, so it can be used as a gate.
+
+  Who runs the analysis is ``<package>:<file type>``. It defaults to the ``caeFeaImplementation`` /
+  ``caeCfdImplementation`` :doc:`user configuration <configuration>` options — ``//pub/feature/cae/calculix:fea``
+  and ``//pub/feature/cae/calculix:cfd`` — and ``-i``/``--implementation`` overrides it for one run. PartCAD
+  ships no solver: an implementation is a package like any other, declared in a ``cae:`` section exactly as an
+  export or a render implementation is declared in its own (see :ref:`output-files`), and installed as a
+  dependency.
+
+  An analysis that produces no answer is reported the same way by ``pc cae`` and by ``pc test``: which
+  implementation was asked, what it said, and which platform it did not work on. The remedies differ — install a
+  solver, use another machine, fix the part — and only the implementation's own sentence says which, so it is
+  relayed as it stands rather than classified. The command and the check say it identically on purpose: a user
+  who ran one of them and then the other must not be told two different things about the same machine.
+
+  ``pc test`` runs the same analyses. Its ``fea`` and ``cfd`` tests apply to a part that declares the matching
+  section — and to nothing else, so a package of bolts pays nothing for them. **One thing passes: the analysis
+  ran and reported no findings.** A malformed section fails; a plugin that cannot be resolved fails (the
+  package is not a dependency, did not load, or declares no such file type — the configuration is wrong
+  wherever the package is opened); a plugin that resolves and cannot run fails too, whether what is missing is
+  the solver, the mesher, or a sandbox that will not build. That last one is not a skip on purpose: a part
+  declaring ``fea:`` has asked a question, and a plugin that answered nothing has failed. So declaring ``fea:``
+  in a shared package does make ``pc test`` fail for everyone who has not installed what the implementation
+  needs — that is what declaring it means, and a package unwilling to ask that of its readers should not
+  declare the section. It is the one verdict ``pc test`` does not remember — installing a solver changes
+  nothing a cache key is built from, so a remembered one would go on failing a part that now analyses perfectly
+  well.
+
+  **A machine with no container runtime is the one excuse.** An implementation naming a ``container:`` or a
+  ``dockerImage`` (see :doc:`configuration`) is saying that a container is how what pip cannot install
+  arrives; where there is no container runtime to run it in, nothing was ever asked, and the check skips with
+  a ``WARNING`` carrying the whole report. It still declares the requirements that let it run in a ``conda``
+  or ``venv`` sandbox, so a host with the non-Python pieces installed natively runs it there and a failure
+  there is a failure. An implementation that names no image gets no excuse at all, and a container runtime
+  that *is* here removes the excuse for one that does — an image that cannot be pulled or is missing the
+  solver is something somebody can fix. A Docker daemon running Windows containers is not one of these
+  runtimes: every image PartCAD uses is a Linux image.
+
+.. _cam:
+
+``pc cam``
+  Produce the route files of the objects that declare one: the program a machine cuts them with. It takes the
+  object's own outline, offsets it by the radius of the cutter, and cuts it at a series of depths -- a 2.5D
+  route, which is what a CNC router does to sheet goods and what a mill does to a plate::
+
+      pc cam                    # every object of this package that says how it is made
+      pc cam :panel             # one of them
+      pc cam -s :nameplate      # one that is a sketch
+      pc cam -m laser :gasket   # one that could be made either way, written for the laser
+      pc cam -P ...             # this package and everything it imports
+      pc cam ...:panel          # every panel from here down
+
+  Unlike ``pc cae``, this is a **package-level** command. An analysis is asked of one part; a route is what a
+  package's cut list is made of, so with nothing named ``pc cam`` produces one for every sketch and part of
+  the package that says how it is made and passes over every object that does not, silently. Most
+  objects are never cut, and a package where three parts of forty are is the ordinary case rather than
+  thirty-seven warnings. Naming an object that declares nothing *is* an error: naming one is asking about it,
+  and coming back with nothing would look exactly like a route that went somewhere the user did not notice.
+  An assembly and a scene are not routed at all -- an assembly is put together rather than cut, and a scene is
+  an arrangement of things that were each cut on their own.
+
+  The object says what is cut out of it, and how, in the ``manufacturing:``
+  section that already says how it is made -- beside the machine it belongs to::
+
+      parts:
+        stock:
+          type: build123d
+          path: sheet.py
+
+        panel:
+          type: build123d
+          path: panel.py
+          manufacturing:
+            method: subtractive
+            source: stock
+            cnc:
+              operation: profile  # around the outside of it
+              diameter: 6 mm      # the cutter
+              depth_per_pass: 3 mm
+              feed: 2400 mm/min
+              speed: 18000 rpm
+
+  A key written directly under ``manufacturing:`` is shared by every machine the
+  part names; one written inside a machine's own subsection is that machine's
+  and outranks it. A part may name several -- ``cnc:``, ``laser:``, ``drill:``
+  -- and they are **alternatives**, ways it could be made rather than stages it
+  goes through, so ``--machine`` picks which to write for and the programs land
+  beside each other as ``panel.laser.nc`` and ``panel.cnc.nc``. A part that
+  really is machined in stages is a chain of parts, each naming the previous one
+  as its ``source``.
+
+  A *sketch* has one of these sections too, with no ``method:`` in it: a drawing
+  is not made from anything, it is a path a machine follows.
+
+  ``operation:`` says which side of the outline the tool runs on. ``profile`` goes around the outside of the
+  material and around the inside of every hole, so the object survives at its nominal size -- and cuts the
+  holes first, because a profile cut ends by separating the part from its stock and a hole cut after that is
+  cut in something that is no longer held. ``pocket`` clears what is inside the outline, ring by ring,
+  innermost first so that the wall is cut last by a tool engaged on one side rather than buried in a slot; an
+  island in the middle of one is refused rather than cut through. ``engrave`` follows the outline itself,
+  offset by nothing, which is what a V-bit or a drag knife wants.
+
+  A length may be written as a number and a unit -- ``mm``, ``cm``, ``m``, ``um``, ``in``, ``inch``, ``"``,
+  ``ft``, ``mil`` or ``thou`` -- matched case-insensitively, with or without a space in front of it and with
+  or without a plural. A bare number is **millimetres**. A feed may name the length, the time, or both:
+  ``2400``, ``2400 mm/min``, ``40 mm/s``, ``60 in/min``; a bare number is millimetres per minute. A spindle
+  speed is rpm, with or without the word. What the *file* is written in is a separate question and the
+  ``units:`` parameter of the file type: a part 18 mm thick is cut 18 mm deep whether the program says ``G21``
+  or ``G20``.
+
+  ``safe_z:`` is a **clearance above the top of the object** rather than an absolute height, so it means the
+  same thing wherever the object sits in Z.
+
+  ``depth:`` is the one key with a conditional default. An object that does not say is cut **through**, from
+  the top of its bounding box to the bottom. A sketch has no thickness to be cut through, so a sketch that
+  does not say how deep to cut is refused. ``diameter:`` has no default at all and must not get one: every
+  other parameter has a defensible default, and the diameter of the cutter is the one number that cannot be
+  guessed from the part -- a route produced against a diameter nobody chose is wrong by exactly the amount
+  nobody noticed.
+
+  Every key of that section is also a parameter of the ``cam:`` file type that produces the route, which is
+  what makes it three layers of one namespace: ``//builtin/cam`` underneath, then the package's own ``cam:``
+  section, then the object's ``manufacturing:``. So a package cutting twenty parts from one sheet sets the
+  cutter once and the one part that needs a smaller one says so for itself. The conversion above happens at
+  every layer -- a ``mm/min`` written by the package is understood as surely as one written on the object.
+
+  The route is written to ``<object>.<extension>`` -- ``panel.nc`` -- beside the package, or wherever ``-O``
+  says. ``--json`` prints what was produced as the array it is: the file, the implementation that wrote it,
+  and whatever that implementation counted about the route. ``pc cam`` exits non-zero if any object it was
+  asked about produced no route, and reports every one of them rather than stopping at the first: a route is
+  a file, and an object whose section is wrong must not cost the other nineteen theirs.
+
+  Who produces it is ``<package>:<file type>``. Unlike an analysis, PartCAD **ships one** -- a route is
+  arithmetic on the object's own outline rather than somebody else's program with a release cycle of its own,
+  which is the test ``export:`` and ``render:`` already pass -- so ``camImplementation`` defaults to
+  ``//builtin/cam:gcode`` and nothing has to be installed. A controller that wants a dialect of its own is a
+  package declaring a file type in its own ``cam:`` section exactly as an export or a render implementation is
+  declared in its own (see :ref:`output-files`), named by that option, by an ``implementation:`` in the
+  object's own ``manufacturing:`` section, or by ``-i`` for one run -- in that order of precedence, narrowest
+  last.
+
+  What the built-in one writes is plain RS-274 with every curve linearized to within ``tolerance:`` of the
+  true curve: an arc word is only an arc while the plane it was written in survives the post-processor, and
+  one tolerance says exactly what the approximation costs where an arc and a tolerance would say less. Nothing
+  in the file is a timestamp, a host name or a version, so the same object and the same parameters produce the
+  same bytes on any machine.
+
+  ``pc test`` runs this as its ``cam`` check, and it is the same code: the check produces the route and passes
+  the object only if one came back. It applies to an object that says how it is made and to nothing
+  else, so a package of bolts pays nothing for it -- the same gate the ``fea`` and ``cfd`` checks have, and
+  the same cost model. There is one way to pass: a route was written. A malformed section fails, an
+  implementation that cannot be resolved fails, and an implementation that resolved and produced nothing fails
+  -- a tool bigger than the hole it was asked to cut, an outline the offset consumed, a sandbox that will not
+  build. A machine that cannot provision a sandbox at all is the one thing it does not hold against the object:
+  nothing was ever asked there, so it skips, loudly, and does not remember the skip.
+
+  Unlike the analyses, the check does **not** keep what it produced. An analysis writes its model beside the
+  package because the model is the answer somebody asked for; a route produced by a check is a by-product, and
+  one left beside the package would be indistinguishable from the one this command writes -- checked in by
+  accident, or read as current long after the part moved on. So the check routes into a temporary directory and
+  deletes it.
+
+  **The check that used to be called ``cam`` is ``manufacturability`` now.** It asks whether an object *can* be
+  made or bought at all -- whether the geometry suits the method it declares, whether what it is made from is
+  reproducible, whether a supplier could be found -- which is a different question from whether a
+  post-processor can produce a program for it. Both are computer-aided manufacturing, which is why one word
+  answered for both until this command existed.
+
+  **The outline is a section taken at the bottom of the cut**, and that is the limit worth knowing. For a
+  prismatic object -- a panel, a plate, a gasket, anything cut out of stock of one thickness -- it is the same
+  outline at every depth. For an object whose cross-section changes over the cut there is no single right
+  answer, and the route follows the bottom and says so, as a warning naming how much the two ends differ by:
+  a route produced from an outline the user did not expect is the one failure that looks like a success all
+  the way to the machine. There is also no lead-in, no tab and no ramp -- the tool plunges at the start of
+  each contour and the part is free at the end of the last pass.
+
 ``pc convert``
   Convert parts, sketches, assemblies or scenes to another format and update their type in the package.
   Subcommands: ``part``, ``sketch``, ``assembly`` and ``scene``. An assembly converts between ``assy`` and
   ``urdf``: to URDF it writes the ``.urdf`` file and the meshes it references; to ASSY it writes an ``stl``
   part for every URDF link, an interface pair for every joint, and an ``.assy`` that places the parts with
-  ``connect:``. A scene converts between ``assy`` and ``world``: to a Gazebo world it writes the ``.world``
-  file and the meshes it references; to ASSY it copies every shape the world places into the package as a
-  part of its own and writes an ``.assy`` that places them.
+  ``connect:``. A scene converts between ``assy`` and any file format the package graph reads as a scene --
+  ``sim-gazebo:world`` and ``sim-mujoco:mjcf`` are the two today, each from its engine's plugin package. To
+  such a format it writes the file and the meshes it references; to ASSY it copies every shape the file
+  places into the package as a part of its own and writes an ``.assy`` that places them. Which formats those
+  are is not a fixed list -- it is whatever the graph declares under ``import:`` with ``scene`` among its
+  ``kinds`` -- so a package that teaches PartCAD an arrangement format converts to and from it too.
 
 ``pc export``
   Export a 3D view of parts, assemblies, or scenes. Use ``-a`` for an assembly and ``-S`` for a scene.
   Choose the format with ``-t``:
-  ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, ``gltf``, ``iges``, ``urdf``, ``world``, or any
-  file type a package implements itself (see :ref:`output-files`). Use ``-O`` to set the output directory and
-  ``-r`` to export recursively. ``urdf`` writes a ``.urdf`` file plus a directory of the mesh files it
-  references, and ``world`` writes a Gazebo ``.world`` file (SDFormat) the same way -- that is the format a
-  scene has. ``-e``
+  ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, ``gltf``, ``iges``, ``urdf``, or any
+  file type a package implements itself (see :ref:`output-files`). Use ``-O`` to set the output directory,
+  and ``-P <package>...`` or ``...:<name>`` to export the packages below this one too (see
+  :ref:`recursive-names`). ``urdf`` writes a ``.urdf`` file plus a directory of the mesh files it
+  references.
+
+  ``-t`` also takes a full path, ``-t sim-gazebo:world``, which names the package the implementation lives
+  in. That is how a format PartCAD ships no implementation of is reached, and an engine's own scene format is
+  exactly that: a Gazebo world (SDFormat) is written by
+  `partcad-sim-gazebo <https://github.com/partcad/partcad-sim-gazebo>`_ and a MuJoCo model (MJCF) by
+  `partcad-sim-mujoco <https://github.com/partcad/partcad-sim-mujoco>`_, beside the reader and the simulator
+  that share their knowledge of the format, so ``-t sim-gazebo:world`` is the spelling that resolves and a
+  bare ``-t world`` resolves to nothing. Both write a file plus a directory of the meshes it references, the
+  way ``urdf`` does. ``-e``
   names a further package whose ``export:`` options and implementations are used, which is how one package's
-  exporter is applied to another package's objects.
+  exporter is applied to another package's objects -- the same answer for every file type at once, where
+  ``-t <package>:<type>`` is the answer for one.
 
 ``pc render``
   Render a 2D projection of parts, assemblies, or scenes onto a plane. Choose the format with ``-t``:
   ``svg``, ``png``, ``jpeg``, ``dxf``, ``readme``, ``pdf``, ``html``, or any file type a package implements
   itself (see :ref:`output-files`). ``-e`` works the same way as it does for ``pc export``, reading the
-  ``render:`` options from another package.
+  ``render:`` options from another package. ``-P <package>...`` and ``...:<name>`` render a whole subtree, the
+  same way they do for ``pc export`` (see :ref:`recursive-names`).
 
   ``--with-ports`` draws every port of the object on the projection: a coordinate frame at each, with the long
   arrow along ``+Z`` — the direction a part travels along when it is connected through that port — and the
   name a ``connectPorts:`` would have to use written beside it. ``--with-interfaces`` names each *instance* of
   an interface once, draws a line from that name out to each port that belongs to it, and draws each port's
-  boundary sketch where the port is. ``--with-all`` draws both. On an assembly or a scene all three walk
-  everything inside it and place each child's ports where it put the child, which is how a connection that
-  went wrong is found: two frames that should have met and did not. Every port drawn is also listed in the
-  log, with the exact name to write in an Assembly YAML file.
+  boundary sketch where the port is. ``--with-all`` draws both. Every port drawn is also listed in the log,
+  with the exact name to write in an Assembly YAML file.
+
+  An assembly is taken at its word: what is drawn is what it says its ports are -- the ones its ``map:``
+  externalizes and the ones it declares (see :ref:`assembly-ports`) -- and not everything inside it. That is
+  the same boundary ``pc info`` and a ``connect:`` see, and an assembly that externalizes three ports of the
+  forty it contains means those three. ``--with-internals`` draws what is inside one anyway, each child's
+  ports placed where the assembly put the child, which is how a connection that went wrong is found: two
+  frames that should have met and did not. On its own it asks for nothing; it says how deep the three options
+  above reach.
 
   The options apply to whichever format is being written — the projection is the same one underneath ``svg``,
   ``png``, ``jpeg`` and ``dxf`` — and a package can ask for the same thing permanently, by declaring
-  ``with_ports:`` or ``with_interfaces:`` on a file type of its own (see :ref:`output-files`, and
-  ``examples/feature_interface``, which keeps four such drawings checked in). ``port_marker_size`` and
+  ``with_ports:``, ``with_interfaces:`` or ``with_internals:`` on a file type of its own (see
+  :ref:`output-files`, and ``examples/feature_interface``, which keeps four such drawings checked in).
+  ``port_marker_size`` and
   ``port_label_size`` set how big the markers and the names are, as a fraction of the projection's largest
   dimension.
 
@@ -418,6 +843,25 @@ Other commands
   Check the host system for known issues. Use ``--dry-run`` to list the available checks, ``--filters`` to run
   only checks with the given tags, and ``--fix`` to attempt automatic fixes.
 
+  One of them is about this repository rather than the host: ``AgentSkills`` compares the AI agent skills
+  installed here against the PartCAD running, and reports the ones an older release wrote. ``pc upgrade``
+  replaces PartCAD and leaves them where they are, so without this an agent goes on reading instructions for a
+  CLI that has moved -- silently, since a stale skill looks exactly like a current one. ``--fix`` reinstalls
+  them, for the agents that had them and no others.
+
 ``pc search``
   Search for objects by keyword. Subcommands: ``all``, ``parts``, ``sketches``, ``assemblies``,
-  ``scenes``, ``interfaces``, and ``packages``.
+  ``scenes``, ``interfaces``, and ``packages``. ``-P`` names the package to search, the root package by
+  default; ``-P <package>...`` searches the packages below it too (see :ref:`recursive-names`).
+
+  ``pc search parts`` and ``pc search assemblies`` also take ``-i``/``--interface``, which searches by what
+  an object *connects by* rather than by what its declaration says: ``pc search parts -i m4-thru`` finds
+  every part with a 4mm through hole, and finds the ones that implement ``m4-thru-3`` or any other interface
+  derived from it, because a part with a 3mm-thick 4mm through hole is a part with a 4mm through hole. An
+  abstract interface is therefore the most useful thing to search by -- it is the name a whole family is
+  known by. A bare name is the interface this package declares, and ``//package:name`` is any other.
+
+  The answer comes from the declarations -- ``implements:``, and an assembly's ``map:`` -- so nothing is
+  built and nothing is instantiated to produce it; the interfaces named in those declarations are resolved
+  once per package and kept for the rest of the run. ``--keyword`` and ``--interface`` may be given together,
+  and then both have to hold.

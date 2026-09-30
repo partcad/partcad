@@ -9,8 +9,9 @@ import os
 
 from filelock import FileLock, Timeout
 
-from .tests import HealthCheckReport, HealthCheckTest
 from partcad.user_config import user_config
+
+from .tests import HealthCheckReport, HealthCheckTest
 
 
 class StaleGitLocksCheck(HealthCheckTest):

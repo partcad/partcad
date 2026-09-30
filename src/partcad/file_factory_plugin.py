@@ -12,9 +12,9 @@ import os
 
 import aiofiles
 
+from . import logging as pc_logging
 from . import telemetry
 from .file_factory import FileFactory
-from . import logging as pc_logging
 
 
 @telemetry.instrument()

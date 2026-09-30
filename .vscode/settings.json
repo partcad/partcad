@@ -243,11 +243,6 @@
   "python.testing.unittestEnabled": false,
   // "redhat.telemetry.enabled": false,
   "remote.autoForwardPortsSource": "hybrid",
-  "remote.extensionKind": {
-    "codecov.codecov": [
-      "ui"
-    ]
-  },
   "search.exclude": {
     "**/*.egg-info": true,
     "**/.partcad": true,

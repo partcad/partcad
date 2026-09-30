@@ -11,16 +11,30 @@ import os
 import threading
 
 from . import logging as pc_logging
-from . import wrapper
+from . import shape_envelope, telemetry, wrapper
 from .part_factory_file import PartFactoryFile
-from . import telemetry
-
-from . import shape_envelope
+from .process_crash import command_failure
 
 
 @telemetry.instrument()
 class PartFactoryStep(PartFactoryFile):
     PYTHON_SANDBOX_VERSION = "3.11"
+
+    # A STEP file is where a manufacturing tolerance belongs when the file
+    # states one: AP242 carries the whole of GD&T, and a part read from a file
+    # that tolerances its features is better described by the file than by
+    # anything a package could write beside it. So this type is read for it (see
+    # 'tolerance_inspect'), and - because plenty of STEP files carry no GD&T at
+    # all, and a part read from one of those would otherwise have no way left to
+    # say how precisely it has to be made - it accepts a 'tolerance:' field for
+    # the declaration to answer with when the file does not.
+    #
+    # 'kicad' inherits both by inheriting this factory, which is right in both
+    # directions: what it builds is a STEP file, so it is read like one, and a
+    # board fabricated to a tolerance nothing in the KiCad project states has
+    # the same need of a field.
+    ACCEPTS_TOLERANCE_FIELD = True
+    TOLERANCE_FILE_FORMAT = "step"
 
     lock = threading.Lock()
 
@@ -48,7 +62,7 @@ class PartFactoryStep(PartFactoryFile):
                     request_serialized,
                 )
                 if exitcode != 0 and len(errors) == 0:
-                    errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+                    errors = command_failure(command, exitcode)
 
                 if errors:
                     pc_logging.error(errors)

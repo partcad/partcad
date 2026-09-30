@@ -6,14 +6,14 @@
 #
 # Licensed under Apache License, Version 2.0.
 
-from packaging.specifiers import SpecifierSet
 import sys
 
+from packaging.specifiers import SpecifierSet
+
 from . import consts
-from . import logging as pc_logging
 from . import exception as pc_exception
-from . import sandbox_versions
-from . import telemetry
+from . import logging as pc_logging
+from . import sandbox_versions, telemetry
 
 
 @telemetry.instrument()
@@ -44,6 +44,43 @@ class Configuration:
     """
 
     name: str
+
+    # What tells an old 'import:' (dependencies) from a new one (readers).
+    #
+    # 'type:' is the decisive one: the dependency schema *requires* it, and its
+    # four values name transports. A reader declaration has no 'type' at all -
+    # what it declares is 'path', 'kinds', 'extension' and so on - so the word
+    # cannot mean both things by accident.
+    DEPENDENCY_TRANSPORTS = frozenset({"git", "tar", "local", "external"})
+    # The keys only a dependency has, so that an entry still being written -
+    # a 'url:' with no 'type:' yet - is recognised for what it is rather than
+    # read as a reader with an odd field.
+    DEPENDENCY_ONLY_KEYS = frozenset(
+        {"url", "relPath", "revision", "subfolder", "onlyInRoot", "cacheVersion", "includePaths", "plugin"}
+    )
+
+    @classmethod
+    def _obsolete_import_entries(cls, section) -> list:
+        """The names under 'import:' that describe a dependency, not a reader.
+
+        Empty for a section that declares readers, which is what makes this safe
+        to call on every package: the check costs one pass over a handful of
+        keys and says nothing about a package using the section as it is meant
+        to be used now.
+
+        An entry that is neither - no marker, no reader fields - is left alone
+        here and fails later, where the message can say what a reader
+        declaration is missing.
+        """
+        if not isinstance(section, dict):
+            return []
+        obsolete = []
+        for entry_name, entry in section.items():
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("type") in cls.DEPENDENCY_TRANSPORTS or (cls.DEPENDENCY_ONLY_KEYS & set(entry)):
+                obsolete.append(entry_name)
+        return obsolete
 
     def __init__(
         self,
@@ -82,23 +119,82 @@ class Configuration:
         # The location is authoritative for every package except the root. The
         # root has no parent to derive a location from, so it adopts the name it
         # declares - that is what lets a package developed standalone use the
-        # same package path its consumers will see it at.
-        if name == consts.ROOT and self.declared_name:
+        # same package path its consumers will see it at. Captured before that
+        # rename, because 'is this the package the user is standing in' is a
+        # question the legacy-'import:' report below has to ask afterwards.
+        is_root = name == consts.ROOT
+        if is_root and self.declared_name:
             name = self.declared_name
             self.name = name
         else:
             self.config_obj["name"] = name
 
-        if not "render" in self.config_obj or self.config_obj["render"] is None:
+        if "render" not in self.config_obj or self.config_obj["render"] is None:
             self.config_obj["render"] = {}
 
-        # Backward compatibility for "import" -> "dependencies" renaming
-        if "import" in self.config_obj and "dependencies" not in self.config_obj:
-            pc_logging.warning(
-                f"{name}: 'import' key is deprecated and will be removed in future versions. Use 'dependencies' instead.",
+        # 'import:' used to be the name of 'dependencies:', and for a while a
+        # package that still used it was migrated here in silence. It cannot be
+        # any more: 'import:' is now the section that declares object types a
+        # package can read (see 'output.IMPORT'), so copying it into
+        # 'dependencies' would take a perfectly good reader declaration and try
+        # to fetch it as a package.
+        #
+        # The two are told apart by what the entries carry, and the markers are
+        # decisive rather than a guess. 'type:' is *required* of a dependency
+        # and its four values name transports; a reader declaration has no
+        # 'type' at all, and could not use one of those words if it did. The
+        # rest are the other transport-only keys, listed so that a
+        # half-finished dependency is still recognised as one.
+        #
+        # Reported, never migrated: an automatic rewrite is what made the two
+        # ambiguous, and doing it again with a better guess would only move the
+        # day it goes wrong. So the section is dropped and said to be dropped.
+        #
+        # How loudly depends on whose package it is, and that is the only thing
+        # the two cases differ in.
+        #
+        # The *root* package is the one the user is standing in and the one they
+        # can fix, so it is an error and the package is broken: the command
+        # exits non-zero and nothing loads out of a configuration PartCAD can no
+        # longer read the way it was meant. That is how every other unreadable
+        # 'partcad.yaml' is handled; see 'ProjectLocal.__init__'.
+        #
+        # An *imported* package is somebody else's -- very often reached through
+        # the public index, several levels away from anything the user wrote --
+        # so it is a warning naming the package, the entry and the fix, and the
+        # package goes on being usable for everything else it declares. It has
+        # to be: 'Context.import_project()' reports a broken import as an error
+        # of its own, so marking it broken here would make one legacy package
+        # anywhere in the index fail every command that merely walks past it.
+        # What is lost is exactly what the section said -- those dependencies,
+        # and whatever was underneath them.
+        obsolete = self._obsolete_import_entries(self.config_obj.get("import"))
+        if obsolete:
+            report = pc_logging.error if is_root else pc_logging.warning
+            report(
+                "%s: 'import:' now declares object types this package can read, not its dependencies. "
+                "The %s %s %s a dependency, not a reader, and %s ignored. "
+                "Rename the section to 'dependencies:'."
+                % (
+                    name,
+                    "entries" if len(obsolete) > 1 else "entry",
+                    ", ".join("'%s'" % entry for entry in obsolete),
+                    "describe" if len(obsolete) > 1 else "describes",
+                    "are" if len(obsolete) > 1 else "is",
+                )
             )
-            self.config_obj["dependencies"] = self.config_obj["import"]
-            del self.config_obj["import"]  # Clean up old key
+            self.broken = self.broken or is_root
+            # Only the entries that gave themselves away. The check is per
+            # entry, so the section is too: a package part-way through the
+            # rename has a legacy dependency and a working reader side by side,
+            # and dropping the whole mapping would take the reader with it --
+            # leaving every object that uses it failing as an unknown type,
+            # which says nothing about the section that caused it.
+            import_section = self.config_obj["import"]
+            for entry_name in obsolete:
+                del import_section[entry_name]
+            if not import_section:
+                del self.config_obj["import"]
 
         # option: "partcad"
         # description: the version of PartCAD required to handle this package
@@ -153,6 +249,27 @@ class Configuration:
             # as the stack that goes into it.
             self.python_version = sandbox_versions.DEFAULT_PYTHON_VERSION
             self.python_version_declared = None
+
+        # option: "dockerImage"
+        # description: the image this package's sandboxes are built from, for
+        #              whoever is using the "docker" sandbox
+        # values: string (e.g. "ghcr.io/example/solver:1a2b3c4d")
+        # default: None, meaning PartCAD's own base image for the Python version
+        #
+        # Declared by a package that needs something pip cannot install -- a
+        # native executable, a library with no wheel for some platform. It does
+        # NOT excuse the package from declaring its "pythonRequirements": an
+        # image says where the package runs best, not where it runs at all, and
+        # a host that has the native pieces installed runs it in a conda or venv
+        # sandbox like any other package.
+        #
+        # Kept apart from anything resolved, for the reason "pythonVersion" is:
+        # an output implementation runs in the image the package that *ships* it
+        # named, and a caller asking for a part has no opinion worth reading.
+        self.docker_image_declared = self.config_obj.get("dockerImage")
+        if self.docker_image_declared is not None and not isinstance(self.docker_image_declared, str):
+            pc_logging.warning('%s: "dockerImage" must be a string naming an image' % name)
+            self.docker_image_declared = str(self.docker_image_declared)
 
         # option: "javascriptVersion"
         # description: the major version of Node.js to use in sandboxed

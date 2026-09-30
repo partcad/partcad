@@ -104,6 +104,16 @@ parts:
     type: alias
     source: //pub/examples/partcad/feature_interface:socket-head-m4-screw-6mm
 
+  # The one bought part of the PartCAD logo.
+  screw_m8_35mm:
+    type: alias
+    source: //pub/examples/partcad/produce_part_step:bolt
+
 render:
   svg:
+    # This drawing is checked in, so it has to be the same file every time it
+    # is rendered. See 'reproducible' in '//builtin/render', and the note at
+    # the top of 'examples/partcad.yaml' for what that settles and what it
+    # cannot.
+    reproducible: true
   readme:

@@ -27,13 +27,13 @@ pc inspect logo_embedded
 
 ### partcad_logo (alias to logo)
 <table><tr>
-<td valign=top><a href="partcad_logo.assy"><img src="././partcad_logo.svg" alt="partcad_logo" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><img src="././partcad_logo.svg" alt="partcad_logo" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
 <td valign=top>PartCAD logo</td>
 </tr></table>
 
 ### partcad_logo_short (alias to logo)
 <table><tr>
-<td valign=top><a href="partcad_logo_short.assy"><img src="././partcad_logo_short.svg" alt="partcad_logo_short" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><img src="././partcad_logo_short.svg" alt="partcad_logo_short" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
 <td valign=top>PartCAD logo</td>
 </tr></table>
 
@@ -53,7 +53,7 @@ pc inspect logo_embedded
 ## Parts
 
 ### primitive_compound
-<a href="primitive_compound.compound"><img src="././primitive_compound.svg" alt="primitive_compound" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a>
+<img src="././primitive_compound.svg" alt="primitive_compound" style="width: auto; height: auto; max-width: 200px; max-height: 200px;">
 
 <br/><br/>
 

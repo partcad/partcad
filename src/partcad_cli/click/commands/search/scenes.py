@@ -15,7 +15,7 @@ from ...service import run
     "--recursive",
     "recursive",
     is_flag=True,
-    help="Recursively search in all imported packages",
+    help="Recursively search in all imported packages (older spelling of '<package>...')",
     show_envvar=True,
 )
 @click.option(
@@ -24,7 +24,10 @@ from ...service import run
     type=str,
     default="//",
     show_envvar=True,
-    help="Package to search the scenes in, defaults to '//'(the root package)",
+    help=(
+        "Package to search the scenes in, defaults to '//'(the root package). "
+        "'<package>...' searches that package and every package below it"
+    ),
 )
 @click.option(
     "-k",

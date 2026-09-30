@@ -111,6 +111,7 @@ class TelemetryConfig(dict):
     def __init__(self, v: vyper.Vyper):
         self.v = v
         self.v.bind_env("telemetry.type", "PC_TELEMETRY_TYPE")
+        self.v.bind_env("telemetry.detail", "PC_TELEMETRY_DETAIL")
         self.v.bind_env("telemetry.env", "PC_TELEMETRY_ENV")
         self.v.bind_env("telemetry.performance", "PC_TELEMETRY_PERFORMANCE")
         self.v.bind_env("telemetry.failures", "PC_TELEMETRY_FAILURES")
@@ -135,6 +136,34 @@ class TelemetryConfig(dict):
                 return telemetry["type"]
 
         return "sentry"
+
+    @property
+    def detail(self):
+        """How deep the tracing goes: 'actions' (the default) or 'methods'.
+
+        'actions' is one span per operation PartCAD names - the processes and
+        the actions its own log lines are built from ('Action: InitWrapper',
+        'Process: ListAssemblies'). That is the shape of what a command does.
+
+        'methods' adds a span for every instrumented method underneath them.
+        It is what a trace needs to answer "where inside this did the time go",
+        and it is expensive in a way that is easy to miss: creating one part
+        goes through a dozen instrumented methods, so a package of eight
+        thousand of them is a quarter of a million spans for a listing. It is
+        available, and it is not the default.
+        """
+        try:
+            if self.v.is_set("telemetry.detail"):
+                return self.v.get_string("telemetry.detail")
+        except Exception:  # pragma: no cover
+            # Workaround for https://github.com/alexferl/vyper/pull/71
+            if "telemetry.detail" in self.v._override:
+                return self.v._override["telemetry.detail"]
+            telemetry = self.v._config.get("telemetry", {})
+            if "detail" in telemetry:
+                return telemetry["detail"]
+
+        return "actions"
 
     @property
     def env(self):
@@ -296,6 +325,8 @@ OPTION_KEYS = (
     "cacheS3MinEntrySize",
     "cacheDependenciesIgnore",
     "pythonSandbox",
+    "remoteSandbox",
+    "remoteSandboxToken",
     "ignoreBundledOpenscad",
     "internalStateDir",
     "logLevel",
@@ -309,6 +340,9 @@ OPTION_KEYS = (
     "useDocker",
     "useDockerPython",
     "useDockerKicad",
+    "caeFeaImplementation",
+    "caeCfdImplementation",
+    "camImplementation",
     "tags",
 )
 
@@ -343,7 +377,55 @@ SECTION_PATHS = (
 )
 
 
+# Which implementation each CAE analysis is run by when nothing says otherwise.
+# A package path and a file type in it, exactly as a user would write one, and
+# both live in the public PartCAD index. They are not built into 'partcad': a
+# solver is a large third-party program, and which one to run is the user's
+# decision (see the 'caeFeaImplementation' option below).
+DEFAULT_CAE_IMPLEMENTATIONS = {
+    "fea": "//pub/feature/cae/calculix:fea",
+    "cfd": "//pub/feature/cae/calculix:cfd",
+}
+
+# Which implementation produces a route when nothing says otherwise. Unlike the
+# two above this one *is* built into 'partcad': a route is arithmetic on the
+# object's own outline rather than somebody else's program, so PartCAD ships it
+# (see 'partcad.output.BUILTIN_PACKAGES'). The option exists all the same,
+# because which post-processor a shop's machine reads is that shop's answer and
+# not PartCAD's.
+DEFAULT_CAM_IMPLEMENTATION = "//builtin/cam:gcode"
+
+
 class UserConfig(vyper.Vyper):
+    # The sandbox before anything has been read. Both are replaced during
+    # '__init__'; they exist as class attributes so that the property below
+    # answers on a half-built object, which 'vyper.Vyper.__init__' can reach
+    # through '__setattr__' before ours has run.
+    _python_sandbox = None
+    _python_sandbox_declared = False
+
+    @property
+    def python_sandbox(self):
+        """Which sandbox to build Python environments in.
+
+        A property so that setting it counts as a decision. '--python-sandbox'
+        arrives this way -- the CLI assigns the attribute after the
+        configuration has been read -- and a decision, however it arrives, is
+        obeyed rather than second-guessed by the container-runtime check in
+        'Context.get_python_runtime'.
+        """
+        return self._python_sandbox
+
+    @python_sandbox.setter
+    def python_sandbox(self, value):
+        self._python_sandbox = value
+        self._python_sandbox_declared = True
+
+    @property
+    def python_sandbox_declared(self) -> bool:
+        """Whether the sandbox above was asked for rather than picked."""
+        return self._python_sandbox_declared
+
     def get_bool(self, key):
         """Read a boolean option, believing "0", "no" and "off".
 
@@ -368,6 +450,19 @@ class UserConfig(vyper.Vyper):
     def get_config_dir():
         home = os.environ.get("HOME", Path.home())
         return os.path.join(home, ".partcad")
+
+    @staticmethod
+    def get_config_path():
+        """The configuration file itself: the first of the layers '__init__' resolves.
+
+        Next to the directory above rather than derived from it at each call
+        site, for the reason 'get_generated_id_path' below gives: a path spelled
+        twice is a path that can be read from one place and written to another.
+        A report of what the configuration resolved to has to name this file,
+        and naming a different one would make the report a lie exactly when
+        somebody is using it to find out why an option did not take.
+        """
+        return os.path.join(UserConfig.get_config_dir(), "config.yaml")
 
     @staticmethod
     def get_cache_dir():
@@ -415,6 +510,10 @@ class UserConfig(vyper.Vyper):
             value = self.get(path)
             if value:
                 data[path] = value
+        # Whether the sandbox was somebody's decision, which the value cannot
+        # say: every process resolves one, so the receiving end would read the
+        # startup default as a statement. See '__init__'.
+        data["pythonSandboxDeclared"] = self._python_sandbox_declared
         return data
 
     @classmethod
@@ -423,15 +522,19 @@ class UserConfig(vyper.Vyper):
         return cls(settings=data)
 
     def __init__(self, settings: dict = None):
+        """Resolve the configuration: the file, the `PC_*` environment, `settings`.
+
+        Each option below is read once and kept as an attribute, so that a
+        caller asks the object rather than the layers underneath it. `settings`
+        is what `from_dict` passes when a daemon is rebuilding a *caller's*
+        configuration rather than resolving its own.
+        """
         super().__init__()
         self.set_config_type("yaml")
 
         cfg_dir = UserConfig.get_config_dir()
         os.makedirs(cfg_dir, exist_ok=True)
-        config_path = os.path.join(
-            cfg_dir,
-            "config.yaml",
-        )
+        config_path = UserConfig.get_config_path()
         if os.path.exists(config_path):
             try:
                 with open(config_path, "r") as f:
@@ -498,6 +601,29 @@ class UserConfig(vyper.Vyper):
         self.set_default("cacheS3MaxEntrySize", 100 * 1024 * 1024)
         self.set_default("cacheS3MinEntrySize", 100)
         self.set_default("cacheDependenciesIgnore", False)
+
+        # Whether the *user* said which sandbox to use, as opposed to PartCAD
+        # picking one below. Captured before the default is set, because
+        # 'is_set()' cannot tell a default from a decision afterwards -- and the
+        # difference matters: an unstated preference is upgraded to the 'docker'
+        # sandbox where a container runtime answers (see
+        # 'Context.get_python_runtime'), and a stated one is obeyed.
+        #
+        # The environment is checked directly rather than waited for: the
+        # binding below happens after this point, and '--python-sandbox' arrives
+        # later still, through the property this sets up.
+        # A configuration handed over by another process says so itself. It
+        # cannot be worked out from the value: 'to_dict' copies the startup
+        # default along with everything else, and applying that copy is a vyper
+        # override, which 'is_set' cannot tell from a decision. So every daemon
+        # saw a declared 'conda' or 'venv', obeyed it, and never upgraded to the
+        # 'docker' sandbox that the same command run in-process would choose.
+        if settings is not None and "pythonSandboxDeclared" in settings:
+            self._python_sandbox_declared = bool(settings["pythonSandboxDeclared"])
+        else:
+            self._python_sandbox_declared = bool(self.is_set("pythonSandbox")) or bool(
+                os.environ.get("PC_PYTHON_SANDBOX")
+            )
 
         # conda first, because it is the only sandbox that can provision an
         # *interpreter*: a package asking for a Python the host does not have
@@ -732,10 +858,40 @@ class UserConfig(vyper.Vyper):
 
         # option: pythonSandbox
         # description: sandboxing environment for invoking python scripts
-        # values: [none | venv | pypy | conda]
-        # default: conda where the host has it, else venv
+        # values: [docker | none | venv | pypy | conda | remote]
+        # default: the best this machine can provide -- 'docker' where a
+        #          container runtime answers, else conda where the host has it,
+        #          else venv. Only the last two are decided here: asking whether
+        #          a container runtime answers means talking to a daemon, and a
+        #          command that never builds a sandbox should not pay for that.
+        #          'Context.get_python_runtime' asks, the first time a sandbox is
+        #          actually needed, and only when nothing was declared.
         self.bind_env("pythonSandbox", "PC_PYTHON_SANDBOX")
-        self.python_sandbox = self.get_string("pythonSandbox")
+        self._python_sandbox = self.get_string("pythonSandbox")
+
+        # option: remoteSandbox
+        # description: where 'partcad-service-remote-docker' is listening, as
+        #              host:port. Only the 'remote' sandbox reads it, and that
+        #              sandbox cannot work without it -- there is no default,
+        #              because guessing at a service that runs commands is not
+        #              a thing to do on somebody's behalf.
+        # values: <host>:<port>
+        # default: none
+        self.bind_env("remoteSandbox", "PC_REMOTE_SANDBOX")
+        self.remote_sandbox = self.get_string("remoteSandbox") if self.is_set("remoteSandbox") else None
+
+        # option: remoteSandboxToken
+        # description: the shared secret 'partcad-service-remote-docker' was
+        #              started with, sent as a bearer token on every request.
+        #              Needed only where that service listens on an address
+        #              other than loopback -- it refuses to start on one
+        #              without a token, because a service that runs commands
+        #              and asks nothing of its callers is a remote shell for
+        #              whoever can reach the port.
+        # values: <string>
+        # default: none
+        self.bind_env("remoteSandboxToken", "PC_REMOTE_SANDBOX_TOKEN")
+        self.remote_sandbox_token = self.get_string("remoteSandboxToken") if self.is_set("remoteSandboxToken") else None
 
         # option: javascriptSandbox
         # description: sandboxing environment for invoking JavaScript scripts
@@ -820,6 +976,7 @@ class UserConfig(vyper.Vyper):
         # values: <dict>
         # default: {
         #   "type": "sentry",
+        #   "detail": "actions",
         #   "environment": "prod",
         #   "performance": "true",
         #   "failures": "true",
@@ -885,6 +1042,16 @@ class UserConfig(vyper.Vyper):
         #              per subject.
         # values: [True | False]
         # default: True
+        #
+        # Bound to the environment like every other option here, and it is the
+        # one in this family a machine most needs to be able to answer without
+        # writing a configuration file: an image built with no Docker in it -- a
+        # cloud agent's container, a CI runner with no socket -- can say so once
+        # in its environment, and everything that would otherwise fail against a
+        # daemon that was never there can tell "there is none" from "there is
+        # none and nobody said so", which are different situations and deserve
+        # different outcomes.
+        self.bind_env("useDocker", "PC_USE_DOCKER")
         self.use_docker = self.get_bool("useDocker")
 
         # option: useDockerPython
@@ -897,6 +1064,7 @@ class UserConfig(vyper.Vyper):
         # the 'useDockerPython' tag reports, so that a package can tell "not
         # asked for" from "asked for but unavailable"), and the plain attribute
         # is what actually happens once 'useDocker' has had its say.
+        self.bind_env("useDockerPython", "PC_USE_DOCKER_PYTHON")
         self.use_docker_python_declared = self.get_bool("useDockerPython")
         self.use_docker_python = self.use_docker and self.use_docker_python_declared
 
@@ -904,6 +1072,7 @@ class UserConfig(vyper.Vyper):
         # description: use a Docker container for KiCad
         # values: [True | False]
         # default: True
+        self.bind_env("useDockerKicad", "PC_USE_DOCKER_KICAD")
         self.use_docker_kicad_declared = self.get_bool("useDockerKicad")
         self.use_docker_kicad = self.use_docker and self.use_docker_kicad_declared
 
@@ -926,6 +1095,70 @@ class UserConfig(vyper.Vyper):
         # daemon serving this caller honours the tags the caller declared.
         self.bind_env("tags", "PC_TAGS")
         self.tags = self.get("tags")
+
+        # option: caeFeaImplementation
+        # description: which implementation runs "pc cae fea", as
+        #              "<package>:<file type>"
+        # values: <string>
+        # default: //pub/feature/cae/calculix:fea
+        #
+        # option: caeCfdImplementation
+        # description: which implementation runs "pc cae cfd", as
+        #              "<package>:<file type>"
+        # values: <string>
+        # default: //pub/feature/cae/calculix:cfd
+        #
+        # PartCAD ships no solver, so unlike every export and render format
+        # there is no built-in implementation for these two to fall back on -
+        # the default is a package in the public index, and this is where it is
+        # named. It is user configuration rather than a constant because the
+        # answer is a property of the machine and the person: which solver is
+        # installed, which one is licensed, which one this shop trusts. A run
+        # overrides it with "pc cae fea --implementation", and the IDE's FEA tab
+        # with the field over the model.
+        #
+        # Defaulted here rather than only on the attribute, so that the resolved
+        # value travels to the daemon like every other option: a key missing
+        # from the copy is a key the daemon resolves from its own environment,
+        # which is exactly what sending the configuration is meant to stop.
+        self.set_default("caeFeaImplementation", DEFAULT_CAE_IMPLEMENTATIONS["fea"])
+        self.set_default("caeCfdImplementation", DEFAULT_CAE_IMPLEMENTATIONS["cfd"])
+        self.bind_env("caeFeaImplementation", "PC_CAE_FEA_IMPLEMENTATION")
+        self.bind_env("caeCfdImplementation", "PC_CAE_CFD_IMPLEMENTATION")
+        # The 'or' still stands: a configuration file may carry the key with
+        # nothing under it, and an analysis with no implementation at all is a
+        # worse answer than the default one.
+        self.cae_fea_implementation = self.get_string("caeFeaImplementation") or DEFAULT_CAE_IMPLEMENTATIONS["fea"]
+        self.cae_cfd_implementation = self.get_string("caeCfdImplementation") or DEFAULT_CAE_IMPLEMENTATIONS["cfd"]
+
+        # option: camImplementation
+        # description: which implementation produces a route for "pc cam", as
+        #              "<package>:<file type>"
+        # values: <string>
+        # default: //builtin/cam:gcode
+        #
+        # Unlike the two above there *is* a built-in to fall back on, and the
+        # default names it. What this option is for is the machine at the other
+        # end: a controller that wants a dialect of its own, or a shop with a
+        # post-processor it already trusts, is a package declaring a file type
+        # in its own 'cam:' section and this option pointing at it. A run
+        # overrides it with "pc cam --implementation", and an object with
+        # "implementation:" in its own 'cam:' section.
+        self.set_default("camImplementation", DEFAULT_CAM_IMPLEMENTATION)
+        self.bind_env("camImplementation", "PC_CAM_IMPLEMENTATION")
+        self.cam_implementation = self.get_string("camImplementation") or DEFAULT_CAM_IMPLEMENTATION
+
+    def cae_implementation(self, analysis: str) -> str:
+        """Which implementation runs one analysis, by its name ("fea"/"cfd").
+
+        Looked up rather than branched on, so that adding a third analysis is an
+        entry in 'DEFAULT_CAE_IMPLEMENTATIONS' and an option key beside it, and
+        not a chain of ifs in whatever asks.
+        """
+        attribute = "cae_%s_implementation" % analysis
+        if not hasattr(self, attribute):
+            raise ValueError("PartCAD does not run a '%s' analysis" % analysis)
+        return getattr(self, attribute)
 
 
 user_config = UserConfig()

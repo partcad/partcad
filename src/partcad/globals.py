@@ -9,60 +9,60 @@
 
 import os
 import threading
+
 import ruamel.yaml as ruamel
 
-from .context import Context
+from . import consts, factory
+from . import logging as pc_logging
 from .assembly import Assembly
-from .scene import Scene
-from .assembly_factory_assy import AssemblyFactoryAssy
 from .assembly_factory_alias import AssemblyFactoryAlias
+from .assembly_factory_assy import AssemblyFactoryAssy
 from .assembly_factory_enrich import AssemblyFactoryEnrich
+from .assembly_factory_imported import AssemblyFactoryImported, SceneFactoryImported
 from .assembly_factory_step import AssemblyFactoryStep
-from .assembly_factory_urdf import AssemblyFactoryUrdf
-from .file_factory_url import FileFactoryUrl
+from .context import Context
 from .file_factory_plugin import FileFactoryPlugin
+from .file_factory_url import FileFactoryUrl
+from .part import Part
+from .part_factory_3mf import PartFactory3mf
+from .part_factory_alias import PartFactoryAlias
+from .part_factory_brep import PartFactoryBrep
+from .part_factory_build123d import PartFactoryBuild123d
+from .part_factory_cadquery import PartFactoryCadquery
+from .part_factory_chili3d import PartFactoryChili3d
+from .part_factory_compound import PartFactoryCompound
+from .part_factory_enrich import PartFactoryEnrich
+from .part_factory_extrude import PartFactoryExtrude
+from .part_factory_kicad import PartFactoryKicad
+from .part_factory_obj import PartFactoryObj
+from .part_factory_scad import PartFactoryScad
+from .part_factory_sdf import PartFactorySdf
+from .part_factory_step import PartFactoryStep
+from .part_factory_stl import PartFactoryStl
+from .part_factory_sweep import PartFactorySweep
+from .part_factory_wrapper import PartFactoryWrapper
+from .plugin_factory_provider_enrich import PluginFactoryProviderEnrich
 from .plugin_factory_provider_manufacturer import PluginFactoryProviderManufacturer
 from .plugin_factory_provider_store import PluginFactoryProviderStore
-from .plugin_factory_provider_enrich import PluginFactoryProviderEnrich
-from .plugin_factory_repository import PluginFactoryRepository
+from .plugin_factory_repository import (  # noqa: F401  # imported for the registration side effect, like its siblings
+    PluginFactoryRepository,
+)
 from .plugin_factory_repository_basic import PluginFactoryRepositoryBasic
 
 # from .plugin_factory_repository_tree import PluginFactoryRepositoryTree
 # from .plugin_factory_repository_full import PluginFactoryRepositoryFull
 from .plugin_factory_repository_enrich import PluginFactoryRepositoryEnrich
-from .part_factory_cadquery import PartFactoryCadquery
-from .part_factory_build123d import PartFactoryBuild123d
-from .part_factory_chili3d import PartFactoryChili3d
-from .part_factory_sdf import PartFactorySdf
-from .part_factory_step import PartFactoryStep
-from .part_factory_brep import PartFactoryBrep
-from .part_factory_stl import PartFactoryStl
-from .part_factory_3mf import PartFactory3mf
-from .part_factory_obj import PartFactoryObj
-from .part_factory_scad import PartFactoryScad
-from .part_factory_kicad import PartFactoryKicad
-from .part_factory_extrude import PartFactoryExtrude
-from .part_factory_sweep import PartFactorySweep
-from .part_factory_alias import PartFactoryAlias
-from .part_factory_enrich import PartFactoryEnrich
-from .part_factory_compound import PartFactoryCompound
-from .part_factory_wrapper import PartFactoryWrapper
+from .scene import Scene
 from .scene_factory import SceneFactoryAlias, SceneFactoryAssy, SceneFactoryEnrich
-from .scene_factory_world import SceneFactoryWorld
-from .sketch_factory_basic import SketchFactoryBasic
-from .sketch_factory_cadquery import SketchFactoryCadquery
-from .sketch_factory_build123d import SketchFactoryBuild123d
-from .sketch_factory_dxf import SketchFactoryDxf
-from .sketch_factory_svg import SketchFactorySvg
 from .sketch_factory_alias import SketchFactoryAlias
+from .sketch_factory_basic import SketchFactoryBasic
+from .sketch_factory_build123d import SketchFactoryBuild123d
+from .sketch_factory_cadquery import SketchFactoryCadquery
+from .sketch_factory_dxf import SketchFactoryDxf
 from .sketch_factory_enrich import SketchFactoryEnrich
+from .sketch_factory_svg import SketchFactorySvg
 from .software_factory_raw import SoftwareFactoryRaw
-
-from .part import Part
-from . import consts
-from . import factory
 from .user_config import UserConfig
-from . import logging as pc_logging
 
 __version__: str = "0.7.127"
 
@@ -97,13 +97,18 @@ factory.register("part", "compound", PartFactoryCompound)
 factory.register("part", "wrapper", PartFactoryWrapper)
 factory.register("assembly", "assy", AssemblyFactoryAssy)
 factory.register("assembly", "step", AssemblyFactoryStep)
-factory.register("assembly", "urdf", AssemblyFactoryUrdf)
+# Every object type that is somebody else's file format - 'urdf' and whatever a
+# plugin package declares - reaches this one factory, which resolves the
+# 'import:' declaration the type names and runs the reader it points at. It is
+# registered under a reserved key rather than a type name because the type
+# names are not PartCAD's to know; see 'factory.IMPORTED_KINDS'.
+factory.register("assembly", factory.IMPORTED_KINDS["assembly"], AssemblyFactoryImported)
+factory.register("scene", factory.IMPORTED_KINDS["scene"], SceneFactoryImported)
 factory.register("assembly", "alias", AssemblyFactoryAlias)
 factory.register("assembly", "enrich", AssemblyFactoryEnrich)
 # A scene is declared by pointing at the file that holds it - an ASSY file, or
 # a Gazebo world - with no assembly object in between. See 'partcad.scene'.
 factory.register("scene", "assy", SceneFactoryAssy)
-factory.register("scene", "world", SceneFactoryWorld)
 factory.register("scene", "alias", SceneFactoryAlias)
 factory.register("scene", "enrich", SceneFactoryEnrich)
 factory.register("file", "url", FileFactoryUrl)
@@ -124,7 +129,6 @@ def init(config_path=None, search_root=True, user_config=UserConfig()) -> Contex
     """Initialize the default context explicitly using the desired path."""
     global _partcad_context
     global _partcad_context_path
-    global _partcad_context_lock
 
     with _partcad_context_lock:
         if _partcad_context is None:
@@ -141,7 +145,6 @@ def init(config_path=None, search_root=True, user_config=UserConfig()) -> Contex
 def fini():
     global _partcad_context
     global _partcad_context_path
-    global _partcad_context_lock
 
     with _partcad_context_lock:
         _partcad_context = None

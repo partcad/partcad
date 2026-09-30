@@ -20,6 +20,7 @@ import os
 
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, wrapper
+from .process_crash import describe_exit_code
 
 
 async def read_assembly_tree(ctx, assembly_file, output_folder, file_type="step", precision=5):
@@ -56,7 +57,7 @@ async def read_assembly_tree(ctx, assembly_file, output_folder, file_type="step"
     command = [wrapper_path, "import_assy"]
     exitcode, response_serialized, errors = await runtime.run_async(command, shape_envelope.serialize(request))
     if exitcode != 0 and not errors:
-        errors = "assembly import failed with exit code %s" % exitcode
+        errors = "assembly import failed: %s" % describe_exit_code(exitcode)
     if errors:
         pc_logging.error(errors)
         raise Exception(errors)

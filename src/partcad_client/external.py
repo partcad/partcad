@@ -42,6 +42,23 @@ the daemon serves `pc adhoc convert` with. The converted copy is written under
 the workspace's own state directory, which is already mounted into the container
 at the path it has here, so one name means the same thing on both sides.
 
+Some read a *scene* and only their own description of one. MuJoCo is that one:
+it reads MJCF, and a Gazebo world handed to it is not a slow way of opening a
+scene, it is a file it cannot read. What has to be decided there is a different
+question -- which description language the file is written in, rather than
+whether it holds triangles -- and it is answered by the tool's own declaration:
+an `open:` entry that names a `sceneType` also names the `sceneExtensions` it is
+stored in, so a file that already is what the application reads goes straight
+over.
+
+One that is not cannot be converted here, and the reason is worth stating
+plainly: an engine's scene format is implemented by that engine's plugin package
+-- MJCF by `partcad/partcad-sim-mujoco`, SDFormat by
+`partcad/partcad-sim-gazebo`, which are also where those `open:` entries come
+from -- and a file handed to `pc open` has no package around it to reach that
+implementation through. So `_transcode_scene` refuses, and says which export
+does work. Only the mesh conversion above still runs, and only for parts.
+
 A containerised GUI needs an X server on the host, which is the one place where
 this cannot paper over the difference between platforms. On Linux the display is
 usually a socket that can simply be shared, cookie and all, and nothing has to be
@@ -52,6 +69,7 @@ what to run, rather than a container that starts and silently never shows a wind
 """
 
 import contextlib
+import functools
 import glob
 import hashlib
 import os
@@ -61,6 +79,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
+from partcad_utils.container_image import image_name, image_tag
 from partcad_utils.workspace import determine_root_path, socket_path
 
 from . import __version__, object_types
@@ -70,9 +89,14 @@ __all__ = [
     "OpenResult",
     "Tool",
     "TOOLS",
+    "builtin_tools",
+    "merge_tools",
     "open_file",
+    "tool_from_declaration",
     "tool_names",
+    "tools_from_section",
     "transcode_path",
+    "use_tools",
 ]
 
 # How long to wait for the `docker` commands that only ask a question. Generous
@@ -91,6 +115,45 @@ class ExternalToolError(Exception):
     """No way to open the file, with a message saying what would fix that."""
 
 
+def _extension_of(path: str) -> str:
+    """The extension of ``path``, lowercased and with its dot kept.
+
+    With the dot, because that is how every extension a tool declares is written
+    -- `ownFormats`, `imports` and `sceneExtensions` alike -- so a comparison
+    needs no stripping at either end.
+    """
+    return os.path.splitext(path)[1].lower()
+
+
+def _export_target(scene_type: str) -> str:
+    """How ``scene_type`` has to be spelled for `pc export -t` to resolve it.
+
+    A format PartCAD implements is asked for by name. One an engine's plugin
+    implements is not PartCAD's to resolve, so the package that declares it has
+    to be named -- and which of the two this is is exactly whether PartCAD has an
+    extension for it.
+    """
+    if scene_type in object_types.SCENE_TYPE_EXTENSION:
+        return scene_type
+    return "<package>:" + scene_type
+
+
+def _bare_type(object_type: Optional[str]) -> Optional[str]:
+    """An object type without the package that declares it.
+
+    'sim-mujoco:mjcf' and 'mjcf' are one format asked for in two places: the
+    first is how an object in some other package declares it, the second is what
+    the package implementing it calls it in its own `open:` entry. Comparing the
+    part after the last ':' is what makes those the same answer.
+
+    None stays None, so that two tools declaring no scene type at all do not
+    come out equal.
+    """
+    if object_type is None:
+        return None
+    return object_type.rsplit(":", 1)[-1].lower()
+
+
 @dataclass(frozen=True)
 class Tool:
     """A third-party application PartCAD knows how to launch.
@@ -102,7 +165,10 @@ class Tool:
     name: str
     display_name: str
     # The image a container is created from when the machine has no local copy.
-    image: str
+    # Empty for an application whose declaration names none: a package may know
+    # where a tool is installed without there being a container to fall back to,
+    # and `--use-docker` says so rather than trying to create one from nothing.
+    image: str = ""
     # Executable names to look for, both on this machine's PATH and inside the
     # container. Ordered: the first one found wins.
     binaries: Tuple[str, ...] = ()
@@ -134,8 +200,14 @@ class Tool:
     # How the file reaches the application, when being the last argument is not
     # it. Blender's command line takes a `.blend` to open and imports anything
     # else through a line of Python, which is a fact about Blender and lives
-    # with the rest of them.
-    file_args: Optional[Callable[[str], Tuple[str, ...]]] = None
+    # with the rest of them -- in its declaration, as templates: `{path}` is
+    # substituted with the file name and `{path_repr}` with it quoted as a
+    # Python string, for a template that embeds the name in code.
+    #
+    # Templates rather than a callable because this table is read out of
+    # `open:` declarations now, and a package that teaches PartCAD an
+    # application cannot ship a Python function into a frozen client.
+    file_args: Tuple[str, ...] = ()
     # The format a file that is not already a mesh is converted to before this
     # application sees it, for an application that reads meshes and nothing
     # else. None -- every other tool in the table -- means the file is handed
@@ -151,6 +223,28 @@ class Tool:
     # it two questions -- it is a mesh, and Blender ships no importer for it, so
     # it takes the STL route like a solid does.
     imports: Tuple[str, ...] = ()
+    # The PartCAD *scene* type this application reads, for one that reads a
+    # description of an arrangement rather than geometry. MuJoCo is the one
+    # PartCAD knows about: it reads MJCF and no other model format, so a Gazebo
+    # world it is pointed at is written out as MJCF first.
+    #
+    # Deliberately a separate field from `mesh_via` rather than a generalization
+    # of it, because the two ask different questions of the file. `mesh_via`
+    # asks whether it holds triangles, which is a property of what is in it;
+    # this asks which description language it is written in, which is a property
+    # of the file itself. One tool sets one of the two.
+    scene_type: Optional[str] = None
+    # The extensions a file of `scene_type` is stored in, declared here rather
+    # than looked up.
+    #
+    # `partcad_client.object_types` knows the scene formats *PartCAD* has, and an
+    # engine's own is not one of them -- MJCF belongs to
+    # `partcad/partcad-sim-mujoco` and SDFormat to `partcad/partcad-sim-gazebo`,
+    # which is also where the `open:` entry that names it comes from. So the
+    # declaration carries the answer with it: the package that knows the format
+    # is the package that says what it is called on disk, and a client needs no
+    # table of formats it has never heard of to recognise one.
+    scene_extensions: Tuple[str, ...] = ()
 
     @property
     def container_name(self) -> str:
@@ -172,11 +266,16 @@ class Tool:
         """The arguments that name ``path`` to this application.
 
         The path itself for every application that takes a file name, which is
-        all of them but Blender; see `file_args`.
+        all of them but Blender; see `file_args`. An application's own file is
+        named that way too even when it declares templates: what those are for
+        is the *import* of something that is not one, and a `.blend` is opened
+        rather than imported.
         """
-        if self.file_args is None:
+        if not self.file_args:
             return (path,)
-        return tuple(self.file_args(path))
+        if os.path.splitext(path)[1].lower() in self.own_formats:
+            return (path,)
+        return tuple(template.replace("{path_repr}", repr(path)).replace("{path}", path) for template in self.file_args)
 
     def needs_mesh(self, path: str, object_type: Optional[str] = None) -> bool:
         """Whether ``path`` has to be converted before this application sees it.
@@ -197,6 +296,52 @@ class Tool:
         # A mesh this application has no importer for is no better off than a
         # solid: it is converted too, to the one format that always works.
         return extension not in self.imports
+
+    def reads_scene(self, path: str, object_type: Optional[str] = None) -> bool:
+        """Whether ``path`` already is the scene description this application reads.
+
+        Asked of the tool's own declaration first, because the format is very
+        likely the tool's package's own and not one PartCAD has a table for: a
+        declared type that names it settles it, and so does one of the
+        extensions the declaration lists.
+
+        The declared type is compared by its last segment, so that the `mjcf` a
+        plugin's `open:` entry names and the `sim-mujoco:mjcf` the object
+        declaring it is written as are the one format they are.
+
+        A declared type that names *another* format ends it there, and does not
+        fall through to the extension: two scene formats can share one, and a
+        Gazebo world in a `.xml` is exactly the file this application cannot
+        read. What may fall through is a declared type that says nothing about
+        the file -- an `alias`, a part type, a type this release has never heard
+        of -- which is how `readable_scene_type` treats one too.
+        """
+        if object_type:
+            if _bare_type(object_type) == _bare_type(self.scene_type):
+                return True
+            # Whether the declaration named a *format* at all. A qualified name
+            # did by construction: some package declared it. A bare one did when
+            # PartCAD itself has it, which today means 'assy'.
+            if ":" in object_type or object_type.lower() in object_types.SCENE_TYPE_EXTENSION:
+                return False
+        if _extension_of(path) in self.scene_extensions:
+            return True
+        # A format PartCAD itself has -- today that is 'assy', which no tool
+        # reads, but a table entry is still the right answer when there is one.
+        return object_types.readable_scene_type(path, object_type) == self.scene_type
+
+    def needs_scene(self, path: str, object_type: Optional[str] = None) -> bool:
+        """Whether ``path`` has to be converted into this application's own format.
+
+        False for every application that takes what it is given, and false for
+        one that reads a scene description when the file already is one it
+        reads. A file that is no scene at all comes back True and is refused
+        with the reason by `_transcode_scene`, which is better than handing a
+        simulator a STEP file and letting it say something of its own.
+        """
+        if self.scene_type is None:
+            return False
+        return not self.reads_scene(path, object_type)
 
     def file_for(self, path: str) -> str:
         """The file this application is really given, from the one it was handed.
@@ -219,144 +364,169 @@ class Tool:
         return path
 
 
-FREECAD = Tool(
-    name="freecad",
-    display_name="FreeCAD",
-    # `:latest`, not a pinned tag: a user asking for a container wants the
-    # current FreeCAD, and a pin here would quietly age into a version nobody
-    # chose. The image is a community one because the FreeCAD project publishes
-    # none -- the `freecad/freecad` repository on Docker Hub has never had an
-    # image pushed to it -- and it is this one because it carries a GUI FreeCAD
-    # on `PATH` and is still being rebuilt. `--docker-image` overrides it, which
-    # is also the answer for anyone who would rather run their own.
-    image="linuxserver/freecad:latest",
-    binaries=("freecad", "FreeCAD", "freecad-daily"),
-    macos_apps=("FreeCAD.app",),
-    windows_globs=("FreeCAD*/bin/FreeCAD.exe", "FreeCAD*/FreeCAD.exe"),
-    flatpak_id="org.freecad.FreeCAD",
-)
+# Where the built-in declarations live inside the wheel. Found without importing
+# `partcad`: this module is a client's and has to stay cheap to import, and the
+# file is data -- the same reason `object_types` holds a copy of PartCAD's tables
+# rather than reaching for them.
+BUILTIN_OPEN_PACKAGE = ("partcad", "builtin", "open", "partcad.yaml")
 
-GAZEBO = Tool(
-    name="gazebo",
-    display_name="Gazebo",
-    # The simulator's own image for the current Gazebo. `:latest`, for the
-    # reason FreeCAD's is: a user asking for a container wants the current
-    # Gazebo, and `--docker-image` is the answer for anyone who wants another
-    # one (`osrf/gazebo` for Gazebo Classic, say).
-    image="gazebosim/gz-harmonic:latest",
-    # Three generations of one program, newest first: `gz sim` today, `ign
-    # gazebo` in the Ignition years, and `gazebo` for Gazebo Classic. Whichever
-    # the machine has is the one used.
-    binaries=("gz", "ign", "gazebo"),
-    binary_args={"gz": ("sim",), "ign": ("gazebo",)},
-    macos_apps=("Gazebo.app",),
-    windows_globs=("Gazebo*/bin/gz.exe",),
-    flatpak_id="org.gazebosim.Gazebo",
-)
+# What a declaration calls each field of `Tool`. Spelled camelCase in YAML, like
+# every other declaration PartCAD reads, and snake_case here.
+DECLARATION_FIELDS = {
+    "displayName": "display_name",
+    "image": "image",
+    "binaries": "binaries",
+    "args": "args",
+    "binaryArgs": "binary_args",
+    "macosApps": "macos_apps",
+    "macosExecutable": "macos_executable",
+    "windowsGlobs": "windows_globs",
+    "flatpakId": "flatpak_id",
+    "companions": "companions",
+    "fileArgs": "file_args",
+    "ownFormats": "own_formats",
+    "imports": "imports",
+    "meshVia": "mesh_via",
+    "sceneType": "scene_type",
+    "sceneExtensions": "scene_extensions",
+}
 
-KICAD = Tool(
-    name="kicad",
-    display_name="KiCad",
-    # The image PartCAD already builds and uses for `kicad` parts (see
-    # 'partcad.part_factory_kicad'), pinned to this release the same way: it is
-    # `kicad/kicad` with PartCAD's own environment on top, so the GUI is in it
-    # and there is one KiCad container in the product rather than two. It is
-    # `linux/amd64` only, as KiCad's own images are; a machine that cannot run
-    # it almost certainly has KiCad installed, which is used first anyway.
-    image="ghcr.io/partcad/partcad-container-kicad:" + __version__,
-    binaries=("kicad",),
-    macos_apps=("KiCad/KiCad.app", "KiCad.app"),
-    windows_globs=("KiCad/*/bin/kicad.exe",),
-    flatpak_id="org.kicad.KiCad",
-    # What a `kicad` part points at is the STEP file KiCad's CLI generates from
-    # the board. The board is the project beside it, and that is what opening
-    # KiCad means.
-    companions=(".kicad_pro", ".kicad_pcb", ".kicad_sch"),
-)
-
-# The Python Blender is asked to run when it is handed geometry rather than one
-# of its own files. `blender <file>` *opens* a file, and the only thing Blender
-# opens is a `.blend`: everything else is an import, which is an operator call
-# and nothing else. Written as one expression on the command line rather than a
-# script file because it has to work identically in a container, where a script
-# file would be one more thing to make visible on both sides of the mount.
-#
-# Two names per format: Blender 4.x replaced the old Python importers with C++
-# ones under different operator names ('wm.stl_import' for what used to be
-# 'import_mesh.stl'), and both releases are in use. Whichever exists answers;
-# the loop tries them in turn, newest first, and says so if none does. Reading
-# a home file with no contents first is what leaves the imported object alone in
-# the scene instead of inside Blender's default cube.
-_BLENDER_IMPORT = """\
-import bpy, os
-path = {path!r}
-importers = {{
-    '.stl': ('wm.stl_import', 'import_mesh.stl'),
-    '.obj': ('wm.obj_import', 'import_scene.obj'),
-    '.ply': ('wm.ply_import', 'import_mesh.ply'),
-    '.gltf': ('import_scene.gltf',),
-    '.glb': ('import_scene.gltf',),
-    '.json': ('import_scene.gltf',),
-    '.fbx': ('import_scene.fbx',),
-    '.x3d': ('import_scene.x3d',),
-}}
-extension = os.path.splitext(path)[1].lower()
-bpy.ops.wm.read_homefile(use_empty=True)
-for name in importers.get(extension, ()):
-    category, _, operator = name.partition('.')
-    try:
-        getattr(getattr(bpy.ops, category), operator)(filepath=path)
-        break
-    except Exception as e:
-        print('PartCAD: bpy.ops.' + name + ' did not import ' + path + ': ' + str(e))
-else:
-    print('PartCAD: this Blender has no importer for ' + (extension or path))
-"""
-
-
-def _blender_arguments(path: str) -> Tuple[str, ...]:
-    """How Blender is told about ``path``: opened if it is a `.blend`, else imported."""
-    if os.path.splitext(path)[1].lower() == ".blend":
-        return (path,)
-    return ("--python-expr", _BLENDER_IMPORT.format(path=path))
-
-
-BLENDER = Tool(
-    name="blender",
-    display_name="Blender",
-    # `:latest`, for the reason FreeCAD's is: a user asking for a container
-    # wants the current Blender. The image is a community one because the
-    # Blender project publishes none, and it is this one because it carries a
-    # GUI Blender on `PATH` and is still being rebuilt. `--docker-image`
-    # overrides it, as it does for every other tool here.
-    image="linuxserver/blender:latest",
-    binaries=("blender",),
-    macos_apps=("Blender.app",),
-    # Not through `open -a`: the arguments below are the whole point of the
-    # launch, and `open -a` drops them on a Blender that is already running.
-    macos_executable="Contents/MacOS/Blender",
-    windows_globs=("Blender Foundation/Blender*/blender.exe", "Blender*/blender.exe"),
-    flatpak_id="org.blender.Blender",
-    file_args=_blender_arguments,
-    # What the expression above knows how to import. '.json' is deliberately
-    # absent: PartCAD writes both glTF and three.js to it, and only one of the
-    # two is a file Blender reads -- so a '.json' is converted rather than
-    # guessed at.
-    imports=(".stl", ".obj", ".ply", ".gltf", ".glb", ".fbx", ".x3d"),
-    # Blender reads triangles. Anything else -- a STEP file, a CadQuery script,
-    # a part PartCAD builds -- reaches it as the STL PartCAD makes out of it.
-    # STL rather than a richer mesh format because every part type converts to
-    # it, which is what makes this one rule rather than a table of exceptions.
-    mesh_via="stl",
-    # A `.blend` is Blender's own file: not a mesh, and not something to convert
-    # into one.
-    own_formats=(".blend",),
+# The fields that are a sequence, so a declaration's list becomes the tuple the
+# frozen dataclass wants.
+_TUPLE_FIELDS = frozenset(
+    {
+        "binaries",
+        "args",
+        "macos_apps",
+        "windows_globs",
+        "companions",
+        "file_args",
+        "own_formats",
+        "imports",
+        "scene_extensions",
+    }
 )
 
 
-# The tools `pc open --with` accepts. Each is a row here, not a branch anywhere
-# below.
-TOOLS: Dict[str, Tool] = {tool.name: tool for tool in (FREECAD, GAZEBO, KICAD, BLENDER)}
+def tool_from_declaration(name: str, config: dict) -> Tool:
+    """One `open:` entry as a `Tool`.
+
+    Unknown keys are ignored rather than refused. A declaration is read by
+    whatever PartCAD the user has installed, and a tool declared by a package
+    that knows about a field this release does not should still launch.
+    """
+    values = {"name": name, "display_name": name}
+    for declared, field_name in DECLARATION_FIELDS.items():
+        if declared not in config or config[declared] is None:
+            continue
+        value = config[declared]
+        if field_name in _TUPLE_FIELDS:
+            value = tuple(value) if isinstance(value, (list, tuple)) else (value,)
+        elif field_name == "binary_args":
+            value = {key: tuple(args) for key, args in (value or {}).items()}
+        elif field_name == "image":
+            # `{version}` pins an image PartCAD publishes to this release
+            # without the number being written down twice. Through
+            # `image_tag()`, not the bare version: a CI run that rebuilt the
+            # images has to reach *those* rather than the ones the last release
+            # published, and that is the one variable which says so.
+            #
+            # And `image_name()` for the owner, which is the same redirection
+            # one segment to the left. `container-kicad.yml` publishes
+            # `<this repository>-container-kicad`, so in a fork the image is the
+            # fork's -- and `partcad.part_factory_kicad` already follows it. Two
+            # readers of one image, one following the owner and one not, is the
+            # asymmetry that leaves `pc open --with kicad` reaching for a tag
+            # nobody published. Raised by CodeRabbit on #646.
+            #
+            # `image_name()` only ever rewrites images in PartCAD's own
+            # namespace, which is what makes this safe here: this function also
+            # builds tools a *user* declared, and their image is not CI's to
+            # move.
+            value = image_name(str(value).replace("{version}", image_tag(__version__)))
+        values[field_name] = value
+    return Tool(**values)
+
+
+def tools_from_section(section: dict) -> Dict[str, Tool]:
+    """Every entry of one `open:` section, as tools."""
+    if not isinstance(section, dict):
+        return {}
+    return {name: tool_from_declaration(name, config) for name, config in section.items() if isinstance(config, dict)}
+
+
+def _builtin_declarations() -> dict:
+    """The `open:` section of the package that ships inside `partcad`.
+
+    Read off disk rather than through a context, because `pc open` has none and
+    is not going to acquire one: it is handed a path, the file is already there,
+    and needing the package graph to answer "where is FreeCAD" would make the
+    command depend on a workspace it has nothing to do with. A tool a *package*
+    declares is the case that does need the graph, and that one is answered by
+    the daemon -- see `merge_tools()`.
+    """
+    import importlib.util
+
+    spec = importlib.util.find_spec("partcad")
+    if spec is None or not spec.submodule_search_locations:
+        return {}
+    root = os.path.dirname(list(spec.submodule_search_locations)[0])
+    path = os.path.join(root, *BUILTIN_OPEN_PACKAGE)
+    if not os.path.isfile(path):
+        return {}
+    import yaml
+
+    with open(path, encoding="utf-8") as f:
+        return (yaml.safe_load(f) or {}).get("open") or {}
+
+
+@functools.lru_cache(maxsize=1)
+def builtin_tools() -> Dict[str, Tool]:
+    """The applications PartCAD itself declares.
+
+    Cached: the file is inside the installation and cannot change under a
+    running process, and `pc open` asks for it on a path where an editor's
+    context menu is waiting.
+    """
+    return tools_from_section(_builtin_declarations())
+
+
+def merge_tools(declared: Optional[dict] = None) -> Dict[str, Tool]:
+    """The built-in applications, plus whatever a workspace's packages declare.
+
+    `declared` is an `open:` section the caller obtained from somewhere that has
+    the package graph -- in practice the daemon, which is the only side that
+    does. A package's entry wins over a built-in of the same name, which is what
+    lets the plugin for an engine own the tool for it once it is published.
+    """
+    tools = dict(builtin_tools())
+    tools.update(tools_from_section(declared or {}))
+    return tools
+
+
+# What `pc open` opens a file in when the user names no application. A string
+# rather than a reference to one of the entries, because the entries are data
+# now and this is the one of them PartCAD treats as special.
+DEFAULT_TOOL = "freecad"
+
+# The tools `pc open --with` accepts. Each is a declaration, not a branch
+# anywhere below. Replaced wholesale by `use_tools()` when a caller has asked
+# the daemon what the workspace's packages declare.
+TOOLS: Dict[str, Tool] = merge_tools()
+
+
+def use_tools(declared: Optional[dict]) -> None:
+    """Add the applications a workspace's packages declare to this process.
+
+    Called by `pc open` once, before it looks a tool up, with whatever the
+    daemon reported. A no-op when nothing was declared or the daemon could not
+    be reached, which is what keeps the command working with no daemon at all --
+    for every tool PartCAD itself ships, which is the common case.
+    """
+    if not declared:
+        return
+    TOOLS.clear()
+    TOOLS.update(merge_tools(declared))
 
 
 def tool_names() -> List[str]:
@@ -394,12 +564,12 @@ class OpenResult:
 
 def open_file(
     path: str,
-    tool: str = FREECAD.name,
+    tool: str = DEFAULT_TOOL,
     use_docker: bool = False,
     image: Optional[str] = None,
     log: Optional[Callable[[str], None]] = None,
     object_type: Optional[str] = None,
-    transcode: Optional[Callable[[str, Optional[str], str, str], None]] = None,
+    transcode: Optional[Callable[..., None]] = None,
 ) -> OpenResult:
     """Open ``path`` in ``tool``, natively if it is installed, else in a container.
 
@@ -413,13 +583,16 @@ def open_file(
     (a '.py' is three different script types). It decides nothing on its own; it
     is one of the two things `object_types.is_mesh` reads.
 
-    ``transcode`` is how a file that is not a mesh becomes one, for an
-    application that reads nothing else. Called as
-    ``transcode(source, source_type, target, target_type)`` and expected to leave
-    ``target`` on disk. It is a callback rather than something done here because
-    turning a solid into a mesh is CAD work: it belongs to the daemon, and this
-    module is the half that must keep running without one. A caller that passes
-    none can still open a mesh in Blender; a solid is refused with the reason.
+    ``transcode`` is how a file this application cannot read becomes one it can:
+    a mesh for an application that reads nothing else, an MJCF model for one that
+    reads only its own scene description. Called as
+    ``transcode(source, source_type, target, target_type, kind)`` -- where
+    ``kind`` is "part" or "scene" -- and expected to leave ``target`` on disk. It
+    is a callback rather than something done here because both conversions are
+    CAD work: they belong to the daemon, and this module is the half that must
+    keep running without one. A caller that passes none can still open a mesh in
+    Blender and an MJCF model in MuJoCo; anything needing a conversion is refused
+    with the reason.
     """
     say = log or (lambda _message: None)
 
@@ -442,6 +615,8 @@ def open_file(
     opened = resolved
     if spec.needs_mesh(resolved, object_type):
         opened = _transcode(spec, resolved, root, object_type, transcode, say)
+    elif spec.needs_scene(resolved, object_type):
+        opened = _transcode_scene(spec, resolved, root, object_type, transcode, say)
 
     native = native_command(spec)
     if native is not None:
@@ -468,7 +643,7 @@ def open_file(
 
 
 # ---------------------------------------------------------------------------
-# Making a mesh out of what the application cannot read
+# Making something the application can read out of what it cannot
 # ---------------------------------------------------------------------------
 
 
@@ -498,7 +673,7 @@ def _transcode(
     source: str,
     root: str,
     object_type: Optional[str],
-    transcode: Optional[Callable[[str, Optional[str], str, str], None]],
+    transcode: Optional[Callable[..., None]],
     say: Callable[[str], None],
 ) -> str:
     """Convert ``source`` to the mesh format ``spec`` reads, and return that file."""
@@ -532,7 +707,106 @@ def _transcode(
             "run `pc open` rather than calling this directly." % (spec.display_name, source)
         )
 
-    target = transcode_path(root, source, spec.mesh_via)
+    return _produce(spec, source, source_type, root, spec.mesh_via, spec.mesh_via, "part", transcode, say)
+
+
+def _transcode_scene(
+    spec: Tool,
+    source: str,
+    root: str,
+    object_type: Optional[str],
+    transcode: Optional[Callable[..., None]],
+    say: Callable[[str], None],
+) -> str:
+    """Convert ``source`` into the scene description ``spec`` reads, and return it.
+
+    The counterpart of `_transcode` for an application that reads an arrangement
+    rather than geometry, and it refuses far more often, for a reason that is
+    structural rather than incidental: the format such an application reads
+    belongs to that application's engine, and PartCAD does not implement it.
+    `mjcf` is `partcad/partcad-sim-mujoco`'s and `world` is
+    `partcad/partcad-sim-gazebo`'s -- the same packages the `open:` entries for
+    MuJoCo and Gazebo come from -- so writing one means running that package's
+    exporter, which means a package that imports it. A file handed to `pc open`
+    has no package around it at all.
+
+    So this converts only between formats PartCAD itself has, refuses the rest
+    with the export command that does work, and is in practice a refusal. What
+    it must never do is hand the application a file it cannot read and let it
+    say something of its own.
+    """
+    source_type = object_types.readable_scene_type(source, object_type)
+    reason = object_types.PACKAGE_ONLY_TYPES.get(source_type or "")
+    if reason is not None:
+        raise ExternalToolError(
+            "%s cannot open %s: %s, so it only means anything inside a package and there is "
+            "nothing here to convert.\n"
+            "Export the scene from its package instead, and open that: pc export -S -t %s -O <dir> <scene>"
+            % (spec.display_name, source, reason, _export_target(spec.scene_type))
+        )
+    # The tool's own format, as PartCAD knows it. Absent for every engine format,
+    # which is the ordinary case and the reason for the message below.
+    extension = object_types.SCENE_TYPE_EXTENSION.get(spec.scene_type)
+    if extension is None:
+        raise ExternalToolError(
+            "%s reads %s, and %s is not one.\n"
+            "PartCAD cannot write %s here: the package that declares %s is what implements it, and a "
+            "file opened on its own has no package to reach that from.\n"
+            "Export the scene from a package that imports it, and open the result:\n"
+            "  pc export -S -t %s -O <dir> <scene>\n"
+            "If %s already is %s, say so with --type ('pc open --type <package>:%s ...'); the VS Code "
+            "extension passes the declared type of the object you clicked."
+            % (
+                spec.display_name,
+                spec.scene_type.upper(),
+                source,
+                spec.scene_type.upper(),
+                spec.scene_type,
+                _export_target(spec.scene_type),
+                source,
+                spec.scene_type.upper(),
+                spec.scene_type,
+            )
+        )
+    if source_type is None:
+        raise ExternalToolError(
+            "%s reads %s, and PartCAD cannot tell what %s holds -- it is not a scene file it knows "
+            "(it reads: %s).\n"
+            "If it is one, say so with --type ('pc open --type ...'); the VS Code extension passes the "
+            "declared type of the object you clicked."
+            % (
+                spec.display_name,
+                spec.scene_type.upper(),
+                source,
+                ", ".join(sorted(object_types.SCENE_TYPE_EXTENSION)),
+            )
+        )
+    if transcode is None:
+        raise ExternalToolError(
+            "%s reads %s, and %s is not one. Converting it needs the PartCAD daemon; "
+            "run `pc open` rather than calling this directly." % (spec.display_name, spec.scene_type.upper(), source)
+        )
+
+    return _produce(spec, source, source_type, root, spec.scene_type, extension, "scene", transcode, say)
+
+
+def _produce(
+    spec: Tool,
+    source: str,
+    source_type: str,
+    root: str,
+    target_type: str,
+    extension: str,
+    kind: str,
+    transcode: Callable[..., None],
+    say: Callable[[str], None],
+) -> str:
+    """Run one conversion and return the file it left behind.
+
+    Shared by the two above: what differs between them is what is converted and
+    what makes it necessary, and none of that is here.
+    """
+    target = transcode_path(root, source, extension)
     if os.path.isfile(target) and os.path.getmtime(target) >= os.path.getmtime(source):
         # The conversion is the slow part of opening a part, and the source has
         # not changed since the last one. A `touch` of the source is enough to
@@ -542,12 +816,12 @@ def _transcode(
 
     with contextlib.suppress(OSError):
         os.makedirs(os.path.dirname(target), exist_ok=True)
-    say("Converting %s to %s for %s..." % (source, spec.mesh_via.upper(), spec.display_name))
-    transcode(source, source_type, target, spec.mesh_via)
+    say("Converting %s to %s for %s..." % (source, target_type.upper(), spec.display_name))
+    transcode(source, source_type, target, target_type, kind)
     if not os.path.isfile(target):
         raise ExternalToolError(
             "Failed to convert %s to %s for %s; the conversion wrote nothing to %s."
-            % (source, spec.mesh_via.upper(), spec.display_name, target)
+            % (source, target_type.upper(), spec.display_name, target)
         )
     return target
 
@@ -651,6 +925,12 @@ def _open_in_container(
     # point of the check.
     x11_env, x11_mounts, x11_advice = _x11_forwarding(spec)
     display = x11_env["DISPLAY"]
+
+    if not (image or spec.image):
+        raise ExternalToolError(
+            "%s is not installed here and declares no container image, so there is nothing to run it in.\n"
+            "Install it, or name an image with --docker-image." % spec.display_name
+        )
 
     state = _container_state(spec.container_name)
     if state is None:

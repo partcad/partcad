@@ -9,12 +9,14 @@
 #
 
 import asyncio
-import pytest
+import os
 import shutil
 import sys
-import os
+
+import pytest
 
 import partcad as pc
+from partcad import runtime as pc_runtime
 
 test_config_local = {
     "name": "//primitive_local",
@@ -117,7 +119,7 @@ def test_part_get_obj_2():
 def test_part_get_scad():
     """Load an OpenSCAD part"""
     scad_path = shutil.which("openscad")
-    if not scad_path is None:
+    if scad_path is not None:
         ctx = pc.Context("examples/produce_part_openscad")
         part = ctx.get_part(":cube")
         assert part is not None
@@ -240,6 +242,33 @@ def test_part_example_kicad():
     kicad_package = ctx.get_project("//produce_part_kicad")
     if kicad_package.skipped:
         pytest.skip("//produce_part_kicad is excluded here: tag '%s'" % kicad_package.skipped_by)
+    # No container runtime here means there is nothing to run 'kicad-cli' in, and
+    # this test is about the KiCad part factory rather than about the machine it
+    # runs on -- so it is skipped, whether Docker was turned off deliberately
+    # ('PC_USE_DOCKER=false', or 'useDocker: false' in the user configuration) or
+    # is simply not answering.
+    #
+    # **Only** that. Everything past this point is this test's to fail on: an
+    # image that cannot be pulled, a 'kicad-cli' that errors, a part that comes
+    # back empty. Those are the KiCad path being broken, and a skip there would
+    # be a green run with the subject quietly missing from it. Note the tags
+    # checked above cannot answer the question either way: they report whether a
+    # container was *asked for*, not whether one can be started (see
+    # 'partcad.tags').
+    #
+    # Asked of 'runtime.docker_enabled', which is the same call the factory
+    # itself makes a moment later and the same one 'pc healthcheck' reports on.
+    # Asking it here in another spelling -- 'from_env().ping()', as this used to
+    # -- is how a test comes to skip on a machine the factory would have run on,
+    # or run on one it would not: a daemon that answers a ping but runs Windows
+    # containers is not a daemon that can run 'kicad-cli' in a Linux image.
+    #
+    # It checks 'useDocker' first and only then pings, which is what keeps a
+    # host whose DOCKER_HOST points at something unreachable from sitting out
+    # the SDK's sixty-second API timeout to reach a skip that was already
+    # decided.
+    if not pc_runtime.docker_enabled():
+        pytest.skip("No container runtime to run 'kicad-cli' in (Docker is off here, or none is answering)")
     nano = ctx.get_part("//produce_part_kicad:Arduino_Nano")
     assert nano is not None
 

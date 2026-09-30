@@ -4,7 +4,7 @@
 #
 # The host's Docker daemon arrives as one of two bind mounts: the standard
 # /var/run/docker.sock, which is the only path Docker Desktop understands on
-# macOS and Windows, and whatever docker-socket-init.sh resolved for a Linux
+# macOS and Windows, and whatever host-sockets-init.sh resolved for a Linux
 # host that keeps its daemon elsewhere. Either may be an empty directory rather
 # than a socket -- that is what Docker leaves when the source does not exist.
 # This picks whichever is real, puts it where every Docker client looks for it,

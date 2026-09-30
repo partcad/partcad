@@ -16,8 +16,8 @@ import asyncio
 
 import pytest
 
-from partcad.sandbox_lock import EnvironmentLock, ProcessSlots
 from partcad import sandbox_lock
+from partcad.sandbox_lock import EnvironmentLock, ProcessSlots
 
 
 def _lock(tmp_path, name="env"):

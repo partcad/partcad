@@ -4,24 +4,25 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import rich_click as click
 import atexit
-import logging
 import locale
+import logging
 import platform
 import re
-import sentry_sdk
 import sys
+
+import rich_click as click
+import sentry_sdk
 import sentry_sdk.session
 import yaml
 
 import partcad_utils
 import partcad_utils.logging_remote_client as logging_remote_client
+from partcad_cli.click.cli_context import CliContext
+from partcad_cli.click.loader import Loader
 from partcad_utils import logging as pc_logging
 from partcad_utils import telemetry as pc_telemetry
 from partcad_utils.user_config import user_config as pc_user_config
-from partcad_cli.click.loader import Loader
-from partcad_cli.click.cli_context import CliContext
 
 # partcad's package __init__ used to run this when the CLI imported it; the CLI
 # no longer imports the heavy partcad package, so initialize telemetry here.
@@ -137,7 +138,9 @@ command_groups = [
     },
     {
         # `search` sits beside `list`: both enumerate the objects in a package,
-        # one filtered by keyword and one not.
+        # one filtered by keyword and one not. `sim` sits beside `test`: both
+        # ask whether an object is any good, one about making it and one about
+        # what it does once it is made.
         "name": "Object commands",
         "commands": [
             "list",
@@ -145,12 +148,20 @@ command_groups = [
             "add",
             "import",
             "test",
+            "sim",
             "inspect",
             "info",
             "bom",
             "convert",
             "export",
             "render",
+            # Beside `export` and `render` because that is what it is: the third
+            # thing a script produces from a shape, configured in a section of
+            # `partcad.yaml` of the same shape as theirs. `cam` is the fourth,
+            # and sits here for the same reason -- it produces the program a
+            # machine cuts the shape with.
+            "cae",
+            "cam",
         ],
     },
     {
@@ -301,8 +312,11 @@ click.rich_click.COMMAND_GROUPS = {
     "--python-sandbox",
     default=None,
     show_envvar=True,
-    type=click.Choice(["none", "venv", "pypy", "conda"]),
-    help="Sandboxing environment for invoking python scripts (defaults to conda, else venv)",
+    # Every sandbox 'runtime_python_all.create' knows. A choice list missing one
+    # is a documented value the command line refuses, which is how '--python-sandbox
+    # docker' was rejected on a machine running Docker.
+    type=click.Choice(["docker", "conda", "venv", "remote", "none", "pypy"]),
+    help="Sandboxing environment for invoking python scripts (defaults to docker where one answers, else conda, else venv)",
 )
 @click.option(
     "--javascript-sandbox",
@@ -592,7 +606,6 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
 
         # Prepare the callboack to be used by command handlers should they need a PartCAD context object
         def get_partcad_context():
-            nonlocal ctx, path
             from partcad.globals import init
 
             try:

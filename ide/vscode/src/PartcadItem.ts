@@ -10,6 +10,19 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
+/**
+ * An object type without the package that declares it.
+ *
+ * A file format a plugin package implements is written as a full resource path
+ * -- `sim-gazebo:world`, `sim-mujoco:mjcf` -- because that is what resolves it,
+ * and the engine scene formats are all of them now: PartCAD itself ships no
+ * simulator and no simulator's scene format. The tree only ever asks *which
+ * format* a scene is, never whose, so it compares the part after the last ':'.
+ */
+export function bareType(objectType: string | undefined): string {
+    return (objectType ?? '').split(':').pop() ?? '';
+}
+
 export const ITEM_TYPE_NONE = 'none';
 export const ITEM_TYPE_PACKAGE = 'package';
 export const ITEM_TYPE_SKETCH = 'sketch';
@@ -129,15 +142,31 @@ export class PartcadItem extends vscode.TreeItem {
                 light: path.join(__filename, '..', '..', 'resources', 'light', 'globe.svg'),
                 dark: path.join(__filename, '..', '..', 'resources', 'dark', 'globe.svg'),
             };
-            // A world scene gets a context value of its own: it is the one
-            // kind of scene another application can open, because a '.world'
-            // file *is* what Gazebo reads. An ASSY scene is PartCAD's own
-            // format and there is nothing to hand over. Only once there is a
-            // file, though - the value is what puts "Open in > Gazebo" and
-            // "Open source" on the row, and neither has anything to act on
-            // without one.
+            // A scene held in a simulator's own format gets a context value of
+            // its own: those are the scenes another application can open,
+            // because a '.world' file *is* what Gazebo reads and an MJCF model
+            // *is* what MuJoCo reads. An ASSY scene is PartCAD's own format and
+            // is nothing but references to the parts of a package, so there is
+            // nothing to hand over. Only once there is a file, though - the
+            // value is what puts "Open in > ..." and "Open source" on the row,
+            // and neither has anything to act on without one.
+            //
+            // Each takes only its own format. Nothing converts between them
+            // here: an engine's scene format is implemented by that engine's
+            // plugin package, and `pc open` is handed a file with no package
+            // around it to reach either implementation through.
+            //
+            // The type is compared bare, because a scene declares one of these
+            // as 'sim-gazebo:world' or 'sim-mujoco:mjcf' -- through the package
+            // that implements it, which is the only spelling that resolves.
             this.contextValue =
-                itemPath === undefined ? 'scene' : config.type === 'world' ? 'sceneWorld' : 'sceneWithCode';
+                itemPath === undefined
+                    ? 'scene'
+                    : bareType(config.type) === 'world'
+                      ? 'sceneWorld'
+                      : bareType(config.type) === 'mjcf'
+                        ? 'sceneMjcf'
+                        : 'sceneWithCode';
             this.command = {
                 title: 'Inspect',
                 command: 'partcad.inspectScene',
@@ -182,7 +211,7 @@ export class PartcadItem extends vscode.TreeItem {
             }
             // As with a world scene above: a 'kicad' part is the one kind of
             // part KiCad can be pointed at, because the board it is generated
-            // from is a file beside it (see 'KICAD' in
+            // from is a file beside it (see the 'kicad' entry of 'builtin/open/partcad.yaml' and
             // 'partcad_client.external'). 'itemPath' stays undefined for it -
             // what the tree would open is the STEP KiCad writes, not source.
             this.contextValue =

@@ -11,6 +11,7 @@ import plistlib
 
 import brand
 import pytest
+
 from conftest import COMPONENT_ROOT
 
 VSCODIUM_GALLERY = {"serviceUrl": "https://open-vsx.org/vscode/gallery", "itemUrl": "https://open-vsx.org/vscode/item"}

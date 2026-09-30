@@ -11,9 +11,12 @@ the 'ai-cadquery'/'ai-build123d' part types are the ones in the wild. Loading su
 a package used to drop every affected object with only a log line, abort the
 enumeration loop at the first one (taking the objects declared after it with it),
 and raise a bare KeyError at anyone who then asked for one by name.
-"""
 
-import os
+A declaration is read when its kind is created, which is when something asks
+for that kind (see 'Project.LAZY_OBJECT_KINDS') rather than when the package
+loads - so several of these reach for 'project.parts' before asking what was
+recorded, and that reach is the point rather than incidental.
+"""
 
 import pytest
 import yaml
@@ -56,6 +59,11 @@ def test_an_unusable_declaration_does_not_hide_the_rest(package):
 def test_the_recorded_reason_names_the_type(package):
     ctx = pc.Context(str(package))
     project = ctx.get_project("//")
+
+    # The declarations are read when the kind is created, which is when
+    # somebody asks for it (see 'Project.LAZY_OBJECT_KINDS'), so this is
+    # what makes the package look at its parts at all.
+    project.parts
 
     reason = project.get_broken_object_reason("part", "obsolete")
     assert "ai-cadquery" in reason
@@ -281,11 +289,69 @@ def test_a_retired_type_says_it_was_retired_and_when(package, monkeypatch):
     recorded = _record_warnings(monkeypatch)
 
     project = pc.Context(str(package)).get_project("//")
+    project.parts
 
     reason = project.get_broken_object_reason("part", "obsolete")
     assert "retired in PartCAD 0.7.153" in reason
     assert "ai-cadquery" in reason
     assert any("ai-cadquery" in message and "retired" in message for message in recorded), recorded
+
+
+def test_a_retired_type_does_not_stop_the_package_being_rendered(package):
+    """Which is what the softening was for, and what it did not reach.
+
+    'pc render -r --package //pub/examples' ended in a quarter of a second with
+    "No shapes found to render", over the six generative-AI parts the public
+    index still declares. The enumeration handed the render a None for each of
+    them and 'render_shapes' raised 'EmptyShapesError' at the first one -- so a
+    command that merely walks a package exited non-zero over a feature PartCAD
+    removed, which is precisely the outcome 'RetiredTypeException' exists to
+    prevent. Nothing said so: the message names neither the package nor the
+    part, and every part in the index is perfectly renderable.
+    """
+    project = pc.Context(str(package)).get_project("//")
+
+    shapes = project._enumerate_shapes(None, None, None, None)
+
+    assert None not in shapes
+    assert sorted(shape.name for shape in shapes) == ["good_after", "good_before"]
+
+
+def test_a_part_that_will_not_build_still_stops_it(unknown_type_package):
+    """The other half, and the reason this is not simply "drop every None".
+
+    A type nobody retired is a mistake somebody can correct, so a render that
+    silently skipped it would produce a package's worth of output with a part
+    quietly missing from it.
+    """
+    project = pc.Context(str(unknown_type_package)).get_project("//")
+
+    assert None in project._enumerate_shapes(None, None, None, None)
+
+
+def test_the_retired_one_is_remembered_as_retired(package):
+    """'broken_objects' holds it and 'retired_objects' holds it as well.
+
+    Two records rather than one because they call for opposite things -- a
+    broken object is a failure to report, a retired one a declaration to walk
+    past -- and a single dictionary of reasons could only tell them apart by
+    matching on the text of the message.
+    """
+    project = pc.Context(str(package)).get_project("//")
+    project.parts
+
+    assert project.is_retired_object("part", "obsolete") is True
+    assert project.is_retired_object("part", "good_before") is False
+    assert list(project.broken_objects["part"]) == ["obsolete"]
+
+
+def test_a_typo_is_not_remembered_as_retired(unknown_type_package):
+    """So the render goes on failing on it: this is a mistake somebody can fix."""
+    project = pc.Context(str(unknown_type_package)).get_project("//")
+    project.parts
+
+    assert project.is_retired_object("part", "typo") is False
+    assert list(project.broken_objects["part"]) == ["typo"]
 
 
 def test_a_retired_type_raises_a_retired_type_exception():
@@ -308,6 +374,10 @@ def test_an_unknown_type_is_still_an_error(unknown_type_package):
     pc.logging.reset_errors()
 
     project = pc.Context(str(unknown_type_package)).get_project("//")
+    # The declarations are read when the kind is created, which is when
+    # somebody asks for it (see 'Project.LAZY_OBJECT_KINDS'), so this is
+    # what makes the package look at its parts at all.
+    project.parts
 
     assert pc.logging.had_errors is True
     reason = project.get_broken_object_reason("part", "typo")
@@ -320,7 +390,7 @@ def test_an_unknown_type_is_still_an_error(unknown_type_package):
 def test_an_unknown_type_is_reported_at_error_level(unknown_type_package, monkeypatch):
     recorded = _record_warnings(monkeypatch)
 
-    pc.Context(str(unknown_type_package)).get_project("//")
+    pc.Context(str(unknown_type_package)).get_project("//").parts
 
     assert not any("nonsense" in message for message in recorded), recorded
 
@@ -352,6 +422,10 @@ def test_a_retired_part_type_on_a_sketch_is_unknown_rather_than_retired(
     pc.logging.reset_errors()
 
     project = pc.Context(str(retired_part_type_on_a_sketch_package)).get_project("//")
+    # The declarations are read when the kind is created, which is when
+    # somebody asks for it (see 'Project.LAZY_OBJECT_KINDS'), so this is
+    # what makes the package look at its sketches at all.
+    project.sketches
 
     assert pc.logging.had_errors is True
     reason = project.get_broken_object_reason("sketch", "not_a_sketch_type")
@@ -366,7 +440,7 @@ def test_a_retired_part_type_on_a_sketch_is_not_reported_as_a_warning(
 ):
     recorded = _record_warnings(monkeypatch)
 
-    pc.Context(str(retired_part_type_on_a_sketch_package)).get_project("//")
+    pc.Context(str(retired_part_type_on_a_sketch_package)).get_project("//").sketches
 
     assert not any("ai-cadquery" in message for message in recorded), recorded
 

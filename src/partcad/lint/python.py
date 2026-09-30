@@ -1,14 +1,14 @@
-import os
-import json
 import asyncio
 import importlib
+import json
+import os
 import subprocess
 import threading
 
 from partcad.context import Context
-from partcad.project import Project
 from partcad.lint.lint import Linting, LintingReport, Severity
 from partcad.process_output import decode as decode_output
+from partcad.project import Project
 
 # Lazy-load the linting dependency as it is not always needed.
 # `ruff` is an optional extra: it is only required when Python linting runs.
@@ -100,7 +100,7 @@ class PythonLinting(Linting):
             stdout, _ = await p.communicate()
             stdout = decode_output(stdout)
 
-            if stdout and 'passed' not in stdout:
+            if stdout and "passed" not in stdout:
                 for item in json.loads(stdout):
                     location = item.get("location", {})
                     linting_report.add(

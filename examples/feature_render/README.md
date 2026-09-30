@@ -21,8 +21,8 @@ file types leave behind, which is why the tables below show the SVGs.
 The 3D and CAD files a package publishes are a different section --
 `export:` -- and a different example: see `feature_export`.
 
-A `prefix` that points at a directory expects it to be there: PartCAD writes
-the file, not the path to it, unless it is asked to with `--create-dirs`.
+A `prefix` that points at a directory PartCAD has to make is fine: the
+directories an output file needs are created on the way to writing it.
 Here `images/` already exists, because what is in it is checked in.
 
 
@@ -52,7 +52,7 @@ pc render -t dxf -O ./ :outline
 
 ### outline
 <table><tr>
-<td valign=top><a href="outline.basic"><img src="././outline.svg" alt="outline" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><img src="././outline.svg" alt="outline" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></td>
 <td valign=top>A 2D shape, to show which file types are worth writing for one</td>
 </tr></table>
 

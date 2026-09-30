@@ -42,14 +42,15 @@ BOOLEAN_OPTIONS = [
     ("cacheS3", "PC_CACHE_S3", "cache_s3"),
     ("cacheDependenciesIgnore", "PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
     ("ignoreBundledOpenscad", "IGNORE_BUNDLED_OPENSCAD", "ignore_bundled_openscad"),
-]
-
-# The boolean options with no environment binding, settable in config.yaml only.
-# They read through the same get_bool, so they are covered there instead.
-CONFIG_ONLY_OPTIONS = [
-    ("useDocker", "use_docker"),
-    ("useDockerPython", "use_docker_python_declared"),
-    ("useDockerKicad", "use_docker_kicad_declared"),
+    # The Docker family. These were settable in 'config.yaml' only until an
+    # image built without a daemon needed a way to say so without writing a
+    # file, and listing them here is not only coverage: 'build_config' clears
+    # every variable named in this table, so a run whose own environment sets
+    # one -- which is exactly what such an image does -- still tests what these
+    # say they test rather than what the machine happens to be.
+    ("useDocker", "PC_USE_DOCKER", "use_docker"),
+    ("useDockerPython", "PC_USE_DOCKER_PYTHON", "use_docker_python_declared"),
+    ("useDockerKicad", "PC_USE_DOCKER_KICAD", "use_docker_kicad_declared"),
 ]
 
 # The booleans TelemetryConfig reads, which go through the same get_bool.
@@ -145,12 +146,11 @@ def test_the_telemetry_booleans_read_the_same_way(config_home, monkeypatch, env_
 
 @pytest.mark.parametrize(
     "key,attribute",
-    [(key, attribute) for key, _env, attribute in BOOLEAN_OPTIONS] + CONFIG_ONLY_OPTIONS,
+    [(key, attribute) for key, _env, attribute in BOOLEAN_OPTIONS],
 )
 @pytest.mark.parametrize("written,expected", [("false", False), ("0", False), ("true", True), ("1", True)])
 def test_config_file_values_read_the_same_way(config_home, monkeypatch, key, attribute, written, expected):
-    """YAML hands over real booleans and integers rather than strings, and the
-    options with no environment binding are only reachable this way."""
+    """YAML hands over real booleans and integers rather than strings."""
     (config_home / ".partcad").mkdir(exist_ok=True)
     (config_home / ".partcad" / "config.yaml").write_text("%s: %s\n" % (key, written))
     assert getattr(build_config(monkeypatch), attribute) is expected

@@ -4,9 +4,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import rich_click as click
 import importlib
 import os
+
+import rich_click as click
 
 from partcad_utils import logging as pc_logging
 
@@ -46,7 +47,7 @@ class Loader(click.RichGroup):
             return []
 
     def get_command(self, _ctx, name: str) -> click.Command:
-        if not name in self.list_commands(_ctx):
+        if name not in self.list_commands(_ctx):
             raise click.ClickException(f"Unknown command: '{name}'. Try `--help`.")
 
         if not name.isalnum():
