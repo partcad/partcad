@@ -1050,6 +1050,30 @@ function animate(): void {
             }
             (window as any).pcViewerStats.lastLogTime = frameEnd;
         }
+
+        // Graphics profiling: draw calls and memory usage
+        if (!(window as any).pcGraphicsStats) {
+            const gl = renderer.getContext() as WebGLRenderingContext;
+            const ext = gl.getExtension('WEBGL_debug_renderer_info');
+            const unmasked_vendor = ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : 'unknown';
+            const unmasked_renderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'unknown';
+            console.log(`[PartCAD Viewer] GPU: ${unmasked_vendor} - ${unmasked_renderer}`);
+            (window as any).pcGraphicsStats = { lastLogTime: frameEnd };
+        }
+        const renderInfo = renderer.info.render;
+        const memInfo = renderer.info.memory;
+        const graphicsDisplay = `Draw Calls: ${renderInfo.calls}\nTriangles: ${renderInfo.triangles}\nGeometries: ${memInfo.geometries}\nTextures: ${memInfo.textures}`;
+
+        // Log graphics info every 3 seconds
+        if (frameEnd - (window as any).pcGraphicsStats.lastLogTime > 3000) {
+            console.log('[PartCAD Viewer] Graphics Stats:', {
+                drawCalls: renderInfo.calls,
+                triangles: renderInfo.triangles,
+                geometries: memInfo.geometries,
+                textures: memInfo.textures,
+            });
+            (window as any).pcGraphicsStats.lastLogTime = frameEnd;
+        }
     }
 }
 
