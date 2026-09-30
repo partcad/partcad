@@ -1,0 +1,60 @@
+#
+# OpenVMP, 2023
+#
+# Author: Roman Kuzmenko
+# Created: 2024-04-17
+#
+# Licensed under Apache License, Version 2.0.
+#
+
+import os
+
+import aiofiles
+import aiohttp
+
+from . import telemetry
+from .file_factory import FileFactory
+from .logging import debug
+
+
+@telemetry.instrument()
+class FileFactoryUrl(FileFactory):
+    url: str = None
+
+    def __init__(self, ctx, source_project, target_project, config):
+        super().__init__(ctx, source_project, target_project, config)
+
+        # 'fileUrl' is what this factory exists for, so say which object is
+        # missing it. Left to itself this is a bare KeyError with a traceback
+        # and no hint of which declaration in 'partcad.yaml' is at fault.
+        if "fileUrl" not in config:
+            raise Exception("ERROR: '%s' declares 'fileFrom: url' but no 'fileUrl'" % config.get("name", "<unnamed>"))
+        self.url = config["fileUrl"]
+
+    async def _download(self, path):
+        debug("Downloading file from %s to %s" % (self.url, path))
+
+        dirs = os.path.dirname(path)
+        if dirs != "" and not os.path.exists(dirs):
+            os.makedirs(dirs)
+
+        # 'trust_env' is what makes aiohttp read HTTPS_PROXY/HTTP_PROXY and
+        # NO_PROXY out of the environment. It is off by default, which makes
+        # this the one downloader in PartCAD that ignores them: libgit2 is
+        # asked for the same thing explicitly (project_factory_git._clone
+        # passes proxy=True) and 'requests' does it on its own (the tar
+        # transport). On a machine whose only route out is a proxy that
+        # difference is invisible until it bites -- the package's git and tar
+        # imports succeed and every 'fileFrom: url' download hangs until it
+        # times out, with nothing saying why.
+        async with aiohttp.ClientSession(trust_env=True) as session:
+            r = await session.get(self.url)
+            # A 404 answers with a page, not with nothing. Without this the body
+            # of that page is written out as the file, and everything downstream
+            # treats it as the real one: the object fails later with a baffling
+            # parse error, and 'pc add' would pin the hash of an error page.
+            r.raise_for_status()
+            content = await r.read()
+
+        async with aiofiles.open(path, "wb") as f:
+            await f.write(content)

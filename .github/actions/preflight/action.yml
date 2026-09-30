@@ -1,0 +1,301 @@
+name: "Preflight"
+description: >
+  Check that this run has the credentials the jobs after it are going to reach
+  for, and stop it here -- with the remedy -- when it does not.
+
+  Written for a fork. Everything in this repository's CI assumes the secrets
+  `partcad/partcad` has, and a fork has none of them until somebody adds them.
+  Without this, that is not something a contributor gets told: it is a job that
+  fails forty minutes in, on a step whose error is about a registry or an empty
+  key argument rather than about their setup. The point of this action is that
+  the message names what to add, where to add it, and what runs once they have.
+
+  Two kinds of answer, and the difference is the whole design:
+
+   * A capability this run NEEDS. Missing, this fails, so nothing downstream
+     starts. What "needs" means is decided by the caller from the run's own
+     scope -- a change to the VS Code extension needs neither of these, and
+     demanding them of it would stop a run that was never going to touch them.
+   * A capability this run CAN USE. Missing, this says so once and lets the run
+     continue, with the summary stating what that costs.
+
+  It never prints a secret, and does not have to: every question here is whether
+  something is set, not what it is. The values arrive as `inputs` so that the
+  caller passes `secrets.*` explicitly -- the `secrets` context cannot be read
+  from a job-level `if:`, which is why this is a job rather than a condition.
+
+  POSIX shell, and every caller's gating job is on Linux already. A preflight
+  that fanned out over the matrix would ask one question per cell.
+
+inputs:
+  needs-ghcr:
+    description: >
+      "true" when this run means to publish container images of its own -- the
+      `push` or `degraded` output of ".github/actions/container-images". A run
+      that only pulls the release's does not need the write and is not stopped
+      for it.
+    required: false
+    default: "false"
+  needs-ssh:
+    description: >
+      "true" when this run may have to clone a dependency that is not public.
+
+      The suite drives `pc install`, and a PartCAD package can declare a `git`
+      dependency on any repository -- so this is a property of which
+      repositories this fork's packages point at, which nothing here can read.
+      Callers pass `github.event.repository.private`: a private repository is
+      one whose dependencies are likely private too, and a public one clones
+      public dependencies over https and needs no key. A heuristic, and the
+      failure message says so and says how to turn it off.
+    required: false
+    default: "false"
+  ssh-key:
+    description: >
+      secrets.SSH_PRIVATE_KEY_RO -- a private key whose public half is a
+      read-only deploy key on the repositories this fork's packages depend on.
+      Tested for being set and for nothing else.
+    required: false
+    default: ""
+  registry:
+    description: "The container registry PartCAD's own images live in."
+    required: false
+    default: "ghcr.io"
+  token:
+    description: >
+      secrets.GITHUB_TOKEN. Used to ask the registry what it grants this
+      token, never printed and never written anywhere.
+    required: false
+    default: ""
+
+outputs:
+  ghcr-write:
+    description: '"true" when this run can publish container images.'
+    value: ${{ steps.check.outputs.ghcr-write }}
+  ssh-key:
+    description: '"true" when SSH_PRIVATE_KEY_RO is set for this run.'
+    value: ${{ steps.check.outputs.ssh-key }}
+
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      env:
+        NEEDS_GHCR: ${{ inputs.needs-ghcr }}
+        NEEDS_SSH: ${{ inputs.needs-ssh }}
+        SSH_KEY: ${{ inputs.ssh-key }}
+        REGISTRY: ${{ inputs.registry }}
+        TOKEN: ${{ inputs.token }}
+        # A pull request whose head is in another repository -- which is what
+        # GitHub's read-only-token rule turns on, and what "a fork's pull
+        # request" means here. Not who the author is: a collaborator with write
+        # access still gets a read-only token when the branch lives in their
+        # own copy.
+        #
+        # The head being *elsewhere*, which is what GitHub's rule turns on --
+        # not the head repository being a fork of something. Those differ for
+        # the case that matters: a pull request opened inside a fork, branch
+        # to branch, has `head.repo.fork` true (that repository is a fork) and
+        # a fully writable token (the head is this repository). Read the wrong
+        # one and a fork's own pull requests are treated as untrusted in their
+        # own repository -- no images published, no coverage of what they
+        # changed -- which is exactly the run a contributor opens to check
+        # their work before sending it here.
+        FROM_A_FORK: ${{ github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name != github.repository }}
+        REPO: ${{ github.repository }}
+        OWNER: ${{ github.repository_owner }}
+      run: |
+        set -euo pipefail
+
+        fatal=0
+        rows=""
+        row() { rows="${rows}| \`$1\` | $2 | $3 |"$'\n'; }
+        say() { printf '%s\n' "$1" >> "${GITHUB_STEP_SUMMARY}"; }
+
+        # Two of the three answers are GitHub rules rather than things to
+        # discover by asking, so they are derived and the registry is only
+        # asked about the third. A pull request from a fork gets a read-only
+        # GITHUB_TOKEN however the workflow declares its permissions, and no
+        # `permissions:` block, environment or repository setting changes that.
+        if [ "${FROM_A_FORK}" = "true" ]; then
+          ghcr_write=false
+          ghcr_why="read-only, because GitHub gives a fork's pull request a read-only token"
+        elif [ -z "${TOKEN}" ]; then
+          ghcr_write=false
+          ghcr_why="no token was passed to this action"
+        else
+          # Ask the registry what it grants this token, on the image this run
+          # would publish, and read back the granted actions.
+          #
+          # **It confirms and it never refutes.** A granted `push` is proof the
+          # write works. A withheld one is not proof of the opposite, and that
+          # is measured rather than cautious: on `partcad/partcad` itself -- the
+          # repository whose workflows publish every one of these images, with
+          # `packages: write` and this same `GITHUB_TOKEN` -- this endpoint
+          # answers `pull` and no `push`. The release tags on ghcr are the
+          # evidence that the push works anyway.
+          #
+          # So the endpoint's negative answer says something about the endpoint
+          # and not about the run, and a gate that stopped on it would stop this
+          # repository from building its own images. A check that blocks a run
+          # which would have worked is worse than no check: the person it stops
+          # has nothing to fix.
+          #
+          # What that costs is the case this probe was added for -- a fork whose
+          # "Workflow permissions" are read-only, caught before the push rather
+          # than at it. Nothing cheap distinguishes that from the false negative
+          # above. The only definitive test is pushing something small and
+          # seeing what happens, which is a real image, a real tag and a tag to
+          # clean up afterwards; worth doing if the case turns out to bite, and
+          # not worth guessing at before then.
+          #
+          # Pure shell on purpose -- `base64` is coreutils and is everywhere,
+          # and a probe that needed a language runtime would be a probe that
+          # silently stopped running the day one was missing.
+          scope="repository:${REPO}-container-python:pull,push"
+          claims=""
+          if body=$(curl -fsSL --max-time 20 -u "${OWNER}:${TOKEN}" \
+              "https://${REGISTRY}/token?service=${REGISTRY}&scope=${scope}" 2>/dev/null); then
+            # Peeled a field at a time rather than matched as one pattern, so
+            # that whitespace anywhere in the JSON cannot silently defeat it --
+            # and it did: a single space after the colon left the whole body in
+            # `jwt`, the decode produced nothing, and the run fell through to
+            # "could not be asked" and carried on as though writable.
+            jwt="${body#*token}"
+            jwt="${jwt#*:}"
+            jwt="${jwt#*\"}"
+            jwt="${jwt%%\"*}"
+            payload="${jwt#*.}"
+            payload="${payload%%.*}"
+            case $(( ${#payload} % 4 )) in
+              2) payload="${payload}==" ;;
+              3) payload="${payload}=" ;;
+            esac
+            claims=$(printf '%s' "${payload}" | tr '_-' '/+' | base64 -d 2>/dev/null || true)
+          fi
+
+          # `"push"` quoted, so that a repository whose *name* held the word
+          # could not answer for the permission. The granted actions are the
+          # only place it appears quoted like this.
+          #
+          # Both of the other branches land on writable, for the two different
+          # reasons above: the probe could not be run, or it answered and its
+          # answer does not settle the question. Neither is a reason to stop a
+          # run, and the push itself says so loudly if the write really is
+          # missing.
+          ghcr_write=true
+          if [ -z "${claims}" ]; then
+            ghcr_why="assumed writable: ${REGISTRY} could not be asked"
+          elif case "${claims}" in *'"push"'*) true ;; *) false ;; esac; then
+            ghcr_why="${REGISTRY}/${REPO}-container-* is writable"
+          else
+            ghcr_why="assumed writable: ${REGISTRY} reported pull only, which it also does where the push works"
+          fi
+        fi
+
+        # Stop where there is something to fix, explain where there is not.
+        #
+        # A fork's pull request against this repository cannot be made to
+        # publish -- not by a `permissions:` block, not by a secret, not by any
+        # setting either side can reach. Failing it would leave an outside
+        # contributor's Dockerfile change permanently un-mergeable for a reason
+        # they cannot act on, so that case keeps the warning it has always had
+        # and gains the one thing it was missing: where to go to get the
+        # coverage. Anywhere else -- a fork running its own CI, this repository
+        # -- a missing write *is* fixable, and a run that goes on to test the
+        # release's images while reporting on a change to them is worse than a
+        # run that stops and says so.
+        if [ "${NEEDS_GHCR}" = "true" ] && [ "${ghcr_write}" != "true" ]; then
+          say ""
+          say "### This run cannot publish the container images it changes"
+          say ""
+          say "It builds PartCAD's container images (the paths say so, or \`#images\` asked), so it"
+          say "has to push them where its own test jobs can pull them from. It cannot:"
+          say "${ghcr_why}."
+          say ""
+          if [ "${FROM_A_FORK}" = "true" ]; then
+            row "packages: write" "unavailable here" "${ghcr_why}"
+            echo "::warning title=This pull request's container images go untested here::${ghcr_why}"
+            say "**There is no fix inside this run.** The read-only token is GitHub's rule for a"
+            say "fork's pull request, not a setting either of us can change, so the tests below run"
+            say "against the release's images and your change to them goes untested *here*."
+            say ""
+            say "To get that coverage, run CI in your own fork: push the branch there and start"
+            say "**CI** from your fork's **Actions** tab (\"Run workflow\"). That run's token writes to"
+            say "\`${REGISTRY}/<your fork>-container-*\`, it builds your images, and its test jobs pull"
+            say "what it built. Link the run on this pull request and a reviewer can see it went green."
+          else
+            row "packages: write" "**REQUIRED — missing**" "${ghcr_why}"
+            fatal=1
+            echo "::error title=This run cannot publish the container images it was asked to build::${ghcr_why}"
+            say "Fix it and re-run:"
+            say ""
+            say "1. **Actions** tab → \"I understand my workflows, go ahead and enable them\", if this"
+            say "   fork has never run one."
+            say "2. **Settings → Actions → General → Workflow permissions** → *Read and write*."
+            say ""
+            say "Nothing else is needed — \`${REGISTRY}/${REPO}-container-*\` is created on first push,"
+            say "and no secret of your own has to be added for it."
+          fi
+        elif [ "${ghcr_write}" = "true" ]; then
+          row "packages: write" "available" "${ghcr_why}"
+        else
+          row "packages: write" "not needed" "${ghcr_why}; this run pulls the release's images"
+        fi
+
+        if [ -n "${SSH_KEY}" ]; then ssh_key=true; else ssh_key=false; fi
+
+        # What the key is for: cloning a PartCAD package this repository depends
+        # on which is not public. The suite drives `pc install`, and a package
+        # can declare a `git` dependency on any repository -- so whether a run
+        # needs a key is a property of *which repositories this fork's packages
+        # point at*, not of which scenario is running.
+        #
+        # Nothing here can read that, and the caller uses the one signal that
+        # correlates with it: a **private** repository is one whose dependencies
+        # are likely private too, and a public one clones public dependencies
+        # over https and needs nothing. That is a heuristic and it is stated as
+        # one -- a private fork with only public dependencies can set
+        # `needs-ssh: "false"` in its own copy of the workflow and lose nothing.
+        if [ "${NEEDS_SSH}" = "true" ] && [ "${ssh_key}" != "true" ]; then
+          row "SSH_PRIVATE_KEY_RO" "**REQUIRED — missing**" "this repository is private and has no deploy key"
+          fatal=1
+          echo "::error title=A private repository with no deploy key::add SSH_PRIVATE_KEY_RO"
+          say ""
+          say "### No SSH deploy key"
+          say ""
+          say "This repository is private, so the packages its suites install may depend on"
+          say "repositories that are private too -- and \`SSH_PRIVATE_KEY_RO\` is not set, so nothing"
+          say "in this run can clone one. Left to the suite, that surfaces as a \`git\` authentication"
+          say "failure inside one behave scenario, in one shard, a long way from the cause."
+          say ""
+          say "Add it under **Settings → Secrets and variables → Actions → New repository secret**,"
+          say "named \`SSH_PRIVATE_KEY_RO\`, holding a private key whose public half is a read-only"
+          say "deploy key on the repositories being cloned."
+          say ""
+          say "If this repository is private but every dependency it installs is public, it does not"
+          say "need one: set \`needs-ssh: \"false\"\` on the \`Prerequisites\` job in your copy of"
+          say "\`.github/workflows/test.yml\` and \`test-dev.yml\`."
+        elif [ "${ssh_key}" = "true" ]; then
+          row "SSH_PRIVATE_KEY_RO" "available" "a private dependency can be cloned over SSH"
+        else
+          row "SSH_PRIVATE_KEY_RO" "not needed" "this repository is public, and a public dependency clones over https"
+        fi
+
+        echo "ghcr-write=${ghcr_write}" >> "${GITHUB_OUTPUT}"
+        echo "ssh-key=${ssh_key}" >> "${GITHUB_OUTPUT}"
+
+        say ""
+        say "### Prerequisites"
+        say ""
+        say "| Capability | State | Detail |"
+        say "| --- | --- | --- |"
+        printf '%s' "${rows}" >> "${GITHUB_STEP_SUMMARY}"
+
+        printf '%s' "${rows}"
+        if [ "${fatal}" = "1" ]; then
+          echo "::error::this run is missing a credential the jobs after it need; see the job summary"
+          exit 1
+        fi
+        echo "every credential this run needs is present."

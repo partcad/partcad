@@ -1,0 +1,6 @@
+links:
+  - part: plate
+    name: lower
+  - part: plate
+    name: upper
+    location: [[0.0, 0.0, 20.0], [0.0, 0.0, 1.0], 0.0]

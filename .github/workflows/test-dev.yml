@@ -13,14 +13,22 @@ on:
     branches: ["devel"]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # A push whose head commit is a version bump is the only run that publishes
+  # the dev container image tagged with that version: the job that builds it is
+  # skipped on every other push to devel, and the tag is never built again. So
+  # cancelling such a run loses that image for good -- 0.7.180 has no dev
+  # container image on ghcr for exactly this reason, its run having been
+  # cancelled by the next push. Give version bumps a concurrency group of their
+  # own, keyed by commit, so nothing can supersede them. Every other run keeps
+  # cancelling its predecessor as before.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ startsWith(github.event.head_commit.message, 'Version updated') && format('-{0}', github.sha) || '' }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 env:
-  VERSION: 0.7.158
+  VERSION: 0.8.131
   CONTAINER_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}-devcontainer
   TOTAL_TIMEOUT: 900
@@ -29,9 +37,128 @@ env:
   PC_TELEMETRY_PERFORMANCE: false
 
 jobs:
+  # What this change can say anything about. Every job below reads it; see
+  # ".github/actions/changed-scopes", and the note on "Run: pytest" for why that
+  # job gets a gate of its own rather than sharing this one's.
+  scope:
+    name: "Scope"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # As in "test.yml": a push to "devel" runs this only for a version bump, and
+    # the event name leads because a "schedule" carries no "head_commit" -- see
+    # the long note there. Stated here and nowhere else in this file: every other
+    # job needs this one, and a job that needs a skipped job is skipped.
+    #
+    # "github.event.repository.fork" is the last clause and it is what lets a
+    # fork run this at all. The reasoning above is about *this* repository: a
+    # push to "devel" here is followed by a version bump within the hour, so
+    # the matrix runs on that instead. A fork has no bump coming, so without
+    # this clause a contributor who pushes to their fork's "devel" -- which is
+    # what a fork's default branch is called -- gets a run in which every
+    # single job is skipped, and nothing anywhere says why.
+    if: >-
+      ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel'
+      || startsWith(github.event.head_commit.message, 'Version updated')
+      || github.event.repository.fork }}
+    outputs:
+      devcontainer: ${{ steps.scope.outputs.devcontainer }}
+      pytest: ${{ steps.scope.outputs.devcontainer-pytest }}
+      # Which of PartCAD's own container images this run addresses, and whether
+      # it may publish them. The same question "test.yml" asks, of the same
+      # action and with the same answer: both files call "container-kicad.yml",
+      # which builds one image per commit, and it cannot be told two different
+      # tags to build it under.
+      image-tag: ${{ steps.images.outputs.tag }}
+      image-push: ${{ steps.images.outputs.push }}
+      image-release: ${{ steps.images.outputs.release }}
+      image-override: ${{ steps.images.outputs.override }}
+      # Asked for images of its own and unable to publish them -- read by
+      # "preflight", as in "test.yml".
+      image-degraded: ${{ steps.images.outputs.degraded }}
+      # Whose copy this run addresses; empty unless it built its own. See the
+      # longer note on the same output in "test.yml".
+      image-owner: ${{ steps.images.outputs.push == 'true' && github.event.repository.fork && github.repository_owner || '' }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Decide the depth
+        id: depth
+        uses: ./.github/actions/test-depth
+      - name: Decide what the change touches
+        id: scope
+        uses: ./.github/actions/changed-scopes
+        with:
+          deep: ${{ steps.depth.outputs.deep }}
+      - name: Which images this run uses
+        id: images
+        uses: ./.github/actions/container-images
+        with:
+          wanted: ${{ steps.depth.outputs.images == 'true' || steps.scope.outputs.images == 'true' }}
+          release: ${{ env.VERSION }}
+
+  # The same prerequisite check "test.yml" runs, for the same reason and against
+  # the same action: a fork has none of the secrets this file assumes, and the
+  # dev container jobs below all push to or pull from the registry. Gating the
+  # two jobs that hold credentials gates the three test jobs through the graph
+  # that is already there.
+  preflight:
+    name: "Prerequisites"
+    needs: scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # A job-level block REPLACES the workflow's, it does not add to it: every
+      # scope left out becomes "none". So "contents: read" is restated here, and
+      # not restating it is what CodeRabbit caught on this pull request -- with
+      # "contents" at none, "actions/checkout" cannot clone a private
+      # repository, and the job would die before reaching the check. On a
+      # private fork, which is the case this whole action exists for. Every
+      # other credentialed job in these two files pairs the two for this reason.
+      contents: read
+      # And the write this asks the registry about, because a GITHUB_TOKEN is
+      # scoped per job: left at the default, the probe would be measuring a
+      # token nothing else in the run uses. It requests the write; whether the
+      # repository grants it is the question.
+      packages: write
+    outputs:
+      # Forwarded so that a job can ask what this run has rather than reaching
+      # for "secrets" itself, which an "if:" cannot read.
+      ghcr-write: ${{ steps.preflight.outputs.ghcr-write }}
+      ssh-key: ${{ steps.preflight.outputs.ssh-key }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: preflight
+        uses: ./.github/actions/preflight
+        with:
+          # "devcontainer" too, and not only the image outputs: a change to
+          # ".devcontainer" alone sets neither of those, and the job below still
+          # runs and still pushes the dev container image ("push: always"). Left
+          # out, a fork's pull request changing only that file would be told
+          # nothing about the publish it cannot do. Caught by CodeRabbit here.
+          needs-ghcr: ${{ needs.scope.outputs.devcontainer == 'true'
+            || needs.scope.outputs.image-push == 'true'
+            || needs.scope.outputs.image-degraded == 'true' }}
+          # A private repository is one whose PartCAD packages may depend on
+          # repositories that are private too, and cloning one needs the key.
+          # A public fork clones public dependencies over https and needs
+          # nothing. See the input's description for why this is the signal.
+          #
+          # An event whose payload carries no "repository" evaluates to the
+          # empty string here, which is not "true" and so does not require the
+          # key. That is the safe direction of the two: the cost is a private
+          # fork's nightly not being told, and the alternative would be a run
+          # blocked over a field that was never there.
+          needs-ssh: ${{ github.event.repository.private }}
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   devcontainer:
     name: "Build: Dev Container"
-    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    # "preflight" too: this job talks to the registry, and a run that cannot
+    # must hear it from the job whose subject that is. Every test job below
+    # needs this one, so gating it gates them.
+    needs: [scope, preflight]
+    if: ${{ needs.scope.outputs.devcontainer == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -63,6 +190,8 @@ jobs:
 
   poetry-install:
     name: "Run: poetry install"
+    # Only "devcontainer" is named: it needs "scope" itself, and a skip
+    # propagates down the chain.
     needs: devcontainer
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
@@ -106,7 +235,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           runCmd: |
             start_time=$SECONDS
@@ -126,13 +255,56 @@ jobs:
             echo "All installation attempts failed after 3 tries"
             exit 1
 
+  # The KiCad sandbox image "test_part_example_kicad" starts, by the release
+  # PartCAD reports. "test.yml" publishes the very same image, but a "needs:"
+  # does not reach across a workflow, so the job below used to race that build
+  # and pull a tag that did not exist yet -- on every version bump, which is
+  # the one commit for which nothing has ever pushed that tag. One build,
+  # waited for by both workflows: see ".github/workflows/container-kicad.yml".
+  container-kicad:
+    # "preflight" too: this job talks to the registry, and a run that cannot
+    # must hear it from the job whose subject that is. Every test job below
+    # needs this one, so gating it gates them.
+    needs: [scope, preflight]
+    # The "devcontainer" scope, not the narrower "pytest" one this job was
+    # first written with, because all three jobs below wait for it now and two
+    # of them run on a change that "devcontainer-pytest" excludes -- a change
+    # under ".devcontainer" runs "Run: behave" and "Run: pc" and not
+    # "Run: pytest". Gated on "pytest" it would be skipped for such a change,
+    # and a job whose dependency is skipped is skipped: the two jobs that
+    # change is for would quietly stop running.
+    #
+    # ...or this run decided to build images of its own, which no scope
+    # implies: a change carrying "#images" need not be one that runs anything
+    # in this file, and a run whose summary says it rebuilt these images had
+    # better have rebuilt them.
+    if: >-
+      ${{ needs.scope.outputs.devcontainer == 'true'
+      || needs.scope.outputs.image-override != '' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/container-kicad.yml
+    with:
+      tag: ${{ needs.scope.outputs.image-tag }}
+      push: ${{ needs.scope.outputs.image-push == 'true' }}
+      release: ${{ needs.scope.outputs.image-release }}
+
   pytest:
     name: "Run: pytest"
     runs-on: ubuntu-24.04
     # 30 -> 45: the larger OCP 7.9 / build123d 0.11 install per sandbox, in
     # line with the "Pytest" job in test.yml.
     timeout-minutes: 45
-    needs: poetry-install
+    needs: [scope, poetry-install, container-kicad]
+    # The one job in this file that a change to ".devcontainer" alone does not
+    # run. What it does is the "Pytest" matrix in "test.yml" over again, on one
+    # image and one interpreter, and a change to the container's configuration
+    # cannot make the unit tests disagree with what that matrix already said.
+    # What such a change *can* break is whether anything works inside the
+    # container at all -- and "Run: behave" and "Run: pc" below are the jobs that
+    # ask that, drive the command line end to end, and still run.
+    if: ${{ needs.scope.outputs.pytest == 'true' }}
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
       contents: read
@@ -174,35 +346,50 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
+          # The images this run built, where it built any. Empty otherwise,
+          # which "partcad_utils.container_image" reads as "the release" -- the
+          # default every installed PartCAD has. Forwarded into the container
+          # because that is where the tests run and where PartCAD reads it;
+          # "test_part_example_kicad" starts the KiCad sandbox by this name.
+          # See "Which images this run uses" on "Scope".
+          env: |
+            PC_CONTAINER_IMAGE_TAG=${{ needs.scope.outputs.image-override }}
+            PC_CONTAINER_IMAGE_OWNER=${{ needs.scope.outputs.image-owner }}
+          # "runCmd" is handed to a shell as one script, so the step's result is
+          # the *last* command's unless the script says otherwise. This one used
+          # to end with "echo DONE", which meant a failing pytest was reported as
+          # a passing job -- and it was: on 7cb384e this job was green while its
+          # own JUnit upload carried a failed test, which is how the dev
+          # container's "docker" sandbox went on being broken without anybody
+          # seeing it. "set -e" is what makes each line count, here and in the
+          # two jobs below, where a trailing "coverage xml" hid the same way (it
+          # succeeds after a failing run, because coverage writes its data
+          # whatever the program exited with).
           runCmd: |
-            (cd partcad-ide-vscode && poetry run nox --session setup && poetry run nox --session build_package)
+            set -e
+            (cd ide/vscode && npm ci && npm run vsce-package)
 
             # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
             mkdir -pv pytest-results
             poetry --no-ansi --no-interaction show --tree
-            poetry --no-ansi --no-interaction run python -m pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --ignore-glob="partcad-ide-vscode/bundled" --dist no --verbose --color=no
-            echo DONE
+            poetry --no-ansi --no-interaction run python -m pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --ignore-glob="ide/vscode/bundled" --dist no --verbose --color=no
 
-      - name: Upload test results & coverage reports to github and codecov
+      - name: Upload test results
         if: always()
         uses: ./.github/actions/upload-test-results
         with:
           name: pytest-results
           path: pytest-results/
           retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: pytest-results/junit.xml
-          coverage-report: pytest-results/coverage.xml
 
       - name: Generate Allure Report
         if: always()
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -221,58 +408,45 @@ jobs:
           path: allure-report/
           retention-days: 7
 
-  # pre-commit:
-  #   name: "Run: pre-commit"
-  #   needs: devcontainer
-  #   runs-on: ubuntu-24.04
-  #   timeout-minutes: 10
-  #   steps:
-  #     - name: Checkout (GitHub)
-  #       uses: actions/checkout@v7
-  #     - name: Setup Dev Container
-  #       id: setup
-  #       uses: ./.github/actions/setup-devcontainer
-
-  #     - name: Login to GitHub Container Registry
-  #       uses: docker/login-action@v3
-  #       with:
-  #         registry: ${{ env.CONTAINER_REGISTRY }}
-  #         username: ${{ github.repository_owner }}
-  #         password: ${{ secrets.GITHUB_TOKEN }}
-
-  #     - name: Cache pre-commit dependencies
-  #       uses: actions/cache@v6
-  #       with:
-  #         path: |
-  #           .pre-commit
-  #         key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-  #         restore-keys: |
-  #           ${{ runner.os }}-pre-commit-
-  #     - name: Run pre-commit hooks
-  #       uses: devcontainers/ci@v0.3
-  #       with:
-  #         imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-  #         cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{env.IMAGE_NAME }}:${{ env.VERSION }}"
-  #         configFile: .devcontainer/.devcontainer.json
-  #         push: never
-  #         # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
-  #         # TODO: Run ggshield and/or other secrets scanning tools as separate job
-  #         env: |
-  #           SKIP=poetry-export,poetry-lock,ggshield
-  #         runCmd:
-  #           pre-commit run --config .devcontainer/.pre-commit-config.yaml --show-diff-on-failure --color=always
-  #           --all-files
-
   behave:
     name: "Run: behave"
     runs-on: ubuntu-24.04
 
-    # 60 -> 90: this dev-container behave run was hitting the 60-minute budget
-    # on the new stack. The 'test.yml' Behave jobs (native, not containerized)
-    # get a larger bump because they also cover Windows and macOS.
-    timeout-minutes: 90
+    # 60 -> 90 -> 120: this job runs the *whole* behave suite in one process,
+    # where the "Behave" jobs in "test.yml" shard the same suite
+    # BEHAVE_SHARDS ways -- so it is the one place where the suite's total
+    # growth lands on a single budget, and the only thing that ever gives it
+    # room back is a bump here.
+    #
+    # Measured rather than guessed, on devel itself: the "Run Behave" step took
+    # 81m09s on 0ded0360 and 70m20s on 3c29314c. Those are consecutive version
+    # bumps, and the *longer* of the two is the one with *fewer* scenarios in
+    # it -- so an eleven minute spread between runners sits on top of whatever
+    # the suite really costs, and 90 left the slower of those two runs under
+    # nine minutes of margin with nothing changed at all.
+    #
+    # What the suite grows *in* is what makes that margin disappear rather than
+    # erode: a scenario that renders anything provisions a CAD sandbox of its
+    # own from a throwaway $HOME, so each one costs minutes where a scenario
+    # settled by its declaration costs under a second. Seven were added to
+    # "features/test.feature" alone between 0.8.90 and here.
+    #
+    # The failure this bump is for gives no reason of its own: a job at
+    # "timeout-minutes" is cancelled with its log ending mid-sentence, which
+    # is why "test.yml" wraps its long commands in "dev-tools/ci/bounded.sh".
+    # Nothing wraps this one, so the budget is the whole of the margin.
+    timeout-minutes: 120
 
-    needs: poetry-install
+    # The KiCad image as well, on the same rule as "test.yml": no test job
+    # starts before every container it might run in has been published.
+    # Nothing here starts that container today -- "features/open.feature"
+    # asks "pc open" what it would do rather than doing it -- and the wait
+    # is free either way, the build running from "scope" while
+    # "poetry-install" is still going.
+    # "preflight" is named although "container-kicad" implies it: this job
+    # reads one of its outputs (the SSH agent step) rather than only
+    # depending on it.
+    needs: [scope, poetry-install, container-kicad, preflight]
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
       contents: read
@@ -315,7 +489,28 @@ jobs:
         run: Set-Service -Name ssh-agent -StartupType Manual
         shell: pwsh
 
+      # Only where there is a key to load. It used to run unconditionally, and
+      # on a fork -- which has no such secret until somebody adds one -- the
+      # action is handed an empty string and fails the whole job with "The
+      # ssh-private-key argument is empty", forty minutes of setup in and about
+      # the wrong thing.
+      #
+      # What it is for is a dependency that is not public. These suites drive
+      # "pc install", and a PartCAD package may declare a "git" dependency on
+      # any repository -- so a private fork testing its own packages clones its
+      # own private repositories here, and this is the credential that lets it.
+      # The public upstream needs none: its own dependencies are public and
+      # clone over https, which is why the key can be absent without anything
+      # being wrong. ".github/actions/preflight" reports which of the two this
+      # run is, and stops a private repository that has no key rather than
+      # letting it fail inside a scenario.
       - name: Start SSH Agent
+        # Through "preflight" rather than "secrets.SSH_PRIVATE_KEY_RO != ''":
+        # the "secrets" context is not readable from an "if:", and a step's own
+        # "env:" is not readable from that same step's "if:" either. Asking the
+        # one job whose subject is "what does this run have" is also the answer
+        # that already appears in the summary a contributor is reading.
+        if: ${{ needs.preflight.outputs.ssh-key == 'true' }}
         uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
@@ -324,38 +519,75 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           env: |
             # TODO-25: Workaround for "Host key verification failed."
             GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+            # The agent "Start SSH Agent" above opened, which runs on the
+            # *runner* and not in the container. "devcontainers/ci" forwards
+            # neither the socket nor this variable -- it has no "mount" input at
+            # all -- so the agent was simply absent in here, and
+            # "features/install.feature:44 Install packages with ssh", which
+            # clones "git@github.com:", failed on every run of this job. It is
+            # the only scenario that did: 268 passed beside it. The socket
+            # arrives through the "-v" that .devcontainer/devcontainer.json
+            # binds, from the path .devcontainer/host-sockets-init.sh resolves
+            # on the runner; this is what points ssh at it.
+            #
+            # Set here rather than in "remoteEnv", because in the editor the
+            # Dev Containers extension forwards an agent of its own and sets
+            # this variable to its socket. CI is the case that has no agent.
+            #
+            # UNQUOTED, and the line above it is not a precedent to copy. The
+            # action reads this block with "core.getMultilineInput" and hands
+            # each line to "--remote-env" as one argv element, verbatim -- no
+            # shell, so nothing ever strips a quote (see "populateDefaults" in
+            # its common/src/envvars.ts: anything containing "=" is passed
+            # "straight through"). Quoted, the value of this variable would
+            # contain the two quote characters and name a socket that does not
+            # exist. GIT_SSH_COMMAND survives its quotes only because git runs
+            # that value through "sh -c", which removes them; a socket path
+            # never sees a shell.
+            SSH_AUTH_SOCK=/run/host-ssh-agent.sock
+            # The images this run built, where it built any. Empty otherwise,
+            # which "partcad_utils.container_image" reads as "the release" -- the
+            # default every installed PartCAD has. Forwarded into the container
+            # because that is where the tests run and where PartCAD reads it;
+            # "test_part_example_kicad" starts the KiCad sandbox by this name.
+            # See "Which images this run uses" on "Scope".
+            PC_CONTAINER_IMAGE_TAG=${{ needs.scope.outputs.image-override }}
+            PC_CONTAINER_IMAGE_OWNER=${{ needs.scope.outputs.image-owner }}
 
+          # The suite's status is kept and reported, and the coverage report is
+          # written either way. Ending on "coverage xml" reported *its* status,
+          # which is success after a failing run -- see the note on the pytest
+          # job above.
           runCmd: |
+            set -e
             # TODO-26: PC-186: Allow to configure git clone protocol in settings
             git config --global url."git@github.com:".insteadOf "https://github.com/"
             git config --global protocol.version 2
             mkdir -pv behave-results
-            poetry --no-ansi --no-interaction run coverage run $(poetry run which behave)
+            status=0
+            poetry --no-ansi --no-interaction run coverage run $(poetry run which behave) || status=$?
             poetry --no-ansi --no-interaction run coverage xml --data-file=./.coverage -o behave-results/coverage.xml
+            exit $status
 
-      - name: Upload test results & coverage reports to github and codecov
+      - name: Upload test results
         if: always()
         uses: ./.github/actions/upload-test-results
         with:
           name: behave-results
           path: behave-results/
           retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: behave-results/junit.xml
-          coverage-report: behave-results/coverage.xml
 
       - name: Generate Allure Report
         if: always()
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -460,7 +692,13 @@ jobs:
     name: "Run: pc"
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    needs: poetry-install
+    # The KiCad image as well, on the same rule as "test.yml": no test job
+    # starts before every container it might run in has been published.
+    # Nothing here starts that container today -- "features/open.feature"
+    # asks "pc open" what it would do rather than doing it -- and the wait
+    # is free either way, the build running from "scope" while
+    # "poetry-install" is still going.
+    needs: [scope, poetry-install, container-kicad]
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
       contents: read
@@ -502,25 +740,38 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          configFile: .devcontainer/devcontainer.json
           push: never
+          # The images this run built, where it built any. Empty otherwise,
+          # which "partcad_utils.container_image" reads as "the release" -- the
+          # default every installed PartCAD has. Forwarded into the container
+          # because that is where the tests run and where PartCAD reads it;
+          # "test_part_example_kicad" starts the KiCad sandbox by this name.
+          # See "Which images this run uses" on "Scope".
+          env: |
+            PC_CONTAINER_IMAGE_TAG=${{ needs.scope.outputs.image-override }}
+            PC_CONTAINER_IMAGE_OWNER=${{ needs.scope.outputs.image-owner }}
+          # Same shape as the two jobs above: every "pc" counts, and the report
+          # is still written when one of them fails. This job was the only one of
+          # the three that ever went red, and only by accident -- the "pc"
+          # commands failed early enough to leave no coverage data, so the
+          # "coverage xml" it ended on failed too.
           runCmd: |
+            set -e
             mkdir -pv pc-test-results
             poetry --no-ansi --no-interaction show --tree
+            status=0
             # TODO: Use similar 'coverage run' in behave steps when calling pc
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r //pub/examples)"
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi test -r --package //pub/examples)"
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi render -r --package //pub/examples)"
-            poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o pc-test-results/coverage.xml
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r //pub/examples)" || status=$?
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi test -r --package //pub/examples)" || status=$?
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi render -r --package //pub/examples)" || status=$?
+            poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o pc-test-results/coverage.xml || true
+            exit $status
 
-      - name: Upload test results & coverage reports to github and codecov
+      - name: Upload test results
         if: always()
         uses: ./.github/actions/upload-test-results
         with:
           name: pc-test-results
           path: pc-test-results/
           retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: pc-test-results/junit.xml
-          coverage-report: pc-test-results/coverage.xml

@@ -1,0 +1,4 @@
+links:
+  - part: board
+    name: board1
+    location: [[0, 0, 0], [0, 0, 1], 0]

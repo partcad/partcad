@@ -1,0 +1,5 @@
+# Same as 'feature_convert_part': the 'render:' section is here to exercise
+# rendering of every sketch type, and the projections it leaves in this
+# directory are not documentation. The sources - including 'svg/cylinder.svg',
+# which is an input and not a projection - live in the subdirectories.
+/*.svg

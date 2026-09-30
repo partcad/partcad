@@ -1,0 +1,152 @@
+name: "Sandbox base image"
+description: >-
+  Make the `docker` Python sandbox's base image available to this job, under the
+  name PartCAD resolves -- by pulling the one this run addresses, which
+  `build-containers` built.
+
+# This used to build the image, once per job, and the argument for that was
+# real: on a pull request the published `<release>` tag is somebody else's
+# build, made before this commit existed. Pulling it is how
+# `tools/containers/python/Dockerfile` gained the `pycairo` wheel reportlab's
+# renderPM needs while every PNG in every rendering job went on failing with
+# "cannot import desired renderPM backend rlPyCairo" -- the fix was in the
+# repository and not in the tag, and no run could tell.
+#
+# `.github/actions/container-images` answers that now, and answers it once for
+# the whole run: a commit that changes these images builds them and publishes
+# `<release>-<branch>-<digest>-<commit>`, and every job here is handed that tag in
+# `PC_CONTAINER_IMAGE_TAG`. A commit that does not change them is a commit
+# whose tree would build, byte for byte, what the release already published --
+# the image installs PartCAD at the release from PyPI and takes nothing from
+# the working tree except `tools/containers`, which is the thing being watched.
+#
+# So the build here was a second copy of `Build the Python sandbox images`,
+# doing the same work N more times: the same Dockerfile with the same two build
+# arguments, written out twice, in two files, with nothing keeping them in step.
+# It is gone. One job builds these images; every other job pulls what it built.
+#
+# A build still happens here when the pull comes up empty, and it is worth
+# being precise about who that is for, because it is no longer any job in
+# `test.yml`: every job there waits for `build-containers`, so the tag it needs
+# is published before it starts. It is for `Examples via bundle` in
+# `build-standalone.yml`, which runs on the version bump in a *different*
+# workflow from the one publishing that release's images -- and a `needs:` does
+# not reach across a workflow, which is the fact this whole mechanism was
+# written around. There the fallback is the difference between testing the
+# bundle and failing on an image nothing has pushed yet.
+#
+# It is not a second implementation, though, which was the other half of the
+# problem: it runs `dev-tools/ci/build-sandbox-image.sh`, the same script
+# `Build the Python sandbox images` runs. One answer to "how is this image
+# built", two callers deciding only where the result goes.
+#
+# What that leaves the action doing on an ordinary job is small, and worth
+# stating: it pulls the image up front so a missing one is one clear error here
+# rather than `resolve_image` failing inside the first render, in a sandbox,
+# per process. PartCAD would pull the same name by itself -- see
+# `resolve_image`, "a name that is present locally is used without asking a
+# registry" -- so this decides *when* and *how loudly*, not *what*.
+
+inputs:
+  python-version:
+    description: >-
+      The interpreter the image carries. This is PartCAD's own default -- what a
+      package that names no `pythonVersion` gets, `sandbox_versions
+      .DEFAULT_PYTHON_VERSION` -- and not the version the job itself runs on.
+      A suite whose packages ask for another interpreter needs that one too.
+    required: false
+    default: "3.11"
+
+runs:
+  using: "composite"
+  steps:
+    - name: The sandbox base image
+      shell: bash
+      # Through the environment rather than interpolated into the script
+      # (zizmor template-injection), like every other matrix value here.
+      env:
+        PYTHON_VERSION: ${{ inputs.python-version }}
+      run: |
+        set -euo pipefail
+
+        # Both read out of the source rather than restated here. The name and
+        # the release are what `image_for()` builds the tag from, so a copy in
+        # this file is a copy that can be wrong -- and would be wrong silently,
+        # by pulling an image nothing then looks for and leaving the job to
+        # resolve a different one after all.
+        image=$(sed -n 's/^BASE_IMAGE = "\(.*\)"$/\1/p' src/partcad/runtime_python_docker.py)
+        release=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' src/partcad/__init__.py)
+        if [ -z "${image}" ] || [ -z "${release}" ]; then
+          echo "::error::could not read BASE_IMAGE or __version__ out of the sources"
+          exit 1
+        fi
+
+        # The tag this run addresses, read out of the ambient environment
+        # rather than an input -- because that is where
+        # `partcad_utils.container_image` reads it. The job exports it once, so
+        # this step and the PartCAD running beside it cannot disagree; an input
+        # would be a second place to set it, which is a second place for it to
+        # drift.
+        tag_prefix="${PC_CONTAINER_IMAGE_TAG:-${release}}"
+
+        # And whose copy, read the same way and for the same reason. A fork
+        # cannot publish into "partcad", so a run there that built its own
+        # images published them under its own owner; pulling the name out of
+        # the source unchanged would reach for "ghcr.io/partcad/..." and leave
+        # the job testing the upstream release's images while its summary said
+        # it had built its own. `container_image.image_name` is the same
+        # rewrite on the Python side -- owner only, and only for a
+        # "<registry>/<owner>/<name>" reference.
+        if [ -n "${PC_CONTAINER_IMAGE_OWNER:-}" ]; then
+          owner=$(printf '%s' "${PC_CONTAINER_IMAGE_OWNER}" | tr '[:upper:]' '[:lower:]')
+          case "${image}" in
+            */*/*)
+              image="${image%%/*}/${owner}/${image##*/}"
+              ;;
+            *)
+              echo "::warning::${image} is not <registry>/<owner>/<name>; PC_CONTAINER_IMAGE_OWNER ignored"
+              ;;
+          esac
+        fi
+
+        # The suffix `docker_image.candidates()` tries first, spelled Docker's
+        # way -- see `ARCH_ALIASES`. Only the two architectures CI runs on are
+        # named: anything else is a runner nobody has, and guessing a suffix
+        # would pull an image under a tag that is never looked for.
+        case "$(uname -m)" in
+          x86_64) arch=amd64 ;;
+          aarch64 | arm64) arch=arm64 ;;
+          *)
+            echo "::error::no sandbox image tag is defined for $(uname -m)"
+            exit 1
+            ;;
+        esac
+
+        tag="${image}:${tag_prefix}-py${PYTHON_VERSION}-${arch}"
+
+        echo "::group::pulling ${tag}"
+        if docker pull "${tag}"; then
+          echo "::endgroup::"
+          echo "the sandbox will run in ${tag}, as published"
+        else
+          echo "::endgroup::"
+          # Said out loud rather than passed over, because in this workflow it
+          # should not happen -- the jobs here wait for the build. Where it is
+          # expected (see the note at the top) it is one line of noise; where
+          # it is not, it is the only sign that something published nothing.
+          echo "::notice::${tag} is not published; building it from this commit"
+          echo "::group::building ${tag}"
+          PC_IMAGE_REF="${tag}" \
+          PC_PYTHON_VERSION="${PYTHON_VERSION}" \
+          PC_PARTCAD_VERSION="${release}" \
+            dev-tools/ci/build-sandbox-image.sh
+          echo "::endgroup::"
+          echo "the sandbox will run in ${tag}, built from this commit"
+        fi
+
+        # Asserted either way, because the whole point is that the sandbox
+        # finds it. A pull or a build that landed under some other name would
+        # leave every rendering step resolving the registry again and
+        # reporting whatever it finds, which is the failure this action exists
+        # to end.
+        docker image inspect "${tag}" >/dev/null

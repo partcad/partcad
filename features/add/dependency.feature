@@ -31,7 +31,6 @@ Feature: `pc add dep` command
     And a file named "partcad.yaml" should have YAML content:
       """
       private: true
-      pythonVersion: ">=\\d+\\.\\d+"
       partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
         OpenVMP-robots:

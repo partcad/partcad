@@ -13,8 +13,8 @@ yourself — run the real CLI so the result always matches the installed version
 
 Find a usable invocation, most-preferred first, and remember it as `PARTCAD`.
 This covers a `pc`/`partcad` on `PATH` (a wheel install or the standalone
-bundle), and a `partcad-cli` that is importable in the current Python
-environment but whose console scripts are not on `PATH`:
+bundle), and a `partcad` that is importable in the current Python environment
+but whose console scripts are not on `PATH`:
 
 ```sh
 if   command -v pc      >/dev/null 2>&1;         then PARTCAD="pc"
@@ -30,8 +30,8 @@ echo "PARTCAD=${PARTCAD:-<none>}"
 If `PARTCAD` is empty, PartCAD is not available. Stop and tell the user to
 install it first — do not fabricate a `partcad.yaml`:
 
-> PartCAD is not installed. Run `/pc:install executable` for the standalone
-> build, or `/pc:install python-module` to install it into the current Python
+> PartCAD is not installed. Run `/pc:setup executable` for the standalone
+> build, or `/pc:setup python-module` to install it into the current Python
 > environment, then re-run `/pc:init`.
 
 ## 3. Run init

@@ -1,0 +1,13 @@
+links:
+  - part: plate
+
+  - part: screw
+    name: screw-bad
+    connect:
+      name: plate
+      to: m3-thru
+      toInstance: TL
+      how:
+        # A minimum above its maximum is not a range: "pc test" fails on it.
+        holdWithForceMin: 9.0
+        holdWithForceMax: 2.0

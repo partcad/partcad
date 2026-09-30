@@ -1,0 +1,15 @@
+// The VSCodium build the PartCAD IDE is made from.
+//
+// `version` is a VSCodium release tag (`1.106.1.25293`, say). Leave it `null` to
+// build from whatever VSCodium released last, which is what an unattended build
+// does today; set it to a tag to pin, and the build then produces the same IDE
+// next month as it does now.
+//
+// `checksums` maps a release asset name to its SHA-256. Pinning a version
+// without pinning the checksums still leaves the download unverified beyond
+// HTTPS, so `build.sh --record` fills this in: run it once on a machine with
+// network access and commit what it writes.
+{
+  "version": null,
+  "checksums": {}
+}

@@ -8,6 +8,11 @@ links:
       with: TR-4.5mm-hole-opening-m3
       to: {{ param_placement }}-{{ param_motor_tr_connect_to }}-3mm-thru-opening-m3
       name: example-bracket
+      # How far the two are drawn apart in the exploded view of this step in the
+      # assembly instruction book ('pc render -t pdf' or '-t html'). It does not
+      # move the part: without it the two would be spaced by half of their
+      # largest dimension, which is more than this joint needs to be legible.
+      exploded: 30
 
   {% for side in ['R', 'L'] %}
   - part: socket-head-m4-screw-6mm

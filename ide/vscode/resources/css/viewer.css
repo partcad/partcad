@@ -1,0 +1,769 @@
+/*
+ * PartCAD, 2026
+ *
+ * Licensed under Apache License, Version 2.0.
+ */
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+/* An author 'display' beats the user agent's '[hidden] { display: none }', so a
+   pane that sets one of its own - the instructions are a flex column - would go
+   on showing after being hidden. The panes are stacked on top of each other, so
+   that is the previous tab painted over the current one. */
+[hidden] {
+    display: none !important;
+}
+
+/* The panel is a tab strip over one object: the 3D view, and whatever else
+   PartCAD has to say about what is on screen. */
+.panel {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+}
+
+.tabs {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 0;
+    border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.tab {
+    padding: 0.4rem 0.9rem;
+    border: none;
+    border-bottom: 1px solid transparent;
+    background: transparent;
+    color: var(--vscode-descriptionForeground);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+
+.tab:hover {
+    color: var(--vscode-foreground);
+}
+
+.tab.current {
+    color: var(--vscode-foreground);
+    border-bottom-color: var(--vscode-focusBorder, currentColor);
+}
+
+.tab:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.panes {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.pane {
+    position: absolute;
+    inset: 0;
+    overflow: auto;
+}
+
+/* The 3D pane is the control pane and the canvas, side by side. The canvas never
+   scrolls: the model is moved with the camera, not with a scrollbar. */
+.pane-3d {
+    display: flex;
+    overflow: hidden;
+}
+
+/*
+ * The control pane: what is on screen, and how it is drawn.
+ *
+ * The tree takes whatever is left after the controls at the bottom, which is
+ * most of it - an assembly is a hierarchy and a part has a row per port, so the
+ * list is the tall thing here and Metadata, Animate and Opacity are up to three
+ * lines under it (Metadata only for a model that has any).
+ * It shrinks on a narrow panel rather than pushing the canvas out of one.
+ */
+.controls {
+    display: flex;
+    flex: 0 1 16rem;
+    flex-direction: column;
+    min-width: 7rem;
+    border-right: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.tree {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.4rem 0.3rem;
+    user-select: none;
+}
+
+.tree-line {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+/* Every row is indented from its parent by the width of one twisty, so a child's
+   label starts where its parent's does. */
+.tree-children {
+    margin-left: 0.9rem;
+}
+
+.tree-label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    padding: 0.05rem 0.15rem;
+    cursor: pointer;
+}
+
+.tree-line:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.tree-name {
+    overflow: hidden;
+    white-space: nowrap;
+    /* The names are long and the pane is narrow, so a name that does not fit is
+       cut off with the whole of it in the tooltip rather than wrapped: a wrapped
+       row is two rows, and the rows are what a reader counts. */
+    text-overflow: ellipsis;
+}
+
+/* The groups are the sections of a declaration rather than things of their own. */
+.tree-ports > .tree-line > .tree-label > .tree-name,
+.tree-interfaces > .tree-line > .tree-label > .tree-name {
+    color: var(--vscode-descriptionForeground);
+}
+
+.tree-twisty {
+    flex: 0 0 auto;
+    width: 0.9rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--vscode-descriptionForeground);
+    font-family: inherit;
+    font-size: 0.8em;
+    line-height: 1;
+    text-align: center;
+    cursor: pointer;
+}
+
+.tree-twisty-empty {
+    cursor: default;
+}
+
+.tree-twisty:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.tree input[type='checkbox'] {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+/* The canvas takes whatever the control pane leaves. 'min-width: 0', because a
+   flex item's basis is its content and the canvas is sized from this element -
+   without it the two would push each other. */
+.viewer {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+.viewer canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* The loading readout, centered over the canvas the way drei's <Html center> is. */
+.overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    /* The canvas is transparent so the editor background shows through; the
+       readout follows the theme rather than assuming a light or dark one. */
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    text-align: center;
+    white-space: pre-line;
+    pointer-events: none;
+}
+
+/*
+ * What a shape's metadata says about its elements, pinned to them: a dot on the
+ * element, a leader line up and to the right, and the text at the end of it.
+ *
+ * The layer is laid over the canvas and lets every pointer event through to it -
+ * a callout is something to read, and one that took the drag would stop the
+ * camera orbiting whenever the pointer crossed it.
+ */
+.callouts {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+}
+
+/* Anchored by its bottom-left corner (see 'addCallouts'), where the leader starts. */
+.callout {
+    --leader: 1.25rem;
+    padding: 0 0 var(--leader) var(--leader);
+    pointer-events: none;
+}
+
+.callout::before {
+    /* The leader: the diagonal of the padding square, from the anchor to the box. */
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: calc(var(--leader) * 1.4142);
+    border-top: 1px solid var(--vscode-editorWidget-border, var(--vscode-foreground));
+    transform: rotate(-45deg);
+    transform-origin: 0 0;
+}
+
+.callout::after {
+    /* The dot on the element the callout is about. */
+    content: '';
+    position: absolute;
+    left: -3px;
+    bottom: -3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--vscode-foreground);
+}
+
+.callout-box {
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border, transparent));
+    border-radius: 3px;
+    background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+    color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+    font-family: var(--vscode-font-family);
+    font-size: calc(var(--vscode-font-size) * 0.9);
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.callout-title {
+    font-weight: 600;
+}
+
+.callout-line {
+    font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+}
+
+/*
+ * The panes that are read rather than looked at: the bill of materials and the
+ * supply information.
+ */
+
+.sheet {
+    padding: 0.75rem 1rem 1.5rem 1rem;
+}
+
+.sheet h1 {
+    margin: 0.2em 0 0.1em 0;
+    font-size: 1.4rem;
+    font-weight: 600;
+}
+
+.sheet h2 {
+    margin: 1.2em 0 0.4em 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.subtitle {
+    margin: 0 0 1em 0;
+    color: var(--vscode-descriptionForeground);
+}
+
+.placeholder {
+    color: var(--vscode-descriptionForeground);
+}
+
+.error {
+    padding: 0.75rem 1rem;
+    color: var(--vscode-errorForeground, var(--vscode-foreground));
+    white-space: pre-wrap;
+}
+
+.total {
+    margin-top: 0.8em;
+    font-weight: 600;
+}
+
+.badge {
+    margin-left: 0.5em;
+    padding: 0 0.35em;
+    border: 1px solid var(--vscode-panel-border, currentColor);
+    border-radius: 3px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.85em;
+}
+
+.name {
+    font-family: var(--vscode-editor-font-family, monospace);
+}
+
+table.grid {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table.grid th,
+table.grid td {
+    padding: 0.3em 0.6em;
+    border-bottom: 1px solid var(--vscode-panel-border, transparent);
+    text-align: left;
+    vertical-align: top;
+}
+
+table.grid th {
+    color: var(--vscode-descriptionForeground);
+    font-weight: 600;
+}
+
+table.grid .numeric {
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* The rows of the supply list are the way in to one item's suppliers. */
+table.selectable tbody tr {
+    cursor: pointer;
+}
+
+table.selectable tbody tr:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+table.selectable tbody tr:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.back {
+    margin-bottom: 0.6em;
+    padding: 0.2em 0.5em;
+    border: none;
+    background: transparent;
+    color: var(--vscode-textLink-foreground);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+
+.properties {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 2px 12px;
+    margin: 0.6em 0;
+}
+
+.properties dt {
+    color: var(--vscode-descriptionForeground);
+}
+
+.properties dd {
+    margin: 0;
+}
+
+/* One supplier's offer for one item. */
+.option {
+    margin: 0.6em 0;
+    padding: 0.6em 0.8em;
+    border: 1px solid var(--vscode-panel-border, transparent);
+    border-radius: 4px;
+}
+
+.option-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1em;
+}
+
+.option .price {
+    font-size: 1.1em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/*
+ * The instructions: the same document `pc render -t html` writes, shown the way
+ * it shows it - one page at a time, with arrows to flip through them.
+ */
+
+.document {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.document-pages {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 1rem;
+}
+
+.document .page {
+    display: none;
+    max-width: 48rem;
+    /* A column, and as tall as the pane, for the same reason the printed page is
+       one: a block's share of the page ('flex-basis' on an image row) means
+       nothing without it, and the footer belongs at the bottom rather than under
+       the last paragraph. */
+    flex-direction: column;
+    min-height: 100%;
+    margin: 0 auto;
+}
+
+.document .page.current {
+    display: flex;
+}
+
+.document h1 {
+    margin: 0 0 0.6em 0;
+    font-size: 1.6rem;
+}
+
+.document h2 {
+    margin: 1em 0 0.4em 0;
+    font-size: 1.25rem;
+}
+
+.document h3 {
+    margin: 1em 0 0.4em 0;
+    font-size: 1.05rem;
+}
+
+.document p {
+    line-height: 1.5;
+    /* The model carries newlines inside a paragraph; the paginated formats turn
+       each into a break, and so does this. */
+    white-space: pre-line;
+}
+
+.document table {
+    width: 100%;
+    margin: 0.5em 0 1em 0;
+    border-collapse: collapse;
+}
+
+.document th,
+.document td {
+    padding: 0.25em 0.5em;
+    border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.document .images {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    margin: 0.8em 0;
+}
+
+.document .images figure {
+    margin: 0;
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: center;
+}
+
+.document .images img {
+    max-width: 100%;
+    max-height: 50vh;
+    height: auto;
+}
+
+.document figcaption {
+    margin-top: 0.4em;
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.85em;
+}
+
+.document ul.links {
+    line-height: 1.8;
+}
+
+.document .footer {
+    margin-top: auto;
+    padding-top: 2em;
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.8em;
+    text-align: center;
+}
+
+.document-bar {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 0.3rem;
+    border-top: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.document-bar .counter {
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.85em;
+}
+
+.nav {
+    border: none;
+    background: transparent;
+    color: var(--vscode-foreground);
+    font-family: inherit;
+    font-size: 1.4rem;
+    line-height: 1;
+    padding: 0 0.6rem;
+    cursor: pointer;
+}
+
+.nav[disabled] {
+    opacity: 0.3;
+    cursor: default;
+}
+
+a {
+    color: var(--vscode-textLink-foreground);
+}
+
+/*
+ * The analysis panes: FEA and CFD.
+ *
+ * Three bands, and the middle one takes what is left. Which solver ran is on
+ * top, centred, because it is the one thing about an analysis a user changes
+ * without editing a file; the findings are the bottom fifth, and are not there
+ * at all when the analysis found nothing - a pass should hand the model the
+ * whole pane rather than a strip of white space saying "none".
+ */
+.pane.cae {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.cae-header {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.cae-header-label {
+    color: var(--vscode-descriptionForeground);
+}
+
+.cae-implementation {
+    width: min(32rem, 60%);
+    padding: 0.25em 0.5em;
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, transparent));
+    border-radius: 2px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: inherit;
+}
+
+.cae-implementation:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.cae-run {
+    padding: 0.25em 0.9em;
+    border: none;
+    border-radius: 2px;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+
+.cae-run:hover {
+    background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
+}
+
+.cae-body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.cae-model {
+    position: relative;
+    width: 100%;
+    /* Height is set by the pane itself: the whole of it, or all but the findings
+       band. A percentage rather than a flex ratio because the 20% is a promise
+       about the pane and not about whatever the findings happen to fill. */
+    height: 100%;
+    overflow: hidden;
+}
+
+/* The two model viewers both fill the band and never scroll: the picture is
+   moved with the pointer, not with a scrollbar. */
+.cae-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.cae-canvas canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.cae-image-host {
+    /* The pan is a transform on the image, so the band clips it and the pointer
+       belongs to the band rather than to whatever is under the pointer. */
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+}
+
+.cae-image-host:active {
+    cursor: grabbing;
+}
+
+.cae-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transform-origin: 0 0;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.cae-model .placeholder,
+.cae-model .error {
+    padding: 1rem;
+    white-space: pre-line;
+}
+
+.cae-findings {
+    overflow: auto;
+    border-top: 1px solid var(--vscode-panel-border, transparent);
+    padding: 0.4rem 1rem 0.6rem 1rem;
+}
+
+.cae-findings-heading {
+    margin-bottom: 0.3em;
+    color: var(--vscode-descriptionForeground);
+    font-weight: 600;
+}
+
+.cae-findings-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cae-finding {
+    display: flex;
+    gap: 0.6em;
+    align-items: baseline;
+    padding: 0.15em 0;
+}
+
+.cae-severity {
+    flex: 0 0 auto;
+    min-width: 5.5em;
+    text-transform: uppercase;
+    font-size: 0.8em;
+    letter-spacing: 0.03em;
+    color: var(--vscode-descriptionForeground);
+}
+
+.cae-severity-error,
+.cae-severity-critical {
+    color: var(--vscode-errorForeground, var(--vscode-foreground));
+}
+
+.cae-severity-warning {
+    color: var(--vscode-editorWarning-foreground, var(--vscode-foreground));
+}
+
+.cae-finding-message {
+    flex: 1 1 auto;
+    white-space: pre-wrap;
+}
+
+.cae-finding-where {
+    flex: 0 0 auto;
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-editor-font-family, monospace);
+}
+
+/* How the model is drawn, under the tree of what is drawn: the bottom of the
+   control pane, and the only part of it that is there before anything is shown. */
+.viewer-controls {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.5rem;
+    border-top: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.control-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.opacity-slider {
+    /* Whatever the row has left: the pane is resizable by the editor and the
+       slider is the part of the row that can give. */
+    flex: 1 1 3rem;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.control-value {
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    white-space: nowrap;
+    min-width: 3rem;
+    text-align: right;
+}

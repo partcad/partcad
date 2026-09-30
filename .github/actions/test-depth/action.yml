@@ -1,0 +1,141 @@
+name: "Test depth"
+description: >
+  Decides how much of the matrix this run gets, and says why in the job summary.
+  Used by the "set matrix" job of every workflow that fans out over operating
+  systems.
+
+  Three tiers, not two. A pull request is re-run on every push to it, so it pays
+  the reduced matrix over and over; the merge queue runs once, immediately before
+  the commit lands, and is the last place a breakage can be caught cheaply. So
+  they no longer get the same thing:
+
+    * "pr"    -- one image per operating system and architecture, no macOS, and
+                 the oldest and newest supported Python only.
+    * "queue" -- what a pull request used to run: the current release of every
+                 operating system, macOS included, and the full Python range.
+    * "deep"  -- everything, older OS versions included.
+
+outputs:
+  tier:
+    description: '"pr", "queue" or "deep".'
+    value: ${{ steps.decide.outputs.tier }}
+  deep:
+    description: '"true" for the full matrix, "false" for a reduced one.'
+    value: ${{ steps.decide.outputs.deep }}
+  queue:
+    description: >
+      '"true" for the merge queue tier or deeper -- that is, "false" only on a
+      pull request. What a job reads when it wants "everything but the images a
+      pull request drops".'
+    value: ${{ steps.decide.outputs.queue }}
+  images:
+    description: >
+      '"true" when the run was *asked* to rebuild PartCAD''s own container
+      images -- "#images" in a pull request. It is an opt-in and nothing more:
+      the automatic answer, a change under "tools/containers", is
+      ".github/actions/changed-scopes". A workflow reads the two together,
+      because a change that alters how an image is built can be invisible to
+      both the paths and the person writing the description.'
+    value: ${{ steps.decide.outputs.images }}
+
+runs:
+  using: composite
+  steps:
+    - id: decide
+      shell: bash
+      env:
+        # Through the environment, never interpolated into the script: the title
+        # and the body of a pull request are text a contributor writes, and
+        # "${{ }}" would splice it into the shell.
+        PR_TITLE: ${{ github.event.pull_request.title }}
+        PR_BODY: ${{ github.event.pull_request.body }}
+        EVENT_NAME: ${{ github.event_name }}
+      run: |
+        # A pull request runs the smallest matrix, the merge queue runs the one a
+        # pull request used to, and everything else -- the nightly schedule, a
+        # manual dispatch, and any push, which includes the release path -- runs
+        # everything. That way the complete matrix is never more than a day, or a
+        # "#deepTest", away; a release is always built and checked in full; and
+        # nothing merges without having met macOS and the whole Python range in
+        # the queue.
+        case "${EVENT_NAME}" in
+        pull_request | pull_request_target) tier=pr ;;
+        merge_group) tier=queue ;;
+        *) tier=deep ;;
+        esac
+        reason="event '${EVENT_NAME}'"
+
+        # Opt in per pull request, for a change that warrants the full matrix
+        # before it merges -- anything touching packaging, dependencies, or
+        # platform specific code. Matched case-insensitively, in the title as
+        # well as the body, because that is how people will actually type it.
+        #
+        # A plain substring match, and it does not know prose from an opt-in: a
+        # pull request that merely *mentions* the marker -- one editing this
+        # file, or the section of "docs/source/contributing.rst" that explains
+        # it -- opts itself in and runs the full matrix. The pull request that
+        # introduced these tiers did exactly that and ran ~147 jobs before
+        # anyone noticed. Left as it is on purpose: the alternative is a matcher
+        # that tries to tell a marker from a mention (outside backticks? on its
+        # own line?), which is a rule a contributor has to know before their
+        # opt-in works, and the failure mode of *that* is a deep run somebody
+        # asked for and did not get. Over-running is the safe direction. Write
+        # it split -- the marker's two halves in separate code spans -- if a
+        # description has to name it without asking for it.
+        #
+        # It reaches the merge queue too: the queue's event carries no pull
+        # request to read a title from, but a queued commit's message is the pull
+        # request's title and body, and the merge commit GitHub builds for the
+        # queue carries it. Nothing here reads that -- what makes "#deepTest"
+        # hold all the way through is that the queue tier already runs what the
+        # marker asks a pull request for, plus the deep-only images on a deep
+        # run of its own trigger.
+        if printf '%s\n%s' "${PR_TITLE}" "${PR_BODY}" | grep -qiF '#deeptest'; then
+          tier=deep
+          reason="'#deepTest' in the pull request"
+        fi
+
+        # The images marker, read here because this is where a pull request's
+        # own words are already read, and matched exactly the way "#deepTest"
+        # is -- case-insensitively, in the title as well as the body, and with
+        # no attempt to tell an opt-in from a mention. A description that
+        # merely names the marker rebuilds the images, which costs minutes and
+        # publishes a branch tag nobody was going to pull; a marker somebody
+        # typed and did not get costs a run that tested the release's images
+        # while claiming to test this commit's. Over-running is the safe
+        # direction here too. Write it split across two code spans to name it
+        # without asking for it.
+        #
+        # It does not reach the merge queue, and does not need to: a queued
+        # commit's images are the ones "devel" is about to publish, and the run
+        # that publishes them is the version bump that follows the merge.
+        if printf '%s\n%s' "${PR_TITLE}" "${PR_BODY}" | grep -qiF '#images'; then
+          images=true
+        else
+          images=false
+        fi
+
+        # Kept as separate booleans because that is what an "if:" can read
+        # without a string comparison in every workflow.
+        [ "${tier}" = "deep" ] && deep=true || deep=false
+        [ "${tier}" = "pr" ] && queue=false || queue=true
+
+        echo "tier=${tier}" >> "${GITHUB_OUTPUT}"
+        echo "deep=${deep}" >> "${GITHUB_OUTPUT}"
+        echo "queue=${queue}" >> "${GITHUB_OUTPUT}"
+        echo "images=${images}" >> "${GITHUB_OUTPUT}"
+        case "${tier}" in
+        deep)
+          echo "Full matrix (${reason})." >> "${GITHUB_STEP_SUMMARY}" ;;
+        queue)
+          echo "Merge queue matrix (${reason}): every current OS image and the full Python range." \
+            >> "${GITHUB_STEP_SUMMARY}" ;;
+        pr)
+          echo "Pull request matrix (${reason}): no macOS, no second image per OS, and the oldest and newest Python only. The merge queue runs the rest before this merges; put '#deepTest' in the pull request description for everything now." \
+            >> "${GITHUB_STEP_SUMMARY}" ;;
+        esac
+        if [ "${images}" = "true" ]; then
+          echo "PartCAD's own container images are rebuilt from this commit ('#images' in the pull request), published under a tag of this branch's own, and used by the tests in this run." \
+            >> "${GITHUB_STEP_SUMMARY}"
+        fi
+        cat "${GITHUB_STEP_SUMMARY}"

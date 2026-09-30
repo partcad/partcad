@@ -1,4 +1,4 @@
-# CD on Linux, MacOS and Windows
+# CD on Linux, macOS and Windows
 name: CD # Keep the action badge icon short
 
 on:
@@ -14,86 +14,181 @@ on:
 permissions:
   contents: write
 
+# Version bumps get a concurrency group of their own, keyed by commit, exactly
+# as in "test.yml" -- see the longer note beside the same block there. A bump is
+# the only push to "devel" this workflow runs at all, and its artifacts are that
+# version's; superseding it with the next bump leaves that version with none,
+# which is what happened to 0.8.30 and 0.8.31 when five of them landed in forty
+# minutes and the runs for the middle three were cancelled.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ startsWith(github.event.head_commit.message, 'Version updated') && format('-{0}', github.sha) || '' }}
   cancel-in-progress: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
 
+# The same four lists as "test.yml", with the same meanings, because this
+# workflow builds what that one tests. Keep them in sync; that file carries the
+# reasoning for which images are here and which are not.
+env:
+  # One macOS entry, the moving label: "macos-latest" and "macos-26" became the
+  # same image when GitHub moved the alias in July 2026. See the note under OSES
+  # in "test.yml".
+  OSES:
+    '["ubuntu-latest", "ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-22.04-arm", "windows-latest", "windows-2022",
+    "macos-latest"]'
+  # Dropped unless the run is deep: the Ubuntu 22.04 images. No macOS, because
+  # there is only one macOS leg left and dropping it from the *deep* set would
+  # test none. See ".github/actions/test-depth" and OSES_DEEP_ONLY in "test.yml".
+  OSES_DEEP_ONLY: '["ubuntu-22.04", "ubuntu-22.04-arm"]'
+  # Dropped on a pull request and kept from the merge queue up, as in "test.yml"
+  # -- that file carries the reasoning for why this is macOS alone, and in
+  # particular why no Windows image is in it.
+  OSES_QUEUE_ONLY: '["macos-latest"]'
+  PYTHONS: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
+  # Same cost trade-off as test.yml: the full Python range runs on
+  # ubuntu-latest only, every other image builds on the oldest and the newest
+  # supported Python, plus Windows on 3.12. 40 -> 21 combinations, and 15 on a
+  # run that is not deep.
+  #
+  # Windows + 3.12 is deliberately back in the matrix. It was excluded for an
+  # 'ensurepip' failure (#374); the toolchain underneath has since moved a long
+  # way, so this run is what tells us whether that is still real. Re-exclude it
+  # if it is.
+  EXCLUDES: >-
+    [{"os": "ubuntu-22.04", "python-version": "3.11"},
+    {"os": "ubuntu-22.04", "python-version": "3.12"},
+    {"os": "ubuntu-22.04", "python-version": "3.13"},
+    {"os": "ubuntu-24.04-arm", "python-version": "3.11"},
+    {"os": "ubuntu-24.04-arm", "python-version": "3.12"},
+    {"os": "ubuntu-24.04-arm", "python-version": "3.13"},
+    {"os": "ubuntu-22.04-arm", "python-version": "3.11"},
+    {"os": "ubuntu-22.04-arm", "python-version": "3.12"},
+    {"os": "ubuntu-22.04-arm", "python-version": "3.13"},
+    {"os": "windows-latest", "python-version": "3.11"},
+    {"os": "windows-latest", "python-version": "3.13"},
+    {"os": "windows-2022", "python-version": "3.11"},
+    {"os": "windows-2022", "python-version": "3.13"},
+    {"os": "macos-latest", "python-version": "3.11"},
+    {"os": "macos-latest", "python-version": "3.12"},
+    {"os": "macos-latest", "python-version": "3.13"}]
+
 jobs:
+  # Composed here rather than written out below, so that a pull request can run
+  # a reduced matrix. Mirrors the job of the same name in "test.yml".
+  set-matrix:
+    name: "Set matrix"
+    runs-on: ubuntu-latest
+    # As in "test.yml": a push to "devel" runs this only for a version bump, and
+    # the event name leads because a "schedule" carries no "head_commit" -- see
+    # the long note there.
+    #
+    # "github.event.repository.fork" is the last clause and it is what lets a
+    # fork run this at all. The reasoning above is about *this* repository: a
+    # push to "devel" here is followed by a version bump within the hour, so
+    # the matrix runs on that instead. A fork has no bump coming, so without
+    # this clause a contributor who pushes to their fork's "devel" -- which is
+    # what a fork's default branch is called -- gets a run in which every
+    # single job is skipped, and nothing anywhere says why.
+    if: >-
+      ${{ github.event_name != 'push' || github.ref != 'refs/heads/devel'
+      || startsWith(github.event.head_commit.message, 'Version updated')
+      || github.event.repository.fork }}
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      # Which of the four artifacts below this change can say anything about.
+      # See ".github/actions/changed-scopes".
+      wheel: ${{ steps.scope.outputs.wheel }}
+      docs: ${{ steps.scope.outputs.docs }}
+      vsix: ${{ steps.scope.outputs.vsix }}
+      plugin: ${{ steps.scope.outputs.plugin }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Decide the depth
+        id: depth
+        uses: ./.github/actions/test-depth
+
+      - name: Decide what the change touches
+        id: scope
+        uses: ./.github/actions/changed-scopes
+        with:
+          deep: ${{ steps.depth.outputs.deep }}
+
+      - name: Set matrix
+        id: set-matrix
+        env:
+          DEEP: ${{ steps.depth.outputs.deep }}
+          QUEUE: ${{ steps.depth.outputs.queue }}
+        run: |
+          # Both tiers, exactly as in "test.yml": DEEP adds the older OS
+          # versions, QUEUE adds the images and the interpreters a pull request
+          # does not pay for.
+          OSES='${{ env.OSES }}'
+          PYTHONS='${{ env.PYTHONS }}'
+          if [ "${DEEP}" != "true" ]; then
+            OSES=$(jq -cn --argjson all "${OSES}" --argjson deep_only '${{ env.OSES_DEEP_ONLY }}' '$all - $deep_only')
+          fi
+          if [ "${QUEUE}" != "true" ]; then
+            OSES=$(jq -cn --argjson all "${OSES}" --argjson queue_only '${{ env.OSES_QUEUE_ONLY }}' '$all - $queue_only')
+            PYTHONS=$(jq -cn --argjson all "${PYTHONS}" '[$all[0], $all[-1]]')
+          fi
+          echo "Operating systems: ${OSES}"
+          echo "Python versions: ${PYTHONS}"
+          # Leftover excludes for dropped images match nothing; see the note in
+          # the same step in "test.yml".
+          echo 'matrix={"os": '"${OSES}"', "python-version": '"${PYTHONS}"', "exclude": ${{ env.EXCLUDES }}}' >> "${GITHUB_OUTPUT}"
+
   build:
+    needs: set-matrix
     strategy:
       fail-fast: false
-      matrix:
-        # Keep this list in sync with OSES in test.yml, which documents why
-        # each image is here and why macos-13/macos-14/ubuntu-26.04 are not.
-        os: [ubuntu-latest, ubuntu-22.04, windows-latest, windows-2022, macos-latest, macos-26]
-        python-version:
-          - "3.10"
-          - "3.11"
-          - "3.12"
-          - "3.13"
-          - "3.14"
-        exclude:
-          # Same cost trade-off as test.yml: the full Python range runs on
-          # ubuntu-latest only, every other image builds on the oldest and the
-          # newest supported Python, plus Windows on 3.12.
-          # 30 -> 17 combinations.
-          #
-          # Windows + 3.12 is deliberately back in the matrix. It was excluded
-          # for an 'ensurepip' failure (#374); the toolchain underneath has
-          # since moved a long way, so this run is what tells us whether that
-          # is still real. Re-exclude it if it is.
-          - { os: "ubuntu-22.04", python-version: "3.11" }
-          - { os: "ubuntu-22.04", python-version: "3.12" }
-          - { os: "ubuntu-22.04", python-version: "3.13" }
-          - { os: "windows-latest", python-version: "3.11" }
-          - { os: "windows-latest", python-version: "3.13" }
-          - { os: "windows-2022", python-version: "3.11" }
-          - { os: "windows-2022", python-version: "3.13" }
-          - { os: "macos-latest", python-version: "3.11" }
-          - { os: "macos-latest", python-version: "3.12" }
-          - { os: "macos-latest", python-version: "3.13" }
-          - { os: "macos-26", python-version: "3.11" }
-          - { os: "macos-26", python-version: "3.12" }
-          - { os: "macos-26", python-version: "3.13" }
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
-    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    # The "only a version bump on devel" guard is inherited from "set-matrix"
+    # through "needs" -- a job that needs a skipped job is skipped -- so what is
+    # left to state here is what this change can say about the wheel. See
+    # ".github/actions/changed-scopes".
+    if: ${{ needs.set-matrix.outputs.wheel == 'true' }}
     env:
       # 'startsWith', not '== windows-latest': the matrix now also contains a
       # pinned windows-2022, which needs the very same venv layout.
       BIN_DIR: ${{ startsWith(matrix.os, 'windows') && 'Scripts' || 'bin' }}
 
     steps:
+      # Before the checkout, because this decides how the checkout writes the
+      # tree. Git for Windows leaves "core.symlinks" off, and the wheel ships
+      # the AI agent skills through two symlinks in "src/partcad/ai_agents" --
+      # so on Windows this tree would otherwise hold two text files where they
+      # are, and the wheel built below would have no skills in it. The build
+      # backend refuses to build that (see "dev-tools/build-backend"), which
+      # makes this the difference between a green Windows leg and a red one
+      # rather than the difference between a good wheel and a quietly empty one.
+      #
+      # The runners can create symlinks -- see the note in
+      # ".github/actions/setup-build", where "build" 1.6.0 started doing it.
+      - name: Check out with symlinks intact
+        if: runner.os == 'Windows'
+        run: git config --global core.symlinks true
+
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-all
         with:
           job: build
       - uses: ./.github/actions/setup-build
 
+      # Two distributions: the `partcad` wheel and the `partcad-cli` shim that
+      # depends on it. This used to be five, built in dependency order because
+      # each pinned the ones below it at `==`; there is nothing to order now.
       - name: Test building and packaging
         shell: bash -el {0}
         run: |
           . ~/.bashrc
           . ~/.bash_profile
           mamba activate env-build
-          # Build the shared partcad-utils wheel first; partcad (and the CLI and
-          # the service) pin it, and it is not on PyPI.
-          cp LICENSE.txt partcad-utils
-          (cd partcad-utils && python -m build)
-          cp LICENSE.txt apache20.svg partcad
-          (cd partcad && python -m build)
-          mamba deactivate
-
-          mamba activate env-build-cli
-          cp LICENSE.txt apache20.svg README.md partcad-cli
-          cp LICENSE.txt partcad-service-json-rpc
-          # Install partcad-utils (pinned by partcad) before installing partcad.
-          python -m pip install --find-links=partcad-utils/dist partcad-utils
-          python -m pip install -r partcad/requirements.txt
-          python -m pip install --no-index --find-links=partcad/dist partcad
-          # Build the JSON-RPC service wheel too; partcad-cli pins it.
-          (cd partcad-service-json-rpc && python -m build)
-          (cd partcad-cli && python -m build)
+          python -m build
+          # The shim states `license = {file = "LICENSE.txt"}`, so it needs the
+          # repository's copy the way each distribution used to.
+          cp LICENSE.txt dev-tools/shim
+          (cd dev-tools/shim && python -m build)
           mamba deactivate
 
       - name: Test installation
@@ -102,24 +197,140 @@ jobs:
           . ~/.bashrc
           . ~/.bash_profile
           mamba activate ${{ format('env-test-build-{0}', matrix.python-version) }}
-          # Install partcad-utils first (pinned by partcad/cli/service, not on PyPI).
-          python -m pip install --find-links=partcad-utils/dist partcad-utils
-          python -m pip install -r partcad/requirements.txt
-          python -m pip install --no-index --find-links=partcad/dist partcad
-          # Install the service before partcad-cli, which pins it.
-          python -m pip install -r partcad-service-json-rpc/requirements.txt
-          python -m pip install --no-index --find-links=partcad-service-json-rpc/dist partcad-service-json-rpc
-          python -m pip install -r partcad-cli/requirements.txt
-          python -m pip install --no-index --find-links=partcad-cli/dist partcad-cli
-          mamba deactivate
+          python -m pip install --find-links=dist partcad
+          # Every package the one wheel ships, and every entry point it declares.
+          # A wheel that builds but is missing one of them is the failure this
+          # catches -- `packages.find` sees whatever is under `src/`.
+          python -c "
+          import partcad, partcad_cli, partcad_client, partcad_utils, partcad_service_json_rpc, partcad_ide_client
+          "
+          # And the data it ships, not only the code. `pc init` installs the AI
+          # agent skills out of the installation, so a wheel that packaged none
+          # of them is one that quietly stopped doing that -- which is what a
+          # checkout with the symlinks dropped produces. The build backend
+          # refuses to build such a tree; this is the same failure caught from
+          # the other end, on the artifact rather than on its source.
+          python -c "
+          import partcad.ai_agents as ai_agents
+          assert ai_agents.available_skills(), 'the wheel carries no AI agent skills'
+          assert ai_agents.plugin_manifest()['name'], 'the wheel carries no plugin manifest'
+          "
+          pc --no-ansi version
 
-      - name: Build documentation
+      # What the wheel carries is one thing; what `pc init` writes out of it is
+      # what a user actually gets, and it is a different code path. `plugin.yml`
+      # validates the plugin this repository *publishes*; nothing validated the
+      # one `pc init` installs until this. The manifests are compared byte for
+      # byte, so `claude plugin validate` passing there carries over to here.
+      - name: Test what `pc init` installs
         shell: bash -el {0}
         run: |
           . ~/.bashrc
           . ~/.bash_profile
           mamba activate ${{ format('env-test-build-{0}', matrix.python-version) }}
-          # python -m pip install -r .devcontainer/requirements.txt
-          python -m pip install -r docs/requirements.txt
-          sphinx-build  -M html docs/source docs/build -n -W
+          export WORKSPACE="$(mktemp -d)"
+          export REPO="${PWD}"
+          ( cd "${WORKSPACE}" && git init -q . && pc --no-ansi init )
+          python -c "
+          import filecmp, json, os
+          import partcad
+          import partcad.ai_agents as ai_agents
+
+          workspace = os.environ['WORKSPACE']
+          repo = os.environ['REPO']
+          shipped = ai_agents.available_skills()
+
+          # Claude gets the plugin, and the skills under it verbatim.
+          plugin = os.path.join(workspace, '.claude', 'skills', ai_agents.plugin_name())
+          installed = os.path.join(plugin, '.claude-plugin', 'plugin.json')
+          published = os.path.join(repo, 'ai-agents', 'claude', '.claude-plugin', 'plugin.json')
+          assert filecmp.cmp(installed, published, shallow=False), 'the installed manifest is not the published one'
+          assert json.load(open(installed))['version'] == partcad.__version__, 'the manifest states another version'
+          for skill in shipped:
+              here = os.path.join(plugin, 'skills', skill, 'SKILL.md')
+              there = os.path.join(ai_agents.SKILLS_DIR, skill, 'SKILL.md')
+              assert filecmp.cmp(here, there, shallow=False), skill + ' was not installed verbatim for Claude'
+
+          # Cursor gets them prefixed, renamed to match, and stamped.
+          for skill in shipped:
+              name = ai_agents.CURSOR_PREFIX + skill
+              text = open(os.path.join(workspace, '.cursor', 'skills', name, 'SKILL.md'), encoding='utf-8').read()
+              # A literal rather than a regex: '$' inside a double-quoted shell
+              # heredoc is one more thing that has to survive two quoting layers.
+              assert ('name: ' + name + '\n') in text, name + ' does not name its own directory'
+              assert ai_agents.stamped_version(text) == partcad.__version__, name + ' is not stamped with this version'
+              assert 'pc:' not in text, name + ' still points at the plugin namespace Cursor has not got'
+
+          print('pc init installed', len(shipped), 'skills for', ', '.join(sorted(ai_agents.AGENTS)))
+          "
+          rm -rf "${WORKSPACE}"
+          partcad-json-rpc --help >/dev/null
+          # The shim brings the wheel in, and owns nothing of its own.
+          python -m pip install --no-index --find-links=dist --find-links=dev-tools/shim/dist partcad-cli
           mamba deactivate
+
+  # The documentation, built once -- one Linux runner, one interpreter, one
+  # "sphinx-build -W".
+  #
+  # It used to be a step of the matrix above, which meant that a change to a
+  # single ".rst" file built the wheel on every image and every Python version
+  # to get at it, and that a change to the wheel rebuilt the documentation
+  # fifteen times over. Neither is worth anything: Sphinx is pure Python and
+  # "docs/source/conf.py" enables no extensions at all -- there is no autodoc,
+  # so the build never imports PartCAD and cannot be affected by the platform it
+  # runs on or by the source tree it sits next to.
+  #
+  # Its own job also means the documentation can be gated on the documentation.
+  # A prose-only pull request now runs this and nothing else in this workflow.
+  docs:
+    name: "Documentation"
+    needs: set-matrix
+    if: ${{ needs.set-matrix.outputs.docs == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          # The interpreter Read the Docs builds with; see ".readthedocs.yaml".
+          python-version: "3.13"
+      - name: Build documentation
+        run: |
+          python -m pip install -r docs/requirements.txt
+          # "-W": a warning is an error. That is the whole point of this job --
+          # a broken cross reference is how the published documentation ends up
+          # with a link that goes nowhere.
+          sphinx-build -M html docs/source docs/build -n -W
+
+  # The VS Code extension, built once -- one Linux runner, one ".vsix", the same
+  # package "deploy.yml" attaches to the release. It is not part of the matrix
+  # above: the matrix says which OS and Python the *wheels* have to build on, and
+  # the extension is packaged with `vsce` on whatever host does it.
+  #
+  # The workflow it calls used to run on its own "push"/"pull_request" triggers.
+  # Those are gone, so this is the only thing that builds it on a pull request or
+  # a push -- which also means a push to "devel" that is not a version bump
+  # skips it, exactly as it skips everything else here.
+  build-vscode-extension:
+    name: "VS Code extension"
+    # The "only a version bump on devel" guard comes through "needs", as it does
+    # for "build" above; this is the extension's own gate.
+    needs: set-matrix
+    if: ${{ needs.set-matrix.outputs.vsix == 'true' }}
+    uses: ./.github/workflows/vsix.yml
+
+  # The Claude Code plugin, on the same footing as the extension above: built
+  # once, on one runner, and attached to the release by "deploy.yml".
+  #
+  # It used to have a workflow of its own, "ai-agents.yml", on path-filtered
+  # "push"/"pull_request" triggers. Those are gone for the reason the extension's
+  # are: the version bump now rewrites "plugin.json", so every bump commit
+  # matched that path filter and would have built the plugin here and there both.
+  build-claude-plugin:
+    name: "Claude Code plugin"
+    # The "only a version bump on devel" guard comes through "needs", as above.
+    # This is the one job a change under "ai-agents/" runs, and it is the only
+    # thing such a change can break.
+    needs: set-matrix
+    if: ${{ needs.set-matrix.outputs.plugin == 'true' }}
+    uses: ./.github/workflows/plugin.yml
