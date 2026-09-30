@@ -25,23 +25,50 @@ from .utils import resolve_resource_path
 # The module-level name a repository plugin states its cache version with.
 CACHE_VERSION_NAME = "CACHE_VERSION"
 
-# One answer per plugin reference, per context. The root of a plugin-backed
-# hierarchy is created before its children and resolves the number first, so
-# every child of it reads the same answer here even if the package that hosts
-# the plugin is no longer reachable by the time the child is built. Without that
-# the children would compute a different namespace from the root's and stop
-# sharing its cache.
+# One answer per plugin reference, per context: '(script path, its stat,
+# version)'. The root of a plugin-backed hierarchy is created before its
+# children and resolves the number first, so every child of it reads the same
+# answer here without resolving anything - it need only stat the path the root
+# found. Without that the children would compute a different namespace from the
+# root's and stop sharing its cache.
 #
-# Per context and not per process: a daemon keeps a context warm for as long as
-# it runs, and a memo that outlived the context would go on reporting a version
-# the script no longer states. A context is dropped when its files change, and
-# this goes with it.
-_declared_versions: "weakref.WeakKeyDictionary[object, dict[str, int]]" = weakref.WeakKeyDictionary()
+# Guarded by a stat rather than held outright, because a daemon keeps a context
+# warm for as long as it runs and edits the packages under it in place: a memo
+# that only remembered the number would go on reporting a version the script had
+# stopped stating. 'Context.reload_changed_packages()' drops the *packages*
+# whose configuration changed and keeps the context, so waiting for the context
+# to go would be waiting for something that does not happen.
+#
+# A plugin-backed package is deliberately not one of the packages that reload
+# looks at - it has no file to stat, and asking its repository is a round trip.
+# The plugin's own script does have a file, and this is where it is watched.
+_declared_versions: "weakref.WeakKeyDictionary[object, dict[str, tuple]]" = weakref.WeakKeyDictionary()
 _declared_versions_lock = threading.Lock()
 
 
-def _read_declared_cache_version(ctx, parent: Project, plugin_ref: str) -> int:
-    """The cache version the plugin states in its own code, or 0 if it states none.
+def _script_stat(path):
+    """What the plugin's script looks like from outside, to tell whether it changed.
+
+    Modification time and size: a stat, not a read. None for a path that is not
+    there, or for a repository that names no script at all.
+
+    The same notion as 'cache_hash.file_stat', which arrives with the caching
+    work in #702; fold the two together once that lands.
+    """
+    if path is None:
+        return None
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
+def _read_declared_cache_version(ctx, parent: Project, plugin_ref: str):
+    """The version the plugin states in its own code, and the script it was read from.
+
+    Returned as '(version, path)' - 0 and None when the plugin states none, has
+    no script, or cannot be reached. The path is what the memo above stats.
 
     The number says when the plugin's answers stopped meaning what they used to
     mean. It belongs to the plugin and to nobody else: a package that imports a
@@ -63,11 +90,11 @@ def _read_declared_cache_version(ctx, parent: Project, plugin_ref: str) -> int:
     source = parent if package_name == parent.name else ctx.get_project(package_name)
     if source is None:
         pc_logging.debug("Cannot version the plugin cache: package not loaded: %s" % package_name)
-        return 0
+        return 0, None
 
     config = (source.config_obj.get("repositories") or {}).get(repository_name)
     if not isinstance(config, dict) or not config.get("path"):
-        return 0
+        return 0, None
     path = os.path.join(source.config_dir, config["path"])
 
     try:
@@ -75,7 +102,7 @@ def _read_declared_cache_version(ctx, parent: Project, plugin_ref: str) -> int:
             tree = ast.parse(f.read(), filename=path)
     except (OSError, SyntaxError, ValueError) as e:
         pc_logging.debug("Cannot version the plugin cache: %s: %s" % (path, e))
-        return 0
+        return 0, path
 
     for node in tree.body:
         if isinstance(node, ast.AnnAssign):
@@ -89,21 +116,29 @@ def _read_declared_cache_version(ctx, parent: Project, plugin_ref: str) -> int:
         value = node.value
         # 'bool' is an 'int' and 'CACHE_VERSION = True' is a typo, not a version.
         if isinstance(value, ast.Constant) and isinstance(value.value, int) and not isinstance(value.value, bool):
-            return value.value
+            return value.value, path
         pc_logging.error("%s: %s must be an integer literal" % (path, CACHE_VERSION_NAME))
-        return 0
-    return 0
+        return 0, path
+    return 0, path
 
 
 def declared_cache_version(ctx, parent: Project, plugin_ref: str) -> int:
-    """'_read_declared_cache_version', once per plugin reference per context."""
+    """'_read_declared_cache_version', once per plugin reference per context.
+
+    Read again when the script it was read from has changed, so that a daemon
+    holding a context open does not hold an answer the script has withdrawn.
+    """
     with _declared_versions_lock:
         known = _declared_versions.setdefault(ctx, {})
-        if plugin_ref in known:
-            return known[plugin_ref]
-    version = _read_declared_cache_version(ctx, parent, plugin_ref)
+        entry = known.get(plugin_ref)
+    if entry is not None:
+        path, stat, version = entry
+        if _script_stat(path) == stat:
+            return version
+    version, path = _read_declared_cache_version(ctx, parent, plugin_ref)
     with _declared_versions_lock:
-        return known.setdefault(plugin_ref, version)
+        known[plugin_ref] = (path, _script_stat(path), version)
+    return version
 
 
 class ExternalImportConfiguration:

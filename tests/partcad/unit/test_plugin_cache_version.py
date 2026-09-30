@@ -12,6 +12,8 @@ is needed before the plugin can be asked anything: it names both the cache the
 answers are kept in and the directory the plugin's own files land in.
 """
 
+import os
+
 import pytest
 
 from partcad import project_factory_external as pfe
@@ -42,6 +44,18 @@ def _forget_previous_answers():
     pfe._declared_versions.clear()
     yield
     pfe._declared_versions.clear()
+
+
+def _rewrite(path, body):
+    """Rewrite a script so that its stat really differs.
+
+    The guard is modification time and size, and a test that rewrites a file
+    within the same filesystem timestamp tick and to the same length would be
+    testing that nothing was noticed.
+    """
+    path.write_text(body)
+    st = path.stat()
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
 
 
 def _plugin(tmp_path, body, path="repo.py"):
@@ -127,28 +141,63 @@ def test_the_whole_hierarchy_gets_one_answer(tmp_path):
     """Read once per plugin reference, so a child cannot land somewhere else.
 
     The root resolves it first; a child asks with its own parent, which is the
-    plugin-backed package rather than the one that hosts the script, and must
-    still be given the root's answer.
+    plugin-backed package rather than the one that hosts the script, and could
+    not resolve the script by itself. It must still get the root's answer, or it
+    would compute a different cache namespace and stop sharing the root's.
     """
     ctx, parent = _plugin(tmp_path, "CACHE_VERSION = 3\n")
     assert pfe.declared_cache_version(ctx, parent, "//pkg:repo") == 3
 
-    (tmp_path / "repo.py").write_text("CACHE_VERSION = 8\n")
     stranger = FakeProject("//ext", tmp_path, {})
     assert pfe.declared_cache_version(ctx, stranger, "//pkg:repo") == 3
+    # ...and on its own it could not have: nothing resolves '//pkg' for it.
+    assert pfe.declared_cache_version(FakeContext(), stranger, "//pkg:repo") == 0
 
 
 def test_another_context_reads_the_script_again(tmp_path):
-    """A warm daemon must not go on reporting a version the script dropped.
+    """The memo is what keeps one hierarchy consistent, not a cache of its own."""
+    ctx, parent = _plugin(tmp_path, "CACHE_VERSION = 3\n")
+    assert pfe.declared_cache_version(ctx, parent, "//pkg:repo") == 3
 
-    The memo is what keeps one hierarchy consistent; it is not a second cache
-    on top of the one it is computing the key for.
+    _rewrite(tmp_path / "repo.py", "CACHE_VERSION = 8\n")
+    assert pfe.declared_cache_version(FakeContext(), parent, "//pkg:repo") == 8
+
+
+def test_the_same_context_reads_it_again_once_the_script_changes(tmp_path):
+    """A warm daemon must not go on reporting a version the script withdrew.
+
+    'Context.reload_changed_packages()' drops the packages whose configuration
+    changed and keeps the context, so an answer held for the life of a context
+    outlives the file it came from. A plugin-backed package is not one of the
+    packages that reload looks at either - it has no configuration file to stat.
+    The script does, and this is what stats it.
     """
     ctx, parent = _plugin(tmp_path, "CACHE_VERSION = 3\n")
     assert pfe.declared_cache_version(ctx, parent, "//pkg:repo") == 3
 
-    (tmp_path / "repo.py").write_text("CACHE_VERSION = 8\n")
-    assert pfe.declared_cache_version(FakeContext(), parent, "//pkg:repo") == 8
+    _rewrite(tmp_path / "repo.py", "CACHE_VERSION = 8\n")
+    assert pfe.declared_cache_version(ctx, parent, "//pkg:repo") == 8
+
+    # ...including a plugin that stops stating one at all.
+    _rewrite(tmp_path / "repo.py", "def get(key):\n    return None\n")
+    assert pfe.declared_cache_version(ctx, parent, "//pkg:repo") == 0
+
+
+def test_an_unchanged_script_is_not_parsed_twice(tmp_path):
+    """The memo still earns its keep: a stat, not a parse, on the way back."""
+    ctx, parent = _plugin(tmp_path, "CACHE_VERSION = 3\n")
+    assert pfe.declared_cache_version(ctx, parent, "//pkg:repo") == 3
+
+    reads = []
+    real = pfe._read_declared_cache_version
+    pfe._read_declared_cache_version = lambda *a: (reads.append(a), real(*a))[1]
+    try:
+        assert pfe.declared_cache_version(ctx, parent, "//pkg:repo") == 3
+        # ...and a child of the hierarchy, which cannot resolve the package.
+        assert pfe.declared_cache_version(ctx, FakeProject("//ext", tmp_path, {}), "//pkg:repo") == 3
+    finally:
+        pfe._read_declared_cache_version = real
+    assert reads == []
 
 
 def test_the_old_place_to_say_it_is_named_when_it_is_still_used(caplog):
