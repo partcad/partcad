@@ -164,3 +164,13 @@ def test_a_large_file_is_not_read_in_the_middle(tmp_path):
     '--cache-bypass' is the way past it.
     """
     assert _files_key(_large(tmp_path, b"m")) == _files_key(_large(tmp_path, b"M"))
+
+
+def test_a_key_and_the_string_spelling_it_are_different_keys():
+    assert _dict_key({1: "value"}) != _dict_key({"1": "value"})
+    assert _dict_key({True: "value"}) != _dict_key({"True": "value"})
+
+
+def test_keys_of_different_types_hash_in_a_fixed_order():
+    """Mixed keys cannot be compared with each other, and must not need to be."""
+    assert _dict_key({1: "a", "b": 2, None: 3}) == _dict_key({None: 3, "b": 2, 1: "a"})

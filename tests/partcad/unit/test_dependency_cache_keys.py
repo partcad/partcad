@@ -13,6 +13,8 @@ went on being served from the entry built before the edit.
 """
 
 import asyncio
+import os
+import shutil
 
 import pytest
 
@@ -143,3 +145,38 @@ def test_nothing_extruded_from_an_uncached_sketch_is_cached(package):
     ctx = pc.Context(str(package))
 
     assert _key_of(ctx, "part", "slab") is None
+
+
+def _connected_keys(path):
+    ctx = pc.Context(str(path))
+
+    async def collect():
+        assembly = ctx._get_assembly(":connect-interfaces")
+        motor = await ctx._get_part_async(":example-motor")
+        return await assembly.get_cache_key_async(), await motor.get_cache_key_async()
+
+    return asyncio.run(collect())
+
+
+def test_editing_an_interface_moves_the_key_of_an_assembly_connected_through_it(tmp_path):
+    """Where a connected part goes is its interface's to say, not the part's.
+
+    A part's key covers the names of the interfaces it implements; what a port
+    of one of them is at is declared in the interface, and moving it moves the
+    part within every assembly that connects through it.
+    """
+    package = tmp_path / "feature_interface"
+    shutil.copytree(os.path.join(os.path.dirname(__file__), "..", "..", "..", "examples", "feature_interface"), package)
+    assembly, motor = _connected_keys(package)
+    assert assembly is not None
+
+    config = (package / "partcad.yaml").read_text()
+    moved = "TL: [[-16.5, 15.5, 0.0], [0.0, 0.0, 1.0], 270.0] # top left"
+    assert "TL: [[-15.5, 15.5, 0.0], [0.0, 0.0, 1.0], 270.0] # top left" in config
+    (package / "partcad.yaml").write_text(
+        config.replace("TL: [[-15.5, 15.5, 0.0], [0.0, 0.0, 1.0], 270.0] # top left", moved, 1)
+    )
+
+    moved_assembly, moved_motor = _connected_keys(package)
+    assert moved_motor == motor
+    assert moved_assembly != assembly

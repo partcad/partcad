@@ -80,7 +80,12 @@ def _ctx(session, params):
         # reload replaces. A warm context would otherwise go on answering from
         # the 'partcad.yaml' it read first, until the daemon is stopped.
         packages, recursive = _config_check_targets(ctx, params)
-        ctx.reload_changed_packages(packages, recursive=recursive)
+        try:
+            ctx.reload_changed_packages(packages, recursive=recursive)
+        except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
+            # Reported as 'context.create' reports it. The context is kept, and
+            # loads the root again on the next request (see the reload).
+            raise JsonRpcError(INVALID_CONFIG, "Invalid configuration file", data={"detail": str(e)}) from e
     return ctx
 
 

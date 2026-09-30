@@ -550,10 +550,19 @@ class Context:
                 self._config_checked_at[name] = now
                 if file_stat(project.config_path) != project.config_stat:
                     changed.append(name)
+
+            # A root that is not loaded - the last reload of it failed, and
+            # there is no configuration left to compare - is loaded again every
+            # time, or the context would stay empty after the file was fixed.
+            root_changed = self.root is None or self.root.name not in self.projects
+            if root_changed:
+                changed.append(consts.ROOT if self.root is None else self.root.name)
+            elif self.root.name in changed:
+                root_changed = True
             if not changed:
                 return []
 
-            if self.root is not None and self.root.name in changed:
+            if root_changed:
                 # Everything but the built-in packages, which are PartCAD's own
                 # files: including the 'onlyInRoot' dependencies, which are
                 # the root's even though they are not named under it.
@@ -575,10 +584,16 @@ class Context:
                     if _package_of(target) in dropped:
                         del self.mates[source][target]
 
-            if self.root is not None and self.root.name in changed:
+            if root_changed:
                 self.name = consts.ROOT
                 self.current_project_path = consts.ROOT
-                self._import_root()
+                try:
+                    self._import_root()
+                except BaseException:
+                    # An unparseable file: nothing is loaded, and saying so is
+                    # what makes the next call try again (see above).
+                    self.root = None
+                    raise
 
         pc_logging.info("Reloaded the packages whose configuration changed: %s" % ", ".join(sorted(changed)))
         return dropped

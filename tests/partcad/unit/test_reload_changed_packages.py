@@ -170,3 +170,24 @@ def test_a_package_is_checked_at_most_once_per_interval(ctx, workspace, monkeypa
 
     now[0] += 2
     assert ctx.reload_changed_packages(["//right"]) == ["//right"]
+
+
+def test_a_root_that_failed_to_reload_is_loaded_again_once_it_is_fixed(ctx, workspace):
+    """The failed reload dropped every package and left nothing to compare.
+
+    Kept that way, the context would answer with nothing until the daemon was
+    restarted, however the file was fixed.
+    """
+    config = workspace / "partcad.yaml"
+    body = config.read_text()
+
+    config.write_text("parts: [\n")
+    with pytest.raises(Exception):
+        ctx.reload_changed_packages()
+    assert ctx.root is None
+
+    config.write_text(body)
+    ctx.reload_changed_packages()
+    assert ctx.root is not None
+    assert _part(ctx, "//:top") is not None
+    assert _part(ctx, "//right:r") is not None

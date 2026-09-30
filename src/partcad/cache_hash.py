@@ -85,6 +85,22 @@ def _frame(tag: bytes, data: bytes) -> bytes:
     return _header(tag, len(data)) + data
 
 
+def _scalar(val) -> bytes:
+    """A value that holds no others, framed with a tag saying what type it is."""
+    if isinstance(val, str):
+        return _frame(b"s", val.encode())
+    if val is None:
+        return _header(b"n", 0)
+    if isinstance(val, bool):
+        # Before 'int': a bool is one, and True is not 1 here.
+        return _frame(b"t", str(val).encode())
+    if isinstance(val, int):
+        return _frame(b"i", str(val).encode())
+    if isinstance(val, float):
+        return _frame(b"r", repr(val).encode())
+    return _frame(b"o", str(val).encode())
+
+
 def file_stat(filename: str):
     """What a file looks like from outside, to tell later whether it changed.
 
@@ -149,27 +165,23 @@ class CacheHash:
         def recurse(val):
             if isinstance(val, dict):
                 self.hasher.update(_header(b"d", len(val)))
-                for k in sorted(val.keys(), key=str):
-                    self.hasher.update(_frame(b"k", str(k).encode()))
+                # Keys framed with their type like any other value, so that
+                # 1 and "1" are two keys here as they are to whoever reads the
+                # dictionary - and sorted by that, which is total whatever the
+                # keys are, where comparing the keys themselves is not.
+                for encoded, k in sorted(((_scalar(k), k) for k in val.keys()), key=lambda pair: pair[0]):
+                    self.hasher.update(encoded)
                     recurse(val[k])
-            elif isinstance(val, str):
-                self.hasher.update(_frame(b"s", val.encode()))
-            elif isinstance(val, (list, tuple, set, frozenset)):
-                items = val if isinstance(val, (list, tuple)) else sorted(val, key=str)
-                self.hasher.update(_header(b"l", len(items)))
-                for item in items:
+            elif isinstance(val, (list, tuple)):
+                self.hasher.update(_header(b"l", len(val)))
+                for item in val:
                     recurse(item)
-            elif val is None:
-                self.hasher.update(_header(b"n", 0))
-            elif isinstance(val, bool):
-                # Before 'int': a bool is one, and True is not 1 here.
-                self.hasher.update(_frame(b"t", str(val).encode()))
-            elif isinstance(val, int):
-                self.hasher.update(_frame(b"i", str(val).encode()))
-            elif isinstance(val, float):
-                self.hasher.update(_frame(b"r", repr(val).encode()))
+            elif isinstance(val, (set, frozenset)):
+                self.hasher.update(_header(b"l", len(val)))
+                for encoded in sorted(_scalar(item) for item in val):
+                    self.hasher.update(encoded)
             else:
-                self.hasher.update(_frame(b"o", str(val).encode()))
+                self.hasher.update(_scalar(val))
 
         recurse(data)
         self.touch()

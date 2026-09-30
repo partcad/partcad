@@ -318,6 +318,25 @@ def test_the_packages_checked_are_the_ones_the_request_is_about(tmp_path, params
     assert session.contexts[context_id].reload_targets == expected
 
 
+def test_a_configuration_that_no_longer_parses_is_reported_as_one(tmp_path):
+    """As 'context.create' reports it, rather than as an internal error."""
+    import yaml
+
+    session, _ = make_session()
+    context_id = create_context(session, tmp_path)
+
+    def unparseable(packages=None, recursive=False):
+        yaml.safe_load("parts: [\n")
+
+    session.contexts[context_id].reload_changed_packages = unparseable
+
+    with pytest.raises(JsonRpcError) as raised:
+        operations._ctx(session, {"context": context_id})
+    assert raised.value.code == operations.INVALID_CONFIG
+    # Kept: its next request loads the root again.
+    assert context_id in session.contexts
+
+
 def test_an_operation_on_the_session_context_reloads_its_changed_packages_first(tmp_path):
     """The VS Code extension's path: no context id, the session's default."""
     session, _ = make_session()
