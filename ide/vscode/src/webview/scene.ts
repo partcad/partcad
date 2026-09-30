@@ -50,7 +50,6 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 import { calloutsOf } from './callouts';
 import { el } from './dom';
@@ -302,54 +301,6 @@ function disposeTree(root: THREE.Object3D): void {
         }
         disposeMaterials(mesh.material as THREE.Material | THREE.Material[] | undefined);
     });
-}
-
-/** Batch geometries by material to reduce draw calls. */
-function batchByMaterial(group: THREE.Group): void {
-    const geometriesByMaterial = new Map<THREE.Material, Array<{ geometry: THREE.BufferGeometry; matrix: THREE.Matrix4 }>>();
-
-    // Collect all geometries by material
-    group.traverse((node) => {
-        const mesh = node as THREE.Mesh;
-        if (!mesh.isMesh || !mesh.geometry) {
-            return;
-        }
-        const material = mesh.material as THREE.Material | undefined;
-        if (!material) {
-            return;
-        }
-        const key = material;
-        if (!geometriesByMaterial.has(key)) {
-            geometriesByMaterial.set(key, []);
-        }
-        geometriesByMaterial.get(key)!.push({
-            geometry: mesh.geometry,
-            matrix: mesh.matrixWorld.clone(),
-        });
-    });
-
-    // Merge and replace
-    for (const [material, items] of geometriesByMaterial) {
-        if (items.length <= 1) {
-            continue; // Skip if only one mesh
-        }
-        try {
-            const geometries = items.map((item) => item.geometry);
-            const merged = mergeGeometries(geometries);
-            const batch = new THREE.Mesh(merged, material);
-            group.add(batch);
-
-            // Remove individual meshes
-            group.traverse((node) => {
-                const mesh = node as THREE.Mesh;
-                if (mesh.isMesh && mesh.material === material && mesh !== batch && items.some((i) => i.geometry === mesh.geometry)) {
-                    group.remove(mesh);
-                }
-            });
-        } catch (error) {
-            console.warn('[PartCAD Viewer] Batching failed for material:', error);
-        }
-    }
 }
 
 export function clearGeometry(): void {
@@ -880,10 +831,6 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
         scene.remove(content);
         disposeTree(content);
     }
-
-    // Batch geometries by material to reduce draw calls
-    batchByMaterial(group);
-
     content = group;
     scene.add(group);
     // Framed on everything the show carries, whether or not it is switched on:
