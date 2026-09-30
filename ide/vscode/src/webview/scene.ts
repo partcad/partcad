@@ -853,9 +853,11 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
 
     // Performance logging (behind config flag)
     const perfDebug = (window as any).partcadConfig?.viewer?.performanceDebug ?? false;
+    console.log('[PartCAD Viewer] perfDebug flag:', perfDebug, 'config:', (window as any).partcadConfig);
     const nodeTriangleCounts = new Map<string, number>();
     if (perfDebug) {
         // Count triangles per node
+        console.log('[PartCAD Viewer] Counting triangles for', loaded.built.length, 'nodes');
         for (const { node, path, group: nodeGroup } of loaded.built) {
             let nodeTriangles = 0;
             nodeGroup.traverse((obj: any) => {
@@ -867,10 +869,16 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
                     }
                 }
             });
-            nodeTriangleCounts.set(nodeId(path), Math.round(nodeTriangles));
+            const id = nodeId(path);
+            const count = Math.round(nodeTriangles);
+            nodeTriangleCounts.set(id, count);
+            if (count > 0) {
+                console.log(`[PartCAD Viewer] Node ${id}: ${count} triangles`);
+            }
         }
         // Store for access by tree display
         (window as any).pcNodeTriangleCounts = nodeTriangleCounts;
+        console.log('[PartCAD Viewer] Stored', nodeTriangleCounts.size, 'nodes with triangle counts');
 
         const stats = {
             name: message.name || '(unnamed)',

@@ -242,6 +242,9 @@ async function show(message: ShowMessage): Promise<void> {
     // Set up viewer configuration on the window object for access by scene.ts
     if (message.config) {
         (window as any).partcadConfig = message.config;
+        console.log('[PartCAD Viewer] Config set:', message.config);
+    } else {
+        console.log('[PartCAD Viewer] No config in message');
     }
 
     // The pane first, and the visibility it asks for with it: an item that starts
@@ -266,6 +269,8 @@ async function show(message: ShowMessage): Promise<void> {
     if (generation !== mine) {
         return;
     }
+    // Refresh tree labels to show triangle counts after geometry is loaded
+    objectTree.refreshLabels();
     // Apply current opacity slider value to newly loaded geometry
     if (opacitySlider) {
         const opacity = parseInt(opacitySlider.value, 10) / 100;

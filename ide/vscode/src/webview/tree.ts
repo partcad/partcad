@@ -74,6 +74,7 @@ interface Row {
     checked: boolean;
     box: HTMLInputElement;
     children: Row[];
+    element?: HTMLElement;
 }
 
 /** What the pane lists for one node: itself, what is inside it, what it declares. */
@@ -234,6 +235,7 @@ export class Tree {
     private render(row: Row): HTMLElement {
         const item = el('div', `tree-item tree-${row.item.kind}`);
         item.setAttribute('role', 'treeitem');
+        row.element = item;
 
         const line = el('div', 'tree-line');
         // Pointing at a part or a sub-assembly in the pane says which of the things
@@ -249,9 +251,14 @@ export class Tree {
         const triangleCounts = (window as any).pcNodeTriangleCounts as Map<string, number> | undefined;
         if (triangleCounts) {
             const count = triangleCounts.get(row.item.id);
-            if (count !== undefined) {
+            if (count !== undefined && count > 0) {
                 displayName = `${row.item.name} (${count.toLocaleString()} triangles)`;
+            } else if (row.item.id.includes(':') || row.item.id.includes('/')) {
+                // Debug: log node IDs to help diagnose mismatch
+                console.log(`[PartCAD Tree] Node ID not found: "${row.item.id}", available keys:`, Array.from(triangleCounts.keys()).slice(0, 5));
             }
+        } else {
+            console.log('[PartCAD Tree] Triangle counts map not found');
         }
         const name = el('span', 'tree-name', displayName);
         // The names are long (a port is 'inner-TL-3mm-thru-opening-m3') and the
@@ -299,6 +306,34 @@ export class Tree {
         };
         if (this.root !== undefined) {
             walk(this.root);
+        }
+    }
+
+    /** Refresh tree labels after triangle counts are calculated. */
+    public refreshLabels(): void {
+        const triangleCounts = (window as any).pcNodeTriangleCounts as Map<string, number> | undefined;
+        if (!triangleCounts) {
+            return;
+        }
+        const updateLabels = (row: Row) => {
+            // Find the name span in the label and update it with triangle count
+            const label = row.element?.querySelector('.tree-label') as HTMLElement | null;
+            if (label) {
+                const nameSpan = label.querySelector('.tree-name') as HTMLElement | null;
+                if (nameSpan) {
+                    let displayName = row.item.name;
+                    const count = triangleCounts.get(row.item.id);
+                    if (count !== undefined && count > 0) {
+                        displayName = `${row.item.name} (${count.toLocaleString()} triangles)`;
+                    }
+                    nameSpan.textContent = displayName;
+                    nameSpan.title = displayName;
+                }
+            }
+            row.children.forEach(updateLabels);
+        };
+        if (this.root !== undefined) {
+            updateLabels(this.root);
         }
     }
 }
