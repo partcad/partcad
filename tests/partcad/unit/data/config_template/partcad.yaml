@@ -1,0 +1,16 @@
+desc: |
+  One package, two PartCADs: the template picks which form this one can read.
+  Rendered by PartCAD {{ partcad_version }}.
+
+{% set new = partcad_version_major is defined and partcad_version_at_least("0.8.77") %}
+
+interfaces:
+{% if new %}
+  chosen:
+    desc: what a newer PartCAD reads
+  only-for-the-new:
+    desc: a name that only exists where the feature does
+{% else %}
+  chosen:
+    desc: what an older PartCAD reads
+{% endif %}

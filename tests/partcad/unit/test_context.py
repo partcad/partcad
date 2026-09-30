@@ -1,0 +1,315 @@
+#!/usr/bin/env python3
+#
+# OpenVMP, 2023
+#
+# Author: Roman Kuzmenko
+# Created: 2023-08-19
+#
+# Licensed under Apache License, Version 2.0.
+#
+
+import asyncio
+import os
+from unittest.mock import patch
+
+import pytest
+
+import partcad as pc
+
+
+def test_ctx1():
+    ctx = pc.Context("tests/partcad")
+    assert ctx is not None
+
+
+def test_ctx_stats1():
+    """What the loaded packages declare, counted as they are loaded."""
+    ctx = pc.Context("examples")
+    assert ctx is not None
+    ctx.stats_recalc()
+    assert ctx.stats_packages > 0
+    assert ctx.stats_parts_declared == 0
+    ctx.get_project("//produce_part_cadquery_primitive")
+    assert ctx.stats_parts_declared > 0
+    assert ctx.stats_assemblies_declared == 0
+    ctx.get_project("//produce_assembly_assy")
+    assert ctx.stats_assemblies_declared > 0
+    assert ctx.stats_memory > 0
+
+
+def test_declared_counts_what_is_declared_rather_than_what_was_made():
+    """The two numbers are two questions, and this is the first of them.
+
+    Loading a package declares its objects; it no longer makes them (see
+    'Project.LAZY_OBJECT_KINDS'), and the declared count must not move when
+    something does.
+    """
+    ctx = pc.Context("examples")
+    project = ctx.get_project("//produce_part_cadquery_primitive")
+
+    declared = ctx.stats_parts_declared
+    assert declared == len(project.object_configs("part")) > 0
+    assert project.objects("part") == {}  # counting made nothing
+
+    project.get_part("cube")
+    assert ctx.stats_parts_declared == declared
+    len(project.parts)
+    assert ctx.stats_parts_declared == declared
+
+
+def test_nothing_is_instantiated_until_something_is_built():
+    """And this is the second: a shape counts once it has been built.
+
+    Declaring one does not, and neither does creating the object that would
+    build it - which is what a listing does.
+    """
+    ctx = pc.Context("examples")
+    project = ctx.get_project("//produce_part_cadquery_primitive")
+    assert ctx.stats_parts_instantiated == 0
+
+    assert len(project.parts) > 0  # every part of the package, created
+    assert ctx.stats_parts_instantiated == 0  # and none of them built
+
+    cube = project.get_part("cube")
+    cube.cacheable = False
+    assert asyncio.run(cube.get_wrapped(ctx)) is not None
+    assert ctx.stats_parts_instantiated == 1
+
+
+def test_ctx_stats2():
+    ctx = pc.Context("examples")
+    assert ctx is not None
+    ctx.stats_recalc()
+    assert ctx.stats_parts_instantiated == 0
+    old_memory = ctx.stats_memory
+
+    cube = ctx._get_part("//produce_part_cadquery_primitive:cube")
+    assert cube is not None
+    assert ctx.stats_parts_instantiated == 0
+    ctx.stats_recalc()
+    new_memory = ctx.stats_memory
+    assert new_memory > old_memory
+
+    old_memory = ctx.stats_memory
+    cube.cacheable = False
+    obj = asyncio.run(cube.get_wrapped(ctx))
+    assert obj is not None
+    ctx.stats_recalc()
+    assert ctx.stats_parts_instantiated == 1
+    new_memory = ctx.stats_memory
+
+    assert new_memory > old_memory
+
+
+def test_ctx_fini():
+    ctx1 = pc.init()
+    assert ctx1 is not None
+    pc.fini()
+    ctx2 = pc.init()
+    assert ctx2 is not None
+    assert ctx2 != ctx1
+    pc.fini()
+    ctx3 = pc.init()
+    assert ctx3 is not None
+
+
+@pytest.mark.parametrize("variation", [(True, False), (False, True), (False, False)])
+def test_offline_mode(variation):
+    offline, force_update = variation
+
+    with patch.object(pc.user_config, "offline", offline), patch.object(pc.user_config, "force_update", force_update):
+        ctx = pc.Context(user_config=pc.user_config)
+        checks = [
+            (0, True, True),  # At time 0, should check connectivity with result of True
+            (20, False, True),  # At time 20, should not check connectivity and saved state must return True
+            (80, True, False),  # At time 80, should check connectivity with result of False
+            (120, False, False),  # At time 120, should not check connectivity and saved state must return False
+            (240, False, False),  # At time 240, should not check connectivity and saved state must return False
+            (400, True, True),  # At time 400, should check connectivity with result of True
+        ]
+
+        for timestamp, should_check_connection, has_connection in checks:
+            with (
+                patch("time.time", return_value=timestamp),
+                patch.object(ctx, "_check_connectivity", return_value=has_connection) as check_connectivity_mock,
+            ):
+                assert ctx.is_connected() == (has_connection and not offline)
+                if (should_check_connection or force_update) and not offline:
+                    check_connectivity_mock.assert_called_once()
+
+
+def test_ctx_root_reports_the_loaded_package():
+    """The root package a Context loaded is reachable, and says where it came from.
+
+    This is the contract the PartCAD IDE reports a loaded package with: it needs
+    the 'partcad.yaml' that was loaded and whether the load succeeded, and both
+    live on 'Context.root', not on the Context. They were once read straight off
+    the Context, and when those attributes moved the extension started failing
+    silently with "No PartCAD package is detected" - a Context has no
+    'config_path' and no 'broken', so reading either raises AttributeError.
+    """
+    ctx = pc.Context("examples")
+
+    assert not hasattr(ctx, "config_path")
+    assert not hasattr(ctx, "broken")
+
+    assert ctx.root is not None
+    assert ctx.root.broken is False
+    assert ctx.root.config_path.endswith("partcad.yaml")
+    assert os.path.isfile(ctx.root.config_path)
+    # The name is adopted from the loaded 'partcad.yaml', so it is not the
+    # provisional '//' the Context starts out with.
+    assert ctx.name != pc.consts.ROOT
+    assert ctx.get_project(ctx.name) is ctx.root
+
+
+# --------------------------------------------------------------------------- #
+# What "offline" is decided by                                                 #
+# --------------------------------------------------------------------------- #
+
+
+def proxied(monkeypatch, variable=None, value=None):
+    """Put the environment in exactly one proxy state, clearing before setting.
+
+    The order is the whole point, and Windows is why. Environment variable names
+    are case-insensitive there and 'os.environ' upper-cases its keys, so
+    'HTTPS_PROXY' and 'https_proxy' are one variable rather than two -- and a
+    test that set one spelling and then cleared the other cleared the value it
+    had just set. It read as a proxy test on Linux and, on Windows, as a test
+    that no proxy is configured; asserting the proxy's address, it failed there
+    and only there.
+    """
+    for spelling in ("HTTPS_PROXY", "https_proxy"):
+        monkeypatch.delenv(spelling, raising=False)
+    if variable is not None:
+        monkeypatch.setenv(variable, value)
+
+
+def test_the_probe_is_a_public_resolver_when_nothing_is_proxied(monkeypatch):
+    """The historical answer, and the right one on a host that dials out itself."""
+    proxied(monkeypatch)
+    assert pc.context.connectivity_probe() == ("8.8.8.8", 53)
+
+
+@pytest.mark.parametrize(
+    "proxy, expected",
+    [
+        ("http://127.0.0.1:33893", ("127.0.0.1", 33893)),
+        ("http://proxy.example.com:3128", ("proxy.example.com", 3128)),
+        # No scheme is a spelling people use, and urlparse reads it as a path
+        # unless one is supplied.
+        ("proxy.example.com:3128", ("proxy.example.com", 3128)),
+        # No port either: an HTTP proxy's default.
+        ("http://proxy.example.com", ("proxy.example.com", 80)),
+        ("http://user:secret@proxy.example.com:8080", ("proxy.example.com", 8080)),
+    ],
+)
+def test_a_proxied_host_is_asked_about_its_proxy(monkeypatch, proxy, expected):
+    """Where every packet goes through a proxy, only the proxy can answer.
+
+    8.8.8.8 is unreachable in such an environment while git and every download
+    work, so probing it reports offline on a machine that can fetch everything
+    PartCAD needs -- and 'is_connected()' gates the clone, so an import is then
+    never attempted at all.
+    """
+    proxied(monkeypatch, "HTTPS_PROXY", proxy)
+    assert pc.context.connectivity_probe() == expected
+
+
+def test_the_lowercase_spelling_is_read_too(monkeypatch):
+    """'https_proxy' is what most tools set; both spellings are in the wild.
+
+    On Windows this asserts something weaker than its name suggests, and
+    unavoidably so: there is only one variable there whatever its case. What it
+    still says on every platform is that the value is read.
+    """
+    proxied(monkeypatch, "https_proxy", "http://proxy.example.com:3128")
+    assert pc.context.connectivity_probe() == ("proxy.example.com", 3128)
+
+
+@pytest.mark.parametrize(
+    "proxy",
+    [
+        # No host in it at all.
+        "://",
+        # A port that is not a number. 'ParseResult.port' raises ValueError on
+        # this one, and it is raised from outside the 'except OSError' that
+        # '_check_connectivity' wraps the connection in -- so before this was
+        # caught, an environment carrying such a value did not fall back to
+        # offline, it made 'is_connected()' raise at whichever caller asked
+        # first.
+        "http://proxy.example:not-a-port",
+        "proxy.example:65536",
+    ],
+)
+def test_an_unparseable_proxy_falls_back_rather_than_failing(monkeypatch, proxy):
+    """A value PartCAD cannot read says nothing, so the resolver answers instead."""
+    proxied(monkeypatch, "HTTPS_PROXY", proxy)
+    assert pc.context.connectivity_probe() == ("8.8.8.8", 53)
+
+
+def test_an_unparseable_proxy_leaves_is_connected_answering(monkeypatch):
+    """And the caller gets an answer rather than a ValueError out of the probe.
+
+    The connection is mocked rather than made. What this asserts is about the
+    'ValueError' no longer escaping 'connectivity_probe()', and reaching that
+    over a real socket would put a three-second timeout and the runner's
+    network in the way of saying so.
+    """
+    proxied(monkeypatch, "HTTPS_PROXY", "http://proxy.example:not-a-port")
+    ctx = pc.Context("tests/partcad")
+    ctx.connection_status = {}
+    with patch("partcad.context.socket.create_connection", side_effect=OSError):
+        assert ctx.is_connected() is False
+
+
+def test_the_probe_waits_five_seconds_in_a_command(monkeypatch):
+    """What an ordinary `pc` invocation gives the network before giving up.
+
+    Asserted on the call rather than by timing one: what is under test is the
+    number PartCAD passes, and reaching a real timeout would put five seconds
+    and the runner's network into a unit test.
+    """
+    monkeypatch.setattr(pc.context.process_role, "_is_daemon", False)
+    ctx = pc.Context("tests/partcad")
+    ctx.connection_status = {}
+
+    with patch("partcad.context.socket.create_connection") as connect:
+        ctx.is_connected()
+
+    assert connect.call_args.kwargs["timeout"] == 5.0
+
+
+def test_the_probe_waits_ten_seconds_in_a_daemon(monkeypatch):
+    """Twice as long where a wrong answer is held on everybody's behalf.
+
+    The daemon is one process serving every client of the workspace, it keeps
+    the answer for the 300 seconds `is_connected()` caches a negative one, and
+    there is no prompt waiting on it.
+    """
+    monkeypatch.setattr(pc.context.process_role, "_is_daemon", True)
+    ctx = pc.Context("tests/partcad")
+    ctx.connection_status = {}
+
+    with patch("partcad.context.socket.create_connection") as connect:
+        ctx.is_connected()
+
+    assert connect.call_args.kwargs["timeout"] == 10.0
+
+
+def test_a_command_is_not_a_daemon_until_something_says_so(monkeypatch):
+    """The flag is set by the process that decided to serve, never guessed.
+
+    `partcad_service_json_rpc.__main__._build_session` is what says it, which
+    `tests/partcad_service_json_rpc/test_main.py` pins; here it is the default
+    that matters, because everything else -- `pc`, a test, the IDE's client --
+    reads it without setting it.
+    """
+    monkeypatch.setattr(pc.context.process_role, "_is_daemon", False)
+    assert pc.context.probe_timeout() == pc.context.PROBE_TIMEOUT
+
+    pc.context.process_role.mark_daemon()
+    assert pc.context.probe_timeout() == pc.context.DAEMON_PROBE_TIMEOUT
+    # Idempotent, and there is no way back other than this test's monkeypatch.
+    pc.context.process_role.mark_daemon()
+    assert pc.context.probe_timeout() == pc.context.DAEMON_PROBE_TIMEOUT

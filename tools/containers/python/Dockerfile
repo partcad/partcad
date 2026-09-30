@@ -1,23 +1,164 @@
-FROM ghcr.io/partcad/partcad-devcontainer:0.7.150
+# The runtime the `docker` Python sandbox is built in, and the image a plugin
+# that needs something pip cannot install builds `FROM`.
+#
+# It carries an interpreter and the service that runs commands in it, and
+# deliberately nothing else. The CAD stack is NOT baked in: PartCAD creates a
+# virtual environment in a directory it mounts and installs into that, so what a
+# package renders against is the package's own `pythonRequirements` at the
+# version it asked for, not whatever was frozen into an image months ago. An
+# image that carried the stack would also have to be rebuilt for every change to
+# it, and would be a gigabyte before anybody added anything.
+#
+# Neither are PartCAD's own wrapper scripts, for a different reason: an image is
+# built once and used for releases afterwards, so a wrapper baked in here would
+# be run against a later release's protocol. They are mounted instead -- see
+# "Why the wrappers are mounted and not baked in" in the README.
+#
+# What that leaves here is the floor under every derived image, which is why it
+# is `python:*-slim` and not a dev container: the `docker` sandbox is the default
+# where a container runtime answers, and a default that costs more to provision
+# than conda does is one people turn off.
+#
+# See `tools/containers/README.md` for the contract this promises and a derived
+# image inherits.
+ARG PYTHON_VERSION=3.11
 
-USER vscode
-RUN /home/vscode/miniforge3/bin/conda create --yes --name pc-env python=3.12 pip
+# A wheel for `pycairo`, built here and thrown away with this stage.
+#
+# PNG and JPEG renders go through reportlab's `renderPM`, whose only backend now
+# is `rlPyCairo` -> `pycairo` -> cairo. `rlPyCairo` is pure Python; `pycairo` is
+# a C extension that publishes **no Linux wheel**, so pip has to compile it
+# against a system cairo -- and a sandbox provisioned in the final image would
+# find neither the headers nor a compiler, and every PNG in a container failed
+# with "cannot import desired renderPM backend rlPyCairo".
+#
+# The conda sandbox has the same problem and solves it by taking `pycairo` from
+# conda-forge, which ships cairo with it (see `runtime_python_conda.py`). The
+# equivalent here is to build the wheel once, in a stage that keeps the
+# toolchain, and carry only the wheel into the image -- which is what the README
+# asks for: "prefer a wheel to a toolchain". The toolchain is ~200 MB and this
+# image is the floor under every derived one.
+FROM python:${PYTHON_VERSION}-slim AS pycairo-wheel
+# DL3008 asks for `=<version>` on each package. This Dockerfile is built for
+# every supported Python, and those base images span two Debian releases
+# (bookworm for the older ones, trixie for the newer), so there is no one
+# version string that exists in both archives -- a pinned one would 404 the
+# fetch on whichever half of the matrix it was not written for. The same reason
+# the runtime stage below carries this, and the reason `.devcontainer/Dockerfile`
+# does. `tools/containers/kicad/Dockerfile` can pin because it is built `FROM`
+# one fixed image.
+# hadolint ignore=DL3008
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends build-essential libcairo2-dev pkg-config \
+  && rm -rf /var/lib/apt/lists/*
+# Deliberately unpinned: what has to match is whatever `rlPyCairo` asks for at
+# sandbox-provision time, and a version fixed here that stopped satisfying it
+# would be a wheel pip ignores -- back to compiling, in an image with no
+# compiler. `--no-deps` keeps it to the one extension that needs building.
+# hadolint ignore=DL3013
+RUN pip wheel --no-deps --wheel-dir /wheels pycairo
 
-USER root
-RUN mkdir -p /dot-partcad
+
+FROM python:${PYTHON_VERSION}-slim
+
+# Repeated because an ARG before FROM is out of scope after it.
+ARG PYTHON_VERSION=3.11
+ARG PARTCAD_VERSION=dev
+
+# What `pc system prune` recognises. Without these an image cannot be told from
+# the rest of what a machine has installed, and cleaning up after ourselves would
+# mean deleting somebody else's images. Third-party images are asked to carry
+# them too; see the README.
+LABEL partcad.image="1"
+LABEL partcad.version="${PARTCAD_VERSION}"
+LABEL partcad.python="${PYTHON_VERSION}"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# The `lib*` names are what an OpenCASCADE wheel dlopen()s and does not bundle:
+# OCCT is a visualization toolkit as much as a modelling one, so it links GL, X
+# and fontconfig even where nothing is ever drawn. They are named here rather
+# than left to chance because the failure without them is an ImportError deep
+# inside a sandbox rather than a missing package a user could act on -- and
+# every CAD sandbox PartCAD builds installs OCP, so this is not a niche case.
+#
+# `libcairo2` is what the `pycairo` wheel built in the stage above links against
+# at run time. The `-dev` package it was compiled with stayed in that stage;
+# this is the library itself, about a megabyte.
+#
+# `git` is here because a package may name a dependency by repository, and pip
+# shells out to it.
+#
+# glib is asked for twice because it is named differently on the two Debian
+# releases this matrix spans: the images for the older Python versions are built
+# on bookworm, the newer ones on trixie, and trixie's 64-bit `time_t` transition
+# renamed the package to `libglib2.0-0t64`. Asking for the new name and falling
+# back is what lets one Dockerfile serve every version, rather than a
+# conditional on a base image that will move again.
+#
+# And the same split is why nothing here is version-pinned; see DL3008 above.
+# hadolint ignore=DL3008
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends \
+    ca-certificates \
+    git \
+    libgl1 \
+    libglu1-mesa \
+    libgomp1 \
+    libfontconfig1 \
+    libfreetype6 \
+    libice6 \
+    libsm6 \
+    libx11-6 \
+    libxext6 \
+    libxrender1 \
+    libcairo2 \
+  && (apt-get install --yes --no-install-recommends libglib2.0-0t64 \
+      || apt-get install --yes --no-install-recommends libglib2.0-0) \
+  && rm -rf /var/lib/apt/lists/*
+
+# Not root. What the sandbox writes goes into mounted directories and has to
+# stay usable outside the container -- and on Linux PartCAD runs the container
+# as the host's own uid, which needs a home directory that is not `/root`.
+RUN useradd --create-home --uid 1000 --shell /bin/bash pc
+
+# Writable by whichever uid ends up running here, not only by `pc`. PartCAD
+# runs the container as the *host's* uid on Linux, and that is 1000 on one
+# laptop and 501 on the next; a state directory only `pc` can write is a
+# sandbox that fails for everybody else. Sticky, so one uid cannot remove
+# another's files.
+RUN mkdir -p /dot-partcad && chown pc:pc /dot-partcad && chmod 1777 /dot-partcad
 ENV PC_INTERNAL_STATE_DIR=/dot-partcad
-RUN mkdir -p /pc
+
+# Where pip looks before it goes to an index. It only *adds* a source, so
+# nothing else resolves differently -- but a sandbox asking for `rlPyCairo`
+# finds the `pycairo` it needs already built for this image's interpreter and
+# architecture, instead of trying to compile it and failing.
+COPY --from=pycairo-wheel /wheels /opt/pc-wheels
+ENV PIP_FIND_LINKS=/opt/pc-wheels
+
 WORKDIR /pc
 COPY _common/requirements.txt ./
-
-USER vscode
-RUN /home/vscode/miniforge3/bin/conda run -n pc-env pip install --no-cache-dir -r requirements.txt
-
-USER root
+RUN pip install --no-cache-dir -r requirements.txt
 COPY _common/pc-container-json-rpc.py ./
-RUN chown -R vscode:vscode /dot-partcad /pc
+
+# What a caller may run. The whole of the RPC service's isolation, and per-image
+# on purpose: a caller names a command and the image decides whether it exists.
+# A derived image adding a native tool of its own adds it here.
+#
+# It does not gate the `docker` sandbox, which reaches the interpreter through
+# `docker exec` -- that is PartCAD running a command on its own machine, in a
+# container it started, and there is no boundary there to enforce.
+ENV PC_CONTAINER_ALLOWED_COMMANDS='{"python": "/usr/local/bin/python3"}'
+
+# Kept in the image rather than removed after the build, unlike the check the
+# CalculiX runtime runs: a derived image is supposed to run this to find out it
+# broke the contract, and it cannot do that if the build that produced its base
+# deleted it.
+COPY python/verify.py ./verify.py
+RUN python3 verify.py
 
 EXPOSE 5000
 
-USER vscode
-CMD ["/home/vscode/miniforge3/bin/conda", "run", "-n", "pc-env", "python", "pc-container-json-rpc.py"]
+USER pc
+CMD ["python3", "pc-container-json-rpc.py"]

@@ -1,0 +1,2127 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "definitions": {
+    "output-section": {
+      "type": ["object", "null"],
+      "properties": {
+        "output_dir": { "type": "string", "minLength": 1 }
+      },
+      "patternProperties": {
+        "^[a-zA-Z0-9_.-]+$": { "$ref": "#/definitions/output-type" }
+      },
+      "additionalProperties": false
+    },
+    "machine-axis": {
+      "description": "The axis the tool, the beam, the drill or the saw approaches along ('toolAxis:', or 'along:', which says the same), as one of '+X', '-X', '+Y', '-Y', '+Z' or '-Z'. Defaults to '-Z': the part sits on the bed and the tool comes down to it. It is what 'every cut wall is vertical' is measured against, and what 'pc cam' orients the part by. Not to be confused with 'direction:', which says which way round a contour is cut.",
+      "type": "string",
+      "enum": ["+X", "-X", "+Y", "-Y", "+Z", "-Z", "+x", "-x", "+y", "-y", "+z", "-z", "X", "Y", "Z", "x", "y", "z"]
+    },
+    "subtractive-cnc": {
+      "description": "A CNC router or mill, and everything it needs to cut this part. It follows any 2.5D path, so it is the machine that can make anything the other two can -- and what a 'subtractive' part that names no machine at all is taken to mean.",
+      "type": "object",
+      "properties": {
+        "toolAxis": { "$ref": "#/definitions/machine-axis" },
+        "along": { "$ref": "#/definitions/machine-axis", "description": "The same as 'toolAxis:', said the way it usually is ('cuts along -Z'). Write one or the other." },
+        "diameter": { "$ref": "#/definitions/cam-length", "description": "The cutter's diameter. Every contour is offset by half of it, so the part comes out at its nominal size" },
+        "depth": { "$ref": "#/definitions/cam-length", "description": "How far down from the top of the object the cut goes. An object that does not say is cut through" },
+        "depth_per_pass": { "$ref": "#/definitions/cam-length", "description": "How deep each pass goes" },
+        "safe_z": { "$ref": "#/definitions/cam-length", "description": "The height rapid moves are made at, above the top of the object" },
+        "feed": { "$ref": "#/definitions/cam-feed", "description": "The cutting feed rate; a bare number is millimeters per minute" },
+        "plunge": { "$ref": "#/definitions/cam-feed", "description": "The feed rate of a downward move; the cutting feed where there is none" },
+        "speed": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }], "description": "The spindle speed in rpm. A spindle nobody commands is one the operator set, so an object that says nothing gets no M3/M5" },
+        "stepover": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "How far each successive ring of a pocket moves in, as a fraction of the cutter's diameter" },
+        "operation": { "type": "string", "enum": ["profile", "pocket", "engrave"], "description": "Which side of the outline the cutter runs on: around the outside of it ('profile'), clearing what is inside it ('pocket'), or along it ('engrave')" },
+        "direction": { "type": "string", "enum": ["climb", "conventional"], "description": "Which way round each contour is cut. 'climb' puts the material on the cutter's right, which leaves the better edge; 'conventional' reverses every path" },
+        "implementation": { "type": "string", "minLength": 1, "description": "Who produces this route, as '<package>:<file type>'" },
+        "desc": { "type": "string", "maxLength": 1000 }
+      },
+      "not": { "required": ["toolAxis", "along"] },
+      "additionalProperties": false
+    },
+    "subtractive-laser": {
+      "description": "A laser cutter, whose beam does not tilt: every wall it makes is parallel to its own axis, which 'manufacturability-laser' checks. It takes no 'diameter:' -- a beam has no cutter, and 'kerf:' is what it removes -- and no 'depth:' or 'safe_z:', because it cuts through in one pass and never moves in Z.",
+      "type": "object",
+      "properties": {
+        "toolAxis": { "$ref": "#/definitions/machine-axis" },
+        "along": { "$ref": "#/definitions/machine-axis", "description": "The same as 'toolAxis:', said the way it usually is ('cuts along -Z'). Write one or the other." },
+        "kerf": { "$ref": "#/definitions/cam-length", "description": "How wide a cut the beam itself removes, as a length ('0.2', '0.2 mm', '0.008 in'). A property of the machine and the material rather than of the job. 'pc cam' offsets every contour by half of it so the part comes out at its nominal size" },
+        "power": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }], "description": "How hard the beam fires, as the S-word its controller reads. A beam nobody commands is gated with a bare M3, which is what a machine whose power is set at the panel wants" },
+        "feed": { "$ref": "#/definitions/cam-feed", "description": "How fast the head travels; a bare number is millimeters per minute" },
+        "direction": { "type": "string", "enum": ["climb", "conventional"], "description": "Which way round each contour is cut" },
+        "implementation": { "type": "string", "minLength": 1, "description": "Who produces this route, as '<package>:<file type>'" },
+        "desc": { "type": "string", "maxLength": 1000 }
+      },
+      "not": { "required": ["toolAxis", "along"] },
+      "additionalProperties": false
+    },
+    "subtractive-drill": {
+      "description": "A drilling machine. It goes in and comes out, so the only thing it makes is a round hole along its own axis -- which 'manufacturability-drill' checks, of the material taken away rather than of the part left behind. It takes no 'depth:': how deep each hole goes is the geometry's to say, not the job's.",
+      "type": "object",
+      "properties": {
+        "toolAxis": { "$ref": "#/definitions/machine-axis" },
+        "along": { "$ref": "#/definitions/machine-axis", "description": "The same as 'toolAxis:', said the way it usually is ('cuts along -Z'). Write one or the other." },
+        "diameter": { "$ref": "#/definitions/cam-length", "description": "The drill in the spindle. Checked against the holes it is sent to, so a bit that is not the size of them is reported rather than run" },
+        "safe_z": { "$ref": "#/definitions/cam-length", "description": "The height rapid moves are made at, above the top of the object" },
+        "peck": { "$ref": "#/definitions/cam-length", "description": "How deep the drill goes before it comes back out to clear the swarf. A hole with none is drilled in one go" },
+        "plunge": { "$ref": "#/definitions/cam-feed", "description": "The feed rate going in" },
+        "speed": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }], "description": "The spindle speed in rpm" },
+        "implementation": { "type": "string", "minLength": 1, "description": "Who produces this route, as '<package>:<file type>'" },
+        "desc": { "type": "string", "maxLength": 1000 }
+      },
+      "not": { "required": ["toolAxis", "along"] },
+      "additionalProperties": false
+    },
+    "subtractive-cut": {
+      "description": "A saw that cuts the stock across, to length or to size, and does nothing else. It is described by where it cuts: for each cut, the axis the saw travels along and how far into the stock it goes before it cuts across. 'manufacturability-cut' makes those cuts in the 'source:' and checks that what is left is the part. 'pc cam' writes no program for it.",
+      "type": "object",
+      "properties": {
+        "toolAxis": {
+          "$ref": "#/definitions/machine-axis",
+          "description": "The axis the saw travels along, for every cut that does not name its own. It points at the offcut: the saw starts where the stock starts along it, travels each cut's 'length:', and everything further along is cut off. Defaults to '-Z'."
+        },
+        "along": { "$ref": "#/definitions/machine-axis", "description": "The same as 'toolAxis:', said the way it usually is ('cuts along -Z'). Write one or the other." },
+        "cuts": {
+          "description": "The cuts, in the part's own coordinates (which are the stock's). Each is a 'length:' -- how far into the stock the saw travels before it cuts, measured from where the stock starts along its axis -- and, optionally, the axis: 'toolAxis:', or 'along:', which says the same. A cut that names neither travels along the machine's 'toolAxis:'. Any number may be written as '$name', the value of the part's own parameter of that name ('$length in').",
+          "oneOf": [
+            { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/subtractive-cut-one" } },
+            { "$ref": "#/definitions/subtractive-cut-one" }
+          ]
+        },
+        "desc": { "type": "string", "maxLength": 1000 }
+      },
+      "not": { "required": ["toolAxis", "along"] },
+      "required": ["cuts"],
+      "additionalProperties": false
+    },
+    "subtractive-cut-one": {
+      "type": "object",
+      "properties": {
+        "toolAxis": { "$ref": "#/definitions/cut-direction", "description": "The axis this cut travels along, pointing at the offcut. Defaults to the machine's 'toolAxis:'." },
+        "along": { "$ref": "#/definitions/cut-direction", "description": "The same as 'toolAxis:', said the way a saw cut usually is. Write one or the other." },
+        "length": { "$ref": "#/definitions/cam-length", "description": "How far into the stock the saw travels before it cuts, which is how long a piece it leaves ('1219.2', '48 in', '$length in')" }
+      },
+      "required": ["length"],
+      "not": { "required": ["toolAxis", "along"] },
+      "additionalProperties": false
+    },
+    "cut-direction": {
+      "oneOf": [
+        { "$ref": "#/definitions/machine-axis" },
+        { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } }
+      ]
+    },
+    "sketch-manufacturing": {
+      "type": "object",
+      "description": "How a machine follows this drawing: which machine, and the job it runs. A sketch has no 'method:' and no 'source:' -- it is not made from anything, it is a path -- so this is the machine subsections and the job keys and nothing else. Scoped the same way a part's is: what is written here is shared by every machine named below, and what is written inside one of them is that machine's own.",
+      "properties": {
+        "cnc": { "$ref": "#/definitions/subtractive-cnc" },
+        "drill": { "$ref": "#/definitions/subtractive-drill" },
+        "laser": { "$ref": "#/definitions/subtractive-laser" },
+        "diameter": { "$ref": "#/definitions/cam-length", "description": "Shared by every machine named that reads one" },
+        "depth": { "$ref": "#/definitions/cam-length", "description": "How deep to score. A sketch has no thickness to be cut through, so this is the one thing it has to answer for itself" },
+        "depth_per_pass": { "$ref": "#/definitions/cam-length" },
+        "safe_z": { "$ref": "#/definitions/cam-length" },
+        "peck": { "$ref": "#/definitions/cam-length" },
+        "kerf": { "$ref": "#/definitions/cam-length" },
+        "feed": { "$ref": "#/definitions/cam-feed" },
+        "plunge": { "$ref": "#/definitions/cam-feed" },
+        "speed": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }] },
+        "stepover": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "power": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }] },
+        "operation": { "type": "string", "enum": ["profile", "pocket", "engrave"] },
+        "direction": { "type": "string", "enum": ["climb", "conventional"] },
+        "implementation": { "type": "string", "minLength": 1 },
+        "desc": { "type": "string", "maxLength": 1000 }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "cam-length": {
+      "oneOf": [
+        { "type": "number", "exclusiveMinimum": 0 },
+        { "type": "string", "minLength": 1 }
+      ]
+    },
+    "cam-feed": {
+      "oneOf": [
+        { "type": "number", "exclusiveMinimum": 0 },
+        { "type": "string", "minLength": 1 }
+      ]
+    },
+    "cae-analysis": {
+      "type": "object",
+      "description": "The boundary conditions one analysis is run under. 'fix:' names what is held still, 'load:' what is pulled on; both name interface types this object implements, and 'load' values are a force (or a mass, which is the default reading of a bare number - in kilograms)",
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "implementation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Who runs this analysis, as '<package>:<file type>'. Overrides the 'caeFeaImplementation'/'caeCfdImplementation' user configuration for this object; '-i' on the command line overrides both. A part that names one is saying which solver it was written against"
+        },
+        "fix": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+            {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_/./:-]+$": {
+                  "oneOf": [
+                    { "type": "null" },
+                    { "type": "string" },
+                    { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "load": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_/./:-]+$": {
+              "oneOf": [
+                { "$ref": "#/definitions/cae-load-value" },
+                {
+                  "type": "object",
+                  "patternProperties": {
+                    "^[a-zA-Z0-9_/./-]*$": { "$ref": "#/definitions/cae-load-value" }
+                  },
+                  "additionalProperties": false,
+                  "minProperties": 1
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "cae-load-value": {
+      "description": "A force, or a mass to weigh into one. A number is a mass in kilograms; a string ends in a unit name, case-insensitively, with or without a preceding space and with or without a plural 's': n/nm/mn/kn/newton for force, mg/g/kg/ton/tonne/lb/pound for mass",
+      "oneOf": [
+        { "type": "number" },
+        { "type": "string", "minLength": 1 }
+      ]
+    },
+    "materials": {
+      "type": ["object", "null"],
+      "description": "What the parts of this package can be made of. A material is not a shape - there is nothing to render, export or measure - it is a set of facts about a substance that the things with geometry refer to by name",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "The short form: the full name of the substance ('pla: Polylactic Acid')"
+            },
+            { "type": "null" },
+            {
+              "type": "object",
+              "properties": {
+                "formal": { "type": "string", "minLength": 1, "description": "The short formal name, e.g. 'PLA'" },
+                "full": { "type": "string", "minLength": 1, "description": "The full name of the substance, e.g. 'Polylactic Acid'" },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "url": { "$ref": "#/definitions/url" },
+                "density": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Density in g/mm^3, the units every length in PartCAD is already in. A datasheet quotes g/cm^3, which is 1000x larger"
+                },
+                "mu": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Coefficient of sliding friction, dimensionless. The same number SDFormat states as '<friction><ode><mu>', URDF as '<gazebo><mu1>' and MJCF as the first 'friction' component; a part made of this material gets it unless it states a 'friction' of its own"
+                },
+                "tags": {
+                  "oneOf": [
+                    { "type": "string", "minLength": 1 },
+                    { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                  ],
+                  "description": "What the material is good at, as the package chose to say it. Free-form on purpose"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "simulation-section": {
+      "type": ["object", "null"],
+      "description": "The simulation plugins this package implements. One is declared exactly as an export or a render implementation is - a script, the sandbox it needs and its parameters - and is named by full path from a 'simulate:'",
+      "patternProperties": {
+        "^[a-zA-Z0-9_.-]+$": { "$ref": "#/definitions/simulation-type" }
+      },
+      "additionalProperties": false
+    },
+    "simulation-type": {
+      "type": ["object", "null"],
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "path": { "type": "string", "minLength": 1, "description": "The script that runs the simulation, relative to the package that declares it" },
+        "package": { "type": "string", "minLength": 1, "description": "The package holding 'path', when it is not this one" },
+        "format": { "type": "string", "minLength": 1, "description": "The file type the scene is exported to before the plugin is started" },
+        "formatOptions": { "type": "object", "description": "Export parameters for that conversion, e.g. 'static: false' to let the bodies move" },
+        "pythonVersion": { "type": "string", "minLength": 1 },
+        "pythonRequirements": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": true
+    },
+    "import-section": {
+      "type": ["object", "null"],
+      "description": "The object types this package can read: third-party file formats an assembly or a scene may be declared as. One is declared exactly as an export implementation is - a script, the sandbox it needs and its parameters - and is named by an object's 'type:', by full path when the package is not this one",
+      "patternProperties": {
+        "^[a-zA-Z0-9_.-]+$": { "$ref": "#/definitions/import-type" }
+      },
+      "additionalProperties": false
+    },
+    "import-type": {
+      "type": ["object", "null"],
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "path": { "type": "string", "minLength": 1, "description": "The reader script, relative to the package that declares it" },
+        "package": { "type": "string", "minLength": 1, "description": "The package holding 'path', when it is not this one" },
+        "extension": { "type": "string", "minLength": 1, "description": "The source file's extension" },
+        "kinds": {
+          "description": "Which object kinds this type may be declared as. Both, where the file itself does not say which it is",
+          "oneOf": [
+            { "type": "string", "enum": ["assembly", "scene"] },
+            { "type": "array", "items": { "type": "string", "enum": ["assembly", "scene"] }, "uniqueItems": true, "minItems": 1 }
+          ]
+        },
+        "noun": { "type": "string", "minLength": 1, "description": "What one of these is called in a log line ('model', 'world', 'robot')" },
+        "dropped": {
+          "type": "object",
+          "description": "How each counter of the reader's 'dropped' summary is worded when it is reported. The reader counts; this names",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "pythonVersion": { "type": "string", "minLength": 1 },
+        "pythonRequirements": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": true
+    },
+    "open-section": {
+      "type": ["object", "null"],
+      "description": "The third-party applications 'pc open' can launch. An entry is data and nothing else - where the application is on each operating system, what to run it as, which container to fall back to, and what it can read; the logic that finds and launches it is the same for every tool and lives in 'partcad_client.external'",
+      "patternProperties": {
+        "^[a-zA-Z0-9_.-]+$": { "$ref": "#/definitions/open-tool" }
+      },
+      "additionalProperties": false
+    },
+    "open-tool": {
+      "type": ["object", "null"],
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "displayName": { "type": "string", "minLength": 1, "description": "What the application is called in a message" },
+        "image": { "type": "string", "minLength": 1, "description": "The container it runs in when the machine has no local copy. '{version}' is substituted with the running PartCAD's version" },
+        "binaries": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Executables to look for, on PATH and in the container, in order; the first found wins" },
+        "args": { "type": "array", "items": { "type": "string" }, "description": "Arguments that go before the file name" },
+        "binaryArgs": {
+          "type": "object",
+          "description": "The same, for one executable in particular, for an application with more than one front end",
+          "additionalProperties": { "type": "array", "items": { "type": "string" } }
+        },
+        "macosApps": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Bundles to look for under /Applications and ~/Applications" },
+        "macosExecutable": { "type": "string", "minLength": 1, "description": "The executable inside the bundle, for an application handed arguments rather than a document" },
+        "windowsGlobs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Install locations as globs, so a versioned directory still matches" },
+        "flatpakId": { "type": "string", "minLength": 1 },
+        "companions": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Extensions this application really opens, when the file it was handed is not one and one of these sits beside it" },
+        "fileArgs": { "type": "array", "items": { "type": "string" }, "description": "How the file reaches the application when being the last argument is not it. '{path}' is the file name, '{path_repr}' it quoted as a Python string" },
+        "ownFormats": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Extensions this application opens whatever they hold, because they are its own" },
+        "imports": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "The mesh formats it can read, for one that reads meshes" },
+        "meshVia": { "type": "string", "minLength": 1, "description": "What a file that is not a mesh is converted to first" },
+        "sceneType": { "type": "string", "minLength": 1, "description": "The PartCAD scene type it reads, for one that reads a description of an arrangement rather than geometry" },
+        "sceneExtensions": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true, "description": "The file extensions 'sceneType' is stored in, with the dot ('.xml'). Declared rather than looked up: an engine's scene format is implemented by the same package this entry comes from, so that package is what says what the format is called on disk" }
+      },
+      "additionalProperties": true
+    },
+    "simulate": {
+      "type": ["object", "null"],
+      "description": "The simulations this object declares: what it is supposed to do, or not do, once it is placed in a world and the world is run. 'pc sim' runs them",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/simulate-entry" }
+      },
+      "additionalProperties": false
+    },
+    "simulate-entry": {
+      "type": "object",
+      "properties": {
+        "desc": { "type": "string", "maxLength": 1000 },
+        "scene": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The scene this object is simulated in, by full path. Its 'subject' parameter is assigned this object's own full path. Defaults to '//builtin/scene:subject', an empty world holding the subject and nothing else"
+        },
+        "offset": { "$ref": "#/definitions/OCCTLocation" },
+        "simulation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The simulation plugin that runs it, by full path, declared in that package's 'simulation:' section. Required: PartCAD implements no simulator, so a package imports one (e.g. github.com/partcad/partcad-sim-mujoco) and names it here"
+        },
+        "validation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A Python expression over 'before', 'after' and 'result' that is true when the simulation went as it should"
+        },
+        "params": {
+          "type": "object",
+          "description": "Parameter values handed to the simulation plugin, overriding what its own declaration defaults to (e.g. 'duration')"
+        }
+      },
+      "required": ["simulation"],
+      "additionalProperties": false
+    },
+    "output-type": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string" },
+        {
+          "type": "object",
+          "properties": {
+            "desc": { "type": "string", "maxLength": 1000 },
+            "path": { "type": "string", "minLength": 1 },
+            "package": { "type": "string", "minLength": 1 },
+            "pythonRequirements": { "type": "array", "items": { "type": "string" } },
+            "pythonVersion": { "type": "string", "minLength": 1 },
+            "dockerImage": { "type": "string", "minLength": 1 },
+            "decode": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether the shape and assembly envelopes are rebuilt into live CAD geometry before the implementation sees them. Set to false by an implementation that needs the assembly tree's structure rather than the single compound it decodes to (the built-in URDF exporter is the one that does)"
+            },
+            "reproducible": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether this file has to come out byte-for-byte the same every time it is written from the same object. Set to true for a drawing that is kept in a repository, so that a diff answers whether it changed: the built-in 2D projections then go through OpenCASCADE's exact hidden-line algorithm rather than the polygonal one, every number is rounded to the precision the file type claims, and a DXF gets fixed header metadata instead of the clock and a fresh pair of GUIDs. Off by default because the exact projection is much the slower of the two on a large assembly. Unlike the other fields here it is also handed to the implementation, so an implementation another package supplies reads it and means the same thing by it"
+            },
+            "extension": { "type": "string", "minLength": 1 },
+            "prefix": { "type": "string", "minLength": 1 },
+            "output_dir": { "type": "string", "minLength": 1 },
+            "exclude": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["packages", "sketches", "interfaces", "parts", "assemblies", "scenes"]
+              },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "file_path":{
+      "type": "string",
+      "pattern": "^(?!.*\\.$)(?:(?:[a-zA-Z]:\\|\\\\[^\\/:*?\"<>|\r\n]+\\[^\\/:*?\"<>|\r\n]+\\|\\.{1,2}[\\/]|[a-zA-Z0-9_ -]+[\\/]|[\\/])?(?:[^\\/:*?\"<>|\r\n]+[\\/]?)*)$"
+    },
+    "url": {
+      "type": "string",
+      "pattern": "((http|https)://)(www.)?[a-zA-Z0-9@:%._\\+~#?&//=]{2,256}\\.[a-z]{2,6}\\b([-a-zA-Z0-9@:%._\\+~#?&//=]*)"
+    },
+    "unless": {
+      "description": "The conditions this declaration does not work under. A list of clauses, any one of which excludes it (OR); a clause is a single tag, or a list of tags that must all hold together (AND) - e.g. [[arm, useDocker, useDockerKicad]]. It is skipped, with an INFO line saying so, wherever a clause holds. A tag names something true of the context: the host's architecture ('arm64', 'arm', 'x86_64'), its operating system ('linux', 'macos', 'windows'), that system's version ('ubuntu-24.04', 'macos-26'), a boolean configuration option in one of its two spellings ('useDocker' when on, '!useDocker' when off; likewise 'useDockerPython' and 'useDockerKicad'), or a tag the user configuration adds. '!' is part of a tag's name, not an operator.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "string", "minLength": 1 },
+              {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "minItems": 1,
+                "uniqueItems": true
+              }
+            ]
+          },
+          "uniqueItems": true
+        }
+      ]
+    },
+    "file-hash": {
+      "description": "The hash of the file this declaration points at, as '<algorithm>:<digest>' -- md5, sha1, sha256 or sha512 (a bare digest is accepted too, and the algorithm is read from its length). It pins the *bytes*: a file fetched with 'fileFrom' is whatever the remote serves at the moment it is fetched, and the download is refused unless it hashes to this. Optional, but an object fetched without one is not reproducible and so fails the manufacturing test. Nothing to do with the hashes PartCAD computes for itself, such as a shape's cache key.",
+      "type": "string",
+      "minLength": 1
+    },
+    "software-refs": {
+      "description": "The software objects an object ships with: a firmware image the board runs, a binary that has to be on the host. Optional, and most objects declare none. Each entry names a 'software' object, either of this package or of another ('<package path>:<name>'); a single one may be written on its own instead of as a list. Listed in the bill of materials of every assembly the object ends up in, and required to be obtainable by the manufacturing test.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      ]
+    },
+    "shape-properties": {
+      "type": "object",
+      "description": "What the shape this object produces reports about itself, as opposed to 'parameters', which are what is asked of the object type that produces it. Every entry here is an output: it describes the instantiated shape, and an exporter that has a way to state one writes it out rather than recomputing or losing it.",
+      "properties": {
+        "material": { "type": "string", "minLength": 1, "description": "The name of the material this shape is made of." },
+        "color": {
+          "type": "string",
+          "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$",
+          "description": "The colour of this shape, as #RRGGBB or #RRGGBBAA."
+        },
+        "physics": { "$ref": "#/definitions/shape-physics" }
+      },
+      "additionalProperties": false
+    },
+    "physics": {
+      "type": "object",
+      "description": "Physical properties, each with a documented name and unit. Lengths are millimetres and angles are degrees, as everywhere else in PartCAD; everything else is SI. A property that has no entry here is not carried: a format that states one PartCAD does not support fails the import, and a property PartCAD holds that the target format cannot state is reported on export.",
+      "properties": {
+        "mass": { "type": "number", "description": "Mass, in kilograms.", "minimum": 0 },
+        "centerOfMass": {
+          "type": "array",
+          "description": "Centre of mass in the shape's own frame, in millimetres.",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "inertiaOrientation": {
+          "type": "array",
+          "description": "Orientation of the frame the inertia tensor is stated in, as roll/pitch/yaw in degrees. Absent means aligned with the shape's own frame.",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "inertia": {
+          "type": "object",
+          "description": "The inertia tensor about 'centerOfMass', in kg*m^2.",
+          "properties": {
+            "ixx": { "type": "number" },
+            "ixy": { "type": "number" },
+            "ixz": { "type": "number" },
+            "iyy": { "type": "number" },
+            "iyz": { "type": "number" },
+            "izz": { "type": "number" }
+          },
+          "additionalProperties": false
+        },
+        "friction": { "type": "number", "description": "Coefficient of friction, along the first friction direction.", "minimum": 0 },
+        "friction2": { "type": "number", "description": "Coefficient of friction, along the second friction direction.", "minimum": 0 },
+        "frictionDirection": {
+          "type": "array",
+          "description": "The first friction direction, in the shape's own frame.",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "contactStiffness": { "type": "number", "description": "Contact stiffness, in N/m." },
+        "contactDamping": { "type": "number", "description": "Contact damping, in N*s/m." },
+        "minContactDepth": { "type": "number", "description": "Penetration allowed before a contact force is applied, in millimetres." },
+        "maxContactVelocity": { "type": "number", "description": "The largest velocity a contact correction may impart, in mm/s." },
+        "restitution": { "type": "number", "description": "Coefficient of restitution: 0 is a dead stop, 1 is a perfect bounce.", "minimum": 0, "maximum": 1 },
+        "maxContacts": { "type": "integer", "description": "The largest number of contact points to resolve at once.", "minimum": 1 },
+        "velocityDamping": { "type": "number", "description": "Velocity damping applied to the body itself.", "minimum": 0 },
+        "selfCollide": { "type": "boolean", "description": "Whether this body collides with the others of the same model." },
+        "gravity": { "type": "boolean", "description": "Whether gravity acts on this body." },
+        "maxEffort": { "type": "number", "description": "The largest effort a connection may exert: N*m for a turn, N for a move." },
+        "maxVelocity": { "type": "number", "description": "The largest velocity a connection allows: deg/s for a turn, mm/s for a move." },
+        "damping": { "type": "number", "description": "Damping resisting the movement a connection allows." },
+        "springStiffness": { "type": "number", "description": "Stiffness of a spring returning a connection to 'springReference'." },
+        "springReference": { "type": "number", "description": "The position a spring returns a connection to: degrees for a turn, millimetres for a move." },
+        "stopCfm": { "type": "number", "description": "Constraint force mixing used at a connection's limits." },
+        "stopErp": { "type": "number", "description": "Error reduction used at a connection's limits." },
+        "fudgeFactor": { "type": "number", "description": "Solver scaling applied to a connection, between 0 and 1." },
+        "implicitSpringDamper": { "type": "boolean", "description": "Whether the spring and damper are applied implicitly by the solver." },
+        "provideFeedback": { "type": "boolean", "description": "Whether the simulator reports the forces at this connection." }
+      },
+      "additionalProperties": false
+    },
+    "shape-physics": {
+      "description": "The physical properties a shape may state about itself: 'physics' without the ones that describe a connection rather than a body. An effort limit, a joint damping or a spring belongs to the interface a connection is made through, not to the part that connection moves, so a part that states one has made a mistake rather than said something to carry. Stated as the whole vocabulary minus the connection-only names, so that a body property added to 'physics' is available here without being written down twice, and so that the two lists cannot drift apart.",
+      "allOf": [
+        { "$ref": "#/definitions/physics" },
+        {
+          "type": "object",
+          "propertyNames": {
+            "not": {
+              "description": "The properties of a connection, which only an interface may state. See 'motion' and 'physics' on an interface.",
+              "enum": [
+                "maxEffort",
+                "maxVelocity",
+                "damping",
+                "springStiffness",
+                "springReference",
+                "stopCfm",
+                "stopErp",
+                "fudgeFactor",
+                "implicitSpringDamper",
+                "provideFeedback"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "motion": {
+      "type": "object",
+      "description": "The freedom of movement a connection allows. Angles are degrees and lengths millimetres, as everywhere else in PartCAD.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["fixed", "revolute", "continuous", "prismatic", "planar", "floating", "ball", "screw"]
+        },
+        "axis": {
+          "type": "array",
+          "description": "The axis moved about or along, in the frame of this interface's port.",
+          "items": { "$ref": "#/definitions/number-or-expression" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "limits": {
+          "type": "object",
+          "description": "How far the movement may go: degrees for a turn, millimetres for a move.",
+          "properties": {
+            "lower": { "$ref": "#/definitions/number-or-expression" },
+            "upper": { "$ref": "#/definitions/number-or-expression" }
+          },
+          "additionalProperties": false
+        },
+        "softLimits": {
+          "type": "object",
+          "description": "Limits a controller enforces before the hard ones, and the gains it does it with.",
+          "properties": {
+            "lower": { "$ref": "#/definitions/number-or-expression" },
+            "upper": { "$ref": "#/definitions/number-or-expression" },
+            "kPosition": { "$ref": "#/definitions/number-or-expression" },
+            "kVelocity": { "$ref": "#/definitions/number-or-expression" }
+          },
+          "additionalProperties": false
+        },
+        "mimic": {
+          "type": "object",
+          "description": "A movement that follows another one: value = multiplier * other + offset.",
+          "properties": {
+            "joint": { "type": "string", "minLength": 1 },
+            "multiplier": { "$ref": "#/definitions/number-or-expression" },
+            "offset": { "$ref": "#/definitions/number-or-expression" }
+          },
+          "required": ["joint"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "expression": {
+      "description": "A number written as a PartCAD expression instead of a literal, e.g. \"%size / 2%\". The whole value has to be the expression, delimiters included: a value that merely contains one (\"%size%mm\") resolves to text, and the places this is referenced from are the ones that need a number. The values are the parameters of the object it is declared in - an interface's or a part's 'parameters'. Not Jinja2: 'partcad.yaml' is rendered as a Jinja2 template before it is parsed, which is one step too early for a value that depends on which instance of the object is being asked for.",
+      "type": "string",
+      "pattern": "^%[^%]+%$"
+    },
+    "number-or-expression": {
+      "description": "A number, or an expression over the object's parameters that evaluates to one.",
+      "oneOf": [
+        { "type": "number" },
+        { "$ref": "#/definitions/expression" }
+      ]
+    },
+    "OCCTLocationValue": {
+      "$ref": "#/definitions/number-or-expression"
+    },
+    "sketch-inner-circle": {
+      "oneOf": [
+        { "$ref": "#/definitions/sketch-dimension" },
+        {
+          "type": "object",
+          "properties": {
+            "radius": { "$ref": "#/definitions/sketch-dimension" },
+            "x": { "$ref": "#/definitions/sketch-coordinate" },
+            "y": { "$ref": "#/definitions/sketch-coordinate" }
+          },
+          "required": ["radius"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "sketch-inner-square": {
+      "oneOf": [
+        { "$ref": "#/definitions/sketch-dimension" },
+        {
+          "type": "object",
+          "properties": {
+            "side": { "$ref": "#/definitions/sketch-dimension" },
+            "x": { "$ref": "#/definitions/sketch-coordinate" },
+            "y": { "$ref": "#/definitions/sketch-coordinate" }
+          },
+          "required": ["side"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "sketch-inner-rectangle": {
+      "type": "object",
+      "properties": {
+        "side-x": { "$ref": "#/definitions/sketch-dimension" },
+        "side-y": { "$ref": "#/definitions/sketch-dimension" },
+        "x": { "$ref": "#/definitions/sketch-coordinate" },
+        "y": { "$ref": "#/definitions/sketch-coordinate" }
+      },
+      "required": ["side-x", "side-y"],
+      "additionalProperties": false
+    },
+    "sketch-slot": {
+      "description": "A slot: a rectangle with semicircular ends, which is what a slotted hole is. 'length' is measured over those ends, so a slot as long as it is wide is a circle; 'width' is their diameter. Unlike the other shapes here it is placed by the centre of its FIRST rounded end rather than by its middle - 'x' and 'y' are that point, and 'angle' turns it about that point, in degrees from +X - so a port keeps its coordinates when the opening it marks is slotted.",
+      "type": "object",
+      "properties": {
+        "length": { "$ref": "#/definitions/sketch-dimension" },
+        "width": { "$ref": "#/definitions/sketch-dimension" },
+        "x": { "$ref": "#/definitions/sketch-coordinate" },
+        "y": { "$ref": "#/definitions/sketch-coordinate" },
+        "angle": { "$ref": "#/definitions/sketch-coordinate" }
+      },
+      "required": ["length", "width"],
+      "additionalProperties": false
+    },
+    "sketch-dimension": {
+      "description": "A length of a 'basic' sketch: a non-negative number, or an expression over the sketch's parameters that evaluates to one.",
+      "oneOf": [
+        { "type": "number", "minimum": 0 },
+        { "$ref": "#/definitions/expression" }
+      ]
+    },
+    "sketch-coordinate": {
+      "description": "A position within a 'basic' sketch: a number, or an expression over the sketch's parameters that evaluates to one.",
+      "$ref": "#/definitions/number-or-expression"
+    },
+    "OCCTLocation":{
+      "type": "array",
+      "items": [
+        {
+          "type": "array",
+          "items": { "$ref": "#/definitions/OCCTLocationValue" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "array",
+          "items": { "$ref": "#/definitions/OCCTLocationValue" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        { "$ref": "#/definitions/OCCTLocationValue" }
+      ],
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "object-reference": {
+      "description": "A reference to another object: a name of this package ('m3-thru'), or one qualified with a package path ('//std/metric/m:m3-thru'), either of them carrying parameter values ('m-thru;size=4,depth=3'). A value may be a '%...%' expression over the parameters of the object the reference is written in ('m-thru;size=%size + 1%'), which is why a complete expression is allowed anywhere in the name - it is resolved before the reference is looked up.",
+      "type": "string",
+      "pattern": "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$",
+      "minLength": 1
+    },
+    "port":{
+      "oneOf": [
+        { "$ref": "#/definitions/OCCTLocation" },
+        { "type": "null"},
+        {
+          "type": "object",
+          "properties": {
+            "location": { "$ref": "#/definitions/OCCTLocation" },
+            "sketch": { "$ref": "#/definitions/object-reference" },
+            "project": { "type": "string" },
+            "params": {
+              "description": "The parameter values to build the port's sketch with, so that one parametrized sketch serves a family of ports. Equivalent to spelling them into the sketch's name ('sketch: m;size=3'); a value may be an expression over the parameters of the object that declares the port.",
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_/./-]+$": {
+                  "anyOf": [
+                    { "type": ["number", "boolean", "array"] },
+                    { "type": "string" }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "hold": {
+      "description": "The interface, or the list of interfaces, to hold this object by while it is connected to another one. The default for 'holdWith'/'holdTo' in the 'how' section of an ASSY 'connect*' node.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      ]
+    },
+    "holdInstance": {
+      "description": "The instance of each interface listed in 'hold' to hold this object by, in the same order. The default for 'holdWithInstance'/'holdToInstance' in the 'how' section of an ASSY 'connect*' node.",
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      ]
+    },
+    "holdForce": {
+      "description": "A force to hold this object with, in N. The default for the 'holdWithForce*'/'holdToForce*' fields in the 'how' section of an ASSY 'connect*' node.",
+      "type": "number",
+      "minimum": 0
+    },
+    "implements": {
+      "description": "The interfaces this object implements, and where each instance of each of them is. Declared by a part, a sketch and an assembly alike: an assembly whose 'map:' does not fit -- a fixture whose mounting face is a coordinate rather than a port of anything inside it -- states it the way a part does.",
+      "type": "object",
+      "patternProperties": {
+        "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "null" },
+            { "$ref": "#/definitions/OCCTLocation" },
+            {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_/.%-]+$": { "$ref": "#/definitions/OCCTLocation" }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_/./-]+$": {
+                  "type": "object",
+                  "properties": {
+                    "location": { "$ref": "#/definitions/OCCTLocation" },
+                    "port": {
+                      "description": "A port of this same object to place this instance at, instead of a location. The ports of an object are known before its 'implements:' is read, so this names one of its own 'ports:' or one its 'map:' externalized.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "params": { "type": "object", "properties": { "offset": { "type": "number" } } }
+                  },
+                  "anyOf": [{ "required": ["location"] }, { "required": ["port"] }],
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ports-section": {
+      "description": "The ports this object has in addition to the ones it inherits from the interfaces it implements.",
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/.%-]+$": { "$ref": "#/definitions/port" }
+      },
+      "additionalProperties": false
+    },
+    "port-map": {
+      "description": "What an assembly externalizes of the things it is made of. The key is the new name; the value names what it stands for: [node, port] externalizes a port of that node under that name, and [node, interface, instance] externalizes that instance of that interface under that instance name (the interface itself is read off the node -- an assembly is in no position to rename one). The node is the ASSY file's node name -- a link's 'name:', or the part/assembly name where the link has none -- and not the name of the part, since an assembly may place the same part six times. A node inside a named container is reached through it ('frame/bracket'); the anonymous 'links:' containers an ASSY file is built out of contribute nothing to the path, and a sub-assembly that a package declares is not descended into -- it externalizes its own ports and this assembly maps those.",
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/.%-]+$": {
+          "type": "array",
+          "items": [
+            { "type": "string", "minLength": 1, "description": "The ASSY node." },
+            { "type": "string", "minLength": 1, "description": "A port of that node, or an interface it implements." },
+            { "type": "string", "description": "The instance of that interface. The empty string is the unnamed one." }
+          ],
+          "minItems": 2,
+          "maxItems": 3
+        }
+      },
+      "additionalProperties": false
+    },
+    "connect": {
+      "description": "What this part or assembly contributes to every connection it takes part in. The defaults for the 'how' section of an ASSY 'connect*' node.",
+      "type": "object",
+      "properties": {
+        "hold": { "$ref": "#/definitions/hold" },
+        "holdInstance": { "$ref": "#/definitions/holdInstance" },
+        "holdForce": { "$ref": "#/definitions/holdForce" },
+        "holdForceMin": { "$ref": "#/definitions/holdForce" },
+        "holdForceMax": { "$ref": "#/definitions/holdForce" }
+      },
+      "additionalProperties": false
+    },
+    "interface-movement-body": {
+      "type": "object",
+      "properties": {
+        "min": { "$ref": "#/definitions/number-or-expression" },
+        "max": { "$ref": "#/definitions/number-or-expression" },
+        "default": { "$ref": "#/definitions/number-or-expression" },
+        "type": { "type": "string", "enum": ["move", "turn"], "default": "move" },
+        "dir": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/number-or-expression" },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "additionalProperties": false
+    },
+    "interface-movement-body-custom": {
+      "description": "One freedom-of-movement parameter under a name PartCAD does not know the axis of. The same as 'interface-movement-body' except that 'dir' is not optional: moveX/moveY/moveZ and turnX/turnY/turnZ carry their axis in the name, and anything else has to state it. It is also why a custom name has no short form - '[min, max, default]' has nowhere to put a direction.",
+      "type": "object",
+      "properties": {
+        "min": { "$ref": "#/definitions/number-or-expression" },
+        "max": { "$ref": "#/definitions/number-or-expression" },
+        "default": { "$ref": "#/definitions/number-or-expression" },
+        "type": { "type": "string", "enum": ["move", "turn"], "default": "move" },
+        "dir": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/number-or-expression" },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": ["dir"],
+      "additionalProperties": false
+    },
+    "interface-movement-value": {
+      "description": "One freedom-of-movement parameter under one of the six names PartCAD knows the axis of - moveX/moveY/moveZ, turnX/turnY/turnZ, and their hyphenated spellings. The range it may take, written as '{min, max, default}', as the short '[min, max, default]', or as the one value it is pinned to. A custom name is 'interface-movement-body-custom' instead, which has to state its 'dir'.",
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/definitions/number-or-expression" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/definitions/number-or-expression" },
+          "minItems": 1,
+          "maxItems": 3
+        },
+        { "$ref": "#/definitions/interface-movement-body" }
+      ]
+    },
+    "check-interference": {
+      "description": "What 'partcad.test.interference' does with this assembly. There is no list of pairs to excuse here: two parts have one relationship, the 'connect' that joins them, and that is where an overlap which is meant to be there is stated - with 'selfScrew' or 'snapIn' on the interface, the mating or the connection's 'how', or with 'interferes' naming the further items the same act of joining drives through.",
+      "type": "object",
+      "properties": {
+        "minVolume": {
+          "description": "Shared volume, in mm^3, below which an overlap is not reported. A rounding tolerance and nothing else: the default of 0.05 is orders of magnitude below any overlap a person would call one, and above the noise of two surfaces that meet exactly.",
+          "type": "number",
+          "minimum": 0
+        },
+        "minFraction": {
+          "description": "The same floor expressed as a share of the smaller of the two parts, for assemblies whose parts differ enormously in size. An overlap has to clear both.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "check-connectivity": {
+      "description": "What 'partcad.test.connectivity' does with this assembly.",
+      "type": "object",
+      "properties": {
+        "allowDuplicates": {
+          "description": "Whether the same part in the same place twice is allowed.",
+          "type": "boolean",
+          "default": false
+        },
+        "requireAnchored": {
+          "description": "Whether every item after the first has to be connected to something rather than placed by coordinates. An assembly that says it is manufacturable is held to this whatever it says here.",
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "mating": {
+      "description": "How one particular pair of interfaces goes together. Stated once for the pair and applied to every connection that joins them, alongside the freedom of movement that connection is left with.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "properties": {
+            "desc": { "type": "string", "maxLength": 1000 },
+            "selfScrew": {
+              "description": "Whether joining these two interfaces cuts a thread rather than matching one, which is what lets the two ends carry different threads or one of them none. An interface declares 'selfScrew' on itself when that is true wherever it is used, such as a self-tapping screw; said here it is true of the pairing, which is the only place it can be said when neither end knows on its own - the same screw cuts its own thread in a pilot hole and cuts nothing in the clearance hole it passes through on the way. A connection's 'how' overrides it for a single joint.",
+              "type": "boolean",
+              "default": false
+            },
+            "snapIn": {
+              "description": "Whether joining these two interfaces is done by pushing one past the other rather than by screwing it in: a bore pushed onto a thread it is not cut to match, a clip over a barb. Getting past means passing through, and a model that holds no springs holds them overlapping, so the two are expected to share that space. Said here for the same reason 'selfScrew' is, and never alongside it: a joint is pushed together or threaded into place, not both. A connection's 'how' overrides it for a single joint.",
+              "type": "boolean",
+              "default": false
+            },
+            "sourcePortSelector": { "type": "string", "minLength": 1 },
+            "targetPortSelector": { "type": "string", "minLength": 1 }
+          },
+          "patternProperties": {
+            "^(move[XYZ]|turn[XYZ]|move-[xyz]|turn-[xyz])$": { "$ref": "#/definitions/interface-movement-value" }
+          },
+          "additionalProperties": { "$ref": "#/definitions/interface-movement-body-custom" },
+          "allOf": [
+            {
+              "if": { "properties": { "selfScrew": { "const": true } }, "required": ["selfScrew"] },
+              "then": { "properties": { "snapIn": { "const": false } } }
+            }
+          ]
+        }
+      ]
+    },
+    "mates": {
+      "description": "The interfaces an interface can be connected to: a single name, a list of names, or a mapping of each name to the properties of that pairing.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": { "$ref": "#/definitions/object-reference" },
+          "uniqueItems": true
+        },
+        {
+          "type": "object",
+          "patternProperties": {
+            "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": { "$ref": "#/definitions/mating" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "interface-parameter": {
+      "description": "An interface's 'parameters:'. It holds two kinds at once, told apart by what each declares rather than by where it is written: a construction parameter, exactly as a part or a sketch declares one ('size: {type: float, default: 3.0}'), which a reference sets ('m-thru;size=4'); and a freedom-of-movement parameter, which states a range and an axis ('min', 'max', 'dir') and says what a connection made through the interface may still do. The two vocabularies do not overlap: one of the six predefined movement names, a '[min, max, default]' list, or a 'min'/'max'/'dir' or 'type: move'/'type: turn' makes it the second kind; anything else is the first.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "patternProperties": {
+            "^(move[XYZ]|turn[XYZ]|move-[xyz]|turn-[xyz])$": { "$ref": "#/definitions/interface-movement-value" },
+            "^(?!(move[XYZ]|turn[XYZ]|move-[xyz]|turn-[xyz])$)[a-zA-Z0-9_/./-]+$": {
+              "$comment": "Which kind this is, decided the same way 'partcad.interface_config.is_movement_parameter' decides it: a declaration stating 'min', 'max', 'dir' or 'type: move'/'type: turn' is freedom of movement, and anything else is a construction value. Written as 'if'/'then' rather than as an 'anyOf' of the two so that a declaration meant as one kind is reported against that kind - an 'anyOf' answers a missing 'dir' with whatever the *other* branch disliked.",
+              "if": {
+                "type": "object",
+                "anyOf": [
+                  { "required": ["min"] },
+                  { "required": ["max"] },
+                  { "required": ["dir"] },
+                  { "required": ["type"], "properties": { "type": { "enum": ["move", "turn"] } } }
+                ]
+              },
+              "then": { "$ref": "#/definitions/interface-movement-body-custom" },
+              "else": { "$ref": "#/definitions/shape-parameter-value" }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "The short list form. Either the names of the freedoms this interface allows with no bounds on them ('[moveX, moveY, turnZ]'), which is the oldest spelling of 'parameters:' there is, or one parameter's '[min, max, default]'.",
+          "type": "array",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "$ref": "#/definitions/interface-movement-name" },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            {
+              "type": "array",
+              "items": { "$ref": "#/definitions/number-or-expression" },
+              "minItems": 2,
+              "maxItems": 3
+            }
+          ]
+        }
+      ]
+    },
+    "interface-movement-name": {
+      "description": "One of the six freedoms PartCAD knows the axis of, named on its own. Only these six: a custom name has to state the 'dir' it moves along or turns about, and a bare list has nowhere to put one.",
+      "type": "string",
+      "pattern": "^(move[XYZ]|turn[XYZ]|move-[xyz]|turn-[xyz])$"
+    },
+    "parameter-override": {
+      "description": "One value of an object's 'with:'. A string may not contain ',', ';' or '=': overriding an object's parameters asks for the instance of it that has those values, and the name of that instance is spelled '<name>;<parameter>=<value>,...' - the same name 'pc inspect cube;width=20.0' asks for. Those three characters are what that spelling is made of, so a value carrying one of them cannot be named.",
+      "oneOf": [
+        { "type": "string", "pattern": "^[^,;=]*$" },
+        { "type": "number" },
+        { "type": "boolean" }
+      ]
+    },
+    "parameter-default": {
+      "description": "What a parameter is worth when nothing overrides it, and what its 'enum' offers. The same naming constraint as '#/definitions/parameter-override' applies to a string, for the same reason: a value that cannot be spelled in an instance name cannot be asked for by name. Any other type is left alone - only strings carry those characters.",
+      "anyOf": [
+        { "type": "string", "pattern": "^[^,;=]*$" },
+        { "type": ["number", "boolean", "array"] }
+      ]
+    },
+    "parameter-list": {
+      "description": "A parameter whose value is a list of names, written as the list it defaults to. Every entry is held to the same naming constraint a string default is ('#/definitions/parameter-default'), and for the same reason with one more comma to it: a reference spells the whole list as one value ('...;include=BEND_UP,BEND_DOWN'), so a name carrying a comma could not be asked for by name.",
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[^,;=]*$" },
+      "uniqueItems": true
+    },
+    "shape-parameter-value": {
+      "description": "One construction parameter of an object: the bare value it defaults to, or a declaration of its type, its default and what it may be. The same shape wherever an object is parametrized - a part, a sketch, an assembly, and the construction half of an interface's 'parameters:'.",
+      "oneOf": [
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "string", "pattern": "^[^,;=]*$" },
+        { "$ref": "#/definitions/parameter-list" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["string", "int", "bool", "float", "array"] },
+            "enum": {
+              "type": "array",
+              "items": {
+                "allOf": [{ "type": "string", "minLength": 1 }, { "$ref": "#/definitions/parameter-default" }]
+              },
+              "uniqueItems": true
+            },
+            "desc": { "type": "string", "maxLength": 1000 },
+            "default": { "$ref": "#/definitions/parameter-default" },
+            "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+            "material": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "shape-parameter": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "oneOf": [
+            { "type": "number" },
+            { "$ref": "#/definitions/parameter-list" },
+            {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string", "enum": ["string", "int", "bool", "float", "array"] },
+                "enum": {
+                  "type": "array",
+                  "items": {
+                    "allOf": [{ "type": "string", "minLength": 1 }, { "$ref": "#/definitions/parameter-default" }]
+                  },
+                  "uniqueItems": true
+                },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "default": { "$ref": "#/definitions/parameter-default" },
+                "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+                "material": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    "render": {
+      "description": "The 'render:' section: the 2D projections and documents 'pc render' writes. Its file types are open-ended, like every output section, but the raster options of the built-in formats are still checked.",
+      "allOf": [
+        { "$ref": "#/definitions/output-section" },
+        {
+          "type": ["object", "null"],
+          "properties": {
+            "png": { "$ref": "#/definitions/raster-output-type" },
+            "jpeg": { "$ref": "#/definitions/raster-output-type" }
+          }
+        }
+      ]
+    },
+    "raster-output-type": {
+      "description": "A rasterized projection. Only what the built-in rasterizers understand is typed here; a package that replaces the implementation may add parameters of its own, which is why this does not close the object.",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string" },
+        {
+          "type": "object",
+          "properties": {
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 },
+            "quality": { "type": "integer", "minimum": 1, "maximum": 100 },
+            "progressive": { "type": "boolean" },
+            "optimize": { "type": "boolean" },
+            "subsampling": {
+              "oneOf": [
+                { "type": "string", "enum": ["4:4:4", "4:2:2", "4:2:0", "4:1:1"] },
+                { "type": "integer", "minimum": -1, "maximum": 2 }
+              ]
+            },
+            "background": { "type": "string", "pattern": "^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" }
+          },
+          "additionalProperties": true
+        }
+      ]
+    }
+  },
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 255
+    },
+    "desc": {
+      "description": "What this package is, in prose. Rendered at the top of the package's generated README, and allowed the same length as the 'docs' fields beside it.",
+      "type": "string",
+      "maxLength": 5000
+    },
+    "private": {
+      "type": "boolean",
+      "default": false
+    },
+    "manufacturable": {
+      "type": "boolean",
+      "default": false
+    },
+    "unless": { "$ref": "#/definitions/unless" },
+    "docs": {
+      "type": ["object", "null"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "intro": { "type": "string", "maxLength": 5000 },
+        "usage": { "type": "string", "maxLength": 5000 }
+      },
+      "additionalProperties": false
+    },
+    "url": { "$ref": "#/definitions/url" },
+    "poc": {
+      "type": "string",
+      "minLength":0
+    },
+    "partcad": {
+      "type": "string",
+      "pattern": "^(>)?(=)?([0-9]+\\.)?[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
+    },
+    "pythonVersion": {
+      "type": "string",
+      "pattern": "^(>)?(=)?([0-9]+\\.)?[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "description": "The interpreter this package's sandboxes are built on. Defaults to the one PartCAD pins, not to the one PartCAD is running on, so a package renders on the same Python for everyone who opens it. A version newer than the CAD packages PartCAD pins are built for is held down to the newest that has wheels, and says so."
+    },
+    "pythonRequirements": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 3 },
+      "uniqueItems": true
+    },
+    "dockerImage": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The image this package's sandboxes are built from, for whoever is using the 'docker' sandbox. Declared by a package needing something pip cannot install. It does not replace 'pythonRequirements': an image says where a package runs best, not where it runs at all, and a host with the native pieces installed runs the same package in a conda or venv sandbox. PartCAD appends the machine's architecture to the tag before pulling and falls back to the bare name."
+    },
+    "javascriptVersion": {
+      "type": ["string", "number"],
+      "pattern": "^[0-9]+(\\.[0-9]+)*$"
+    },
+    "javascriptRequirements": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "chili3dVersion": {
+      "type": ["string", "number"],
+      "minLength": 1
+    },
+    "suppliers":{
+      "description": "The providers to consider for the parts and assemblies of this package. A name is a provider of this package unless it is qualified with a package path, which lets a package buy from a provider defined elsewhere.",
+      "oneOf":[
+        { "type": "null" },
+        { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_/.:-]+$": { "type": "null" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "cover": {
+      "type": ["object", "null"],
+      "properties": {
+        "package": { "type": "string", "minLength": 1 },
+        "assembly": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "render": { "$ref": "#/definitions/render" },
+    "export": { "$ref": "#/definitions/output-section" },
+    "cae": { "$ref": "#/definitions/output-section" },
+    "cam": { "$ref": "#/definitions/output-section" },
+    "simulation": { "$ref": "#/definitions/simulation-section" },
+    "import": { "$ref": "#/definitions/import-section" },
+    "open": { "$ref": "#/definitions/open-section" },
+    "materials": { "$ref": "#/definitions/materials" },
+    "mates": {
+      "description": "Matings declared apart from the interfaces they apply to, so that a package can mate interfaces it does not own: each source interface, then each interface it mates with.",
+      "type": ["object", "null"],
+      "patternProperties": {
+        "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": {
+          "type": "object",
+          "patternProperties": {
+            "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$": { "$ref": "#/definitions/mating" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "dependencies": {
+      "type": ["object", "null"],
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "type": "object",
+          "properties": {
+            "desc": { "type": "string", "maxLength": 1000 },
+            "type": { "type": "string", "enum": ["git", "tar", "local", "external"] },
+            "onlyInRoot": { "type": "boolean", "default": false },
+            "path": { "type": "string", "minLength": 1 },
+            "url": { "$ref": "#/definitions/url" },
+            "relPath": { "type": "string", "minLength": 1 },
+            "revision": { "type": "string", "minLength": 1 },
+            "plugin": { "type": "string", "minLength": 1 },
+            "subfolder": { "type": "string" },
+            "cacheVersion": { "type": "integer", "minimum": 0 },
+            "includePaths": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": false,
+          "required": ["type"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "parts": {
+      "type": ["object", "null"],
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "cadquery", "build123d", "chili3d", "sdf", "svg", "dxf", "extrude",
+                    "sweep", "stl", "step", "scad", "3mf", "enrich", "alias", "brep",
+                    "obj", "kicad", "compound"
+                  ]
+                },
+                "aliases": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "properties": { "$ref": "#/definitions/shape-properties" },
+                "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "fileHash": { "$ref": "#/definitions/file-hash" },
+                "source": { "type": "string", "minLength": 1 },
+                "package": { "type": "string", "minLength": 1 },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "images": {
+                  "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "sketch": { "type": "string", "minLength": 1 },
+                "depth": { "type": "number" },
+                "url": { "$ref": "#/definitions/url" },
+                "axis": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": { "type": "number" },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                },
+                "ratio": { "type": "number", "minimum": 0.5, "maximum": 1.0 },
+                "cache": { "type": "boolean", "default": true },
+                "requirements": {
+                  "oneOf": [
+                    { "type": "string", "minLength": 1 },
+                    { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "properties":{
+                          "type": "object",
+                          "properties":{
+                            "length": { "type": "number" }
+                          }
+                        }
+                      },
+                      "additionalProperties": { "type": "string", "minLength": 1 }
+                    }
+                  ]
+                },
+                "with": {
+                  "type": "object",
+                  "patternProperties": {
+                    "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
+                  },
+                  "additionalProperties": false
+                },
+                "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "cwd": { "type": "string", "minLength": 1 },
+                "showObject": { "type": "string", "minLength": 1 },
+                "method": { "type": "string", "minLength": 1 },
+                "patch": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } },
+                "pythonRequirements": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "javascriptRequirements": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "javascriptVersion": {
+                  "type": ["string", "number"],
+                  "pattern": "^[0-9]+(\\.[0-9]+)*$"
+                },
+                "chili3dVersion": {
+                  "type": ["string", "number"],
+                  "minLength": 1
+                },
+                "dependencies": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "parameters": { "$ref": "#/definitions/shape-parameter"},
+                "render": { "$ref": "#/definitions/render" },
+                "export": { "$ref": "#/definitions/output-section" },
+                "cae": { "$ref": "#/definitions/output-section" },
+                "fea": { "$ref": "#/definitions/cae-analysis" },
+                "cfd": { "$ref": "#/definitions/cae-analysis" },
+                "simulate": { "$ref": "#/definitions/simulate" },
+                "vendor": { "type": "string", "minLength": 1 },
+                "sku": { "type": "string", "minLength": 1 },
+                "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
+                "item_in_sku": {
+                  "description": "Which of the kinds of items that come under one SKU this is, where one SKU is a set of different things (a shaft and the clip that comes with it). Every object sold in the set names the set's 'vendor' and 'sku', and a different 'item_in_sku'; 'count_per_sku' is then how many of this one kind come in one set. Buying enough of every kind is buying the set as many times as the most demanding kind needs, not once per kind.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "manufacturing": {
+                  "type": "object",
+                  "properties": {
+                    "method": {
+                      "type": "string",
+                      "enum": ["additive", "subtractive", "forming", "sheet_metal", "pcbBasic"]
+                    },
+                    "source": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The part that goes into the process, for a method that works on one rather than on stock. Required by 'sheet_metal', where it is the flat piece that is bent -- itself manufactured, and expected to be cut by a subtractive process that gives it its outline and its holes. A reference, resolved against this package like any other."
+                    },
+                    "instructions": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The sketch that says how the process is carried out. Required by 'sheet_metal', where it holds one line per bend, each annotated with its angle, its inner radius and its direction. A reference to a sketch, which may carry parameters -- 'bends;include=BEND_UP,BEND_DOWN' reads the bend layers of a drawing that also holds the outline."
+                    },
+                    "cnc": { "$ref": "#/definitions/subtractive-cnc" },
+                    "drill": { "$ref": "#/definitions/subtractive-drill" },
+                    "laser": { "$ref": "#/definitions/subtractive-laser" },
+                    "cut": { "$ref": "#/definitions/subtractive-cut" },
+                    "diameter": { "$ref": "#/definitions/cam-length", "description": "Shared by every machine named below that reads one: the cutter on a router, the bit in a drill. A laser has none and ignores it" },
+                    "depth": { "$ref": "#/definitions/cam-length", "description": "How far down from the top of the object the cut goes. An object that does not say is cut through" },
+                    "depth_per_pass": { "$ref": "#/definitions/cam-length", "description": "How deep each pass goes" },
+                    "safe_z": { "$ref": "#/definitions/cam-length", "description": "The height rapid moves are made at, above the top of the object" },
+                    "peck": { "$ref": "#/definitions/cam-length", "description": "How deep a drill goes before it comes back out to clear the swarf" },
+                    "kerf": { "$ref": "#/definitions/cam-length", "description": "How wide a cut a beam removes. Only a laser has one" },
+                    "feed": { "$ref": "#/definitions/cam-feed", "description": "The cutting feed rate; a bare number is millimeters per minute" },
+                    "plunge": { "$ref": "#/definitions/cam-feed", "description": "The feed rate of a downward move; the cutting feed where there is none" },
+                    "speed": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }], "description": "The spindle speed in rpm" },
+                    "stepover": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "How far each successive ring of a pocket moves in, as a fraction of the cutter's diameter" },
+                    "power": { "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "minLength": 1 }], "description": "How hard a laser fires. Only a laser has one" },
+                    "operation": { "type": "string", "enum": ["profile", "pocket", "engrave"], "description": "Which side of the outline the cutter runs on" },
+                    "direction": { "type": "string", "enum": ["climb", "conventional"], "description": "Which way round each contour is cut" },
+                    "implementation": { "type": "string", "minLength": 1, "description": "Who produces this route, as '<package>:<file type>'" },
+                    "desc": { "type": "string", "maxLength": 1000 }
+                  },
+                  "required":["method"],
+                  "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "if": { "properties": { "method": { "const": "subtractive" } }, "required": ["method"] },
+                      "then": { "required": ["source"] }
+                    },
+                    {
+                      "if": { "properties": { "method": { "const": "sheet_metal" } }, "required": ["method"] },
+                      "then": { "required": ["source", "instructions"] }
+                    },
+                    {
+                      "description": "A machine and a job describe taking material away. Only 'subtractive' does that, so the keys that say how it is cut are refused everywhere else rather than accepted and never read.",
+                      "if": {
+                        "properties": { "method": { "not": { "const": "subtractive" } } },
+                        "required": ["method"]
+                      },
+                      "then": {
+                        "properties": {
+                          "cnc": false,
+                          "drill": false,
+                          "laser": false,
+                          "cut": false,
+                          "diameter": false,
+                          "depth": false,
+                          "depth_per_pass": false,
+                          "safe_z": false,
+                          "peck": false,
+                          "kerf": false,
+                          "feed": false,
+                          "plunge": false,
+                          "speed": false,
+                          "stepover": false,
+                          "power": false,
+                          "operation": false,
+                          "direction": false,
+                          "implementation": false,
+                          "desc": false
+                        }
+                      }
+                    }
+                  ]
+                },
+                "implements": { "$ref": "#/definitions/implements" },
+                "ports": { "$ref": "#/definitions/ports-section" },
+                "manufacturable": { "type": "boolean" },
+                "tolerance": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "How precisely this part has to be made, in millimetres. Only for the part types that take it -- 'step' and 'kicad' -- whose file may state a tolerance of its own; every other type states this as the 'tolerance' parameter instead. What is declared here is what is used; the file is read only when nothing is."
+                },
+                "unless": { "$ref": "#/definitions/unless" },
+                "connect": { "$ref": "#/definitions/connect" },
+                "software": { "$ref": "#/definitions/software-refs" }
+              },
+              "required": ["type"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "A part built by a package-defined partType (its 'type' references a partType). partType-specific properties are allowed.",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
+                },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "parameters": { "$ref": "#/definitions/shape-parameter" },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "fileHash": { "$ref": "#/definitions/file-hash" },
+                "vendor": { "type": "string", "minLength": 1 },
+                "sku": { "type": "string", "minLength": 1 },
+                "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
+                "item_in_sku": {
+                  "description": "Which of the kinds of items that come under one SKU this is, where one SKU is a set of different things (a shaft and the clip that comes with it). Every object sold in the set names the set's 'vendor' and 'sku', and a different 'item_in_sku'; 'count_per_sku' is then how many of this one kind come in one set. Buying enough of every kind is buying the set as many times as the most demanding kind needs, not once per kind.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "unless": { "$ref": "#/definitions/unless" }
+              },
+              "required": ["type"],
+              "additionalProperties": true
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "assemblies":{
+      "type": ["object", "null"],
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["assy", "step", "urdf", "alias", "enrich"],
+                  "description": "'assy' is an Assembly YAML file, 'step' a STEP assembly, 'urdf' a URDF robot description. A format an engine's plugin package implements is not in this list and is named through that package - 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
+                },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "images": {
+                  "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "fileHash": { "$ref": "#/definitions/file-hash" },
+                "precision": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 5,
+                  "description": "The number of decimal places the placement of each component is rounded to ('step' type only)"
+                },
+                "ignoreCollision": {
+                  "oneOf": [
+                    { "type": "boolean" },
+                    { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                  ],
+                  "default": false,
+                  "description": "Build a URDF link from its visual geometry rather than its collision geometry: true for every link, or a list of the link names it applies to ('urdf' type only)"
+                },
+                "packagePaths": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true,
+                  "description": "Roots to resolve 'package://' mesh references against ('urdf' type only)"
+                },
+                "strict": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Fail on a Gazebo setting that has no PartCAD property, instead of reporting it. URDF outside Gazebo's extension blocks always fails, whatever this says ('urdf' type only)"
+                },
+                "manufacturing": {
+                  "type": "object",
+                  "properties": {
+                    "method": { "type": "string", "enum": ["assy"], "default": "assy" }
+                  },
+                  "required":["method"],
+                  "additionalProperties": false
+                },
+                "source": { "type": "string", "minLength": 1 },
+                "package": { "type": "string", "minLength": 1 },
+                "parameters": { "$ref": "#/definitions/shape-parameter"},
+                "with": {
+                  "type": "object",
+                  "patternProperties": {
+                    "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
+                  },
+                  "additionalProperties": false
+                },
+                "dependencies": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "vendor": { "type": "string", "minLength": 1 },
+                "sku": { "type": "string", "minLength": 1 },
+                "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
+                "item_in_sku": {
+                  "description": "Which of the kinds of items that come under one SKU this is, where one SKU is a set of different things (a shaft and the clip that comes with it). Every object sold in the set names the set's 'vendor' and 'sku', and a different 'item_in_sku'; 'count_per_sku' is then how many of this one kind come in one set. Buying enough of every kind is buying the set as many times as the most demanding kind needs, not once per kind.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "interference": { "$ref": "#/definitions/check-interference" },
+                "connectivity": { "$ref": "#/definitions/check-connectivity" },
+                "render": { "$ref": "#/definitions/render" },
+                "export": { "$ref": "#/definitions/output-section" },
+                "simulate": { "$ref": "#/definitions/simulate" },
+                "manufacturable": { "type": "boolean" },
+                "unless": { "$ref": "#/definitions/unless" },
+                "connect": { "$ref": "#/definitions/connect" },
+                "map": { "$ref": "#/definitions/port-map" },
+                "implements": { "$ref": "#/definitions/implements" },
+                "ports": { "$ref": "#/definitions/ports-section" },
+                "properties": { "$ref": "#/definitions/shape-properties" },
+                "software": { "$ref": "#/definitions/software-refs" }
+              },
+              "required": ["type"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "An assembly read from a third-party file format by a plugin package (its 'type' names an entry of that package's 'import:' section, by full path). The reader's own parameters are allowed.",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
+                },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "fileHash": { "$ref": "#/definitions/file-hash" },
+                "parameters": { "$ref": "#/definitions/shape-parameter"},
+                "dependencies": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "interference": { "$ref": "#/definitions/check-interference" },
+                "connectivity": { "$ref": "#/definitions/check-connectivity" },
+                "render": { "$ref": "#/definitions/render" },
+                "export": { "$ref": "#/definitions/output-section" },
+                "simulate": { "$ref": "#/definitions/simulate" },
+                "manufacturable": { "type": "boolean" },
+                "unless": { "$ref": "#/definitions/unless" },
+                "properties": { "$ref": "#/definitions/shape-properties" },
+                "software": { "$ref": "#/definitions/software-refs" }
+              },
+              "required": ["type"],
+              "additionalProperties": true
+            }
+          ]
+        }
+      }
+    },
+    "scenes": {
+      "type": ["object", "null"],
+      "description": "Scenes: placed arrangements of objects - a workcell, a table, a simulation world - stating where things are and not how they got there. Declared by pointing at the file that holds one, with no assembly object in between",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["assy", "alias", "enrich"],
+                  "description": "'assy' is an Assembly YAML file read as a scene, which is the same format without the 'how' sections. An engine's own scene format is implemented by that engine's plugin package and is named through it - 'sim-gazebo:world' for a Gazebo world (SDFormat), 'sim-mujoco:mjcf' for a MuJoCo model - which is the spelling that resolves it"
+                },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "fileHash": { "$ref": "#/definitions/file-hash" },
+                "ignoreCollision": {
+                  "oneOf": [
+                    { "type": "boolean" },
+                    { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                  ],
+                  "default": false,
+                  "description": "Build a link from its visual geometry rather than its collision geometry: true for every link, or a list of the link names it applies to ('world' type only)"
+                },
+                "modelPaths": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true,
+                  "description": "Roots to resolve 'model://' references against ('world' type only)"
+                },
+                "source": { "type": "string", "minLength": 1 },
+                "package": { "type": "string", "minLength": 1 },
+                "parameters": { "$ref": "#/definitions/shape-parameter"},
+                "with": {
+                  "type": "object",
+                  "patternProperties": {
+                    "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
+                  },
+                  "additionalProperties": false
+                },
+                "dependencies": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "render": { "$ref": "#/definitions/render" },
+                "export": { "$ref": "#/definitions/output-section" },
+                "manufacturable": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "A scene is not a product to be made, so it is not manufacturable unless it says so"
+                },
+                "unless": { "$ref": "#/definitions/unless" },
+                "properties": { "$ref": "#/definitions/shape-properties" }
+              },
+              "required": ["type"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "A scene read from a third-party file format by a plugin package (its 'type' names an entry of that package's 'import:' section, by full path). The reader's own parameters are allowed.",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
+                },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "fileHash": { "$ref": "#/definitions/file-hash" },
+                "parameters": { "$ref": "#/definitions/shape-parameter"},
+                "dependencies": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "render": { "$ref": "#/definitions/render" },
+                "export": { "$ref": "#/definitions/output-section" },
+                "simulate": { "$ref": "#/definitions/simulate" },
+                "manufacturable": { "type": "boolean", "default": false },
+                "unless": { "$ref": "#/definitions/unless" },
+                "properties": { "$ref": "#/definitions/shape-properties" }
+              },
+              "required": ["type"],
+              "additionalProperties": true
+            }
+          ]
+        }
+      }
+    },
+    "sketches": {
+      "type": ["object", "null"],
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["basic", "dxf", "svg", "cadquery", "build123d", "enrich", "alias"] },
+            "desc": { "type": "string", "maxLength": 1000 },
+            "images": {
+              "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true
+            },
+            "unless": { "$ref": "#/definitions/unless" },
+            "path": { "type": "string", "minLength": 1 },
+            "fileFrom": { "type": "string", "enum": ["url"] },
+            "fileUrl": { "$ref": "#/definitions/url" },
+            "fileHash": { "$ref": "#/definitions/file-hash" },
+            "tolerance": { "type": "number", "minimum": 0 },
+            "parameters": { "$ref": "#/definitions/shape-parameter"},
+            "render": { "$ref": "#/definitions/render" },
+            "export": { "$ref": "#/definitions/output-section" },
+            "manufacturing": { "$ref": "#/definitions/sketch-manufacturing" },
+            "include": {
+              "description": "The layers of the drawing to read, as a layer name or a list of them ('dxf' only). Empty or absent means every layer; names are matched case-insensitively, and only one of 'include' and 'exclude' may be given. It is also an object-type parameter of the same name, so a reference may set it instead: 'bends;include=BEND_UP,BEND_DOWN' reads the one sketch two layers at a time, and the parameter outranks this field where both are given.",
+              "oneOf": [
+                { "type": "string", "minLength": 1 },
+                {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 }, "uniqueItems": true
+                },
+                { "type": "null" }
+              ]
+            },
+            "exclude": {
+              "description": "The layers of the drawing not to read, as a layer name or a list of them ('dxf' only). An object-type parameter as well, exactly like 'include' above, and mutually exclusive with it.",
+              "oneOf": [
+                { "type": "string", "minLength": 1 },
+                {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 }, "uniqueItems": true
+                },
+                { "type": "null" }
+              ]
+            },
+            "use-wires": { "type": "boolean", "default": false },
+            "use-faces": { "type": "boolean", "default": false },
+            "ignore-visibility": { "type": "boolean", "default": false },
+            "flip-y": { "type": "boolean", "default": false },
+            "source": { "type": "string", "minLength": 1 },
+            "package": { "type": "string", "minLength": 1 },
+            "circle": {
+              "oneOf": [
+                { "$ref": "#/definitions/sketch-dimension" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "radius": { "$ref": "#/definitions/sketch-dimension" },
+                    "x": { "$ref": "#/definitions/sketch-coordinate" },
+                    "y": { "$ref": "#/definitions/sketch-coordinate" }
+                  },
+                  "required": ["radius"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "square": {
+              "oneOf": [
+                { "$ref": "#/definitions/sketch-dimension" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "side": { "$ref": "#/definitions/sketch-dimension" },
+                    "x": { "$ref": "#/definitions/sketch-coordinate" },
+                    "y": { "$ref": "#/definitions/sketch-coordinate" }
+                  },
+                  "required": ["side", "x", "y"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "rectangle": {
+              "type": "object",
+              "properties": {
+                "side-x": { "$ref": "#/definitions/sketch-dimension" },
+                "side-y": { "$ref": "#/definitions/sketch-dimension" },
+                "x": { "$ref": "#/definitions/sketch-coordinate" },
+                "y": { "$ref": "#/definitions/sketch-coordinate" }
+              },
+              "required": ["side-x", "side-y"],
+              "additionalProperties": false
+            },
+            "slot": { "$ref": "#/definitions/sketch-slot" },
+            "inner": {
+              "description": "The shapes cut out of the outer one. Each may be given once by its own name, or several at a time in the plural list beside it.",
+              "type": "object",
+              "properties": {
+                "circle": { "$ref": "#/definitions/sketch-inner-circle" },
+                "circles": {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/sketch-inner-circle" }
+                },
+                "square": { "$ref": "#/definitions/sketch-inner-square" },
+                "squares": {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/sketch-inner-square" }
+                },
+                "rectangle": { "$ref": "#/definitions/sketch-inner-rectangle" },
+                "rectangles": {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/sketch-inner-rectangle" }
+                },
+                "slot": { "$ref": "#/definitions/sketch-slot" },
+                "slots": {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/sketch-slot" }
+                }
+              },
+              "additionalProperties": false
+            },
+            "with": {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": ["type"],
+          "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
+          "not": { "required": ["include", "exclude"] },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "interfaces": {
+      "type": ["object", "null"],
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "oneOf": [
+            {
+              "description": "The short form of an alias, the same one a sketch and a part have: the interface this one is another name for.",
+              "$ref": "#/definitions/object-reference"
+            },
+            {
+          "type": "object",
+          "properties": {
+            "abstract": { "type": "boolean", "default": false },
+            "desc": { "type": "string", "maxLength": 1000 },
+            "images": {
+              "description": "The images this object was modeled from -- a drawing, a photo, a sketch. Paths relative to the package, shown beside the object in the generated README.",
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true
+            },
+            "unless": { "$ref": "#/definitions/unless" },
+            "path": { "type": "string", "minLength": 1 },
+            "alias": {
+              "description": "This interface is that one, under another name: the same ports under the same names, a drop-in for it, mating with whatever it mates with. What is not declared here is taken from it. How a package that has published a name keeps publishing it after the family behind it becomes parametric - 'm3-thru-3' is 'm-thru;size=3,depth=3' spelled the way it always was.",
+              "$ref": "#/definitions/object-reference"
+            },
+            "leadPort": { "type": "string", "minLength": 1 },
+            "threadStep": {
+              "description": "The axial distance a connection made through this interface advances per full turn, in mm. Inherited by the interfaces that inherit this one, and by the connections that use it.",
+              "oneOf": [
+                { "type": "number", "minimum": 0 },
+                { "$ref": "#/definitions/expression" }
+              ]
+            },
+            "selfScrew": {
+              "description": "Whether this interface cuts its own thread rather than matching one, so that it may be connected to an interface with a different 'threadStep' or none.",
+              "type": "boolean",
+              "default": false
+            },
+            "multiConnect": {
+              "description": "Whether one instance of this interface may take more than one item. A stud takes one brick and a bolt hole takes one bolt, so two items connected to the same port is a mistake worth reporting; a shaft is the counter-example, since several parts sit along it. Inherited by the interfaces that inherit this one, and only silence is inherited over: 'multiConnect: false' on a child overrides a parent that allows many, rather than being skipped as unset.",
+              "type": "boolean"
+            },
+            "inherits":{
+              "type": "object",
+              "patternProperties":{
+                "^(?:[a-zA-Z0-9_/.:;=,-]|%[^%]+%)+$":{
+                  "oneOf": [
+                    { "type": "null" },
+                    { "type": "string", "minLength": 1 },
+                    { "$ref": "#/definitions/OCCTLocation" },
+                    {
+                      "type": "object",
+                      "patternProperties": {
+                        "^[a-zA-Z0-9_/.%-]*$": { "$ref": "#/definitions/OCCTLocation" }
+                      },
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "patternProperties": {
+                        "^[a-zA-Z0-9_/.%-]*$": {
+                          "type": "object",
+                          "properties": {
+                            "sketch": {
+                              "description": "The boundary the ports this instance brings in are drawn with, instead of the one the inherited interface draws them with. The same opening drawn differently - a slotted hole is a through hole that mates as one and keeps its port, and what tells them apart is the outline. Written as a reference like any other, so parameter values go in the name: 'm-slotted;size=4,length=30'.",
+                              "$ref": "#/definitions/object-reference"
+                            },
+                            "location": { "$ref": "#/definitions/OCCTLocation" },
+                            "params": { "type": "object" }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
+            "ports":{
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_/.%-]+$": { "$ref": "#/definitions/port" }
+              },
+              "additionalProperties": false
+            },
+            "mates": { "$ref": "#/definitions/mates" },
+            "parameters": { "$ref": "#/definitions/interface-parameter"},
+            "motion": { "$ref": "#/definitions/motion" },
+            "physics": { "$ref": "#/definitions/physics" }
+          },
+          "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "providers": {
+      "type": ["object", "null"],
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["store", "manufacturer", "enrich"] },
+            "desc": { "type": "string", "maxLength": 1000 },
+            "source": { "type": "string", "minLength": 1 },
+            "package": { "type": "string", "minLength": 1 },
+            "with": {
+              "type": "object",
+              "properties": {
+                "currency": {
+                  "allOf": [{ "type": "string", "minLength": 1 }, { "$ref": "#/definitions/parameter-override" }]
+                },
+                "file": {
+                  "allOf": [{ "$ref": "#/definitions/file_path" }, { "$ref": "#/definitions/parameter-override" }]
+                },
+                "output": {
+                  "allOf": [{ "type": "string", "minLength": 1 }, { "$ref": "#/definitions/parameter-override" }]
+                },
+                "startOffsetWidth": { "type": "number" }
+              },
+              "additionalProperties": false
+            },
+            "abstract": { "type": "boolean", "default": false },
+            "unless": { "$ref": "#/definitions/unless" },
+            "parameters": { "$ref": "#/definitions/shape-parameter"}
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "repositories": {
+      "type": ["object", "null"],
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["basic", "enrich"] },
+            "desc": { "type": "string", "maxLength": 1000 },
+            "source": { "type": "string", "minLength": 1 },
+            "package": { "type": "string", "minLength": 1 },
+            "with": {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
+              },
+              "additionalProperties": false
+            },
+            "unless": { "$ref": "#/definitions/unless" },
+            "parameters": { "$ref": "#/definitions/shape-parameter"}
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "software": {
+      "description": "The software this package ships: firmware images, binaries, disk images. Software is an object of a package like a part is, and unlike a part it has no geometry - it is always a file. Every type is a file; the types beyond 'raw' will name the firmware flashing procedure the file goes through (which tool, which bootloader), never a different way of pointing at it.",
+      "type": ["object", "null"],
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "oneOf": [
+            {
+              "description": "The short form: the path of the file, relative to the package.",
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["raw"],
+                  "default": "raw",
+                  "description": "'raw' is the file handed over as it is, and is the default."
+                },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "version": { "type": ["string", "number"], "minLength": 1 },
+                "url": { "$ref": "#/definitions/url" },
+                "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "fileHash": {
+                  "allOf": [{ "$ref": "#/definitions/file-hash" }],
+                  "description": "As elsewhere. Software is the one place a missing one is reported before anything is built: see the 'Software' lint check."
+                },
+                "unless": { "$ref": "#/definitions/unless" }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "partTypes": {
+      "type": ["object", "null"],
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "type": "object",
+          "properties": {
+            "kind": { "type": "string", "enum": ["wrapper"] },
+            "desc": { "type": "string", "maxLength": 1000 },
+            "unless": { "$ref": "#/definitions/unless" },
+            "path": { "type": "string", "minLength": 1 },
+            "pythonRequirements": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

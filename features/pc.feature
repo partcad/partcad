@@ -23,7 +23,7 @@ Feature: `pc` command
     # TODO-61: Due to different terminal size in CI' (YAML file or directory with 'partcad.yaml')' is wrapped to the next line
     And STDOUT should contain "Specify the package path"
     And STDOUT should contain "Create a new PartCAD package in the current directory "
-    And STDOUT should contain "Download and set up all imported packages "
+    And STDOUT should contain "Download everything the package needs to be built."
     And STDOUT should contain "List components"
 
   @pc-verbose @pc-status

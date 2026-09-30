@@ -8,15 +8,60 @@ on:
     tags:
       - "**"
 
+# `contents: write` is what attaches the wheels, the bundles and the IDE to the
+# GitHub release. `actions: read` is not for anything this workflow does itself:
+# a called workflow cannot be granted a scope the caller does not hold, and
+# "build-ide-standalone.yml" declares `actions: read` so its "build" job can
+# download the artifacts of *another* run. Naming any permission here drops
+# every unnamed one to `none`, so leaving this out does not merely narrow the
+# token -- it makes the whole run fail to start, before a single job, with no
+# failed job to point at. That is what `startup_failure` on every tag from
+# 0.7.185 to 0.7.193 was: nine releases that never built or published.
 permissions:
   contents: write
+  actions: read
 
 jobs:
   # The standalone bundles: the same tools packaged with their own Python
-  # interpreter, for users who have none. They are attached to the same GitHub
-  # release as the wheels, which is where "install.sh" downloads them from.
+  # interpreter, for users who have none. One per supported OS version, all
+  # attached to the same GitHub release as the wheels, which is where
+  # "install.sh" downloads them from.
+  #
+  # That workflow also packs the Linux bundles as snaps. Those are deliberately
+  # NOT part of this release: publishing them needs Snap Store credentials and,
+  # because the snap is classic, a manual store review. Until that exists they
+  # stay build artifacts of the "Standalone" workflow, and nothing here
+  # downloads or uploads them.
   build-standalone:
     uses: ./.github/workflows/build-standalone.yml
+
+  # The PartCAD IDE: the editor with the PartCAD extension and the command line
+  # bundles above inside it, attached to the same release. It waits for the
+  # bundles and is told they are already here -- a called workflow shares this
+  # run's artifacts, so it downloads what the job above produced. This is the
+  # only place that says so: on every other trigger the IDE workflow finds the
+  # sibling "Standalone" run for the commit instead of building anything.
+  build-ide:
+    needs: build-standalone
+    uses: ./.github/workflows/build-ide-standalone.yml
+    with:
+      tools_in_this_run: true
+
+  # The VS Code extension: one ".vsix", built once, attached to the same release.
+  # Independent of everything above, and platform-independent now that the
+  # package has no compiled content in it -- it is a JSON-RPC client, so the one
+  # built here is the one every platform gets.
+  build-vscode-extension:
+    uses: ./.github/workflows/vsix.yml
+
+  # The Claude Code plugin: one archive, attached to the same release, and the
+  # same tree pushed to the "plugin-dist" branch by the last job below. Both
+  # carry this release's version -- "dev-tools/bumpversion.toml" moves the
+  # plugin manifest with everything else -- so there is no separate plugin
+  # release to remember. There used to be, on a "pc--v*" tag of its own; it was
+  # never once pushed, which is why the plugin still said 0.1.0.
+  build-claude-plugin:
+    uses: ./.github/workflows/plugin.yml
 
   # Keep the "build" job identical to "python-build.yml".
   # TODO(clairbee): include "python-build.yml" instead
@@ -56,37 +101,65 @@ jobs:
           mkdir .venv
           python -m venv .venv/build
           (. .venv/build/${{ env.BIN_DIR }}/activate && python -m pip install --upgrade pip build && deactivate)
-          python -m venv .venv/build-cli
-          (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install --upgrade pip build && deactivate)
           python -m venv .venv/install
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --upgrade pip build && deactivate)
-          sudo apt install --yes libcairo2-dev python3-dev
+          # "apt-get update" first, and it is not optional. The runner image
+          # ships an apt index that is days old, and Ubuntu's archive keeps only
+          # the current build of a package: the moment one of these -- or, as in
+          # 0.8.32, something they depend on -- is rebuilt, the stale index names
+          # a .deb that is no longer there and the install dies on a 404.
+          #
+          # That is what left 0.8.32 unreleased. This job is what "publish-to-pypi"
+          # needs first, so one 404 on "libbz2-dev" skipped the publish, the
+          # release, and the plugin marketplace behind it, and the version that
+          # went out was the previous one. Every other "apt-get install" in this
+          # repository already updates first; this was the one that did not.
+          sudo apt-get update
+          sudo apt-get install --yes libcairo2-dev python3-dev
+      # Two distributions: the `partcad` wheel, and the `partcad-cli`
+      # compatibility shim that depends on it. This used to be five, built in
+      # dependency order because each pinned the ones below it at `==` and none
+      # of them was on PyPI; there is nothing to order now.
       - name: Test building and packaging
         run: |
-          (. .venv/build/${{ env.BIN_DIR }}/activate && cd partcad && python -m build && cd .. && deactivate)
-          (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install -r partcad/requirements.txt && deactivate)
-          (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=partcad/dist partcad && deactivate)
-          cp README.md partcad-cli
-          (. .venv/build-cli/${{ env.BIN_DIR }}/activate && cd partcad-cli && python -m build && cd .. && deactivate)
+          (. .venv/build/${{ env.BIN_DIR }}/activate && python -m build && deactivate)
+          # The shim states `license = {file = "LICENSE.txt"}`, so it needs the
+          # repository's copy the way each distribution used to.
+          cp LICENSE.txt dev-tools/shim
+          (. .venv/build/${{ env.BIN_DIR }}/activate && cd dev-tools/shim && python -m build && cd ../.. && deactivate)
       - name: Test installation
         run: |
-          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install -r partcad/requirements.txt     && deactivate)
-          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=partcad/dist     partcad && deactivate)
-          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install -r partcad-cli/requirements.txt && deactivate)
-          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=partcad-cli/dist partcad-cli && deactivate)
+          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --find-links=dist partcad && deactivate)
+          # Every package the one wheel ships, and every entry point it declares.
+          # A wheel that builds but is missing one of them is the failure this
+          # catches -- `packages.find` sees whatever is under `src/`.
+          (. .venv/install/${{ env.BIN_DIR }}/activate && python -c "
+          import partcad, partcad_cli, partcad_client, partcad_utils, partcad_service_json_rpc, partcad_ide_client
+          " && deactivate)
+          # And the data it ships, not only the code: this is the wheel that
+          # gets published, and `pc init` installs the AI agent skills out of
+          # it. See the same check in "build.yml".
+          (. .venv/install/${{ env.BIN_DIR }}/activate && python -c "
+          import partcad.ai_agents as ai_agents
+          assert ai_agents.available_skills(), 'the wheel carries no AI agent skills'
+          assert ai_agents.plugin_manifest()['name'], 'the wheel carries no plugin manifest'
+          " && deactivate)
+          (. .venv/install/${{ env.BIN_DIR }}/activate && pc --no-ansi version && partcad-json-rpc --help >/dev/null && deactivate)
+          # The shim brings the wheel in, and owns nothing of its own.
+          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=dist --find-links=dev-tools/shim/dist partcad-cli && deactivate)
       # Upload artifact from the selected OS/Python version combination only
       - name: Upload "partcad"
         if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.13' }}
         uses: actions/upload-artifact@v7
         with:
           name: python-package-distributions
-          path: partcad/dist/
+          path: dist/
       - name: Upload "partcad-cli"
         if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.13' }}
         uses: actions/upload-artifact@v7
         with:
           name: python-package-distributions-cli
-          path: partcad-cli/dist/
+          path: dev-tools/shim/dist/
 
   publish-to-pypi:
     name: Publish to PyPI
@@ -95,23 +168,49 @@ jobs:
       # Deliberately blocking: a release that carries the wheels but not the
       # bundles is a release "install.sh" cannot install.
       - build-standalone
+      # Blocking for the same reason: "install.sh --ide" installs from this
+      # release too.
+      - build-ide
+      # Blocking too, though nothing installs the extension automatically: a
+      # release that is missing an asset the documentation points at is a
+      # release someone has to go and fix by hand.
+      - build-vscode-extension
+      # And the plugin, for that same reason: the installation instructions
+      # name the archive on the release, so a release without it is one the
+      # documentation lies about.
+      - build-claude-plugin
     runs-on: ubuntu-24.04
     environment:
       name: pypi
 
     steps:
+      # Before the downloads: "actions/checkout" cleans the workspace, and the
+      # artifacts are downloaded into it. This job needs the checkout only for
+      # "dev-tools/release/platforms-manifest.sh".
+      #
+      # Which is why every download below lands under "release/", a directory
+      # this repository does not have: a download path that names one it *does*
+      # have merges the artifacts into the source tree instead of standing
+      # beside it. "path: ide" did exactly that in 0.8.25 -- the IDE archives
+      # unpacked next to "ide/standalone" and "ide/vscode", and the upload,
+      # which globbed the directory, tried to send the IDE's own source tree to
+      # the release and died on "is a directory" halfway through.
+      - uses: actions/checkout@v7
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
-      - name: Download lib dists
+      # Both into "dist", which is what gets uploaded to PyPI as a whole: the
+      # `partcad` wheel and sdist, and the `partcad-cli` shim beside them.
+      - name: Download the wheel
         uses: actions/download-artifact@v8
         with:
           name: python-package-distributions
           path: dist
 
-      - name: Download cli dists
+      - name: Download the partcad-cli shim
         uses: actions/download-artifact@v8
         with:
           name: python-package-distributions-cli
@@ -123,7 +222,77 @@ jobs:
         with:
           pattern: partcad-standalone-*
           merge-multiple: true
-          path: standalone
+          path: release/standalone
+
+      - name: Download the IDE
+        uses: actions/download-artifact@v8
+        with:
+          pattern: partcad-ide-*
+          merge-multiple: true
+          path: release/ide
+
+      # By name, not by pattern: there is exactly one of these, and the two
+      # patterns above already claim every other "partcad-*" artifact this run
+      # produces.
+      - name: Download the VS Code extension
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-vsix
+          path: release/vsix
+
+      # By name for the same reason, and into a directory of its own: the
+      # marketplace tree goes to a branch rather than to the release, so only
+      # the archive is downloaded here.
+      - name: Download the Claude Code plugin
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-plugin
+          path: release/plugin
+      # The version this run is releasing, read from the tree it checked out.
+      # `bump-my-version` keeps it in "dev-tools/bumpversion.toml" and names the
+      # tag after exactly that value (`tag_name = "{new_version}"` there), so the
+      # tree and the tag cannot disagree unless somebody moved one by hand.
+      #
+      # This used to be `git describe --abbrev=0` in a clone made further down,
+      # after the manifest. `git clone` checks out the *default* branch --
+      # `devel` -- so what it described was the newest tag on `devel`, not the
+      # commit being released. Every release so far was named correctly only
+      # because `main` was fast-forwarded to `devel`'s tip in the same minute;
+      # promoting `main` to anything older would have published that commit's
+      # archives, and its wheel, under `devel`'s version.
+      #
+      # Not gated on `main`: a tag build is the rehearsal of a release, so it
+      # checks the naming too, and the checks below pin their globs to this.
+      #
+      # The distributions are checked against it because `skip-existing` on the
+      # PyPI upload below would quietly do nothing, rather than fail, if "dist"
+      # held a version that is already published.
+      - name: Determine the release version
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^current_version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+            dev-tools/bumpversion.toml)"
+          if [ -z "${version}" ]; then
+            echo "::error::no current_version in dev-tools/bumpversion.toml"
+            exit 1
+          fi
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ] && [ "${GITHUB_REF_NAME:-}" != "${version}" ]; then
+            echo "::error::this run is tagged ${GITHUB_REF_NAME:-} but its tree is ${version}"
+            exit 1
+          fi
+          # The four files "dist" holds: the wheel and sdist of each of the two
+          # distributions, all four named after the version that built them.
+          for name in \
+            "partcad-${version}-py3-none-any.whl" "partcad-${version}.tar.gz" \
+            "partcad_cli-${version}-py3-none-any.whl" "partcad_cli-${version}.tar.gz"; do
+            if [ ! -f "dist/${name}" ]; then
+              echo "::error::dist/${name} is missing -- this run mixed the artifacts of two builds"
+              ls -l dist
+              exit 1
+            fi
+          done
+          echo "RELEASE_VERSION=${version}" >> "${GITHUB_ENV}"
+          echo "Releasing ${version}."
 
       # "install.sh" derives an asset name from `uname` and fails for the user
       # if that asset is not on the release. Downloading artifacts does not fail
@@ -132,10 +301,47 @@ jobs:
       - name: Check the standalone bundles are complete
         run: |
           missing=0
-          # The platforms built by "build-standalone.yml".
-          for platform in linux-x86_64 macos-arm64 windows-x86_64; do
-            archive=$(find standalone -type f -name "partcad-*-${platform}.*" ! -name "*.sha256")
-            checksum=$(find standalone -type f -name "partcad-*-${platform}.*.sha256")
+          # Nothing but the three download directories, and nothing but files in
+          # them. A "release/" that grew a directory would mean the checkout and
+          # the downloads had collided again, and every check below would be
+          # looking at source files -- so say so here, before the release
+          # exists, rather than by publishing the wrong assets.
+          stray="$(find release -mindepth 1 -type d \
+            ! -path release/standalone ! -path release/ide ! -path release/vsix \
+            ! -path release/plugin)"
+          if [ -n "${stray}" ]; then
+            echo "::error::unexpected directories under release/: $(echo ${stray})"
+            missing=1
+          fi
+          # The platforms built by "build-standalone.yml". Keep in sync with the
+          # matrix there: a release missing one of these is a release some
+          # machine cannot install, and the manifest generated below would
+          # faithfully describe the gap rather than close it.
+          #
+          # PLATFORMS_CORE and PLATFORMS_DEEP together, because a release is
+          # always a deep run: this workflow runs on a push, and
+          # ".github/actions/test-depth" gives every push the full matrix. The
+          # deep-only platforms -- both Ubuntu 22.04 images and macos-15-x86_64 --
+          # are the ones a pull request skips, not ones a release may go without.
+          #
+          # One macOS build per architecture, both frozen on macOS 15: a bundle
+          # runs on the OS version it was built on and everything newer, so these
+          # two cover macOS 15 and 26 between them. "build-standalone.yml" says
+          # why, and installs each of them on both generations to prove it.
+          #
+          # By version, not by "partcad-*": an archive left over from another
+          # build satisfies the loose glob, and the release would then carry two
+          # versions -- which only "platforms-manifest.sh" would notice, after
+          # the assets were already checked.
+          for platform in \
+            ubuntu-22.04-x86_64 ubuntu-22.04-arm64 \
+            ubuntu-24.04-x86_64 ubuntu-24.04-arm64 \
+            macos-15-arm64 macos-15-x86_64 \
+            windows-2022-x86_64; do
+            archive=$(find release/standalone -type f \
+              -name "partcad-${RELEASE_VERSION}-${platform}.*" ! -name "*.sha256")
+            checksum=$(find release/standalone -type f \
+              -name "partcad-${RELEASE_VERSION}-${platform}.*.sha256")
             if [ -z "${archive}" ] || [ -z "${checksum}" ]; then
               echo "::error::no standalone bundle for ${platform}"
               missing=1
@@ -143,29 +349,270 @@ jobs:
               echo "${archive} $(stat -c%s "${archive}") bytes"
             fi
           done
+          # And the same for the IDE, which "install.sh --ide" downloads by a
+          # name derived the same way. There is more than one file per platform
+          # here -- the archive, and the .dmg or the installer beside it -- so
+          # this checks for the archive by name and then lists what came with it.
+          for platform in linux-x86_64 macos-arm64 macos-x86_64 windows-x86_64; do
+            case "${platform}" in
+            windows-*) extension="zip" ;;
+            *) extension="tar.gz" ;;
+            esac
+            archive="$(find release/ide -type f \
+              -name "partcad-ide-${RELEASE_VERSION}-${platform}.${extension}" | head -n 1)"
+            if [ -z "${archive}" ] || [ ! -f "${archive}.sha256" ]; then
+              echo "::error::no IDE archive for ${platform}"
+              missing=1
+            else
+              find release/ide -type f -name "partcad-ide-${RELEASE_VERSION}-${platform}*" \
+                ! -name "*.sha256" \
+                -printf "%p %s bytes\n"
+            fi
+          done
+          # And the extension, which is two packages: the extension itself and
+          # the "OpenVMP.partcad" transition shim published beside it. Neither
+          # has a platform in its name -- and the upload below sends the files
+          # it finds, so an extension that was never built would not fail
+          # there: it would simply be absent from the release, for somebody to
+          # notice later. Each is checked by its own name rather than by one
+          # "partcad-*.vsix" glob, which the shim also matches: that would
+          # report a release carrying only the shim as complete.
+          #
+          # By version, like the archives above. "vsix.yml" names both packages
+          # after the version in "ide/vscode/package.json", so this is also what
+          # now catches that file lagging behind the bump -- the drift the shim
+          # stopped stating a version of its own to avoid.
+          for package in "partcad" "partcad-shim"; do
+            vsix="$(find release/vsix -type f -name "${package}-${RELEASE_VERSION}.vsix" | head -n 1)"
+            if [ -z "${vsix}" ]; then
+              echo "::error::no ${package} VS Code extension package"
+              missing=1
+            else
+              echo "${vsix} $(stat -c%s "${vsix}") bytes"
+            fi
+          done
+          # And the plugin. Named after the version like everything else here,
+          # so the documented `--plugin-url .../pc-<version>.zip` resolves -- by
+          # that version rather than "pc-*.zip", which is what would catch
+          # "plugin.json" lagging behind the bump the way it sat at 0.1.0.
+          plugin="$(find release/plugin -type f -name "pc-${RELEASE_VERSION}.zip" | head -n 1)"
+          if [ -z "${plugin}" ]; then
+            echo "::error::no Claude Code plugin archive"
+            missing=1
+          else
+            echo "${plugin} $(stat -c%s "${plugin}") bytes"
+          fi
           exit "${missing}"
 
-      - name: Determine the release tag
-        if: github.ref == 'refs/heads/main'
+      # What the release carries, written down for the clients that download
+      # from it. A bundle is named after the OS version it was frozen on, and
+      # which of those a release has is not something a client can work out from
+      # its own machine -- "pc upgrade", the VS Code extension and the FreeCAD
+      # addon each used to guess "<os>-<arch>" and now read this instead. It is
+      # generated from the archives about to be uploaded, so it cannot describe
+      # a release that is not the one being made.
+      - name: Build the release manifest
         run: |
-          git clone https://github.com/partcad/partcad partcad-git;
-          cd partcad-git;
-          echo "MERGED_TAG=$(git describe --abbrev=0)" >> "${GITHUB_ENV}"
+          dev-tools/release/platforms-manifest.sh \
+            --bundles release/standalone --ide release/ide --output release/platforms.json
+          cat release/platforms.json
+          # Valid JSON, and the version the archives carry -- which the script
+          # takes from the archive names and refuses to write if they disagree
+          # with each other. This is the other half of that: they have to agree
+          # with the tree this job checked out, and so with the wheel.
+          python3 -c '
+          import json, os, sys
+          manifest = json.load(open("release/platforms.json"))
+          want = os.environ["RELEASE_VERSION"]
+          if manifest["version"] != want:
+              sys.exit("::error::platforms.json says %s, but this run is releasing %s" % (manifest["version"], want))
+          '
 
       - name: Create GitHub Release
         if: github.ref == 'refs/heads/main'
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ env.RELEASE_VERSION }}
         run: |
-          gh release create '${{ env.MERGED_TAG }}' --repo '${{ github.repository }}' --notes "";
-          gh release upload '${{ env.MERGED_TAG }}' dist/** --repo '${{ github.repository }}'
-          gh release upload '${{ env.MERGED_TAG }}' standalone/** --repo '${{ github.repository }}'
+          # The tag has to be the one on the commit this run built. `gh release
+          # create` does not check: given a tag that does not exist it makes
+          # one, on the repository's default branch -- `devel` -- and publishes
+          # these archives against a tree nobody built. So resolve it first and
+          # refuse if it names anything else. "/commits/<ref>" resolves a tag,
+          # annotated ones included, to the commit it points at.
+          tagged="$(gh api "repos/${REPO}/commits/${TAG}" --jq .sha || true)"
+          if [ -z "${tagged}" ]; then
+            echo "::error::cannot resolve tag ${TAG} -- see the error above; a 404 means the"
+            echo "::error::version bump that creates the tag never landed on this commit"
+            exit 1
+          fi
+          if [ "${tagged}" != "${GITHUB_SHA}" ]; then
+            echo "::error::tag ${TAG} is on ${tagged}, not on ${GITHUB_SHA}, which is what this run built"
+            exit 1
+          fi
+          # A draft until every asset is on it. "pc upgrade", the VS Code
+          # extension and the FreeCAD addon all resolve what to install through
+          # "/releases/latest", which skips drafts -- so a run that dies partway
+          # leaves the previous, complete release as the latest one, instead of
+          # one that is missing "platforms.json" and half its archives and that
+          # every client then fails on.
+          #
+          # And a draft again if it is already there, rather than created:
+          # the run that gets re-run is the one that failed after creating the
+          # release, so "a release with that tag already exists" used to stop
+          # the re-run before it could finish the uploads it was re-run for.
+          # One that got as far as publishing has to go back to being a draft
+          # before its assets are replaced -- "--clobber" deletes each one
+          # before it sends it again, and on a published release that is a
+          # stretch of minutes in which clients resolve this release and find
+          # the archive they came for gone. Drafted first, they resolve the
+          # release before it instead, which is a complete one, and a re-run
+          # that fails again leaves them there rather than on this.
+          if gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
+            gh release edit "${TAG}" --repo "${REPO}" --draft=true
+          else
+            gh release create "${TAG}" --repo "${REPO}" --draft --notes ""
+          fi
+          # Files, never a glob: "dist/**" and its siblings are `bash` globs
+          # that match directories as readily as files, and `gh` fails on a
+          # directory ("is a directory") -- after the release exists, with the
+          # assets it had already started uploading on it and the rest not.
+          # "--clobber" so that a re-run replaces what a failed run left behind
+          # rather than failing on it.
+          find dist release -type f -print0 |
+            xargs -0 gh release upload "${TAG}" --clobber --repo "${REPO}"
+          gh release edit "${TAG}" --repo "${REPO}" --draft=false
 
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          # One call uploads everything in "dist". Without this, a call that
+          # fails partway leaves one distribution published and the other not,
+          # and the retry dies on "File already exists" rather than finishing
+          # the job.
+          skip-existing: true
           repository-url:
             "${{ github.ref == 'refs/heads/main' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/'
             }}"
           user: __token__
           password: "${{ github.ref == 'refs/heads/main' &&  secrets.PYPI_KEY || secrets.TEST_PYPI_KEY }}"
+
+  # The rolling marketplace branch: this release's plugin, symlink-free, at the
+  # root of a branch, which is what `/plugin marketplace add
+  # partcad/partcad@plugin-dist` reads. It is the "latest" everyone who
+  # installed the plugin that way follows.
+  #
+  # Last, and only on "main", for the reason the release is a draft until its
+  # assets are on it: this pointer should move to a release that exists. A run
+  # that dies before this leaves users on the previous plugin, which is a
+  # complete one.
+  publish-plugin-dist:
+    name: Publish the plugin marketplace
+    needs: publish-to-pypi
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    # Serialize this job across runs, so that two releases going out close
+    # together cannot interleave their force-pushes. Not "cancel-in-progress":
+    # cancelling a publish mid-push is the thing to avoid, and the queue is one
+    # deep in practice. This does not cover a *re-run* of an older release
+    # weeks later -- nothing concurrent about that -- which is what the version
+    # check below is for. Job-level, not workflow-level, deliberately: a group
+    # over the whole of "deploy.yml" would queue or cancel the builds and the
+    # PyPI upload as well, and this job is the only one here that overwrites
+    # something that already exists.
+    concurrency:
+      group: publish-plugin-dist
+      cancel-in-progress: false
+
+    steps:
+      # No checkout: the branch this pushes shares no history with the source
+      # tree, and the artifact is the whole of what goes on it.
+      - name: Download the marketplace tree
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-plugin-dist
+          path: marketplace
+
+      - name: Check the marketplace is complete
+        run: |
+          missing=0
+          # The catalog is under a hidden directory, and hidden files are
+          # excluded from an artifact unless asked for. A tree that lost it
+          # still looks plausible -- a "pc" directory with every skill in it --
+          # and installs as nothing, because there is no marketplace to add.
+          if [ ! -f marketplace/.claude-plugin/marketplace.json ]; then
+            echo "::error::no .claude-plugin/marketplace.json in the artifact"
+            missing=1
+          fi
+          if find marketplace -type l | grep -q .; then
+            echo "::error::the tree contains symlinks; it must not"
+            find marketplace -type l
+            missing=1
+          fi
+          if ! find marketplace/pc/skills -name SKILL.md -print -quit | grep -q .; then
+            echo "::error::no skills in the plugin"
+            missing=1
+          fi
+          exit "${missing}"
+
+      - name: Push it to "plugin-dist"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+            marketplace/pc/.claude-plugin/plugin.json | head -n 1)"
+          if [ -z "${version}" ]; then
+            echo "::error::no version in the plugin manifest"
+            exit 1
+          fi
+
+          # Never move the branch backwards. The push below is a force-push, so
+          # on its own it would happily restore an older plugin: re-running the
+          # Deployment run of an earlier release -- which is exactly how this
+          # branch is republished by hand -- would take "plugin-dist" back to
+          # that release's contents and leave every rolling install downgraded,
+          # silently. The concurrency group above orders concurrent runs; this
+          # is what stops an old one whenever it runs.
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          # A shallow fetch into a scratch repository, because there is no
+          # checkout here and "git archive --remote" does not work against
+          # GitHub over https. An absent branch -- the first publish -- fetches
+          # nothing and leaves "published" empty, which is not an error.
+          probe="$(mktemp -d)"
+          published="$(
+            git -C "${probe}" init -q &&
+            git -C "${probe}" fetch -q --depth 1 "${remote}" plugin-dist 2>/dev/null &&
+            git -C "${probe}" show FETCH_HEAD:pc/.claude-plugin/plugin.json 2>/dev/null |
+              sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1 || true
+          )"
+          rm -rf "${probe}"
+          if [ -n "${published}" ] && [ "${published}" != "${version}" ]; then
+            newest="$(printf '%s\n%s\n' "${published}" "${version}" | sort -V | tail -n 1)"
+            if [ "${newest}" = "${published}" ]; then
+              echo "::error::'plugin-dist' carries ${published}; refusing to publish ${version} over it."
+              echo "::error::Re-run the Deployment for the newest release instead, or delete the branch to reset it."
+              exit 1
+            fi
+          fi
+          echo "Publishing ${version} over ${published:-an empty branch}."
+
+          cd marketplace
+          # A fresh history every time, force-pushed. The branch is a pointer to
+          # one state, not a record of how it got there -- the repository's own
+          # history is that -- and an orphan commit keeps it from growing a
+          # copy of every release anyone ever clones.
+          git init -q
+          git checkout -q -b plugin-dist
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -qm "PartCAD ${version}"
+          git push -f \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            plugin-dist
+          echo "Published the 'pc' plugin ${version} to the 'plugin-dist' branch."

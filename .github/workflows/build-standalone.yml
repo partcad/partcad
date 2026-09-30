@@ -5,61 +5,482 @@ on:
   workflow_dispatch:
   # Called by "deploy.yml", which uploads the bundles to the GitHub release.
   workflow_call:
+    inputs:
+      # Not a knob, and nothing passes it. It exists so that the `concurrency`
+      # group below can tell a called instance of this workflow from an
+      # independent one -- which nothing else in the expression context can.
+      #
+      # `github.workflow` looks like the discriminator and is the wrong one:
+      # inside a called workflow the whole `github` context is the *caller's*,
+      # so it reads "IDE" or "Deployment" here, never "Standalone". (Same trap
+      # as `github.event_name`, which reads "push" on the release path rather
+      # than "workflow_call" -- "build-ide-standalone.yml" says so too.) The
+      # `inputs` context, by contrast, exists only under `workflow_call` and
+      # `workflow_dispatch`, and this workflow declares no `workflow_dispatch`
+      # inputs -- so `inputs.called` is null on every trigger except a call,
+      # and non-null on a call whether or not the caller passed anything.
+      called:
+        description: >-
+          Reserved. Do not pass it: its presence, not its value, is what marks
+          an instance of this workflow that another workflow called.
+        type: boolean
+        default: true
   merge_group:
   # Freezing pulls ~500MB of OpenCASCADE per runner, so this does not run on
-  # every change: only on the ones that can change what is frozen. The two
-  # lists are duplicated because GitHub Actions does not support YAML anchors.
-  # "main" is absent on purpose: a push there runs "deploy.yml", which calls
-  # this workflow itself. Listing it here would build everything twice.
+  # every change: only on the ones that can change what is frozen, and on
+  # "devel" only once per version.
+  #
+  # "main" is absent on purpose: a push there runs "deploy.yml", which calls this
+  # workflow itself. Listing it here would build everything twice.
+  #
+  # No filtering of any kind sits on this trigger. What governs a push is the
+  # "set-matrix" gate below -- only a commit whose message starts with "Version
+  # updated" builds anything -- which is what "test.yml", "build.yml" and
+  # "test-dev.yml" have always done and what this workflow did not. Every other
+  # push to "devel" is followed by a bump within minutes ("version-bump.yml"
+  # runs on all of them), and the bump carries the source change that preceded
+  # it, so the bundles are frozen once, from the commit a release is cut from,
+  # and are stamped with that version. They used to be frozen twice: once for
+  # the merge, carrying the version it replaced, and again for the bump.
+  #
+  # The "paths:" list that used to be here cannot come back, not even as a
+  # narrowing filter in front of that gate. A bump happens to touch
+  # "pyproject.toml" and "src/**", so it would pass today; the day
+  # "dev-tools/bumpversion.toml" stops naming a file on such a list, nothing is
+  # ever frozen on "devel" again and nothing says so. One gate, in one place,
+  # that a reader can see the whole of.
   push:
     branches: ["devel"]
-    paths:
-      - "dev-tools/pyinstaller/**"
-      - "install.sh"
-      - ".github/workflows/build-standalone.yml"
-      - "partcad/src/**"
-      - "partcad-cli/src/**"
-      - "partcad/requirements*.txt"
-      - "partcad-cli/requirements*.txt"
+  # A pull request carries no "paths:" filter either, and that is not the same
+  # as running on everything -- the filtering moved into the "build" job below,
+  # where the merge queue obeys it too.
+  #
+  # It had to move. "merge_group" supports no "paths:" filter at all: GitHub
+  # filters that event on branches only. So the list this workflow used to carry
+  # governed the pull request and then stopped governing anything the moment the
+  # same commit entered the queue, where this workflow froze four bundles for a
+  # change to a README. The second reason is required checks: a workflow skipped
+  # by a "paths:" filter creates no check run, and a required check that is never
+  # created leaves a pull request waiting forever, while a job skipped by an
+  # "if:" reports "skipped", which counts as passing.
   pull_request:
     branches: ["main", "devel"]
-    paths:
-      - "dev-tools/pyinstaller/**"
-      - "install.sh"
-      - ".github/workflows/build-standalone.yml"
-      - "partcad/src/**"
-      - "partcad-cli/src/**"
-      - "partcad/requirements*.txt"
-      - "partcad-cli/requirements*.txt"
 
 permissions:
   contents: read
 
+# One build per branch, or per pull request, and a new push supersedes the one
+# in flight. That is the plain half of the group. The suffix is the other half,
+# and it is not cosmetic.
+#
+# Being called used to be fatal here. `github.workflow` is the *caller's*
+# workflow name inside a called workflow, so an instance called by the "IDE"
+# workflow computed the group "IDE-refs/heads/devel" -- byte for byte the group
+# the IDE run that called it was already holding. `cancel-in-progress` then did
+# exactly what it was told. Every "IDE" run died that way, on devel and on
+# every pull request, in well under a minute and with no failed job to point
+# at: the called workflow was cancelled before it started a single one.
+#
+# Appending the run id when, and only when, an `inputs` context exists closes
+# both halves of that. A called instance can no longer share a group with the
+# run that called it, because the caller's own group carries no such suffix;
+# and it can no longer share one with any other instance, called or
+# independent, because no two runs share a run id. Independent runs keep the
+# plain group unchanged, so a second push to a branch still cancels the build
+# in flight -- which is why the suffix is conditional rather than always there.
+#
+# Note which way round the two branches go. `a && b || c` is the only
+# conditional an expression has, and it is not a ternary: `&&` yields the first
+# falsy operand and `||` the first truthy one, so a *falsy* `b` falls through to
+# `c` and the condition stops meaning anything at all. An empty string is falsy.
+# Written the other way -- `== 'null' && '' || format(...)` -- this would append
+# the suffix to every run, independent ones included, and no push would ever
+# supersede the build in flight again. The non-empty half has to be the half the
+# condition selects.
+#
+# A third case now sits between them: a version bump, keyed by commit the way
+# "test.yml", "build.yml" and "build-ide-standalone.yml" key theirs. The bundles
+# a bump produces are that version's, and the release is cut from that commit --
+# so the next bump superseding this run does not replace its artifacts, it
+# removes them. Runs 490 through 494 were cancelled exactly that way on
+# 2026-09-01, leaving 0.8.28 through 0.8.31 with no bundles built on "devel" at
+# all.
+#
+# Three cases, chained left to right, and the order is the precedence: a called
+# instance is a called instance whatever its commit message says, so it has to
+# be tested first. The chain reads `A && B || C && D || ''` -- `&&` yields the
+# first falsy operand, `||` the first truthy one, so a false `A` falls through
+# to `C && D` and a false `C` to the empty string. Same trap as the note above:
+# every value that is *selected* has to be non-empty, or the chain runs on past
+# it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ toJSON(inputs.called) != 'null' && format('-called-{0}', github.run_id) || startsWith(github.event.head_commit.message, 'Version updated') && format('-{0}', github.sha) || '' }}
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
+# One bundle per supported OS version, not one per operating system. A frozen
+# bundle links against the C library and system frameworks of the machine that
+# froze it, so it runs there and on anything newer, and on nothing older -- a
+# single "linux" build would silently mean "the newest Linux we happened to
+# build on". Every image is pinned for the same reason: "*-latest" moves, and an
+# artifact name that moves with it is a contract nobody can rely on.
+#
+# This is the list. "install.sh" and the other clients no longer keep one --
+# they read "platforms.json", which "deploy.yml" generates from the archives
+# these jobs produce -- so what has to agree with it is short: the platform loop
+# in the release check in "deploy.yml", which is what refuses a release with a
+# platform missing, and IDE_CORE/IDE_DEEP in "build-ide-standalone.yml", which
+# name the bundle that goes inside each IDE. Both consume these ids; a name that
+# is wrong in either is a job waiting for an artifact nothing uploaded. The
+# EXAMPLES_* lists below name them too, and those are checked in "Set matrix".
+#
+# ubuntu-26.04 (and -arm) are absent on purpose: still preview images, not
+# covered by the Actions SLA. See the note in test.yml.
+#
+# macOS is the one operating system here that is built on a single OS version,
+# and its labels are not symmetric. On Apple silicon a release has a pinned label
+# and the newest also answers to "macos-latest" ("macos-15", "macos-26", with
+# "macos-latest" pointing at the newest -- macOS 26 since July 2026). On x86_64
+# the same image is "macos-15-intel"/"macos-26-intel", and **there is no
+# "macos-latest-intel"**: the moving label exists on one architecture only. The
+# nearest x86_64 thing to it, "macos-latest-large", is a paid larger runner and
+# not a substitute. (The "-large"/"-xlarge" labels are all larger runners, which
+# this repository does not use.) x86_64 macOS used to mean "macos-13", which is
+# why there was no Intel bundle here at all: no macos-13 job ever started on the
+# current runner plan, and GitHub retired the image in December 2025 -- see the
+# note in test.yml. The "-intel" labels replaced it, as standard runners.
+#
+# Which label to use is decided by what the job is for, and the two answers are
+# opposite:
+#
+#   * a job that FREEZES a bundle names a pinned image, always. The archive is
+#     named after that image and the C library floor comes from it, so a label
+#     that moves would silently rename what we publish and raise what it needs.
+#   * a job that INSTALLS one on a later OS names the moving label where there is
+#     one. Its whole question is "does this still run on the newest macOS", and
+#     pinning it means the answer goes stale the day a newer macOS ships and
+#     nobody notices until someone edits this file.
+#
+# So: freeze on macos-15/macos-15-intel, install-test on those and on
+# macos-latest. The Intel forward leg has to name macos-26-intel because the
+# moving label does not exist there; when a macOS 27 Intel image appears that leg
+# needs editing and the arm64 one does not.
+#
+# **One macOS build per architecture, both frozen on macOS 15, and both install-
+# tested on macOS 15 and macOS 26.** A frozen bundle runs on the OS version it
+# was built on and everything newer, so the macOS 15 builds cover macOS 15 and 26
+# between them and a macos-26-* build reaches no machine they do not. There used
+# to be a macos-26-arm64 build; it was a second 10x-billed freeze buying the half
+# of the range the first one already had, and dropping it is what pays for the
+# Intel build -- which reaches machines nothing here reached before.
+#
+# What that costs is the assumption. "Older build runs on newer OS" is the whole
+# basis of the per-OS-version scheme and nothing used to check it: a macOS 26 host
+# was handed a macOS 26 build. So the "Install" job now runs each macOS bundle on
+# its own generation *and* on the next one -- see INSTALL_FORWARD_* below. That is
+# a ~10 minute job in place of a ~35 minute freeze, and it tests the property that
+# matters rather than sidestepping it.
+#
+# The macOS 15 images are also the last x86_64 ones: GitHub drops x86_64 macOS
+# when they retire (announced for autumn 2027). That single event is what forces
+# the next move here -- arm64 to macos-26, x86_64 to nothing -- so it is one
+# migration to plan, not two. "dev-tools/pyinstaller/README.md" says so as well.
+#
+# Windows has one build, not one per image, and that is not an oversight. The
+# per-OS-version split exists because a machine can be lined up against it: an
+# Ubuntu version out of /etc/os-release, a macOS major version out of sw_vers,
+# and a build with a higher floor than the host is then dropped. Windows offers
+# no such comparison -- "windows-2022"/"windows-2025" are runner image names, and
+# the only way back to one of them is the NT build number table in
+# "dev-tools/pyinstaller/build.sh", which knows those two server builds and no
+# version of Windows anybody runs. A second Windows build is therefore something
+# no client can ask for on purpose: redundant if it is equally portable, and
+# unreachable if it is not. Windows also has no glibc-style floor for it to
+# differ in -- the CRT it needs ships with the bundle or with the OS. So one
+# build is published, from the older image, which is also the one the IDE
+# embeds. If Windows ever does need two, the host-to-build mapping has to exist
+# first, or the choice is a guess with a version number on it.
+env:
+  # The libraries the bundled OpenSCAD AppImage resolves from the host. It is not
+  # fully self-contained -- see dev-tools/pyinstaller/build.sh -- and every job
+  # that runs the Linux x86_64 payload needs these: the freeze (its own smoke
+  # test runs it), the install (it runs it after unpacking), and the examples.
+  # Defined once here because three copies of a list like this drift.
+  #
+  # libegl1 and libopengl0 are the two the Qt5 release never wanted and the Qt6
+  # snapshot does. They were not guessed: the build's smoke test runs `ldd` over
+  # the payload when it will not start, and named exactly `libEGL.so.1` and
+  # `libOpenGL.so.0` as unresolvable while everything else resolved through the
+  # AppImage's own `usr/lib`. Add to this list the same way rather than by
+  # reasoning about what Qt "should" need.
+  OPENSCAD_HOST_LIBRARIES: >-
+    libgl1 libx11-6 libxcb1 libfontconfig1 libfreetype6 libglib2.0-0 libharfbuzz0b
+    libegl1 libopengl0
+
+  # Built on every run.
+  PLATFORMS_CORE: >-
+    [{"os": "ubuntu-24.04", "platform": "ubuntu-24.04-x86_64"},
+    {"os": "ubuntu-24.04-arm", "platform": "ubuntu-24.04-arm64"},
+    {"os": "macos-15", "platform": "macos-15-arm64"},
+    {"os": "windows-2022", "platform": "windows-2022-x86_64"}]
+  # Added only on a deep run: the nightly schedule, a manual dispatch, a push --
+  # which includes the release path -- or "#deepTest" in the pull request. See
+  # ".github/actions/test-depth", and OSES_DEEP_ONLY in "test.yml", which drops
+  # the same images for the same reasons.
+  #
+  # This workflow is the expensive one to halve: seven freezes of ~875MB, two of
+  # them on macOS runners that bill at 10x. The trade is that a pull request no
+  # longer proves the Ubuntu 22.04 and the macOS x86_64 bundles still build.
+  # Nothing ships unproven, though -- "deploy.yml" runs on a push, which is always
+  # deep, and refuses a release that is missing any platform. Put "#deepTest" on a
+  # pull request that touches the freeze, and the whole set runs before it merges.
+  #
+  # macos-15-x86_64 is here rather than in PLATFORMS_CORE for the billing rate and
+  # for one reason of its own: it is the architecture Apple stopped shipping, so
+  # it is the build least likely to be the one a change breaks and the one a
+  # contributor is least likely to be on. A release still carries it, and
+  # "#deepTest" still builds it before a merge.
+  PLATFORMS_DEEP: >-
+    [{"os": "ubuntu-22.04", "platform": "ubuntu-22.04-x86_64"},
+    {"os": "ubuntu-22.04-arm", "platform": "ubuntu-22.04-arm64"},
+    {"os": "macos-15-intel", "platform": "macos-15-x86_64"}]
+
+  # Which architectures the snap is packed for. Both on a deep run and on a push
+  # to "devel"; amd64 alone on a pull request.
+  #
+  # The snap is not published yet -- it is a build artifact of this workflow, and
+  # "deploy.yml" attaches the bundles rather than the snaps -- so what these jobs
+  # prove is that the recipe still wraps a bundle and that the wrapped bundle
+  # still starts. That property does not differ by architecture: the recipe is
+  # one file, the two jobs run it over two payloads whose difference the "Build"
+  # and "Install" jobs above have already exercised, and each is ~45 minutes of
+  # squashing ~875MB. So a pull request packs one and the push that follows the
+  # merge packs both.
+  SNAP_CORE: >-
+    [{"os": "ubuntu-24.04", "arch": "amd64", "bundle": "ubuntu-24.04-x86_64"}]
+  SNAP_QUEUE_ONLY: >-
+    [{"os": "ubuntu-24.04-arm", "arch": "arm64", "bundle": "ubuntu-24.04-arm64"}]
+
+  # Extra "Install" legs: a bundle run on a runner that did not build it.
+  #
+  # Every platform this run froze is installed on the image that froze it -- the
+  # "Set matrix" job derives that from the lists above, so it cannot be forgotten.
+  # These are the legs that go further: the macOS bundles on the *newest* macOS,
+  # which is where "a frozen bundle runs on the OS it was built on and everything
+  # newer" is either true or is a story we tell users. Nothing else tests it:
+  # every other install runs a build on its own image.
+  #
+  # "macos-latest" rather than the macOS 26 it currently is, so that the leg keeps
+  # asking about the newest macOS as GitHub moves the label rather than about the
+  # one that was newest when this line was written. That is the opposite of the
+  # rule for the freeze above, and deliberately -- see the note before `env`.
+  #
+  # They exercise the resolution as well as the binary, because "install.sh" runs
+  # here without "--platform": a macOS 26 host has to read the manifest, work out
+  # that the macOS 15 build is the one it can run, and fetch that. The assertion
+  # after it names the platform, so resolving to the wrong build fails the job.
+  #
+  # arm64 is core rather than deep, unlike the freeze it replaced. We now ship one
+  # arm64 build for every macOS version, so "it still starts on the newest macOS"
+  # protects every Mac user rather than some of them -- and it is ~10 minutes
+  # beside the hours of macOS "Examples" a pull request already pays for.
+  INSTALL_FORWARD_CORE: >-
+    [{"os": "macos-latest", "platform": "macos-15-arm64"}]
+  # x86_64 follows its bundle: deep-only, both generations. Pinned, because
+  # "macos-latest-intel" is not a label -- the moving one is arm64 only.
+  INSTALL_FORWARD_DEEP: >-
+    [{"os": "macos-26-intel", "platform": "macos-15-x86_64"}]
+
+  # Which bundles the "Examples" job below runs the example packages through, and
+  # with which suite. A representative subset of the builds above rather than all
+  # of them: what those jobs exercise is the bundle's *behaviour*, which does not
+  # differ between the 22.04 and the 24.04 build of the same architecture -- only
+  # the libraries it links against do, and the "Install" jobs cover every
+  # platform this run built for that. So this is one build per operating system
+  # and architecture.
+  #
+  # Each runs on the image that froze it, and only there. What a second generation
+  # would add is that the binary starts on a newer OS, which is the "Install"
+  # job's question and is answered there for a tenth of the price -- an "Examples"
+  # leg provisions a conda sandbox and renders every package.
+  EXAMPLES_CORE: >-
+    [{"os": "ubuntu-24.04", "platform": "ubuntu-24.04-x86_64", "suite": "PartCAD", "package": "//pub/examples/partcad", "render": true},
+    {"os": "ubuntu-24.04", "platform": "ubuntu-24.04-x86_64", "suite": "All", "package": "//pub/examples", "render": false},
+    {"os": "ubuntu-24.04-arm", "platform": "ubuntu-24.04-arm64", "suite": "PartCAD", "package": "//pub/examples/partcad", "render": true},
+    {"os": "macos-15", "platform": "macos-15-arm64", "suite": "PartCAD", "package": "//pub/examples/partcad", "render": true},
+    {"os": "macos-15", "platform": "macos-15-arm64", "suite": "All", "package": "//pub/examples", "render": false}]
+  # macOS x86_64, whose bundle only a deep run has -- asking for it on a reduced
+  # run would be asking to download an artifact nothing built. This is the only
+  # place PartCAD runs a CAD sandbox on an Intel Mac at all, which is why it is
+  # here rather than left to the "Install" job's smoke test. One suite rather
+  # than the two the arm64 macOS gets: the runner bills at 10x, and "PartCAD" is
+  # the suite that tests this repository rather than the public index.
+  EXAMPLES_DEEP: >-
+    [{"os": "macos-15-intel", "platform": "macos-15-x86_64", "suite": "PartCAD", "package": "//pub/examples/partcad", "render": true}]
+
 jobs:
+  set-matrix:
+    name: "Set matrix"
+    runs-on: ubuntu-latest
+    # Only a version bump freezes anything on a push to "devel", as in
+    # "test.yml", "build.yml" and "test-dev.yml" -- that first file carries the
+    # long note, and this is the same guard for the same reason. Every other
+    # push there is followed by a bump within minutes, and the bump is the
+    # commit a release is cut from, so freezing for both means freezing the same
+    # tree twice and publishing the first copy under the version it replaced.
+    #
+    # Stated here and nowhere else in this workflow: every other job needs this
+    # one, directly or through "build", and a job that needs a skipped job is
+    # skipped.
+    #
+    # Two clauses lead the message test, and neither is decoration.
+    #
+    #   * A called instance always runs. "deploy.yml" calls this workflow to
+    #     build what a release carries, and the caller has already decided. It
+    #     calls from "main" and from a tag, so the ref clause would let it
+    #     through today as well -- `inputs.called` says so directly rather than
+    #     by geography, and keeps saying it if a caller is ever added on "devel".
+    #     The note on `concurrency` above says why that marker, and not
+    #     `github.event_name` or `github.workflow`, is what identifies a called
+    #     run: inside one the whole `github` context is the caller's.
+    #   * Only a push carries `head_commit`. On every other trigger it is null,
+    #     `startsWith` reads that as the empty string, and without the event-name
+    #     clause the whole condition would be false -- which is how the nightly
+    #     run of "test.yml" came to be skipped every night until the same clause
+    #     was put first there. Here that would be the merge queue and every
+    #     manual dispatch.
+    if: >-
+      ${{ toJSON(inputs.called) != 'null'
+      || github.event_name != 'push'
+      || github.ref != 'refs/heads/devel'
+      || startsWith(github.event.head_commit.message, 'Version updated') }}
+    outputs:
+      build: ${{ steps.set-matrix.outputs.build }}
+      install: ${{ steps.set-matrix.outputs.install }}
+      examples: ${{ steps.set-matrix.outputs.examples }}
+      snap: ${{ steps.set-matrix.outputs.snap }}
+      # Whether this change can alter what gets frozen at all. See
+      # ".github/actions/changed-scopes"; the note on "pull_request" above says
+      # why the answer lives here rather than in a "paths:" filter.
+      bundle: ${{ steps.scope.outputs.bundle }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Decide the depth
+        id: depth
+        uses: ./.github/actions/test-depth
+
+      - name: Decide what the change touches
+        id: scope
+        uses: ./.github/actions/changed-scopes
+        with:
+          deep: ${{ steps.depth.outputs.deep }}
+
+      - name: Set matrix
+        id: set-matrix
+        env:
+          DEEP: ${{ steps.depth.outputs.deep }}
+          QUEUE: ${{ steps.depth.outputs.queue }}
+        run: |
+          snap='${{ env.SNAP_CORE }}'
+          if [ "${DEEP}" = "true" ]; then
+            platforms=$(jq -cn --argjson core '${{ env.PLATFORMS_CORE }}' --argjson deep '${{ env.PLATFORMS_DEEP }}' '$core + $deep')
+            forward=$(jq -cn --argjson core '${{ env.INSTALL_FORWARD_CORE }}' --argjson deep '${{ env.INSTALL_FORWARD_DEEP }}' '$core + $deep')
+            examples=$(jq -cn --argjson core '${{ env.EXAMPLES_CORE }}' --argjson deep '${{ env.EXAMPLES_DEEP }}' '$core + $deep')
+          else
+            platforms='${{ env.PLATFORMS_CORE }}'
+            forward='${{ env.INSTALL_FORWARD_CORE }}'
+            examples='${{ env.EXAMPLES_CORE }}'
+          fi
+          if [ "${QUEUE}" = "true" ]; then
+            snap=$(jq -cn --argjson core "${snap}" --argjson rest '${{ env.SNAP_QUEUE_ONLY }}' '$core + $rest')
+          fi
+          # A pull request freezes no macOS bundle. This is the most expensive
+          # leg in the file -- a ~35 minute freeze on a runner that bills at 10x,
+          # and then the same again for the two "Examples" suites that run
+          # through it -- and it is the one nothing else in a pull request pays
+          # for twice. The merge queue restores it, so no macOS bundle reaches a
+          # release, or even the "devel" branch, unbuilt; "#deepTest" restores it
+          # on the pull request itself.
+          #
+          # Selected by "os" rather than by a list of names, so a macOS image
+          # added to any of the three lists above is covered without a fourth
+          # list having to be remembered.
+          if [ "${QUEUE}" != "true" ]; then
+            drop_macos='map(select(.os | startswith("macos") | not))'
+            platforms=$(jq -c "${drop_macos}" <<<"${platforms}")
+            forward=$(jq -c "${drop_macos}" <<<"${forward}")
+            examples=$(jq -c "${drop_macos}" <<<"${examples}")
+            # And the "All" suite, which sweeps the example packages the public
+            # index carries. Its step is "continue-on-error" -- several of those
+            # packages have not been updated for build123d 0.11, so it fails on
+            # code this repository cannot fix -- which leaves it a job whose only
+            # way to report anything is to fail at "install.sh", something the
+            # "Install" job above has already done for the same platform. Same
+            # reasoning, and the same TODO, as "Examples (All)" in "test.yml".
+            examples=$(jq -c 'map(select(.suite != "All"))' <<<"${examples}")
+          fi
+          echo "Platforms: ${platforms}"
+          echo 'build={"include": '"${platforms}"'}' >> "${GITHUB_OUTPUT}"
+
+          # Everything the "Install" job can exercise, which is everything but
+          # Windows: "install.sh" is a shell installer and there is none there.
+          #
+          # Derived from the build list rather than written out. That is what
+          # makes "every bundle this run freezes is installed somewhere" true by
+          # construction rather than by anyone remembering: there is no second
+          # list to fall behind, and so nothing to check it against either.
+          # INSTALL_FORWARD_* then adds the legs that run a bundle on an image
+          # that did not build it -- those are a second list, and they are checked
+          # below. `unique_by` because a forward leg naming an image already in
+          # the build list would otherwise be two identical jobs.
+          own=$(jq -c 'map(select(.platform | startswith("windows") | not) | {os, platform})' <<<"${platforms}")
+          install=$(jq -cn --argjson own "${own}" --argjson forward "${forward}" \
+            '($own + ($forward | map({os, platform}))) | unique_by([.os, .platform])')
+          echo "Install: ${install}"
+
+          # Every "Install" and "Examples" leg has to name a build this run
+          # produced -- the deep-only ones are absent from a reduced run, and the
+          # job would then wait for an artifact that nothing uploaded. Checked
+          # rather than trusted, because these lists are edited separately from
+          # the platform lists and a mismatch would otherwise show up as a
+          # download failure well into the run.
+          echo "Examples: ${examples}"
+          built=$(jq -c '[.[].platform]' <<<"${platforms}")
+          for pair in "Install:${install}" "Examples:${examples}"; do
+            what="${pair%%:*}"
+            legs="${pair#*:}"
+            orphans=$(jq -r --argjson built "${built}" \
+              '[.[] | select(.platform as $p | $built | index($p) | not) | .platform] | unique | join(" ")' \
+              <<<"${legs}")
+            if [ -n "${orphans}" ]; then
+              echo "::error::the ${what} matrix asks for bundles this run does not build: ${orphans}"
+              exit 1
+            fi
+          done
+          echo 'install={"include": '"${install}"'}' >> "${GITHUB_OUTPUT}"
+          echo 'examples={"include": '"${examples}"'}' >> "${GITHUB_OUTPUT}"
+          # The snap wraps a bundle this run froze, so it is checked the same way
+          # the two lists above are.
+          echo "Snap: ${snap}"
+          orphans=$(jq -r --argjson built "${built}" \
+            '[.[] | select(.bundle as $p | $built | index($p) | not) | .bundle] | unique | join(" ")' \
+            <<<"${snap}")
+          if [ -n "${orphans}" ]; then
+            echo "::error::the Snap matrix asks for bundles this run does not build: ${orphans}"
+            exit 1
+          fi
+          echo 'snap={"include": '"${snap}"'}' >> "${GITHUB_OUTPUT}"
+
   build:
     name: "Build (${{ matrix.platform }})"
+    needs: set-matrix
+    # Everything below needs this job, so this is the whole workflow's gate: a
+    # change that cannot alter what is frozen skips the freeze, the installs, the
+    # snaps and the examples together.
+    if: ${{ needs.set-matrix.outputs.bundle == 'true' }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x86_64
-          # macos-latest is arm64. There is no macos x86_64 bundle: it would
-          # need macos-13, and no macos-13 job has ever started on the current
-          # runner plan (see the note in test.yml).
-          - os: macos-latest
-            platform: macos-arm64
-          - os: windows-latest
-            platform: windows-x86_64
-          # No linux arm64 bundle yet. This used to be impossible - cadquery-ocp
-          # 7.7.2 published no aarch64 Linux wheel - but 7.9.3.1.1 does, so the
-          # blocker is gone and adding an "ubuntu-24.04-arm" entry here is now
-          # only a question of runner budget.
-          # TODO(clairbee): add the linux-arm64 bundle.
+      matrix: ${{ fromJson(needs.set-matrix.outputs.build) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
 
@@ -82,32 +503,123 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install --yes libcairo2-dev
 
+      # The libraries the bundled OpenSCAD AppImage resolves from the host: it is
+      # not fully self-contained (see dev-tools/pyinstaller/build.sh). The
+      # "Examples" job below has installed these for a while; this job needs them
+      # too, because `build.sh` runs the payload as part of its own smoke test.
+      #
+      # It went without until the payload moved from the 2021.01 release to a
+      # snapshot. The older, smaller build happened to find everything it needed
+      # on the runner; the current one does not, and the loader's answer to that
+      # is exit 127 -- which reads like a missing file and is not one.
+      #
+      # x86_64 only, because Linux arm64 carries no OpenSCAD to run.
+      - name: Install the bundled OpenSCAD's host libraries (Linux x86_64)
+        if: matrix.platform == 'ubuntu-22.04-x86_64' || matrix.platform == 'ubuntu-24.04-x86_64'
+        run: |
+          sudo apt-get install --yes --no-install-recommends ${{ env.OPENSCAD_HOST_LIBRARIES }}
+
+      # The platform id is passed rather than detected: the runner image label is
+      # the authoritative answer to which OS version this is, and recovering it
+      # from the running system is guesswork on Windows in particular.
       - name: Build the standalone bundle
         shell: bash
-        run: dev-tools/pyinstaller/build.sh
+        run: dev-tools/pyinstaller/build.sh --platform=${{ matrix.platform }}
 
+      # Three attempts, because losing this one costs the whole build.
+      #
+      # `upload-artifact` reaches the artifact service over the network, and on
+      # the `macos-15-intel` runners that request has twice resolved to nothing:
+      #
+      #     ##[error]Failed to CreateArtifact: Unable to make request: ENOTFOUND
+      #
+      # It blocked the 0.8.47 and 0.8.54 releases, both on `macos-15-x86_64`,
+      # and both times *after* the bundle was built -- the log says "there will
+      # be 2 files uploaded" and "Artifact name is valid!" and then fails a DNS
+      # lookup. What that throws away is the most expensive thing this
+      # repository does, ~500MB of OpenCASCADE frozen over the better part of an
+      # hour, and "deploy.yml" makes `publish-to-pypi` wait on this workflow, so
+      # it takes the wheel, the bundles, the extension and the plugin with it.
+      #
+      # Spelled out rather than looped. A step that `uses:` an action cannot be
+      # wrapped in a shell loop, a composite action cannot help either
+      # (`continue-on-error` is not supported on a composite's steps), and the
+      # repository has no retry action to reach for -- `version-bump.yml` writes
+      # its own loop for the same reason. Only the last attempt is allowed to
+      # fail the job.
+      #
+      # `overwrite: true` on the retries: a first attempt that got far enough to
+      # create the artifact and then died would otherwise make every retry fail
+      # with "an artifact with this name already exists", turning one transient
+      # error into a permanent one. It is not needed on the first attempt, and
+      # not set there, so a genuine duplicate name is still an error.
       - name: Upload the bundle
+        id: upload
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: partcad-standalone-${{ matrix.platform }}
           path: |
-            dist/standalone/*.tar.gz
+            dist/standalone/*.tar.xz
             dist/standalone/*.zip
             dist/standalone/*.sha256
           if-no-files-found: error
           retention-days: 14
 
+      # Long enough for a failed DNS lookup to be worth repeating, short enough
+      # that it is noise against the build that just ran.
+      - name: Wait before retrying the upload
+        if: steps.upload.outcome == 'failure'
+        shell: bash
+        run: sleep 30
+
+      - name: Upload the bundle (second attempt)
+        id: upload-retry
+        if: steps.upload.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: partcad-standalone-${{ matrix.platform }}
+          path: |
+            dist/standalone/*.tar.xz
+            dist/standalone/*.zip
+            dist/standalone/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+      - name: Wait before the last upload attempt
+        if: steps.upload.outcome == 'failure' && steps.upload-retry.outcome == 'failure'
+        shell: bash
+        run: sleep 60
+
+      # The one that is allowed to fail the job.
+      - name: Upload the bundle (final attempt)
+        if: steps.upload.outcome == 'failure' && steps.upload-retry.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: partcad-standalone-${{ matrix.platform }}
+          path: |
+            dist/standalone/*.tar.xz
+            dist/standalone/*.zip
+            dist/standalone/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+  # Every platform this run built that "install.sh" can install, which is every
+  # one except Windows -- there is no shell installer there -- plus the macOS
+  # bundles again on the next macOS generation. The runner is in the job name
+  # because the platform no longer identifies the leg: "macos-15-arm64" is
+  # installed twice, on macos-15 and on macos-latest, and those are the two jobs
+  # that
+  # together say the build runs everywhere it claims to.
   install:
-    name: "Install (${{ matrix.platform }})"
-    needs: build
+    name: "Install (${{ matrix.platform }} on ${{ matrix.os }})"
+    needs: [set-matrix, build]
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x86_64
-          - os: macos-latest
-            platform: macos-arm64
+      matrix: ${{ fromJson(needs.set-matrix.outputs.install) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
 
@@ -120,17 +632,50 @@ jobs:
           name: partcad-standalone-${{ matrix.platform }}
           path: archives
 
+      # "install.sh" reads the release manifest to learn which builds exist --
+      # it keeps no list of its own -- so the directory it installs from needs
+      # one, exactly as a release does. Generated by the same script the release
+      # uses, from the archive this run actually produced: that is the contract
+      # between the two being exercised, rather than asserted.
+      - name: Describe what this run built
+        shell: bash
+        run: dev-tools/release/platforms-manifest.sh --bundles archives --output archives/platforms.json
+
       # This exercises the script users pipe into `sh`, against the archive
       # this run produced, on a machine where PartCAD was never installed.
+      #
+      # Deliberately without `--platform`: the installer resolving this machine
+      # to one of the published builds is the part that can silently pick the
+      # wrong one, so it runs for real and the result is asserted afterwards.
+      # That assertion is the whole point of the forward legs -- on macos-latest
+      # the installer has to read the manifest, work out that the macOS 15 build
+      # is one this machine can run, and fetch it. A resolver that refused it, or
+      # picked something else, fails here rather than in a user's terminal.
       - name: Install with install.sh
         shell: bash
         run: |
-          version=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' partcad/src/partcad/__init__.py)
+          version=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' src/partcad/__init__.py)
           sh install.sh \
             --version "${version}" \
             --base-url "file://${PWD}/archives" \
             --install-dir "${HOME}/partcad-standalone" \
-            --bin-dir "${HOME}/partcad-bin"
+            --bin-dir "${HOME}/partcad-bin" 2>&1 | tee install.log
+          # The line install.sh ends on: "Installed PartCAD <version>
+          # (<platform>) in <dir>." -- the platform inside that line, so that a
+          # correct download followed by a wrong install cannot pass. "PartCAD"
+          # rather than anything looser because install.sh says "Installed the
+          # PartCAD IDE ..." with --ide, and this job installs the bundle.
+          #
+          # It used to look for "(<platform>) is installed": #516 added this
+          # assertion against its own branch's wording, #526 had already
+          # reworded that line, the two edits were in different files so the
+          # merge was clean, and the job has failed ever since however well the
+          # install went -- taking the steps after it (running the commands, the
+          # bundled OpenSCAD, the uninstall) with it.
+          grep -q "Installed PartCAD .*(${{ matrix.platform }}) in " install.log || {
+            echo "::error::install.sh did not resolve this machine to ${{ matrix.platform }}"
+            exit 1
+          }
 
       - name: Run the installed commands
         shell: bash
@@ -144,22 +689,70 @@ jobs:
           pc init
           pc list
 
+      # Same libraries as the freeze and the examples: this job runs the payload
+      # too, and had no step for them because the older OpenSCAD release found
+      # what it needed on the runner unaided.
+      - name: Install the bundled OpenSCAD's host libraries (Linux x86_64)
+        if: startsWith(matrix.platform, 'ubuntu-') && endsWith(matrix.platform, '-x86_64')
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ${{ env.OPENSCAD_HOST_LIBRARIES }}
+
       # The bundled OpenSCAD has to survive being packed, downloaded and
       # unpacked with its executable bit intact, which the build's own smoke
-      # test cannot show: it runs against the bundle before it is archived.
+      # test cannot show: it runs against the bundle before it is archived. On
+      # macOS it also has to survive `.app` -> ditto -> tar.xz -> curl -> untar
+      # with enough of its signed bundle intact to still launch, which is the
+      # half of this that only a runner can answer.
+      #
+      # Linux arm64 is excluded because it carries no payload -- upstream builds
+      # no current arm64 snapshot. Windows does carry one and is still not
+      # covered here; that predates this step growing a macOS leg, and the
+      # build's own smoke test is what exercises it there.
       - name: Run the bundled OpenSCAD after installation
-        if: matrix.platform == 'linux-x86_64'
+        if: runner.os == 'macOS' || (startsWith(matrix.platform, 'ubuntu-') && endsWith(matrix.platform, '-x86_64'))
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="${HOME}/partcad-bin:${PATH}"
+          cd "${HOME}"
+          # By the installed path rather than by resolving the `pc` symlink, for
+          # the reason the conda step below gives: `readlink -f` is not portable
+          # to macOS, and only one version is installed.
+          internal="$(ls -d "${HOME}"/partcad-standalone/*/_internal)"
+          if [ "${RUNNER_OS}" = "macOS" ]; then
+            openscad="${internal}/openscad/OpenSCAD.app/Contents/MacOS/OpenSCAD"
+          else
+            openscad="${internal}/openscad/AppRun"
+          fi
+          test -x "${openscad}"
+          printf 'cube(10);\n' > smoke.scad
+          "${openscad}" --export-format binstl -o smoke.stl smoke.scad
+          test -s smoke.stl
+          pc --no-ansi healthcheck --filters openscad 2>&1 | tee healthcheck.log
+          grep -q "OpenSCAD: Passed" healthcheck.log
+
+      # The same for the bundled conda, and on every platform rather than one:
+      # without it PartCAD has no CAD sandbox at all on a machine that has no
+      # conda, which is the machine this bundle exists for. The executable bit
+      # is the part the archive can lose; `--version` is the part a truncated
+      # download would.
+      - name: Run the bundled conda after installation
         shell: bash
         run: |
           export PATH="${HOME}/partcad-bin:${PATH}"
           cd "${HOME}"
-          test -x "$(readlink -f "${HOME}/partcad-bin/pc" | xargs dirname)/_internal/openscad/AppRun"
-          printf 'cube(10);\n' > smoke.scad
-          "$(readlink -f "${HOME}/partcad-bin/pc" | xargs dirname)/_internal/openscad/AppRun" \
-            --export-format binstl -o smoke.stl smoke.scad
-          test -s smoke.stl
-          pc --no-ansi healthcheck --filters openscad 2>&1 | tee healthcheck.log
-          grep -q "OpenSCAD: Passed" healthcheck.log
+          # By the installed path rather than by resolving the `pc` symlink:
+          # this step runs on macOS too, and only one version is installed.
+          bundled="$(ls -d "${HOME}"/partcad-standalone/*/_internal/conda/micromamba)"
+          test -x "${bundled}"
+          "${bundled}" --version
+          # Reported rather than asserted: these runners keep their conda off
+          # PATH, so this check can only pass through the bundle -- but that is
+          # a property of the image, not something this job controls.
+          echo "host conda: $(command -v mamba || command -v conda || echo none)"
+          pc --no-ansi healthcheck --filters conda 2>&1 | tee healthcheck-conda.log
+          grep -q "CondaAvailable: Passed" healthcheck-conda.log
 
       - name: Uninstall with install.sh
         shell: bash
@@ -170,47 +763,181 @@ jobs:
           test ! -e "${HOME}/partcad-bin/pc"
           test ! -d "${HOME}/partcad-standalone"
 
-  # The wheel-based "Examples (PartCAD)" and "Examples (All)" jobs in test.yml,
-  # cloned to run the same commands through the *bundled* `pc` rather than
-  # `python -m partcad_cli ...`. This is the end-to-end check the build's own
-  # smoke test cannot be: it fetches a git dependency (through the bundle's
-  # libgit2, which nothing else here exercises), runs CAD scripts in the conda
-  # sandbox, and -- on Linux -- uses the OpenSCAD the bundle carries.
+  # The snap package: the Linux bundle above, wrapped so that `snap install` is
+  # an option next to `install.sh` and `pip`. It packages the artifact rather
+  # than freezing a second time, so what the snap carries is exactly what the
+  # archive carries. See "dev-tools/snap/README.md".
   #
-  # Skipped on the release path (deploy.yml calls this workflow on a push to
-  # main) and in the merge queue, to keep those fast and off heavy integration
-  # tests; the deterministic build and install jobs above gate the release.
-  examples:
-    name: "Examples ${{ matrix.suite }} via bundle (${{ matrix.platform }})"
-    needs: build
+  # Not published anywhere: these are build artifacts, and uploading them to the
+  # Snap Store is deliberately left for later (it needs store credentials, and a
+  # manual review because the snap is classic). "deploy.yml" does not touch them.
+  #
+  # One base, two architectures. The base is what a snap runs on, and a core24
+  # snap carries its own Ubuntu 24.04 runtime onto whatever distribution the
+  # user has -- so unlike the standalone archives, there is nothing to gain from
+  # a build per host OS version here. The build *host* still has to be the
+  # base's release, which is why these are pinned to the ubuntu-24.04 images and
+  # take the ubuntu-24.04 bundles.
+  snap:
+    name: "Snap (${{ matrix.arch }})"
+    needs: [set-matrix, build]
+    # Skipped on the release path and in the merge queue, like the examples
+    # below. Nothing downstream consumes these: "deploy.yml" publishes the
+    # wheels and the standalone archives, and a job whose output no release
+    # carries has no business being able to block one.
     if: >-
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/devel')
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x86_64
-            suite: PartCAD
-            package: "//pub/examples/partcad"
-            render: true
-          - os: ubuntu-latest
-            platform: linux-x86_64
-            suite: All
-            package: "//pub/examples"
-            render: false
-          - os: macos-latest
-            platform: macos-arm64
-            suite: PartCAD
-            package: "//pub/examples/partcad"
-            render: true
-          - os: macos-latest
-            platform: macos-arm64
-            suite: All
-            package: "//pub/examples"
-            render: false
+      # One architecture on a pull request, both on a push to "devel" and on a
+      # dispatch. SNAP_CORE and SNAP_QUEUE_ONLY above say which and why; an
+      # output rather than a literal list here because a leg whose bundle a
+      # reduced run did not freeze has to be absent rather than skipped.
+      matrix: ${{ fromJson(needs.set-matrix.outputs.snap) }}
+    runs-on: ${{ matrix.os }}
+    # Squashing ~875MB of frozen bundle is most of this.
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download the Linux bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-standalone-${{ matrix.bundle }}
+          path: archives
+
+      # ".snapcraft.yaml" packages "dist/standalone/partcad", which is where
+      # a local "dev-tools/pyinstaller/build.sh" leaves the bundle. Unpacking the
+      # archive there puts the artifact in the same place -- and checks in
+      # passing that the archive the release ships is intact.
+      - name: Unpack the bundle
+        run: |
+          mkdir -p dist/standalone
+          tar -xf archives/partcad-*-${{ matrix.bundle }}.tar.xz -C dist/standalone
+          test -x dist/standalone/partcad/pc
+
+      - name: Install snapcraft
+        run: sudo snap install snapcraft --classic
+
+      # Destructive mode, so there is no LXD to set up: it builds straight on the
+      # runner, which snapcraft only allows when the runner is the base's release.
+      - name: Build the snap
+        run: dev-tools/snap/build.sh --no-bundle --destructive-mode
+
+      # Installing and running it is the only check that the bundle survives
+      # being wrapped: that the apps resolve, that the classic confinement lets
+      # the frozen interpreter start, and that PartCAD writes its state where the
+      # snap directs it rather than into the home directory.
+      - name: Install the snap and run it
+        run: |
+          sudo snap install --dangerous --classic dist/snap/partcad_*_${{ matrix.arch }}.snap
+          # Only the app named after the snap gets the bare name; `pc` is
+          # `partcad.pc` until aliased. Users do this too (see the README).
+          sudo snap alias partcad.pc pc
+          # Where snapd puts the commands. On the hosted images it is already on
+          # PATH; say so anyway, so this does not depend on the image.
+          export PATH="/snap/bin:${PATH}"
+          # From a directory that is not the checkout, so nothing can resolve
+          # against the sources by accident.
+          cd "${HOME}"
+          pc version
+          partcad --help
+          partcad.json-rpc --version
+          pc init
+          pc list
+
+      # ".snapcraft.yaml" points PC_INTERNAL_STATE_DIR at the per-user
+      # directory snapd gives the snap, so that PartCAD's cache, sandboxes and
+      # git clones do not land in ~/.partcad. Nothing about the commands above
+      # succeeding would show that, so check it from both ends: that snapd
+      # exports the variable, and that PartCAD acted on it. Note that snapd
+      # creates ~/snap/partcad/common for every snap it runs, so its mere
+      # existence proves nothing and is not what is asserted.
+      - name: Check the snap keeps its state in the snap directory
+        run: |
+          export PATH="/snap/bin:${PATH}"
+          # `tail -n 1` so that anything snapd chooses to print first cannot be
+          # mistaken for the value.
+          # shellcheck disable=SC2016  # the expansion has to happen in the snap's shell, not here
+          state_dir="$(echo 'echo "$PC_INTERNAL_STATE_DIR"' | snap run --shell partcad.pc | tail -n 1 || true)"
+          echo "PC_INTERNAL_STATE_DIR as the snap sees it: '${state_dir}'"
+          test "${state_dir}" = "${HOME}/snap/partcad/common" || {
+            echo "::error::the snap does not export PC_INTERNAL_STATE_DIR=${HOME}/snap/partcad/common"
+            exit 1
+          }
+          # ~/.partcad is still created and still holds the user configuration
+          # and the telemetry id -- that is by design (see dev-tools/snap/README.md).
+          # What must not be there is the state PC_INTERNAL_STATE_DIR redirects.
+          for leftover in cache git tar external sandbox conda; do
+            if [ -e "${HOME}/.partcad/${leftover}" ]; then
+              echo "::error::PartCAD wrote '${leftover}' into ~/.partcad rather than the snap directory"
+              exit 1
+            fi
+          done
+          ls -la "${HOME}/.partcad" "${HOME}/snap/partcad/common" || true
+
+      # A snap does not carry the user's shell environment, so a git outside the
+      # standard prefixes is not visible to it. That is accepted: PartCAD
+      # reports it missing. The health check is run for the record, and
+      # deliberately not allowed to fail the job over it.
+      #
+      # conda used to be in the same sentence and no longer is: the snap wraps
+      # the bundle, the bundle carries a conda, and a payload inside the snap is
+      # visible to it whatever the user's shell says. So this is also where the
+      # snap gets its CAD sandbox back -- which is why the conda half *is*
+      # asserted below while git stays informational.
+      - name: Health check (informational)
+        run: |
+          export PATH="/snap/bin:${PATH}"
+          cd "${HOME}"
+          pc --no-ansi healthcheck 2>&1 | tee healthcheck.log || true
+          echo "git is expected to be reported missing here."
+          grep -q "CondaAvailable: Passed" healthcheck.log || {
+            echo "::error::the snap did not resolve the conda the bundle carries"
+            exit 1
+          }
+
+      - name: Remove the snap
+        run: sudo snap remove --purge partcad
+
+      - name: Upload the snap
+        uses: actions/upload-artifact@v7
+        with:
+          name: partcad-snap-${{ matrix.arch }}
+          path: |
+            dist/snap/*.snap
+            dist/snap/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  # The wheel-based "Examples (PartCAD)" and "Examples (All)" jobs in test.yml,
+  # cloned to run the same commands through the *bundled* `pc` rather than
+  # `python -m partcad_cli ...`. This is the end-to-end check the build's own
+  # smoke test cannot be: it fetches a git dependency (through the bundle's
+  # libgit2, which nothing else here exercises), runs CAD scripts in the conda
+  # sandbox, and -- on Linux x86_64 -- uses the OpenSCAD the bundle carries.
+  #
+  # Skipped on the release path (deploy.yml calls this workflow on a push to
+  # main) and in the merge queue, to keep those fast and off heavy integration
+  # tests; the deterministic build and install jobs above gate the release.
+  examples:
+    name: "Examples ${{ matrix.suite }} via bundle (${{ matrix.platform }})"
+    needs: [set-matrix, build]
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/devel')
+    # A representative subset of the build matrix, not all of it: EXAMPLES_CORE
+    # and EXAMPLES_DEEP above say which builds and why. The deep half is why this
+    # is an output of "set-matrix" rather than a literal list here -- a leg whose
+    # bundle a reduced run did not freeze has to be absent, not skipped, or it
+    # sits waiting for an artifact nothing will upload.
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.set-matrix.outputs.examples) }}
     runs-on: ${{ matrix.os }}
     # No conda cache and a sandbox built from scratch (cadquery-ocp is ~150MB),
     # so this is slower than the cached wheel-based jobs in test.yml.
@@ -219,48 +946,128 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # PartCAD runs CAD scripts in a conda sandbox it provisions at runtime, so
-      # the bundle still needs conda/mamba on PATH -- the one host prerequisite
-      # it does not carry, exactly as for the wheels.
-      - uses: conda-incubator/setup-miniconda@v4
-        with:
-          miniforge-version: 24.11.3-0
-          use-mamba: true
-          # conda-forge only, for the same ABI reason as in setup-all -- see the
-          # comment there. The runtime sandbox PartCAD provisions below inherits
-          # this channel list, so leaving 'defaults' in would let Anaconda builds
-          # into it too.
-          channels: conda-forge
-          # Only base is needed -- PartCAD creates its own sandbox env at
-          # runtime. No named env, which is the part of setup-all that is flaky
-          # enough to need continue-on-error.
-          auto-activate-base: true
-          activate-environment: ""
+      # No conda reachable here, on purpose. PartCAD runs CAD scripts in a conda
+      # sandbox it provisions at runtime, and the bundle now carries the conda
+      # that provisions it -- so this job builds the whole CAD stack through the
+      # payload, on a machine with nothing of its own. That is the end-to-end
+      # proof the build's own smoke test cannot be: it can only show that a conda
+      # was *resolved*, not that a sandbox solved and ran.
+      #
+      # This used to install Miniforge here (`setup-miniconda`, conda-forge
+      # only). The bundled micromamba resolves from conda-forge with no
+      # configuration at all, which is the same channel policy for the same
+      # reason -- see the comments in `.github/actions/setup-all/action.yml`.
+      #
+      # Taking one *out of the way* rather than trusting it to be absent: the
+      # hosted images ship a conda (`$CONDA`) and put a launcher for it on PATH
+      # on some of them -- ubuntu-24.04 has `/usr/bin/conda`.
+      # `partcad_utils.conda` prefers the host's by design, so one left reachable
+      # would quietly turn this back into a test of the runner's conda, which is
+      # exactly the mistake that let the bundle ship without one.
+      #
+      # The launcher itself, not the directory holding it: it lives in `/usr/bin`
+      # alongside every other system tool, so dropping that directory from PATH
+      # takes `sudo`, `apt-get` and the rest of the job with it. Only what
+      # `command -v` actually resolves is removed, and only from a hosted runner
+      # that is discarded when the job ends. `$CONDA` is untouched, so a job that
+      # wants the runner's conda still has it.
+      # The image the `docker` sandbox renders in, built from this commit rather
+      # than pulled from the tag a previous run published. This job's comments
+      # below describe a conda sandbox, and that is now only half true: the
+      # `docker` sandbox is the default wherever a container runtime answers, so
+      # a Linux runner renders in a container and the bundled conda is what the
+      # rest of the machine falls back to. Both are worth testing and both are;
+      # what this step ends is the container half testing an old image. See the
+      # action.
+      - name: The sandbox base image
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/sandbox-image
+
+      - name: Take the runner's conda out of the way
+        shell: bash
+        run: |
+          for _ in 1 2 3 4 5; do
+            found="$(command -v mamba || command -v conda || true)"
+            [ -n "${found}" ] || break
+            echo "removing the launcher at '${found}' (CONDA=${CONDA:-unset} is left alone)"
+            sudo rm -f "${found}"
+            # Fail on the first one that will not go, rather than looping over
+            # it and leaving the check below to report a puzzle.
+            if [ -e "${found}" ]; then
+              echo "::error::could not remove the conda launcher at '${found}'"
+              exit 1
+            fi
+          done
+
+      # Asserted afterwards rather than assumed, and under `bash -el` -- the
+      # shell the steps below use. A login shell re-reads the profile scripts, so
+      # "no conda is reachable" is only true if it is still true there. The
+      # second half is this step's own lesson: the first attempt at it removed
+      # `/usr/bin` from PATH, which passed this check and broke everything after
+      # it, so what the job needs is checked too.
+      - name: Check that no conda is reachable, and the rest of PATH survived
+        shell: bash -el {0}
+        run: |
+          if command -v mamba >/dev/null 2>&1 || command -v conda >/dev/null 2>&1; then
+            echo "::error::a conda is still reachable ($(command -v mamba || command -v conda)),"
+            echo "::error::so this job would exercise it rather than the one the bundle carries."
+            exit 1
+          fi
+          for needed in sudo tar curl git sh; do
+            if ! command -v "${needed}" >/dev/null 2>&1; then
+              echo "::error::'${needed}' is no longer on PATH; the step above took too much with it"
+              exit 1
+            fi
+          done
+          echo "no conda reachable, and PATH still has what this job runs"
 
       # The libraries the bundled OpenSCAD AppImage resolves from the host: it is
       # not fully self-contained (see dev-tools/pyinstaller/build.sh). A desktop
       # has these; a CI runner may not, so install them and let the examples use
       # the bundled OpenSCAD.
-      - name: Install the bundled OpenSCAD's host libraries (Linux)
-        if: runner.os == 'Linux'
+      - name: Install the bundled OpenSCAD's host libraries (Linux x86_64)
+        if: matrix.platform == 'ubuntu-24.04-x86_64'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            libgl1 libx11-6 libxcb1 libfontconfig1 libfreetype6 libglib2.0-0 libharfbuzz0b
+          sudo apt-get install --yes --no-install-recommends ${{ env.OPENSCAD_HOST_LIBRARIES }}
 
-      # macOS bundles carry no OpenSCAD (see build.sh), so the examples fall back
-      # to a host OpenSCAD there, exactly as the wheels do. Same install as the
-      # wheel-based jobs' setup-test action.
-      - name: Install OpenSCAD (macOS)
-        if: runner.os == 'macOS'
-        shell: bash -el {0}
+      # What `examples/feature_cae` needs and pip cannot install, the same as the
+      # `Examples (PartCAD)` job in `test.yml` -- this job runs the same examples
+      # through the bundle, so it meets the same analysis and needs the same
+      # things on the host.
+      #
+      # `libglu1-mesa` is not a mistake for `python3-gmsh`. The sandbox installs
+      # gmsh from PyPI (there is a wheel for x86_64), and that wheel dlopen()s
+      # libGLU without bundling it -- which is what this leg failed on:
+      # "libGLU.so.1: cannot open shared object file". `test.yml` never saw it
+      # because `python3-gmsh` drags libGLU in as a dependency there. The base
+      # image carries the same library for the same reason; see the comment
+      # beside it in `tools/containers/python/Dockerfile`.
+      #
+      # x86_64 only. On 64-bit ARM Linux gmsh publishes no wheel at all, so the
+      # cantilever excludes itself there with `unless: [aarch64]` and there is no
+      # analysis to equip -- see `examples/feature_cae/partcad.yaml`.
+      - name: The CAE example's native dependencies (Linux x86_64)
+        if: matrix.platform == 'ubuntu-24.04-x86_64'
         run: |
-          which openscad \
-            || HOMEBREW_NO_AUTO_UPDATE=1 brew install -f openscad \
-            || ( \
-              rm /Users/"$USER"/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg \
-              && HOMEBREW_NO_AUTO_UPDATE=1 brew install -f openscad \
-            )
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends calculix-ccx libglu1-mesa
+          ccx -version || true
+
+      # Linux arm64 is the one bundle that carries no OpenSCAD -- upstream builds
+      # no current arm64 snapshot (see build.sh) -- so it falls back to a host
+      # one, exactly as the wheels do.
+      - name: Install OpenSCAD (Linux arm64)
+        if: matrix.platform == 'ubuntu-24.04-arm64'
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends openscad
+
+      # macOS installs nothing here on purpose, and used to install the
+      # "openscad@snapshot" cask. Every bundle now carries that same snapshot, and
+      # `find_executable` prefers the bundled copy, so a host install would leave
+      # this job green whether or not the payload works -- exactly what the
+      # Linux x86_64 leg avoids by installing the AppImage's libraries and not
+      # OpenSCAD itself. The wheel-based jobs still install it: they have no
+      # bundle to carry one. See ".github/actions/setup-test/action.yml".
 
       - name: Download the bundle
         uses: actions/download-artifact@v8
@@ -268,12 +1075,22 @@ jobs:
           name: partcad-standalone-${{ matrix.platform }}
           path: archives
 
+      # `--platform`, unlike the "Install" job above. The artifact downloaded
+      # here holds the one build it is named after and no "platforms.json", so
+      # there is no inventory for the installer to resolve this machine against.
+      # Writing one into this directory would be worse than leaving it out: a
+      # manifest describing every platform would point at archives that are not
+      # here, so the installer would resolve the host to one of them and fail on
+      # the download instead of on the missing manifest. Resolution is what the
+      # "Install" job exercises, against a manifest generated from the archive
+      # sitting beside it; what this job exercises is the bundle.
       - name: Install with install.sh
         shell: bash -el {0}
         run: |
-          version=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' partcad/src/partcad/__init__.py)
+          version=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' src/partcad/__init__.py)
           sh install.sh \
             --version "${version}" \
+            --platform "${{ matrix.platform }}" \
             --base-url "file://${PWD}/archives" \
             --install-dir "${HOME}/partcad-standalone" \
             --bin-dir "${HOME}/partcad-bin"
@@ -288,7 +1105,17 @@ jobs:
       # `pc`. No coverage: a frozen binary cannot be instrumented, and coverage
       # of the shipped bundle is not meaningful. `cd examples` so the local
       # package resolves as it does in test.yml.
+      #
+      # "The same commands" has to include how their failure is treated, and the
+      # "All" suite in test.yml is `continue-on-error` -- it sweeps the example
+      # packages the public index carries, and several of those have not been
+      # updated for build123d 0.11, so it fails on somebody else's code. Without
+      # the same escape hatch here, this job reported that as a broken bundle
+      # while the "PartCAD" suite beside it -- the one that does test this
+      # repository -- passed. Drop this and the two in test.yml together, when
+      # the index is updated; see the TODOs there.
       - name: Run the ${{ matrix.suite }} examples through the bundle
+        continue-on-error: ${{ matrix.suite == 'All' }}
         shell: bash -el {0}
         run: |
           cd examples

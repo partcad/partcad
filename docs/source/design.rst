@@ -30,8 +30,8 @@ arbitrary part metadata like camera view angles and so on).
 
 - Basic shapes
 
-  - Outer shape: `circle`, `rectangle`, `square`
-  - Optional inner shape: `circle`, `rectangle`, `square`
+  - Outer shape: `circle`, `rectangle`, `square`, `slot`
+  - Optional inner shape: `circle`, `rectangle`, `square`, `slot`
 
 - Files
 
@@ -77,12 +77,6 @@ PartCAD has an evergrowing list of ways to define the part model:
   - `build123d <https://github.com/gumyr/build123d>`_
   - `sdf <https://github.com/fogleman/sdf>`_
 
-- AI-generated scripts
-
-  - OpenSCAD
-  - CadQuery
-  - build123d
-
 Assemblies
 ==========
 
@@ -91,10 +85,34 @@ assemblies together.
 
 PartCAD is expected to have an ever-growing list of ways to define assemblies
 using existing parts.
-However, at the moment, only one way is supported.
-It is called ASSY: assembly YAML.
-The idea behind ASSY is to create a simplistic way to enumerate parts,
-define their parameters and define how parts connect.
+
+- ASSY: assembly YAML
+
+  The native format. The idea behind ASSY is to create a simplistic way to
+  enumerate parts, define their parameters and define how parts connect.
+
+- STEP
+
+  A STEP file that carries an assembly structure, used as an assembly directly,
+  with its components becoming parts of the package.
+
+- URDF
+
+  A `URDF <https://wiki.ros.org/urdf>`_ robot description used as an assembly
+  directly. Its links become the same tree of placed parts an ASSY file
+  produces, evaluated with every joint at its zero position. PartCAD can also
+  write a URDF (plus the meshes it references) from any assembly.
+
+  A URDF is a description of a *simulatable* robot. What it says about a link
+  itself - mass, inertia, friction and contact, material and colour - becomes
+  named PartCAD properties of the part that link turns into, and goes back out
+  on export. What an assembly built out of rigid placements has nowhere to put -
+  joint kinematics, collision geometry, sensors, transmissions - is dropped, and
+  reported. :doc:`simulation` describes that gap and what closing it would take.
+
+For an assembly defined by a file another tool produced - the STEP and the URDF
+above - nothing is copied into the package, so the file stays the source of
+truth.
 
 Scenes
 ======
@@ -102,7 +120,7 @@ Scenes
 PartCAD does not yet implement scenes. But the idea is to be able to reproduce
 the same features as worlds in Gazebo to the extent that PartCAD scenes can be
 exported to and simulated in Gazebo, but without using XML while creating the
-scene.
+scene. See :doc:`simulation`.
 
 Monorepos
 =========
@@ -149,7 +167,8 @@ Object IDs
 ==========
 
 PartCAD packages contain objects of different types: *sketches*, *parts*,
-*assemblies*, *scenes*, *interfaces*, *providers* and so on.
+*assemblies*, *scenes*, *interfaces*, *mates*, *providers*, *software* and
+*partTypes*.
 All of them need to get referenced.
 
 Single object
@@ -231,14 +250,23 @@ long as they are maintained following the PartCAD standards and conventions.
 Command line tools
 ==================
 
-PartCAD CLI tools get installed using the PyPI module ``partcad-cli``.
-The main tool is called ``pc``.
+PartCAD CLI tools get installed using the PyPI package ``partcad``, which also
+carries the Python module and the JSON-RPC service. The main tool is called ``pc``.
 The CLI tools are supposed to provide the complete set of PartCAD features.
 
-Visual Studio Code extension
-============================
+Graphical interfaces
+====================
 
-The PartCAD extension for ``vscode`` is designed to be the primary tool.
+The PartCAD extension for ``vscode`` is designed to be the primary graphical
+tool. The **PartCAD IDE** is that extension, the editor and the command line
+tools in one application, for a machine with neither Python nor an editor set
+up. A **FreeCAD** add-on browses the same packages inside FreeCAD and imports
+objects into the open document.
+
+None of the three carries PartCAD itself. Each is a client of the
+``partcad-json-rpc`` service, which owns the warm context and the sandboxes, so
+they all see the same packages and the same cache as ``pc`` does on the same
+machine. See :doc:`installation` for all three.
 
 
 ========================

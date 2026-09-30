@@ -1,0 +1,3568 @@
+#
+# OpenVMP, 2023
+#
+# Author: Roman Kuzmenko
+# Created: 2023-08-19
+#
+# Licensed under Apache License, Version 2.0.
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import copy
+import inspect
+import os
+import re
+import threading
+import typing
+
+# from pprint import pformat
+from pathlib import Path
+from typing import TYPE_CHECKING, List, Optional
+
+import ruamel.yaml
+
+from . import (
+    assembly,
+    assembly_config,
+)
+from . import assembly_factory_alias as afa
+from . import (
+    assembly_guide,
+)
+from . import config as pc_config
+from . import (
+    consts,
+)
+from . import document as pc_document
+from . import (
+    factory,
+    interface,
+    interface_config,
+)
+from . import logging as pc_logging
+from . import (
+    material,
+    material_config,
+    output,
+    part_config,
+)
+from . import part_factory_alias as pfa
+from . import (
+    plugin_config,
+    plugin_provider,
+    plugin_repository,
+    project_config,
+    reference,
+    scene,
+    scene_config,
+)
+from . import scene_factory as scnf
+from . import (
+    sketch,
+    sketch_config,
+)
+from . import sketch_factory_alias as sfa
+from . import software as pc_software
+from . import (
+    software_config,
+)
+from . import tags as pc_tags
+from . import (
+    telemetry,
+)
+from .document_pdf import render_pdf_async
+from .enrich import enriched_source_name
+from .exception import EmptyShapesError, NeedsUpdateException, ObjectNameTakenError
+from .part import Part
+from .render import render_cfg_merge
+from .shape_config import NO_DEFAULT
+from .utils import (
+    format_parameterized_name,
+    normalize_resource_path,
+    parse_parameterized_name,
+    resolve_resource_path,
+)
+
+if TYPE_CHECKING:
+    from partcad.context import Context
+    from partcad.shape import Shape
+
+
+# The kinds of first-class objects a package may contain, mapped to the
+# 'partcad.yaml' section that declares them. Kept as data so that introducing a
+# new kind of object does not require touching the per-kind accessor plumbing.
+OBJECT_KINDS = (
+    "material",
+    "interface",
+    "sketch",
+    "part",
+    "assembly",
+    "scene",
+    "provider",
+    "repository",
+    "software",
+    "partType",
+)
+OBJECT_KIND_SECTIONS = {
+    # What a part is made of, rather than a part: a 'Material' is not a shape
+    # and nothing constructs it, so it has neither a factory nor a 'type'.
+    "material": "materials",
+    "interface": "interfaces",
+    "sketch": "sketches",
+    "part": "parts",
+    "assembly": "assemblies",
+    # A scene is a placed arrangement rather than a product, built out of the
+    # very same files an assembly is; see 'partcad.scene'.
+    "scene": "scenes",
+    "provider": "providers",
+    "repository": "repositories",
+    # 'software' is the one kind of object that is neither a shape nor a plugin:
+    # a file the product ships with (a firmware image, a binary) rather than
+    # geometry or a way of getting geometry. The section is named the same in
+    # the singular and the plural, which is why this entry looks like a no-op.
+    "software": "software",
+    # A 'partType' is a package-defined way to construct parts (e.g. a wrapper
+    # script). It is enumerable like any other object, but it is not a shape and
+    # is never instantiated: parts whose 'type' references it are constructed by
+    # PartFactoryWrapper, which looks the definition up here.
+    "partType": "partTypes",
+}
+
+# The object kinds a package creates on demand rather than when it loads.
+#
+# The four that are shapes, and the expensive ones: a catalog package declares
+# thousands of them, and creating one runs a factory. Which of them a command
+# wants is the command's business -- 'pc list assemblies' wants assemblies, 'pc
+# render //pkg:bolt' wants one part -- and a package that made all four as it
+# loaded answered every one of those questions by doing all of the work. So the
+# dictionaries below are filled per kind, the first time somebody reads the one
+# they are after (see '_lazy_objects'), and a lookup by name creates just the
+# object named (see 'get_object').
+#
+# The kinds that are not here stay eager, and are not an oversight: materials
+# and software are data rather than shapes, and interfaces and mates are what
+# the shapes are declared in terms of - a package has a handful of each, and
+# the parts that name them are created after them, which is the order
+# '_instantiate_objects' sets out.
+LAZY_OBJECT_KINDS = ("sketch", "part", "assembly", "scene")
+
+# The object types that are references to another object rather than an object
+# of their own. Parametrizing one of these does not mean applying the values to
+# it - it declares no parameters to apply them to - but asking for the instance
+# of what it points at that has them, so the values are handed to it in 'with'
+# and it passes them on (see 'PartFactoryAlias', 'PartFactoryEnrich'). That is
+# what makes a chain of aliases and enriches work in any order.
+PARAMETER_PASSING_TYPES = ("alias", "enrich")
+
+# Object types whose parts the object itself materializes, rather than the
+# package declaring them: a STEP assembly's components become the parts
+# '<assembly>/<component>', a URDF's links the parts '<assembly>/<link>', a
+# Gazebo world's links the parts '<scene>/<model>/<link>', and an MJCF model's
+# geoms the parts '<object>/<body>'. Such a part is only
+# in 'Project.parts' once the object has been built, so 'get_part' builds it on
+# demand (see '_materialize_derived_part').
+# 'step' is the one built-in factory that does it. Every other one is an
+# 'import:' type - a URDF, an MJCF model, a Gazebo world, or whatever a plugin
+# package teaches PartCAD to read next - and those cannot be listed here,
+# because the whole point of the section is that PartCAD does not know what is
+# in it (see 'output.IMPORT').
+#
+# So the test is by exclusion: a type no built-in factory is registered for is
+# an imported one. That is exact for a working package, and for a broken one -
+# a typo in 'type:' - it means this claims the object and the build then fails
+# with the type error, which is the same failure the object was going to
+# produce anyway and says the same thing.
+#
+# It has to stay a dictionary lookup and nothing more: '_derived_part_owner()'
+# runs on every part lookup, and resolving the declaration would need a context
+# and a package fetch to answer a question asked thousands of times.
+PART_PRODUCING_BUILTIN_TYPES = ("step",)
+
+
+def produces_own_parts(kind: str, type_name) -> bool:
+    """Whether objects of this type materialize their own parts."""
+    if not isinstance(type_name, str) or not type_name:
+        return False
+    if type_name in PART_PRODUCING_BUILTIN_TYPES:
+        return True
+    return type_name not in factory.all.get(kind, {})
+
+
+# How often a caller waiting on somebody else's derived-part build looks again.
+# It waits for a CAD build, so the granularity costs nothing next to what it is
+# waiting for; what matters is that the wait yields to the loop instead of
+# occupying a thread.
+_DERIVED_PART_POLL_SECONDS = 0.01
+
+
+def _has_running_loop() -> bool:
+    """Whether this thread is already running an event loop."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
+
+
+# The file extension each object kind is written to, where it is not the kind's
+# own name. 'None' means the kind is not file-backed at all, so what the user
+# names is the object rather than a path. Lifted out of the 'add_*' methods
+# because the URL form of 'pc add' has to derive the same name from the last
+# segment of a URL, and two copies of these would name one file two ways.
+SECTION_EXTENSIONS = {
+    "sketches": {"cadquery": "py", "build123d": "py", "basic": None},
+    "parts": {"cadquery": "py", "build123d": "py", "chili3d": "chili", "sdf": "py"},
+    "assemblies": {},
+}
+
+
+# What '_skipped_by' returns for a declaration whose 'unless' PartCAD could not
+# read. Not a clause - nothing excluded it - but the object is dropped all the
+# same, and recorded as broken so that the reason reaches the user.
+INVALID_UNLESS = "<invalid 'unless'>"
+
+
+def _readme_cell(text) -> str:
+    """A value made safe to put in one cell of a generated markdown table."""
+    text = "" if text is None else str(text)
+    return text.replace("|", "\\|").replace("\n", "<br/>")
+
+
+def declare_object_type_parameters(factory_name: str, config: dict, params: dict) -> None:
+    """Declare the object-type parameters a reference sets but the object does not.
+
+    An object-type parameter belongs to the *type* rather than to the
+    declaration (see 'factory.accepted_object_type_parameters'), so it is there
+    to be set whether or not the package that wrote the object thought to
+    mention it. Without this, 'bends;include=BEND_UP,BEND_DOWN' would be refused
+    by the two checks below - the object "has no parameters", and then the
+    parameter "is not declared in" it - and a DXF sketch could only be read
+    layer by layer if every combination of layers had been declared in advance,
+    which is the opposite of what a parameter is for.
+
+    Only the names this reference actually sets are declared, and only where the
+    object declares nothing of that name itself: a declaration that is there is
+    the one that carries the 'desc', the 'enum' and the default its author
+    meant. The type's own default goes in as the default, so an unset parameter
+    reads back exactly as it did before anything was declared, and the type
+    witnesses its type ('config.declared_parameter_type').
+
+    A name the type does not contribute is left alone, and is rejected moments
+    later by 'apply_parameter_values' with the message it has always had. That
+    is the point of the registry: every other parameter name is the object's own
+    invention, and inventing a declaration for one would turn a typo into a
+    parameter nothing reads.
+    """
+    accepted = factory.accepted_object_type_parameters(factory_name, config.get("type"))
+    if not accepted:
+        return
+    parameters = config.get("parameters")
+    for name in params:
+        if name not in accepted:
+            continue
+        if isinstance(parameters, dict) and name in parameters:
+            continue
+        if not isinstance(parameters, dict):
+            parameters = {}
+            config["parameters"] = parameters
+        default = accepted[name]
+        # The default is the type's witness of what the parameter is, which is
+        # how it is read everywhere else ('shape_config.object_type_parameter').
+        # A parameter that has none - 'material' and 'color', where absent means
+        # absent - leaves the type unstated, and an unstated type is the one
+        # case 'coerce_parameter_value' takes the value exactly as written:
+        # right for both of them, and better than guessing at a type here.
+        declaration = {"type": pc_config.declared_parameter_type(default)}
+        if default is not NO_DEFAULT:
+            declaration["default"] = default
+        parameters[name] = declaration
+
+
+@telemetry.instrument()
+class Project(project_config.Configuration):
+    sketches: dict[str, sketch.Sketch]
+    parts: dict[str, Part]
+    assemblies: dict[str, assembly.Assembly]
+    scenes: dict[str, scene.Scene]
+    providers: dict[str, plugin_provider.Provider]
+    repositories: dict[str, plugin_repository.Repository]
+    software: dict[str, pc_software.Software]
+
+    class MaterialLock(object):
+        def __init__(self, prj, material_name: str):
+            prj.material_locks_lock.acquire()
+            if material_name not in prj.material_locks:
+                prj.material_locks[material_name] = threading.Lock()
+            self.lock = prj.material_locks[material_name]
+            prj.material_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
+
+    class InterfaceLock(object):
+        def __init__(self, prj, interface_name: str):
+            prj.interface_locks_lock.acquire()
+            if interface_name not in prj.interface_locks:
+                prj.interface_locks[interface_name] = threading.Lock()
+            self.lock = prj.interface_locks[interface_name]
+            prj.interface_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
+
+    class SketchLock(object):
+        def __init__(self, prj, sketch_name: str):
+            prj.sketch_locks_lock.acquire()
+            if sketch_name not in prj.sketch_locks:
+                prj.sketch_locks[sketch_name] = threading.Lock()
+            self.lock = prj.sketch_locks[sketch_name]
+            prj.sketch_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
+
+    class PartLock(object):
+        def __init__(self, prj, part_name: str):
+            prj.part_locks_lock.acquire()
+            if part_name not in prj.part_locks:
+                prj.part_locks[part_name] = threading.Lock()
+            self.lock = prj.part_locks[part_name]
+            prj.part_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
+
+    class AssemblyLock(object):
+        def __init__(self, prj, assembly_name: str):
+            prj.assembly_locks_lock.acquire()
+            if assembly_name not in prj.assembly_locks:
+                prj.assembly_locks[assembly_name] = threading.Lock()
+            self.lock = prj.assembly_locks[assembly_name]
+            prj.assembly_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
+
+    class SceneLock(object):
+        def __init__(self, prj, scene_name: str):
+            prj.scene_locks_lock.acquire()
+            if scene_name not in prj.scene_locks:
+                prj.scene_locks[scene_name] = threading.Lock()
+            self.lock = prj.scene_locks[scene_name]
+            prj.scene_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
+
+    # Which lock guards one object of a kind. The bulk pass takes the same one a
+    # lookup by name takes (see 'get_object'), which is what makes the two safe
+    # to run at once.
+    OBJECT_KIND_LOCKS: typing.ClassVar[dict] = {}
+
+    class ProviderLock(object):
+        def __init__(self, prj, provider_name: str):
+            prj.provider_locks_lock.acquire()
+            if provider_name not in prj.provider_locks:
+                prj.provider_locks[provider_name] = threading.Lock()
+            self.lock = prj.provider_locks[provider_name]
+            prj.provider_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
+
+    class RepositoryLock(object):
+        def __init__(self, prj, repository_name: str):
+            prj.repository_locks_lock.acquire()
+            if repository_name not in prj.repository_locks:
+                prj.repository_locks[repository_name] = threading.Lock()
+            self.lock = prj.repository_locks[repository_name]
+            prj.repository_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
+
+    class SoftwareLock(object):
+        def __init__(self, prj, software_name: str):
+            prj.software_locks_lock.acquire()
+            if software_name not in prj.software_locks:
+                prj.software_locks[software_name] = threading.Lock()
+            self.lock = prj.software_locks[software_name]
+            prj.software_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
+
+    def __init__(
+        self,
+        ctx: Context,
+        name: str,
+        path: str,
+        config_obj: dict | None = None,
+        inherited_config: dict | None = None,
+    ):
+        super().__init__(
+            name,
+            path,
+            config_obj=config_obj,
+            inherited_config=inherited_config,
+        )
+        self.ctx = ctx
+
+        # Protect the critical sections from access in different threads
+        self.lock = threading.Lock()
+
+        # Objects this package declares but could not instantiate, as
+        # {kind: {name: reason}}. They are kept rather than dropped so that the
+        # package can say what is missing and why: an object that vanishes with
+        # nothing but a line in a log leaves the user staring at an empty
+        # package with no way to tell an empty one from a broken one.
+        self.broken_objects: dict[str, dict[str, str]] = {kind: {} for kind in OBJECT_KINDS}
+        # Of those, the ones that are broken because *PartCAD* retired their
+        # type. Kept apart because the two call for opposite things: a broken
+        # object is a failure to report, and a retired one is a declaration
+        # nobody can now make work, which every command that merely walks the
+        # package has to be able to walk past. See 'record_broken_object'.
+        self.retired_objects: dict[str, set] = {kind: set() for kind in OBJECT_KINDS}
+
+        # Objects this package declares but which do not apply here, as
+        # {kind: {name: clause}} - the 'unless' clause of theirs that excluded
+        # them, as text. Kept apart from 'broken_objects': nothing failed, and
+        # nothing is to be fixed. See 'partcad.tags'.
+        self.skipped_objects: dict[str, dict[str, str]] = {kind: {} for kind in OBJECT_KINDS}
+
+        # option: "unless"
+        # description: the conditions this package does not work under
+        # values: a tag, or a list whose entries are tags (any one excludes) and
+        #         lists of tags (all of which must hold together to exclude)
+        # default: none
+        #
+        # Decided here rather than in 'Configuration', which has no context and
+        # therefore no tags to decide against. A malformed 'unless' is reported
+        # and then ignored: raising would take the whole package - and every
+        # package underneath it - out of the tree over a typo, which is a far
+        # worse outcome than loading a package that meant to exclude itself.
+        try:
+            self.skipped_by = pc_tags.excluded_by(self.config_obj, ctx.tags, self.name)
+        except ValueError as e:
+            pc_logging.error(str(e))
+            self.skipped_by = None
+        self.skipped = self.skipped_by is not None
+        if self.skipped:
+            pc_logging.info("Skipping the package '%s': excluded by 'unless' (%s)" % (self.name, self.skipped_by))
+
+        # self._object_configs[kind] holds the declared configuration of every
+        # object of that kind. 'None' means "not enumerated yet": a local
+        # package knows everything from its parsed 'partcad.yaml' and populates
+        # all kinds here, while a plugin-backed package (see ProjectPlugin)
+        # leaves them None and fills them on demand through the accessors
+        # (object_config / object_configs / object_names).
+        self._object_configs: dict[str, typing.Optional[dict]] = {
+            kind: self._initial_object_configs(kind) for kind in OBJECT_KINDS
+        }
+
+        # {kind: {interface name: [objects that implement it]}}, built on the
+        # first search that asks for one and never while a package loads:
+        # 'pc list' does not ask, and must not pay for an index it does not
+        # read. See 'partcad.shape_ports.interface_index'.
+        self.interface_indexes: dict[str, dict] = {}
+
+        # The instantiated objects of each kind, filled lazily by the getters.
+        self.materials = {}
+        self.material_locks = {}
+        self.material_locks_lock = threading.Lock()
+
+        self.interfaces = {}
+        self.interface_locks = {}
+        self.interface_locks_lock = threading.Lock()
+
+        # The four lazy kinds (see 'LAZY_OBJECT_KINDS'). Held under private
+        # names because the ones the rest of the world reads are properties
+        # that fill them first.
+        self._sketches = {}
+        self.sketch_locks = {}
+        self.sketch_locks_lock = threading.Lock()
+
+        self._parts = {}
+        self.part_locks = {}
+        self.part_locks_lock = threading.Lock()
+
+        self._assemblies = {}
+        self.assembly_locks = {}
+        self.assembly_locks_lock = threading.Lock()
+
+        self._scenes = {}
+        self.scene_locks = {}
+        self.scene_locks_lock = threading.Lock()
+
+        # Which of the lazy kinds have been created in bulk already, and the
+        # lock that makes "have they" and "create them" one answer.
+        #
+        # One lock for all four kinds rather than one lock each: a factory
+        # making an object of one kind may ask for an object of another, and
+        # two locks taken in whatever order that happens to produce are two
+        # threads deadlocking on one package. Re-entrant, because that same
+        # factory registers what it makes into the very dictionary this is
+        # filling, and because a kind that resolves into itself (an alias to a
+        # part of this package) comes back through here on the same thread.
+        # '_instantiating_kinds' is what stops that from recursing: it is only
+        # ever read by the thread holding the lock, since every other thread is
+        # still waiting for it.
+        self._instantiated_kinds: set[str] = set()
+        self._instantiating_kinds: set[str] = set()
+        self._instantiate_lock = threading.RLock()
+        # Which declaration each implicitly declared alias belongs to, per kind
+        # and built on demand. See 'alias_declared_by'.
+        self._alias_index: dict[str, dict] = {}
+        # The names that exist because another object's 'aliases' asked for
+        # them, per kind, as they are created. See 'init_objects'.
+        self._implicit_aliases: dict[str, set] = {}
+        # The declarations already normalized, per kind. See '_normalized'.
+        self._normalized_configs: dict[str, set] = {}
+
+        self.providers = {}
+        self.provider_locks = {}
+        self.provider_locks_lock = threading.Lock()
+
+        self.repositories = {}
+        self.repository_locks = {}
+        self.repository_locks_lock = threading.Lock()
+
+        self.software = {}
+        self.software_locks = {}
+        self.software_locks_lock = threading.Lock()
+
+        # The objects already built to materialize a part of theirs (see
+        # '_materialize_derived_part'), and the lock that keeps two threads from
+        # building the same one. Keyed by '(kind, name)': 'assemblies:' and
+        # 'scenes:' are separate namespaces, and both hold types that produce
+        # parts.
+        self._derived_parts_attempted: set[tuple] = set()
+        # owner -> the event its builder sets when the build is over. A second
+        # caller for the same owner waits on this instead of looking the part
+        # up while 'children' is still being filled.
+        self._derived_parts_building: dict[tuple, threading.Event] = {}
+        self._derived_parts_lock = threading.Lock()
+
+        if (
+            "desc" in self.config_obj
+            and self.config_obj["desc"] is not None
+            and isinstance(self.config_obj["desc"], str)
+        ):
+            self.desc = self.config_obj["desc"].strip()
+        else:
+            self.desc = ""
+
+        if not self.skipped:
+            self._instantiate_objects()
+
+    def _initial_object_configs(self, kind: str):
+        """The configs of the given kind known at construction time.
+
+        A local package returns everything its configuration declares. A
+        plugin-backed package overrides this to return None, deferring
+        enumeration until the data is actually requested.
+        """
+        if self.skipped:
+            # A skipped package declares nothing here. Emptying it at the source
+            # is what makes every consumer downstream - the listings, the
+            # counts, the getters - agree that there is nothing in it, without
+            # any of them having to know about tags.
+            return {}
+        cfg = self.config_obj.get(OBJECT_KIND_SECTIONS[kind])
+        return {} if cfg is None else self._filter_skipped(kind, cfg)
+
+    def _skipped_by(self, kind: str, name: str, config) -> typing.Optional[str]:
+        """The 'unless' clause excluding this object here, remembering it, or None.
+
+        A malformed 'unless' is recorded as a broken object rather than raised:
+        the object is dropped either way, and going through 'broken_objects'
+        is what puts the reason in front of the user instead of in a traceback.
+        Returns a value in that case too, because the object must not be
+        instantiated from a declaration PartCAD could not read.
+        """
+        try:
+            clause = pc_tags.excluded_by(config, self.ctx.tags, "%s:%s" % (self.name, name))
+        except ValueError as e:
+            self.record_broken_object(kind, name, e)
+            return INVALID_UNLESS
+        if clause is None:
+            return None
+        self.skipped_objects.setdefault(kind, {})[name] = clause
+        pc_logging.info("Skipping the %s '%s:%s': excluded by 'unless' (%s)" % (kind, self.name, name, clause))
+        return clause
+
+    def _filter_skipped(self, kind: str, configs: dict) -> dict:
+        """'configs' without the objects that do not apply to this context."""
+        if not configs:
+            return configs
+        return {name: config for name, config in configs.items() if self._skipped_by(kind, name, config) is None}
+
+    def get_skipped_object_clause(self, kind: str, name: str) -> typing.Optional[str]:
+        """The 'unless' clause an object was excluded on, or None if it was not.
+
+        The clause as text ('arm64', or 'arm and useDocker'), which is what
+        every caller needs it for and what the user will recognize from their
+        own configuration.
+        """
+        return self.skipped_objects.get(kind, {}).get(name)
+
+    def _instantiate_objects(self):
+        """Instantiate the package's objects.
+
+        Split out of the constructor so that a plugin-backed package can
+        override it to instantiate lazily, on demand, instead of enumerating
+        and instantiating everything up front.
+        """
+        # First: software is a file the package ships, not geometry, so nothing
+        # here depends on it having been read, and a part that references one
+        # resolves it by name when asked rather than at load time.
+        self.init_software()
+        # Before the objects that name one: a material is data, so reading it
+        # cannot fail on anything that is not read yet, and having them all in
+        # place first means a part's 'material' resolves without a second pass.
+        self.init_materials()
+        # An interface may be defined by a sketch, which it asks for by name
+        # ('Interface.__init__'); that creates the one sketch it names rather
+        # than every sketch the package has, which is what "after sketches"
+        # used to mean here.
+        self.init_interfaces()
+        self.init_mates()  # After interfaces
+        self.init_providers()
+        self.init_suppliers()  # after providers
+        self.init_repositories()
+        # The four kinds that are shapes are NOT created here; they are created
+        # when something asks for them (see 'LAZY_OBJECT_KINDS'). The order
+        # their 'init_*' used to be called in was a dependency order and it
+        # still holds - a sketch before the part that extrudes it, a part
+        # before the assembly that places it - but it is now kept by the
+        # resolution itself rather than by this sequence: whatever an object
+        # names is asked for by name while it is being made, and 'get_object'
+        # creates that one thing on the spot. What this order was really
+        # protecting is the kinds above, which is why they stayed.
+
+    # The generic object-access layer. Every read of a package's declared
+    # objects goes through these three methods so that a plugin-backed package
+    # can source the same data lazily without changing any caller.
+
+    def object_configs(self, kind: str) -> dict:
+        """All declared configs of 'kind', enumerating on demand if needed."""
+        configs = self._object_configs.get(kind)
+        if configs is None:
+            configs = {} if self.skipped else self._filter_skipped(kind, self._enumerate_object_configs(kind))
+            self._object_configs[kind] = configs
+        return configs
+
+    def _normalized(self, kind: str, name: str, config):
+        """'config' with the fields every reader of a declaration expects.
+
+        A declaration gains its 'name' and 'orig_name', its parameter sections
+        expanded and the user's overrides applied, when it is normalized - and
+        because normalizing happens in place, that used to be a side effect of
+        the package creating all of its objects as it loaded. It no longer
+        creates them (see 'LAZY_OBJECT_KINDS'), so the accessor does it: a
+        declaration read from a package is a normalized one whether or not
+        anything has been made out of it.
+
+        Done once per object and remembered, because normalizing is not free -
+        it expands the parameter sections and applies the user's overrides - and
+        this accessor is read per object by every bulk pass over a kind.
+
+        Only the kinds that have a configuration class here; an interface and a
+        material have normalizations of their own (see
+        'normalized_interface_config'), and a 'partType' is not an object.
+        """
+        config_class = self.OBJECT_KIND_CONFIG_CLASSES.get(kind)
+        if config_class is None or config is None:
+            return config
+        done = self._normalized_configs.setdefault(kind, set())
+        configs = self._object_configs.get(kind)
+        if name in done and configs is not None and configs.get(name) is config:
+            return config
+        normalized = config_class.normalize(name, config, f"{self.name}:{name}")
+        if kind in LAZY_OBJECT_KINDS and isinstance(normalized, dict) and "manufacturable" not in normalized:
+            # What the package says about anything it produces, written onto the
+            # declaration rather than only onto the object. 'ShapeFactory' puts
+            # it there as it creates one, which used to mean every declaration
+            # carried it once the package had loaded - and 'pc convert' reads
+            # the declaration rather than the object, so resolving one part
+            # copied the field out of a declaration that nothing had asked for.
+            normalized["manufacturable"] = self.is_manufacturable
+        if configs is not None and configs.get(name) is not normalized:
+            # A short-form declaration ('cube: //other:cube') normalizes into a
+            # new dictionary rather than in place, and the package should hold
+            # the one every reader is handed.
+            configs[name] = normalized
+        done.add(name)
+        return normalized
+
+    def object_config(self, kind: str, name: str):
+        """The config of a single object, fetched individually when possible.
+
+        For a plugin-backed package this avoids a full enumeration: it asks the
+        plugin for just this one object and only falls back to listing
+        everything if the targeted fetch is not supported.
+        """
+        configs = self._object_configs.get(kind)
+        if configs is not None and name in configs:
+            return self._normalized(kind, name, configs[name])
+        # Not in the (possibly already enumerated) set: try a targeted single
+        # fetch. A plugin-backed package can serve objects beyond what it
+        # enumerates - e.g. the first page of a large, paginated catalog - so
+        # any addressable object remains reachable even when it was not listed.
+        one = None if self.skipped else self._fetch_object_config(kind, name)
+        if one is not None:
+            # Filtered here as well as in the enumeration above: an object a
+            # plugin-backed package serves without listing reaches the caller
+            # through this path only, and 'unless' has to hold on both.
+            if self._skipped_by(kind, name, one) is not None:
+                return None
+            return self._normalized(kind, name, one)
+        if configs is None:
+            return self._normalized(kind, name, self.object_configs(kind).get(name))
+        return None
+
+    def object_names(self, kind: str) -> list:
+        return list(self.object_configs(kind).keys())
+
+    def object_descriptions(self, kind: str) -> dict:
+        """What a listing prints beside each declared name, creating nothing.
+
+        A listing wants two columns and neither of them needs the object: the
+        name is the declaration's, and the description is the declaration's
+        too, apart from the reference types that declare none - an alias, an
+        enrich and a compound are then described by what they point at, and
+        that is resolved from the declaration as well (see
+        'partcad.reference').
+
+        So a listing does not build a package to print it, which is the whole
+        point: 'pc list parts -r //pub' over a catalog of twenty thousand parts
+        used to run a factory per row. What that also means is that a listing
+        no longer reports a declaration PartCAD cannot use - it does not look
+        closely enough to find out. That is 'pc test's question, and it asks it
+        of every object.
+        """
+        descriptions = {}
+        for name, config in list(self.object_configs(kind).items()):
+            config = self._normalized(kind, name, config)
+            if not isinstance(config, dict):
+                descriptions[name] = None
+                continue
+            desc = config.get("desc")
+            # A reference that says what it is keeps its own word for it, the
+            # same answer 'PartFactoryAlias' gives the object.
+            if config.get("type") in reference.REFERENCE_TYPES and not desc:
+                try:
+                    desc = reference.describe(config["type"], self.name, self._reference_source(config))
+                except Exception as e:
+                    # A reference that says nothing about what it points at.
+                    # Reported by whoever tries to build it; a listing says what
+                    # it can and prints the row.
+                    pc_logging.debug("%s: cannot describe '%s': %s" % (self.name, name, e))
+            descriptions[name] = desc.strip() if isinstance(desc, str) else desc
+
+        # And the names that exist because another declaration's 'aliases'
+        # asked for them. They have no declaration to read, which is why they
+        # are listed from the index of who claimed them (see
+        # 'alias_declared_by') - and they are listed, because a package really
+        # does have an object under each of them.
+        for alias, owner in self._aliases_declared(kind).items():
+            if alias in descriptions:
+                # Refused when it was created: the package declares something
+                # else under that name, and that is what it has.
+                continue
+            descriptions[alias] = reference.describe("alias", self.name, self.name + ":" + owner)
+        return descriptions
+
+    def _reference_source(self, config: dict) -> str:
+        """The '<package>:<object>' a reference declaration resolves to.
+
+        The same answer its factory works out, by the same rules: an enrich
+        names an instance, so its parameters are part of which object it points
+        at ('enriched_source_name'), while an alias and a compound pass any
+        'with' on to what they name.
+        """
+        if config.get("type") == "enrich":
+            return enriched_source_name(self, self, config)
+        source = reference.source_of(self, self.name, config, config.get("type", "object"))
+        with_parameters = config.get("with")
+        if with_parameters:
+            package_name, object_name = reference.split(source)
+            source = package_name + ":" + format_parameterized_name(object_name, with_parameters)
+        return source
+
+    def declares_object(self, kind: str, name: str) -> bool:
+        """Whether this package has an object of that kind under that name to offer.
+
+        The question a recursive run asks of every package it walks: an
+        unqualified object name means "the one in this package, if it has one",
+        and a package that has none is passed over rather than reported. Only a
+        run that found none anywhere is an error -- which is what makes
+        '//pub/examples...:bolt' usable over a tree where three packages of
+        forty declare a bolt.
+
+        Cheap by construction: the declaration is read, nothing is built and
+        nothing is instantiated. Asking each package for the object instead
+        would build it, and would log a "not found" for each of the
+        thirty-seven that do not have one.
+
+        Parameters are the caller's, not part of the name an object is declared
+        under, so they are cut off before looking.
+        """
+        base, _ = parse_parameterized_name(name)
+        if self.object_config(kind, base) is not None:
+            return True
+        if kind == "part" and "/" in base:
+            # A part an assembly materializes -- '<assembly>/<link>' of a URDF
+            # or of a STEP assembly -- is declared nowhere: it exists once that
+            # assembly has been built. It is still nameable, and naming one is
+            # how it is asked for, so the package that declares the assembly it
+            # comes out of is the package that has it.
+            return self.object_config("assembly", base.split("/")[0]) is not None
+        return False
+
+    # Hooks for plugin-backed packages. Never reached for a local package,
+    # whose '_object_configs' are all populated at construction.
+    def _enumerate_object_configs(self, kind: str) -> dict:
+        return {}
+
+    def _fetch_object_config(self, kind: str, name: str):
+        return None
+
+    def dependencies(self) -> dict:
+        """The declared child-package dependencies of this package.
+
+        Routed through an accessor so that a plugin-backed package can source
+        its children from the repository (see ProjectExternalRepository) instead
+        of from a 'dependencies' section on disk.
+        """
+        deps = self.config_obj.get("dependencies")
+        return deps if deps else {}
+
+    async def ensure_enumerated_async(self):
+        """Warm any lazily-enumerated data from within an async context.
+
+        A no-op for a local package (enumerated at construction). A plugin-backed
+        package overrides this to await its repository, so the synchronous
+        consumers downstream only ever hit the cache. Called from the import
+        traversal (see Context._import_all_recursive).
+        """
+        return None
+
+    async def prefetch_object_configs_async(self, kinds) -> None:
+        """Warm the enumerations of 'kinds' from within an async context.
+
+        A no-op for a local package, whose objects are known at construction. A
+        plugin-backed package overrides this to fetch several kinds at once and
+        concurrently, so that a caller which then reads them one after another
+        through the synchronous accessors pays one round trip's latency rather
+        than one per kind (see Context.get_all_packages).
+        """
+        return None
+
+    def object_count(self, kind: str) -> int:
+        """Number of declared objects of a kind, without instantiating them."""
+        return len(self.object_configs(kind))
+
+    def object_count_known(self, kind: str) -> int:
+        """Number of declared objects of a kind, without enumerating either.
+
+        "Known", rather than "declared": for a local package the two are the
+        same, because its 'partcad.yaml' was parsed when it loaded, and for a
+        plugin-backed one this is whatever has been asked for so far. The
+        difference is a round trip to the repository, and the caller is a report
+        of what is loaded ('pc info') - which must not go to the network to make
+        its own numbers larger.
+        """
+        configs = self._object_configs.get(kind)
+        return len(configs) if configs else 0
+
+    # Backward-compatible views onto the object-access layer. These keep the
+    # historical 'self.<kind>_configs' attribute name working (now sourced
+    # through the accessor, so plugin packages enumerate lazily here too).
+    @property
+    def material_configs(self) -> dict:
+        return self.object_configs("material")
+
+    @property
+    def interface_configs(self) -> dict:
+        return self.object_configs("interface")
+
+    @property
+    def sketch_configs(self) -> dict:
+        return self.object_configs("sketch")
+
+    @property
+    def part_configs(self) -> dict:
+        return self.object_configs("part")
+
+    @property
+    def assembly_configs(self) -> dict:
+        return self.object_configs("assembly")
+
+    @property
+    def scene_configs(self) -> dict:
+        return self.object_configs("scene")
+
+    @property
+    def provider_configs(self) -> dict:
+        return self.object_configs("provider")
+
+    @property
+    def repository_configs(self) -> dict:
+        return self.object_configs("repository")
+
+    @property
+    def software_configs(self) -> dict:
+        return self.object_configs("software")
+
+    # TODO(clairbee): Implement get_cover()
+    # def get_cover(self):
+    #     if not "cover" in self.config_obj or self.config_obj["cover"] is None:
+    #         return None
+    #     if isinstance(self.config_obj["cover"], str):
+    #         return os.path.join(self.config_dir, self.config_obj["cover"])
+    #     elif "package" in self.config_obj["cover"]:
+    #         return self.ctx.get_project(
+    #             self.path + "/" + self.config_obj["cover"]["package"]
+    #         ).get_cover()
+
+    def info(self) -> dict:
+        """Return package-level information (name, description, URLs).
+
+        Mirrors the object factories' ``info()`` so that ``pc info`` can render
+        a package the same way it renders parts, sketches and assemblies. It
+        intentionally does not enumerate the package's objects.
+        """
+        info = {"Path": self.name}
+        if self.skipped:
+            # Stated here as well as in the log line at load: by the time
+            # somebody asks a package what it is, the line explaining why it is
+            # empty has long scrolled past.
+            info["Skipped"] = "excluded by 'unless' (%s)" % self.skipped_by
+        if "url" in self.config_obj and self.config_obj["url"] is not None:
+            info["Url"] = self.config_obj["url"]
+        if "importUrl" in self.config_obj and self.config_obj["importUrl"] is not None:
+            info["ImportUrl"] = self.config_obj["importUrl"]
+        if self.desc:
+            info["Desc"] = self.desc
+        return info
+
+    def matches(self, keyword: str) -> bool:
+        if not keyword:
+            return False
+        keyword = keyword.lower()
+
+        if keyword in str(self.config_obj).lower() or keyword in self.name.lower():
+            return True
+        return False
+
+    def relocate(self, pattern: str) -> str:
+        """Rewrites a reference this package authored against its own name.
+
+        A package declares its identity ('name' in its configuration) but may
+        be loaded at a different location, e.g. when it is vendored into
+        another package tree. References it makes to itself are written using
+        the identity, because that is what resolves while the package is being
+        developed standalone. Point them back at wherever this instance
+        actually lives, so that a vendored copy uses itself instead of pulling
+        a second instance in from the package it was copied from.
+
+        The rewrite is per-instance state: two copies of the same package
+        loaded at two locations relocate independently and never interact.
+        """
+        declared_name = self.declared_name
+        if not declared_name or declared_name == self.name:
+            # The common case: loaded exactly where it says it belongs.
+            return pattern
+
+        if (
+            pattern == declared_name
+            or pattern.startswith(declared_name + "/")
+            or pattern.startswith(declared_name + ":")
+        ):
+            relocated = self.name + pattern[len(declared_name) :]
+            pc_logging.debug("%s: relocated the reference '%s' to '%s'" % (self.name, pattern, relocated))
+            return relocated
+
+        return pattern
+
+    def resolve(self, pattern: str):
+        """Resolves a reference authored by this package into (package, item)."""
+        return resolve_resource_path(self.name, self.relocate(pattern))
+
+    def normalize(self, pattern: str) -> str:
+        """Resolves a reference authored by this package into 'package:item'."""
+        return normalize_resource_path(self.name, self.relocate(pattern))
+
+    def get_child_project_names(self, absolute: bool = True):
+        if self.broken:
+            pc_logging.info("Ignoring the broken package: %s" % self.name)
+            return
+
+        # Skipping a package skips what it brings in, subfolders and declared
+        # dependencies alike. It already said so once, when it was loaded.
+        if self.skipped:
+            return []
+
+        children = list()
+        if os.path.isdir(self.config_dir):
+            # Sorted, because this list reaches a generated README: 'os.scandir'
+            # yields whatever order the filesystem stores, so without this the
+            # sub-package section of 'feature_monorepo/README.md' came out in a
+            # different order on a different machine and the rendered-examples
+            # check failed on a tree nobody had touched.
+            sub_folders = sorted(f.name for f in os.scandir(self.config_dir) if f.is_dir())
+            for subdir in list(sub_folders):
+                if os.path.exists(
+                    os.path.join(
+                        self.config_dir,
+                        subdir,
+                        consts.DEFAULT_PACKAGE_CONFIG,
+                    )
+                ):
+                    children.append(self.name + "/" + subdir if absolute else subdir)
+
+        dependencies = self.dependencies()
+        if dependencies:
+            if not self.config_obj.get("isRoot", False):
+                dependencies = [
+                    x for x in dependencies if "onlyInRoot" not in dependencies[x] or not dependencies[x]["onlyInRoot"]
+                ]
+            if absolute:
+                children.extend([self.name + "/" + project_name for project_name in dependencies])
+            else:
+                children.extend(list(dependencies))
+        return children
+
+    def init_mates(self):
+        mates = self.config_obj.get("mates", {})
+        for source_interface_name, mate_config in mates.items():
+            if ":" not in source_interface_name:
+                source_interface_name = self.name + ":" + source_interface_name
+            source_package_name, short_source_interface_name = self.resolve(source_interface_name)
+
+            # Short-circuit the case when the source package is the current one
+            # to avoid recursive package loading
+            if source_package_name == self.name:
+                source_package = self
+            else:
+                source_package = self.ctx.get_project(source_package_name)
+
+            source_interface = source_package.get_interface(short_source_interface_name)
+            if source_interface is None:
+                raise Exception("Failed to find the source interface to mate: %s" % source_interface_name)
+            source_interface.add_mates(self, mate_config)
+
+    def get_interface_config(self, interface_name):
+        return self.object_config("interface", interface_name)
+
+    def init_materials(self):
+        for material_name in self.object_names("material"):
+            # Per object, exactly as 'init_objects' does it and for the same
+            # reason: an unreadable declaration costs the user that one
+            # material rather than every material declared after it.
+            try:
+                self.init_material_by_config(self.get_material_config(material_name), material_name)
+            except Exception as e:
+                self.record_broken_object("material", material_name, e)
+
+    def init_material_by_config(self, config, material_name=None, source_project=None):
+        """Build one material and put it in this package.
+
+        Built here rather than through 'init_object_by_config' because that
+        dispatches on a 'type' to a factory, and a material has neither: it is
+        declared data, like an interface. Normalization still happens - it is
+        what expands the short form - and it happens before the name is read
+        back out, because in the short form the declaration is a string and has
+        no name in it yet.
+        """
+        if source_project is None:
+            source_project = self
+        if material_name is None:
+            material_name = config["name"]
+        config = material_config.MaterialConfiguration.normalize(
+            material_name, config, "%s:%s" % (self.name, material_name)
+        )
+        self.register_object(
+            "material",
+            material_name,
+            material.Material(material_name, source_project.name, config),
+        )
+
+    def get_material(self, material_name, quiet=False) -> Optional[material.Material]:
+        """The material of this package called 'material_name', or None.
+
+        Built directly rather than through 'get_object' for the same reason
+        'get_interface' is: there is no factory to dispatch on a 'type'. Unlike
+        an interface, a material has no parameters either, so there is no
+        instance to derive - what remains is the two-step look under the lock
+        that every kind needs, because the object may have been created while
+        this thread waited for the lock and creating a second one would collide
+        in 'register_object'.
+        """
+        with self.lock:
+            existing = self.materials.get(material_name)
+        if existing is not None:
+            return existing
+
+        with Project.MaterialLock(self, material_name):
+            if self.materials.get(material_name) is not None:
+                return self.materials[material_name]
+
+            config = self.get_material_config(material_name)
+            if config is None:
+                if not quiet:
+                    pc_logging.error(
+                        "Material '%s' not found in '%s'",
+                        material_name,
+                        self.name,
+                    )
+                return None
+            self.init_material_by_config(config, material_name)
+            return self.materials[material_name]
+
+    def get_material_config(self, material_name):
+        return self.object_config("material", material_name)
+
+    def init_interfaces(self):
+        for interface_name in self.object_names("interface"):
+            # Per interface, exactly as 'init_objects' does it and for the same
+            # reason: a declaration PartCAD cannot read costs the user that one
+            # interface rather than every object declared after it.
+            try:
+                self.init_interface_by_config(self.normalized_interface_config(interface_name))
+            except Exception as e:
+                self.record_broken_object("interface", interface_name, e)
+
+    def normalized_interface_config(self, interface_name: str, deep_copy: bool = False):
+        """The declaration of one interface, with its parameter section expanded.
+
+        Normalized in place, on the configuration the package holds, so that the
+        interface itself and every parametrized instance derived from it read
+        one expanded declaration rather than each expanding its own copy.
+        'deep_copy' hands back a copy of it instead, for a parametrized instance
+        - which fills values in, and would otherwise be filling them into the
+        template every other instance derives from.
+
+        The normalizing is under the package lock rather than the interface's
+        own, because the interface locks that guard the objects are keyed by the
+        *instance* name: two threads resolving 'm-thru;size=3' and
+        'm-thru;size=4' hold two different locks and would be rewriting the one
+        declaration they both derive from at the same time. Fetching the
+        declaration stays outside it: for a plugin-backed package that is a
+        request to the plugin, and this lock is not one to hold across I/O.
+        """
+        config = self.get_interface_config(interface_name)
+        with self.lock:
+            config = interface_config.InterfaceConfiguration.normalize(
+                interface_name, config, f"{self.name}:{interface_name}"
+            )
+            return copy.deepcopy(config) if deep_copy else config
+
+    def init_interface_by_config(self, config, source_project=None):
+        if source_project is None:
+            source_project = self
+
+        interface_name: str = config["name"]
+        self.register_object("interface", interface_name, interface.Interface(interface_name, source_project, config))
+
+    def get_interface(self, interface_name, func_params=None) -> interface.Interface:
+        """The interface of this package called 'interface_name', or None.
+
+        The name may carry parameter values - 'm-thru;size=4,depth=3' - exactly
+        as a part's or a sketch's does, and 'func_params' adds to whatever the
+        name already says (that is what 'pc info -i -p size=4' passes). Each
+        distinct set of values is a distinct interface object, registered under
+        the canonical spelling of its name, so that two references asking for
+        the same values get the one interface and mate with each other.
+
+        Built here rather than through 'get_object' for the reason
+        'get_material' gives: there is no factory to dispatch on a 'type'. What
+        an interface does share with a shape is the parametrization, and that
+        part is shared code - 'parse_parameterized_name',
+        'format_parameterized_name' and 'apply_parameter_values' - rather than
+        a second implementation of it.
+        """
+        base_name, params = parse_parameterized_name(interface_name)
+        if func_params:
+            params = {**params, **func_params}
+        if params:
+            # Spelled the one way, before anything is looked up under it: an
+            # interface's name is what a mating is registered under, so
+            # 'm-thru;size=4' and 'm-thru;size=4.0' being two objects would be
+            # two halves of a connection that never find each other.
+            # Read before normalization, and so possibly still in a short form:
+            # an interface declared as a bare string is an alias, and an alias
+            # has no parameters of its own to canonicalize against.
+            declaration = self.get_interface_config(base_name)
+            declared = (
+                interface_config.construction_parameters(declaration.get(interface_config.PARAMETERS))
+                if isinstance(declaration, dict)
+                else {}
+            )
+            params = pc_config.canonical_parameter_values(declared, params, f"{self.name}:{base_name}")
+        result_name = format_parameterized_name(base_name, params)
+
+        # Released before the interface's own lock is taken, for the reason
+        # 'get_object' gives: 'init_interface_by_config' registers, and
+        # 'register_object' takes this lock.
+        with self.lock:
+            existing = self.interfaces.get(result_name)
+        if existing is not None:
+            return existing
+
+        with Project.InterfaceLock(self, result_name):
+            # The same second look 'get_object' takes, for the same reason: the
+            # interface may have been created while this thread waited for the
+            # lock, and creating another would collide with it.
+            if self.interfaces.get(result_name) is not None:
+                return self.interfaces[result_name]
+
+            if base_name not in self.interface_configs:
+                # We don't know anything about such a interface
+                pc_logging.error(
+                    "Interface '%s' not found in '%s'",
+                    base_name,
+                    self.name,
+                )
+                return None
+            # This is not yet created (invalidated?)
+            if not params:
+                try:
+                    self.init_interface_by_config(self.normalized_interface_config(base_name))
+                except Exception as e:
+                    self.record_broken_object("interface", base_name, e)
+                    return None
+                return self.interfaces.get(result_name)
+
+            # A parametrized instance: the declaration is a template that every
+            # instance derives from, so it is copied rather than filled in -
+            # writing the values into it would make the next reference, and the
+            # unparametrized interface itself, inherit them.
+            config = self.normalized_interface_config(base_name, deep_copy=True)
+            full_object_name = f"{self.name}:{result_name}"
+            config = interface_config.InterfaceConfiguration.normalize(result_name, config, full_object_name)
+            config["orig_name"] = base_name
+            # The construction half of 'parameters:' - the values the interface
+            # is built from. The other half of that section is the freedom of
+            # movement a connection keeps, which a reference does not set; see
+            # 'partcad.interface_config'.
+            declared = config.get(interface_config.PARAMETERS) or {}
+            construction = interface_config.construction_parameters(declared)
+            if not construction:
+                pc_logging.error(
+                    "Attempt to parametrize the interface '%s' of '%s', which declares no parameters to set",
+                    base_name,
+                    self.name,
+                )
+                return None
+            try:
+                pc_config.apply_parameter_values(construction, params, result_name)
+            except Exception as e:
+                self.record_broken_object("interface", result_name, e)
+                return None
+            declared.update(construction)
+
+            try:
+                self.init_interface_by_config(config)
+            except Exception as e:
+                self.record_broken_object("interface", result_name, e)
+                return None
+            return self.interfaces.get(result_name)
+
+    def get_sketch_config(self, sketch_name):
+        return self.object_config("sketch", sketch_name)
+
+    def set_sketch_config(self, sketch_name, sketch_config):
+        """
+        Save the updated sketch configuration to the project configuration file.
+        """
+        if "name" in sketch_config:
+            del sketch_config["name"]
+        if "orig_name" in sketch_config:
+            del sketch_config["orig_name"]
+
+        if "offset" in sketch_config and isinstance(sketch_config["offset"], list):
+            sketch_config["offset"] = ruamel.yaml.comments.CommentedSeq(sketch_config["offset"])
+            sketch_config["offset"].fa.set_flow_style()
+
+        yaml = ruamel.yaml.YAML()
+        yaml.preserve_quotes = True
+
+        with self.lock:
+            try:
+                with open(self.config_path) as fp:
+                    package_config = yaml.load(fp)
+
+                if "sketches" in package_config:
+                    sketches = package_config["sketches"]
+                    sketches[sketch_name] = sketch_config
+                else:
+                    package_config["sketches"] = {sketch_name: sketch_config}
+
+                with open(self.config_path, "w") as fp:
+                    yaml.dump(package_config, fp)
+
+            except (IOError, OSError) as e:
+                pc_logging.error(f"Failed to update sketch configuration: {e}")
+                raise
+            except Exception as e:
+                pc_logging.error(f"Unexpected error updating sketch configuration: {e}")
+                raise
+
+    def get_part_config(self, part_name):
+        return self.object_config("part", part_name)
+
+    def get_assembly_config(self, assembly_name):
+        return self.object_config("assembly", assembly_name)
+
+    def get_scene_config(self, scene_name):
+        return self.object_config("scene", scene_name)
+
+    def get_provider_config(self, provider_name):
+        return self.object_config("provider", provider_name)
+
+    def get_repository_config(self, repository_name):
+        return self.object_config("repository", repository_name)
+
+    def get_software_config(self, software_name):
+        return self.object_config("software", software_name)
+
+    def get_part_type_config(self, part_type_name):
+        return self.object_config("partType", part_type_name)
+
+    def get_object_config(self, object_name, configs: dict[str, dict[str, typing.Any]]):
+        if object_name not in configs:
+            return None
+        return configs[object_name]
+
+    def init_providers(self):
+        return self.init_objects(
+            "provider",
+            self.provider_configs,
+            plugin_config.PluginConfiguration,
+            None,
+            self.get_provider_config,
+        )
+
+    def init_repositories(self):
+        return self.init_objects(
+            "repository",
+            self.repository_configs,
+            plugin_config.PluginConfiguration,
+            None,
+            self.get_repository_config,
+        )
+
+    def init_software(self):
+        return self.init_objects(
+            "software",
+            self.software_configs,
+            software_config.SoftwareConfiguration,
+            None,
+            self.get_software_config,
+        )
+
+    def record_broken_object(self, kind: str, name: str, reason) -> None:
+        """Remember that an object was declared but could not be created.
+
+        Reported once, here, rather than by each caller: the same failure is
+        reachable both while enumerating a package and while resolving a single
+        object by name, and it should read the same either way.
+
+        A 'NeedsUpdateException' is re-raised rather than recorded: it says the
+        *package* requires a newer PartCAD, which is not a per-object condition
+        and which the caller turns into its own "update PartCAD" prompt. Filing
+        it against one object would swallow that prompt.
+
+        A type PartCAD itself retired ('factory.RetiredTypeException') is
+        reported at WARNING instead of ERROR. The object is still recorded as
+        broken and still skipped, but nothing the user of that package can do
+        would make it work - PartCAD dropped the feature - so it must not fail
+        the command. The public index, a separate repository, still declares the
+        generative-AI part types retired in 0.7.153. Every other reason stays an
+        error: an unknown type is a mistake somebody can fix.
+        """
+        if isinstance(reason, NeedsUpdateException):
+            raise reason
+
+        retired = isinstance(reason, factory.RetiredTypeException)
+
+        reason = str(reason) or type(reason).__name__
+        # One line, and short: some of these configurations embed multi-page
+        # descriptions, and logging the whole thing buries every other message.
+        reason = " ".join(reason.split())
+        if len(reason) > 200:
+            reason = reason[:197] + "..."
+
+        self.broken_objects.setdefault(kind, {})[name] = reason
+        if retired:
+            self.retired_objects.setdefault(kind, set()).add(name)
+            pc_logging.warning("Skipping the %s '%s:%s': %s" % (kind, self.name, name, reason))
+        else:
+            pc_logging.error("Failed to create the %s '%s:%s': %s" % (kind, self.name, name, reason))
+
+    def get_broken_object_reason(self, kind: str, name: str):
+        """Why an object could not be created, or None if it was not one of them."""
+        return self.broken_objects.get(kind, {}).get(name)
+
+    def is_retired_object(self, kind: str, name: str) -> bool:
+        """Whether that object is absent because PartCAD retired its type.
+
+        The one reason for an object to be missing that is nobody's to fix, and
+        therefore the one a command walking the package has to pass over rather
+        than fail on.
+        """
+        return name in self.retired_objects.get(kind, set())
+
+    def objects(self, kind: str) -> dict:
+        """The objects of one kind created so far, as {name: object}.
+
+        The counterpart of 'object_configs()', which answers the same question
+        about what the package *declares*. Only the kinds that are instantiated
+        at all: a 'partType' is a way of constructing parts, not an object.
+
+        "So far", and deliberately not "all of them": this is the dictionary
+        itself, and reading it creates nothing. That is what a caller putting an
+        object *into* the package needs ('register_object' below, which holds
+        the package lock while it does), and what a caller asking for one object
+        by name needs ('get_object', which creates that one if it is absent).
+        The public 'parts'/'sketches'/'assemblies'/'scenes' are the other
+        question - every object of that kind, created if need be - and they fill
+        this first.
+        """
+        name = OBJECT_KIND_SECTIONS.get(kind, "")
+        objects = getattr(self, "_" + name, None) if kind in LAZY_OBJECT_KINDS else getattr(self, name, None)
+        if objects is None:
+            raise ValueError("'%s' is not a kind of object a package instantiates" % kind)
+        return objects
+
+    def alias_declared_by(self, kind: str, name: str) -> typing.Optional[str]:
+        """The object whose 'aliases:' claims 'name', if any object does.
+
+        An alias declared that way has no declaration of its own: it comes into
+        being because the object that names it was created (see
+        'init_object_by_config'). While a package created every object of a
+        kind as it loaded, looking one up needed to know nothing about that;
+        now that a name is created when it is asked for, the lookup has to know
+        which declaration to create in order to get this one.
+
+        Indexed once per kind, on the first lookup that misses. The index is
+        built out of the declarations and creates nothing, so the miss that
+        builds it - including a name nothing declares at all - costs a pass
+        over a dictionary rather than a package full of factories.
+        """
+        return self._aliases_declared(kind).get(name)
+
+    def _aliases_declared(self, kind: str) -> dict:
+        """Every implicitly declared alias of a kind, mapped to what declares it."""
+        index = self._alias_index.get(kind)
+        if index is None:
+            index = {}
+            for owner, config in self.object_configs(kind).items():
+                if not isinstance(config, dict):
+                    continue
+                for alias in config.get("aliases") or []:
+                    if not isinstance(alias, str):
+                        continue
+                    if ";" in owner:
+                        # The parameters of a parametrized declaration travel
+                        # to the aliases it asks for, exactly as they do where
+                        # those aliases are created.
+                        alias += owner[owner.index(";") :]
+                    index.setdefault(alias, owner)
+            self._alias_index[kind] = index
+        return index
+
+    def object_lock(self, kind: str, name: str):
+        """The lock that guards creating one object of a kind, or None."""
+        lock_class = self.OBJECT_KIND_LOCKS.get(kind)
+        return lock_class(self, name) if lock_class is not None else contextlib.nullcontext()
+
+    def _lazy_objects(self, kind: str) -> None:
+        """Create every declared object of 'kind', once, on first demand.
+
+        The four lazy kinds only; everything else was created when the package
+        loaded. See 'LAZY_OBJECT_KINDS' for why, and the lock in '__init__' for
+        how the re-entrancy and the races are kept apart.
+        """
+        if kind in self._instantiated_kinds:
+            return
+        with self._instantiate_lock:
+            # Asked again under the lock: the thread that was waiting for it was
+            # waiting for exactly this to be done.
+            if kind in self._instantiated_kinds or kind in self._instantiating_kinds:
+                return
+            self._instantiating_kinds.add(kind)
+            try:
+                self._instantiate_kind(kind)
+                self._instantiated_kinds.add(kind)
+            finally:
+                self._instantiating_kinds.discard(kind)
+
+    # What each lazy kind is created from: the configuration class that
+    # normalizes a declaration, and the factory that makes the aliases it asks
+    # for. The same four arguments 'get_object' is handed for one object.
+    _CREATE_BY_KIND: typing.ClassVar[dict] = {}
+
+    # What normalizes a declaration of each kind - the classes above, plus the
+    # kinds that are still created as the package loads. Every kind in here is
+    # normalized by the accessor that reads it ('_normalized'), so nothing
+    # downstream has to normalize it again.
+    OBJECT_KIND_CONFIG_CLASSES: typing.ClassVar[dict] = {}
+
+    def _instantiate_kind(self, kind: str) -> None:
+        """Create every declared object of one lazy kind.
+
+        What it declares comes from 'object_names()', which is also where a
+        plugin-backed package's round trip to the repository lives - so that
+        package needs nothing of its own here.
+
+        Each object is created under its own lock, which is the lock a lookup
+        by name takes ('get_object'), and skipped if it is already there. That
+        is what makes the two safe to run at once: without it, a thread
+        arriving here while another is part-way through 'get_part("cube")'
+        makes a second cube under a name that is now taken, 'register_object'
+        refuses it, and the refusal is recorded against a declaration that is
+        perfectly good.
+
+        Created from the declaration rather than by calling the getter per
+        name, because the getter re-reads and re-parses what this already has
+        in hand, and a catalog package has thousands of these.
+        """
+        config_class, alias_class, get_config = self._CREATE_BY_KIND[kind]
+        self.init_objects(kind, self.object_configs(kind), config_class, alias_class, getattr(self, get_config))
+
+    # Every object of a lazy kind, created if it has not been yet. The reading
+    # is what asks for it: 'pc list parts' and a bulk render want all of them,
+    # while 'get_part' wants one and goes through 'objects()' instead.
+    @property
+    def sketches(self) -> dict:
+        self._lazy_objects("sketch")
+        return self._sketches
+
+    @sketches.setter
+    def sketches(self, value) -> None:
+        self._sketches = value
+
+    @property
+    def parts(self) -> dict:
+        self._lazy_objects("part")
+        return self._parts
+
+    @parts.setter
+    def parts(self, value) -> None:
+        self._parts = value
+
+    @property
+    def assemblies(self) -> dict:
+        self._lazy_objects("assembly")
+        return self._assemblies
+
+    @assemblies.setter
+    def assemblies(self, value) -> None:
+        self._assemblies = value
+
+    @property
+    def scenes(self) -> dict:
+        self._lazy_objects("scene")
+        return self._scenes
+
+    @scenes.setter
+    def scenes(self, value) -> None:
+        self._scenes = value
+
+    def register_object(self, kind: str, name: str, obj) -> None:
+        """Put a newly created object into this package under 'name'.
+
+        The one place an object enters a package, so that the name is tested
+        for being taken before the entry is written, rather than the newcomer
+        silently displacing whatever was there. What used to happen instead is
+        the defect this exists to stop: an 'enrich' registered the instance it
+        builds in the package its source comes from *under the enriching
+        object's name* - and that name defaults to the source object's own - so
+        enriching an object replaced it, and the enriched parameters then
+        rendered in the source package's own outputs.
+
+        The object already registered under the name is the one that stays; the
+        newcomer raises 'ObjectNameTakenError', which the caller records
+        against that one object ('record_broken_object'). Re-registering the
+        very same object is not a clash: a factory that produced the object
+        already there has not displaced anything.
+
+        Asking for an object rather than creating one is 'get_object()', which
+        hands back what the package already holds under that name - including
+        the parameterized instance an 'enrich' asks for, which is why two
+        enriches with the same parameters share one instance instead of
+        colliding here.
+        """
+        with self.lock:
+            objects = self.objects(kind)
+            existing = objects.get(name)
+            if existing is not None and existing is not obj:
+                raise ObjectNameTakenError(kind, self.name, name)
+            objects[name] = obj
+
+    def init_objects(
+        self,
+        factory_name: str,
+        configs: dict[str, dict[str, typing.Any]],
+        config_class,
+        alias_class,
+        get_config: callable,
+    ):
+        if configs is None:
+            return
+
+        objects = self.objects(factory_name)
+        for name in list(configs):
+            # Per object, so that one unusable declaration costs the user that
+            # object and not the rest of the package. A package published years
+            # ago can name a feature this PartCAD no longer has (the 'ai-*' part
+            # types, say); without this, the first such entry aborted the loop
+            # and every object declared after it silently disappeared too.
+            try:
+                with self.object_lock(factory_name, name):
+                    if name in objects and name not in self._implicit_aliases.get(factory_name, ()):
+                        # Already made from this declaration: somebody asked for
+                        # it by name while this pass was running, and
+                        # 'get_object' made it. Making it again would land on a
+                        # name that is now taken, and 'register_object' refusing
+                        # that would be recorded as a broken declaration. Under
+                        # the lock, so the test and the creation are the same
+                        # answer the getter gets.
+                        #
+                        # A name that exists because another declaration's
+                        # 'aliases' claimed it is the other case, and a real
+                        # clash between two declarations: that one goes on to be
+                        # refused and recorded, exactly as it was before any of
+                        # this was created on demand.
+                        continue
+                    # Normalized by the accessor, which is where a declaration
+                    # of a kind gains its 'name' whether or not anything is ever
+                    # made out of it (see '_normalized').
+                    config = get_config(name)
+                    self.init_object_by_config(factory_name, config_class, alias_class, config)
+            except Exception as e:
+                self.record_broken_object(factory_name, name, e)
+
+    def init_sketch_by_config(self, config, source_project=None):
+        self.init_object_by_config(
+            "sketch", sketch_config.SketchConfiguration, sfa.SketchFactoryAlias, config, source_project
+        )
+
+    def init_part_by_config(self, config, source_project=None):
+        self.init_object_by_config("part", part_config.PartConfiguration, pfa.PartFactoryAlias, config, source_project)
+
+    def init_provider_by_config(self, config, source_project=None):
+        self.init_object_by_config("provider", plugin_config.PluginConfiguration, None, config, source_project)
+
+    def init_repository_by_config(self, config, source_project=None):
+        self.init_object_by_config("repository", plugin_config.PluginConfiguration, None, config, source_project)
+
+    def init_software_by_config(self, config, source_project=None):
+        self.init_object_by_config("software", software_config.SoftwareConfiguration, None, config, source_project)
+
+    def materialize_part_by_config(self, config) -> Optional[Part]:
+        """The part an assembly materializes, created on first use.
+
+        A STEP assembly's components and a URDF's links are parts of this
+        package that nothing declares: the assembly's own source file is what
+        says they exist, so they are registered as it is built (see the
+        'part_for()' of those two factories).
+
+        An assembly is built more than once - asking for one of these parts by
+        name builds the assembly that produces it ('_materialize_derived_part'),
+        and so does rendering it - and the later pass finds the parts the first
+        one registered. That is the same part being materialized again rather
+        than two declarations claiming one name, so it is handed back rather
+        than refused ('register_object').
+
+        The two passes also overlap: 'Assembly.do_instantiate' decides whether
+        to assemble by reading 'children' without a lock, so a thread rendering
+        the assembly and a thread resolving one of its parts by name can both
+        be walking the same links. Whichever gets here second then creates a
+        part under a name the first has just taken, and 'register_object'
+        refuses it - so that refusal is caught and the part already registered
+        is handed back. The loser's own part is inert: 'register_object' is what
+        raised, and '_create()' does nothing else with it afterwards.
+
+        Caught rather than prevented with the part's own lock, which is what
+        this used to do. 'get_object' holds the package lock while it takes the
+        part lock, and 'register_object' below takes the package lock while
+        this holds the part lock - opposite orders on the same two locks, which
+        is a deadlock as soon as two threads resolve parts of one package at
+        once. There is only one lock in this now, and it is 'register_object's,
+        whose test-and-set under it is what makes this safe at all.
+        """
+        name = config["name"]
+        parts = self.objects("part")
+        existing = parts.get(name)
+        if existing is not None:
+            return existing
+        try:
+            self.init_part_by_config(config)
+        except ObjectNameTakenError:
+            pass
+        return parts.get(name)
+
+    def init_object_by_config(self, factory_name: str, config_class, alias_class, config, source_project=None):
+        if source_project is None:
+            source_project = self
+        factory.instantiate(factory_name, config["type"], self.ctx, source_project, self, config)
+
+        # Initialize aliases if they are declared implicitly
+        if alias_class and config.get("aliases"):
+            object_name = config["name"]
+            for alias in config["aliases"]:
+                if ";" in object_name:
+                    # Copy parameters
+                    alias += object_name[object_name.index(";") :]
+                alias_object_config = {
+                    "type": "alias",
+                    "name": alias,
+                    "source": ":" + object_name,
+                }
+                # User configuration may override the parameters of the alias
+                # itself, so the alias (with the parameters copied above, if
+                # any) is what the fully qualified name is built from - not the
+                # object the alias points at.
+                full_alias_name = f"{self.name}:{alias}"
+                alias_object_config = config_class.normalize(alias, alias_object_config, full_alias_name)
+                # Per alias, and against the alias rather than the object it
+                # points at: an alias that cannot be created - most often
+                # because the package already declares something under that
+                # name ('register_object') - is a defect in that one name, and
+                # failing here would take down the perfectly good object whose
+                # 'aliases' mentioned it.
+                try:
+                    alias_class(self.ctx, source_project, self, alias_object_config)
+                    # Remembered so that the bulk pass can tell this name apart
+                    # from one of its own declarations that somebody has just
+                    # created by asking for it. See 'init_objects'.
+                    self._implicit_aliases.setdefault(factory_name, set()).add(alias)
+                except Exception as e:
+                    self.record_broken_object(factory_name, alias, e)
+
+    def get_sketch(self, sketch_name, func_params=None, quiet=False) -> Optional[sketch.Sketch]:
+        """The declared sketch, or None.
+
+        'quiet' suppresses the "not found" reporting for a caller that asks
+        after a sketch which may legitimately not be there and says so itself -
+        the sheet metal check resolves its 'instructions' reference twice, once
+        to key its verdict and once to reach the annotations, and a reference
+        that resolves to nothing should be reported once, by the check, and not
+        three times by the resolver underneath it. It is the same flag, for the
+        same reason, that 'get_part' already takes.
+        """
+        return self.get_object(
+            "sketch",
+            Project.SketchLock,
+            self.objects("sketch"),
+            self.get_sketch_config,
+            sketch_config.SketchConfiguration,
+            sfa.SketchFactoryAlias,
+            sketch_name,
+            func_params,
+            quiet=quiet,
+        )
+
+    def _part_object(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
+        """The declared part, once anything that had to be built for it has been."""
+        return self.get_object(
+            "part",
+            Project.PartLock,
+            self.objects("part"),
+            self.get_part_config,
+            part_config.PartConfiguration,
+            pfa.PartFactoryAlias,
+            part_name,
+            func_params,
+            quiet=quiet,
+        )
+
+    def get_part(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
+        """The synchronous accessor, for callers that own no event loop.
+
+        A coroutine must use 'get_part_async()'. Materializing a derived part
+        means instantiating an assembly, which is asynchronous, and the only way
+        a synchronous caller can drive that is 'asyncio.run()' -- which raises on
+        a thread that already has a running loop. Reaching that state used to be
+        answered by building on a thread of its own; see
+        '_materialize_derived_part_async()' for why that was worse than the
+        error.
+        """
+        # A part an assembly materializes (a STEP component or a URDF link) is
+        # not declared in 'partcad.yaml' - the assembly's own source file is
+        # what declares it - so it only exists once that assembly has been
+        # built. Build it now, rather than report a part that the package can
+        # perfectly well produce as missing.
+        self._materialize_derived_part(part_name)
+        return self._part_object(part_name, func_params, quiet=quiet)
+
+    async def get_part_async(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
+        """'get_part()' for callers that are already running on a loop.
+
+        The pair exists the way 'test()'/'test_async()' and
+        'render_assembly_readme()'/'render_assembly_readme_async()' do: the
+        coroutine is the implementation and the synchronous one wraps it. What is
+        specific here is that the wrapping is around the *materialization* only -
+        looking a declared part up costs nothing and needs no loop.
+        """
+        await self._materialize_derived_part_async(part_name)
+        return self._part_object(part_name, func_params, quiet=quiet)
+
+    def _derived_part_owner(self, part_name: str) -> Optional[tuple]:
+        """The object whose parts are named '<that object>/<something>'.
+
+        Returns '(kind, name)' - a Gazebo world declares its parts as a scene
+        does, a STEP or URDF assembly as an assembly does - or None. Only types
+        that materialize parts qualify, and only when the package really
+        declares one under that name, so an ordinary part called 'brackets/left'
+        is not mistaken for one.
+
+        Read from the configs already known rather than through
+        'get_assembly_config()': this runs on every part lookup, and that
+        accessor would ask a plugin-backed package to go and fetch the name over
+        the network before it could say it does not have it.
+        """
+        prefix = part_name.split(";")[0]
+        while "/" in prefix:
+            prefix = prefix.rsplit("/", 1)[0]
+            # Both namespaces are searched: 'assemblies:' and 'scenes:' are
+            # separate, and a format read as either ('mjcf') is declared in
+            # whichever the package meant.
+            for kind in ("assembly", "scene"):
+                config = (self._object_configs.get(kind) or {}).get(prefix)
+                # Read before normalization, and so possibly still in a short
+                # form: 'robot: //other:robot' is a bare string until the kind
+                # is normalized, and asking a string for its 'type' raises.
+                # Nothing is lost by stopping here - a short form is an alias,
+                # and an alias produces no parts of its own.
+                if isinstance(config, dict) and produces_own_parts(kind, config.get("type")):
+                    return kind, prefix
+        return None
+
+    def _derived_part_to_build(self, part_name: str):
+        """The object to build so that 'part_name' exists, or None.
+
+        Cheap and synchronous: dictionary lookups and one set. Both accessors
+        take this before deciding whether they need a loop at all, so the common
+        path -- a part that is declared, or a name no assembly produces -- never
+        pays for one.
+
+        Returns (owner, object), or None when there is nothing to build.
+        'owner' is the '(kind, name)' pair '_derived_part_owner()' hands back,
+        because 'assemblies:' and 'scenes:' are separate namespaces and both
+        hold types that produce parts. Claims nothing: '_claim_derived_part()'
+        does that, and only once the caller is known to be allowed to build at
+        all.
+
+        Whoever ends up not building has to wait for whoever does, rather than
+        go and look the part up. 'children' is filled as the factory works, so a
+        lookup made in the middle of a build finds a part that is not registered
+        yet and reports it missing; 'AssemblyFactoryAssy.handle_node()' raises
+        on that.
+
+        This is not hypothetical. 'handle_node_list()' dispatches its links with
+        'asyncio.create_task', so two derived parts of one assembly really are
+        resolved at the same time. It could not bite while materialization ran
+        on a thread the caller then joined -- that blocked the caller's loop, so
+        no second task of it could run at all -- which is precisely the blocking
+        this change removes.
+        """
+        if part_name in self.objects("part"):
+            return None
+        owner = self._derived_part_owner(part_name)
+        if owner is None:
+            return None
+        kind, name = owner
+        owning_assembly = self.get_scene(name) if kind == "scene" else self.get_assembly(name)
+        if owning_assembly is None or owning_assembly.children:
+            return None
+        return owner, owning_assembly
+
+    def _claim_derived_part(self, owner: tuple):
+        """Claim the right to build 'owner', or find out who already has it.
+
+        Returns (done, claimed): the event to set when the build is over and
+        whether this caller is the one that must build, or None when the owner
+        has been attempted already and nothing is running.
+
+        Kept apart from '_derived_part_to_build()' because a caller has to be
+        *allowed* to build before it claims anything. A synchronous accessor
+        reached from a coroutine is not, and a claim it could not honour would
+        leave an event nobody ever sets and every later caller polling on it.
+        """
+        with self._derived_parts_lock:
+            building = self._derived_parts_building.get(owner)
+            if building is not None:
+                # Someone else's build. Wait for theirs; do not start another.
+                return building, False
+            if owner in self._derived_parts_attempted:
+                return None
+            self._derived_parts_attempted.add(owner)
+            done = threading.Event()
+            self._derived_parts_building[owner] = done
+            return done, True
+
+    def _finish_derived_part(self, owner: tuple, done) -> None:
+        """Release whoever is waiting on this owner's build, however it went."""
+        with self._derived_parts_lock:
+            self._derived_parts_building.pop(owner, None)
+        done.set()
+
+    def _materialize_derived_part(self, part_name: str) -> None:
+        """Build the assembly that would produce 'part_name', if one would.
+
+        The synchronous half of the pair. It drives the coroutine below with
+        'asyncio.run()' **on the calling thread**, which is what a synchronous
+        caller is entitled to do and what keeps the instantiation on the thread
+        that asked for it.
+        """
+        target = self._derived_part_to_build(part_name)
+        if target is None:
+            return
+        owner, owning_assembly = target
+        # Asked before anything is claimed and before anything is waited on,
+        # because a coroutine may do neither. Waiting would block the very loop
+        # the builder runs on, and claiming would leave an event nobody sets
+        # once the raise below unwinds -- both of which are worse than the
+        # blocking this change set out to remove.
+        #
+        # Asked before the coroutine is even created, so that a caller on a loop
+        # is told rather than left with an un-awaited coroutine object.
+        #
+        # A coroutine reaching this accessor is a caller that has not been
+        # converted to 'get_part_async()' yet, and saying so is the point. What
+        # used to happen instead was a 'threading.Thread(...).start(); .join()'
+        # to borrow a clean loop, and that was wrong three times over: 'join()'
+        # blocked the caller's event loop for the length of the build; the
+        # thread was invisible to 'threads_max' and to the traced executors of
+        # 'ThreadPoolManager', which is where every other thread in the core
+        # comes from; and moving the work off this thread threw away the
+        # ownership of 'Assembly.lock' that a nested resolution depends on --
+        # an 'RLock' is re-entrant for the thread holding it, so a nested call
+        # used to pass straight through, and from a borrowed thread it blocked
+        # on a lock the waiting thread was holding.
+        if _has_running_loop():
+            raise RuntimeError(
+                "%s: cannot materialize the derived part %s from a coroutine; "
+                "await get_part_async() instead of calling get_part()" % (self.name, part_name)
+            )
+
+        claim = self._claim_derived_part(owner)
+        if claim is None:
+            return
+        done, claimed = claim
+        if not claimed:
+            # Another caller is building this owner. A synchronous caller owns
+            # no event loop, so blocking here blocks nothing but itself.
+            done.wait()
+            return
+
+        pc_logging.debug("Building %s:%s to resolve the part %s", self.name, owner[1], part_name)
+        try:
+            asyncio.run(owning_assembly.do_instantiate())
+        except Exception as e:  # pylint: disable=broad-except
+            pc_logging.error(
+                "Failed to build %s:%s while resolving the part %s: %s" % (self.name, owner[1], part_name, e)
+            )
+        finally:
+            self._finish_derived_part(owner, done)
+
+    async def _materialize_derived_part_async(self, part_name: str) -> None:
+        """'_materialize_derived_part()' for a caller already on a loop.
+
+        Awaited on the caller's own loop and so on the caller's own thread,
+        which is the whole point: 'Assembly.do_instantiate()' guards itself with
+        a thread-owned 'RLock' chosen to be re-entrant precisely so that a
+        nested resolution -- an assembly whose instantiation resolves one of the
+        parts it itself produces -- passes through instead of blocking.
+        """
+        target = self._derived_part_to_build(part_name)
+        if target is None:
+            return
+        owner, owning_assembly = target
+        claim = self._claim_derived_part(owner)
+        if claim is None:
+            return
+        done, claimed = claim
+        if not claimed:
+            # Another caller is building this owner. Waited for by polling
+            # rather than by handing the wait to a thread: a thread would be one
+            # more of exactly what this change is removing, and would be blocked
+            # for the length of a CAD build. The wait is between two tasks of
+            # one command, and the thing waited on takes seconds.
+            while not done.is_set():
+                await asyncio.sleep(_DERIVED_PART_POLL_SECONDS)
+            return
+        pc_logging.debug("Building %s:%s to resolve the part %s", self.name, owner[1], part_name)
+        try:
+            await owning_assembly.do_instantiate()
+        except Exception as e:  # pylint: disable=broad-except
+            pc_logging.error(
+                "Failed to build %s:%s while resolving the part %s: %s" % (self.name, owner[1], part_name, e)
+            )
+        finally:
+            self._finish_derived_part(owner, done)
+
+    def get_assembly(self, assembly_name, func_params=None, quiet=False) -> Optional[assembly.Assembly]:
+        return self.get_object(
+            "assembly",
+            Project.AssemblyLock,
+            self.objects("assembly"),
+            self.get_assembly_config,
+            assembly_config.AssemblyConfiguration,
+            afa.AssemblyFactoryAlias,
+            assembly_name,
+            func_params,
+            quiet=quiet,
+        )
+
+    def get_scene(self, scene_name, func_params=None, quiet=False) -> Optional[scene.Scene]:
+        return self.get_object(
+            "scene",
+            Project.SceneLock,
+            self.objects("scene"),
+            self.get_scene_config,
+            scene_config.SceneConfiguration,
+            scnf.SceneFactoryAlias,
+            scene_name,
+            func_params,
+            quiet=quiet,
+        )
+
+    def get_provider(self, provider_name, func_params=None) -> Optional[plugin_provider.Provider]:
+        return self.get_object(
+            "provider",
+            Project.ProviderLock,
+            self.providers,
+            self.get_provider_config,
+            plugin_config.PluginConfiguration,
+            None,
+            provider_name,
+            func_params,
+        )
+
+    def get_repository(self, repository_name, func_params=None) -> Optional[plugin_repository.Repository]:
+        return self.get_object(
+            "repository",
+            Project.RepositoryLock,
+            self.repositories,
+            self.get_repository_config,
+            plugin_config.PluginConfiguration,
+            None,
+            repository_name,
+            func_params,
+        )
+
+    def get_software(self, software_name, func_params=None, quiet=False) -> Optional[pc_software.Software]:
+        return self.get_object(
+            "software",
+            Project.SoftwareLock,
+            self.software,
+            self.get_software_config,
+            software_config.SoftwareConfiguration,
+            None,
+            software_name,
+            func_params,
+            quiet=quiet,
+        )
+
+    def get_object(
+        self,
+        factory_name: str,
+        lock_class,
+        objects,
+        get_config: callable,
+        config_class,
+        alias_class,
+        object_name: str,
+        func_params=None,
+        quiet=False,
+    ):
+        if func_params is None or not func_params:
+            has_func_params = False
+        else:
+            has_func_params = True
+
+        base_object_name, params = parse_parameterized_name(object_name)
+        has_name_params = bool(params)
+
+        if has_func_params:
+            params = {**params, **func_params}
+            has_name_params = True
+
+        if not has_name_params:
+            result_name = object_name
+        else:
+            # Determine the name we want this parameterized object to have
+            result_name = format_parameterized_name(base_object_name, params)
+
+        # The package lock is released before the object's own lock is taken,
+        # never held across it. Creating an object registers it, and
+        # 'register_object' takes the package lock while this holds the
+        # object's - so a thread waiting for the object lock with the package
+        # lock still in hand would be holding the very thing the creating
+        # thread needs to finish, and the two would wait on each other. Two
+        # threads asking one package for the same instance is enough, which is
+        # two enriches with the same 'with:' resolving at once.
+        #
+        # Releasing it costs nothing: what it guards here is a lookup, and the
+        # look below - under the object lock, where creation happens - is the
+        # one that decides.
+        with self.lock:
+            existing = objects.get(result_name)
+        if existing is not None:
+            return existing
+
+        with lock_class(self, result_name):
+            # Look again now that the object lock is held: another thread may
+            # have created this object between the check above and this lock,
+            # and creating a second one would land on a name that is now taken
+            # ('register_object'), turning a race into a failure for whichever
+            # thread got here second.
+            if objects.get(result_name) is not None:
+                return objects[result_name]
+
+            if not has_name_params:
+                # This is just a regular object name, no params (object_name == result_name).
+                # Resolve through 'get_config' rather than a membership test on
+                # the enumerated set, so a plugin-backed package can serve an
+                # object it did not enumerate (a targeted single fetch).
+                config = get_config(object_name)
+                if config is None:
+                    # Nothing declares this name - but something may declare it
+                    # as one of its 'aliases', and such an alias is made by
+                    # making that something. Under that object's own lock, the
+                    # one its own creation takes.
+                    owner = self.alias_declared_by(factory_name, object_name)
+                    if owner is not None:
+                        with self.object_lock(factory_name, owner):
+                            if objects.get(owner) is None:
+                                try:
+                                    self.init_object_by_config(
+                                        factory_name, config_class, alias_class, get_config(owner)
+                                    )
+                                except Exception as e:
+                                    self.record_broken_object(factory_name, owner, e)
+                        if objects.get(object_name) is not None:
+                            return objects[object_name]
+                    # We don't know anything about such an object - unless it
+                    # is one this context excluded, which is not an error and
+                    # must not read like one: the package declares it, PartCAD
+                    # left it out on purpose, and saying which tag did that is
+                    # the difference between a user fixing a typo they do not
+                    # have and a user reading the one line that explains it.
+                    clause = self.get_skipped_object_clause(factory_name, object_name)
+                    if clause is not None:
+                        if not quiet:
+                            pc_logging.info(
+                                "The %s '%s:%s' is excluded by 'unless' (%s)",
+                                factory_name,
+                                self.name,
+                                object_name,
+                                clause,
+                            )
+                        return None
+                    if not quiet:
+                        pc_logging.error(
+                            "Object '%s' not found in '%s'",
+                            object_name,
+                            self.name,
+                        )
+                    return None
+                # This is not yet created (invalidated?)
+                try:
+                    self.init_object_by_config(factory_name, config_class, alias_class, config)
+                except Exception as e:
+                    self.record_broken_object(factory_name, object_name, e)
+                    return None
+
+                if object_name not in objects or objects[object_name] is None:
+                    # Returning None, not 'objects[object_name]': the object is
+                    # known to be absent here - that is what this branch tests
+                    # for - so indexing it raised a bare KeyError out of the very
+                    # path that had just reported the failure.
+                    reason = self.get_broken_object_reason(factory_name, object_name)
+                    if reason is None:
+                        self.record_broken_object(factory_name, object_name, "the factory produced no object")
+                    return None
+                return objects[object_name]
+
+            # This object has params (part_name != result_name). Only the base
+            # object's *declaration* is needed to derive the parametrized
+            # variant, so it is asked for rather than looked up in the
+            # instantiated 'objects' dict - a plugin-backed package creates
+            # lazily and may not have made the base yet.
+            #
+            # Through 'get_config' rather than the enumerated mapping, for the
+            # two reasons that accessor exists: it can fetch this one
+            # declaration without enumerating the package (which is the whole
+            # of what a lookup by name should cost), and it hands back a
+            # normalized one, so the copy below carries what a declaration
+            # carries. Taking the mapping instead meant every named lookup
+            # materialized it, and a plugin-backed package answered 'get_part'
+            # with a round trip for its entire catalog.
+            config = get_config(base_object_name)
+            if config is None:
+                # The same distinction the unparametrized branch above makes:
+                # a base this context excluded is not a base that is missing,
+                # and 'gone;width=5' has to read the same way as 'gone'.
+                clause = self.get_skipped_object_clause(factory_name, base_object_name)
+                if clause is not None:
+                    if not quiet:
+                        pc_logging.info(
+                            "The %s '%s:%s' is excluded by 'unless' (%s)",
+                            factory_name,
+                            self.name,
+                            base_object_name,
+                            clause,
+                        )
+                    return None
+                # Guarded like the 'unless' report just above it, and for the
+                # same reason: a caller that passed 'quiet' has said it will
+                # report a missing object itself. Without this, 'quiet' held
+                # only for an unparameterized name - so 'gone' was silent and
+                # 'gone;width=5' was not, which is the opposite of the rule
+                # this branch exists to keep ("'gone;width=5' has to read the
+                # same way as 'gone'").
+                if not quiet:
+                    pc_logging.error(
+                        "Base object '%s' not found in '%s'",
+                        base_object_name,
+                        self.name,
+                    )
+                return None
+            pc_logging.debug("Found the base object: %s" % base_object_name)
+
+            # Now we have the original assembly name and the complete set of parameters
+            config = copy.deepcopy(config)
+            declare_object_type_parameters(factory_name, config, params)
+            if ("parameters" not in config or config["parameters"] is None) and (
+                config["type"] not in PARAMETER_PASSING_TYPES
+            ):
+                pc_logging.error(
+                    "Attempt to parametrize '%s' of '%s' which has no parameters: %s",
+                    base_object_name,
+                    self.name,
+                    str(config),
+                )
+                return None
+
+            # Expand the config object so that the parameter values can be set
+            full_object_name = f"{self.name}:{result_name}"
+            config = config_class.normalize(result_name, config, full_object_name)
+            config["orig_name"] = base_object_name
+
+            # Fill in the parameter values
+            if "parameters" in config and config["parameters"] is not None:
+                # Filling "parameters"
+                pc_config.apply_parameter_values(config["parameters"], params, result_name)
+            else:
+                # Filling "with"
+                if "with" not in config:
+                    config["with"] = {}
+                for param_name, param_value in params.items():
+                    config["with"][param_name] = param_value
+
+            # Now initialize the object
+            pc_logging.debug("Initializing a parametrized object: %s" % result_name)
+            # pc_logging.debug(
+            #     "Initializing a parametrized object using the following config: %s"
+            #     % pformat(config)
+            # )
+            try:
+                factory.instantiate(factory_name, config["type"], self.ctx, self, self, config)
+            except Exception as e:
+                # Same reasoning as the non-parametrized branch above: a
+                # declaration this PartCAD cannot use costs the caller this one
+                # object, not an exception out of a package listing.
+                self.record_broken_object(factory_name, result_name, e)
+                return None
+
+            # See if it worked
+            if result_name not in objects:
+                self.record_broken_object(factory_name, result_name, "the factory produced no object")
+                return None
+
+            return objects[result_name]
+
+    def get_suppliers(self):
+        """The providers to consider for this package's objects, by absolute path.
+
+        A supplier is written from the point of view of the package that lists
+        it, so it is resolved against that package the way every other reference
+        this package makes is: a bare name is one of its own providers,
+        '../sibling:name' is one next door, and an absolute path is itself.
+        """
+        return {self.normalize(supplier_name): supplier for supplier_name, supplier in self.suppliers.items()}
+
+    def init_suppliers(self):
+        cfg = self.config_obj.get("suppliers", {})
+        if isinstance(cfg, str):
+            cfg = {cfg: {}}
+        elif isinstance(cfg, list):
+            cfg = {c: {} for c in cfg}
+        elif not isinstance(cfg, dict):
+            pc_logging.error(
+                "Invalid suppliers configuration in '%s': %s",
+                self.name,
+                str(cfg),
+            )
+            return
+
+        self.suppliers = cfg
+
+    def add_import(self, alias, location):
+        if ":" in location:
+            location_param = "url"
+            if location.endswith(".tar.gz"):
+                location_type = "tar"
+            else:
+                location_type = "git"
+        else:
+            location_param = "path"
+            location_type = "local"
+
+        yaml = ruamel.yaml.YAML()
+        yaml.preserve_quotes = True
+        with open(self.config_path) as fp:
+            config = yaml.load(fp)
+            fp.close()
+
+        if "import" in config and "dependencies" not in config:
+            config["dependencies"] = config["import"]
+        if config["dependencies"] is None:
+            config["dependencies"] = {}
+        config["dependencies"][alias] = {
+            location_param: location,
+            "type": location_type,
+        }
+        with open(self.config_path, "w") as fp:
+            yaml.dump(config, fp)
+            fp.close()
+
+    def rel_path(self, path) -> str:
+        """Render a filesystem path for display, relative to this package.
+
+        Paths that belong to a package are reported relative to that package's
+        directory, so the output does not depend on the caller's working
+        directory. That matters because the caller is not always the process
+        doing the work: the JSON-RPC daemon runs detached with ``cwd=/``, and
+        receives absolute paths from its clients. A path outside the package is
+        reported in full, since it has no package-relative form.
+        """
+        if not path:
+            return path
+        abs_path = os.path.abspath(str(path))
+        root = os.path.abspath(self.config_dir)
+        if abs_path == root or abs_path.startswith(root + os.sep):
+            return os.path.relpath(abs_path, root).replace("\\", "/")
+        return abs_path
+
+    def _validate_path(self, path, extension) -> tuple[bool, str, str]:
+        if not os.path.isabs(path):
+            path = os.path.abspath(path)
+        root = self.config_dir
+        if not os.path.isabs(root):
+            root = os.path.abspath(root)
+
+        # A path boundary, not a string prefix: '/work/pkg-other/fw.bin' starts
+        # with '/work/pkg' and is not in it, and 'relpath' would then hand back
+        # '../pkg-other/fw.bin' to be written down as the object's path. This is
+        # the test 'rel_path()' above already makes.
+        if not (path == root or path.startswith(root + os.sep)):
+            pc_logging.error("Can't add files outside of the package")
+            return False, None, None
+
+        path = os.path.relpath(path, root).replace("\\", "/")
+        name = path
+        # 'extension' is None for a caller that wants the path back untouched
+        # (software, whose file has no extension PartCAD can predict).
+        if extension and name.lower().endswith((".%s" % extension).lower()):
+            name = name[: -len(extension) - 1]
+
+        return True, path, name
+
+    def _add_component(
+        self,
+        kind: str,
+        path: str,
+        section: str,
+        ext_by_kind: dict[str, str],
+        component_config,
+    ) -> bool:
+        if kind in ext_by_kind:
+            ext = ext_by_kind[kind]
+        else:
+            ext = kind
+
+        if ext:
+            # This is a file type.
+            # Remove the extension from the name.
+            valid, path, name = self._validate_path(path, ext)
+            if not valid:
+                return False
+        else:
+            # This is not a file type.
+            # The user provided value is not a path. It's just the name itself.
+            name = path
+            path = None
+
+        obj = {"type": kind, **component_config}
+        if name == path:
+            obj["path"] = path
+
+        return self.add_object_config(section, name, obj)
+
+    def extension_for(self, section: str, kind: str):
+        """The file extension objects of this kind are written to.
+
+        'None' where the kind is not file-backed; the kind's own name where
+        nothing says otherwise, which is the common case ('step' -> '.step').
+        """
+        by_kind = SECTION_EXTENSIONS.get(section, {})
+        return by_kind[kind] if kind in by_kind else kind
+
+    def add_object_config(self, section: str, name: str, obj: dict) -> bool:
+        """Write one object declaration into this package's 'partcad.yaml'.
+
+        The one place a declaration is added, so that a locally added file and
+        one fetched from a URL land in the file the same way, and so that
+        'ruamel' keeps the rest of the document as the author wrote it.
+        """
+        yaml = ruamel.yaml.YAML()
+        yaml.preserve_quotes = True
+        # Wide enough that nothing here is ever folded onto a second line. The
+        # default wraps at about 80 columns, which is narrower than a URL and
+        # narrower than a sha256 'fileHash' - and a URL split across two lines is
+        # both hard to read and easy to break while editing it by hand.
+        yaml.width = 4096
+        with open(self.config_path) as fp:
+            config = yaml.load(fp)
+            fp.close()
+
+        # A 'partcad.yaml' holding nothing at all parses as None.
+        if config is None:
+            config = {}
+
+        config_section = config.get(section)
+        if config_section is None:
+            config_section = {}
+        config_section[name] = obj
+        config[section] = config_section
+
+        with open(self.config_path, "w") as fp:
+            yaml.dump(config, fp)
+            fp.close()
+
+        return True
+
+    def add_sketch(self, kind: str, path: str, config={}) -> bool:
+        pc_logging.info("Adding the sketch %s of type %s" % (self.rel_path(path), kind))
+        return self._add_component(
+            kind,
+            path,
+            "sketches",
+            SECTION_EXTENSIONS["sketches"],
+            config,
+        )
+
+    def add_part(self, kind: str, path: str, config={}) -> bool:
+        pc_logging.info("Adding the part %s of type %s" % (self.rel_path(path), kind))
+        return self._add_component(
+            kind,
+            path,
+            "parts",
+            SECTION_EXTENSIONS["parts"],
+            config,
+        )
+
+    def add_software(self, path: str, config={}) -> bool:
+        """Declare a file of this package as software of it.
+
+        No 'kind' argument: 'raw' is the only type there is, and the types that
+        will join it name a flashing procedure rather than a file format. No
+        extension either - a firmware image is as likely to be a '.img' or
+        nothing at all as a '.bin' - so the path is recorded whole and the name
+        is its stem.
+        """
+        pc_logging.info("Adding the software %s" % self.rel_path(path))
+        valid, rel_path, _ = self._validate_path(path, None)
+        if not valid:
+            return False
+        # '_validate_path' answers where the path is, not what it is, and a
+        # directory is inside the package like any file. Software is always a
+        # file, so one written here would be refused by 'SoftwareFactoryFile' on
+        # the next load -- a declaration that never had a chance, reported far
+        # from the command that wrote it.
+        if not os.path.isfile(os.path.join(self.config_dir, rel_path)):
+            pc_logging.error("Software must be a file: %s" % self.rel_path(path))
+            return False
+        name = os.path.splitext(os.path.basename(rel_path))[0]
+        return self.add_object_config("software", name, {**config, "path": rel_path})
+
+    def add_assembly(self, kind: str, path: str, config={}) -> bool:
+        pc_logging.info("Adding the assembly %s of type %s" % (self.rel_path(path), kind))
+        return self._add_component(
+            kind,
+            path,
+            "assemblies",
+            SECTION_EXTENSIONS["assemblies"],
+            config,
+        )
+
+    def add_scene(self, kind: str, path: str, config={}) -> bool:
+        pc_logging.info("Adding the scene %s of type %s" % (self.rel_path(path), kind))
+        ext_by_kind = {}
+        return self._add_component(
+            kind,
+            path,
+            "scenes",
+            ext_by_kind,
+            config,
+        )
+
+    def set_part_config(self, part_name, part_config):
+        if "name" in part_config:
+            del part_config["name"]
+        if "orig_name" in part_config:
+            del part_config["orig_name"]
+
+        if "offset" in part_config and isinstance(part_config["offset"], list):
+            part_config["offset"] = ruamel.yaml.comments.CommentedSeq(part_config["offset"])
+            part_config["offset"].fa.set_flow_style()
+
+        yaml = ruamel.yaml.YAML()
+        yaml.preserve_quotes = True
+        with open(self.config_path) as fp:
+            package_config = yaml.load(fp)
+            fp.close()
+
+        if "parts" in package_config:
+            parts = package_config["parts"]
+            parts[part_name] = part_config
+        else:
+            package_config["parts"] = {part_name: part_config}
+
+        with open(self.config_path, "w") as fp:
+            yaml.dump(package_config, fp)
+            fp.close()
+
+    def update_part_config(self, part_name, part_config_update: dict[str, typing.Any]):
+        pc_logging.debug("Updating part config: %s: %s" % (part_name, part_config_update))
+        yaml = ruamel.yaml.YAML()
+        yaml.preserve_quotes = True
+        with open(self.config_path) as fp:
+            config = yaml.load(fp)
+            fp.close()
+
+        if "parts" in config:
+            parts = config["parts"]
+            if part_name in parts:
+                part_config = parts[part_name]
+                for key, value in part_config_update.items():
+                    if value is not None:
+                        part_config[key] = value
+                    else:
+                        if key in part_config:
+                            del part_config[key]
+
+                with open(self.config_path, "w") as fp:
+                    yaml.dump(config, fp)
+                    fp.close()
+
+    async def _run_test_async(self, ctx, tests: list, use_wrapper: bool = False) -> bool:
+        if tests is None:
+            tests = ctx.get_all_tests()
+
+        tasks = []
+        test_method = "test_log_wrapper" if use_wrapper else "test_cached"
+
+        def get_objects(config_dict, getter):
+            for name in config_dict:
+                obj = getter(name)
+                # skip testing objects that are not finalized
+                if obj and (not hasattr(obj, "finalized") or obj.finalized):
+                    yield obj
+
+        tasks.extend(
+            asyncio.create_task(obj.test_async()) for obj in get_objects(self.interface_configs, self.get_interface)
+        )
+
+        for config_dict, getter in [
+            (self.sketch_configs, self.get_sketch),
+            (self.part_configs, self.get_part),
+            (self.assembly_configs, self.get_assembly),
+            (self.scene_configs, self.get_scene),
+        ]:
+            tasks.extend(
+                asyncio.create_task(getattr(t, test_method)(tests, ctx, obj))
+                for obj in get_objects(config_dict, getter)
+                for t in tests
+            )
+
+        return all(await asyncio.gather(*tasks))
+
+    async def test_async(self, ctx, tests=None) -> bool:
+        return await self._run_test_async(ctx, tests, use_wrapper=False)
+
+    def test(self, ctx, tests=None) -> bool:
+        return asyncio.run(self.test_async(ctx, tests))
+
+    async def test_log_wrapper_async(self, ctx, tests=None) -> bool:
+        return await self._run_test_async(ctx, tests, use_wrapper=True)
+
+    def test_log_wrapper(self, ctx, tests=None) -> bool:
+        return asyncio.run(self.test_log_wrapper_async(ctx, tests))
+
+    def _output_cfg(self, shape, options_project=None) -> dict:
+        """Which output file types are configured for a shape, and how.
+
+        Used to decide what a package produces, not how: it is the union of the
+        'export:' and 'render:' sections of the package (and of the package the
+        options were asked to come from), overlaid with the shape's own. The
+        options each type ends up with are resolved per type and per format in
+        'Shape.output_getopts()'.
+
+        'render:' is read before 'export:', the same order the option resolution
+        uses, so that a package which configured an export format under the old
+        section and then moved it gets the newer answer. The merge itself is
+        'render_cfg_merge', not 'output.merge': what this is read for is
+        'exclude', and a shape's exclusions have always added to its package's
+        rather than replacing them.
+        """
+        cfg = {}
+        for config_obj in [p.config_obj for p in (options_project, self) if p is not None] + [shape.config]:
+            for section in output.config_sections(output.EXPORT):
+                section_obj = config_obj.get(section)
+                if isinstance(section_obj, dict):
+                    cfg = render_cfg_merge(cfg, copy.deepcopy(section_obj))
+        return cfg
+
+    async def render_async(
+        self,
+        sketches: Optional[List] = None,
+        interfaces: Optional[List] = None,
+        parts: Optional[List] = None,
+        assemblies: Optional[List] = None,
+        format: Optional[str] = None,
+        output_dir: Optional[Path] = None,
+        options_package: Optional[str] = None,
+        ignore_manufacturability: bool = False,
+        scenes: Optional[List] = None,
+        overlay=None,
+        render_opts: Optional[dict] = None,
+    ):
+        with pc_logging.Action("RenderPkg", self.name):
+            # A skipped package has nothing to render, and must not be asked to:
+            # its declarations are still in 'config_obj' (nothing rewrites the
+            # file), so enumerating them would resolve every one of them to None
+            # and fail the whole render with an 'EmptyShapesError'.
+            if self.skipped:
+                return
+
+            options_project = self.ctx.get_project(options_package) if options_package else None
+            if options_package and options_project is None:
+                pc_logging.error("The options package is not found: %s" % options_package)
+                return
+
+            # The package's own 'render:' section, which is what the documents
+            # below (README, assembly readme, instruction book) are configured
+            # by. The per-shape output configuration is resolved separately, by
+            # '_output_cfg()', because it also has to take 'export:' and the
+            # options package into account.
+            render = self.config_obj.get("render") or {}
+            shapes: List[Shape] = await self._enumerate_shapes_async(sketches, interfaces, parts, assemblies, scenes)
+
+            if None in shapes:
+                raise EmptyShapesError
+
+            tasks = []
+            # Every file type that has a built-in implementation, plus any the
+            # packages involved implement themselves.
+            output_formats = output.all_formats(self.ctx)
+
+            # Only the objects the package declares. Building the assemblies
+            # below may materialize more parts - a URDF's links become the parts
+            # '<assembly>/<link>' - but the package declares no such part: it
+            # exists once that assembly has been built, so enumerating them
+            # would mean building every assembly here before anything is
+            # rendered. They stay reachable and exportable by name, and one
+            # named that way lands in a sub-directory of its own (see
+            # 'output.name_to_path()'); they are simply not part of a bulk
+            # render.
+            # A file type named by its full path is not one of the types this
+            # package could have enumerated: it lives in another package, which
+            # is the whole reason for spelling it that way. So it is rendered as
+            # asked rather than looked for in the list below - there is nothing
+            # to look for, and filtering it out is how 'pc export -t
+            # sim-gazebo:world' came to succeed while writing nothing.
+            named_elsewhere = format is not None and output.split_format(self.name, format)[1] is not None
+
+            for shape in shapes:
+                shape_cfg = self._output_cfg(shape, options_project)
+                formats = output_formats + [
+                    name
+                    for name in output.format_names(shape_cfg)
+                    if name not in output_formats and not output.is_document_format(name, shape_cfg)
+                ]
+                if named_elsewhere:
+                    formats = [format]
+
+                for format_name in formats:
+                    if named_elsewhere or self._should_render_format(format_name, shape_cfg, format, shape.kind):
+                        if not hasattr(shape, "finalized") or shape.finalized:
+                            tasks.append(
+                                shape.render_async(
+                                    ctx=self.ctx,
+                                    format_name=format_name,
+                                    project=self,
+                                    output_dir=output_dir,
+                                    options_package=options_package,
+                                    overlay=overlay,
+                                    # One run's worth of export parameters (the
+                                    # viewport of 'pc render --view'), on top of
+                                    # everything the configuration resolved to.
+                                    # Handed to every file type: whether one
+                                    # means anything to a projection of a shape
+                                    # is the implementation's to decide, and a
+                                    # package may well implement one of its own
+                                    # that reads it.
+                                    **(render_opts or {}),
+                                )
+                            )
+
+            await asyncio.gather(*tasks)
+
+            # The package document lists what the package declares; an assembly
+            # document lists what that assembly is made of, and the assembly
+            # instruction book how to put it together. An assembly gets one of
+            # its own when it is the object the document was asked for, or when
+            # it asks for one in its own configuration.
+            for document_format in ("readme",) + assembly_guide.GUIDE_FORMATS:
+                for assembly_name in self._assembly_documents_to_render(
+                    shapes, assemblies, format, document_format, render
+                ):
+                    if document_format == "readme":
+                        await self.render_assembly_readme_async(assembly_name, render, output_dir)
+                    else:
+                        await self.render_assembly_guide_async(
+                            assembly_name,
+                            document_format,
+                            render,
+                            output_dir,
+                            ignore_manufacturability,
+                        )
+
+            # A scene lists what it holds exactly as an assembly does, so it
+            # gets the same document. It never gets an instruction book: an
+            # assembly guide is an account of putting something together, and
+            # nothing in a scene was put together (see 'partcad.scene').
+            for scene_name in self._assembly_documents_to_render(shapes, scenes, format, "readme", render, "scene"):
+                await self.render_assembly_readme_async(scene_name, render, output_dir, kind="scene")
+
+            # The package document is skipped when specific assemblies or scenes
+            # were asked for: their own documents are what was requested.
+            if (format == "readme" and not assemblies and not scenes) or (format is None and "readme" in render):
+                self.render_readme_async(render, output_dir)
+
+    def _assembly_documents_to_render(
+        self, shapes, assemblies, format, document_format, render_cfg=None, kind="assembly"
+    ):
+        """Which assemblies get a document of the given kind out of this run.
+
+        'kind' selects which shapes are considered - "assembly" or "scene" -
+        because the two are declared in sections of their own and a document is
+        written per object of one kind, never per object of both.
+        """
+        if format is not None and format != document_format:
+            return []
+        names = []
+        for shape in shapes:
+            if shape.kind != kind:
+                continue
+            # A 'pdf' or 'html' somebody implements is a file of that assembly's
+            # own, produced above like any other file type, and asking for it
+            # here as well would overwrite it with the instruction book.
+            cfg = render_cfg_merge(copy.deepcopy(render_cfg or {}), shape.config.get("render") or {})
+            if not output.is_document_format(document_format, cfg):
+                continue
+            if (format == document_format and assemblies) or document_format in (shape.config.get("render") or {}):
+                names.append(shape.name)
+        return names
+
+    async def routable_shapes_async(self, sketches=None, parts=None) -> list:
+        """The objects of this package that declare a route, in a fixed order.
+
+        Only sketches and parts. An assembly is put together rather than cut,
+        and a scene is an arrangement of things that were each cut on their own,
+        so neither has an outline a machine could follow -- and offering to
+        route one would answer a question the object cannot be asked.
+
+        Naming objects asks about those and nothing else, which is what
+        `pc cam <object>` resolves to; naming none asks about the whole package.
+        An object that declares no `cam:` section is left out silently: most
+        objects are never cut, and a package where three of forty are is the
+        ordinary case rather than thirty-seven warnings.
+
+        Sorted by name, because what a package produces should not depend on the
+        order a mapping happened to be read in.
+        """
+        from . import cam as pc_cam
+
+        if self.skipped:
+            # A skipped package's declarations are still in 'config_obj' --
+            # nothing rewrites the file -- so enumerating them would resolve
+            # every one to None. The same guard 'render_async()' opens with.
+            return []
+
+        named = bool(sketches or parts)
+        if not named:
+            sketches = [
+                name
+                for name in (self.config_obj.get("sketches") or {})
+                if self.get_skipped_object_clause("sketch", name) is None
+            ]
+            parts = [
+                name
+                for name in (self.config_obj.get("parts") or {})
+                if self.get_skipped_object_clause("part", name) is None
+            ]
+
+        # A name that resolves to nothing is dropped and not reported here: the
+        # getters already say "Object 'x' not found in '//package'", naming the
+        # package as well, and a second line saying the same thing less
+        # precisely is two errors for one typo.
+        shapes = []
+        for name in sorted(sketches or []):
+            shape = self.get_sketch(name)
+            if shape is not None:
+                shapes.append(shape)
+        for name in sorted(parts or []):
+            # Awaited rather than 'get_part()': a part a URDF or STEP assembly
+            # materializes does not exist until that assembly has been built.
+            # See 'get_part_async()', and the same note in the test operation.
+            shape = await self.get_part_async(name)
+            if shape is not None:
+                shapes.append(shape)
+
+        if named:
+            # Asked about by name, so it is routed whatever it declares: the
+            # refusal an object that says nothing about being cut earns belongs
+            # to 'Shape.route_async()', which says which object and why.
+            return shapes
+        return [shape for shape in shapes if pc_cam.declares_job(shape)]
+
+    def _enumerate_shapes(self, sketches, interfaces, parts, assemblies, scenes=None):
+        """'_enumerate_shapes_async()' for a caller that owns no event loop."""
+        return asyncio.run(self._enumerate_shapes_async(sketches, interfaces, parts, assemblies, scenes))
+
+    async def _enumerate_shapes_async(self, sketches, interfaces, parts, assemblies, scenes=None):
+        def get_keys(section, kind):
+            # A section that is present but empty (e.g. `sketches:` with no
+            # entries, as `pc init` writes it) parses as None; treat it as {}.
+            if section not in self.config_obj:
+                return []
+            names = list((self.config_obj.get(section) or {}).keys())
+            # Read from 'config_obj' rather than through 'object_configs()' so
+            # that a plugin-backed package - which declares none of this on disk
+            # - keeps rendering nothing, as it always has. But an object this
+            # context excluded is not one to render: it was never instantiated,
+            # so it would come back None and fail the whole package's render
+            # with an 'EmptyShapesError'.
+            return [name for name in names if self.get_skipped_object_clause(kind, name) is None]
+
+        # Naming nothing at all means the whole package. Naming one object means
+        # that object: each kind used to fall back to "all of them" on its own,
+        # so asking for one part rendered every sketch, every assembly and every
+        # scene beside it - which is a lot of work nobody asked for, and, with
+        # "--with-ports", a lot of pictures nobody asked for either.
+        if not (sketches or interfaces or parts or assemblies or scenes):
+            sketches = get_keys("sketches", "sketch")
+            # interfaces = get_keys("interfaces", "interface")
+            parts = get_keys("parts", "part")
+            assemblies = get_keys("assemblies", "assembly")
+            scenes = get_keys("scenes", "scene")
+
+        shapes = []
+        for kind, names, get in (
+            ("sketch", sketches, self.get_sketch),
+            ("part", parts, self.get_part_async),
+            ("assembly", assemblies, self.get_assembly),
+            ("scene", scenes, self.get_scene),
+        ):
+            for name in names or []:
+                shape = get(name)
+                # 'get_part_async()' is a coroutine and the other three getters
+                # are not: a part a URDF or STEP assembly materializes does not
+                # exist until that assembly has been built, and building one is
+                # asynchronous (see 'get_part()', which refuses from a
+                # coroutine, and 'routable_shapes_async()', which awaits for the
+                # same reason). Naming such a part - 'pc export //pkg:robot/base_link'
+                # - is how it is asked for, and it is the one kind of object
+                # here that is not simply looked up.
+                if inspect.isawaitable(shape):
+                    shape = await shape
+                # An object whose type PartCAD retired is not one that failed to
+                # build. 'RetiredTypeException' is softened precisely so that a
+                # command which merely walks such a package does not exit
+                # non-zero -- "nothing the user of that package can do would
+                # make it work". It still comes back None, and a None here used
+                # to fail the entire package's render with an
+                # 'EmptyShapesError': the whole render of the public index
+                # ended, in a quarter of a second, on six generative-AI parts
+                # retired in 0.7.153 that a reader of the message ("No shapes
+                # found to render") would never connect to it.
+                #
+                # Every other None still raises. A part that would not build is
+                # a failure worth having, and telling the two apart is the only
+                # thing this loop does that the four it replaced did not.
+                if shape is None and self.is_retired_object(kind, name):
+                    continue
+                shapes.append(shape)
+        # TODO(clairbee): interfaces are not yet renderable.
+        # for name in interfaces: shapes.append(self.get_interface(name))
+
+        return shapes
+
+    def _should_render_format(
+        self, format_name: str, shape_cfg: dict, current_format: typing.Optional[str], shape_kind: str
+    ) -> bool:
+        """Helper function to determine if a format should be rendered"""
+        plural_shape_kind = {
+            "part": "parts",
+            "assembly": "assemblies",
+            "scene": "scenes",
+            "sketch": "sketches",
+            "interface": "interfaces",
+            "providers": "providers",
+        }
+        if (
+            format_name in shape_cfg
+            and shape_cfg[format_name] is not None
+            and not isinstance(shape_cfg[format_name], str)
+            and plural_shape_kind.get(shape_kind, None) in shape_cfg.get(format_name, {}).get("exclude", [])
+        ):
+            return False
+        return (current_format is None and format_name in shape_cfg) or (
+            current_format is not None and current_format == format_name
+        )
+
+    def render(
+        self,
+        sketches: Optional[list] = None,
+        interfaces: Optional[list] = None,
+        parts: Optional[list] = None,
+        assemblies: Optional[list] = None,
+        format: Optional[str] = None,
+        output_dir: Optional[Path] = None,
+        options_package: Optional[str] = None,
+        ignore_manufacturability: bool = False,
+        scenes: Optional[list] = None,
+        overlay=None,
+        render_opts: Optional[dict] = None,
+    ):
+        asyncio.run(
+            self.render_async(
+                sketches,
+                interfaces,
+                parts,
+                assemblies,
+                format,
+                output_dir,
+                options_package,
+                ignore_manufacturability,
+                scenes,
+                overlay,
+                render_opts,
+            )
+        )
+
+    def readme_image_path(self, name, render_cfg, return_path, config=None):
+        """Where the projection of the shape called 'name' is.
+
+        Returns a '(src, test_path)' pair: 'src' is the path to write into a
+        document that links to the image, relative to the document being
+        generated, and 'test_path' is where the image file is expected relative
+        to the output directory, so that the caller can check whether it has been
+        rendered at all. Both are 'None' when the package renders none of the
+        image formats below.
+        """
+        # The first image format the package renders wins, in this order. Each
+        # entry is the render config key and the extension the rendered file
+        # carries, which is not always the key: "jpeg" writes ".jpg".
+        image_formats = [("svg", ".svg"), ("png", ".png"), ("jpeg", ".jpg")]
+
+        if config is not None and config.get("type") == "svg":
+            image_cfg, extension = render_cfg.get("svg", {}), ".svg"
+        else:
+            for image_format, image_extension in image_formats:
+                if image_format in render_cfg:
+                    image_cfg, extension = render_cfg[image_format], image_extension
+                    break
+            else:
+                return None, None
+
+        if isinstance(image_cfg, str):
+            image_cfg = {"prefix": image_cfg}
+        if image_cfg is None:
+            image_cfg = {}
+        prefix = image_cfg.get("prefix", ".")
+
+        # The link the document carries keeps the name's '/' as a '/': it is a
+        # URL a reader of the document follows rather than a path on the machine
+        # that generated it. The file it points at is that same link spelled for
+        # this filesystem, which for a name with a '/' in it is a file in a
+        # sub-directory -- see 'output.name_to_path()'.
+        image_path = os.path.join(return_path, prefix, name + extension)
+        test_image_path = os.path.join(prefix, output.name_to_path(name, extension))
+        return image_path, test_image_path
+
+    def _readme_image(self, name, render_cfg, return_path, config=None):
+        """The '<img>' markup for the projection of the shape called 'name'."""
+        src, test_image_path = self.readme_image_path(name, render_cfg, return_path, config)
+        if src is None:
+            return None, None
+        markup = '<img src="%s" alt="%s" style="%s">' % (src, name, pc_document.MARKDOWN_IMAGE_STYLE)
+        return markup, test_image_path
+
+    def _assembly_document_target(
+        self, format, extension, assembly_name, render_cfg=None, output_dir=None, kind="assembly"
+    ):
+        """Where a document of one assembly or scene goes, and what it is about.
+
+        Returns '(assembly, path, dir_path, return_path, render_cfg, output_dir)',
+        or 'None' if this package has no such object of that kind.
+        """
+        assembly = self.get_scene(assembly_name) if kind == "scene" else self.get_assembly(assembly_name)
+        if assembly is None:
+            return None
+
+        if render_cfg is None:
+            render_cfg = self.config_obj.get("render", {}) or {}
+        if output_dir is None:
+            output_dir = self.config_dir
+
+        # Only the assembly's own configuration is consulted for the path here:
+        # the package-level setting points at the package document, and reusing
+        # it would have the assembly overwrite it.
+        cfg = (assembly.config.get("render") or {}).get(format, {})
+        if isinstance(cfg, str):
+            cfg = {"path": cfg}
+        if cfg is None:
+            cfg = {}
+
+        # 'assembly.name' rather than the requested name: a parameterized
+        # assembly is known by the name its parameter values resolve to, which is
+        # also the name its images are rendered under. A '/' in it is a
+        # sub-directory, the same way it is for the files the shapes themselves
+        # are written to (see 'output.name_to_path()').
+        path = os.path.join(output_dir, cfg.get("path", output.name_to_path(assembly.name, extension)))
+        dir_path = os.path.dirname(path)
+        return_path = os.path.relpath(output_dir, dir_path)
+        return assembly, path, dir_path, return_path, render_cfg, output_dir
+
+    async def render_assembly_readme_async(self, assembly_name, render_cfg=None, output_dir=None, kind="assembly"):
+        """Generate the markdown document of a single assembly or scene.
+
+        Where the package document lists what the package declares, this one lists
+        what the assembly is made of: every part and every sub-assembly it uses,
+        recursively, grouped by the package they come from and counted. A scene
+        ('kind="scene"') is documented the same way, and lists what it holds.
+
+        Returns the path of the generated document, or 'None' if there is no such
+        object in this package.
+        """
+        target = self._assembly_document_target("readme", ".md", assembly_name, render_cfg, output_dir, kind)
+        if target is None:
+            return None
+        assembly, path, dir_path, return_path, render_cfg, output_dir = target
+
+        images = assembly_guide.PackageImages(self, render_cfg, output_dir, return_path)
+        document = await assembly_guide.build_readme_document_async(self, assembly, images, dir_path)
+
+        lines = pc_document.render_markdown(document)
+        self.ctx.ensure_dirs_for_file(path)
+        with open(path, "w") as f:
+            f.writelines(map(lambda s: s + "\n", lines))
+        return path
+
+    def render_assembly_readme(self, assembly_name, render_cfg=None, output_dir=None, kind="assembly"):
+        return asyncio.run(self.render_assembly_readme_async(assembly_name, render_cfg, output_dir, kind))
+
+    async def render_assembly_guide_async(
+        self,
+        assembly_name,
+        format="pdf",
+        render_cfg=None,
+        output_dir=None,
+        ignore_manufacturability=False,
+    ):
+        """Generate the assembly instruction book of a single assembly.
+
+        'format' is "pdf" or "html": the same document either way, laid out on
+        paper or as pages to flip through in a browser.
+
+        Returns the path of the generated document, or 'None' if there is no such
+        assembly in this package. Raises 'AssemblyDocumentError' if the assembly
+        is not one an instruction book can be written for (see
+        'assembly_guide.check_source').
+        """
+        if format not in assembly_guide.GUIDE_FORMATS:
+            raise ValueError("Unsupported assembly document format: %s" % format)
+
+        target = self._assembly_document_target(format, "." + format, assembly_name, render_cfg, output_dir)
+        if target is None:
+            return None
+        assembly, path, dir_path, _return_path, render_cfg, output_dir = target
+
+        async with assembly_guide.guide_document_async(
+            self.ctx, self, assembly, format.upper(), dir_path, ignore_manufacturability
+        ) as document:
+            self.ctx.ensure_dirs_for_file(path)
+            if format == "html":
+                with open(path, "w") as f:
+                    f.write(pc_document.render_html(document))
+            else:
+                await render_pdf_async(self.ctx, document, path)
+
+        return path
+
+    async def assembly_guide_data_async(self, assembly_name, ignore_manufacturability=False):
+        """The assembly instruction book as plain data, pictures included.
+
+        The same document 'render_assembly_guide_async()' writes to a file, for a
+        reader that has no file system in reach: the IDE's viewer is a webview on
+        the other side of a JSON-RPC connection, so every illustration is carried
+        inline as a data URI (see 'document.to_data()').
+
+        For the same reason the document is built with no 'dir_path': the links a
+        generated document makes to the files of the package tree are relative to
+        where it was written, and this one is not written anywhere. What is left
+        is the links that are useful to a reader over a wire - the urls the
+        packages declare.
+        """
+        assembly = self.get_assembly(assembly_name)
+        if assembly is None:
+            return None
+
+        async with assembly_guide.guide_document_async(
+            self.ctx, self, assembly, "Data", ignore_manufacturability=ignore_manufacturability
+        ) as document:
+            return pc_document.to_data(document, embed_images=True)
+
+    def assembly_guide_data(self, assembly_name, ignore_manufacturability=False):
+        return asyncio.run(self.assembly_guide_data_async(assembly_name, ignore_manufacturability))
+
+    def render_assembly_guide(
+        self,
+        assembly_name,
+        format="pdf",
+        render_cfg=None,
+        output_dir=None,
+        ignore_manufacturability=False,
+    ):
+        return asyncio.run(
+            self.render_assembly_guide_async(assembly_name, format, render_cfg, output_dir, ignore_manufacturability)
+        )
+
+    def render_readme_async(self, render_cfg, output_dir):
+        if output_dir is None:
+            output_dir = self.config_dir
+
+        if render_cfg is None:
+            render_cfg = {}
+        cfg = render_cfg.get("readme", {})
+        if isinstance(cfg, str):
+            cfg = {"path": cfg}
+        if cfg is None:
+            cfg = {}
+
+        path = os.path.join(output_dir, cfg.get("path", "README.md"))
+        dir_path = os.path.dirname(path)
+        return_path = os.path.relpath(output_dir, dir_path)
+
+        exclude = cfg.get("exclude", [])
+        if exclude is None:
+            exclude = []
+
+        name = self.name
+        desc = self.desc
+        docs = self.config_obj.get("docs", None)
+        intro = None
+        usage = None
+        if docs:
+            name = docs.get("name", name)
+            intro = docs.get("intro", None)
+            usage = docs.get("usage", None)
+
+        lines = []
+        lines += ["# %s" % name]
+        lines += [""]
+        if desc:
+            lines += [desc]
+            lines += [""]
+        if intro:
+            lines += [intro]
+            lines += [""]
+
+        if usage:
+            lines += ["## Usage"]
+            lines += [usage]
+            lines += [""]
+
+        if self.config_obj.get("dependencies", None) is not None and "packages" not in exclude:
+            dependencies = copy.copy(self.config_obj["dependencies"])
+            child_packages = self.get_child_project_names(absolute=False)
+            display_dependencies = []
+            for alias in child_packages:
+                if alias in dependencies and dependencies[alias].get("onlyInRoot", False) and self.name != "//":
+                    continue
+                display_dependencies.append(alias)
+
+            if display_dependencies:
+                lines += ["## Sub-Packages"]
+                lines += [""]
+                for alias in display_dependencies:
+                    import_config = dependencies.get(alias, {})
+                    columns = []
+
+                    if "type" not in import_config or import_config["type"] == "local":
+                        lines += [
+                            "### [%s](%s)"
+                            % (
+                                alias,
+                                os.path.join(
+                                    return_path,
+                                    import_config.get("path", alias),
+                                    "README.md",
+                                ),
+                            )
+                        ]
+                    elif import_config["type"] == "git":
+                        # 'name' is optional in a dependency and most of them
+                        # omit it -- the alias is the name a package gave the
+                        # thing it imported. Reading it unguarded made a plain
+                        # git dependency crash 'pc render' with a bare KeyError,
+                        # which is why the other two branches below already fall
+                        # back to the alias.
+                        lines += ["### [%s](%s)" % (import_config.get("name", alias), import_config["url"])]
+                    else:
+                        lines += ["### %s" % import_config.get("name", alias)]
+
+                    if "desc" in import_config:
+                        columns += [import_config["desc"]]
+                    elif not columns:
+                        # TODO(clairbee): is there an easy and reiable way to pull the descriptions from sub-packages?
+                        # columns += ["***Not documented yet.***"]
+                        pass
+
+                    if len(columns) > 1:
+                        lines += ["<table><tr>"]
+                        lines += map(lambda c: "<td valign=top>" + c + "</td>", columns)
+                        lines += ["</tr></table>"]
+                    else:
+                        lines += columns
+                    lines += [""]
+
+        def declared(objects: dict) -> list:
+            """The names of the objects the package declares, in order.
+
+            'self.parts' and the dictionaries beside it hold the parametrized
+            *instances* too: asking for 'panel;include=OUTLINE' creates one and
+            registers it, so a package that declares one sketch can hold three.
+            An instance is not a declaration - it exists because something
+            referred to the base with particular parameter values, and the base
+            is in the README already, with its parameters listed - and nothing
+            renders an image for one, so listing them produced a section with
+            no image and a warning naming a file nobody was going to write.
+
+            Told apart by 'orig_name', which is the name of the declaration an
+            object came from and is its own name for everything the package
+            wrote down (see 'Configuration.normalize' and
+            'Project.get_object'). Asked of the object itself rather than of
+            what it resolves to: an alias reports the source's configuration
+            below, where its 'orig_name' is the source's name and not the
+            alias's.
+            """
+            return sorted(name for name in objects if objects[name].config.get("orig_name", name) == name)
+
+        def add_section(name, display_name, shape, render_cfg):
+            config = shape.config
+
+            if "type" in config and config["type"] == "alias" and "aliases" in exclude:
+                return []
+
+            # The same merge 'render_async()' performs when it decides what to
+            # render: a shape's own 'render' section adds to, and overrides, the
+            # package's. Without it a format enabled - or pointed at a different
+            # prefix - on the shape alone renders a file that the README then
+            # fails to find.
+            #
+            # A deep copy, like everywhere else 'render_cfg_merge()' is called:
+            # the merge is in place, and the very same package configuration is
+            # handed to every shape of the package below, so a shallow copy would
+            # let one shape's settings leak into all the ones after it.
+            render_cfg = render_cfg_merge(copy.deepcopy(render_cfg), config.get("render", None) or {})
+
+            path = None
+            if "path" in config:
+                path = config["path"]
+            else:
+                path = name
+                if "type" in config:
+                    if config["type"] == "cadquery" or config["type"] == "build123d" or config["type"] == "sdf":
+                        path += ".py"
+                    elif config["type"] == "chili3d":
+                        path += ".chili"
+                    elif config["type"] == "openscad":
+                        path += ".scad"
+                    else:
+                        path += "." + config["type"]
+            # Linked only where there is a file to follow. An alias, an enrich
+            # or a compound has no file of its own -- it points at another
+            # object -- and a guessed '<name>.<type>' is a link to nothing.
+            if not os.path.isfile(os.path.join(self.config_dir, path)):
+                path = None
+
+            columns = []
+            img_text, test_image_path = self._readme_image(name, render_cfg, return_path, config)
+
+            if img_text is None or not os.path.exists(os.path.join(output_dir, test_image_path)):
+                pc_logging.warn("Skipping rendering of %s: no image found at %s" % (name, test_image_path))
+                return []
+
+            if path:
+                img_text = '<a href="%s">%s</a>' % (path, img_text)
+            columns += [img_text]
+
+            if "desc" in config:
+                columns += [config["desc"]]
+
+            if "parameters" in config:
+                parameters = "Parameters:<br/><ul>\n"
+                for param_name, param in config["parameters"].items():
+                    if "enum" in param:
+                        value = "<ul>\n"
+                        for enum_value in param["enum"]:
+                            if enum_value == param["default"]:
+                                value += "<li><b>%s</b></li>\n" % enum_value
+                            else:
+                                value += "<li>%s</li>" % enum_value
+                        value += "</ul>\n"
+                    else:
+                        value = param["default"]
+                    parameters += "<li>%s: %s</li>\n" % (param_name, value)
+                parameters += "</ul>\n"
+                columns += [parameters]
+
+            if "images" not in config and "desc" in config and "INSERT_IMAGE_HERE" in config["desc"]:
+                config["images"] = list(
+                    re.findall(
+                        r"INSERT_IMAGE_HERE\(([^)]*)\)",
+                        config["desc"],
+                        re.MULTILINE,
+                    ),
+                )
+            if "images" in config:
+                images = "Input images:\n"
+                for image in config["images"]:
+                    images += (
+                        '</br><img src="%s" alt="%s" style="width: auto; height: auto; max-width: 200px; max-height: 200px;" />\n'
+                        % (
+                            image,
+                            image,
+                        )
+                    )
+                columns += [images]
+
+            if "aliases" in config:
+                aliases = "Aliases:<br/><ul>"
+                for alias in config["aliases"]:
+                    aliases += "<li>%s</li>" % alias
+                aliases += "</ul>"
+                columns += [aliases]
+
+            if hasattr(shape, "interfaces"):
+                interfaces = "Interfaces:<br/>"
+                for iface in shape.interfaces:
+                    interfaces += "- %s<br/>" % iface.name
+                columns += [interfaces]
+
+            lines = ["### %s" % display_name]
+            if len(columns) > 1:
+                lines += ["<table><tr>"]
+                lines += map(lambda c: "<td valign=top>" + c + "</td>", columns)
+                lines += ["</tr></table>"]
+            else:
+                lines += columns
+            lines += [""]
+            return lines
+
+        if self.assemblies and "assemblies" not in exclude:
+            lines += ["## Assemblies"]
+            lines += [""]
+            shape_names = declared(self.assemblies)
+            for name in shape_names:
+                shape = self.assemblies[name]
+                if shape.config["type"] == "alias":
+                    source_path = self.normalize(shape.config["source_resolved"])
+                    shape = self.ctx.get_assembly(source_path)
+                    display_name = name + " (alias to " + shape.name + ")"
+                else:
+                    display_name = name
+                lines += add_section(name, display_name, shape, render_cfg)
+
+        if self.parts and "parts" not in exclude:
+            # Built first, and the heading only emitted if anything came of it:
+            # 'add_section' skips a part with no rendered image, and a package
+            # where that is true of every part would otherwise get a "## Parts"
+            # heading with nothing under it.
+            part_lines = []
+            shape_names = declared(self.parts)
+            for name in shape_names:
+                shape = self.parts[name]
+                if shape.config["type"] == "alias":
+                    source_path = self.normalize(shape.config["source_resolved"])
+                    shape = self.ctx.get_part(source_path)
+                    display_name = name + " (alias to " + shape.name + ")"
+                else:
+                    display_name = name
+                part_lines += add_section(name, display_name, shape, render_cfg)
+            if part_lines:
+                lines += ["## Parts", ""]
+                lines += part_lines
+
+        if self.interfaces and "interfaces" not in exclude:
+            lines += ["## Interfaces"]
+            lines += [""]
+            shape_names = declared(self.interfaces)
+            for name in shape_names:
+                shape = self.interfaces[name]
+                lines += add_section(name, name, shape, render_cfg)
+
+        if self.sketches and "sketches" not in exclude:
+            lines += ["## Sketches"]
+            lines += [""]
+            shape_names = declared(self.sketches)
+            for name in shape_names:
+                shape = self.sketches[name]
+                lines += add_section(name, name, shape, render_cfg)
+
+        if self.software and "software" not in exclude:
+            # A table rather than the per-object sections above: software has no
+            # image to show and no parameters to enumerate, and what a reader
+            # needs of it - which file, which version, is it pinned - is a few
+            # short columns that are worth comparing side by side.
+            lines += ["## Software"]
+            lines += [""]
+            lines += [
+                "| Software | Version | File | Hash | Description |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+            for name in sorted(self.software.keys()):
+                software = self.software[name]
+                config = software.config
+                file_text = ""
+                if software.path:
+                    # Relative to the package, the way a part's source file is
+                    # linked above: a generated README lives in the package it
+                    # documents.
+                    file_path = os.path.relpath(software.path, self.config_dir)
+                    file_name = os.path.basename(software.path)
+                    if software.is_local_file():
+                        # The package carries the file, so the README can link
+                        # straight at it. What 'fileFrom' pulls in is not in the
+                        # repository at all, and a link to where it is not is
+                        # worse than the name of the file it will be saved as.
+                        file_text = "[%s](%s)" % (_readme_cell(file_name), _readme_cell(file_path))
+                    else:
+                        file_text = "`%s`" % _readme_cell(file_name)
+                        file_url = config.get("fileUrl")
+                        if file_url:
+                            file_text += " from [%s](%s)" % (
+                                _readme_cell(config.get("fileFrom", "url")),
+                                _readme_cell(file_url),
+                            )
+                declared_hash = software.declared_hash()
+                lines += [
+                    "| %s | %s | %s | %s | %s |"
+                    % (
+                        _readme_cell(name),
+                        # A numeric "version: 0" is a version like any other, and
+                        # the schema allows one; 'or ""' would render it blank.
+                        _readme_cell("" if config.get("version") is None else config.get("version")),
+                        file_text,
+                        "`%s`" % _readme_cell(declared_hash) if declared_hash else "",
+                        _readme_cell(software.desc or ""),
+                    )
+                ]
+            lines += [""]
+
+        lines += [
+            "<br/><br/>",
+            "",
+            "*Generated by [PartCAD](https://partcad.org/)*",
+        ]
+
+        lines = map(lambda s: s + "\n", lines)
+
+        f = open(path, "w")
+        f.writelines(lines)
+        f.close()
+
+
+# Filled here rather than in the class body: the lock classes are nested in it,
+# and the configuration classes are imported above it. One table per question,
+# and both keyed by kind, so that adding a kind is one entry in each rather than
+# a branch in three methods.
+Project.OBJECT_KIND_LOCKS = {
+    "sketch": Project.SketchLock,
+    "part": Project.PartLock,
+    "assembly": Project.AssemblyLock,
+    "scene": Project.SceneLock,
+}
+Project._CREATE_BY_KIND = {
+    "sketch": (sketch_config.SketchConfiguration, sfa.SketchFactoryAlias, "get_sketch_config"),
+    "part": (part_config.PartConfiguration, pfa.PartFactoryAlias, "get_part_config"),
+    "assembly": (assembly_config.AssemblyConfiguration, afa.AssemblyFactoryAlias, "get_assembly_config"),
+    "scene": (scene_config.SceneConfiguration, scnf.SceneFactoryAlias, "get_scene_config"),
+}
+Project.OBJECT_KIND_CONFIG_CLASSES = {
+    **{kind: how[0] for kind, how in Project._CREATE_BY_KIND.items()},
+    "provider": plugin_config.PluginConfiguration,
+    "repository": plugin_config.PluginConfiguration,
+    "software": software_config.SoftwareConfiguration,
+}

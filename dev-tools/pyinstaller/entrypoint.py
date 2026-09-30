@@ -5,18 +5,25 @@
 #
 """Entry point of the frozen PartCAD command line tools.
 
-The wheels expose `pc` and `partcad` as console scripts generated from
-`[project.scripts]`. A frozen bundle has no console scripts, so this module
-takes their place: it is the script PyInstaller analyzes and runs.
+The wheels expose `pc`, `partcad`, and `partcad-json-rpc` as console scripts
+generated from `[project.scripts]`. A frozen bundle has no console scripts, so
+this module takes their place: it is the single script PyInstaller analyzes and
+runs for all three executables in the bundle.
 
-`click` derives the program name from `sys.argv[0]`, so the same frozen code
-prints itself as `pc` or as `partcad` depending on which of the two executables
-in the bundle was invoked.
+Which one ran is decided from `sys.argv[0]`: `partcad-json-rpc` starts the
+JSON-RPC service, and any other name runs the CLI. `click`, in turn, derives its
+program name from `sys.argv[0]`, so the same CLI code prints itself as `pc` or
+as `partcad`.
 """
 
+import os
 import sys
 
-from partcad_cli.click.command import main
+from partcad_cli.click.command import main as cli_main
+
+# Imported so PyInstaller follows it into the bundle; dispatched to only when the
+# `partcad-json-rpc` executable is the one invoked.
+from partcad_service_json_rpc.__main__ import main as service_main
 
 # The banner and the box drawing characters in the help output are not
 # encodable in the code page Windows hands a redirected stdout (cp1252), so
@@ -29,6 +36,14 @@ for _stream in (sys.stdout, sys.stderr):
     _reconfigure = getattr(_stream, "reconfigure", None)
     if _reconfigure is not None:
         _reconfigure(encoding="utf-8", errors="replace")
+
+
+def main():
+    program = os.path.basename(sys.argv[0]).lower()
+    if program.startswith("partcad-json-rpc"):
+        return service_main()
+    return cli_main()
+
 
 if __name__ == "__main__":
     sys.exit(main())

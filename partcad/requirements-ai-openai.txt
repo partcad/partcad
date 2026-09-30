@@ -1,2 +1,0 @@
-# OpenAI
-openai>=2.46,<3

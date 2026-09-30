@@ -27,7 +27,7 @@ warrants, but always finish by validating.
 
 Resolve a command as `/pc:init` does (`pc`, then `partcad`, then
 `python -m partcad_cli.click.command`). If none is found, stop and run
-`/pc:install executable` first.
+`/pc:setup executable` first.
 
 ## 3. Choose a representation
 
@@ -53,7 +53,7 @@ Write the script file **first** from `$ARGUMENTS` (plain type — never `ai-*`),
 then register it — `pc add part` requires the file to already exist:
 
 ```sh
-pc add part --desc "<the description>" <kind> <name>.<ext>   # e.g. build123d bracket.py
+pc --no-ansi add part --desc "<the description>" <kind> <name>.<ext>   # e.g. build123d bracket.py
 ```
 
 Language conventions for the script:
@@ -76,6 +76,17 @@ parts:
     manufacturable: false
 ```
 
+If the part was modelled from reference images — a drawing, a photo, a sketch —
+name them under `images:` as well, as paths relative to the package. That is what
+puts them beside the part in the README `pc render` writes, so a reader sees what
+the model was made to match; nothing else reads them.
+
+```yaml
+    images:
+      - drawing.png
+      - photo.jpg
+```
+
 If you started the project with `pc init`, also delete the empty `sketches:` and
 `assemblies:` sections it leaves — a null section crashes `pc render` on older
 PartCAD (fixed in partcad/partcad#470).
@@ -87,23 +98,79 @@ only if the geometry instantiates cleanly, and the manufacturability checks are
 skipped.
 
 ```sh
-pc test <name>
+pc --no-ansi test <name>
 ```
 
-## 7. Render, compare, and iterate
+Three of its checks fail geometry that instantiates perfectly, and all three are
+about a part that would look right in the pictures rendered below: `shell` (the
+part is a surface rather than a body — the faces do not close, so it has no
+inside and every boolean against it is meaningless), `degenerate` (it has no size
+left in some direction) and `solidity` (its faces are oriented inward, so its
+volume is negative). **None of them can be turned off on the part** — there is
+no such setting, and inventing one is rejected by `pc lint`. Fix the geometry:
+close the shape, keep the feature that collapsed, orient the faces outward. A
+part that fails one of these is a part nothing downstream can compute with,
+however good the picture of it looks.
 
-Produce an image and compare it against the description and any reference images
-— overall shape and every stated dimension:
+## 7. Render it from several angles, compare, and iterate
+
+`pc test` proves the geometry instantiates. It says nothing about whether the
+geometry is the part that was asked for — that is decided by looking at it.
+
+One picture is not enough to decide it. A projection hides everything behind it,
+so a hole in the wrong face, a feature on the wrong side, a chamfer that never
+got cut, or a shape that is right in outline and wrong in depth all survive the
+one view that happens to conceal them. Render **four**: `front`, `top` and
+`right` to read proportions and dimensions off, and `iso` to see how the features
+go together. A rendered file is named after the object, so give each view a
+directory of its own or they overwrite each other:
 
 ```sh
-mkdir -p /tmp/pc-render                       # the -O directory must already exist
-pc render -t png -O /tmp/pc-render <name>     # writes /tmp/pc-render/<name>.png
+for view in front top right iso; do
+  mkdir -p /tmp/pc-render/$view                  # -O expects it to exist
+  pc --no-ansi render -t png --view $view -O /tmp/pc-render/$view <name>
+done
 ```
 
-Fix any error or mismatch, then re-test and re-render. Iterate until it is right —
-no fixed retry count.
+Then view all four — `/tmp/pc-render/<view>/<name>.png` — and compare them
+against the description and any reference images:
+
+- the overall form and the bounding size, in all three axes;
+- every dimension the description states — each is measurable in one of the
+  orthographic views, and a dimension no view confirms is one still assumed;
+- every feature that was asked for, on the face it was asked for, and nothing
+  present that was not.
+
+Add `back`, `left` or `bottom` whenever the part is not symmetric about the axis
+in question: an asymmetric part has a face you have not seen, and a face you have
+not seen is a face you are guessing about. When no named view shows the feature
+you need to check, `--viewport-origin X,Y,Z` and `--viewport-up X,Y,Z` look from
+an arbitrary direction. `/pc:render` covers these options in full.
+
+Fix any error or mismatch, then re-test and re-render. Iterate until every view
+matches — no fixed retry count. If the part is right and the numbers are what
+need checking, `/pc:describe` renders a dimensioned drawing of it.
 
 ## 8. Finalize
 
 Summarize what you built — key dimensions and assumptions — and how to view it:
 `pc inspect <name>`.
+
+If the part is meant to connect to something — a bolt pattern, a plug, a rail —
+say so and offer `/pc:add-interfaces`, which adds the ports and interfaces that
+let PartCAD mate it automatically. Once it has them, `--with-all` draws them on
+the very views you have been comparing against, so a port that is in the wrong
+place or facing the wrong way is visible rather than inferred:
+
+```sh
+for view in front top right iso; do
+  mkdir -p /tmp/pc-render/ports/$view
+  pc --no-ansi render -t png --view $view -O /tmp/pc-render/ports/$view --with-all <name>
+done
+```
+
+Four views again, and for the same reason: a port is a coordinate frame, and one
+projection collapses the axis it is offset along just as it does for geometry.
+`--no-ansi` because every port drawn is also named on stderr, which is where the
+exact string to write in an ASSY file comes from. `/pc:add-interfaces` covers
+reading these drawings in full.

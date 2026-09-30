@@ -1,0 +1,5 @@
+dependencies:
+parts:
+  {{package_name}}:
+    type: cadquery
+    path: ../../../../examples/produce_part_cadquery_primitive/cube.py

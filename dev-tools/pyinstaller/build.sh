@@ -12,10 +12,16 @@
 #   dev-tools/pyinstaller/build.sh              # install dependencies, then build
 #   dev-tools/pyinstaller/build.sh --no-install # build only, dependencies are in place
 #   dev-tools/pyinstaller/build.sh --no-archive # leave the bundle unpacked, skip the archive
+#   dev-tools/pyinstaller/build.sh --platform=ubuntu-22.04-x86_64   # name it explicitly
 #
 # The environment variable PYTHON selects the interpreter to freeze (default
 # `python3`); the bundle embeds that exact interpreter, so it decides the
 # Python version users end up running.
+#
+# The environment variable PLATFORM (or --platform=) overrides the platform id
+# the archive is named after. It is detected from this machine when unset; CI
+# passes it, because the runner image knows its own OS version and this script
+# would have to guess it back out of the kernel.
 #
 # Output (relative to the repository root):
 #
@@ -38,27 +44,158 @@ fi
 SPEC_DIR="${REPO_ROOT}/dev-tools/pyinstaller"
 OUTPUT_DIR="${REPO_ROOT}/dist/standalone"
 OPENSCAD_STAGE_DIR="${REPO_ROOT}/build/openscad"
+CONDA_STAGE_DIR="${REPO_ROOT}/build/conda"
 PYTHON="${PYTHON:-python3}"
 
-# The OpenSCAD the bundle carries. Pinned rather than tracking the latest, so a
-# rebuild of a given PartCAD version produces the same bundle, and matching the
-# version `partcad.healthcheck.openscad` installs on Windows hosts.
-OPENSCAD_VERSION="2021.01"
-# The staged payload is keyed by version, so that bumping OPENSCAD_VERSION and
-# rebuilding in a tree that still holds an old `build/` fetches the new version
-# rather than silently reusing the stale one (`build/` is not wiped between
-# builds, and CI aside, nobody wipes it by hand). Stale siblings are harmless:
-# `build/` is gitignored, and only the matching directory is ever read.
-OPENSCAD_PAYLOAD_DIR="${OPENSCAD_STAGE_DIR}/payload-${OPENSCAD_VERSION}"
+###########################################  OPENSCAD BUILDS  ################################################
+#
+# The OpenSCAD every bundle carries. This block is the ONE place the builds are
+# chosen: the URLs, their checksums and the version are here, and nothing below
+# constructs a download URL of its own. Bump all of it together.
+#
+# ---------------------------------------------------------------------------
+# WHY ONE VERSION EVERYWHERE
+# ---------------------------------------------------------------------------
+#
+# Every platform must carry OpenSCAD built from the SAME upstream source, and
+# the snapshot date in these filenames is what identifies that source. It is a
+# feature-parity requirement, not tidiness: OpenSCAD's language and its exports
+# both move between builds, so bundles built from different sources disagree
+# about what a `.scad` file means. A part that renders on one machine would fail
+# to parse, or render differently, on another -- and "the same part builds the
+# same everywhere" is the promise the bundle exists to keep. A user who reports
+# a rendering difference should never have to ask which platform they were on.
+#
+# So the three URLs below always name one date. Do not bump one platform alone,
+# and do not mix dates to get a newer build on some platform: an older date that
+# all platforms share beats a newer one that they do not.
+#
+# ---------------------------------------------------------------------------
+# HOW TO FIND THE LATEST BUILD THAT QUALIFIES
+# ---------------------------------------------------------------------------
+#
+# Not "yesterday", and not the newest date in the directory. Upstream builds
+# roughly every 2.6 days rather than nightly, a given date can be missing a
+# platform, and the gaps run to 35 days on Linux and Windows and 76 on macOS --
+# so the newest date overall very often has no `.dmg`. What is needed is the
+# newest date carrying all three artifacts, which this prints:
+#
+#   curl -s https://files.openscad.org/snapshots/ |
+#     grep -oE 'OpenSCAD-[0-9A-Za-z._-]+' |
+#     grep -E '^OpenSCAD-[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-x86_64\.AppImage|-x86-64\.zip|\.dmg)$' |
+#     sort -u |
+#     sed -E 's/^OpenSCAD-([0-9]{4}\.[0-9]{2}\.[0-9]{2}).*/\1/' |
+#     uniq -c | awk '$1 == 3 { print $2 }' | tail -1
+#
+# (The two `grep`s are separate on purpose. Anchoring the match to the whole
+# filename is what rejects the `.sha256` and `.sha512` sidecars, and the
+# `-x86-64-Installer.exe` sitting next to the Windows zip; `sort -u` first is
+# what stops a listing that names each file twice counting it twice. Drop the
+# `tail -1` to see every qualifying date, oldest first.)
+#
+# ---------------------------------------------------------------------------
+# HOW TO CONSTRUCT THE URLS
+# ---------------------------------------------------------------------------
+#
+# Base: https://files.openscad.org/snapshots/ -- the development snapshots, not
+# the releases at the parent path. See "WHY A SNAPSHOT" below for why a release
+# is not an option, and note that this directory is the one upstream prunes.
+#
+# The three filenames share almost nothing, so read them off carefully:
+#
+#   Linux x86_64   OpenSCAD-<date>-x86_64.AppImage    underscore before 64
+#   Windows x86_64 OpenSCAD-<date>-x86-64.zip         hyphen before 64, and it
+#                                                     sits beside an
+#                                                     "-x86-64-Installer.exe"
+#                                                     that is NOT what we want
+#   macOS          OpenSCAD-<date>.dmg                no architecture token: the
+#                                                     .dmg is Universal 2 and
+#                                                     serves both Macs
+#
+# There is no Linux arm64 line. Upstream builds no current arm64 snapshot -- the
+# only two aarch64 artifacts in the directory are one-offs from 2021 and 2023,
+# under a naming scheme ("...ai-aarch64") it no longer uses -- so that bundle
+# carries no OpenSCAD and `pc` there uses the host's, exactly as the wheels do.
+#
+# Each checksum below is the `.sha256` upstream publishes beside its artifact:
+#
+#   curl -s "<url>.sha256"
+#
+# They are copied in here rather than fetched at build time, even though they
+# exist and are correct, because a snapshot directory is rolling: pinning the
+# bytes rather than the name is what stops a rebuild of a given PartCAD version
+# picking up something republished under the date it asked for. (The conda
+# payload further down still reads its sidecar -- its upstream is a tagged
+# release, which does not move.)
+#
+# ---------------------------------------------------------------------------
+# WHY A SNAPSHOT, AND WHAT IT COSTS
+# ---------------------------------------------------------------------------
+#
+# The last release, 2021.01, cannot be the shared version. It ships an
+# x86_64-only `.dmg`, so an arm64 Mac would need Rosetta 2 -- Homebrew's
+# `openscad` cask says so in the open, with a `requires_rosetta` caveat -- and
+# Homebrew then `disable!`d that cask outright on 2026-09-01, `because:
+# :fails_gatekeeper_check`, which took every macOS CI job down with it (#583).
+#
+# **The pin therefore expires.** Upstream prunes `snapshots/` on a rolling window
+# of about a year -- measured at 143 Linux and Windows builds spanning 368 days,
+# 119 macOS builds spanning 365 -- so a pin left alone for a year stops resolving
+# and NO bundle builds, on any platform, releases included. It fails loudly: the
+# fetch 404s, `fetch_and_verify` does not retry a 4xx, and `stage_openscad` prints
+# what happened and points back here. The durable fix is to mirror these three
+# artifacts somewhere the project controls.
+#
+OPENSCAD_VERSION="2026.09.05"
+
+OPENSCAD_URL_LINUX_X86_64="https://files.openscad.org/snapshots/OpenSCAD-2026.09.05-x86_64.AppImage"
+OPENSCAD_SHA256_LINUX_X86_64="931c230683182e51c30f8e895f3e3e0b545be67f2e54e8ddba7de0e7df093513"
+
+OPENSCAD_URL_WINDOWS_X86_64="https://files.openscad.org/snapshots/OpenSCAD-2026.09.05-x86-64.zip"
+OPENSCAD_SHA256_WINDOWS_X86_64="cc4e9ed6b515fab2ba095bf92a2215d9a7bc9fde90fa9653968c83d673caa35a"
+
+OPENSCAD_URL_MACOS="https://files.openscad.org/snapshots/OpenSCAD-2026.09.05.dmg"
+OPENSCAD_SHA256_MACOS="52829dc59f9e96f5154c7bdad01158acfc3dd97511611f43054ee918fda5e003"
+
+# The URLs are written out in full rather than composed from OPENSCAD_VERSION,
+# so that what gets downloaded is readable and greppable without running the
+# script. This is the cost of that: a half-finished bump, where the version moved
+# and a URL did not, would otherwise be found only by the smoke test at the end
+# of a build -- or on the one platform nobody rebuilt.
+for openscad_url in \
+  "${OPENSCAD_URL_LINUX_X86_64}" \
+  "${OPENSCAD_URL_WINDOWS_X86_64}" \
+  "${OPENSCAD_URL_MACOS}"; do
+  case "${openscad_url}" in
+  *"OpenSCAD-${OPENSCAD_VERSION}"*) ;;
+  *)
+    echo "error: '${openscad_url}' is not OpenSCAD ${OPENSCAD_VERSION}." >&2
+    echo "       The URLs and OPENSCAD_VERSION are bumped together; see the" >&2
+    echo "       OPENSCAD BUILDS block in build.sh." >&2
+    exit 1
+    ;;
+  esac
+done
+unset openscad_url
+
+# The conda the bundle carries, as the tag of a `micromamba-releases` release --
+# "<micromamba version>-<build>", where `micromamba --version` prints only the
+# first half. Pinned rather than tracking "latest" for the same reason OpenSCAD
+# is: a rebuild of a given PartCAD version has to produce the same bundle.
+MICROMAMBA_VERSION="2.9.0-0"
+# CONDA_PAYLOAD_DIR is set below, once the platform is known: unlike OpenSCAD's,
+# it has to be keyed by platform as well as by version. See the note there.
 
 INSTALL_DEPENDENCIES=1
 CREATE_ARCHIVE=1
+PLATFORM="${PLATFORM:-}"
 for arg in "$@"; do
   case "${arg}" in
   --no-install) INSTALL_DEPENDENCIES=0 ;;
   --no-archive) CREATE_ARCHIVE=0 ;;
+  --platform=*) PLATFORM="${arg#*=}" ;;
   -h | --help)
-    sed -n '7,25p' "${BASH_SOURCE[0]}"
+    sed -n '7,31p' "${BASH_SOURCE[0]}"
     exit 0
     ;;
   *)
@@ -70,8 +207,29 @@ done
 
 ################################################  PLATFORM  ##################################################
 
-# The archive name has to say what the bundle runs on, and has to agree with
-# the names `install.sh` derives from `uname`. Keep the two in sync.
+# A frozen bundle is only portable across systems at least as new as the one it
+# was built on: it links against the C library and the system frameworks of that
+# machine. So a bundle is not "for Linux", it is for the OS *version* it was
+# built on and everything newer -- which is why the archive name carries that
+# version, and why there is one build per supported OS version rather than one
+# per operating system.
+#
+# The platform id is `<os>-<os-version>-<arch>`, and for the builds CI produces
+# it is exactly the runner image label (minus the `-arm` or `-intel` suffix) plus
+# the architecture -- the macOS labels are not symmetric, `macos-15` being the
+# Apple silicon image and `macos-15-intel` the x86_64 one of the same release:
+#
+#   ubuntu-22.04-x86_64   ubuntu-22.04-arm64    macos-15-arm64    windows-2022-x86_64
+#   ubuntu-24.04-x86_64   ubuntu-24.04-arm64    macos-15-x86_64
+#
+# macOS is one build per architecture rather than one per OS version: both are
+# frozen on macOS 15 and cover macOS 15 and 26 between them. CI installs each of
+# them on both releases rather than assuming that.
+#
+# Which of these a release carries is published with it, as `platforms.json`;
+# `install.sh` and the other clients read that rather than keeping a list. The
+# matrix in ".github/workflows/build-standalone.yml" is where the list lives.
+# Windows is one build on purpose -- see the note beside that matrix.
 case "$(uname -s)" in
 Linux*) OS_NAME="linux" ;;
 Darwin*) OS_NAME="macos" ;;
@@ -91,19 +249,111 @@ arm64 | aarch64) ARCH_NAME="arm64" ;;
   ;;
 esac
 
-PLATFORM="${OS_NAME}-${ARCH_NAME}"
+# Only used when PLATFORM was not passed in. CI always passes it: the runner
+# image label is the authoritative answer to "which OS version is this", and
+# recovering it from the running system is guesswork on Windows in particular.
+detect_os_release() {
+  case "${OS_NAME}" in
+  linux)
+    # Every distribution ships this file; `ID`/`VERSION_ID` are the two fields
+    # that are always present. A rolling distribution with no VERSION_ID gets
+    # its ID alone, which still names the build uniquely enough for a local one.
+    if [ -r /etc/os-release ]; then
+      # shellcheck disable=SC1091
+      . /etc/os-release
+      if [ -n "${VERSION_ID:-}" ]; then
+        echo "${ID}-${VERSION_ID}"
+      else
+        echo "${ID}"
+      fi
+      return 0
+    fi
+    echo "error: /etc/os-release is missing, pass --platform=<id>" >&2
+    return 1
+    ;;
+  macos)
+    # The major version is the compatibility boundary; the point release is not.
+    echo "macos-$(sw_vers -productVersion | cut -d. -f1)"
+    ;;
+  windows)
+    # Git Bash reports the NT build number in `uname -s`, e.g.
+    # "MINGW64_NT-10.0-20348". That number identifies the Windows release, but
+    # only through a table -- so map the ones CI builds on and ask for
+    # --platform for anything else, rather than inventing a name.
+    case "$(uname -s)" in
+    *-20348) echo "windows-2022" ;;
+    *-26100) echo "windows-2025" ;;
+    *)
+      echo "error: cannot name this Windows version from '$(uname -s)'," >&2
+      echo "       pass --platform=windows-<year>-${ARCH_NAME}" >&2
+      return 1
+      ;;
+    esac
+    ;;
+  esac
+}
+
+if [ -z "${PLATFORM}" ]; then
+  PLATFORM="$(detect_os_release)-${ARCH_NAME}"
+fi
+
 if [ "${OS_NAME}" = "windows" ]; then
   ARCHIVE_EXT="zip"
   # PyInstaller names the executables `pc.exe` and `partcad.exe` there.
   EXE_SUFFIX=".exe"
 else
-  ARCHIVE_EXT="tar.gz"
+  # xz rather than gzip. The bundle is native code and an unpacked OpenSCAD,
+  # neither of which gzip does well on: measured on a Linux x86_64 build, xz -6
+  # takes the download from 78MB to 57MB for a few seconds more at either end.
+  # Every consumer of this name reads the extension from one
+  # place of its own (`install.sh`, `partcad_client.selfupdate`,
+  # `provision.ts`, the FreeCAD addon's `provision.py`); all four say "tar.xz"
+  # and unpack by content rather than by name, so there is no format to agree
+  # on beyond the file name itself.
+  #
+  # Windows stays a zip: it is what a machine with no tar can open, and the
+  # portable OpenSCAD in it is already compressed.
+  ARCHIVE_EXT="tar.xz"
   EXE_SUFFIX=""
 fi
 
+# Keyed by version *and* platform, and set here rather than beside
+# MICROMAMBA_VERSION because it needs OS_NAME and ARCH_NAME, which the block
+# above is what settles.
+#
+# Version, so that bumping MICROMAMBA_VERSION refetches rather than silently
+# reusing whatever an old `build/` still holds -- the reason the OpenSCAD payload
+# is keyed too. Platform, because every platform stages a payload under the same
+# file name (`micromamba`), where OpenSCAD stages one on two platforms whose
+# workspaces nothing shares. Two builds for different platforms out of one
+# workspace -- an arm64 and an amd64 container over the same bind mount, an
+# Apple silicon Mac building the Intel bundle under `arch -x86_64` -- would
+# otherwise find the first build's executable already staged, pass
+# `stage_conda`'s entry-point check, and copy it into the second build's bundle.
+# The smoke test would catch it, since the executable would not run at all; that
+# is a confusing way to find out about a one-line key.
+CONDA_PAYLOAD_DIR="${CONDA_STAGE_DIR}/payload-${MICROMAMBA_VERSION}-${OS_NAME}-${ARCH_NAME}"
+
+# Where the OpenSCAD payload is staged. Set here rather than beside the version
+# pin because it needs OS_NAME, which the block above is what settles.
+#
+# Keyed by version, so that bumping the pin and rebuilding in a tree that still
+# holds an old `build/` fetches the new version rather than silently reusing the
+# stale one (`build/` is not wiped between builds, and CI aside, nobody wipes it
+# by hand). Stale siblings are harmless: `build/` is gitignored, and only the
+# matching directory is ever read.
+#
+# Keyed by operating system as well, now that all three carry the same version
+# and would otherwise share one directory holding whichever payload was staged
+# last. Not by architecture, unlike conda: the two macOS bundles want the very
+# same payload -- the `.dmg` is a universal binary, x86_64 and arm64 in one
+# artifact -- so an Apple silicon Mac building the Intel bundle under
+# `arch -x86_64` out of one workspace shares it rather than fetching it twice.
+OPENSCAD_PAYLOAD_DIR="${OPENSCAD_STAGE_DIR}/payload-${OPENSCAD_VERSION}-${OS_NAME}"
+
 VERSION="$("${PYTHON}" -c "
 import re, pathlib
-source = pathlib.Path('${REPO_ROOT}/partcad/src/partcad/__init__.py').read_text()
+source = pathlib.Path('${REPO_ROOT}/src/partcad/__init__.py').read_text()
 print(re.search(r'__version__: str = \"([^\"]+)\"', source).group(1))
 ")"
 
@@ -111,45 +361,181 @@ echo "==> Building PartCAD ${VERSION} for ${PLATFORM} with $("${PYTHON}" --versi
 
 ##############################################  DEPENDENCIES  ################################################
 
-# setuptools 82 removed `pkg_resources` outright, and PyInstaller's
-# `pyi_rth_pkgres` runtime hook still expects it: the bundle then aborts at
-# start-up with "module 'pkg_resources' has no attribute 'NullProvider'".
-# Passed to every install below, because installing PartCAD is otherwise free to
-# pull the newest setuptools back in. Drop the bound once PyInstaller ships a
-# hook that copes.
-SETUPTOOLS_BOUND="setuptools<82"
+# There used to be a "setuptools<82" bound on every install below. setuptools 82
+# removed `pkg_resources`, PyInstaller's `pyi_rth_pkgres` runtime hook expects it,
+# and a bundle built without it aborted at start-up with "module 'pkg_resources'
+# has no attribute 'NullProvider'".
+#
+# It is gone because the hook is: PyInstaller adds `pyi_rth_pkgres` only when
+# `pkg_resources` is in the module graph, and "partcad.spec" now excludes it
+# along with the rest of setuptools -- nothing in PartCAD imports either, and the
+# two dependencies that reach for `pkg_resources` both do it inside
+# `try: ... except ImportError`. A bundle frozen against setuptools 8x builds and
+# runs.
 
 if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   echo "==> Installing build dependencies"
-  "${PYTHON}" -m pip install --upgrade pip wheel "${SETUPTOOLS_BOUND}"
+  "${PYTHON}" -m pip install --upgrade pip wheel
   # PyInstaller only learned about Python 3.14 in 6.15; older releases cap
   # themselves at "<3.14" and would refuse to install on the interpreter the
   # bundle is built with.
-  "${PYTHON}" -m pip install "pyinstaller>=6.15" "${SETUPTOOLS_BOUND}"
-
-  # `partcad-cli` declares its license by a path inside its own directory, but
-  # the file itself only exists in the repository root. The wheel build in
-  # "deploy.yml" copies it the same way.
-  cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-cli/"
+  "${PYTHON}" -m pip install "pyinstaller>=6.15"
 
   echo "==> Installing PartCAD from this checkout"
+  # One install: `partcad` ships every package the bundle needs and declares all
+  # three of its executables. This used to be five installs in dependency order,
+  # because each distribution pinned the ones below it at `==` and none of them
+  # was on PyPI, so every pin had to be satisfied from this checkout.
+  #
   # A frozen bundle cannot be extended with pip afterwards, so the optional
-  # extras that the wheels leave to the user are all built in.
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[ai,lint]" "${SETUPTOOLS_BOUND}"
-  # The CAD kernel is NOT a dependency of the 'partcad' wheel - the core runs all
-  # CAD in sandboxes. The standalone bundle, however, freezes it in so that 'pc'
-  # works on a machine with no Python: 'show'/'pc inspect' (via ocp_vscode) need
-  # OCP in-process, and the "imported by name" check below refuses to build the
-  # bundle without OCP/build123d/ocp_vscode. Pinned to the sandbox versions (see
-  # partcad/src/partcad/sandbox_versions.py).
-  # TODO(clairbee): drop this CAD install once the OCP CAD Viewer (ocp_vscode) is
-  # no longer a dependency - the bundle would then need no in-process CAD either.
-  "${PYTHON}" -m pip install \
-    "cadquery-ocp==7.9.3.1.1" "build123d==0.11.1" "ocpsvg==0.6.0" "${SETUPTOOLS_BOUND}"
-  # This satisfies the `partcad==<version>` pin of `partcad-cli` with the local
-  # build rather than with the release on PyPI.
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-cli" "${SETUPTOOLS_BOUND}"
+  # extras the wheel leaves to the user are all built in.
+  "${PYTHON}" -m pip install "${REPO_ROOT}[lint,aws]"
+  #
+  # No CAD kernel is installed here, and none is frozen into the bundle.
+  #
+  # It used to be: 'cadquery-ocp', 'build123d' and 'ocpsvg' were pinned to the
+  # sandbox versions and pulled in so that `convert("build123d"/"cadquery")`
+  # could hand a caller a live object. That is a *library* API, and this bundle
+  # is not importable as a library -- it is three console programs. Every path
+  # the programs do reach builds, renders, exports, converts and tessellates in
+  # a conda sandbox and carries geometry between them as BREP-byte envelopes the
+  # core never opens (see requirements.txt and `Shape._to_envelope`), so the
+  # kernel sat in the bundle unimported.
+  #
+  # It was not cheap to carry. OCP drags in the whole scientific stack through
+  # build123d -- scipy, sympy, scikit-learn, numpy, IPython, ezdxf -- and the
+  # VTK-enabled OCP drags in VTK on top of that. Measured on Linux x86_64, all
+  # of it together was about two thirds of the bundle.
+  #
+  # What this does *not* change: `pc` still needs conda for any CAD, exactly as
+  # the wheel does and exactly as it did before, because that is where the CAD
+  # ran either way. `pc healthcheck` reports it.
 fi
+
+#############################################  PAYLOAD FETCH  ################################################
+
+# Fetch a URL and the ".sha256" its upstream publishes beside it, and check the
+# one against the other. Used for both payloads the bundle carries -- OpenSCAD
+# and conda -- so that neither can be staged from a truncated or substituted
+# download.
+#
+# A third argument overrides that: the expected hash as a literal, for an upstream
+# that publishes no `.sha256` beside the artifact, or one whose artifact can be
+# replaced under a name it already used. The OpenSCAD snapshots are the second
+# case -- see the pin beside OPENSCAD_SHA256_LINUX_X86_64 -- and a literal is the
+# stronger check for them anyway, since it pins the bytes rather than trusting
+# whatever the same host serves for the checksum. conda still takes the sidecar:
+# its upstream is a tagged release, which does not move.
+#
+# Fetched and verified with the Python this script already depends on, rather
+# than with curl and sha256sum, whose presence and flags differ across the three
+# platforms this runs on. The two upstreams do not publish the checksum in the
+# same shape -- OpenSCAD's reads "<hash>  releases/<name>", micromamba's is the
+# bare hash with no trailing newline -- so the first whitespace-separated field
+# is what is compared and anything after it ignored.
+#
+# The download retries, because a single connection failure here fails the whole
+# bundle. This is the only network operation in the build without one, and it
+# cost a run: "Fetching micromamba 2.9.0-0" died on
+# "TimeoutError: [Errno 60] Operation timed out" at connect, after the wheel had
+# already built, and took the `Examples` job that depends on this bundle with it.
+# The same shape as `.github/actions/setup-all/mamba-create-retry.sh`, which
+# exists because conda-forge downloads flake in exactly this way.
+#
+# `urlopen` rather than `urlretrieve` only because `urlretrieve` takes no
+# timeout, and an unbounded read is the other half of this: the connect above
+# took 75 seconds to fail at the OS level, and a stalled transfer would have sat
+# there until the job's own deadline.
+#
+# Three things are deliberately NOT retried. A 4xx is an answer rather than a
+# hiccup -- the URL is wrong, and asking four more times will not make it right.
+# A certificate failure is the one TLS error that means what it says, so only
+# the abrupt-EOF one is retried and `ssl.SSLError` as a whole is not: a bundle
+# that fetched its payload from something it could not authenticate is worse
+# than a bundle that failed to build. And a checksum mismatch stays a hard
+# failure below: retrying it would paper over the truncated-or-substituted
+# download that the checksum is there to catch.
+#
+# The EOF case has to be named because the read happens outside `urlopen`:
+# `do_open` wraps a handshake-time OSError into a URLError, but a TLS EOF part
+# way through `copyfileobj` is raised bare, and an 18 MB payload is a lot of
+# transfer to leave unguarded.
+fetch_and_verify() {
+  local url="$1" destination="$2" expected="${3:-}"
+
+  "${PYTHON}" - "${url}" "${destination}" "${expected}" <<'FETCH'
+import http.client
+import shutil
+import ssl
+import sys
+import time
+import urllib.error
+import urllib.request
+
+ATTEMPTS = 5
+TIMEOUT = 60
+
+
+def fetch(url, destination):
+    """Download one file, retrying the failures that are worth retrying."""
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
+                with open(destination, "wb") as out:
+                    shutil.copyfileobj(response, out)
+            return
+        except urllib.error.HTTPError as failure:
+            # Must come first: HTTPError is a URLError.
+            if failure.code < 500 or attempt == ATTEMPTS:
+                raise
+            reason = failure
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            http.client.HTTPException,
+            ConnectionError,
+            # A TLS connection dropped without a close_notify. Named on its own
+            # rather than catching ssl.SSLError, which would also swallow a
+            # certificate failure -- see the note above.
+            ssl.SSLEOFError,
+        ) as failure:
+            if attempt == ATTEMPTS:
+                raise
+            reason = failure
+        delay = 2**attempt
+        print(
+            "    fetch failed (%s); retrying in %ds [attempt %d/%d]" % (reason, delay, attempt, ATTEMPTS),
+            file=sys.stderr,
+        )
+        time.sleep(delay)
+
+
+downloads = [(sys.argv[1], sys.argv[2])]
+# The sidecar is fetched only when no hash was pinned on the command line. An
+# upstream that publishes none would 404 here, which is not retried and would
+# fail the build after the artifact itself had already arrived intact.
+if not sys.argv[3]:
+    downloads.append((sys.argv[1] + ".sha256", sys.argv[2] + ".sha256"))
+
+for url, destination in downloads:
+    fetch(url, destination)
+FETCH
+
+  "${PYTHON}" - "${destination}" "${expected}" <<'VERIFY'
+import hashlib
+import pathlib
+import sys
+
+artifact = pathlib.Path(sys.argv[1])
+# A hash pinned in `build.sh` is already the bare field; a fetched sidecar may
+# carry a file name after it, which the split below is what drops.
+expected = (sys.argv[2] or pathlib.Path(str(artifact) + ".sha256").read_text()).split()[0]
+actual = hashlib.sha256(artifact.read_bytes()).hexdigest()
+if actual != expected:
+    sys.exit(f"error: checksum mismatch for {artifact.name}: expected {expected}, got {actual}")
+print(f"    checksum verified: {artifact.name}")
+VERIFY
+}
 
 ###############################################  OPENSCAD  ###################################################
 
@@ -163,35 +549,68 @@ fi
 # self-contained -- it resolves libGL, libX11, libxcb, fontconfig, freetype,
 # glib and harfbuzz from the host -- so on a stripped-down Linux system the
 # bundled OpenSCAD still needs those present. Windows takes the upstream portable
-# build, a single statically linked executable that needs nothing at all.
+# zip, `openscad.exe` and `openscad.com` with no DLLs of their own.
 #
-# macOS is deliberately excluded. The 2021.01 release predates Apple Silicon
-# and ships an x86_64-only .dmg, which on the arm64 bundle would require
-# Rosetta 2 -- absent from a clean machine, and not something an installer
-# should be quietly requiring. The current development snapshots may well be
-# universal binaries, but they are snapshots, and their architecture has not
-# been confirmed. Until that is settled, `pc` on macOS uses the host's
-# OpenSCAD, exactly as the wheels do.
+# Linux arm64 is the one platform that carries nothing: upstream builds no
+# current arm64 snapshot -- the only two aarch64 artifacts in the directory are
+# one-offs from 2021 and 2023 -- and running the x86_64 AppImage under emulation
+# is not something a bundle should be quietly requiring. `pc` there uses the
+# host's OpenSCAD, exactly as the wheels do.
+#
+# macOS takes the `.dmg`, mounted at build time and the `OpenSCAD.app` inside it
+# copied out whole. Both architectures carry the identical payload: the `.dmg`
+# is a Universal 2 binary -- `lipo -archs` on the executable inside prints
+# "x86_64 arm64" -- which is why there is one macOS artifact rather than one per
+# architecture.
+#
+# The `.app` is copied entire rather than reduced to the executable inside it:
+# the binary at `Contents/MacOS/OpenSCAD` resolves its Qt frameworks through
+# `@executable_path/../Frameworks`, so the layout around it is what makes it
+# runnable. That is also the path Homebrew's cask links onto PATH as `openscad`,
+# and it is what `partcad.healthcheck.openscad.BUNDLED_SUBPATH` expects to find.
 stage_openscad() {
-  local artifact download_dir payload_dir entry_point
+  local artifact url expected download_dir payload_dir entry_point mount_point
   download_dir="${OPENSCAD_STAGE_DIR}/download-${OPENSCAD_VERSION}"
   payload_dir="${OPENSCAD_PAYLOAD_DIR}"
 
-  case "${PLATFORM}" in
+  # Which of the builds chosen at the top of this file this platform takes. The
+  # URLs live there and nothing is composed here, so there is one place to look
+  # at, and to change, when the pin moves.
+  #
+  # Keyed on the operating system and architecture rather than on PLATFORM,
+  # which now also carries the OS version: which OpenSCAD to fetch does not
+  # depend on whether this is Ubuntu 22.04 or 24.04.
+  case "${OS_NAME}-${ARCH_NAME}" in
   linux-x86_64)
-    artifact="OpenSCAD-${OPENSCAD_VERSION}-x86_64.AppImage"
+    url="${OPENSCAD_URL_LINUX_X86_64}"
+    expected="${OPENSCAD_SHA256_LINUX_X86_64}"
     entry_point="${payload_dir}/AppRun"
     ;;
   windows-x86_64)
-    artifact="OpenSCAD-${OPENSCAD_VERSION}-x86-64.zip"
+    url="${OPENSCAD_URL_WINDOWS_X86_64}"
+    expected="${OPENSCAD_SHA256_WINDOWS_X86_64}"
     entry_point="${payload_dir}/openscad.exe"
     ;;
+  macos-x86_64 | macos-arm64)
+    url="${OPENSCAD_URL_MACOS}"
+    expected="${OPENSCAD_SHA256_MACOS}"
+    entry_point="${payload_dir}/OpenSCAD.app/Contents/MacOS/OpenSCAD"
+    ;;
   *)
+    # Linux arm64, and nothing else today. Upstream publishes no current arm64
+    # snapshot: the only two aarch64 artifacts in the whole directory are one-offs
+    # from 2021 and 2023, under a naming scheme ("...ai-aarch64") it no longer
+    # uses. `pc` there uses the host's OpenSCAD, exactly as the wheels do.
     echo "==> Not bundling OpenSCAD on ${PLATFORM} (see the comment in build.sh)"
     rm -rf "${payload_dir}"
     return 0
     ;;
   esac
+
+  # The file name is the last path segment of the chosen URL rather than a
+  # second spelling of it. The unpackers below key off it -- the Windows zip's
+  # inner directory is its own basename -- so the two cannot drift apart.
+  artifact="${url##*/}"
 
   if [ -e "${entry_point}" ]; then
     echo "==> OpenSCAD ${OPENSCAD_VERSION} already staged"
@@ -202,31 +621,19 @@ stage_openscad() {
   rm -rf "${payload_dir}"
   mkdir -p "${download_dir}" "${payload_dir}"
 
-  # Fetched and verified with the Python this script already depends on, rather
-  # than with curl and sha256sum, whose presence and flags differ across the
-  # three platforms this runs on.
-  "${PYTHON}" - "https://files.openscad.org/${artifact}" "${download_dir}/${artifact}" <<'FETCH'
-import sys
-import urllib.request
-
-for url, destination in ((sys.argv[1], sys.argv[2]), (sys.argv[1] + ".sha256", sys.argv[2] + ".sha256")):
-    urllib.request.urlretrieve(url, destination)
-FETCH
-
-  "${PYTHON}" - "${download_dir}/${artifact}" <<'VERIFY'
-import hashlib
-import pathlib
-import sys
-
-archive = pathlib.Path(sys.argv[1])
-# Published as "<hash>  releases/<name>": take the hash, ignore the path, which
-# names the location on the upstream server rather than the local file.
-expected = pathlib.Path(str(archive) + ".sha256").read_text().split()[0]
-actual = hashlib.sha256(archive.read_bytes()).hexdigest()
-if actual != expected:
-    sys.exit(f"error: checksum mismatch for {archive.name}: expected {expected}, got {actual}")
-print(f"    checksum verified: {archive.name}")
-VERIFY
+  # The expiry the pin comment warns about surfaces here, as a 404 from a
+  # perfectly well-formed URL. Saying so beats leaving a reader to work out why
+  # a build that passed last year does not resolve today.
+  if ! fetch_and_verify "${url}" "${download_dir}/${artifact}" "${expected}"; then
+    echo "error: could not fetch OpenSCAD ${OPENSCAD_VERSION} (${artifact})." >&2
+    echo "       If that was an HTTP 404, the pinned snapshot has been pruned:" >&2
+    echo "       upstream keeps roughly a year of them. Pick a date from" >&2
+    echo "       https://files.openscad.org/snapshots/ that carries all three" >&2
+    echo "       artifacts and bump the whole OPENSCAD BUILDS block at the top" >&2
+    echo "       of build.sh -- version, URLs and checksums together. That block" >&2
+    echo "       carries the command that finds the newest qualifying date." >&2
+    exit 1
+  fi
 
   case "${artifact}" in
   *.AppImage)
@@ -239,10 +646,54 @@ VERIFY
     ;;
   *.zip)
     "${PYTHON}" -m zipfile -e "${download_dir}/${artifact}" "${download_dir}/unpacked"
-    # The zip holds a single "openscad-<version>" directory; the executable
-    # needs its sibling data directories, so the contents move up together.
-    mv "${download_dir}/unpacked/openscad-${OPENSCAD_VERSION}"/* "${payload_dir}/"
+    # The zip holds a single top-level directory, named after the zip itself
+    # ("OpenSCAD-<version>-x86-64"), holding openscad.exe and openscad.com at its
+    # root. Derived from the artifact name rather than spelled out, because the
+    # two agree by construction -- and note the release zips did NOT follow this
+    # rule: 2021.01's inner directory was the lowercase "openscad-2021.01", so
+    # anything hardcoded here would have quietly moved nothing.
+    #
+    # The executable needs its sibling data directories, so the contents move up
+    # together.
+    mv "${download_dir}/unpacked/${artifact%.zip}"/* "${payload_dir}/"
     rm -rf "${download_dir}/unpacked"
+    ;;
+  *.dmg)
+    # An explicit mount point under `build/`, rather than letting hdiutil pick
+    # one under /Volumes. The volume is named "OpenSCAD" with no date in it, so
+    # every snapshot mounts at the same /Volumes/OpenSCAD -- and a name already
+    # taken is silently suffixed ("/Volumes/OpenSCAD 1") rather than refused, so
+    # a second build, or a stale mount left by an interrupted one, would have the
+    # copy below reading whichever image got there first.
+    mount_point="${download_dir}/mnt"
+    rm -rf "${mount_point}"
+    mkdir -p "${mount_point}"
+
+    # `-nobrowse` keeps it out of the Finder, `-noautoopen` stops it opening a
+    # window on a runner that has a session.
+    hdiutil attach -quiet -readonly -nobrowse -noautoopen \
+      -mountpoint "${mount_point}" "${download_dir}/${artifact}"
+
+    # `ditto` rather than `cp -R`: it is macOS's own bundle copier and preserves
+    # the symlinks, permissions and extended attributes of a signed `.app`
+    # exactly. `cp` would do for the bits that matter today, but this app is
+    # signed and notarized -- that is why it passes the Gatekeeper check the
+    # 2021.01 release fails -- and a copy that quietly rewrites its metadata is
+    # not a thing to discover later.
+    #
+    # Detached either way, and not through a trap: `set -e` unwinding a function
+    # does not reliably run a RETURN trap, and an EXIT trap here would displace
+    # the one the smoke test installs further down. An image left attached fails
+    # the *next* build's attach on this mount point, which is a confusing way to
+    # find out that a copy failed.
+    if ! ditto "${mount_point}/OpenSCAD.app" "${payload_dir}/OpenSCAD.app"; then
+      hdiutil detach -quiet -force "${mount_point}" 2>/dev/null || true
+      echo "error: could not copy OpenSCAD.app out of ${artifact}" >&2
+      exit 1
+    fi
+
+    hdiutil detach -quiet "${mount_point}"
+    rmdir "${mount_point}" 2>/dev/null || true
     ;;
   esac
 
@@ -254,6 +705,99 @@ VERIFY
 }
 
 stage_openscad
+
+################################################  CONDA  #####################################################
+
+# The bundle carries a conda, so that `pc` can build the CAD sandbox on a machine
+# that has none.
+#
+# It did not, and that was the flaw this fixes. PartCAD imports no CAD kernel: it
+# provisions a Python environment and runs every CAD script in that, and conda is
+# the only sandbox that provisions an *interpreter* along with it. The bundle
+# exists so that a machine with no Python can run PartCAD -- and it then asked
+# that machine for conda, which the PartCAD IDE discovered by launching the
+# daemon out of a bundle on a clean machine and failing.
+#
+# The `venv` sandbox is not the fallback here that it is for a wheel: a virtual
+# environment is built *from* an interpreter, and the machine this artifact is
+# for is the one with no Python to build it from (see `partcad_utils.conda`).
+#
+# What is staged is micromamba: mamba in its single-file, dependency-free build,
+# published by the mamba project. mamba because that is the implementation CI
+# provisions through Miniforge (`use-mamba: true` in
+# `.github/actions/setup-all/action.yml`) and the one `partcad_utils.conda`
+# already preferred over conda. Not the Miniforge installer itself, for two
+# reasons that both matter here:
+#
+#   1. A conda *installation* is not relocatable. Its entry points hardcode the
+#      prefix they were installed into, and this bundle is unpacked to a path
+#      nobody knows at build time -- `~/.local/share/partcad/<version>` for
+#      `install.sh`, somewhere else for the extension, the addon and the IDE.
+#      One static executable has no prefix to hardcode.
+#   2. Miniforge is around 500MB installed, against 12-22MB here. The bundle is
+#      ~200MB unpacked precisely because the CAD kernel was taken out of it; a
+#      conda distribution would put three times that back.
+#
+# micromamba also resolves from conda-forge with no configuration at all, which
+# is the channel policy the comments in that CI action insist on -- mixing
+# Anaconda's `defaults` into a conda-forge environment is what made the macOS
+# jobs segfault. A Miniforge install would have had to carry a `.condarc` saying
+# the same thing.
+#
+# Unlike OpenSCAD, there is no platform that goes without: upstream builds
+# micromamba for every platform this bundle is built for, and a bundle without a
+# conda is the bug. An unmapped platform therefore fails the build rather than
+# quietly producing one.
+#
+# `partcad_utils.conda` is the other half of this: where the payload is looked
+# for at run time, and why the host's conda still comes first when there is one.
+stage_conda() {
+  local artifact download_dir payload_dir entry_point
+  download_dir="${CONDA_STAGE_DIR}/download-${MICROMAMBA_VERSION}"
+  payload_dir="${CONDA_PAYLOAD_DIR}"
+
+  # Keyed on the operating system and architecture rather than on PLATFORM: one
+  # micromamba build serves every version of an operating system, exactly as one
+  # OpenSCAD build does.
+  case "${OS_NAME}-${ARCH_NAME}" in
+  linux-x86_64) artifact="micromamba-linux-64" ;;
+  linux-arm64) artifact="micromamba-linux-aarch64" ;;
+  macos-x86_64) artifact="micromamba-osx-64" ;;
+  macos-arm64) artifact="micromamba-osx-arm64" ;;
+  # The release also publishes "micromamba-win-64.exe", byte for byte the same
+  # file -- but only the name without the suffix has a ".sha256" beside it, and
+  # a payload nobody can verify is not one worth having. The staged copy is
+  # renamed to "micromamba.exe" below, which is the name that matters.
+  windows-x86_64) artifact="micromamba-win-64" ;;
+  *)
+    echo "error: no micromamba build is mapped for ${PLATFORM}, and a bundle" >&2
+    echo "       without a conda cannot build a CAD sandbox on a host that" >&2
+    echo "       has none -- add the mapping rather than shipping without it" >&2
+    exit 1
+    ;;
+  esac
+
+  entry_point="${payload_dir}/micromamba${EXE_SUFFIX}"
+  if [ -e "${entry_point}" ]; then
+    echo "==> micromamba ${MICROMAMBA_VERSION} already staged"
+    return 0
+  fi
+
+  echo "==> Fetching micromamba ${MICROMAMBA_VERSION} for ${PLATFORM}"
+  rm -rf "${payload_dir}"
+  mkdir -p "${download_dir}" "${payload_dir}"
+
+  fetch_and_verify \
+    "https://github.com/mamba-org/micromamba-releases/releases/download/${MICROMAMBA_VERSION}/${artifact}" \
+    "${download_dir}/${artifact}"
+
+  cp "${download_dir}/${artifact}" "${entry_point}"
+  chmod +x "${entry_point}"
+
+  echo "    staged $(du -sh "${payload_dir}" | cut -f1) in ${payload_dir}"
+}
+
+stage_conda
 
 ##############################################  PRE-FLIGHT  ##################################################
 
@@ -267,14 +811,17 @@ echo "==> Checking the dependencies that are imported by name"
 import importlib
 import sys
 
+# No CAD library is listed: none is frozen in. See the note beside the pip
+# installs above, and the `excludes` in "partcad.spec" that keep one out even
+# when the build environment happens to have it.
 REQUIRED = {
-    "OCP": "the geometry kernel",
-    "build123d": "the geometry kernel",
-    "ocp_vscode": "`pc inspect` (needs Python 3.11 or newer)",
-    "openai": "the OpenAI provider",
-    "ollama": "the Ollama provider",
-    "google.genai": "the Google Gemini provider",
+    "partcad_ide_client": "`pc inspect` displaying into the PartCAD IDE",
+    # pygit2's compiled cffi module loads this from C, so nothing in the import
+    # graph names it -- see the note beside the hidden import in "partcad.spec".
+    "_cffi_backend": "pygit2, and so every repository PartCAD clones",
     "ruff.__main__": "`pc lint` of Python files",
+    "aiomcache": "the 'cacheRemote' cache tier",
+    "aioboto3": "the 'cacheS3' cache tier",
 }
 
 # Python 3.14 has zstd in the standard library as 'compression.zstd'; below
@@ -299,6 +846,68 @@ if broken:
     sys.exit(1)
 PREFLIGHT
 
+# The other way this build environment can produce a bundle that looks complete
+# and is not: on Apple arm64, `_cffi_backend` has to be the PyPI build.
+#
+# `pygit2` reads the libgit2 config search path through
+# `git_libgit2_opts(GIT_OPT_GET_SEARCH_PATH, level, git_buf *)`, a variadic C
+# call that cffi cannot wrap statically and so dispatches at run time through
+# `_cffi_backend`/libffi. Apple arm64 passes variadic arguments on the stack
+# rather than in registers, and the conda-forge cffi 2.x build mis-marshals them
+# there: libgit2 is handed a garbage pointer to write through and the process
+# segfaults. The PyPI wheel links Apple's system libffi and marshals them
+# correctly, which is why the wheels are unaffected. Distinguishing the two is
+# exactly this: the PyPI build loads '/usr/lib/libffi.dylib', the conda-forge
+# build loads '@rpath/libffi.8.dylib' from its own prefix.
+#
+# CI builds with `actions/setup-python`, so it always gets the PyPI wheel. A
+# developer building on their own Mac is the exposed case: PartCAD needs conda
+# for the CAD sandbox, so a conda `python3` is usually first on PATH, its cffi
+# already satisfies `pygit2`'s floor (so pip leaves it in place), and PyInstaller
+# then freezes both that `_cffi_backend` and the conda `libffi.8.dylib` beside
+# it. The bundle's own CI cannot catch this: the crashing path only runs when a
+# clone fails to authenticate and PartCAD retries it with the ambient git config
+# ignored (`_clone_ignoring_ambient_config` in `partcad/project_factory_git.py`),
+# which no anonymous clone of a public repository reaches. It would ship, and
+# segfault for users only.
+if [ "${OS_NAME}-${ARCH_NAME}" = "macos-arm64" ]; then
+  echo "==> Checking that _cffi_backend is the PyPI build"
+  # Read with macholib rather than `otool`, so this needs no Xcode command line
+  # tools; PyInstaller depends on macholib, so it is already installed.
+  "${PYTHON}" - <<'CFFI_PROVENANCE'
+import _cffi_backend
+from macholib.MachO import MachO
+from macholib.mach_o import LC_LOAD_DYLIB, LC_LOAD_WEAK_DYLIB
+
+SYSTEM_LIBFFI = "/usr/lib/libffi.dylib"
+
+loaded = []
+for header in MachO(_cffi_backend.__file__).headers:
+    for load_command, _command, data in header.commands:
+        if load_command.cmd in (LC_LOAD_DYLIB, LC_LOAD_WEAK_DYLIB):
+            loaded.append(data.decode("utf-8").rstrip("\0"))
+
+if SYSTEM_LIBFFI not in loaded:
+    print(f"error: '{_cffi_backend.__file__}'")
+    print(f"       does not load {SYSTEM_LIBFFI}, it loads:")
+    print("\n".join(f"         {name}" for name in loaded))
+    print()
+    print("       This is not the PyPI cffi wheel. A conda-forge build mis-marshals")
+    print("       variadic arguments on Apple arm64, which makes pygit2 segfault when")
+    print("       PartCAD retries a clone with the ambient git config ignored -- and")
+    print("       freezing it here would ship that crash to every user of the bundle.")
+    print()
+    print("       Build from a non-conda interpreter, or force the PyPI wheel into")
+    print("       this environment:")
+    print()
+    print("         python -m pip install --upgrade --force-reinstall --no-deps \\")
+    print("             --only-binary=:all: cffi")
+    raise SystemExit(1)
+
+print(f"    {_cffi_backend.__file__} loads {SYSTEM_LIBFFI}")
+CFFI_PROVENANCE
+fi
+
 ################################################  FREEZE  ####################################################
 
 echo "==> Freezing"
@@ -313,6 +922,9 @@ rm -rf "${OUTPUT_DIR}/partcad"
 BUNDLE_DIR="${OUTPUT_DIR}/partcad"
 # `sys._MEIPASS`, which is where `partcad.healthcheck.openscad` looks for the payload.
 OPENSCAD_BUNDLED_DIR="${BUNDLE_DIR}/_internal/openscad"
+# The same directory, and the same reasoning, for the conda payload:
+# `partcad_utils.conda.BUNDLED_SUBPATH` is where it is looked for.
+CONDA_BUNDLED_DIR="${BUNDLE_DIR}/_internal/conda"
 
 # OpenSCAD is copied in after the freeze rather than declared in the spec.
 # PyInstaller reclassifies shared libraries found among data files as binaries
@@ -328,6 +940,46 @@ if [ -d "${OPENSCAD_PAYLOAD_DIR}" ]; then
   cp -a "${OPENSCAD_PAYLOAD_DIR}" "${OPENSCAD_BUNDLED_DIR}"
 fi
 
+# conda is copied in the same way and for the same reason -- it is a payload
+# PyInstaller has no business analysing -- but unconditionally: `stage_conda`
+# either staged it or stopped the build.
+echo "==> Installing the bundled conda"
+rm -rf "${CONDA_BUNDLED_DIR}"
+cp -a "${CONDA_PAYLOAD_DIR}" "${CONDA_BUNDLED_DIR}"
+
+##############################################  ONE PAYLOAD  #################################################
+
+# PyInstaller emits `pc`, `partcad` and `partcad-json-rpc` byte for byte
+# identical -- since PyInstaller 6 an `EXE` carries the whole `PYZ`, so each is
+# a full ~38MB copy of the compiled Python rather than the bootloader stub the
+# one-directory layout suggests. Three of them cost ~76MB unpacked and about as
+# much again in the archive, because a stream compressor cannot see across
+# files that far apart.
+#
+# So keep one and point the other two at it. `entrypoint.py` dispatches on
+# `sys.argv[0]`, which is the name the user typed and therefore survives the
+# symlink, and PyInstaller's bootloader finds `_internal` beside the resolved
+# executable, which is the same directory either way. Both the tar and the
+# unpackers preserve the link: it is relative and stays inside the bundle,
+# which is what `tarfile`'s "data" filter allows.
+#
+# Windows keeps three real copies. Its archive is a zip, which stores a symlink
+# as a copy of its target anyway, and creating one there needs a privilege a
+# runner does not have.
+if [ "${OS_NAME}" != "windows" ]; then
+  echo "==> Pointing the duplicate executables at 'pc'"
+  for alias_name in partcad partcad-json-rpc; do
+    if cmp -s "${BUNDLE_DIR}/pc" "${BUNDLE_DIR}/${alias_name}"; then
+      rm -f "${BUNDLE_DIR}/${alias_name}"
+      ln -s pc "${BUNDLE_DIR}/${alias_name}"
+    else
+      # A PyInstaller that starts emitting per-name executables would land
+      # here. Nothing breaks; the bundle is just as big as it used to be.
+      echo "    '${alias_name}' is not a copy of 'pc', leaving it alone"
+    fi
+  done
+fi
+
 echo "==> Smoke testing the bundle"
 # Run from a directory that is not the checkout: a bundle that accidentally
 # depends on the source tree still works when started next to it.
@@ -335,17 +987,51 @@ SMOKE_DIR="$(mktemp -d)"
 trap 'rm -rf "${SMOKE_DIR}"' EXIT
 (cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/pc${EXE_SUFFIX}" version)
 (cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/partcad${EXE_SUFFIX}" --help >/dev/null)
+(cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/partcad-json-rpc${EXE_SUFFIX}" --version >/dev/null)
 
 if [ -d "${OPENSCAD_BUNDLED_DIR}" ]; then
   # First that the payload itself runs, and that it is the version we pinned:
   # this catches a data file that shipped without its executable bit, an
   # AppImage tree that lost a piece on the way in, and a stale payload left in
-  # `build/` from a different OPENSCAD_VERSION. OpenSCAD prints its version to
-  # stderr.
-  if [ "${OS_NAME}" = "windows" ]; then
-    openscad_version_output="$(cd "${SMOKE_DIR}" && "${OPENSCAD_BUNDLED_DIR}/openscad.exe" --version 2>&1)"
-  else
-    openscad_version_output="$(cd "${SMOKE_DIR}" && "${OPENSCAD_BUNDLED_DIR}/AppRun" --version 2>&1)"
+  # `build/` from a different pin. OpenSCAD prints its version to stderr.
+  #
+  # On macOS it is the architecture check too. A universal or arm64 `.app` runs
+  # here; an x86_64-only one on Apple silicon needs Rosetta 2, which a runner
+  # does not have, so it fails the build rather than shipping a bundle whose
+  # OpenSCAD starts on only some Macs.
+  case "${OS_NAME}" in
+  windows) openscad_entry_point="${OPENSCAD_BUNDLED_DIR}/openscad.exe" ;;
+  macos) openscad_entry_point="${OPENSCAD_BUNDLED_DIR}/OpenSCAD.app/Contents/MacOS/OpenSCAD" ;;
+  *) openscad_entry_point="${OPENSCAD_BUNDLED_DIR}/AppRun" ;;
+  esac
+  # The status is captured rather than left to `set -e`, and the output is
+  # printed on failure. It has to be captured to match the version below, which
+  # means an unexplained abort here would take the one message that explains it
+  # down with it, still inside the variable -- which is exactly what happened
+  # when this payload moved to a Qt6 snapshot and the runner turned out to be
+  # short of a library.
+  openscad_smoke_status=0
+  openscad_version_output="$(cd "${SMOKE_DIR}" && "${openscad_entry_point}" --version 2>&1)" ||
+    openscad_smoke_status=$?
+  if [ "${openscad_smoke_status}" -ne 0 ]; then
+    echo "error: the bundled OpenSCAD did not run (exit ${openscad_smoke_status})" >&2
+    echo "       ${openscad_entry_point}" >&2
+    printf '       %s\n' "${openscad_version_output}" >&2
+    # 127 from a file that exists is the dynamic loader, not a missing path: the
+    # Linux payload is an AppImage and resolves several libraries from the host
+    # (see the note above `stage_openscad`). Name them rather than leaving the
+    # next reader to guess which one the machine is short of.
+    if command -v ldd >/dev/null 2>&1; then
+      for openscad_object in "${openscad_entry_point}" "${OPENSCAD_BUNDLED_DIR}/usr/bin/openscad"; do
+        [ -e "${openscad_object}" ] || continue
+        openscad_missing="$(ldd "${openscad_object}" 2>/dev/null | grep "not found" || true)"
+        if [ -n "${openscad_missing}" ]; then
+          echo "       ${openscad_object} cannot resolve:" >&2
+          printf '         %s\n' "${openscad_missing}" >&2
+        fi
+      done
+    fi
+    exit 1
   fi
   echo "    ${openscad_version_output}"
   case "${openscad_version_output}" in
@@ -371,6 +1057,38 @@ if [ -d "${OPENSCAD_BUNDLED_DIR}" ]; then
   }
 fi
 
+# The bundled conda: that the payload runs, that it is the version pinned above
+# (which catches a stale `build/` from a different MICROMAMBA_VERSION and a copy
+# that arrived without its executable bit), and then that `pc` resolves a conda
+# at all. `micromamba --version` prints the version without the release's build
+# number, so only the half before the "-" is compared.
+conda_version_output="$(cd "${SMOKE_DIR}" && "${CONDA_BUNDLED_DIR}/micromamba${EXE_SUFFIX}" --version 2>&1)"
+echo "    micromamba ${conda_version_output}"
+# A prefix match rather than an equality: micromamba prints the version and
+# nothing else, but it prints it through a stream that Windows opens in text
+# mode, so what comes back there ends in a carriage return.
+case "${conda_version_output}" in
+"${MICROMAMBA_VERSION%-*}"*) ;;
+*)
+  echo "error: bundled micromamba is not ${MICROMAMBA_VERSION%-*}: '${conda_version_output}'" >&2
+  exit 1
+  ;;
+esac
+
+# What this proves is the same as for OpenSCAD, and no more: the health check
+# reports that a conda was resolved, so it demonstrates the *bundled* one was
+# used only on a machine that has none of its own -- hence the host is reported
+# beside it. That a host conda still wins over the bundled copy, which is the
+# ordering `partcad_utils.conda` deliberately has, is pinned down by the unit
+# tests, where both can be made to exist at once.
+echo "    host conda: $(command -v mamba || command -v conda || echo "none, so the check below can only pass via the bundle")"
+(cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/pc${EXE_SUFFIX}" --no-ansi healthcheck --filters conda 2>&1) |
+  tee "${SMOKE_DIR}/healthcheck-conda.log"
+grep -q "CondaAvailable: Passed" "${SMOKE_DIR}/healthcheck-conda.log" || {
+  echo "error: PartCAD did not resolve a conda executable" >&2
+  exit 1
+}
+
 if [ "${CREATE_ARCHIVE}" = "0" ]; then
   echo "==> Bundle: ${BUNDLE_DIR}"
   exit 0
@@ -388,7 +1106,12 @@ if [ "${ARCHIVE_EXT}" = "zip" ]; then
 else
   # The archive unpacks to a single `partcad/` directory, which is what
   # `install.sh` expects to move into place.
-  tar -czf "${ARCHIVE_PATH}" -C "${OUTPUT_DIR}" partcad
+  #
+  # `-T0` gives xz every core, which is what keeps this to under a minute on a
+  # runner; GNU tar passes XZ_OPT on to xz, and the bsdtar on macOS ignores it
+  # and compresses single-threaded. `-6` is xz's default and already within a
+  # couple of percent of `-9` here, which would cost far more memory per thread.
+  XZ_OPT="${XZ_OPT:--6 -T0}" tar -cJf "${ARCHIVE_PATH}" -C "${OUTPUT_DIR}" partcad
 fi
 
 # `install.sh` verifies this checksum before it unpacks anything.
@@ -409,6 +1132,6 @@ pathlib.Path(name + '.sha256').write_text(f'{digest}  {name}\n')
 )
 
 echo "==> Done"
-echo "    bundle:   ${BUNDLE_DIR}"
-echo "    archive:  ${ARCHIVE_PATH}"
+echo "    bundle:   ${BUNDLE_DIR} ($(du -sh "${BUNDLE_DIR}" | cut -f1) unpacked)"
+echo "    archive:  ${ARCHIVE_PATH} ($(du -h "${ARCHIVE_PATH}" | cut -f1))"
 echo "    checksum: ${ARCHIVE_PATH}.sha256"

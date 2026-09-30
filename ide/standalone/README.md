@@ -1,0 +1,391 @@
+# The PartCAD IDE
+
+The PartCAD extension is a good way to work with PartCAD once Visual Studio Code, a Python environment, a CAD
+sandbox and half a dozen extensions are in place. This directory removes that sentence: it builds an
+application a user downloads and opens, with all of it inside, and with the PartCAD workbench on screen the
+first time it starts.
+
+|                       | wheels                       | standalone command line tools | PartCAD IDE                     |
+| --------------------- | ---------------------------- | ----------------------------- | ------------------------------- |
+| Install               | `pip install -U partcad`     | `install.sh`                  | `install.sh --ide`, or a .dmg   |
+| Needs Python          | yes, 3.10-3.14               | no                            | no                              |
+| Needs an editor       | -                            | -                             | no, it is one                   |
+| What you get          | `pc`, `partcad`, the library | `pc`, `partcad`               | the editor, the extension, `pc` |
+| Needs conda installed | yes, for CAD                 | no, it carries one            | no, from the tools inside it    |
+| Size (Linux, unpacked)| ~15MB plus dependencies      | ~205MB                        | ~500MB                          |
+
+It is built from [VSCodium](https://vscodium.com/), rebranded, with the extensions this repository recommends
+installed into it and the [standalone command line tools](../dev-tools/pyinstaller/README.md) inside it. The
+result per platform -- an archive everywhere, a `.dmg` on macOS, a setup program on Windows -- is published on
+the same GitHub release as everything else.
+
+## Licensing
+
+**The editor is VSCodium, not Visual Studio Code.** Visual Studio Code's source is MIT, but the builds
+Microsoft ships are not: they are covered by a proprietary license that does not permit redistributing a
+modified copy, and the Visual Studio Marketplace's terms restrict its use to Microsoft's own products.
+Rebranding those binaries and pointing them at a marketplace would violate both. VSCodium is a build of the
+same MIT source with the Microsoft branding, telemetry and marketplace configuration removed, published under
+the MIT license, and redistributing a modified copy of it is exactly what the license allows. The gallery it
+comes configured with is [Open VSX](https://open-vsx.org/), and `product.overlay.json` deliberately leaves that
+setting alone.
+
+The same question applies to every extension the IDE carries, which is why they are not simply installed from a
+list: see [`extensions.json`](./extensions.json). One of the repository's recommendations, Pylance, cannot ship
+at all -- it is proprietary and licensed for use only with Microsoft's products -- and the build says so rather
+than dropping it quietly.
+
+## Files
+
+- `build.sh` - the build. Downloads VSCodium, installs the extensions, rebrands, embeds the tools, packs.
+- `vscodium.json` - which VSCodium release to build from, and its checksum.
+- `extensions.json` - what to do about recommendations that cannot simply be installed. The list itself is
+  `../.vscode/extensions.json`.
+- `product.overlay.json` - the branding, merged into the editor's `product.json`.
+- `installer/partcad-ide.iss` - the Windows installer, compiled by Inno Setup.
+- `bootstrap/` - a small extension that ships only in this IDE: it opens the PartCAD workbench on startup,
+  points the PartCAD extension at the tools in the same application, and creates and opens the package the
+  IDE starts in. `bootstrap/media/` is the text of the welcome window's steps, and `bootstrap/examples.json`
+  is the examples it offers to open.
+- `tools/` - the parts of the build that are more than a shell one-liner, each with its own tests.
+- `tests/` - `pytest` tests for `tools/`.
+
+## Building
+
+From the repository root, with Node.js and Python available:
+
+```bash
+ide/standalone/build.sh
+```
+
+That produces `dist/ide/` with the application and its archive. Add the command line tools -- the IDE is
+usable without them, but then it downloads them on first use, which is the friction this component exists to
+remove:
+
+```bash
+dev-tools/pyinstaller/build.sh --no-archive          # produces dist/standalone/partcad
+ide/standalone/build.sh --with-cli-bundle dist/standalone/partcad
+```
+
+Useful while iterating: `--no-extensions` (much faster, and not shippable), `--no-archive`, `--no-icons`,
+`--no-installer`. `--help` lists them all. The VSCodium download is cached in `build/vscodium/`, so a rebuild does not fetch it
+again. Everything else the build produces for itself -- the extension plan, the staging directories, the rendered icons -- goes
+to `build/ide-work/`, and only `build/ide/` becomes the application: on Linux and Windows the VSCodium archive unpacks flat, so
+anything written beside it would be shipped inside the release.
+
+With no `version` in `vscodium.json` the build asks the GitHub API which VSCodium released last, and an anonymous API call is
+rate limited per source IP -- on a shared address that is a `403` before anything is downloaded. Set `GITHUB_TOKEN` (or
+`GH_TOKEN`) to be counted against an account instead, or pin a version, which is worth doing anyway: a pinned build produces the
+same IDE next month as it does today.
+
+Two optional dependencies change what the build can do, and it reports what it left out rather than failing:
+
+- `cairosvg` and `Pillow` (`pip install cairosvg pillow`) render the icons from the project's logo. Without
+  them the application keeps VSCodium's icon -- except on Windows, which uses the three files in
+  `resources/` from git instead: `partcad-ide.ico` for the executable and the window, and
+  `partcad-ide-wizard.bmp` and `partcad-ide-wizard-small.bmp` for the installer's wizard. Those are
+  checked in because they cannot be rendered where they are needed: `cairosvg` needs `cairocffi`, and
+  `cairocffi` needs a `libcairo-2.dll` that no wheel ships, so the renderers are installable on Windows but
+  not loadable there. Regenerate all three when `ide/vscode/resources/logo.svg` changes -- on Linux or
+  macOS, since it is the machines that *can* render that keep them honest:
+
+  ```bash
+  python ide/standalone/tools/make_icons.py \
+      --svg ide/vscode/resources/logo.svg --output-dir /tmp/icons
+  cp /tmp/icons/partcad-ide.ico /tmp/icons/partcad-ide-wizard*.bmp ide/standalone/resources/
+  ```
+
+  `tests/test_icons.py` checks that they are there, that they are the sizes their consumers draw, and that
+  the installer script still names them. What no test can check is whether they still *look* like the
+  logo, which is the whole reason for the paragraph above.
+- `rcedit` (`npm install -g rcedit`) puts the icon into `partcad-ide.exe`. There is no other way to change a
+  Windows executable's icon after it is linked.
+- Inno Setup 6.3 or newer (`choco install innosetup`) compiles the Windows installer. Without it the build
+  produces the `.zip` only.
+
+## What the build does to VSCodium, and why
+
+**`product.json` is rebranded** (`tools/brand.py product` with `product.overlay.json`). Names, the data folder,
+the URL scheme, where "Help" points. Two entries are worth calling out: `updateUrl` is *removed*, because
+VSCodium's update server serves VSCodium and installing that over this application would replace everything
+this build added; and `configurationDefaults` sets the defaults the IDE starts from -- including
+`partcad.backend`, so the extension uses the service rather than looking for a Python environment. They are
+defaults, so a user's own `settings.json` still wins.
+
+**The extensions are installed by the editor itself**, into the application's own extensions directory. The
+build runs the VSCodium command line with a staging directory (`--install-extension`), and then moves the
+result inside the application. It does not write that directory itself: the editor resolves each extension
+against the gallery, picks the build for this platform and writes the layout it expects to read back.
+
+They go into the *application's* extensions directory rather than the user's for two reasons. On macOS a user
+installs by dragging the bundle to /Applications, and anything that was beside the bundle is left behind. And
+on any platform, a PartCAD IDE that installed extensions into `~/.vscode` would be editing the state of a
+Visual Studio Code on the same machine. The cost is that these extensions cannot be uninstalled, only
+disabled -- and that a user who installs a newer version of one from the Extensions view gets that newer
+version, which is the behavior anyone would expect.
+
+Nothing shipped this way updates itself: a built-in extension is not checked against the gallery. For most of
+them that only means a user updates them by hand if they want to. For the PartCAD extension it is the intended
+behavior -- it is versioned with the IDE, and a new one arrives with a new IDE.
+
+**The executable is renamed** to `partcad-ide`, so that the process, the window and the task bar say what this
+is. The `bin/` launcher names the executable it runs, so it is rewritten to match (`tools/brand.py shim`);
+that rewrite replaces whole words only, or a data directory like `.vscodium` would be renamed along with it.
+On macOS nothing is renamed inside the bundle -- the launcher finds the executable through the bundle, and it
+is the bundle directory that becomes `PartCAD IDE.app`.
+
+**The command line tools are embedded** at `<resources>/partcad-cli`, beside `<resources>/app` rather than
+inside it, so that no extension scan walks a gigabyte of Python. The bootstrap extension finds them there
+relative to `appRoot`, which is the same relative path on all three platforms.
+
+That embedding is also where the IDE gets its **conda**. PartCAD builds every shape in a conda sandbox, and
+the IDE has nothing of its own to build one with -- it is an editor and a JSON-RPC client; the daemon it
+launches is `partcad-json-rpc` out of that bundle. The bundle carries a conda (see
+[the standalone README](../../dev-tools/pyinstaller/README.md#conda)), so the IDE inherits one by carrying the
+bundle and adds nothing here. Before it did, the IDE started fine on a clean machine and then failed the
+moment a part had to be built, for want of a `conda` executable the user was never told to install.
+
+**The result is checked** (`tools/verify_bundle.py`): branding applied, every required extension present, no
+extension present that the policy skips, the tools where they should be, the launcher runnable. Each of those
+failures produces an application that starts and looks right, so none of them would be noticed before a user
+hit it.
+
+## Starting in the PartCAD workbench
+
+`bootstrap/` is an extension that exists only in this IDE. On startup it runs
+`workbench.view.extension.partcad-container` -- the command the editor derives from the view container the
+PartCAD extension contributes -- so the IDE opens on the PartCAD Explorer rather than on an empty editor. It
+also points `partcad.servicePath` at the bundled `partcad-json-rpc` and prepends the tools directory to the
+PATH of the integrated terminal, so `pc` works in it without the user installing anything.
+
+The PartCAD extension does the PATH half for itself now too (`partcad.addToolsToTerminalPath`, see
+`ide/vscode/AGENTS.md`), so inside this IDE both run. They agree on the directory -- the extension
+resolves `partcad.servicePath`, which `bootstrap` has just pointed at the bundled service -- so the only effect
+is that it appears on `PATH` twice. This part of `bootstrap` stays because it is what sets `servicePath` in the
+first place, and because it has to work in an editor where the PartCAD extension is disabled.
+
+The IDE's other view of PartCAD comes from the package rather than from here: `pc init` adds a **Render**
+command to the repository's `.vscode/launch.json` (see `src/partcad/launch_config.py`), so "Run and
+Debug" has something in it that renders the package the moment there is a package to render.
+
+Both behaviors have a setting (`partcadIde.openWorkbenchOnStartup`, `partcadIde.useBundledTools`), and both
+notice when they have nothing to work with: in an editor without the PartCAD extension, or without tools next
+to the application, the extension does nothing rather than failing.
+
+It is a separate extension rather than a few lines in `ide/vscode` on purpose. The PartCAD extension
+activates when a workspace looks like a PartCAD project; making it activate on startup, everywhere, to check
+whether it is running inside this IDE would slow down every other Visual Studio Code that has it installed.
+
+## The first start, and the welcome window
+
+An editor that opens on an empty window asks the user to go and find something to open. This one has just
+been installed by somebody who has, by assumption, no PartCAD package to find -- so on its first start
+`bootstrap/` makes one: `pc init` in `~/.partcad/projects/start`, opened as the workspace, with the welcome
+window beside it.
+
+**The package goes under `~/.partcad`, not under `~/.partcad-ide`.** It is the user's first design, not
+editor state: `pc` in a terminal works with the same package, and uninstalling the IDE leaves it alone.
+
+**It runs the bundled `pc`, not the JSON-RPC service.** `pc init` writes a template and adds the "Render"
+command to `.vscode/launch.json`; going through the service would mean starting a daemon to write two files.
+The exit code is not what says whether it worked -- `pc init` reports a refusal by logging it and exiting 0 --
+so the check is that `partcad.yaml` is there afterwards.
+
+**It happens in the editor rather than in the installers.** There are three of those (`install.sh`, the
+Windows setup program, and a .dmg the user drags to Applications, which is no installer at all), and the
+folder has to be opened by the editor in any case. One implementation, in the one place that runs on every
+platform and every way of installing.
+
+**It happens once**, and it never takes over a window that has something in it: an IDE started on a folder --
+"Open with PartCAD IDE", or a path on the command line -- records that the first start has happened and
+leaves the user where they are. The record is in `globalState`, which is why the welcome window survives
+`vscode.openFolder` reopening the workbench: the walkthrough cannot be opened before the reload, because an
+editor belongs to the window it was opened in, so it is left as a note for the activation that follows.
+
+The welcome window itself is a walkthrough (`bootstrap/package.json`, with the text of its steps in
+`bootstrap/media/`), and `workbench.startupEditor` is `welcomePageInEmptyWorkbench` rather than `none`: with a
+package open the workbench is what the user came for, and with no folder open there is nothing else to show.
+It is what the editor calls "Welcome", so `Help > Welcome` and `PartCAD IDE: Welcome` reach it afterwards.
+Every step carries the page of https://partcad.readthedocs.io that explains it; `tests/test_bootstrap.py`
+fails on a link to a page that is not in `docs/source`.
+
+## The examples the welcome window offers
+
+"Start from an example" (`PartCAD IDE: Open an example`) is a list of packages that already work: parts in
+CadQuery, build123d and OpenSCAD, and an assembly. The one the user picks is copied into their starter package
+and the file worth reading first is opened.
+
+**They are the packages under `examples/` in this repository, not a copy of them.** `tools/copy_examples.py`
+copies the ones `bootstrap/examples.json` names into the extension when the IDE is built. Those packages are
+rendered by the `Examples (PartCAD)` job and their output is checked in, so what the IDE hands a user is what
+the project publishes and keeps working; a second copy would be a second thing to keep current, and would not
+be.
+
+**An example brings what it references.** A package may name a sibling (`../produce_part_cadquery_primitive`,
+in an assembly that places parts from it), which is a reference that means nothing once the directory is
+copied out of `examples/` on its own. So the manifest declares what each entry needs, `copy_examples.py`
+checks that declaration against what the `partcad.yaml` and `.assy` files actually reference -- transitively,
+because the package an assembly's parts come from may name a third -- and both the copy into the extension and
+the copy onto the user's disk take the whole set. The build fails on a manifest that does not match; a user
+would otherwise find a package in the Explorer that cannot load.
+
+**They land in the starter package**, as subdirectories, because PartCAD imports every subdirectory that holds
+a `partcad.yaml`: the example appears in the Explorer under the package the user is in, with no edit to any
+`partcad.yaml` and nothing for the daemon to do. A copy that is already there is left alone -- it is the
+user's by then, and may have been changed.
+
+`verify_bundle.py` checks that a built IDE carries every package its manifest offers, and the file each one
+opens.
+
+`partcadIde.createStarterPackage` turns the whole thing off. Without the command line tools -- a developer
+build -- there is no `pc` to run, so the IDE says so in its output channel, shows the welcome window and
+starts in an empty window.
+
+**Workspace trust is off in the PartCAD IDE.** The IDE exists for PartCAD, and PartCAD runs the code in the
+package it opens. With trust on, every folder the user opens -- the starter package first of all, which is
+untrusted by definition because the IDE has just created it -- would open in Restricted Mode, with the PartCAD
+extension waiting for an answer and the "Render" command `pc init` writes into `.vscode/launch.json` blocked,
+because it is a debug configuration. 0.8.123 shipped that way, and worse, since the extension then declared
+untrusted workspaces unsupported and the editor removed it from the window altogether: no PartCAD icon, and
+nothing saying why.
+
+Trust cannot be granted to one extension, so it is off for the whole editor: tasks, debugging and the other
+bundled extensions run in every folder too. It is `--disable-workspace-trust` added to the command line by the
+entry point (see "Software WebGL is on" in `AGENTS.md`), not `security.workspace.trust.enabled` in
+`product.overlay.json`: the editor decides a window's trust before product defaults apply, and that default
+was tried and left the window restricted. `tools/verify_bundle.py` fails a build whose entry point does not
+carry the flag.
+
+In a regular VS Code nothing of this applies: the extension supports untrusted workspaces as `limited`, asks
+for trust, and starts nothing until it has it -- "Workspace trust" in `../vscode/AGENTS.md`.
+
+## Where things end up on the user's machine
+
+| | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| The application | `~/.local/share/partcad/<version>-ide` | `/Applications/PartCAD IDE.app` | wherever the .zip was unpacked |
+| Settings, state, extensions the user installs | `~/.partcad-ide` | `~/.partcad-ide` | `%USERPROFILE%\.partcad-ide` |
+| PartCAD's own cache and configuration | `~/.partcad` | `~/.partcad` | `%USERPROFILE%\.partcad` |
+| The package the IDE starts in | `~/.partcad/projects/start` | `~/.partcad/projects/start` | `%USERPROFILE%\.partcad\projects\start` |
+
+`~/.partcad-ide` is what keeps this IDE from sharing anything with a Visual Studio Code or VSCodium on the same
+machine. `~/.partcad` is deliberately shared: it is PartCAD's, not the editor's, and a package installed from
+the command line should be there in the IDE.
+
+## macOS: signing
+
+Editing files inside a signed application bundle invalidates its signature, and macOS refuses to open a bundle
+whose signature does not verify. The build signs the result ad-hoc (`codesign --sign -`), which makes it
+launchable. It is not a Developer ID signature and the application is not notarized, so macOS still refuses a
+copy that carries the "downloaded from the internet" flag. `install.sh --ide` clears that flag on the copy it
+installs; someone who unpacks the archive by hand clears it with:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/PartCAD IDE.app"
+```
+
+Signing and notarizing properly needs an Apple Developer ID, which is an account and a certificate rather than
+a change to this build. When there is one, sign with it here instead of ad-hoc and the step above disappears.
+
+## Windows: the installer
+
+Windows has no `install.sh`, so `installer/partcad-ide.iss` is the equivalent: an
+[Inno Setup](https://jrsoftware.org/isinfo.php) script, compiled by `build.sh` into
+`partcad-ide-<version>-windows-x86_64-setup.exe` whenever `ISCC.exe` is on the machine (`choco install
+innosetup`; the build says so and carries on when it is not). It needs Inno Setup 6.3 or newer, for the
+`x64compatible` architecture identifiers.
+
+It installs **per user** by default -- into `%LOCALAPPDATA%\Programs\PartCAD IDE`, with no UAC prompt -- and
+offers "for all users" in the wizard for someone with an administrator account. That choice is what the `HKA`
+registry root in the script follows: the same entries land in `HKCU` or in `HKLM` depending on which install it
+is. What it sets up beyond the files: a Start menu entry, an optional desktop icon, the `partcad-ide://` URL
+scheme, an App Paths entry so `partcad-ide` works from the Run dialog, optional "Open with PartCAD IDE" entries
+in the Explorer context menu for files and folders, and -- on by default -- `PATH` entries for the editor's
+`bin` and for the command line tools inside the application, so `partcad-ide` and `pc` work in a new terminal.
+Uninstalling removes all of it, including the `PATH` entries. `%USERPROFILE%\.partcad-ide` is left alone, the
+way `install.sh` leaves `~/.partcad`.
+
+An upgrade installs over the previous one, and the file list only overwrites -- so anything an older build put
+in the application directory that this one does not survives. `[InstallDelete]` clears one place where that
+matters: the directories PartCAD's own extensions live in, under `resources\app\extensions`. A stale directory
+for an extension whose id has not changed is ignored (the editor loads the newest it finds for an id), but the
+extension's id did change once, from `PartCAD.partcad` to `PartCAD.partcad-official`, and two directories with
+two different ids are two extensions -- both loaded, both contributing the same activity bar entry, both
+registering the same commands. Nothing of the user's is under there: extensions they install go to
+`%USERPROFILE%\.partcad-ide`, and everything in that directory is put back by the file list immediately after.
+The `Install (windows-x86_64)` job in `.github/workflows/build-ide-standalone.yml` is what keeps this honest: it
+plants a stale `partcad.partcad-<version>` directory, runs the setup program over the install the way an upgrade
+runs, and checks both halves -- the stale directory is gone, and the two directories the pattern also matches
+were put back rather than deleted on the way past.
+
+`AppId` in the script is the identity Windows recognizes an upgrade and an uninstall by. It is fixed for the
+life of the product: regenerating it turns the next release into a second application installed beside this
+one.
+
+The wizard is branded rather than left as Inno Setup ships it: `WizardImageFile` is the panel beside the
+welcome and finished pages and `WizardSmallImageFile` the badge in the header of the pages between them,
+both rendered from the project logo into `resources/`. `build.sh` passes their directory as `Branding`, the
+same way it passes `AppDir` and `LicenseFile`, and unlike the executable's icon they are unconditional:
+they are in git rather than rendered by the build, so there is no case where they are missing.
+
+The `.zip` is still published next to the installer, for unpacking without installing.
+
+The installer is **not signed**. SmartScreen warns about an unsigned installer from an unknown publisher, and
+the way past that is an authenticode certificate, not a change here. `Compression` is set to `lzma2/fast`
+rather than `max` on purpose: the payload is around a gigabyte, and the difference is minutes of build time
+against a fraction of the download.
+
+## Updating VSCodium
+
+`vscodium.json` pins the release. To move to a newer one:
+
+```bash
+ide/standalone/build.sh --vscodium-version <tag> --record
+```
+
+`--record` writes the version and the checksum of what it downloaded into `vscodium.json` -- as plain JSON,
+without the comments that explain the file, so put those back before committing. Then check the two things a
+VSCodium release can break: that the extensions still install (the build fails if a required one does not), and
+that the launcher was still rewritten (the build runs `--version` through it and fails if it does not run).
+
+With `version` left as `null`, the build takes whatever VSCodium released last. That is convenient and not
+reproducible: a rebuild of an old PartCAD version then produces a different IDE. Pin it before a release.
+
+## Adding an extension
+
+Add it to `../.vscode/extensions.json`. That file is the source of truth, so a contributor's recommendation and
+the IDE's contents cannot drift apart, and nothing else needs editing -- unless the extension is not on Open
+VSX, or cannot be redistributed, in which case `extensions.json` here says what to do about it and why. The
+build prints the whole plan before it installs anything; `tools/resolve_extensions.py --explain` prints it
+without building.
+
+## Releasing
+
+`.github/workflows/build-ide-standalone.yml` builds every platform and then installs the result with
+`install.sh --ide` on a runner that has never seen PartCAD. `deploy.yml` calls it on a push to `main` and
+uploads the archives to the same GitHub release as the wheels and the command line bundles, which is where
+`install.sh --ide` downloads from.
+
+Four platforms: `linux-x86_64`, `macos-arm64` and `windows-x86_64` on every run, and `macos-x86_64` on a deep
+one -- the nightly schedule, a manual dispatch, a push, or `#deepTest` on the pull request (see
+`.github/actions/test-depth`). The Intel macOS IDE is gated because the command line bundle that goes inside
+it is: `macos-15-x86_64` is in `PLATFORMS_DEEP` in `build-standalone.yml`, and on a reduced run there is no
+such artifact to embed. Unlike the bundles, an IDE is built once per operating system and architecture rather
+than per OS version -- it carries its own Electron runtime -- which is why `macos-x86_64` carries no macOS
+version while the bundle inside it does. `IDE_CORE` and `IDE_DEEP` at the top of that workflow are the list.
+
+That is also why the macOS builders are `macos-15` and `macos-15-intel` rather than `macos-latest`: an archive
+with no OS version in its name has nowhere to declare a floor and no way for a client to compare a machine
+against one, so whatever the builder imposes is invisible. Building on the oldest supported image is how it
+does not acquire one, and it keeps a label that moves -- `macos-latest` went from macOS 15 to macOS 26 in July
+2026 -- out of what gets released. Each macOS application is then installed and started on macOS 15 *and* on
+macOS 26, which is where that claim is either true or is a story: `partcad-ide --version` exercises the editor
+and `pc version` the frozen bundle inside it.
+
+It does not build the command line bundles it embeds. `deploy.yml` builds them once, in the same run, and the
+IDE build downloads them from there; on every other trigger the IDE build finds the sibling `Standalone`
+workflow run for the same commit and downloads them from that run instead. Building them here as well would
+mean freezing every platform twice for one commit -- and the `bundles` job in that workflow explains what else
+it meant. When no `Standalone` run exists for the commit (a change confined to `ide/standalone/**`
+fires the IDE workflow and not that one) the build falls back to the newest bundles on the base branch and says
+so, loudly, in the log and the run summary.

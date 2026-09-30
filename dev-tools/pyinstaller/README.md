@@ -7,11 +7,110 @@ with [`install.sh`](../../install.sh) and never see Python.
 
 | | wheels | standalone bundle |
 | --- | --- | --- |
-| Install | `pip install -U partcad-cli` | `curl -fsSL .../install.sh \| sh` |
-| Needs Python | yes, 3.10-3.12 | no |
-| Size | ~15MB plus whatever pip resolves | ~875MB unpacked, ~290MB compressed (Linux, OpenSCAD included) |
-| Optional extras (`ai`, `lint`) | installed on demand | always included |
+| Install | `pip install -U partcad` | `curl -fsSL .../install.sh \| sh` |
+| Upgrade | `pc upgrade` (runs `pip`) | `pc upgrade` (fetches the release archive) |
+| Needs Python | yes, 3.10-3.14 | no |
+| Size | ~15MB plus whatever pip resolves | ~200MB unpacked, ~63MB compressed (Linux x86_64, OpenSCAD and conda included) |
+| Optional extras (`lint`, `memcache`, `aws`) | installed on demand | always included |
 | Importable as a library | yes | no, it is only the CLI |
+| CAD kernel | not a dependency either way — every shape is built in a sandbox | same, see `EXCLUDES` in the spec |
+| conda, which builds the best sandbox | the user's, or the `venv` fallback | carried, see [conda](#conda) |
+
+## One build per OS version
+
+A wheel is portable because Python is. A frozen bundle is not: it links against the C library and the system
+frameworks of the machine that froze it, so it runs there and on anything newer, and on nothing older. A single
+"linux" bundle would therefore quietly mean "whatever Linux the builder happened to be running", and would stop
+starting for users the day that image moved.
+
+So there is one build per supported OS version, and the archive name carries it. The platform id is
+`<os>-<os-version>-<arch>`, which for the builds CI produces is exactly the runner image label (minus any `-arm`
+or `-intel` suffix) plus the architecture:
+
+| | x86_64 | arm64 |
+| --- | --- | --- |
+| Linux | `ubuntu-22.04-x86_64`, `ubuntu-24.04-x86_64` | `ubuntu-22.04-arm64`, `ubuntu-24.04-arm64` |
+| macOS | `macos-15-x86_64` | `macos-15-arm64` |
+| Windows | `windows-2022-x86_64` | — |
+
+The Ubuntu names say what built the bundle, not what is required to run it: any distribution can run these, and
+what differs between the two is the minimum glibc. `install.sh` offers a machine it cannot identify as Ubuntu
+the 22.04 build, which has the lower floor.
+
+**Windows is one build, on purpose.** The per-OS-version split earns its keep only where a machine can be lined
+up against it — an Ubuntu version from `/etc/os-release`, a macOS major version from `sw_vers`. Windows offers
+no such comparison: `windows-2022`/`windows-2025` are runner image names, and the only route back to one of
+them is the NT build number table in `build.sh`, which knows those two server builds and no version of Windows
+anybody runs. So a second Windows build is one no client could ask for on purpose — redundant if it is equally
+portable, unreachable if it is not — and Windows has no glibc-style floor for the two to differ in anyway: the
+CRT the bundle needs ships either inside it or with the OS. The one build published is the older image's, which
+is also the one the IDE embeds. Two would need the host-to-build mapping to exist first.
+
+Two lists have to agree, and nothing enforces it: `PLATFORMS_CORE` plus `PLATFORMS_DEEP` in
+`.github/workflows/build-standalone.yml`, and the platform loop in the release check in `deploy.yml`. A name in the
+matrix that no release check expects is dead weight; one the check expects that the matrix does not build is a refused
+release. Each says so at the point where it is defined. The clients keep no list of their own — they read the manifest
+described below.
+
+Two other places name these ids, and both consume them rather than declaring them, so a name that is wrong there
+is a job waiting for an artifact nothing uploaded. `IDE_CORE`/`IDE_DEEP` in `build-ide-standalone.yml` say which
+bundle goes inside each IDE, and the depth has to match: a core IDE cannot embed a deep-only bundle. The
+`EXAMPLES_CORE`/`EXAMPLES_DEEP` lists in `build-standalone.yml` say which bundles the example packages run
+through, and those *are* enforced — the "Set matrix" job fails the run if a leg names a platform this run does
+not build.
+
+The split between `PLATFORMS_CORE` and `PLATFORMS_DEEP` is about cost, not support: a pull request builds the four core
+platforms, and the three in `PLATFORMS_DEEP` (Ubuntu 22.04 on both architectures, and macOS on x86_64) are added on a
+deep run — the nightly schedule, a manual dispatch, a push, or `#deepTest` in the pull request. See
+`.github/actions/test-depth`. A release runs on a push, so it is always deep and always builds all seven; `deploy.yml`
+refuses to publish otherwise. Put `#deepTest` on a pull request that changes what is frozen.
+
+`build.sh` detects the platform id from the machine when it is not told one, which is what a local build wants.
+CI passes `--platform=` instead: the runner image label is the authoritative answer to which OS version it is,
+and recovering that from the running system is guesswork on Windows in particular.
+
+**macOS is the exception to the table above: one build per architecture, not one per OS version.** The labels
+are not symmetric either. Apple silicon has a pinned label per release, `macos-15`/`macos-26`, and the newest
+also answers to `macos-latest`; x86_64 has `macos-15-intel`/`macos-26-intel` and **no `macos-latest-intel`** —
+the moving label exists on one architecture only, and `macos-latest-large` is a paid larger runner rather than
+an x86_64 equivalent. (`-large`/`-xlarge` are all larger runners, which this repository does not use.) x86_64
+macOS used to mean `macos-13`, which is why there was no Intel bundle at all: no macos-13 job ever started on
+the current runner plan, and GitHub retired the image in December 2025 — see the note in `test.yml`. The
+`-intel` labels replaced it.
+
+Which label a job names follows from what the job is for. **A job that freezes a bundle names a pinned image**:
+the archive is named after it and takes its C library floor from it, so a moving label would rename what we
+publish and raise what it needs, with no commit to point at. **A job that installs one on a later OS names the
+moving label** where there is one: its question is "does this still run on the newest macOS", and pinning it
+means the answer quietly goes stale the day a newer macOS ships. So the freezes are `macos-15` and
+`macos-15-intel`, and the forward legs are `macos-latest` and — for want of an equivalent — `macos-26-intel`,
+which is a line that needs editing when a macOS 27 Intel image appears.
+
+Both macOS builds are frozen on macOS 15, and there is deliberately no macOS 26 build of either. A frozen bundle
+runs on the OS version it was built on and everything newer, so `macos-15-arm64` and `macos-15-x86_64` cover
+macOS 15 and 26 between them; a `macos-26-*` build reaches no machine they do not. There *was* a
+`macos-26-arm64` build. Dropping it is what pays for the Intel one — a 10x-billed freeze traded for another
+10x-billed freeze, out for a build that reached nothing new and in for a build that reaches an architecture
+nothing here reached before.
+
+**That trade is only sound if "older build runs on newer OS" is true, so CI now checks it.** It is the
+assumption the whole per-OS-version scheme rests on and nothing used to test it: every bundle was installed on
+the image that froze it, and a macOS 26 host was handed a macOS 26 build. `INSTALL_FORWARD_CORE` and
+`INSTALL_FORWARD_DEEP` in `build-standalone.yml` add an `Install` leg for each macOS bundle on the *next*
+generation — `macos-15-arm64` on `macos-latest`, `macos-15-x86_64` on `macos-26-intel` — and the IDE workflow
+does the same for the application. Those legs run `install.sh` without `--platform`, so they also check the half that
+is not the binary: that a macOS 26 machine reads the manifest and resolves itself to the macOS 15 build.
+
+The arm64 forward leg is core rather than deep, unlike the freeze it replaced: with one arm64 build for every
+macOS version, "it still starts on the newest macOS" is now load-bearing for every Mac user rather than some of
+them. The Intel legs follow their bundle and stay deep-only.
+
+**The next move here is one event, not two.** The macOS 15 images are the last x86_64 ones: GitHub drops x86_64
+macOS when they retire, announced for autumn 2027. That same retirement is what forces arm64 onto `macos-26`.
+So when it comes: move `macos-15`→`macos-26` and `macos-15-arm64`→`macos-26-arm64`, delete the x86_64 build and
+its legs, and add the next generation's forward legs when there is one.
+
+There is no Windows arm64 bundle -- not a platform PartCAD releases for.
 
 ## Files
 
@@ -19,6 +118,25 @@ with [`install.sh`](../../install.sh) and never see Python.
   its own, and says why for each entry.
 - `entrypoint.py` - what the frozen executables run, in place of the console scripts a wheel would generate.
 - `build.sh` - prepares the environment, freezes, smoke tests, and packs the archive.
+
+The bundle contains three console executables that share one interpreter, `PYZ`, and set of libraries/data:
+`pc` and `partcad` (the CLI) and `partcad-json-rpc` (the JSON-RPC service the VS Code extension launches by
+default). All three run `entrypoint.py`, which dispatches on `sys.argv[0]`: `partcad-json-rpc` starts the
+service, anything else runs the CLI.
+
+They are not three separate payloads. Since PyInstaller 6 an `EXE` carries the whole `PYZ`, so what it emits is
+three byte-identical files -- ~14MB each -- rather than the bootloader stubs the one-directory layout suggests,
+and a stream compressor cannot see across files that far apart, so the duplication costs as much again in the
+archive. `build.sh` therefore keeps `pc` and replaces the other two with relative symlinks to it, right after
+the freeze and before the smoke test that runs all three. `sys.argv[0]` is the name the user typed, so the
+dispatch is unaffected, and the bootloader looks for `_internal` beside the resolved executable, which is the
+same directory either way.
+
+Windows keeps three real copies: its archive is a zip, which stores a symlink as a copy of its target anyway,
+and creating one there needs a privilege a runner does not have. Every unpacker has to preserve the links --
+`tarfile`'s `data` filter allows a relative link that stays inside the archive, and the two hand-rolled member
+policies (`selfupdate._reject_unsafe_links`, the addon's `_safe_members`) enforce the same rule. The addon
+used to drop links outright, which was fine until `partcad-json-rpc`, the file it launches, became one.
 
 ## Building
 
@@ -39,26 +157,280 @@ PYTHON=/tmp/pyi-venv/bin/python dev-tools/pyinstaller/build.sh
 Pass `--no-install` to skip the dependency step when the environment is already prepared, and `--no-archive` to
 stop after the bundle and skip packing it.
 
+On an Apple silicon Mac, build from a **non-conda** interpreter. PartCAD needs conda for the CAD sandbox, so a
+conda `python3` is usually first on `PATH` — and freezing from one produces a bundle that segfaults. `pygit2`
+reads the libgit2 config search path through a variadic C call, which cffi dispatches at run time through
+`_cffi_backend`; the conda-forge cffi 2.x build mis-marshals variadic arguments on Apple arm64 (the PyPI wheel,
+linked against Apple's system libffi, does not). Nothing catches it downstream: the crashing path only runs
+when a clone fails to authenticate and PartCAD retries it with the ambient git config ignored, so the bundle
+passes every check and then crashes for users. `build.sh` refuses to freeze a `_cffi_backend` that is not the
+PyPI build; if it does, either build from a plain `python.org`/`pyenv` interpreter or force the wheel in:
+
+```bash
+python -m pip install --upgrade --force-reinstall --no-deps --only-binary=:all: cffi
+```
+
+CI is not exposed to this — `build-standalone.yml` provisions Python with `actions/setup-python`, which has no
+conda anywhere near it. The same crash in the *wheel*-based CI jobs, whose runners do use conda, is handled
+separately in `.github/actions/setup-all/action.yml`.
+
 The results land in `dist/standalone/`: the `partcad/` bundle, an archive named
-`partcad-<version>-<os>-<arch>.tar.gz` (`.zip` on Windows), and its `.sha256`. The archive name is a contract
-with `install.sh`, which derives the same name from `uname`.
+`partcad-<version>-<platform>.tar.xz` (`.zip` on Windows), and its `.sha256`, where `<platform>` is the
+`<os>-<os-version>-<arch>` id above. Pass `--platform=<id>` to name the archive explicitly rather than after
+this machine. The archive name is a contract with four consumers: `install.sh`, `partcad_client.selfupdate`
+(which is what `pc upgrade` and the VS Code extension use to update a bundle in place), the extension's own
+first-time download (`src/common/provision.ts`), and the FreeCAD addon
+(`cad/freecad/partcad_freecad/provision.py`). So is the archive's single top-level `partcad/`
+directory: all of them unpack it and rename that directory to `<install-dir>/<version>/`, which is what lets a
+new bundle be installed beside a running one instead of over it.
+
+**Which build to download is not a property of the host.** A machine cannot know which OS versions a given
+release was built for, so a release publishes a manifest saying so: `platforms.json`, generated from the
+archives themselves by `dev-tools/release/platforms-manifest.sh` and uploaded by `deploy.yml` beside them.
+
+```json
+{
+  "version": "0.7.177",
+  "bundle": { "linux": { "x86_64": ["ubuntu-24.04-x86_64", "ubuntu-22.04-x86_64"] } },
+  "ide": { "linux": { "x86_64": ["linux-x86_64"] } }
+}
+```
+
+### The archive format
+
+The command line bundle is packed with **xz**, not gzip. It is native code and an unpacked OpenSCAD, neither of
+which gzip does well on: measured on a Linux x86_64 build, `xz -6` takes the download from 78MB to 57MB, for a
+few seconds more on the builder (`-T0`, so it uses every core) and for the user unpacking it. `-9` is within a
+couple of percent of `-6` here and costs far more memory per thread, so `-6`, xz's default, is what `build.sh`
+passes.
+
+Windows stays a `.zip`: it is what a machine with no `tar` can open, and the portable OpenSCAD inside it is
+already compressed. The **IDE** stays a `.tar.gz` -- it is mostly an Electron runtime, which xz barely improves
+on, and `ide/standalone/build.sh` packs it rather than this one. `install.sh` is the one place that
+downloads both, and it picks the extension per artifact.
+
+Nothing has to agree on the *format*: every unpacker reads the compression out of the archive (`tar -xf`,
+`tarfile.open(..., "r:*")`). What has to agree is the file *name*, which is the same four-place contract the
+platform id already lives in: `install.sh`, `partcad_client.selfupdate.archive_extension()`,
+`provision.ts`'s `hostPlatform()`, and the addon's `provision.archive_extension()`. `dev-tools/release/platforms-manifest.sh`
+scans for both tar flavours, because it is pointed at bundle and IDE directories alike.
+
+One thing xz asks of the host that gzip does not: GNU tar runs `xz` as a helper program, so a very small Linux
+system needs `xz-utils` installed. `install.sh` says so by name when the unpacking fails. bsdtar, which is what
+macOS has, decompresses in-process and needs nothing.
+
+Both artifact kinds are in it because they are named differently: the command line bundle carries the OS
+version it was frozen on, the IDE does not (it ships its own Electron runtime and is built once per operating
+system and architecture). Each list is ordered newest build first, and it is an inventory rather than an
+answer: a client still drops the builds newer than the machine it runs on, and one that cannot identify its
+host release walks the list backwards, oldest and most portable first. That policy is `select_platforms()` in
+`partcad_client.selfupdate` and in the addon's `provision.py`, and `selectPlatforms()` in `provision.ts` --
+three copies, because the addon cannot import PartCAD (its whole reason for using the frozen bundle) and the
+extension is TypeScript. `install.sh` is the fourth and the reference implementation: it reads the same
+manifest with `awk`, and applies the same policy from `uname`, `/etc/os-release` and `sw_vers`.
 
 The bundle embeds the interpreter it was built with, so `PYTHON` decides the Python version users end up
-running. CI builds with 3.11, and 3.11 or 3.12 is required: PartCAD itself still supports 3.10, but
-`ocp_vscode` (what `pc inspect` hands shapes to) does not import there, and a dependency that cannot be
-imported cannot be frozen. `build.sh` checks that before it builds and says which import failed.
+running. CI builds with 3.14, the newest version PartCAD supports (`requires-python = ">=3.10,<3.15"`) and
+deliberately ahead of the 3.13 the wheels publish from: a standalone user cannot change the interpreter after
+the fact the way someone installing the wheels can, so shipping the oldest supported one would leave them on it
+for the life of the bundle. Nothing older is exercised. The floor used to be documented as 3.11 because
+`ocp_vscode` (what `pc inspect` used to hand shapes to) required it; `pc inspect` now talks to the PartCAD IDE
+over a socket instead, and `partcad_ide_client` is bundled (it ships inside the `partcad` wheel itself) and is
+pure standard library, so it adds no version floor of its own. A dependency that cannot be imported cannot be
+frozen, so `build.sh` imports them all before it builds and says which import failed.
 
 ## What the frozen bundle changes, and what it does not
 
 Freezing replaces the *installation*, not the architecture. PartCAD still runs CAD scripts (CadQuery,
 build123d, OpenSCAD) in a separate Python interpreter that it provisions itself with conda, and still clones
-package repositories with `git`. Both remain external prerequisites of the standalone bundle, exactly as they
-are for the wheels. `pc healthcheck` reports what is missing.
+package repositories with `git`.
+
+The difference is who supplies them. The bundle carries its own conda (see [conda](#conda) below), so a machine
+with none still builds CAD, and it carries OpenSCAD on the platforms where that is possible. `git` is what is
+left, and it was never a hard prerequisite: packages are cloned through `libgit2`, and the command line tool is
+read for its *configuration* where there is one. `pc healthcheck` reports what is missing.
+
+## No CAD kernel
+
+The bundle used to freeze one in: `cadquery-ocp`, `build123d` and `ocpsvg`, pinned to the sandbox versions.
+That is gone, and it is the single biggest reason the bundle is what it now weighs -- a Linux x86_64 build went
+from 1010MB unpacked to 78MB before OpenSCAD is copied in beside it.
+
+It was carried for one caller. `Shape.convert("build123d"/"cadquery")` hands back a live object, which needs the
+library in this process -- and that is a *library* API. This bundle is three console programs; it is not
+importable, so nothing can call it. The paths the programs do reach never hold a live shape:
+
+- Everything that builds, renders, exports, converts or tessellates a shape runs in the conda sandbox and comes
+  back as a BREP-byte envelope the core carries without opening (`partcad.shape_envelope`, and the note at the
+  top of `requirements.txt`).
+- `Shape._to_envelope()` is the one place that would encode a live shape a factory built in-process, and no
+  factory builds one: not a single module under `partcad/` outside `wrappers/` and `builtin/` imports a CAD
+  library, and both of those directories run in the sandbox.
+- `partcad.geom` builds an OCCT transform on demand. `_from_ocp()` reads the `ImportError` as "this is not an
+  OCP object", which is the right answer in a process that has no OCP, and nothing calls the other two.
+
+So `pc` from a bundle needs conda for CAD exactly as `pc` from a wheel does, exactly as it did before -- the
+kernel it carried never ran. What changed since is where the conda comes from, not whether one is needed: the
+bundle now carries that too, at ~12-22MB rather than the ~600MB the kernel cost. What it cost: OCP is ~250MB of extension module and OpenCASCADE libraries,
+`build123d` pulls scipy, sympy, scikit-learn, numpy, IPython and ezdxf in at *import* time, and the VTK-enabled
+`cadquery-ocp` the bundle pinned pulls VTK (another ~336MB) on top.
+
+`EXCLUDES` in `partcad.spec` names all of it rather than relying on `build.sh` not installing it, so that a
+bundle frozen from a developer's virtualenv -- which may well have build123d in it for other reasons -- is the
+same bundle CI produces.
+
+One thing to know if you are adding to this: the CAD stack was also, by accident, what dragged `cffi` into the
+bundle. `pygit2` needs `_cffi_backend`, loads it from C, and names it nowhere PyInstaller can see; removing the
+kernel removed the accident and broke every `pc` command that touches git. It is a hidden import now, and a
+`build.sh` pre-flight entry. Expect more of that shape from anything else that leaves.
+
+## What else is excluded, and why the list exists
+
+`EXCLUDES` in `partcad.spec` is not only about the CAD kernel. The rest of it falls into four groups, and every
+entry is there because *nothing the three console programs can reach imports it*:
+
+- **The AI provider SDKs.** PartCAD used to generate parts with an LLM and the bundle carried `openai`,
+  `ollama` and `google-genai` for it, because a frozen bundle cannot be extended with pip. PartCAD no longer
+  drives a model -- it gives one tools to work with instead, as the Agent Skills in `ai-agents/` -- so the
+  feature, the `ai` extra, the `ai-*` part types and the dependencies themselves are gone. The excludes stay as
+  a floor: nothing has to be declared to arrive, and `googleapiclient` in particular ships a cached REST
+  discovery document for every Google API, ~100MB of JSON, that PyInstaller's hook collects wholesale.
+- **Packaging machinery** — `setuptools`, `pkg_resources`, `distutils`, `wheel`. Nothing in PartCAD imports
+  them; the two dependencies that reach for `pkg_resources` (`sentry_sdk.utils`, `wrapt.importer`) both do it
+  inside `try: ... except ImportError`. Keeping `pkg_resources` out is also what let the `setuptools<82` bound
+  go from `build.sh`: PyInstaller adds the `pyi_rth_pkgres` runtime hook only when `pkg_resources` is in the
+  graph, and that hook was the only reason for the pin.
+- **Optional dependencies of dependencies** — `cryptography`/`OpenSSL` (`requests` and
+  `urllib3.contrib.pyopenssl` reach for them, 11MB), `httpx`/`httpcore` (`aiobotocore` has an httpx backend
+  beside its aiohttp one), `pydantic`/`pydantic_core` (4.5MB). Each is behind a `try: import` or a `find_spec`
+  check, so their absence is a state the code already handles.
+- **Test suites and interactive-only data** — `jsonschema.tests` and `aiohttp.test_utils`, which
+  `collect_all`/`collect_submodules` sweep in whole and which are what drag `unittest` into a bundle that runs
+  no tests; and `pydoc_data`, the help-topic database only `help()` reads.
+
+Plus `sitecustomize`/`usercustomize`, which belong to the build *machine* rather than to PartCAD.
+
+### The bundle should not depend on what the builder has installed
+
+That is what the list is really for, and it is worth stating as a property to preserve: **freezing from a
+virtualenv that has extra packages in it must produce the same bundle CI produces.** It is easy to lose. Three
+mechanisms were quietly breaking it before these entries existed:
+
+1. A hook collects a package because it is *installed*, not because it is reachable — `googleapiclient` is the
+   ~100MB case.
+2. A dependency has an optional backend guarded at run time but imported unconditionally in the source, so
+   PyInstaller's static analysis follows it whenever it resolves — `aiobotocore` → `httpx`, `requests` →
+   `cryptography`.
+3. `collect_submodules` on a package whose submodules each import a third-party library. `sentry_sdk` ships an
+   integration module for roughly forty frameworks; collecting them all made the bundle carry whatever subset
+   of those frameworks the builder had. `telemetry_sentry.py` calls `sentry_sdk.init(default_integrations=False,
+   ...)` with a single integration, so the spec collects `sentry_sdk` *except* `sentry_sdk.integrations.*` and
+   names the two that are actually used.
+
+The check is cheap: install something unrelated into the build virtualenv, freeze, and diff the bundle against
+one frozen without it. With the AI SDKs, `cryptography`, `pydantic`, `httpx` and setuptools 8x installed, the
+two are identical today.
+
+## conda
+
+Every bundle carries a conda, on every platform. PartCAD imports no CAD kernel -- it provisions a Python
+environment and runs every CAD script in that -- and conda is the only sandbox that provisions an *interpreter*
+along with it. It used to ask the host for one, which is exactly backwards for an artifact whose reason to exist
+is that the host has nothing installed: the PartCAD IDE, which launches `partcad-json-rpc` out of a bundle,
+failed on a clean machine for want of a `conda` executable.
+
+The `venv` sandbox added since is not the answer to that, on this artifact. A virtual environment is built
+*from* an interpreter -- `RuntimePythonVenv._host_interpreter()` looks for `python3` and falls back to
+`sys.executable`, which inside a frozen bundle is `pc` rather than a Python -- so on the machine the bundle
+exists for, the one with no Python at all, there is nothing to build it from. `venv` is the right fallback for
+a wheel, where a Python is a given. Here the sandbox has to come with the tools.
+
+What ships is **micromamba**, pinned in `build.sh` (`MICROMAMBA_VERSION`) and downloaded from
+[`mamba-org/micromamba-releases`](https://github.com/mamba-org/micromamba-releases) at build time,
+checksum-verified against the `.sha256` published beside it. It is mamba -- the same implementation CI
+provisions through Miniforge (`use-mamba: true` in `.github/actions/setup-all/action.yml`), and the one
+`partcad_utils.conda` already preferred over `conda` -- in its single-file build.
+
+Not the Miniforge installer itself, for two reasons that both decide it:
+
+* **A conda installation is not relocatable.** Its entry points hardcode the prefix they were installed into,
+  and this bundle is unpacked wherever its installer puts it -- `~/.local/share/partcad/<version>` for
+  `install.sh`, elsewhere for the VS Code extension, the FreeCAD addon and the IDE. One static executable has
+  no prefix to hardcode and runs from wherever it finds itself.
+* **Size.** Miniforge is around 500MB installed, against 12-22MB here. Taking the CAD kernel out is what got
+  the bundle from ~1010MB to ~180MB; a conda distribution would have put three times its size back.
+
+micromamba also resolves from conda-forge with no configuration at all, which is the channel policy the
+comments in that CI action insist on -- mixing Anaconda's `defaults` into a conda-forge environment is what made
+the macOS jobs segfault. A Miniforge install would have had to carry a `.condarc` saying the same thing.
+
+Unlike OpenSCAD there is no platform that goes without: upstream builds micromamba for all five
+`<os>-<arch>` combinations this bundle is built for, and `stage_conda()` fails the build on one it has no
+mapping for rather than quietly producing a bundle that cannot do CAD. Like OpenSCAD it is **not** declared in
+`partcad.spec` -- `build.sh` copies it into `_internal/conda/` after PyInstaller has run.
+
+| | what ships | size |
+| --- | --- | --- |
+| Linux x86_64 | `micromamba-linux-64` | ~18MB, ~6MB in the archive |
+| Linux arm64 | `micromamba-linux-aarch64` | ~21MB |
+| macOS arm64 | `micromamba-osx-arm64` | ~14MB |
+| macOS x86_64 | `micromamba-osx-64` | ~16MB |
+| Windows x86_64 | `micromamba-win-64`, staged as `micromamba.exe` | ~11MB |
+
+(The release publishes `micromamba-win-64.exe` too, byte for byte the same file, but only the name without the
+suffix has a `.sha256` beside it -- and a payload nobody can verify is not one worth having.)
+
+### The host's conda wins
+
+`partcad_utils.conda.find_executable()` tries the host's `mamba`, then the host's `conda`, and only then the
+bundled copy. That is the opposite of what the bundled OpenSCAD does, on purpose, and the difference is worth
+stating because it will look like an inconsistency otherwise:
+
+OpenSCAD is one self-contained program with no state, so preferring the bundled copy costs a user nothing and
+makes the bundle behave identically everywhere. conda is not a program but an *installation* -- a channel
+configuration the user chose, and a package cache holding the gigabytes the CAD sandbox is made of. Preferring
+ours would strand that cache and re-download the whole CAD stack beside it, on a machine that was working
+perfectly well. So a machine that has conda keeps behaving exactly as it did, and the bundled copy is what
+makes a machine that has none work at all. There is no `--ignore-bundled-conda` for the same reason: nothing is
+being displaced, and the sandbox setting already says it better -- `pythonSandbox: venv` for an environment
+PartCAD builds without conda at all, `none` for no environment whatever.
+
+The bundled conda is given `MAMBA_ROOT_PREFIX` inside PartCAD's internal state directory (`<state dir>/conda`,
+beside the `sandbox` directory holding the environments it creates), and only the bundled one -- a host conda
+knows its own root prefix, and telling it otherwise would move a package cache the user has been filling for
+years. It has to be told something: micromamba's own default is `~/.local/share/mamba`, a directory PartCAD
+would be creating in the user's home without ever having said so -- outside what `pc system status` reports and
+`pc system reset` clears, and outside what `snap remove --purge` takes away, since the snap redirects PartCAD's
+state with `PC_INTERNAL_STATE_DIR` precisely so that it does. The internal state directory is the one PartCAD
+already owns and already documents.
+
+`bundled_command_env()` sets it only when it is unset, though, and that exception is worth stating because it
+takes the payload's cache back out of PartCAD's lifecycle: a user who runs their own micromamba has a
+`MAMBA_ROOT_PREFIX` and a warm cache under it, and sharing it is the point -- but their cache is then where
+they put it, so `pc system status` does not report it, `pc system reset` does not clear it, and
+`snap remove --purge` does not take it away. That is the right trade (PartCAD does not empty caches it did not
+fill, exactly as it leaves a host conda's alone), and it is a trade rather than a free win.
+
+### What tests this
+
+Three things, at three levels:
+
+* `tests/partcad_utils/test_conda.py` pins the ordering and the root prefix. Nothing about either is observable
+  from a build -- a bundle built on a machine with no conda passes its smoke test whichever way round the two
+  are tried -- so it is asserted where a bundled copy and a host copy can be made to exist at once.
+* `build.sh`'s smoke test runs the staged payload (`--version`, against `MICROMAMBA_VERSION`) and then asks
+  `pc healthcheck --filters conda` whether PartCAD resolves a conda at all.
+* The `Standalone` workflow installs the archive and runs the payload out of the *installed* bundle, which is
+  the part the build cannot show -- an archive can lose an executable bit. Its `Examples ... via bundle` jobs
+  then install no conda at all and build the whole CAD stack through the payload; they fail loudly if a conda
+  turns up on `PATH`, because that would silently turn them back into a test of the host's.
 
 ## OpenSCAD
 
-The Linux and Windows bundles carry OpenSCAD, pinned to the version in `build.sh` and downloaded from
-`files.openscad.org` at build time (checksum-verified). `partcad.healthcheck.openscad.find_executable()` prefers it over
+Every bundle but Linux arm64 carries OpenSCAD, and they all carry **the same build** — that is what makes a
+`.scad` part render the same wherever `pc` runs. The three download URLs, their checksums and the version live
+in one block, `OPENSCAD BUILDS` at the top of `build.sh`, which is also where the reasoning below is written
+down for whoever bumps it next; nothing else in the build composes a URL of its own. `partcad.healthcheck.openscad.find_executable()` prefers it over
 any OpenSCAD on the host, and falls back to `shutil.which` when there is no bundled copy — which is what the
 wheels always do. A user can opt out of the bundled copy with `--ignore-bundled-openscad` /
 `IGNORE_BUNDLED_OPENSCAD=1` (`user_config.ignore_bundled_openscad`), which makes the resolver skip the
@@ -67,9 +439,88 @@ where the AppImage's library dependencies are absent.
 
 | | what ships | self-contained |
 | --- | --- | --- |
-| Linux | the AppImage, unpacked | no — needs `libGL`, `libX11`, `libxcb`, fontconfig, freetype, glib, harfbuzz from the host |
-| Windows | the portable build | yes — one statically linked `openscad.exe`, no DLLs |
-| macOS | nothing | — |
+| Linux x86_64 | the AppImage, unpacked | no — needs `libGL`, `libX11`, `libxcb`, fontconfig, freetype, glib and harfbuzz from the host |
+| Linux arm64 | nothing | — |
+| Windows | the portable zip | yes — `openscad.exe` and `openscad.com`, no DLLs |
+| macOS, both architectures | `OpenSCAD.app` out of the `.dmg` | yes — its Qt frameworks are inside the `.app` |
+
+Linux arm64 carries nothing because upstream builds no current arm64 snapshot. The only two aarch64 artifacts
+in the whole directory are one-offs from 2021 and 2023, under a naming scheme (`...ai-aarch64`) it no longer
+uses. `pc` there uses the host's OpenSCAD, exactly as the wheels do.
+
+### One build for every platform
+
+The requirement is stronger than "the same version number": every platform carries OpenSCAD built from the
+**same upstream source**, which the snapshot date in the filenames is what identifies. OpenSCAD's language and
+its exports both move between builds, so bundles built from different sources disagree about what a `.scad`
+file means — a part that renders on one machine could fail to parse, or render differently, on another. An
+older date that all three platforms share therefore beats a newer one that they do not, and no platform is
+ever bumped alone. `build.sh` carries the command that finds the newest date with all three artifacts, which
+is not the same as the newest date in the directory.
+
+### It is a development snapshot, and the pin expires
+
+**The version is a snapshot, not a release.** That is forced, not preferred. The last release, 2021.01, cannot
+be the one version every platform shares:
+
+* It is **x86_64 only**, so an arm64 Mac would need Rosetta 2, which a clean machine does not have. Homebrew's
+  `openscad` cask states this with a `requires_rosetta` caveat.
+* Homebrew **disabled that cask outright** on 2026-09-01, `because: :fails_gatekeeper_check`. It is also what
+  took every macOS CI job down until #583.
+
+So one version across platforms has to be a snapshot. Three consequences follow, and all three are the reason
+this section is long:
+
+1. **The pin expires.** Upstream prunes `snapshots/` on a rolling window of about a year — measured at 143
+   Linux and Windows builds spanning 368 days and 119 macOS builds spanning 365. A pin left alone for a year
+   stops resolving, and then **no bundle builds on any platform**, the release included. It fails loudly: the
+   fetch 404s, `fetch_and_verify` does not retry a 4xx, and `stage_openscad` prints what to do. This is the
+   single biggest maintenance liability in this file. The durable fix, not done here, is to mirror the three
+   artifacts somewhere the project controls.
+2. **A bump picks a date from the listing rather than constructing one.** Builds are not nightly — roughly one
+   every 2.6 days — and a given date can be missing a platform, with gaps up to 35 days on Linux and Windows
+   and 76 on macOS. The date has to be one where all three artifacts exist.
+3. **Checksums are pinned as literals, not read from the sidecars.** Upstream does publish a correct `.sha256`
+   (and `.sha512`) beside every snapshot, and the build could read those — but a snapshot directory is
+   rolling, and pinning the bytes rather than the name is what stops a rebuild of a given PartCAD version
+   picking up something republished under the date it asked for. So a bump moves four values together:
+   `OPENSCAD_VERSION` and the three `OPENSCAD_SHA256_*`. The conda payload still reads its sidecar; its
+   upstream is a tagged release, which does not move.
+
+The three artifact names have almost nothing in common — `-x86_64` on Linux, `-x86-64` on Windows, and no
+architecture token at all on macOS — and the Windows zip sits beside an `-x86-64-Installer.exe` that differs
+from it only by a suffix. They are spelled out in the `case` rather than composed, for that reason.
+
+### Per-platform staging
+
+**Windows** takes the portable zip. Its single top-level directory is named after the zip itself
+(`OpenSCAD-<version>-x86-64`), and `build.sh` derives it from the artifact name rather than hardcoding it.
+Worth knowing that the *release* zips did not follow this rule — 2021.01's inner directory was the lowercase
+`openscad-2021.01` — so a hardcoded name carried over from the release era would have moved nothing at all,
+silently.
+
+**macOS** takes the `.dmg`. `build.sh` attaches it read-only at an explicit mount point under `build/`, copies
+`OpenSCAD.app` out with `ditto`, and detaches — on the failure path too, and without a trap, since `set -e`
+unwinding a function does not reliably run a `RETURN` trap and an `EXIT` trap would displace the smoke test's.
+The explicit mount point is not fastidiousness: the volume is named `OpenSCAD` with no date in it, so every
+snapshot mounts at the same `/Volumes/OpenSCAD`, and a name already taken is silently suffixed
+(`/Volumes/OpenSCAD 1`) rather than refused — so a second build, or a stale mount from an interrupted one,
+would have the copy read whichever image got there first. `ditto` rather than `cp -R` because this app is
+signed and notarized, and that is macOS's own bundle copier.
+
+One `.dmg` serves both Mac architectures because it is a **Universal 2** binary: `lipo -archs` on
+`OpenSCAD.app/Contents/MacOS/OpenSCAD` prints `x86_64 arm64`. That was an open question in this file for a
+while and it is now measured, not inferred.
+
+The `.app` is carried entire rather than reduced to the binary inside it: that binary resolves its Qt
+frameworks through `@executable_path/../Frameworks`, so the layout around it is what makes it runnable — the
+same reason Linux keeps the whole AppImage tree. `BUNDLED_SUBPATH` in `partcad.healthcheck.openscad` and the
+staging in `build.sh` have to agree on that path; a unit test pins all three platforms' layouts, since the one
+being described is never the one the test run is on.
+
+What only a runner can answer is whether the signed `.app` survives `ditto` → `tar.xz` → download → untar and
+still launches. The `Run the bundled OpenSCAD after installation` step in `build-standalone.yml` is that check,
+and it runs on macOS as well as Linux x86_64.
 
 The AppImage ships *unpacked* because running it as an image needs FUSE, which a minimal host may not have.
 
@@ -80,14 +531,10 @@ and glib beside the ones Python needs, on the frozen application's own library s
 ~100MB. That means a bare `pyinstaller partcad.spec` produces a bundle without OpenSCAD; `build.sh` is the
 supported way to build one, as it already is for the dependency pre-flight.
 
-macOS is excluded because the 2021.01 release predates Apple silicon and ships an x86_64-only `.dmg`, which
-on the arm64 bundle would require Rosetta 2 — absent from a clean machine. Development snapshots may be
-universal binaries, but they are snapshots and their architecture has not been confirmed; `lipo -archs` on a
-mounted snapshot `.dmg` would settle it.
-
-To move to a different OpenSCAD, change `OPENSCAD_VERSION` in `build.sh`. Upstream publishes a `.sha256` next
-to each artifact and the build verifies it, so nothing else needs updating — but note the published checksum
-files name a `releases/` path rather than the bare file, which is why the build compares the hash alone.
+To move to a different OpenSCAD, replace the `OPENSCAD BUILDS` block at the top of `build.sh` wholesale — the
+version, the three URLs and the three checksums, all naming one date. That block documents how to find a date
+that qualifies and how the three filenames differ; a startup check refuses a bump that moved the version but
+left a URL behind.
 
 That sandbox is also why `partcad/wrappers/*.py` are bundled as *data* rather than frozen as modules: they are
 handed to that other interpreter as a file path.
@@ -102,13 +549,27 @@ is invisible to it and has to be named in `partcad.spec`. When adding to PartCAD
   `partcad.spec` and say why;
 - a non-Python file read at runtime - add it to `datas` in `partcad.spec`, and remember `__file__` inside a
   bundle points into the unpacked bundle directory, not into a `site-packages`;
-- a new CLI subcommand - nothing to do, `command_modules()` in the spec enumerates the `commands` tree.
+- a new CLI subcommand - nothing to do, `command_modules()` in the spec enumerates the `commands` tree;
+- a compiled extension that loads another module from C rather than importing it in Python - name it in
+  `hiddenimports` *and* in `build.sh`'s pre-flight. `_cffi_backend`, which `pygit2` needs, is the worked
+  example: nothing in the import graph mentions it, so nothing but a runtime failure reveals it missing.
+
+And one in the other direction: a dependency that only the *sandbox* needs does not belong in the bundle at
+all. That is what `EXCLUDES` is for, and the CAD kernel is the case that matters -- see [No CAD
+kernel](#no-cad-kernel).
 
 A missing entry does not fail the build. It fails at runtime, on the one code path that needed it, for users
 only. The `Standalone` workflow (`.github/workflows/build-standalone.yml`) builds every platform and then
 installs and runs the result, which is what catches this; run it with `workflow_dispatch` when in doubt.
 
+## The snap
+
+On Linux the `ubuntu-24.04` bundles are also wrapped as snaps, one per architecture. It is packaging only --
+the snap carries the bundle unchanged, and adds nothing to freeze -- so nothing in this directory has to change
+when it is built. The snaps are not published anywhere yet. See [`../snap/README.md`](../snap/README.md).
+
 ## Releasing
 
-`deploy.yml` calls the `Standalone` workflow on a push to `main` and uploads the archives to the same GitHub
-release as the wheels. `install.sh` downloads from there by default.
+`deploy.yml` calls the `Standalone` workflow on a push to `main` and uploads every archive to the same GitHub
+release as the wheels; the release is refused if any platform is missing. `install.sh` downloads from there by
+default. The snaps are not part of the release: the `snap` job does not even run on that path.

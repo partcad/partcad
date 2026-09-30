@@ -1,0 +1,14 @@
+# What the analyses write, which is a result and not a checked-in artifact.
+#
+# `pc test` runs the analysis, and `Shape.analyze_async()` writes the model it
+# produced beside the part -- `cantilever.fea.glb` here. The `Examples (PartCAD)`
+# job then runs `pc render -r` and fails if anything under `examples/` changed,
+# which is how a rendering regression is caught; an untracked solver result
+# tripped that check the first time the solver actually ran on a runner.
+#
+# It is not checked in, and should not be: the images beside it are PartCAD's
+# own byte-stable renderings, while this is whatever CalculiX and the mesher
+# produced on that machine, at those versions. Committing it would make the
+# check fail on the next release of either.
+*.fea.glb
+*.cfd.glb

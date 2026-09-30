@@ -1,0 +1,453 @@
+//
+// PartCAD, 2026
+//
+// Licensed under Apache License, Version 2.0.
+//
+
+import * as vscode from 'vscode';
+import { traceError, traceVerbose } from '../common/log/logging';
+import * as utils from '../utils';
+import { MSG_CLEAR, MSG_SHOW, ViewerMessage, ViewerNode, decodeGltf } from './protocol';
+import { SpacenavClient } from './spacenav';
+
+/**
+ * One node as the webview is handed it: the same node, with its glTF
+ * decompressed into base64 and measured.
+ *
+ * Decompressed here, in the extension host, rather than in the webview: Node has
+ * zlib built in, a webview would need either a bundled inflater or
+ * DecompressionStream. The size travels because the renderer shows what it is
+ * loading, and it is the size of the buffer rather than of the payload.
+ */
+interface WebviewNode extends Omit<ViewerNode, 'assembly' | 'sketches' | 'geometry'> {
+    size?: number;
+    assembly?: WebviewNode[];
+    sketches?: Record<string, WebviewNode>;
+    /** The root's geometry table, decompressed: each entry measured as it is inflated. */
+    geometry?: Record<string, { gltf: string; size: number }>;
+}
+
+/**
+ * The tabs the panel offers, and the daemon operation behind each.
+ *
+ * The 3D view is not here: its contents arrive over the viewer protocol from
+ * whichever 'partcad' asked for the shape to be shown, and are already in the
+ * webview by the time a tab is looked at. Everything else is a question about
+ * '<package>:<name>' that only this side can put to the daemon, so the renderer
+ * asks and this answers -- see 'fetchTab'.
+ */
+const TAB_COMMANDS: Record<string, string> = {
+    bom: 'partcad.bom',
+    instructions: 'partcad.assemblyGuide',
+    supply: 'partcad.supplyQuote',
+    // Both analyses are the one operation; which of them is asked for travels
+    // as an argument, exactly as 'pc cae fea' and 'pc cae cfd' are one
+    // operation with the analysis in the request.
+    fea: 'partcad.cae',
+    cfd: 'partcad.cae',
+};
+
+/** The tabs that run an analysis rather than ask a question about the object. */
+const ANALYSIS_TABS = new Set(['fea', 'cfd']);
+
+/**
+ * The "PartCAD Viewer" editor tab.
+ *
+ * A webview panel rather than a view in the side bar: a 3D model wants the whole
+ * editor area, and it has to survive being switched away from, which is what
+ * 'retainContextWhenHidden' buys (reloading the webview would drop the model,
+ * the camera the user set up, and every tab already fetched).
+ */
+export class PartcadViewer implements vscode.Disposable {
+    public static readonly viewType = 'partcadViewer';
+    public static readonly title = 'PartCAD Viewer';
+
+    private panel: vscode.WebviewPanel | undefined;
+    private lastShow: ViewerMessage | undefined;
+    /** The configured CAE implementations, once the daemon has been asked. */
+    private caeDefaults: Record<string, string> | undefined;
+    /**
+     * spacenavd, while the panel exists and the SpaceMouse is enabled - on Linux,
+     * where the renderer cannot see the device itself. See 'spacenav.ts'.
+     */
+    private spacenav: SpacenavClient | undefined;
+    private readonly disposables: vscode.Disposable[] = [];
+
+    constructor(private readonly extensionUri: vscode.Uri) {
+        this.disposables.push(
+            vscode.workspace.onDidChangeConfiguration((event) => {
+                if (event.affectsConfiguration('partcad.spaceMouse')) {
+                    this.updateSpaceMouse();
+                }
+            }),
+            // Whether this panel is where the user is changes with the window's focus
+            // as well as with the panel's own visibility.
+            vscode.window.onDidChangeWindowState(() => this.postSpaceMouseState()),
+        );
+    }
+
+    /** Whether the viewer tab currently exists. */
+    public get isOpen(): boolean {
+        return this.panel !== undefined;
+    }
+
+    /** Open the viewer (or bring it forward) without changing what it displays. */
+    public reveal(preserveFocus = true): void {
+        if (this.panel !== undefined) {
+            this.panel.reveal(undefined, preserveFocus);
+            return;
+        }
+        this.create(vscode.ViewColumn.Beside, preserveFocus);
+        if (this.lastShow !== undefined) {
+            // Reopening after a close should not leave an empty canvas when we
+            // still know what was in it.
+            this.handle(this.lastShow);
+        }
+    }
+
+    /** Adopt a panel VS Code restored from a previous session. */
+    public restore(panel: vscode.WebviewPanel): void {
+        this.panel?.dispose();
+        this.attach(panel);
+    }
+
+    /** Route a protocol message from a connected PartCAD to the webview. */
+    public handle(message: ViewerMessage): void {
+        if (message.type === MSG_CLEAR) {
+            this.lastShow = undefined;
+            void this.panel?.webview.postMessage({ type: 'clear' });
+            return;
+        }
+        if (message.type !== MSG_SHOW) {
+            return;
+        }
+
+        let object: WebviewNode | null;
+        try {
+            object = message.object ? inflate(message.object) : null;
+        } catch (error: any) {
+            traceError(`PartCAD Viewer: failed to decode the geometry: ${error.message}`);
+            void vscode.window.showErrorMessage(`PartCAD Viewer: failed to decode the geometry: ${error.message}`);
+            return;
+        }
+
+        this.lastShow = message;
+
+        // Showing something is what opens the viewer: the user asked to inspect
+        // an item, and an inspection with nowhere to draw is not useful.
+        if (this.panel === undefined) {
+            this.create(vscode.ViewColumn.Beside, true);
+        }
+
+        void this.panel?.webview.postMessage({
+            type: 'show',
+            name: message.name ?? null,
+            kind: message.kind ?? null,
+            // What the panel's other tabs are about. A 'partcad' that does not
+            // send it (an older one, or a shape belonging to no package) leaves
+            // the renderer showing the 3D view alone.
+            package: message.package ?? null,
+            keepCamera: message.keepCamera === true,
+            // The object as it arrived, geometry aside: the hierarchy, the
+            // placements, the ports and the interfaces are PartCAD's account of
+            // what is on screen, and this side knows nothing about assemblies,
+            // ports or interfaces.
+            object,
+        });
+    }
+
+    /**
+     * Fill one of the panel's tabs in, on the renderer's request.
+     *
+     * 'token' is the renderer's generation of the object the request was made
+     * for; it comes back untouched so that an answer arriving after the user
+     * moved on can be dropped there rather than painted over what is now on
+     * screen. A refusal is an answer too: asking for the instructions of an
+     * assembly that has no assembly steps is told why, and the reader sees that
+     * instead of an empty tab.
+     */
+    private async fetchTab(tab: string, token: number, implementation?: string): Promise<void> {
+        const analysis = ANALYSIS_TABS.has(tab);
+        // Which implementation the request ends up carrying, so that the field
+        // over the model can be pre-filled with it -- including when the
+        // analysis failed, which is exactly when the user needs to see what was
+        // tried and type something else.
+        const used = analysis ? implementation || (await this.caeDefault(tab)) : undefined;
+        const post = (payload: { data?: unknown; error?: string }) =>
+            void this.panel?.webview.postMessage({
+                type: 'tabData',
+                tab,
+                token,
+                ...(used !== undefined ? { implementation: used } : {}),
+                ...payload,
+            });
+
+        const command = TAB_COMMANDS[tab];
+        if (command === undefined) {
+            post({ error: `There is nothing to fill the '${tab}' tab with.` });
+            return;
+        }
+        const target = this.lastShow;
+        if (!target?.package || !target.name) {
+            post({ error: 'PartCAD did not say which package this object belongs to.' });
+            return;
+        }
+
+        try {
+            // The commands are registered by the backend, so an absent one means
+            // no PartCAD is connected -- which is worth saying plainly rather
+            // than reporting as a missing command.
+            if (!(await vscode.commands.getCommands(true)).includes(command)) {
+                throw new Error('PartCAD is not connected. Use "Restart PartCAD" to reconnect.');
+            }
+            const args: Record<string, unknown> = { pkg: target.package, name: target.name };
+            if (analysis) {
+                args.analysis = tab;
+                args.implementation = used;
+                // The panel is a webview with no file system in reach, so the
+                // model has to arrive as bytes rather than as the path the
+                // daemon wrote it to -- which may not even be this machine.
+                args.inline = true;
+            }
+            post({ data: await vscode.commands.executeCommand(command, args) });
+        } catch (error: any) {
+            traceError(`PartCAD Viewer: failed to fetch the '${tab}' tab: ${error?.message ?? error}`);
+            post({ error: `${error?.message ?? error}` });
+        }
+    }
+
+    /**
+     * The implementation an analysis runs under when nobody has said otherwise.
+     *
+     * Asked of the daemon once per panel and remembered, because it is the
+     * user's configuration rather than anything about the object on screen. A
+     * PartCAD too old to answer, or none connected at all, leaves the field
+     * empty rather than failing the fetch: the analysis itself will report the
+     * real problem a moment later.
+     */
+    private async caeDefault(analysis: string): Promise<string | undefined> {
+        if (this.caeDefaults === undefined) {
+            try {
+                this.caeDefaults =
+                    ((await vscode.commands.executeCommand('partcad.caeDefaults')) as Record<string, string>) ?? {};
+            } catch (error: any) {
+                traceVerbose(`PartCAD Viewer: no CAE defaults: ${error?.message ?? error}`);
+                this.caeDefaults = {};
+            }
+        }
+        return this.caeDefaults[analysis];
+    }
+
+    private create(column: vscode.ViewColumn, preserveFocus: boolean): void {
+        const panel = vscode.window.createWebviewPanel(
+            PartcadViewer.viewType,
+            PartcadViewer.title,
+            { viewColumn: column, preserveFocus },
+            this.webviewOptions(),
+        );
+        this.attach(panel);
+    }
+
+    private attach(panel: vscode.WebviewPanel): void {
+        panel.webview.options = this.webviewOptions();
+        panel.iconPath = utils.joinPath(this.extensionUri, 'resources', 'logo.svg');
+        panel.webview.html = this.html(panel.webview);
+        panel.onDidDispose(() => {
+            if (this.panel === panel) {
+                this.panel = undefined;
+                this.updateSpaceMouse();
+            }
+        });
+        panel.onDidChangeViewState(() => this.postSpaceMouseState());
+        panel.webview.onDidReceiveMessage(
+            (message: { type: string; message?: string; tab?: string; token?: number; implementation?: string }) => {
+                if (message.type === 'error') {
+                    traceError(`PartCAD Viewer: ${message.message}`);
+                } else if (message.type === 'ready') {
+                    this.postSpaceMouseState();
+                    if (this.lastShow !== undefined) {
+                        // The webview finished booting after we had already been
+                        // asked to show something (a restored tab, or a show that
+                        // raced the panel's first paint).
+                        this.handle(this.lastShow);
+                    }
+                } else if (message.type === 'fetchTab') {
+                    void this.fetchTab(message.tab ?? '', message.token ?? 0, message.implementation);
+                } else {
+                    traceVerbose(`PartCAD Viewer: ${message.type}`);
+                }
+            },
+        );
+        this.panel = panel;
+        this.updateSpaceMouse();
+    }
+
+    /**
+     * Start or stop reading spacenavd, and tell the renderer how to behave.
+     *
+     * spacenavd is read only while there is a panel to move, and never on
+     * Windows, where there is no spacenavd and the Gamepad API sees the device.
+     */
+    private updateSpaceMouse(): void {
+        const wanted = this.panel !== undefined && spaceMouseSettings().enabled && process.platform !== 'win32';
+        if (wanted && this.spacenav === undefined) {
+            const client = new SpacenavClient();
+            client.onDidChangeState(() => {
+                traceVerbose(
+                    `PartCAD Viewer: spacenavd ${client.connected ? `connected, device ${client.device}` : 'disconnected'}`,
+                );
+                this.postSpaceMouseState();
+            });
+            client.onEvent((event) => {
+                // Only to the panel the user is looking at: spacenavd reports every
+                // push to every client, whichever window has the focus.
+                if (this.spaceMouseActive()) {
+                    void this.panel?.webview.postMessage({ type: 'spaceMouseEvent', ...event });
+                }
+            });
+            this.spacenav = client;
+        } else if (!wanted && this.spacenav !== undefined) {
+            this.spacenav.dispose();
+            this.spacenav = undefined;
+        }
+        this.postSpaceMouseState();
+    }
+
+    /** Whether the panel is visible in the focused window, which is where a SpaceMouse push is meant for. */
+    private spaceMouseActive(): boolean {
+        return this.panel?.visible === true && vscode.window.state.focused;
+    }
+
+    private postSpaceMouseState(): void {
+        void this.panel?.webview.postMessage({
+            type: 'spaceMouseState',
+            settings: spaceMouseSettings(),
+            active: this.spaceMouseActive(),
+            spacenavd: this.spacenav?.connected === true,
+            spacenavdDevice: this.spacenav?.device ?? null,
+        });
+    }
+
+    private webviewOptions(): vscode.WebviewPanelOptions & vscode.WebviewOptions {
+        return {
+            enableScripts: true,
+            // Switching to another editor tab must not throw the model away.
+            retainContextWhenHidden: true,
+            localResourceRoots: [this.extensionUri],
+        };
+    }
+
+    private html(webview: vscode.Webview): string {
+        const scriptUri = webview.asWebviewUri(utils.joinPath(this.extensionUri, 'dist', 'viewer.js'));
+        const styleUri = webview.asWebviewUri(utils.joinPath(this.extensionUri, 'resources', 'css', 'viewer.css'));
+        const nonce = getNonce();
+
+        // No 'connect-src': the geometry arrives over postMessage and is parsed
+        // from memory, so the viewer never issues a network request. Nothing
+        // here may be relaxed to load an asset from a CDN.
+        return `<!DOCTYPE html>
+			<html lang="en">
+			<head>
+				<meta charset="UTF-8">
+				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: blob:; script-src 'nonce-${nonce}';">
+				<meta name="viewport" content="width=device-width, initial-scale=1.0">
+				<link href="${styleUri}" rel="stylesheet">
+				<title>${PartcadViewer.title}</title>
+			</head>
+			<body>
+				<div class="panel">
+					<div id="tabs" class="tabs" hidden></div>
+					<div class="panes">
+						<div id="pane-3d" class="pane pane-3d">
+							<div class="controls">
+								<div id="tree" class="tree" role="tree"></div>
+								<div class="viewer-controls">
+									<label class="control-label" id="metadata-control" hidden><input type="checkbox" id="metadata-checkbox" checked> Metadata</label>
+									<label class="control-label"><input type="checkbox" id="animate-checkbox" checked> Animate</label>
+									<label class="control-label">Opacity <input type="range" id="opacity-slider" min="0" max="100" value="100" class="opacity-slider"><span id="opacity-value" class="control-value">100%</span></label>
+								</div>
+							</div>
+							<div id="viewer" class="viewer">
+								<div id="overlay" class="overlay">Nothing to display yet.</div>
+							</div>
+						</div>
+						<div id="pane-bom" class="pane" hidden></div>
+						<div id="pane-instructions" class="pane" hidden></div>
+						<div id="pane-fea" class="pane" hidden></div>
+						<div id="pane-cfd" class="pane" hidden></div>
+						<div id="pane-supply" class="pane" hidden></div>
+					</div>
+				</div>
+				<script nonce="${nonce}" src="${scriptUri}"></script>
+			</body>
+			</html>`;
+    }
+
+    public dispose(): void {
+        this.panel?.dispose();
+        this.panel = undefined;
+        this.spacenav?.dispose();
+        this.spacenav = undefined;
+        this.disposables.forEach((disposable) => disposable.dispose());
+    }
+}
+
+/** The 'partcad.spaceMouse.*' settings, in the shape the renderer takes them. */
+function spaceMouseSettings(): { enabled: boolean; sensitivity: number; invert: string[] } {
+    const config = vscode.workspace.getConfiguration('partcad.spaceMouse');
+    const sensitivity = config.get<number>('sensitivity', 1);
+    return {
+        enabled: config.get<boolean>('enabled', true),
+        sensitivity: Number.isFinite(sensitivity) && sensitivity > 0 ? sensitivity : 1,
+        invert: config.get<string[]>('invert', []),
+    };
+}
+
+/** A node, and everything under it, with its geometry decompressed and measured.
+ *
+ * The geometry is decompressed once per distinct shape rather than once per node,
+ * because that is how it arrives: the table on the root holds one entry however
+ * many nodes name it, and the nodes themselves carry only the name. An assembly
+ * that places one bolt a hundred times is a hundred nodes and one inflate.
+ */
+function inflate(node: ViewerNode): WebviewNode {
+    // The three that change shape on the way through are taken out of the spread
+    // rather than overwritten after it: a compressed table and an inflated one are
+    // different types under one name, and spreading the first into the second is
+    // the kind of mismatch TypeScript resolves optimistically on a recursive type.
+    const { geometry, assembly, sketches, ...rest } = node;
+    const inflated: WebviewNode = { ...rest };
+    if (node.gltf !== undefined) {
+        const gltf = decodeGltf(node.gltf);
+        inflated.gltf = gltf.toString('base64');
+        inflated.size = gltf.length;
+    }
+    if (geometry !== undefined) {
+        inflated.geometry = Object.fromEntries(
+            Object.entries(geometry).map(([digest, payload]) => {
+                const gltf = decodeGltf(payload);
+                return [digest, { gltf: gltf.toString('base64'), size: gltf.length }];
+            }),
+        );
+    }
+    if (assembly !== undefined) {
+        inflated.assembly = assembly.map(inflate);
+    }
+    if (sketches !== undefined) {
+        // The sketches the ports are drawn with are nodes like any other, and
+        // name their geometry the same way.
+        inflated.sketches = Object.fromEntries(
+            Object.entries(sketches).map(([reference, sketch]) => [reference, inflate(sketch)]),
+        );
+    }
+    return inflated;
+}
+
+function getNonce(): string {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}

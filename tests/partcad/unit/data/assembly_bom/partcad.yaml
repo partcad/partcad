@@ -1,0 +1,22 @@
+desc: An assembly built out of another package's parts and assemblies
+
+dependencies:
+  sub:
+    type: local
+    path: ./sub
+
+assemblies:
+  top:
+    type: assy
+    desc: The top level assembly
+    render:
+      readme:
+      # Overridden here to catch the package's own settings being mutated by
+      # the merge that resolves them.
+      svg:
+        prefix: ./img
+
+render:
+  readme:
+  svg:
+    prefix: ./

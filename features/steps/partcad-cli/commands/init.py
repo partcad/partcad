@@ -1,5 +1,6 @@
 from behave import given, then
 from behave.runner import Context
+import json
 import yaml
 import logging
 import tempfile
@@ -49,6 +50,31 @@ def step_impl(context, filename):
         raise Exception(f"File '{filename}' was created")
 
 
+@then('a directory named "{directory}" should not exist')
+def step_impl(context, directory):
+    path = os.path.join(context.test_dir, directory)
+    assert not os.path.exists(path), f"'{directory}' was created"
+
+
+@then('the skill "{name}" should be named after its directory')
+def step_impl(context, name):
+    """A skill answers to the name in its front matter, not to its directory.
+
+    The Cursor copies are installed under a `pc-` prefix -- unprefixed, PartCAD
+    would be claiming `init`, `gen` and `render` in a user's skills directory --
+    and the front matter has to be rewritten to match or the skill answers to a
+    command nobody typed.
+    """
+    path = os.path.join(context.test_dir, ".cursor", "skills", name, "SKILL.md")
+    assert os.path.isfile(path), f"'{name}' was not installed"
+
+    with open(path, "r", encoding="utf-8") as file:
+        text = file.read()
+    assert text.startswith("---\n"), f"'{name}' has no front matter"
+    front_matter = yaml.safe_load(text[4 : text.index("\n---", 3)])
+    assert front_matter.get("name") == name, f"'{name}' names itself {front_matter.get('name')!r}"
+
+
 @given('a file named "{filename}" does not exist')
 def step_impl(context, filename):
     file_path = os.path.join(context.test_dir, filename)
@@ -78,11 +104,36 @@ def step_impl(context, filename):
 
 #             # # Check that pub repo we added
 #             # expected_content = {
-#             #     "dependencies": {"pub": {"type": "git", "url": "https://github.com/openvmp/partcad-index.git"}}
+#             #     "dependencies": {
+#             #         "pub": {
+#             #             "type": "git",
+#             #             "url": "https://github.com/openvmp/partcad-index.git",
+#             #             "revision": "main",
+#             #         }
+#             #     }
 #             # }
 #             # assert yaml_content == expected_content, "YAML content does not match expected private package structure"
 #         except yaml.YAMLError as exc:
 #             assert False, f"Error parsing YAML content: {exc}"
+
+
+@then('the file "{filename}" should hold the "{name}" run command')
+def step_impl(context, filename, name):
+    """The command `pc init` adds to the editor's "Run and Debug" view.
+
+    Parsed rather than grepped for, because what matters is that an editor can
+    read the file: it is written into whatever was there before, which is the
+    part that can go wrong.
+    """
+    file_path = os.path.join(context.test_dir, filename)
+    assert os.path.isfile(file_path), f"File '{filename}' was not created"
+
+    with open(file_path, "r", encoding="utf-8") as file:
+        configuration = json.load(file)
+
+    commands = {entry.get("name"): entry for entry in configuration.get("configurations", [])}
+    assert name in commands, f"'{name}' is not among {sorted(commands)}"
+    assert commands[name]["command"] == "pc render", f"'{name}' runs {commands[name].get('command')!r}"
 
 
 @then("the package should be marked as private")

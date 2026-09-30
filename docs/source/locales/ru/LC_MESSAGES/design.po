@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 21:23+0000\n"
+"POT-Creation-Date: 2026-08-03 15:22+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ru\n"
@@ -129,11 +129,11 @@ msgid ""
 "from each other. The information about compatibility between interfaces "
 "(mating) is optionally maintained as well."
 msgstr ""
-"Каждая деталь может реализовывать один или несколько интерфейсов, "
-"один или несколько экземпляров каждого интерфейса. Интерфейсы могут иерархически "
-"наследовать порты и другие свойства друг от друга. Информация о "
-"совместимости между интерфейсами (стыковке) при необходимости также "
-"сохраняется."
+"Каждая деталь может реализовывать один или несколько интерфейсов, один "
+"или несколько экземпляров каждого интерфейса. Интерфейсы могут "
+"иерархически наследовать порты и другие свойства друг от друга. "
+"Информация о совместимости между интерфейсами (стыковке) при "
+"необходимости также сохраняется."
 
 #: ../../source/design.rst:56
 msgid ""
@@ -181,27 +181,11 @@ msgstr "`OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_"
 msgid "`sdf <https://github.com/fogleman/sdf>`_"
 msgstr "`sdf <https://github.com/fogleman/sdf>`_"
 
-#: ../../source/design.rst:80
-msgid "AI-generated scripts"
-msgstr "Скрипты, сгенерированные ИИ"
-
-#: ../../source/design.rst:82
-msgid "OpenSCAD"
-msgstr "OpenSCAD"
-
-#: ../../source/design.rst:83
-msgid "CadQuery"
-msgstr "CadQuery"
-
-#: ../../source/design.rst:84
-msgid "build123d"
-msgstr "build123d"
-
-#: ../../source/design.rst:87
+#: ../../source/design.rst:81
 msgid "Assemblies"
 msgstr "Сборки"
 
-#: ../../source/design.rst:89
+#: ../../source/design.rst:83
 msgid ""
 "Assemblies are parametrized instructions on how to put parts and other "
 "assemblies together."
@@ -209,7 +193,7 @@ msgstr ""
 "Сборки — это параметризованные инструкции о том, как соединять детали и "
 "другие сборки вместе."
 
-#: ../../source/design.rst:92
+#: ../../source/design.rst:86
 msgid ""
 "PartCAD is expected to have an ever-growing list of ways to define "
 "assemblies using existing parts. However, at the moment, only one way is "
@@ -223,11 +207,11 @@ msgstr ""
 "YAML. Идея ASSY — создать простой способ перечисления деталей, задания их"
 " параметров и описания того, как детали соединяются."
 
-#: ../../source/design.rst:100
+#: ../../source/design.rst:94
 msgid "Scenes"
 msgstr "Сцены"
 
-#: ../../source/design.rst:102
+#: ../../source/design.rst:96
 msgid ""
 "PartCAD does not yet implement scenes. But the idea is to be able to "
 "reproduce the same features as worlds in Gazebo to the extent that "
@@ -239,11 +223,11 @@ msgstr ""
 "можно было экспортировать в Gazebo и симулировать в нём, но без "
 "использования XML при создании сцены."
 
-#: ../../source/design.rst:108
+#: ../../source/design.rst:102
 msgid "Monorepos"
 msgstr "Монорепозитории"
 
-#: ../../source/design.rst:110
+#: ../../source/design.rst:104
 msgid ""
 "When PartCAD is initialized, the current folder and its ``partcad.yaml`` "
 "become the `current` package, but not the `root` package. The root "
@@ -255,7 +239,7 @@ msgstr ""
 "путём обхода родительских каталогов до тех пор, пока в них обнаруживается"
 " очередной ``partcad.yaml``."
 
-#: ../../source/design.rst:115
+#: ../../source/design.rst:109
 msgid ""
 "This allows to run PartCAD tools from any sub-directory in a monorepo "
 "project while maintaining the same meaning of relative and absolute "
@@ -265,11 +249,11 @@ msgstr ""
 "проекта-монорепозитория, сохраняя при этом одинаковое значение "
 "относительных и абсолютных путей."
 
-#: ../../source/design.rst:119
+#: ../../source/design.rst:113
 msgid "Paths"
 msgstr "Пути"
 
-#: ../../source/design.rst:121
+#: ../../source/design.rst:115
 msgid ""
 "PartCAD uses package paths to identify packages and parts declared in "
 "them."
@@ -277,7 +261,7 @@ msgstr ""
 "PartCAD использует пути пакетов для идентификации пакетов и деталей, "
 "объявленных в них."
 
-#: ../../source/design.rst:123
+#: ../../source/design.rst:117
 msgid ""
 "The current package has the path ``\"\"`` or ``\".\"``. The root package "
 "has the path ``\"//\"``. For any package ``\"<package-path>\"``, each "
@@ -289,11 +273,11 @@ msgstr ""
 "подкаталог, содержащий ``partcad.yaml``, и каждая импортированная "
 "(``import``) зависимость становится ``\"<package-path>/<sub-package>\"``."
 
-#: ../../source/design.rst:130
+#: ../../source/design.rst:124
 msgid "Absolute vs relative"
 msgstr "Абсолютные и относительные"
 
-#: ../../source/design.rst:132
+#: ../../source/design.rst:126
 msgid ""
 "The absolute package path is the path from the root package to the "
 "package. If the path starts with ``\"//\"`` then it is an absolute path."
@@ -301,7 +285,7 @@ msgstr ""
 "Абсолютный путь пакета — это путь от корневого пакета до пакета. Если "
 "путь начинается с ``\"//\"``, то это абсолютный путь."
 
-#: ../../source/design.rst:135
+#: ../../source/design.rst:129
 msgid ""
 "The relative package path is the path from the current package to the "
 "package. If the path does not start with ``\"//\"`` then it is a relative"
@@ -313,11 +297,11 @@ msgstr ""
 "устранения неоднозначности относительного пути полезно добавить в начало "
 "``\"./\"``."
 
-#: ../../source/design.rst:140
+#: ../../source/design.rst:134
 msgid "Multiple packages"
 msgstr "Несколько пакетов"
 
-#: ../../source/design.rst:142
+#: ../../source/design.rst:136
 msgid ""
 "Some PartCAD commands and interfaces allow referencing multiple packages "
 "at once. ``\"<package-path>/\\*\"`` is a reference to all sub-packages in"
@@ -327,7 +311,7 @@ msgstr ""
 "пакетов сразу. ``\"<package-path>/\\*\"`` — это ссылка на все подпакеты в"
 " ``\"<package-path>\"``."
 
-#: ../../source/design.rst:145
+#: ../../source/design.rst:139
 msgid ""
 "``\"<package-path>/...\"`` is a reference to ``\"<package-path>\"`` and "
 "to all of its sub-packages."
@@ -335,11 +319,11 @@ msgstr ""
 "``\"<package-path>/...\"`` — это ссылка на ``\"<package-path>\"`` и на "
 "все его подпакеты."
 
-#: ../../source/design.rst:149
+#: ../../source/design.rst:143
 msgid "Object IDs"
 msgstr "Идентификаторы объектов"
 
-#: ../../source/design.rst:151
+#: ../../source/design.rst:145
 msgid ""
 "PartCAD packages contain objects of different types: *sketches*, *parts*,"
 " *assemblies*, *scenes*, *interfaces*, *providers* and so on. All of them"
@@ -349,11 +333,11 @@ msgstr ""
 "*сборки*, *сцены*, *интерфейсы*, *поставщики* и так далее. На все из них "
 "нужно уметь ссылаться."
 
-#: ../../source/design.rst:156
+#: ../../source/design.rst:150
 msgid "Single object"
 msgstr "Один объект"
 
-#: ../../source/design.rst:158
+#: ../../source/design.rst:152
 msgid ""
 "Each object has a unique name within the package (across all object "
 "types). The object can be globally identified using ``\"<package-path"
@@ -363,7 +347,7 @@ msgstr ""
 "объектов). Объект можно глобально идентифицировать с помощью "
 "``\"<package-path>:<object-name>\"``."
 
-#: ../../source/design.rst:161
+#: ../../source/design.rst:155
 msgid ""
 "An attempt to reference an object using the object-name alone is "
 "considered a reference to the object in the current package."
@@ -371,11 +355,11 @@ msgstr ""
 "Попытка сослаться на объект, используя только имя объекта, считается "
 "ссылкой на объект в текущем пакете."
 
-#: ../../source/design.rst:165
+#: ../../source/design.rst:159
 msgid "Multiple objects"
 msgstr "Несколько объектов"
 
-#: ../../source/design.rst:167
+#: ../../source/design.rst:161
 msgid ""
 "Some PartCAD commands and interfaces allow referencing multiple objects "
 "at once. ``\"<single-or-multiple-package-path>/:\\*\"`` is a reference to"
@@ -385,11 +369,11 @@ msgstr ""
 "объектов сразу. ``\"<single-or-multiple-package-path>/:\\*\"`` — это "
 "ссылка на все объекты в ``\"<single-or-multiple-package-path>\"``."
 
-#: ../../source/design.rst:173
+#: ../../source/design.rst:167
 msgid "Parametrized objects"
 msgstr "Параметризованные объекты"
 
-#: ../../source/design.rst:175
+#: ../../source/design.rst:169
 msgid ""
 "Some objects (such as *sketches*, *parts*, *assemblies*, *interfaces* and"
 " *providers*) may have parameters specified within the object ID to "
@@ -401,11 +385,11 @@ msgstr ""
 " чтобы идентифицировать экземпляр объекта с заданными параметрами: "
 "``\"<package-path>:<object-name>;param1=value1,param2=value2\"``."
 
-#: ../../source/design.rst:192
+#: ../../source/design.rst:186
 msgid "Objects in a cart"
 msgstr "Объекты в корзине"
 
-#: ../../source/design.rst:194
+#: ../../source/design.rst:188
 msgid ""
 "Whenever an object (a *part* or an *assembly*) is used for manufacturing "
 "or ordering from a store, the object ID may optionally contain the "
@@ -417,11 +401,11 @@ msgstr ""
 "количество: ``\"<package-path>:<object-"
 "name>;param1=value1,param2=value2#<quantity>\"``."
 
-#: ../../source/design.rst:207
+#: ../../source/design.rst:201
 msgid "The public repository"
 msgstr "Публичный репозиторий"
 
-#: ../../source/design.rst:209
+#: ../../source/design.rst:203
 msgid ""
 "The public PartCAD repository is created and maintained by the community "
 "based on the PartCAD standards and conventions. It is hosted on `GitHub "
@@ -431,7 +415,7 @@ msgstr ""
 "основе стандартов и соглашений PartCAD. Он размещён на `GitHub "
 "<https://github.com/partcad/partcad-index>`_."
 
-#: ../../source/design.rst:213
+#: ../../source/design.rst:207
 msgid ""
 "The top levels of the package hierarchy are expected to be maintained by "
 "the PartCAD community. Lower levels of the hierarchy are expected to be "
@@ -455,11 +439,11 @@ msgstr ""
 "обязуется поддерживать. Таким образом, у пользователей PartCAD есть "
 "выбор, какую модель использовать, исходя из их конкретных потребностей."
 
-#: ../../source/design.rst:226
+#: ../../source/design.rst:220
 msgid "Tools"
 msgstr "Инструменты"
 
-#: ../../source/design.rst:228
+#: ../../source/design.rst:222
 msgid ""
 "PartCAD tools can operate with public and private repositories for as "
 "long as they are maintained following the PartCAD standards and "
@@ -469,11 +453,11 @@ msgstr ""
 "репозиториями при условии, что те сопровождаются в соответствии со "
 "стандартами и соглашениями PartCAD."
 
-#: ../../source/design.rst:232
+#: ../../source/design.rst:226
 msgid "Command line tools"
 msgstr "Инструменты командной строки"
 
-#: ../../source/design.rst:234
+#: ../../source/design.rst:228
 msgid ""
 "PartCAD CLI tools get installed using the PyPI module ``partcad-cli``. "
 "The main tool is called ``pc``. The CLI tools are supposed to provide the"
@@ -484,23 +468,23 @@ msgstr ""
 "Предполагается, что инструменты CLI предоставляют полный набор "
 "возможностей PartCAD."
 
-#: ../../source/design.rst:239
+#: ../../source/design.rst:233
 msgid "Visual Studio Code extension"
 msgstr "Расширение для Visual Studio Code"
 
-#: ../../source/design.rst:241
+#: ../../source/design.rst:235
 msgid "The PartCAD extension for ``vscode`` is designed to be the primary tool."
 msgstr "Расширение PartCAD для ``vscode`` задумано как основной инструмент."
 
-#: ../../source/design.rst:246
+#: ../../source/design.rst:240
 msgid "Libraries and frameworks"
 msgstr "Библиотеки и фреймворки"
 
-#: ../../source/design.rst:249
+#: ../../source/design.rst:243
 msgid "Python"
 msgstr "Python"
 
-#: ../../source/design.rst:251
+#: ../../source/design.rst:245
 msgid ""
 "The `partcad` Python module is the first PartCAD library. Its development"
 " is prioritized due to the popularity and the value proposition of such "
@@ -510,11 +494,11 @@ msgstr ""
 "отдаётся приоритет из-за популярности и ценности таких "
 "Python-фреймворков, как CadQuery и build123d."
 
-#: ../../source/design.rst:256
+#: ../../source/design.rst:250
 msgid "Other languages"
 msgstr "Другие языки"
 
-#: ../../source/design.rst:258
+#: ../../source/design.rst:252
 msgid ""
 "PartCAD does not aim to stop at supporting Python. Native libraries in "
 "other languages are planned and all contributors wishing to join the "

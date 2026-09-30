@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+#
+# OpenVMP, 2023
+#
+# Author: Roman Kuzmenko
+# Created: 2023-08-19
+#
+# Licensed under Apache License, Version 2.0.
+#
+
+import asyncio
+import os
+import shutil
+import sys
+
+import pytest
+
+import partcad as pc
+from partcad import runtime as pc_runtime
+
+test_config_local = {
+    "name": "//primitive_local",
+    "type": "local",
+    "path": "examples/produce_part_cadquery_primitive",
+}
+
+test_config_git = {
+    "name": "//primitive_git",
+    "type": "git",
+    "url": "https://github.com/partcad/partcad",
+    "revision": "devel",
+    "relPath": "examples/produce_part_cadquery_primitive",
+}
+
+
+def test_part_get_step_1():
+    """Load a STEP part from a project by the part name"""
+    ctx = pc.Context("examples/produce_part_step")
+    repo1 = ctx.get_project(".")
+    assert repo1 is not None
+    bolt = repo1.get_part("bolt")
+    assert bolt is not None
+    wrapped = asyncio.run(bolt.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_get_step_2():
+    """Load a STEP part from the context by the project and part names"""
+    ctx = pc.Context("examples/produce_part_step")
+    bolt = ctx.get_part(":bolt")
+    assert bolt is not None
+
+    wrapped = asyncio.run(bolt.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_get_brep_1():
+    """Load a BREP part from a project by the part name"""
+    ctx = pc.Context("examples/produce_part_brep")
+    repo1 = ctx.get_project(".")
+    assert repo1 is not None
+    box = repo1.get_part("box")
+    assert box is not None
+    wrapped = asyncio.run(box.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_get_brep_2():
+    """Load a BREP part from the context by the project and part names"""
+    ctx = pc.Context("examples/produce_part_brep")
+    box = ctx.get_part(":box")
+    assert box is not None
+
+    wrapped = asyncio.run(box.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_get_stl():
+    """Load a STL part"""
+    ctx = pc.Context("examples/produce_part_stl")
+    part = ctx.get_part(":cube")
+    assert part is not None
+
+    wrapped = asyncio.run(part.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_get_3mf():
+    """Load a 3MF part"""
+    ctx = pc.Context("examples/produce_part_3mf")
+    part = ctx.get_part(":cube")
+    assert part is not None
+
+    wrapped = asyncio.run(part.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_get_obj_1():
+    """Load a OBJ part from a project by the part name"""
+    ctx = pc.Context("examples/produce_part_obj")
+    repo1 = ctx.get_project(".")
+    assert repo1 is not None
+    box = repo1.get_part("cube")
+    assert box is not None
+    wrapped = asyncio.run(box.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_get_obj_2():
+    """Load a OBJ part from the context by the project and part names"""
+    ctx = pc.Context("examples/produce_part_obj")
+    box = ctx.get_part(":cube")
+    assert box is not None
+
+    wrapped = asyncio.run(box.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_get_scad():
+    """Load an OpenSCAD part"""
+    scad_path = shutil.which("openscad")
+    if scad_path is not None:
+        ctx = pc.Context("examples/produce_part_openscad")
+        part = ctx.get_part(":cube")
+        assert part is not None
+
+        wrapped = asyncio.run(part.get_wrapped(ctx))
+        assert wrapped is not None
+    else:
+        pytest.skip("No OpenSCAD installed")
+
+
+def test_part_get_3():
+    """Instantiate a project by a local import config and load a part"""
+    ctx = pc.Context()  # Empty config
+    _ = pc.ProjectFactoryLocal(ctx, None, test_config_local)
+    cylinder = ctx.get_part("//primitive_local:cylinder")
+    assert cylinder is not None
+    wrapped = asyncio.run(cylinder.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+# Note: The below test fails if there are braking changes in the way parts are
+#       declared. Keep it this way so that the braking changes are conciously
+#       force pushed.
+def test_part_get_4():
+    """Instantiate a project by a git import config and load a part"""
+    ctx = pc.Context()  # Empty config
+    factory = pc.ProjectFactoryGit(ctx, None, test_config_git)
+    assert factory.project.path.endswith(test_config_git["relPath"])
+    cube = factory.project.get_part("cube")
+    assert cube is not None
+
+    wrapped = asyncio.run(cube.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_lazy_loading():
+    """Test for lazy loading of geometry data"""
+    ctx = pc.Context()  # Empty config
+    _ = pc.ProjectFactoryLocal(ctx, None, test_config_local)
+    cylinder = ctx.get_part("//primitive_local:cylinder")
+    assert cylinder._wrapped is None
+
+    wrapped = asyncio.run(cylinder.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_aliases():
+    """Test for part aliases"""
+    ctx = pc.Context()  # Empty config
+    _ = pc.ProjectFactoryLocal(ctx, None, test_config_local)
+    # "box" is an alias for "cube"
+    box = ctx.get_part("//primitive_local:box")
+    assert box is not None
+    assert box._wrapped is None
+
+    wrapped = asyncio.run(box.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_example_cadquery_primitive():
+    """Instantiate all parts from the example: part_cadquery_primitive"""
+    ctx = pc.init("examples")
+    cube = ctx.get_part("//produce_part_cadquery_primitive:cube")
+    assert cube is not None
+    cylinder = ctx.get_part("//produce_part_cadquery_primitive:cylinder")
+    assert cylinder is not None
+
+    wrapped = asyncio.run(cylinder.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_example_cadquery_logo():
+    """Instantiate all parts from the example: part_cadquery_logo"""
+    ctx = pc.init("examples")
+    bone = ctx.get_part("//produce_part_cadquery_logo:bone")
+    assert bone is not None
+    head_half = ctx.get_part("//produce_part_cadquery_logo:head_half")
+    assert head_half is not None
+
+    wrapped = asyncio.run(head_half.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_example_sdf():
+    """Instantiate all parts from the example: produce_part_sdf"""
+    ctx = pc.init("examples")
+    box = ctx.get_part("//produce_part_sdf:box")
+    assert box is not None
+    gear = ctx.get_part("//produce_part_sdf:gear")
+    assert gear is not None
+
+    wrapped = asyncio.run(gear.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_example_build123d_primitive():
+    """Instantiate all parts from the example: part_build123d_primitive"""
+    ctx = pc.init("examples")
+    cube = ctx.get_part("//produce_part_build123d_primitive:cube")
+    assert cube is not None
+
+    wrapped = ctx.get_part_shape("//produce_part_build123d_primitive:cube")
+    assert wrapped is not None
+
+
+def test_part_example_kicad():
+    """Instantiate all parts from the example: part_kicad"""
+    # Skip this test on macOS
+    if os.environ.get("ACTIONS_RUNTIME_TOKEN") is not None:
+        # This is a GitHub Actions environment
+        if sys.platform == "darwin":
+            pytest.skip("Docker CE is missing on macOS in GitHub Actions")
+        if sys.platform == "win32":
+            pytest.skip("Docker does not support nested virtualization on Windows in GitHub Actions")
+    ctx = pc.init("examples")
+    # The example declares 'unless: [arm64]', because KiCad publishes no arm64
+    # container image for the sandbox to run 'kicad-cli' in. Asserting on the
+    # package rather than on the architecture is what keeps this test and the
+    # example's own declaration from drifting apart.
+    kicad_package = ctx.get_project("//produce_part_kicad")
+    if kicad_package.skipped:
+        pytest.skip("//produce_part_kicad is excluded here: tag '%s'" % kicad_package.skipped_by)
+    # No container runtime here means there is nothing to run 'kicad-cli' in, and
+    # this test is about the KiCad part factory rather than about the machine it
+    # runs on -- so it is skipped, whether Docker was turned off deliberately
+    # ('PC_USE_DOCKER=false', or 'useDocker: false' in the user configuration) or
+    # is simply not answering.
+    #
+    # **Only** that. Everything past this point is this test's to fail on: an
+    # image that cannot be pulled, a 'kicad-cli' that errors, a part that comes
+    # back empty. Those are the KiCad path being broken, and a skip there would
+    # be a green run with the subject quietly missing from it. Note the tags
+    # checked above cannot answer the question either way: they report whether a
+    # container was *asked for*, not whether one can be started (see
+    # 'partcad.tags').
+    #
+    # Asked of 'runtime.docker_enabled', which is the same call the factory
+    # itself makes a moment later and the same one 'pc healthcheck' reports on.
+    # Asking it here in another spelling -- 'from_env().ping()', as this used to
+    # -- is how a test comes to skip on a machine the factory would have run on,
+    # or run on one it would not: a daemon that answers a ping but runs Windows
+    # containers is not a daemon that can run 'kicad-cli' in a Linux image.
+    #
+    # It checks 'useDocker' first and only then pings, which is what keeps a
+    # host whose DOCKER_HOST points at something unreachable from sitting out
+    # the SDK's sixty-second API timeout to reach a skip that was already
+    # decided.
+    if not pc_runtime.docker_enabled():
+        pytest.skip("No container runtime to run 'kicad-cli' in (Docker is off here, or none is answering)")
+    nano = ctx.get_part("//produce_part_kicad:Arduino_Nano")
+    assert nano is not None
+
+    wrapped = ctx.get_part_shape("//produce_part_kicad:Arduino_Nano")
+    assert wrapped is not None

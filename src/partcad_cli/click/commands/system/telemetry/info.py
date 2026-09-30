@@ -1,0 +1,28 @@
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
+
+import os
+
+import rich_click as click
+
+import partcad as pc
+
+
+@click.command(help="Get telemetry information")
+@click.pass_obj
+def cli(cli_ctx) -> None:
+    with pc.telemetry.set_context(cli_ctx.otel_context):
+        with pc.logging.Process("SysTelInfo", "global"):
+            id_path = pc.user_config.get_generated_id_path()
+            if os.path.exists(id_path):
+                with open(id_path, "r") as file:
+                    id_value = file.read()
+                    pc.logging.info(f"Telemetry ID: '{id_value}'")
+            else:
+                pc.logging.info("Telemetry ID: None")
+        pc.logging.info(f"Telemetry type: '{pc.user_config.telemetry_config.type}'")
+        pc.logging.info(f"Telemetry detail: '{pc.user_config.telemetry_config.detail}'")
+        pc.logging.info(f"Telemetry env: '{pc.user_config.telemetry_config.env}'")

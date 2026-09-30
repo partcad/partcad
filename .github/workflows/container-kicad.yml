@@ -1,0 +1,139 @@
+# The KiCad sandbox image, built and published by a job both test workflows wait
+# for.
+#
+# It is a workflow of its own because two workflows need the image and "needs:"
+# does not reach across one. "test.yml" always built it; "test-dev.yml" runs the
+# same unit tests inside the dev container, and
+# "tests/partcad/unit/test_part.py::test_part_example_kicad" there starts
+# "ghcr.io/partcad/partcad-container-kicad:<release>" -- the release PartCAD
+# itself reports, see "part_factory_kicad.get_runtime". On a version bump that
+# tag does not exist anywhere yet: the run that bumps the version is the run
+# that first creates it. So the dev container's "Run: pytest" raced the other
+# workflow's build and lost, on every version bump, with
+# 'APIError: ... ("manifest unknown")' -- a test written to fail when the KiCad
+# path is broken failing instead because an image had not been pushed yet.
+#
+# The window is far wider than it looks, and that is the part worth knowing:
+# "devcontainers/ci" builds in its step and **pushes in its post-job step**, so
+# the tag reaches the registry when the whole job ends, not when the build
+# finishes. Inside the old "build-containers" that put twenty-five minutes
+# between the two -- "Build Container for Kicad" was done at 22:37:25 on
+# 0.8.70 and the push ran at 23:03:12, the Python sandbox images having been
+# built in between -- and the dev container's pytest reached the KiCad test at
+# 23:02:30, ninety seconds early. Waiting on the *job* is therefore the only
+# thing that helps, which is exactly what "needs:" waits for; waiting on the
+# step would not have. It is also why this job builds nothing else: alone, its
+# post step pushes a minute after its build rather than half an hour after.
+#
+# A reusable workflow is what gives each caller a real "needs:" edge on the one
+# build, the way "vsix.yml" gives "build.yml" and "deploy.yml" one .vsix. The
+# alternative -- each workflow building the image for itself -- is the same
+# recipe written twice, and two answers to "which image is this release's".
+name: Container (KiCad)
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: >-
+          The tag to build under, and to publish under where "push" says so.
+          The release on an ordinary run; "<release>-<branch>-<digest>-<commit>" on one that
+          changes what the image contains. The caller decides -- see "Which
+          images this run uses" in "test.yml" -- because a called workflow
+          inherits none of its caller's "env" and cannot read the pull request
+          markers and changed paths that answer the question.
+        required: true
+        type: string
+      push:
+        description: >-
+          Whether this run may publish the tag. The build happens either way,
+          because the build is the test.
+        required: true
+        type: boolean
+      release:
+        description: >-
+          The bare release, which is what the layer cache is taken from even
+          when "tag" is a branch's own: on the run that matters most, the first
+          build of a branch tag, that tag does not exist yet.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CONTAINER_REGISTRY: ghcr.io
+
+jobs:
+  kicad:
+    name: "Build Container for Kicad"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    # No concurrency group, which is a deliberate absence rather than an
+    # omission. There was one, to build the image once per commit rather than
+    # once per caller -- and that is a trade this cannot make, because of how
+    # GitHub queues a group: one job runs, a second becomes pending, and a
+    # *third* arriving cancels the pending one. "cancel-in-progress: false"
+    # does not protect it; it only protects the one that is running.
+    #
+    # A third arrival is not exotic. Two callers plus a re-run of either is
+    # enough, and so is a manual dispatch beside a push -- and the cancelled
+    # call would take "Run: pytest", "Run: behave" and "Run: pc" with it,
+    # because a job whose dependency is cancelled is skipped. A suite that
+    # stops running is the one kind of CI failure nothing reports, which is the
+    # rule the gates in "test.yml" are already written around.
+    #
+    # Keying the group per caller narrows that, and keying it per *invocation*
+    # -- "github.run_id" -- leaves a group of one, which is a block that does
+    # nothing. So there is none. Every call builds, and two calls for one
+    # commit build the same image: same tag from the caller, same Dockerfile,
+    # same layers off "cacheFrom". That costs a cache-hit build of about a
+    # minute and cannot displace anything.
+    #
+    # What the old block's "cancel-in-progress: false" was protecting -- a
+    # cancelled build being precisely the missing image everything waiting on
+    # this job is waiting for -- is now simply not reachable: with no group,
+    # nothing here cancels anything. The caller's own workflow-level group
+    # still supersedes a whole run, which is correct, and gives version bumps a
+    # group of their own so that the one run that publishes a release's images
+    # is never the one cancelled.
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v7
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The tag the caller decided on, which is the tag this run's readers
+      # resolve: "part_factory_kicad.get_runtime" and
+      # "partcad_client.external.KICAD" both write '...-container-kicad:' and
+      # then 'container_image.image_tag(__version__)', which is the release
+      # unless PC_CONTAINER_IMAGE_TAG redirects it -- and the caller exports
+      # that variable with this same value. So a tag built here is a tag the
+      # tests in this run look for.
+      #
+      # The cache comes from the release's image rather than from this tag: on
+      # the run that matters most -- the first build of a branch tag -- the tag
+      # itself does not exist yet, and the release's layers are what this is
+      # nearly always a small change away from.
+      #
+      # Published only where publishing is this run's to do. The build happens
+      # either way, because the build is the test; see "Which images this run
+      # uses" in "test.yml" for which runs publish what, and why a branch tag
+      # is safe to publish from an unreviewed branch when the release tag is
+      # not.
+      - name: Build Container for Kicad
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad:${{ inputs.release }}"
+          imageName: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad
+          imageTag: ${{ inputs.tag }}
+          configFile: tools/containers/devcontainer-kicad.json
+          push: ${{ inputs.push && 'always' || 'never' }}

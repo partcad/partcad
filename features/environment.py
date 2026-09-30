@@ -3,9 +3,15 @@ import os
 import socket
 import uuid
 
-from allure_behave.hooks import (  # noqa: F401  # used by the commented-out reporting hook below
-    allure_report,
-)
+# Imported for the side effect of its module body: it snapshots the PYTHON*
+# variables this run was started with, and behave loads this file before any
+# step definition -- which is the last moment at which that snapshot is still
+# what the harness was given. See the module.
+import features.pristine_env  # noqa: F401
+
+from allure_behave.hooks import allure_report
+
+
 from behave.runner import Context
 
 from features.seed import (

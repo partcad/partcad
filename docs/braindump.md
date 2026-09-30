@@ -184,7 +184,6 @@ You will be able to get hints where to narrow the digging:
 ```
 ⬢ [Docker] ❯ partcad version | ts -i %.S | grep -v -e '00.'
 07.381081 /workspaces/partcad/partcad/src/partcad/geom.py:18
-01.349555 /workspaces/partcad/partcad/src/partcad/ai_ollama.py:21
 03.799578 /workspaces/partcad/partcad/src/partcad/shape.py:14
 04.304258 /workspaces/partcad/partcad/src/partcad/shape.py:17
 03:10:51.860 INFO PartCAD version: 0.7.16

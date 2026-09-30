@@ -1,21 +1,233 @@
+#
+# PartCAD ships one Python distribution: `partcad`.
+#
+# It used to ship five -- `partcad`, `partcad-cli`, `partcad-utils`,
+# `partcad-client` and `partcad-service-json-rpc` -- each with its own
+# pyproject.toml, its own requirements.txt, and `==` pins on the others. Every
+# packaging problem this repository had came out of that: which distribution
+# owns an import name, which pin went stale, which of five names is registered
+# on PyPI. One distribution owning all six packages makes the questions stop
+# existing.
+#
+# The boundaries the packaging used to express are still real; they are just
+# enforced where they always actually were:
+#
+#   * A remote daemon is never told to upgrade itself. That is a *protocol*
+#     rule -- there is no upgrade or self-update method in the JSON-RPC surface,
+#     and there must not be one. `src/partcad_service_json_rpc/AGENTS.md` says
+#     so beside the method table. Updating a *local* daemon is unaffected:
+#     `pc upgrade` stops them, replaces the installation and restarts, which has
+#     always been a client acting on its own machine.
+#   * A daemon does not discover or stop other daemons. Enforced by
+#     `partcad_service_json_rpc` not importing `partcad_client`.
+#
+# `partcad-cli` is still published, as a shim: no modules, no entry points, one
+# dependency on this. See `dev-tools/shim/pyproject.toml`.
+#
+# This file is also the development environment: Poetry reads the `[project]`
+# metadata above and the `[tool.poetry.group.*]` dependency groups below, so
+# `poetry install` from the repository root installs PartCAD editable plus
+# everything the tests, the docs and the CAD-backed suites need.
+#
+
+[project]
+name = "partcad"
+version = "0.8.131"
+description = "Package manager for CAD models and a modelling framework"
+readme = "README.md"
+keywords = ["cadquery", "build123d", "sdf", "cad", "design", "openscad", "step", "stl"]
+requires-python = ">=3.10,<3.15"
+# PEP 639: an SPDX expression, with the file named separately. The older
+# `license = {file = "LICENSE.txt"}` inlined the whole Apache text into the
+# `License:` metadata field, which is what PyPI then shows in place of a
+# license name.
+license = "Apache-2.0"
+license-files = ["LICENSE.txt"]
+authors = [
+  {name = "PartCAD", email = "support@partcad.org" }
+]
+maintainers = [
+  {name = "PartCAD", email = "support@partcad.org" }
+]
+dynamic = ["dependencies", "optional-dependencies"]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+]
+
+[project.scripts]
+pc = "partcad_cli.click.command:cli"
+partcad = "partcad_cli.click.command:cli"
+partcad-json-rpc = "partcad_service_json_rpc.__main__:main"
+# A second service from the same package, and a separate executable because it
+# is a separate thing to run: this one holds no PartCAD context and serves
+# containers to clients that are not on this machine. See
+# "src/partcad_service_json_rpc/remote_docker_service.py".
+partcad-service-remote-docker = "partcad_service_json_rpc.remote_docker_service:main"
+
+[project.urls]
+Homepage = "https://github.com/partcad/partcad"
+Issues = "https://github.com/partcad/partcad/issues"
+
+# `setuptools.build_meta`, with one precondition in front of it: that the AI
+# agent skills the wheel ships -- symlinks from `src/partcad/ai_agents` into
+# `ai-agents/` -- are real files this build can package. A checkout that dropped
+# those symlinks (Git for Windows without `core.symlinks`, or a GitHub source
+# zip, on any platform) otherwise builds a wheel with no skills in it that
+# installs, imports and runs perfectly. See `dev-tools/build-backend/`.
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "partcad_build_backend"
+backend-path = ["dev-tools/build-backend"]
+
+# Explicit rather than left to auto-discovery: this distribution ships six
+# top-level packages, and that is not something to leave implicit.
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.dynamic.optional-dependencies]
+# Optional linting dependency. `ruff` ships a native executable that is resolved
+# and launched lazily, so it is only required when `pc lint` actually runs.
+lint = {file = ["requirements-lint.txt"]}
+# The off-machine cache tier whose client is heavy enough to leave out:
+# 'cacheS3' (object storage) pulls aioboto3, and through it a botocore that pins
+# tightly and weighs 13 MiB. 'cacheRemote' (memcached) used to be an extra
+# beside it and is now an ordinary dependency -- see requirements.txt.
+aws = {file = ["requirements-aws.txt"]}
+
+[tool.setuptools.package-data]
+# The '.mjs' files are the JavaScript wrappers, read at runtime and handed to a
+# sandboxed Node.js exactly like the '.py' ones are handed to a sandboxed Python.
+"partcad.wrappers" = ["*.py", "*.mjs"]
+# The packages PartCAD ships inside itself and reaches at '//builtin' (see
+# src/partcad/builtin/). Their 'partcad.yaml' is read and their scripts are
+# executed by path in a sandbox, so both have to land in the wheel as files.
+"partcad.builtin" = ["*.yaml"]
+"partcad.builtin.export" = ["*.py", "*.yaml"]
+"partcad.builtin.render" = ["*.py", "*.yaml"]
+"partcad.builtin.import" = ["*.py", "*.yaml"]
+"partcad.builtin.cam" = ["*.py", "*.yaml"]
+# No scripts: the applications `pc open` launches are declarations and nothing
+# else, read by `partcad_client.external` straight out of the wheel.
+"partcad.builtin.open" = ["*.yaml"]
+# The one built-in package that declares an object rather than an
+# implementation: the scene a `simulate:` places its subject in. Its `.assy` is
+# read as a Jinja2 template, so it ships as a data file like the rest.
+"partcad.builtin.scene" = ["*.assy", "*.yaml"]
+"partcad.template" = ["*.yaml"]
+# The AI agent skills and the Claude plugin manifest `pc init` installs into a
+# repository (see `src/partcad/ai_agents/__init__.py`). They are data rather
+# than code -- Markdown and JSON, read and copied -- and they have to be in the
+# wheel, because the wheel is what a user of PartCAD has.
+#
+# They are also the plugin Claude Code's marketplace publishes, and they stay at
+# the top of the repository where a visitor finds them: `ai-agents/`. What is
+# under `src/partcad/ai_agents/` is two symlinks into it -- `skills` and
+# `plugin.json` -- so there is one copy of each file and the wheel and the
+# plugin cannot ship different skills.
+#
+# The patterns below are matched with `glob`, which resolves a symlink that is a
+# path *component*: `skills/` is followed, and the directories inside it are
+# real, so `**` recurses through them normally. A `SKILL.md` and anything a
+# skill carries beside it are both picked up. `tests/partcad_cli/unit/
+# test_ai_agent_skills.py` checks that every file in the library matches one of
+# these, since a file that does not is simply absent from the install.
+"partcad.ai_agents" = ["skills/**/*", "plugin.json"]
+# The schemas `partcad_utils.assy_lint` validates against: the ASSY one and the
+# `partcad.yaml` one. Both live in `partcad_utils` because both ends check both
+# kinds of file -- the daemon over a package, every client over the one file
+# somebody is editing.
+"partcad_utils.schema" = ["**/*.json"]
+
 [tool.pytest.ini_options]
-# partcad/tests/unit carries helper modules that tests import by name (see
+# tests/partcad/unit carries helper modules that tests import by name (see
 # git_http_server.py). With --import-mode importlib pytest does not put the
 # test's own directory on the path, so it has to be named here.
-pythonpath = ["partcad/src", "partcad/tests/unit"]
+pythonpath = [
+    "src",
+    "tests/partcad/unit",
+    # The FreeCAD addon is not a package that gets installed: FreeCAD loads it
+    # from its own directory, which is what it is importable from here too.
+    "cad/freecad",
+    # Same reason as `tests/partcad/unit` above: the IDE build-tooling tests do
+    # `from conftest import REPO_ROOT` (and `import brand`, from the `tools`
+    # directory their conftest adds), which `--import-mode importlib` does not
+    # put on the path on its own. Without this the whole-repo run in
+    # "test-dev.yml" fails to collect them -- and, because that job's `runCmd`
+    # ends in `echo DONE`, reports success anyway while having run nothing.
+    "ide/standalone/tests",
+]
+# The `--cov` list below names every package the one wheel ships, for the same
+# reason `dev-tools/coverage.rc` writes its `include` list out by hand: a name
+# that is missing is a package coverage never traces. `--cov=partcad` alone
+# traced exactly one of the six, and that is upstream of the report --
+# `coverage.rc` does list all of them, but an `include` filter cannot report a
+# file that was never measured. So every unit test of the other five counted for
+# nothing, and their only coverage came from behave driving the installed `pc`.
+# That is end-to-end, so it walks success paths: the error branches those suites
+# test read as untested, and a pull request adding one was told its patch was
+# uncovered.
+#
+# `--cov-config` is not decoration: without it pytest-cov finds no configuration
+# at all -- there is no `.coveragerc` and no `[tool.coverage]` table here -- and
+# so measures with coverage.py's defaults, which means `branch = False`. Every
+# other suite passes `dev-tools/coverage.rc` to `coverage run` and so records
+# branch data, and `coverage combine` flatly refuses to mix the two: "Can't
+# combine statement coverage data with branch data". That is not a warning, it
+# is exit 1, and it took down the whole merged report in the "Coverage" job the
+# first time that job ever ran with real data from every suite at once. One
+# config file for every producer is the only arrangement that cannot drift back
+# into it.
+#
+# One consequence to know: `--cov=` sets coverage.py's `source`, and `source`
+# beats the `include` list in that file (coverage says so and then ignores
+# `include` -- see `disable_warnings` there). So this list, not `include`, is
+# what the pytest job measures. That is already how it behaved; naming the
+# config only changes `branch`.
+#
+# The seventh entry is a path rather than a name, and it has to be: `wrappers/`
+# is deliberately not a package -- the sandbox puts the directory on `sys.path`
+# and imports its modules top-level, which is how the tests reach them too. A
+# `source` naming the package `partcad` resolves its files by walking
+# `__init__.py`, and that chain stops at a directory that has none, so every
+# wrapper read as outside the source tree and was not traced at all: absent from
+# the report rather than nought in it. No other suite makes up for it, because a
+# wrapper does its real work in the sandbox's *own* interpreter, which nothing
+# runs under `coverage` -- so behave driving `pc` end to end records the core
+# calling out and nothing of what ran. A wrapper's unit tests are the only
+# measurement of it there can be, and they counted for nothing. That is the same
+# defect as the five missing package names above, one level down.
+#
+# Keep the list here, above the string -- `addopts` is a TOML string, so a '#'
+# line inside it is passed to pytest as an argument rather than ignored.
 addopts = """
     --import-mode importlib
     --alluredir=allure-results
+    --cov-config=dev-tools/coverage.rc
     --cov-report=html:pytest-results/htmlcov
     --cov-report=xml:pytest-results/coverage.xml
     --cov=partcad
+    --cov=partcad_cli
+    --cov=partcad_client
+    --cov=partcad_ide_client
+    --cov=partcad_service_json_rpc
+    --cov=partcad_utils
+    --cov=src/partcad/wrappers
     --durations-min=1.0
     --durations=0
     --html=pytest-results/report.html
     --junitxml=pytest-results/junit.xml
     --self-contained-html
     --ignore-glob="openscad*"
-    --ignore-glob="partcad-ide-vscode/bundled/libs/*"
     """
 #    --log-cli-level=DEBUG # Add this flag to see debug logs during test runs
 filterwarnings = [
@@ -33,69 +245,226 @@ markers = [
 # format = "allure_behave.formatter:AllureFormatter"
 # outfile = "allure-results"
 
+# What the three linters check, stated once here rather than three times on
+# three command lines: `isort`, `black` and `flake8` are all invoked on `.`, by
+# the `pre-commit` hooks and by the `Lint (...)` jobs in
+# ".github/workflows/test.yml" alike, so this file is the only place the scope
+# is written down and a hook and a job cannot come to disagree about it.
+#
+# The scope is "PartCAD's own Python": "src/", "tests/", "cad/", "dev-tools/",
+# "ide/", "tools/", "docs/" and the root "conftest.py". Two trees are held out,
+# and not because they are unimportant:
+#
+#   * "examples/" is CAD part scripts, written the way a *user* writes one --
+#     `from build123d import *`, and a `show_object` the runner injects at
+#     execution time. flake8 reports 102 findings there and essentially all of
+#     them are that idiom (F403/F405/F401/F821), which is why `[tool.ruff.lint]`
+#     below already waives exactly those three for `pc lint` of a part. Sorting
+#     their imports carries the wrappers' risk too: these are sandbox scripts,
+#     and their rendered output is checked in.
+#   * "features/" is `behave` step definitions, where every module defines
+#     several functions called `step_impl` and the decorator is what
+#     distinguishes them. 29 of its 56 findings are F811 "redefinition of
+#     unused 'step_impl'" -- the framework's idiom, reported as a defect.
+#
+# Covering either means deciding which codes to waive across a whole directory,
+# which is a policy question and a change of its own -- not something to settle
+# inside a change whose point is that the gate agrees with the tree.
+#
+# `force-exclude` rather than `extend-exclude`: black applies `extend-exclude`
+# only to files it *discovers* by walking, and `pre-commit` hands it the staged
+# files by name. `force-exclude` is the one black also applies to those. This is
+# the same trap as isort's `--filter-files` below.
 [tool.black]
 line-length = 120
 target-version = ['py310']
+force-exclude = """
+^/(examples|features)/
+"""
 
+# Read only because `Flake8-pyproject` is installed: flake8 itself has never
+# supported `pyproject.toml`. Without that plugin this whole table was inert and
+# flake8 fell back to its built-in defaults -- which is why it used to report
+# E501 at 79 columns on a repository that formats at 120, and why nobody could
+# run it usefully.
 [tool.flake8]
-exclude = ".venv"
-extend-ignore = "E203"
+# `extend-exclude` rather than `exclude`, which *replaces* flake8's built-in
+# list (".git", "__pycache__", ".tox", ".eggs", ...) instead of adding to it.
+# ".venv" has to be named either way -- it is not in that built-in list, and
+# `poetry.toml` sets `in-project = true`, so the virtualenv is inside the tree
+# a `flake8 .` walks.
+#
+# Note that unlike black's `force-exclude` and isort's `--filter-files`, this
+# governs *discovery* only: flake8 has no force-exclude, and checks any file
+# handed to it by name regardless. That is why the `flake8` hook in
+# "dev-tools/pre-commit-config.yaml" carries an `exclude:` of its own -- the
+# one place the two trees above are named twice, and the comment there says so.
+# "node_modules" is here for a third reason again: it holds somebody else's
+# code, and a dependency of the VS Code extension vendors a Python file of its
+# own ("flatted"). Nothing checks it out by default, so this only bites after an
+# `npm ci` in "ide/vscode" -- and then `flake8 .` reports thirteen findings in a
+# file this repository does not own.
+extend-exclude = ".venv,examples,features,node_modules"
 max-line-length = 120
 
-[tool.pylint."messages control"]
-ignore = ["setup.py", "__init__.py"]
-disable = "all"
-enable = [
-  "empty-docstring",
-  "missing-class-docstring",
-  "missing-function-docstring",
-  "missing-module-docstring"
+# E203 is the usual black-compatibility waiver (black puts a space before the
+# `:` in a slice; pycodestyle disagrees, and black wins).
+#
+# E501 is waived because *black* owns line length here, at the same 120 stated
+# above. What is left over after black has run is the handful of long string
+# literals black deliberately will not split, so flake8's copy of the rule only
+# ever disagrees with the formatter that already ran.
+#
+# E722 and E731 are deferred rather than endorsed: a bare `except:` and a
+# `name = lambda ...` each need a per-site judgement (what should be caught,
+# whether the alias wants to become a `def`), and neither is a correctness
+# question. Turning either on is its own change.
+extend-ignore = "E203,E501,E722,E731"
+
+# The files where a finding is the idiom rather than a defect. The first two
+# entries are the same paths `[tool.isort]` skips below, for the same reason:
+# these scripts run inside a CAD sandbox, add their own directory to `sys.path`
+# and then import their neighbours by bare name, so a late import (E402) and an
+# import that only exists for its side effect (F401) are the design.
+#
+# The patterns are repository-relative because that is how CI and the hook
+# invoke flake8 (`flake8 src tests` from the root), and flake8 fnmatches them
+# against the path it was handed. fnmatch's `*` spans `/`, so the two
+# directory entries below also cover the files nested one level deeper.
+per-file-ignores = [
+  "src/partcad/wrappers/*:E402,F401,F403,F405,F841,E721",
+  "src/partcad/builtin/*:E402,F401,F403,F405",
+  # Pins expat, sanitises the environment and aliases `partcad_utils.*` in, each
+  # before the thing that needs it, then re-exports the public API.
+  "src/partcad/__init__.py:E402,F401,F403,F405",
+  # `import *` is how these compose their namespace.
+  "src/partcad/context.py:F403,F405",
+  "src/partcad/plugin_provider.py:F403,F405",
+  "src/partcad/plugin_factory_provider_manufacturer.py:F403,F405",
+  "src/partcad/plugin_factory_provider_store.py:F403,F405",
+  "src/partcad/plugin_request_provider_quote.py:F403,F405",
+  # Import after a `sys.path` mutation, like the wrappers.
+  "src/partcad/shape.py:E402",
+  "src/partcad/healthcheck/tests.py:E402",
+  "tests/partcad_service_json_rpc/test_ansi_rendering.py:E402",
+  # A CQGI part script: the runner injects `show_object` at execution time.
+  "tests/partcad/unit/data/*:F821",
 ]
 
 [tool.isort]
 profile = "black"
-known_first_party = ["partcad"]
+# `profile = "black"` brings black's *default* line length, 88, and isort does
+# not read `[tool.black]`. Left at 88 it explodes import lines that black is
+# happy to leave on one -- black then keeps them exploded, because isort writes
+# the trailing comma black treats as "keep this split". The two tools converge,
+# but on a shape neither config asked for, so state the same 120 twice.
+line_length = 120
+# All six packages, and not just `partcad`. The other five resolve as
+# first-party today only because isort auto-detects `src/` into `src_paths`,
+# which is a property of where it was invoked rather than of this config: run
+# from elsewhere, or with the wheel installed non-editable, they land in
+# third-party and the grouping silently changes. Naming them says it outright.
+known_first_party = [
+  "partcad",
+  "partcad_cli",
+  "partcad_client",
+  "partcad_ide_client",
+  "partcad_service_json_rpc",
+  "partcad_utils",
+]
 
-[tools.pyright]
+# Where the import order is what the dynamic loader needs rather than what
+# reads tidily, so sorting it is a bug rather than a tidy-up:
+#
+#   * `src/partcad/wrappers/` and `src/partcad/builtin/` are the scripts that
+#     run inside a CAD sandbox. They add their own directory to `sys.path` and
+#     then import their neighbours by bare name, and several of them import
+#     `pyexpat` (or a module that does) before anything that can pull OCP in:
+#     VTK, which the OCP build links against, bundles an older expat under the
+#     same `XML_*` names, and whichever loads first wins for the process. Sorted
+#     alphabetically, `build123d` lands ahead of the `wrapper_common` that was
+#     pinning expat for it, and the next `xml.dom` use dies with "undefined
+#     symbol: XML_SetReparseDeferralEnabled".
+#   * `src/partcad/__init__.py` sanitises the environment, pins expat, and
+#     aliases `partcad_utils.*` into this namespace -- each step before the one
+#     that depends on it, and the two `from . import` lines at the end are there
+#     for the attribute binding their comments describe.
+#
+# None of that is visible to pytest: a wrapper is executed in a sandbox, so a
+# wrong order here is a render failing on a machine that has VTK, long after the
+# commit that sorted it. The comments in those files say the same thing, but a
+# comment does not stop `isort .`.
+extend_skip = ["src/partcad/__init__.py"]
+# The last two are the held-out trees the comment above `[tool.black]`
+# explains; the first two are the sandbox scripts this comment is about.
+extend_skip_glob = [
+  "src/partcad/wrappers/*",
+  "src/partcad/builtin/*",
+  "examples/*",
+  "features/*",
+]
+
+# Read by Pylance, which `.devcontainer/devcontainer.json` recommends, and by
+# `pyright` if anyone runs it. The table was spelled `[tools.pyright]` until
+# 2026-09 -- one letter, and the wrong one: `tools` is not a table any tool
+# looks in, so these two settings had never applied to anything. Nothing here
+# gates: there is no type checker in any dependency group, so this is editor
+# diagnostics only, and adopting one is a decision of its own.
+[tool.pyright]
 reportMissingTypeArgument = true  # Report generic classes used without type arguments
 strictListInference = true  # Use union types when inferring types of lists elements, instead of Any
 
 # export POETRY_MULTIPROJECT_CHECK_DIR="/tmp/.check_partcad-dev"
 # export POETRY_MULTIPROJECT_PREPARE_DIR="/tmp/.prepare_partcad-dev"
 
-[tool.poetry.plugins."poetry-multiproject-plugin"]
-cache-dir = "/tmp/.prepare_partcad-dev"
+# NOT this repository's own linting. `ruff` is a runtime dependency of PartCAD
+# (the `partcad` group), and `partcad.lint.python` shells out to it to lint the
+# *user's* part scripts: `ruff check --no-cache --output-format=json <target>`,
+# with neither `--config` nor `--isolated`, so ruff discovers configuration by
+# walking up from the file it was handed. This block therefore applies when
+# `pc lint` runs on a part inside this repository -- the examples -- and never
+# to `src/`. The three codes are waived because a CAD part script is written as
+# `from build123d import *` and leans on the star import.
+[tool.ruff.lint]
+ignore = ["F401", "F403", "F405"]
 
+# `poetry install` installs the root project editable, and it resolves what to
+# put on `sys.path` with poetry-core, not with the `[tool.setuptools]` config
+# above. Left to auto-detection it would look for a single package named after
+# the project -- and it looks in the project root *before* `src/`, so a stray
+# `./partcad/` directory left over from the pre-monorepo layout (git leaves the
+# directory behind when the only files still in it are ignored ones like
+# `__pycache__/`) makes `poetry install` fail with "partcad is not a package."
+# and install nothing. Naming the six explicitly says the same thing
+# `[tool.setuptools.packages.find]` does, and cannot be shadowed.
 [tool.poetry]
-name = "partcad-dev"
-version = "0.7.150"
-description = "Development Environment for PartCAD"
-authors = [
-  "PartCAD <support@partcad.org>",
-]
-license = "Apache 2.0"
-readme = "README.md"
 packages = [
-  { include = "partcad", from = "partcad/src" },
-  { include = "partcad_cli", from = "partcad-cli/src" }
+    { include = "partcad", from = "src" },
+    { include = "partcad_cli", from = "src" },
+    { include = "partcad_client", from = "src" },
+    { include = "partcad_ide_client", from = "src" },
+    { include = "partcad_service_json_rpc", from = "src" },
+    { include = "partcad_utils", from = "src" },
 ]
 
-[tool.poetry.scripts]
-pc = 'partcad_cli.click.command:main'
-partcad = 'partcad_cli.click.command:main'
-
-[tool.poetry.dependencies]
-python = ">=3.10,<3.15"
-poetry-plugin-shell = "^1.0.1"
-
+#
+# The development environment. Poetry 2 reads the `[project]` metadata above for
+# the package itself and these groups for everything around it. There is no
+# separate `partcad-dev` distribution any more: the project *is* `partcad`, so
+# `poetry install` installs it editable and the groups add what the suites need.
+#
 [tool.poetry.group.dev.dependencies]
-# black and isort are not run by any CI job or pre-commit hook (see
-# dev-tools/pre-commit-config.yaml), so these are the versions a developer
-# gets, not a gate. Note that black 26's stable style reformats ~54 files in
-# this repo and isort does not agree with the tree as committed today;
-# applying either belongs in its own PR, not in a dependency bump.
+# All three gate: each is a `pre-commit` hook and a `Lint (...)` job in
+# `test.yml`, and each of those pins the version this group resolves, so the
+# hook and the job cannot disagree about what "clean" means. Bumping one of
+# these therefore reformats or re-lints the tree -- do it in a change of its
+# own, and update the pin in both places at the same time.
 black = "^26.5.1"
 flake8 = "^7.3.0"
+# flake8 cannot read `pyproject.toml` on its own. Without this plugin the
+# `[tool.flake8]` table above is inert and flake8 silently falls back to its
+# own defaults -- 79 columns on a repository that formats at 120.
+Flake8-pyproject = "^1.2.3"
 isort = "^8.0.1"
 sentry-sdk = {extras = ["opentelemetry"], version = "^2.66.0"}
 poetry-plugin-shell = "^1.0.1"
@@ -103,7 +472,7 @@ poetry-plugin-shell = "^1.0.1"
 [tool.poetry.group.test.dependencies]
 # Serves a throwaway git repository over smart HTTP, so tests can exercise
 # server-side behaviour that file:// cannot express. See
-# partcad/tests/unit/git_http_server.py.
+# tests/partcad/unit/git_http_server.py.
 flask = "^3.1.3"
 pytest = "^9.1.1"
 pytest-cov = "^7.1.0"
@@ -170,21 +539,41 @@ sphinx-autobuild = [
 ]
 
 [tool.poetry.group.partcad.dependencies]
-# cadquery-ocp, build123d and ocpsvg are NOT wheel runtime dependencies at all:
-# the published 'partcad' wheel declares no CAD dependency, because the core
-# builds/renders/exports every shape - and reads STEP assemblies, and converts
-# files - in sandboxed runtimes, and only needs a CAD library in-process for the
-# opt-in convert("build123d"/"cadquery")/show() live-object features (which warn
-# if it is missing). They stay in this dev group so the monorepo test suite,
-# which exercises those features, has them installed. In OCP 7.9 the native
-# library moved into 'cadquery-ocp-proxy'; 'cadquery-ocp' and the
-# 'cadquery-ocp-novtk' that build123d depends on are both thin wrappers over it,
-# so they coexist.
-cadquery-ocp = "7.9.3.1.1"
+# build123d and ocpsvg are NOT wheel runtime dependencies at all: the published
+# 'partcad' wheel declares no CAD dependency, because the core builds/renders/
+# exports every shape - and reads STEP assemblies, and converts files - in
+# sandboxed runtimes, and only needs a CAD library in-process for the opt-in
+# convert("build123d"/"cadquery")/show() live-object features (which warn if it
+# is missing). They stay in this dev group so the monorepo test suite, which
+# exercises those features, has them installed.
+#
+# 'cadquery-ocp' used to be named here beside them and no longer is, which is a
+# packaging fix rather than a change of what is installed. In OCP 7.9 the native
+# library moved into 'cadquery-ocp-proxy', leaving 'cadquery-ocp' and the
+# 'cadquery-ocp-novtk' that build123d depends on as two *distributions* that
+# install the very same 160 MB 'OCP/OCP.cpython-*.so'. Nothing here needed both:
+# nothing in this environment imports 'cadquery' in process (the sandboxes
+# install their own, ordered by sandbox_versions.GUARD_INVALIDATED_BY), so the
+# VTK-carrying build bought nothing, and build123d pulls the novtk one in
+# regardless.
+#
+# What it cost was real. 'poetry install' installs in parallel, so two workers
+# wrote that one path at once and what landed was a blend of the two wheels --
+# reported as success by both, and then 'import OCP' handing a corrupt ELF to
+# the dynamic loader and taking the interpreter down with SIGSEGV during pytest
+# *collection*, with no failing test to point at. One distribution owning the
+# file is what makes that unrepresentable; 'dev-tools/check_installed_files.py'
+# stays as the general guard, because this pair is not the only way two wheels
+# can come to own one path.
 ocpsvg = "0.6.0"
 build123d = "0.11.1"
 pyyaml = ">=6.0.1"
-pygit2 = ">=1.15.0"
+# Pinned to match partcad/requirements.txt, which explains why. 1.18.2 is the
+# last pygit2 line that supports Python 3.10; 1.19 and later require 3.11.
+pygit2 = [
+  { version = "1.18.2", python = "<3.11" },
+  { version = "1.20.0", python = ">=3.11" },
+]
 ruamel-yaml = ">=0.18.5"
 vyper-config = "^1.2.1"
 packaging = ">=23.1"
@@ -193,11 +582,7 @@ jinja2 = "^3.1.6"
 requests = "^2.34.2"
 aiofiles = "^25.1.0"
 aiohttp = "^3.14.2"
-google-genai = "^2.13.0"
-# ocp-vscode 4.0 pulls threejs-materials, which caps pillow below 12.3.
 pillow = "^12.2.0"
-openai = "^2.46.0"
-ollama = "^0.6.2"
 async-lru = "^2.3.0"
 docker = "^7.2.0"
 psutil = "^7.2.2"
@@ -205,28 +590,22 @@ ruff = "^0.15.22"
 jsonschema = "^4.26.0"
 # Only below 3.14, where the standard library has no 'compression.zstd'.
 "backports.zstd" = { version = ">=1.6.0", python = "<3.14" }
-
-[tool.poetry.group.cli.dependencies]
-setuptools = "^83.0.0"
-jinja2 = "^3.1.6"
-requests = "^2.34.2"
-aiofiles = "^25.1.0"
-aiohttp = "^3.14.2"
-google-genai = "^2.13.0"
-# ocp-vscode 4.0 pulls threejs-materials, which caps pillow below 12.3.
-pillow = "^12.2.0"
-openai = "^2.46.0"
-ollama = "^0.6.2"
-ocp-vscode = "^4.0.0"
+# The clients behind the two off-machine cache tiers, both driven by the
+# monorepo test suite against local mock servers. 'aiomcache' is an ordinary
+# dependency of the published wheel; 'aioboto3' is its 'aws' extra, and is here
+# because the suite needs it either way.
+aiomcache = "^0.8.2"
+aioboto3 = "^15.5.0"
+# The CLI's own two. They are ordinary runtime dependencies of the wheel -- a
+# console script cannot be conditional on an extra, so `pc` needs them
+# unconditionally -- and they are restated here for the same reason as
+# everything above: Poetry does not read `dynamic = ["dependencies"]`, so the
+# dev container and `.devcontainer/requirements.txt` see only what this group
+# names. They used to arrive through a `cli` group that the one-wheel migration
+# deleted; `click` happens to be pulled in transitively today, `rich-click` is
+# not, and `partcad_cli.click.command` imports it at the top.
 click = "^8.4.2"
 rich-click = "^1.9.8"
 
 [tool.poetry.group.performance.dependencies]
 snakeviz = "^2.2.2"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.ruff.lint]
-ignore = ["F401", "F403", "F405"]

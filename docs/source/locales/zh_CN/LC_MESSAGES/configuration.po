@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 21:23+0000\n"
+"POT-Creation-Date: 2026-08-03 15:22+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -20,8 +20,8 @@ msgstr ""
 "Generated-By: Babel 2.17.0\n"
 
 #: ../../source/configuration.rst:2 ../../source/configuration.rst:678
-#: ../../source/configuration.rst:760 ../../source/configuration.rst:835
-#: ../../source/configuration.rst:987 ../../source/configuration.rst:1027
+#: ../../source/configuration.rst:707 ../../source/configuration.rst:782
+#: ../../source/configuration.rst:934 ../../source/configuration.rst:974
 msgid "Configuration"
 msgstr "配置"
 
@@ -172,14 +172,14 @@ msgstr "依赖"
 msgid "Here are some examples of a dependency declaration in ``partcad.yaml``:"
 msgstr "下面是 ``partcad.yaml`` 中依赖声明的一些示例："
 
-#: ../../source/configuration.rst:119 ../../source/configuration.rst:835
-#: ../../source/configuration.rst:1027
+#: ../../source/configuration.rst:119 ../../source/configuration.rst:782
+#: ../../source/configuration.rst:974
 msgid "Method"
 msgstr "方式"
 
 #: ../../source/configuration.rst:119 ../../source/configuration.rst:678
-#: ../../source/configuration.rst:736 ../../source/configuration.rst:760
-#: ../../source/configuration.rst:789 ../../source/configuration.rst:817
+#: ../../source/configuration.rst:707 ../../source/configuration.rst:736
+#: ../../source/configuration.rst:764
 msgid "Example"
 msgstr "示例"
 
@@ -363,7 +363,7 @@ msgid ""
 "used:"
 msgstr "当源文件不在包的源代码仓库中、而需要从远程位置拉取时，可以使用以下选项："
 
-#: ../../source/configuration.rst:281 ../../source/configuration.rst:865
+#: ../../source/configuration.rst:281 ../../source/configuration.rst:812
 msgid "Parameters"
 msgstr "参数"
 
@@ -629,9 +629,9 @@ msgstr "有关 OCCT Location 对象的更多信息，请参见 :ref:`location` �
 msgid "Define parts with CodeCAD scripts using the following syntax:"
 msgstr "使用以下语法通过 CodeCAD 脚本来定义零件："
 
-#: ../../source/configuration.rst:678 ../../source/configuration.rst:736
-#: ../../source/configuration.rst:760 ../../source/configuration.rst:789
-#: ../../source/configuration.rst:817 ../../source/configuration.rst:987
+#: ../../source/configuration.rst:678 ../../source/configuration.rst:707
+#: ../../source/configuration.rst:736 ../../source/configuration.rst:764
+#: ../../source/configuration.rst:934
 msgid "Result"
 msgstr "结果"
 
@@ -656,88 +656,10 @@ msgid "in ``cube.scad``"
 msgstr "位于 ``cube.scad``"
 
 #: ../../source/configuration.rst:695
-msgid "AI Generated CAD Scripts"
-msgstr "AI 生成的 CAD 脚本"
-
-#: ../../source/configuration.rst:697
-msgid ""
-"Generate OpenSCAD, CadQuery or build123d scripts with Generative AI using"
-" the following syntax:"
-msgstr "使用以下语法，通过生成式 AI 生成 OpenSCAD、CadQuery 或 build123d 脚本："
-
-#: ../../source/configuration.rst:713
-msgid ""
-"Place the detailed description of the part in the ``desc`` field. Provide"
-" as much information as possible through the :ref:`requirements` field, "
-"using ``INCLUDE(<filename>)`` or ``DOWNLOAD(<url>)`` to add supported "
-"file formats to the prompt either from a file in the package folder or "
-"from a URL."
-msgstr ""
-"把零件的详细描述放在 ``desc`` 字段中。通过 :ref:`requirements` 字段提供尽可能多的信息，使用 "
-"``INCLUDE(<filename>)`` 或 ``DOWNLOAD(<url>)`` ，从包目录中的文件或从某个 URL "
-"将受支持的文件格式添加到提示词中。"
-
-#: ../../source/configuration.rst:718
-msgid "The following models are recommended for use:"
-msgstr "推荐使用以下模型："
-
-#: ../../source/configuration.rst:721
-msgid "Provider"
-msgstr "提供方"
-
-#: ../../source/configuration.rst:721
-msgid "Model"
-msgstr "模型"
-
-#: ../../source/configuration.rst:723
-msgid "google"
-msgstr "google"
-
-#: ../../source/configuration.rst:723
-msgid "gemini-2.5-pro (default)"
-msgstr "gemini-2.5-pro（默认）"
-
-#: ../../source/configuration.rst:724
-msgid "gemini-2.5-flash"
-msgstr "gemini-2.5-flash"
-
-#: ../../source/configuration.rst:725
-msgid "gemini-3.5-flash"
-msgstr "gemini-3.5-flash"
-
-#: ../../source/configuration.rst:727
-msgid "openai"
-msgstr "openai"
-
-#: ../../source/configuration.rst:727
-msgid "gpt-4o (default)"
-msgstr "gpt-4o（默认）"
-
-#: ../../source/configuration.rst:728
-msgid "gpt-4o-mini"
-msgstr "gpt-4o-mini"
-
-#: ../../source/configuration.rst:730
-msgid "ollama"
-msgstr "ollama"
-
-#: ../../source/configuration.rst:730
-msgid "llama-3.1:8b"
-msgstr "llama-3.1:8b"
-
-#: ../../source/configuration.rst:731
-msgid "llama-3.1:70b (default)"
-msgstr "llama-3.1:70b（默认）"
-
-#: ../../source/configuration.rst:732
-msgid "llama-3.1:405b"
-msgstr "llama-3.1:405b"
-
-#: ../../source/configuration.rst:748
 msgid "CAD Files"
 msgstr "CAD 文件"
 
-#: ../../source/configuration.rst:750
+#: ../../source/configuration.rst:697
 msgid "Define parts with CAD files using the following syntax:"
 msgstr "使用以下语法通过 CAD 文件来定义零件："
 
@@ -763,37 +685,37 @@ msgstr ""
 "或 `3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_ 位于 "
 "``screw.3mf`` ）"
 
-#: ../../source/configuration.rst:776
+#: ../../source/configuration.rst:723
 msgid "Extrude"
 msgstr "拉伸（Extrude）"
 
-#: ../../source/configuration.rst:778
+#: ../../source/configuration.rst:725
 msgid "Define parts by extruding a sketch using the following syntax:"
 msgstr "使用以下语法通过拉伸草图来定义零件："
 
-#: ../../source/configuration.rst:803
+#: ../../source/configuration.rst:750
 msgid "Sweep"
 msgstr "扫掠（Sweep）"
 
-#: ../../source/configuration.rst:805
+#: ../../source/configuration.rst:752
 msgid "Define parts by sweeping a sketch using the following syntax:"
 msgstr "使用以下语法通过扫掠草图来定义零件："
 
-#: ../../source/configuration.rst:829 ../../source/configuration.rst:1020
+#: ../../source/configuration.rst:776 ../../source/configuration.rst:967
 msgid "References"
 msgstr "引用"
 
-#: ../../source/configuration.rst:831
+#: ../../source/configuration.rst:778
 msgid ""
 "It is also possible to declare new parts by referencing other parts that "
 "are already defined elsewhere."
 msgstr "也可以通过引用在别处已经定义的其他零件来声明新的零件。"
 
-#: ../../source/configuration.rst:835 ../../source/configuration.rst:1027
+#: ../../source/configuration.rst:782 ../../source/configuration.rst:974
 msgid "Description"
 msgstr "说明"
 
-#: ../../source/configuration.rst:837 ../../source/configuration.rst:1029
+#: ../../source/configuration.rst:784 ../../source/configuration.rst:976
 msgid "Alias"
 msgstr "Alias"
 
@@ -821,7 +743,7 @@ msgstr "更方便地"
 msgid "reference it locally."
 msgstr "在本地引用它。"
 
-#: ../../source/configuration.rst:844
+#: ../../source/configuration.rst:791
 msgid "Enrich"
 msgstr "Enrich"
 
@@ -865,11 +787,11 @@ msgstr "多次传入"
 msgid "of parameters many times."
 msgstr "同一组参数。"
 
-#: ../../source/configuration.rst:858
+#: ../../source/configuration.rst:805
 msgid "Other Part Types"
 msgstr "其他零件类型"
 
-#: ../../source/configuration.rst:860
+#: ../../source/configuration.rst:807
 msgid ""
 "Other methods to define parts are coming soon (e.g. `SDF "
 "<https://github.com/fogleman/sdf>`_). Please, express your interest in "
@@ -880,7 +802,7 @@ msgstr ""
 "）。如果你希望支持其他格式，请在 GitHub 上提交相应的 issue，或发送电子邮件到 `support@partcad.org "
 "<mailto:support@partcad.org>`_ ，来表达你的意愿。"
 
-#: ../../source/configuration.rst:867
+#: ../../source/configuration.rst:814
 msgid ""
 "Each part may have a list of parameters that are passed into the scripts "
 "to modify the part. The parameters can be of types ``string``, ``float``,"
@@ -891,18 +813,18 @@ msgstr ""
 "每个零件都可以有一份参数列表，这些参数会被传入脚本以修改该零件。参数的类型可以是 ``string`` 、 ``float`` 、 ``int``"
 " 和 ``bool`` 。可以通过在 ``enum`` 中指定可能取值的列表来限制参数值。参数的初始值使用 ``default`` 来设置。"
 
-#: ../../source/configuration.rst:885
+#: ../../source/configuration.rst:832
 msgid ""
 "There are several parameter names that are reserved for values used in "
 "visualization, simulation calculations and, if applicable, manufacturing "
 "(also referred to as ``MCFTT parameters`` using their first letters):"
 msgstr "有几个参数名称是保留的，用于可视化、仿真计算以及（如适用）制造中所使用的值（取其首字母，也被称为 ``MCFTT parameters`` ）："
 
-#: ../../source/configuration.rst:889
+#: ../../source/configuration.rst:836
 msgid "``material``"
 msgstr "``material``"
 
-#: ../../source/configuration.rst:891
+#: ../../source/configuration.rst:838
 msgid ""
 "Must point at an object of type ``material``. Some of them are defined in"
 " ``//pub/std/manufacturing/material``. When a request is made to a "
@@ -915,50 +837,50 @@ msgstr ""
 "中。当向某个制造 API 发出请求时，会从制造商提供的材料中选出一种足够接近的材料。选择正确材料的责任在于该制造 API 的实现（即 "
 "PartCAD 中的 ``provider`` 对象）。"
 
-#: ../../source/configuration.rst:898
+#: ../../source/configuration.rst:845
 msgid "**Not implemented yet. Use hardcoded values for now.**"
 msgstr "**尚未实现。目前请使用硬编码的值。**"
 
-#: ../../source/configuration.rst:900
+#: ../../source/configuration.rst:847
 msgid "``color``"
 msgstr "``color``"
 
-#: ../../source/configuration.rst:902
+#: ../../source/configuration.rst:849
 msgid "**Not implemented yet. Use color names for now.**"
 msgstr "**尚未实现。目前请使用颜色名称。**"
 
-#: ../../source/configuration.rst:904
+#: ../../source/configuration.rst:851
 msgid "``finish``"
 msgstr "``finish``"
 
-#: ../../source/configuration.rst:906
+#: ../../source/configuration.rst:853
 msgid "Optional. Can be omitted for no finish."
 msgstr "可选。如果不需要表面处理，可以省略。"
 
-#: ../../source/configuration.rst:908 ../../source/configuration.rst:914
-#: ../../source/configuration.rst:920
+#: ../../source/configuration.rst:855 ../../source/configuration.rst:861
+#: ../../source/configuration.rst:867
 msgid "**Not implemented yet.**"
 msgstr "**尚未实现。**"
 
-#: ../../source/configuration.rst:910
+#: ../../source/configuration.rst:857
 msgid "``texture``"
 msgstr "``texture``"
 
-#: ../../source/configuration.rst:912
+#: ../../source/configuration.rst:859
 msgid "Optional. Can be omitted for no texture."
 msgstr "可选。如果不需要纹理，可以省略。"
 
-#: ../../source/configuration.rst:916
+#: ../../source/configuration.rst:863
 msgid "``tolerance``"
 msgstr "``tolerance``"
 
-#: ../../source/configuration.rst:918
+#: ../../source/configuration.rst:865
 msgid ""
 "Optional. Can be omitted for a claim to perfect precision during "
 "manufacturing."
 msgstr "可选。如果要声称制造过程中具有完美精度，可以省略。"
 
-#: ../../source/configuration.rst:922
+#: ../../source/configuration.rst:869
 msgid ""
 "If the part has variable MCFTT parameters depending on the surface, then "
 "either this part must be broken down into multiple parts, or the values "
@@ -971,7 +893,7 @@ msgstr ""
 "如果某个零件因表面不同而具有可变的 MCFTT 参数，那么要么必须将该零件拆分成多个零件，要么这些值必须从 CAD "
 "文件/脚本中推导得出（尚未实现）。在后一种情况下，该零件将无法使用制造相关的功能，除非某个特定的制造服务提供方能够识别（vendor,SKU）值，并已通过带外方式收到了相应的制造说明。"
 
-#: ../../source/configuration.rst:929
+#: ../../source/configuration.rst:876
 msgid ""
 "The MCFTT parameters are not required and have no impact on parts that "
 "have ``vendor`` and ``sku`` set and that are procured using providers of "
@@ -980,21 +902,21 @@ msgstr ""
 "对于已设置 ``vendor`` 和 ``sku`` 、并使用 ``store`` 类型提供方进行采购的零件，MCFTT "
 "参数不是必需的，也不会对其产生任何影响。"
 
-#: ../../source/configuration.rst:937
+#: ../../source/configuration.rst:884
 msgid "Assemblies"
 msgstr "装配体"
 
-#: ../../source/configuration.rst:940
+#: ../../source/configuration.rst:887
 msgid "Declare assemblies"
 msgstr "声明装配体"
 
-#: ../../source/configuration.rst:942
+#: ../../source/configuration.rst:889
 msgid ""
 "Assemblies are defined using the ``partcad.yaml`` file in the package "
 "folder. The syntax for defining assemblies is as follows:"
 msgstr "装配体使用包目录中的 ``partcad.yaml`` 文件来定义。定义装配体的语法如下："
 
-#: ../../source/configuration.rst:960
+#: ../../source/configuration.rst:907
 msgid ""
 "The ``assy`` type is used to define assemblies in `Assembly YAML` format."
 " The ``path`` parameter specifies the source file path, and the "
@@ -1008,25 +930,25 @@ msgstr ""
 "``parameters`` 部分则允许定义可在装配体中使用的参数。可选的 ``offset`` 参数使用一个 OCCT Location "
 "对象来指定装配体的位置。有关 OCCT Location 对象的更多信息，请参见“实现细节”。"
 
-#: ../../source/configuration.rst:965
+#: ../../source/configuration.rst:912
 msgid "Here is an example of an assembly definition:"
 msgstr "下面是一个装配体定义的示例："
 
-#: ../../source/configuration.rst:979
+#: ../../source/configuration.rst:926
 msgid ""
 "In this example, an assembly named ``example_assembly`` is defined with a"
 " parameter ``length`` and an offset."
 msgstr "在这个示例中，定义了一个名为 ``example_assembly`` 的装配体，它带有一个参数 ``length`` 和一个偏移量。"
 
-#: ../../source/configuration.rst:982
+#: ../../source/configuration.rst:929
 msgid "Assembly YAML"
 msgstr "Assembly YAML"
 
-#: ../../source/configuration.rst:984
+#: ../../source/configuration.rst:931
 msgid "Here is an example of an assembly defined using `Assembly YAML`:"
 msgstr "下面是一个使用 `Assembly YAML` 定义的装配体示例："
 
-#: ../../source/configuration.rst:1015
+#: ../../source/configuration.rst:962
 msgid ""
 "The example above shows an assembly created using ``Assembly YAML``. "
 "Other methods to define assemblies are coming soon (e.g. using "
@@ -1036,7 +958,7 @@ msgstr ""
 "上面的示例展示了一个使用 ``Assembly YAML`` 创建的装配体。定义装配体的其他方式即将推出（例如使用 ``CadQuery`` 或 "
 "``build123d`` ）。装配体文件的语法在本文档的 ``Assembly YAML`` 一节中有描述。"
 
-#: ../../source/configuration.rst:1022
+#: ../../source/configuration.rst:969
 msgid ""
 "It is also possible to declare assemblies by referencing other assemblies"
 " that are already defined elsewhere. Unfortunately, ``enrich`` "
@@ -1048,21 +970,21 @@ msgstr "也可以通过引用在别处已经定义的其他装配体来声明装
 msgid "existing assembly."
 msgstr "已有的装配体。"
 
-#: ../../source/configuration.rst:1041
+#: ../../source/configuration.rst:988
 msgid "Providers"
 msgstr "提供方"
 
-#: ../../source/configuration.rst:1043
+#: ../../source/configuration.rst:990
 msgid "Providers are declared in ``partcad.yaml`` using the following syntax:"
 msgstr "提供方在 ``partcad.yaml`` 中使用以下语法声明："
 
-#: ../../source/configuration.rst:1058
+#: ../../source/configuration.rst:1005
 msgid ""
 "``enrich`` providers are just references to other providers with some "
 "parameters modified to specific values."
 msgstr "``enrich`` 提供方只是对其他提供方的引用，其中一些参数被修改为特定的值。"
 
-#: ../../source/configuration.rst:1061
+#: ../../source/configuration.rst:1008
 msgid ""
 "``store`` and ``manufacturer`` providers are implemented as Python "
 "scripts. These scripts are invoked using the ``runpy`` module which "
@@ -1072,161 +994,161 @@ msgstr ""
 "``store`` 和 ``manufacturer`` 提供方以 Python 脚本的形式实现。这些脚本使用 ``runpy`` "
 "模块来调用，该模块允许以全局对象的值的形式传入输入。输出也是从全局对象的值中提取的。"
 
-#: ../../source/configuration.rst:1066
+#: ../../source/configuration.rst:1013
 msgid ""
 "The input is passed as the dictionary ``request``. The output is "
 "extracted from the dictionary ``output``"
 msgstr "输入以字典 ``request`` 的形式传入。输出则从字典 ``output`` 中提取"
 
-#: ../../source/configuration.rst:1070
+#: ../../source/configuration.rst:1017
 msgid "Store"
 msgstr "Store"
 
-#: ../../source/configuration.rst:1072
+#: ../../source/configuration.rst:1019
 msgid "``store`` providers use the following input and output values:"
 msgstr "``store`` 提供方使用以下输入和输出值："
 
-#: ../../source/configuration.rst:1074 ../../source/configuration.rst:1121
+#: ../../source/configuration.rst:1021 ../../source/configuration.rst:1068
 msgid "`request[\"parameters\"]`: The configuration parameters of the provider."
 msgstr "`request[\"parameters\"]`：提供方的配置参数。"
 
-#: ../../source/configuration.rst:1075 ../../source/configuration.rst:1122
+#: ../../source/configuration.rst:1022 ../../source/configuration.rst:1069
 msgid "`request[\"api\"]`: The API method called."
 msgstr "`request[\"api\"]`：被调用的 API 方法。"
 
-#: ../../source/configuration.rst:1077 ../../source/configuration.rst:1124
+#: ../../source/configuration.rst:1024 ../../source/configuration.rst:1071
 msgid "`request[\"api\"] == \"caps\"`"
 msgstr "`request[\"api\"] == \"caps\"`"
 
-#: ../../source/configuration.rst:1079
+#: ../../source/configuration.rst:1026
 msgid ""
 "Get capabilities of this provider. Currently PartCAD does not use "
 "capabilities for ``store`` providers."
 msgstr "获取该提供方的能力。目前 PartCAD 不会为 ``store`` 提供方使用能力信息。"
 
-#: ../../source/configuration.rst:1082
+#: ../../source/configuration.rst:1029
 msgid "`output`: no output is expected"
 msgstr "`output`：不期望有任何输出"
 
-#: ../../source/configuration.rst:1084
+#: ../../source/configuration.rst:1031
 msgid "`request[\"api\"] == \"avail\"`"
 msgstr "`request[\"api\"] == \"avail\"`"
 
-#: ../../source/configuration.rst:1086
+#: ../../source/configuration.rst:1033
 msgid "Check availability of the specific part."
 msgstr "检查特定零件的可用性。"
 
-#: ../../source/configuration.rst:1088
+#: ../../source/configuration.rst:1035
 msgid "`request[\"vendor\"]`: the vendor of the part"
 msgstr "`request[\"vendor\"]`：该零件的供应商"
 
-#: ../../source/configuration.rst:1089
+#: ../../source/configuration.rst:1036
 msgid "`request[\"sku\"]`: the SKU of the part"
 msgstr "`request[\"sku\"]`：该零件的 SKU"
 
-#: ../../source/configuration.rst:1090
+#: ../../source/configuration.rst:1037
 msgid "`request[\"count\"]`: the requested quantity of the parts"
 msgstr "`request[\"count\"]`：所请求的零件数量"
 
-#: ../../source/configuration.rst:1091
+#: ../../source/configuration.rst:1038
 msgid "`request[\"count_per_sku\"]`: the known number of parts per SKU"
 msgstr "`request[\"count_per_sku\"]`：每个 SKU 已知包含的零件数量"
 
-#: ../../source/configuration.rst:1092
+#: ../../source/configuration.rst:1039
 msgid "`output[\"available\"]`: boolean, whether it is available in this store"
 msgstr "`output[\"available\"]`：布尔值，表示该零件在此商店中是否可用"
 
-#: ../../source/configuration.rst:1094 ../../source/configuration.rst:1140
+#: ../../source/configuration.rst:1041 ../../source/configuration.rst:1087
 msgid "`request[\"api\"] == \"quote\"`"
 msgstr "`request[\"api\"] == \"quote\"`"
 
-#: ../../source/configuration.rst:1096 ../../source/configuration.rst:1142
+#: ../../source/configuration.rst:1043 ../../source/configuration.rst:1089
 msgid ""
 "Get a quote for the specific cart of parts. Quote API is the core of the "
 "provider. It is expected to return the price of a cart."
 msgstr "为特定的零件购物车获取报价。报价 API 是提供方的核心，它应当返回一个购物车的价格。"
 
-#: ../../source/configuration.rst:1100 ../../source/configuration.rst:1146
+#: ../../source/configuration.rst:1047 ../../source/configuration.rst:1093
 msgid "`request[\"cart\"][\"parts\"]`: the dictionary of parts"
 msgstr "`request[\"cart\"][\"parts\"]`：零件的字典"
 
-#: ../../source/configuration.rst:1101
+#: ../../source/configuration.rst:1048
 msgid "`request[\"cart\"][\"parts\"][<id>][\"vendor\"]`: the vendor of the part"
 msgstr "`request[\"cart\"][\"parts\"][<id>][\"vendor\"]`：该零件的供应商"
 
-#: ../../source/configuration.rst:1102
+#: ../../source/configuration.rst:1049
 msgid "`request[\"cart\"][\"parts\"][<id>][\"sku\"]`: the SKU of the part"
 msgstr "`request[\"cart\"][\"parts\"][<id>][\"sku\"]`：该零件的 SKU"
 
-#: ../../source/configuration.rst:1103
+#: ../../source/configuration.rst:1050
 msgid ""
 "`request[\"cart\"][\"parts\"][<id>][\"count\"]`: the requested quantity "
 "of the parts"
 msgstr "`request[\"cart\"][\"parts\"][<id>][\"count\"]`：所请求的零件数量"
 
-#: ../../source/configuration.rst:1104
+#: ../../source/configuration.rst:1051
 msgid ""
 "`request[\"cart\"][\"parts\"][<id>][\"count_per_sku\"]`: the known number"
 " of parts per SKU"
 msgstr "`request[\"cart\"][\"parts\"][<id>][\"count_per_sku\"]`：每个 SKU 已知包含的零件数量"
 
-#: ../../source/configuration.rst:1105 ../../source/configuration.rst:1149
+#: ../../source/configuration.rst:1052 ../../source/configuration.rst:1096
 msgid "`output[\"price\"]`: the total price of the cart"
 msgstr "`output[\"price\"]`：购物车的总价"
 
-#: ../../source/configuration.rst:1106 ../../source/configuration.rst:1150
+#: ../../source/configuration.rst:1053 ../../source/configuration.rst:1097
 msgid "`output[\"cartId\"]`: the id of the cart (to be used for the order later)"
 msgstr "`output[\"cartId\"]`：购物车的 id（稍后用于下单）"
 
-#: ../../source/configuration.rst:1108 ../../source/configuration.rst:1152
+#: ../../source/configuration.rst:1055 ../../source/configuration.rst:1099
 msgid "`request[\"api\"] == \"order\"`"
 msgstr "`request[\"api\"] == \"order\"`"
 
-#: ../../source/configuration.rst:1110 ../../source/configuration.rst:1154
+#: ../../source/configuration.rst:1057 ../../source/configuration.rst:1101
 msgid ""
 "Order the specific quote. Order API does not need to be implemented as "
 "there is no infrastructure for payments yet."
 msgstr "对特定的报价下单。由于目前还没有支付相关的基础设施，因此下单 API 无需实现。"
 
-#: ../../source/configuration.rst:1114 ../../source/configuration.rst:1158
+#: ../../source/configuration.rst:1061 ../../source/configuration.rst:1105
 msgid "`request[\"cartId\"]`: the id of the cart to be purchased"
 msgstr "`request[\"cartId\"]`：要购买的购物车的 id"
 
-#: ../../source/configuration.rst:1117
+#: ../../source/configuration.rst:1064
 msgid "Manufacturer"
 msgstr "Manufacturer"
 
-#: ../../source/configuration.rst:1119
+#: ../../source/configuration.rst:1066
 msgid "``manufacturer`` providers use the following input and output values:"
 msgstr "``manufacturer`` 提供方使用以下输入和输出值："
 
-#: ../../source/configuration.rst:1126
+#: ../../source/configuration.rst:1073
 msgid "Get capabilities of this provider."
 msgstr "获取该提供方的能力。"
 
-#: ../../source/configuration.rst:1128
+#: ../../source/configuration.rst:1075
 msgid "`output[\"materials\"]`: the dictionary of supported materials"
 msgstr "`output[\"materials\"]`：所支持材料的字典"
 
-#: ../../source/configuration.rst:1138
+#: ../../source/configuration.rst:1085
 msgid "`output[\"format\"]`: the list of supported formats (e.g. `[\"step\"]`)"
 msgstr "`output[\"format\"]`：所支持格式的列表（例如 `[\"step\"]` ）"
 
-#: ../../source/configuration.rst:1147
+#: ../../source/configuration.rst:1094
 msgid ""
 "`request[\"cart\"][\"parts\"][<id>][\"format\"]`: the format of the "
 "binary (e.g. `\"step\"`)"
 msgstr "`request[\"cart\"][\"parts\"][<id>][\"format\"]`：二进制数据的格式（例如 `\"step\"` ）"
 
-#: ../../source/configuration.rst:1148
+#: ../../source/configuration.rst:1095
 msgid "`request[\"cart\"][\"parts\"][<id>][\"binary\"]`: the geometry data"
 msgstr "`request[\"cart\"][\"parts\"][<id>][\"binary\"]`：几何数据"
 
-#: ../../source/configuration.rst:1164
+#: ../../source/configuration.rst:1111
 msgid "Repositories"
 msgstr "仓库"
 
-#: ../../source/configuration.rst:1166
+#: ../../source/configuration.rst:1113
 msgid ""
 "A repository plugin serves the contents of a package: its objects, its "
 "child packages and its metadata. It is what backs an ``external`` "
@@ -1235,17 +1157,17 @@ msgstr ""
 "仓库插件负责提供一个包的内容：它的对象、它的子包以及它的元数据。它正是为 ``external`` 依赖提供支撑的东西（参见 `External "
 "packages`_ ）。"
 
-#: ../../source/configuration.rst:1170
+#: ../../source/configuration.rst:1117
 msgid "Repositories are declared in ``partcad.yaml`` using the following syntax:"
 msgstr "仓库在 ``partcad.yaml`` 中使用以下语法声明："
 
-#: ../../source/configuration.rst:1184
+#: ../../source/configuration.rst:1131
 msgid ""
 "``enrich`` repositories are references to other repositories with some "
 "parameters modified to specific values."
 msgstr "``enrich`` 仓库是对其他仓库的引用，其中一些参数被修改为特定的值。"
 
-#: ../../source/configuration.rst:1187
+#: ../../source/configuration.rst:1134
 msgid ""
 "``basic`` repositories are implemented as Python scripts, invoked the "
 "same way as provider scripts (via ``runpy``, with the input in the global"
@@ -1255,27 +1177,27 @@ msgstr ""
 "``basic`` 仓库以 Python 脚本的形式实现，其调用方式与提供方脚本相同（通过 ``runpy`` ，输入放在全局的 "
 "``request`` 中，输出放在全局的 ``output`` 中）。一个仓库脚本会响应单个通用的键/值请求："
 
-#: ../../source/configuration.rst:1192
+#: ../../source/configuration.rst:1139
 msgid "`request[\"api\"] == \"get\"`"
 msgstr "`request[\"api\"] == \"get\"`"
 
-#: ../../source/configuration.rst:1193
+#: ../../source/configuration.rst:1140
 msgid "`request[\"key\"]`: the key being requested"
 msgstr "`request[\"key\"]`：所请求的键"
 
-#: ../../source/configuration.rst:1194
+#: ../../source/configuration.rst:1141
 msgid ""
 "`output[\"result\"]`: the value stored under that key (or ``null`` if "
 "unknown)"
 msgstr "`output[\"result\"]`：存储在该键之下的值（如果未知则为 ``null`` ）"
 
-#: ../../source/configuration.rst:1196
+#: ../../source/configuration.rst:1143
 msgid ""
 "The keys address every kind of data uniformly, so serving a new kind of "
 "object or a new piece of metadata needs no new API:"
 msgstr "这些键以统一的方式对每一种数据进行寻址，因此提供一种新类型的对象或一项新的元数据都无需新的 API："
 
-#: ../../source/configuration.rst:1199
+#: ../../source/configuration.rst:1146
 #, python-brace-format
 msgid ""
 "``objects/<kind>`` -- all objects of a kind, as ``{name: config, ...}`` "
@@ -1286,23 +1208,23 @@ msgstr ""
 "``sketch`` 、 ``part`` 、 ``assembly`` 、 ``interface`` 、 ``provider`` 、 "
 "``repository`` ）"
 
-#: ../../source/configuration.rst:1202
+#: ../../source/configuration.rst:1149
 msgid ""
 "``objects/<kind>/<name>`` -- a single object's config, fetched without "
 "listing the whole repository"
 msgstr "``objects/<kind>/<name>`` —— 单个对象的配置，无需列出整个仓库即可获取"
 
-#: ../../source/configuration.rst:1204
+#: ../../source/configuration.rst:1151
 msgid "``deps`` -- the names of the child packages"
 msgstr "``deps`` —— 各子包的名称"
 
-#: ../../source/configuration.rst:1205
+#: ../../source/configuration.rst:1152
 msgid ""
 "``meta`` -- package-level properties (``desc``, ``render``, "
 "``manufacturable``, ...)"
 msgstr "``meta`` —— 包级别的属性（ ``desc`` 、 ``render`` 、 ``manufacturable`` ……）"
 
-#: ../../source/configuration.rst:1207
+#: ../../source/configuration.rst:1154
 msgid ""
 "``files/<path>`` -- the base64-encoded content of a file an object "
 "references by ``path``. A plugin-backed package has no source tree, so a "
@@ -1312,7 +1234,7 @@ msgstr ""
 "``files/<path>`` —— 某个对象通过 ``path`` 引用的文件的 base64 "
 "编码内容。由插件支撑的包没有源代码树，因此在构建某个由文件支撑的对象时，其文件会从插件获取，并具体化到该包的缓存目录中。"
 
-#: ../../source/configuration.rst:1212
+#: ../../source/configuration.rst:1159
 msgid ""
 "For a hierarchy, a child package's requests are prefixed with its "
 "``subfolder``: a child in ``motors`` asks for ``motors/objects/part``, "
@@ -1321,7 +1243,7 @@ msgstr ""
 "对于层级结构，子包的请求会以它的 ``subfolder`` 作为前缀： ``motors`` 中的一个子包会请求 "
 "``motors/objects/part`` 、 ``motors/deps`` 等等，全部由同一个脚本提供服务。"
 
-#: ../../source/configuration.rst:1216
+#: ../../source/configuration.rst:1163
 msgid ""
 "Responses are cached per key (in memory and on disk), so a repository "
 "that is slow or remote is queried as little as possible. See "

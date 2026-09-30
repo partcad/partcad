@@ -1,0 +1,94 @@
+desc: One piece of geometry sold by several vendors, reached through references
+
+parts:
+  bolt:
+    type: cadquery
+    desc: A bolt, sold in bags of ten
+    vendor: acme
+    sku: BOLT-1
+    count_per_sku: 10
+    parameters:
+      length: 10.0
+
+  # What 'Procurement' in the documentation recommends: one declaration per
+  # (vendor, SKU) pair, written as an alias of the first.
+  bolt_from_other:
+    type: alias
+    source: bolt
+    vendor: other
+    sku: OTHER-1
+    count_per_sku: 5
+
+  # The record has to travel down a chain of references, not only off the end
+  # of one.
+  bolt_from_other_alias:
+    type: alias
+    source: bolt_from_other
+
+  # A reference that says nothing about buying it orders what it points at.
+  bolt_alias:
+    type: alias
+    source: bolt
+  bolt_alias_alias:
+    type: alias
+    source: bolt_alias
+
+  # Another vendor's SKU, with nothing said about how it is boxed: the bag of
+  # ten belongs to acme's SKU and says nothing about this one.
+  bolt_from_other_single:
+    type: alias
+    source: bolt
+    vendor: other
+    sku: OTHER-2
+
+  # The same thing to order, in a bag this package knows the size of.
+  bolt_repacked:
+    type: alias
+    source: bolt
+    count_per_sku: 7
+
+  bolt_enrich:
+    type: enrich
+    source: bolt
+    with:
+      length: 20.0
+    vendor: third
+    sku: THIRD-1
+    count_per_sku: 3
+  bolt_enrich_enrich:
+    type: enrich
+    source: bolt_enrich
+    with:
+      length: 30.0
+
+  bolt_enrich_plain:
+    type: enrich
+    source: bolt
+    with:
+      length: 20.0
+
+  # A chain does not care which kind of reference each of its links is.
+  bolt_alias_of_enrich:
+    type: alias
+    source: bolt_enrich
+  bolt_enrich_of_alias:
+    type: enrich
+    source: bolt_from_other
+    with:
+      length: 40.0
+
+assemblies:
+  pair:
+    type: assy
+    desc: A pair of bolts, sold assembled
+    vendor: acme
+    sku: PAIR-1
+  pair_from_other:
+    type: alias
+    source: pair
+    vendor: other
+    sku: OTHER-PAIR-1
+    count_per_sku: 2
+  pair_from_other_alias:
+    type: alias
+    source: pair_from_other

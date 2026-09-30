@@ -12,8 +12,13 @@ pc inspect -s sketch
 
 ### sketch
 <table><tr>
-<td valign=top><a href="sketch.py"><img src="././sketch.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="sketch.py"><img src="././sketch.svg" alt="sketch" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>A sample sketch</td>
+<td valign=top>Parameters:<br/><ul>
+<li>width: 3.0</li>
+<li>length: 4.0</li>
+</ul>
+</td>
 </tr></table>
 
 <br/><br/>

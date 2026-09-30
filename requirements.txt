@@ -1,0 +1,60 @@
+# No CAD library is a runtime dependency of PartCAD. It builds, renders and
+# exports every shape - and reads STEP assemblies for 'pc import assembly' and
+# converts files for 'pc convert' - in sandboxed runtimes, which install their
+# own copy of the CAD stack (see sandbox_versions), and it carries geometry
+# between them as BREP-byte envelopes rather than live OCP objects. The only
+# things that need a CAD library present in this process are handing back live
+# build123d/cadquery objects (convert("build123d"/"cadquery")) and show(); both
+# are opt-in, import their library lazily, and warn if it is not installed.
+# sdf-fork  # installed on demand into the sandbox runtime (see part_factory_sdf.py)
+pyyaml>=6.0.1
+# Pinned, not floored. pygit2 follows libgit2 and drops deprecated API across
+# minor releases: 1.20 removed 'Remote.ls_remotes()' (see project_factory_git.py)
+# and reddened every build here the day it was published, because an open floor
+# means a fresh resolve silently picks up such a release. Bump this deliberately,
+# with a test run, instead. 1.18.2 is the last line that supports Python 3.10;
+# 1.19 and later require 3.11, hence the two arms.
+pygit2==1.18.2; python_version < "3.11"
+pygit2==1.20.0; python_version >= "3.11"
+ruamel.yaml>=0.18.5
+packaging>=23.1
+setuptools
+jinja2
+requests
+aiofiles
+aiohttp
+vyper-config==1.2.1
+sentry-sdk[opentelemetry]==2.66.0
+async-lru==2.3.0
+filelock==3.32.0
+docker>=7.1.0
+jsonschema>=4.23.0
+psutil>=6.1.1
+# The client for the shared remote cache tier ('cacheRemote', memcached
+# protocol). It used to be the 'memcache' extra, on the same reasoning that
+# keeps 'aws' one - imported lazily, only when that tier is switched on. It is
+# 9.9 KiB and pulls nothing in, so the extra cost users a decision and cost this
+# repo four files to keep in step, in exchange for nothing measurable. 'aws' is
+# a different case and stays an extra: it pulls aioboto3, and through it a
+# botocore that pins tightly and weighs 13 MiB.
+aiomcache>=0.8.2,<1.0
+# zstd for the BREP payloads the wrapper protocol and the shape cache carry.
+# Not a CAD library, and needed even though the core moves most envelopes
+# around opaquely: it compresses and decompresses them itself wherever it
+# encodes a live shape into one or decodes one back - Shape.get_wrapped(),
+# interfaces and ports, convert()/show().
+# 3.14 has it as 'compression.zstd'; this is a backport of that same module.
+backports.zstd>=1.6.0; python_version < "3.14"
+
+# ---------------------------------------------------------------------------
+# The command line interface
+# ---------------------------------------------------------------------------
+#
+# `pc` and `partcad` are entry points of this one wheel, and an entry point
+# cannot be conditional on an extra -- a `partcad[cli]` would still declare
+# `pc` and it would fail at `import click`. So these are ordinary dependencies.
+# They cost a library-only user about 1.9 MiB downloaded and 11 MiB on disk,
+# most of it pygments arriving through rich-click, against a 15.8 MiB / 80 MiB
+# baseline.
+click==8.4.2
+rich-click==1.9.8

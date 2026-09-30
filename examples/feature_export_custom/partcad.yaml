@@ -1,0 +1,49 @@
+desc: |
+  PartCAD example: the `export:` section, and an export implementation of one's own.
+
+  `export:` (and its 2D counterpart `render:`) has one subsection per output file
+  type, whose fields are that type's export parameters. Two things happen below:
+
+    - `step:` sets `comment`, a parameter of the STEP implementation PartCAD
+      ships. Every STEP file this package produces carries that text in its
+      header. Nothing else about how STEP is written changes.
+
+    - `stl:` sets `path`, which replaces the implementation itself with the
+      script in this package. It is run in a PartCAD sandbox exactly the way the
+      built-in one in `//builtin/export` is - the built-in implementations are
+      declared in that same form, so this package is doing nothing special.
+
+  Either can also be used against another package's objects, without that
+  package knowing about it:
+
+      pc export -t stl -e //pub/examples/partcad/feature_export_custom \
+          --package //pub/examples/partcad/produce_part_step -O ./ bolt
+
+docs:
+  usage: |
+    ```shell
+    pc export -t step :cube
+    pc export -t stl :cube
+    ```
+
+parts:
+  cube:
+    type: cadquery
+    path: cube.py
+    desc: A cube, to have something to export.
+
+export:
+  step:
+    # A parameter of the built-in STEP implementation. The file is still written
+    # by '//builtin/export', which puts this text into the STEP header.
+    comment: Produced by the PartCAD 'feature_export_custom' example.
+
+  stl:
+    # An implementation of this package's own, replacing the built-in one.
+    path: export_stl_commented.py
+    pythonRequirements:
+      - cadquery-ocp==7.9.3.1.1
+    # Parameters, handed to the script above rather than to the built-in one.
+    tolerance: 0.1
+    angularTolerance: 0.1
+    comment: Produced by the PartCAD 'feature_export_custom' example.

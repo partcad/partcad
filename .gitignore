@@ -16,15 +16,28 @@ __pycache__
 **/.DS_Store
 /build
 /dist
-/partcad-cli/build
-/partcad-cli/dist
-# Copied in from the repository root by the wheel and standalone builds
-/partcad-cli/LICENSE.txt
-/partcad/build
-/partcad/dist
+# snapcraft's working directories, and the .snap it writes into the project
+# root before `dev-tools/snap/build.sh` moves it into `dist/snap/`
+/parts
+/stage
+/prime
+/*.snap
+# The compatibility shim, built beside the wheel. Its LICENSE.txt is copied in
+# from the repository root by the build, the way each distribution's used to be.
+/dev-tools/shim/build
+/dev-tools/shim/dist
+/dev-tools/shim/LICENSE.txt
 allure-report/
 allure-results/
 behave-results/
+# What 'dev-tools/ci/coverage_report.py' writes: the merged report the
+# "Coverage" job uploads, its scratch space, the artifacts it downloads into,
+# and the pull request comment it renders. Reproducing that merge locally is
+# what 'docs/source/contributing.rst' documents, and it leaves all four here.
+coverage-comment.md
+coverage-data/
+coverage-report/
+coverage-work/
 docs/build
 # Compiled gettext catalogs — Sphinx auto-builds these from the .po files at build time
 docs/source/locales/**/*.mo
@@ -36,3 +49,7 @@ test-results/
 *.code-workspace
 # Materialized (symlink-free) plugin artifact produced by ai-agents/scripts/materialize.sh
 /ai-agents/.build
+# Fetched by 'fileFrom: url' in examples/produce_part_kicad -- the package
+# deliberately does not carry it (see its 'software:' section), and an untracked
+# copy left behind by 'pc install' would trip the rendered-examples check.
+/examples/produce_part_kicad/arduino-cli-install.sh

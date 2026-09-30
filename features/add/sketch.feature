@@ -10,7 +10,6 @@ Feature: `pc add sketch` command
     And a file named "partcad.yaml" should be created with content:
       """
       private: true
-      pythonVersion: ">=\\d+\\.\\d+"
       partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
@@ -49,19 +48,6 @@ Feature: `pc add sketch` command
   #   Then the command should exit with a status code of "1"
   #   And STDERR should contain "Invalid OpenSCAD syntax"
 
-  # @wip @ai-openscad @error
-  # Scenario: Handle AI service failure
-  #   When I run "partcad add part ai-openscad --ai google --desc 'Simple case' 'case.scad'"
-  #   And the AI service is unavailable
-  #   Then the command should exit with a status code of "1"
-  #   And STDERR should contain "AI service unavailable"
-
-  # @wip @ai-openscad @error
-  # Scenario: Handle invalid AI provider
-  #   When I run "partcad add part ai-openscad --ai unknown --desc 'Simple case' 'case.scad'"
-  #   Then the command should exit with a status code of "1"
-  #   And STDERR should contain "Invalid AI provider"
-
   # @wip @scad @error
   # Scenario: Reject non-existent SCAD file
   #   When I run "partcad add part scad nonexistent.scad"
@@ -78,23 +64,6 @@ Feature: `pc add sketch` command
   #   Then the command should exit with a status code of "1"
   #   And STDERR should contain "Invalid OpenSCAD syntax"
 
-  # @wip @ai-openscad
-  # Scenario: Add ai-openscad Part using GoogleAI
-  #   When I run "partcad add part ai-openscad --ai google --desc 'Pixel phone case of a surprising shape' 'generated-case.scad'"
-  #   Then the command should exit with a status code of "0"
-  #   # And a file named "$PWD/partcad.yaml" should have content:
-  #   And a file named "partcad.yaml" should have YAML content:
-  #     """
-  #     dependencies:
-  #     sketches:
-  #     parts:
-  #       generated-case:
-  #         type: ai-openscad
-  #         desc: Pixel phone case of a surprising shape
-  #         provider: google
-  #     assemblies:
-  #     """
-
   @cadquery
   Scenario: Add cadquery sketch from "example.py" file
     Given a file named "example.py" with content:
@@ -107,7 +76,6 @@ Feature: `pc add sketch` command
     And a file named "partcad.yaml" should have YAML content:
       """
       private: true
-      pythonVersion: ">=\\d+\\.\\d+"
       partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
@@ -131,7 +99,6 @@ Feature: `pc add sketch` command
     And a file named "partcad.yaml" should have YAML content:
       """
       private: true
-      pythonVersion: ">=\\d+\\.\\d+"
       partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
@@ -192,7 +159,6 @@ Feature: `pc add sketch` command
     And a file named "partcad.yaml" should have YAML content:
       """
       private: true
-      pythonVersion: ">=\\d+\\.\\d+"
       partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
@@ -213,7 +179,6 @@ Feature: `pc add sketch` command
     And a file named "partcad.yaml" should have YAML content:
       """
       private: true
-      pythonVersion: ">=\\d+\\.\\d+"
       partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
@@ -223,22 +188,6 @@ Feature: `pc add sketch` command
       assemblies:
       """
 
-  # TODO(clairbee): add support for sketches from AI-generated scripts
-  # @wip @ai-cadquery
-  # Scenario: Add ai-cadquery Part using OpenAI
-  #   When I run "partcad add part ai-cadquery --ai openai --desc 'Custom mechanical part' 'custom_part.py'"
-  #   Then the command should exit with a status code of "0"
-  #   And a file named "partcad.yaml" should have YAML content:
-  #     """
-  #     dependencies:
-  #     sketches:
-  #     parts:
-  #       custom-part:
-  #         type: ai-cadquery
-  #         desc: Custom mechanical part
-  #         provider: openai
-  #     assemblies:
-  #     """
 
   # @wip @cadquery @error
   # Scenario: Reject invalid CadQuery script
@@ -308,13 +257,7 @@ Feature: `pc add sketch` command
     Then the command should exit with a status code of "1"
     And STDERR should contain "Invalid SVG file"
 
-  # @wip @ai-cadquery @error
-  # Scenario: Reject invalid AI-generated CadQuery part
-  #   When I run "partcad add part ai-cadquery --ai google --desc 'An impossible object that defies physics' 'impossible.py'"
-  #   Then the command should exit with a status code of "1"
-  #   And STDERR should contain "Failed to generate CadQuery part"
-
-  # @wip @ai-openscad
+  # @wip @scad
   # Scenario: Add scad part from `test.scad` file
   #   # TODO-54: @alexanderilyin: Add scad linting
   #   Given a file named "test.scad" with content:
@@ -332,3 +275,22 @@ Feature: `pc add sketch` command
   #     parts:
   #     assemblies:
   #     """
+
+  @cadquery @success
+  Scenario: Add a sketch from a URL, pinned by the hash of what came back
+    # A sketch cannot be bought by vendor and SKU, so a fetched one is
+    # reproducible only if it says which bytes it expects. `pc add` fetches once
+    # and writes that hash, so the declaration is pinned from the start.
+    Given "outline.py" is served over HTTP with content:
+      """
+      import cadquery as cq
+      shape = cq.Workplane("XY").rect(20, 10)
+      show_object(shape)
+      """
+    When I run "partcad add sketch cadquery $PC_TEST_HTTP_URL/outline.py"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Sketch 'outline' added to the project."
+    And a file named "partcad.yaml" should contain "fileFrom: url"
+    And a file named "partcad.yaml" should contain "fileHash: sha256:86915b0c8b1e080d45b1bcd0e5aab2aaa7f2db390bce9f38592af712a445bd31"
+    # Not kept: the declaration says where to fetch it, `pc install` does so.
+    And a file named "outline.py" should not exist
