@@ -935,12 +935,6 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
         const geometryInfo = `${stats.name} (${stats.kind})\n${stats.triangleCount.toFixed(0)} triangles\n${(stats.bytesTransferred / 1024).toFixed(1)}KB`;
         (window as any).pcViewerStats.geometryInfo = geometryInfo;
         (window as any).pcViewerStats.statsDisplay.textContent = geometryInfo;
-
-        // Post to extension for VS Code output panel
-        window.parent.postMessage({
-            command: 'log',
-            data: `[Viewer] ${stats.name} (${stats.kind}): ${stats.triangleCount.toFixed(0)} triangles, ${(stats.bytesTransferred / 1024).toFixed(2)}KB`,
-        }, '*');
     }
 }
 

@@ -4,7 +4,7 @@
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.8.131-j",
+  "version": "0.8.131-k",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -361,7 +361,7 @@
           },
           "partcad.viewer.performanceDebug": {
             "default": false,
-            "description": "Show performance metrics in the 3D viewer (top-right corner): part name, triangle count, file size, and FPS/frame time.",
+            "description": "Enable performance debugging: triangle counts in tree, metrics display (top-right), and console logs. Shows part geometry complexity and rendering performance.",
             "type": "boolean"
           }
         }

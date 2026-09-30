@@ -73,7 +73,6 @@ export class PartcadViewer implements vscode.Disposable {
      */
     private spacenav: SpacenavClient | undefined;
     private readonly disposables: vscode.Disposable[] = [];
-    private readonly outputChannel = vscode.window.createOutputChannel('PartCAD Viewer');
 
     constructor(private readonly extensionUri: vscode.Uri) {
         this.disposables.push(
@@ -274,11 +273,9 @@ export class PartcadViewer implements vscode.Disposable {
         });
         panel.onDidChangeViewState(() => this.postSpaceMouseState());
         panel.webview.onDidReceiveMessage(
-            (message: { type: string; message?: string; data?: string; tab?: string; token?: number; implementation?: string }) => {
+            (message: { type: string; message?: string; tab?: string; token?: number; implementation?: string }) => {
                 if (message.type === 'error') {
                     traceError(`PartCAD Viewer: ${message.message}`);
-                } else if (message.type === 'log') {
-                    this.outputChannel.appendLine(message.data ?? '');
                 } else if (message.type === 'ready') {
                     this.postSpaceMouseState();
                     if (this.lastShow !== undefined) {

@@ -41,7 +41,7 @@ When `partcad.viewer.performanceDebug` is **enabled**, the viewer shows:
    - Example: `reactor-core (45000 triangles)`
    - Quickly identify heavy parts for optimization
 
-2. **Console** (F12 in viewer):
+2. **Browser Console** (view via `Ctrl+Shift+P` → "Developer: Toggle Developer Tools" → Console tab):
    ```
    [PartCAD Viewer] Performance Stats: {
      Part: "reactor-unit",
@@ -54,7 +54,7 @@ When `partcad.viewer.performanceDebug` is **enabled**, the viewer shows:
    [PartCAD Viewer] FPS: 60.0 (frame time: 16.67ms)
    ```
 
-3. **On-Screen Display** (top-right corner):
+3. **On-Screen Display** (top-right corner of viewer):
    ```
    reactor-unit (assembly)
    45000 triangles
@@ -63,10 +63,6 @@ When `partcad.viewer.performanceDebug` is **enabled**, the viewer shows:
    FPS: 60.0
    Frame: 16.7ms
    ```
-
-4. **VS Code Output Panel** (Ctrl+Shift+U):
-   - Performance data sent via postMessage
-   - Viewable in PartCAD extension output channel
 
 ## How to Enable
 
