@@ -64,7 +64,6 @@ class ProjectExternalRepository(ProjectPlugin):
         subfolder: str = "",
         repository=None,
         cache=None,
-        cache_version: int = 0,
         config_obj=None,
         inherited_config=None,
     ):
@@ -80,9 +79,6 @@ class ProjectExternalRepository(ProjectPlugin):
         self._subfolder = subfolder
         self._repository = repository
         self._cache = cache
-        # Carried so that child packages served by the same plugin inherit it and
-        # land in the same versioned cache namespace (see 'dependencies()').
-        self._cache_version = cache_version
         self._request_cache: dict[str, object] = {}
         self._request_lock = threading.Lock()
         # The parsed 'objectKinds', once the metadata has arrived. Kept apart
@@ -413,8 +409,8 @@ class ProjectExternalRepository(ProjectPlugin):
                 "plugin": self._plugin_ref,
                 "subfolder": self._scope(child),
             }
-            # Propagate the cache version so a child computes the same versioned
-            # cache namespace as its parent (the whole hierarchy shares one cache).
-            if self._cache_version:
-                deps[child]["cacheVersion"] = self._cache_version
+            # The cache version is not passed down. A child names the same
+            # plugin, and the version is read from that plugin rather than from
+            # anybody's configuration, so the whole hierarchy arrives at one
+            # namespace without carrying the number between packages.
         return deps

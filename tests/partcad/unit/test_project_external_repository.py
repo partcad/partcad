@@ -231,24 +231,19 @@ def test_metadata_materializes_from_the_repository():
     assert repo.name == "//ext"  # identity is never overridden by metadata
 
 
-def test_cache_version_propagates_to_children():
-    """The cache version is inherited by every child of a plugin-backed
-    hierarchy, so the whole tree shares one versioned cache namespace."""
-    ctx = pc.Context("examples")
-    top = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", plugin_ref="//ext:remote", cache_version=3)
-    top._repository = FakeRepository({"deps": ["motors"]})
-    child = top.dependencies()["motors"]
-    assert child["cacheVersion"] == 3
-    assert child["plugin"] == "//ext:remote"
+def test_a_child_is_told_the_plugin_and_not_the_cache_version():
+    """A child carries the plugin reference and nothing about the cache.
 
-
-def test_no_cache_version_leaves_children_unversioned():
-    """Without a cache version (the default), children carry no cacheVersion,
-    preserving the pre-existing cache namespace."""
+    The version belongs to the plugin, and a child names the same plugin, so it
+    arrives at the same namespace by reading the same script. Passing the number
+    between packages would make every child a place it could be wrong.
+    """
     ctx = pc.Context("examples")
     top = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", plugin_ref="//ext:remote")
     top._repository = FakeRepository({"deps": ["motors"]})
-    assert "cacheVersion" not in top.dependencies()["motors"]
+    child = top.dependencies()["motors"]
+    assert child["plugin"] == "//ext:remote"
+    assert "cacheVersion" not in child
 
 
 def test_hierarchy_forwards_under_a_subfolder():
