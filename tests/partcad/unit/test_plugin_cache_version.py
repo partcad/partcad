@@ -49,9 +49,9 @@ def _forget_previous_answers():
 def _rewrite(path, body):
     """Rewrite a script so that its stat really differs.
 
-    The guard is modification time and size, and a test that rewrites a file
-    within the same filesystem timestamp tick and to the same length would be
-    testing that nothing was noticed.
+    The guard is 'cache_hash.file_stat' - modification time and size - and a
+    test that rewrote a file within the same filesystem timestamp tick and to
+    the same length would be testing that nothing was noticed.
     """
     path.write_text(body)
     st = path.stat()
