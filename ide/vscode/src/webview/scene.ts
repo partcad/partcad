@@ -855,6 +855,36 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     const perfDebug = (window as any).partcadConfig?.viewer?.performanceDebug ?? false;
     console.log('[PartCAD Viewer] perfDebug flag:', perfDebug, 'config:', (window as any).partcadConfig);
     const nodeTriangleCounts = new Map<string, number>();
+
+    // Diagnostic: Scene structure profiling
+    if (perfDebug) {
+        let totalMeshes = 0;
+        const materialCounts = new Map<THREE.Material, number>();
+        group.traverse((obj) => {
+            if ((obj as THREE.Mesh).isMesh) {
+                totalMeshes++;
+                const material = (obj as THREE.Mesh).material as THREE.Material | undefined;
+                if (material) {
+                    materialCounts.set(material, (materialCounts.get(material) ?? 0) + 1);
+                }
+            }
+        });
+        const topLevelNodes = loaded.built.length;
+        const avgMeshesPerNode = topLevelNodes > 0 ? (totalMeshes / topLevelNodes).toFixed(1) : '0';
+        const materialDistribution: Record<string, number> = {};
+        let materialIndex = 0;
+        for (const [mat, count] of materialCounts) {
+            materialDistribution[`Material${materialIndex++}`] = count;
+        }
+        console.log('[PartCAD Viewer] Scene Structure:', {
+            totalMeshes,
+            topLevelNodes,
+            avgMeshesPerNode,
+            materials: materialCounts.size,
+            ...materialDistribution,
+        });
+    }
+
     if (perfDebug) {
         // Count triangles per node
         console.log('[PartCAD Viewer] Counting triangles for', loaded.built.length, 'nodes');
