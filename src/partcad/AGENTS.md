@@ -566,7 +566,7 @@ at all).
   now eat a reader declaration before anything could read it, then try to fetch it as a package. So the
   migration is gone and the old use is **reported** instead: `Configuration._obsolete_import_entries()`
   looks for a dependency's required `type:` (`git`/`tar`/`local`/`external`) or its transport-only keys
-  (`url`, `relPath`, `revision`, `subfolder`, `onlyInRoot`, `cacheVersion`, `includePaths`, `plugin`), none of
+  (`url`, `relPath`, `revision`, `subfolder`, `onlyInRoot`, `includePaths`, `plugin`), none of
   which a reader declaration has. Do not restore the copy: guessing is what made the two ambiguous.
 
   **How loudly is the one thing that depends on whose package it is**, and both halves were learned the hard

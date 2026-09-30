@@ -56,7 +56,7 @@ class Configuration:
     # a 'url:' with no 'type:' yet - is recognised for what it is rather than
     # read as a reader with an odd field.
     DEPENDENCY_ONLY_KEYS = frozenset(
-        {"url", "relPath", "revision", "subfolder", "onlyInRoot", "cacheVersion", "includePaths", "plugin"}
+        {"url", "relPath", "revision", "subfolder", "onlyInRoot", "includePaths", "plugin"}
     )
 
     @classmethod

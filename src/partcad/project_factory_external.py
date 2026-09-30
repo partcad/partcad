@@ -8,8 +8,11 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import ast
 import hashlib
 import os
+import threading
+import weakref
 
 from . import logging as pc_logging
 from . import project_factory as pf
@@ -17,6 +20,90 @@ from . import telemetry
 from .cache import Cache
 from .project import Project
 from .project_external_repository import ProjectExternalRepository
+from .utils import resolve_resource_path
+
+# The module-level name a repository plugin states its cache version with.
+CACHE_VERSION_NAME = "CACHE_VERSION"
+
+# One answer per plugin reference, per context. The root of a plugin-backed
+# hierarchy is created before its children and resolves the number first, so
+# every child of it reads the same answer here even if the package that hosts
+# the plugin is no longer reachable by the time the child is built. Without that
+# the children would compute a different namespace from the root's and stop
+# sharing its cache.
+#
+# Per context and not per process: a daemon keeps a context warm for as long as
+# it runs, and a memo that outlived the context would go on reporting a version
+# the script no longer states. A context is dropped when its files change, and
+# this goes with it.
+_declared_versions: "weakref.WeakKeyDictionary[object, dict[str, int]]" = weakref.WeakKeyDictionary()
+_declared_versions_lock = threading.Lock()
+
+
+def _read_declared_cache_version(ctx, parent: Project, plugin_ref: str) -> int:
+    """The cache version the plugin states in its own code, or 0 if it states none.
+
+    The number says when the plugin's answers stopped meaning what they used to
+    mean. It belongs to the plugin and to nobody else: a package that imports a
+    plugin-backed library has no way of knowing that the library now serves its
+    parts the other way up, and should not have to be told. So this is read out
+    of the plugin, not out of the configuration of whoever imports it.
+
+    It is *read* rather than asked for, because the answer is needed before the
+    first question can be asked: it names both the cache the answers are kept in
+    and the directory the plugin's own files are materialized into. The script is
+    parsed, never executed - a module-level 'CACHE_VERSION = <int>' and nothing
+    else. A repository with no script of its own (an 'enrich' one, which rewrites
+    another repository's answers) has no code to version and gets 0.
+    """
+    package_name, repository_name = resolve_resource_path(parent.name, plugin_ref)
+    # The plugin almost always lives in the package that declares the dependency
+    # ('plugin: :name'), and that package is 'parent' - which is loaded, because
+    # it is what is being imported from. Reach for any other one only if asked.
+    source = parent if package_name == parent.name else ctx.get_project(package_name)
+    if source is None:
+        pc_logging.debug("Cannot version the plugin cache: package not loaded: %s" % package_name)
+        return 0
+
+    config = (source.config_obj.get("repositories") or {}).get(repository_name)
+    if not isinstance(config, dict) or not config.get("path"):
+        return 0
+    path = os.path.join(source.config_dir, config["path"])
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=path)
+    except (OSError, SyntaxError, ValueError) as e:
+        pc_logging.debug("Cannot version the plugin cache: %s: %s" % (path, e))
+        return 0
+
+    for node in tree.body:
+        if isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        elif isinstance(node, ast.Assign):
+            targets = node.targets
+        else:
+            continue
+        if not any(isinstance(t, ast.Name) and t.id == CACHE_VERSION_NAME for t in targets):
+            continue
+        value = node.value
+        # 'bool' is an 'int' and 'CACHE_VERSION = True' is a typo, not a version.
+        if isinstance(value, ast.Constant) and isinstance(value.value, int) and not isinstance(value.value, bool):
+            return value.value
+        pc_logging.error("%s: %s must be an integer literal" % (path, CACHE_VERSION_NAME))
+        return 0
+    return 0
+
+
+def declared_cache_version(ctx, parent: Project, plugin_ref: str) -> int:
+    """'_read_declared_cache_version', once per plugin reference per context."""
+    with _declared_versions_lock:
+        known = _declared_versions.setdefault(ctx, {})
+        if plugin_ref in known:
+            return known[plugin_ref]
+    version = _read_declared_cache_version(ctx, parent, plugin_ref)
+    with _declared_versions_lock:
+        return known.setdefault(plugin_ref, version)
 
 
 class ExternalImportConfiguration:
@@ -25,13 +112,14 @@ class ExternalImportConfiguration:
         # A child of a plugin-backed hierarchy carries the subfolder that scopes
         # its requests within the repository. Empty for a top-level package.
         self.subfolder = self.config_obj.get("subfolder", "")
-        # An optional integer the plugin author bumps whenever the *shape* of the
-        # data the plugin returns changes (e.g. a new field is added to every
-        # part config). It is mixed into the on-disk cache location, so bumping it
-        # invalidates every entry cached by an older version of the plugin - which
-        # a key derived from the plugin reference and the request alone would keep
-        # serving. See 'docs/source/configuration.rst' (external dependencies).
-        self.cache_version = int(self.config_obj.get("cacheVersion", 0) or 0)
+        # 'cacheVersion' used to be declared here, by whoever imported the
+        # plugin. Said by name, because the schema refuses an unknown key
+        # without saying which one or what replaced it.
+        if "cacheVersion" in self.config_obj:
+            pc_logging.error(
+                "'cacheVersion' is no longer a property of a dependency: the plugin states it, "
+                "as a module-level '%s = <int>' in its own script." % CACHE_VERSION_NAME
+            )
 
 
 @telemetry.instrument()
@@ -49,8 +137,10 @@ class ProjectFactoryExternal(pf.ProjectFactory, ExternalImportConfiguration):
         # Find a place to store all temporary artifacts if any. The hash of the
         # resolved plugin reference identifies this repository instance, so two
         # vendored copies backed by different plugins get separate caches. The
-        # optional 'cacheVersion' is folded in too, so bumping it moves every
-        # child of this repository to a fresh cache namespace at once.
+        # version the plugin states in its own code is folded in too, so raising
+        # it moves this repository and every child of it to a fresh cache
+        # namespace at once.
+        self.cache_version = declared_cache_version(ctx, parent, self.plugin)
         repo_key = self.plugin if not self.cache_version else "%s@v%d" % (self.plugin, self.cache_version)
         repo_hash = hashlib.sha256(repo_key.encode()).hexdigest()[:16]
         self.path = os.path.join(ctx.user_config.internal_state_dir, "external", repo_hash)
@@ -77,6 +167,5 @@ class ProjectFactoryExternal(pf.ProjectFactory, ExternalImportConfiguration):
             plugin_ref=self.plugin,
             subfolder=self.subfolder,
             cache=self.cache,
-            cache_version=self.cache_version,
             inherited_config=self.inherited_config,
         )

@@ -66,7 +66,6 @@ Besides the package properties and, optionally, a list of imported dependencies,
           revision: <(git only) the exact revision to import>
           plugin: <(external only) reference to the repository plugin that serves this package>
           subfolder: <(external only) location within the repository, for hierarchies>
-          cacheVersion: <(external only) non-negative integer; bump to invalidate the on-disk cache>
           includePaths: <(optional) Jinja2 include path>
 
   suppliers:
@@ -280,14 +279,33 @@ further children.
 Non-null responses from a plugin are cached on disk, keyed by the plugin
 reference and the request; a request the plugin has no answer for is remembered
 only for the run that made it, and is put to the plugin again after a restart.
+The same key also names the directory the plugin's own files are materialized
+into, and a file already there is served without asking the plugin again.
+
 The cache does not know when the plugin's code changes, so a plugin that starts
-returning a new shape of data (for example, adding a field to every part it
-serves) would keep being served the stale, pre-change entries. Set
-``cacheVersion`` to a non-negative integer and bump it whenever the plugin's
-output format changes: it is folded into the cache location, so bumping it moves
-the whole repository (and every child in its hierarchy) to a fresh cache
-namespace at once, invalidating the old entries. It defaults to ``0``
-(unversioned).
+answering differently - a new field on every part it serves, or the same parts
+measured another way - would keep being served the stale, pre-change entries.
+The plugin says so itself, with a module-level constant in its script::
+
+    # Raise whenever this plugin's answers stop meaning what they meant before.
+    # v1 added the stud interfaces; v2 read the connectors off the geometry
+    # instead of the name; v3 turned every part upright.
+    CACHE_VERSION = 3
+
+It is folded into the cache location, so raising it moves the whole repository
+(and every child in its hierarchy) to a fresh cache namespace at once. It
+defaults to ``0`` when the script names none, and a repository with no script of
+its own - an ``enrich`` one, which rewrites another repository's answers - has no
+code to version and stays at ``0``.
+
+The number lives in the plugin because it is the plugin's own business. A
+package that imports a plugin-backed library has no way of knowing that the
+library now measures its parts differently, and should not have to be told: it
+would have to be told again in every package that imports it, and each of them
+would be a place to forget. So this is not a field of the dependency that
+imports the plugin, and PartCAD reads it out of the script rather than asking
+for it - the answer is needed before the first question can be asked. The script
+is parsed, never executed.
 
 See ``examples/plugin_repository_basic`` (a package backed by a local file),
 ``examples/plugin_repository_full`` (backed by an HTTP endpoint) and
