@@ -622,7 +622,8 @@ class Assembly(Shape):
         to order.
 
             {"//package:name": {"kind": "part", "count": 2, "desc": "...",
-                                "vendor": None, "sku": None, "count_per_sku": 1}}
+                                "vendor": None, "sku": None, "count_per_sku": 1,
+                                "item_in_sku": None}}
 
         Software the objects ship with is listed too, as entries of kind
         "software" (see 'get_bom_grouped_async'). A software line item is the
@@ -787,6 +788,7 @@ def _bom_detailed_add(bom: dict, item, kind: str):
             "vendor": store_data.vendor,
             "sku": store_data.sku,
             "count_per_sku": store_data.count_per_sku,
+            "item_in_sku": store_data.item_in_sku,
         }
     entry["count"] += 1
 
@@ -816,6 +818,7 @@ async def _bom_detailed_add_stock(bom: dict, ctx, item):
                 "vendor": store_data.vendor if store_data else None,
                 "sku": store_data.sku if store_data else None,
                 "count_per_sku": store_data.count_per_sku if store_data else 1,
+                "item_in_sku": store_data.item_in_sku if store_data else None,
             }
         entry["count"] += 1
 
@@ -835,6 +838,7 @@ def _bom_detailed_add_software(bom: dict, ctx, item):
                 "vendor": None,
                 "sku": None,
                 "count_per_sku": 1,
+                "item_in_sku": None,
                 "package": software.project_name,
                 "revision": package_revision(project),
                 "type": software.type,

@@ -49,8 +49,13 @@ Three things about how it is done:
   extension host), so this does not trip the "installation appears corrupt" warning. `out/main.js` is left
   alone.
 
+**The same wrapper turns workspace trust off**, by pushing `--disable-workspace-trust` onto `process.argv`
+before `main.js` parses it -- every folder is trusted, for the whole editor, because the IDE exists to run
+PartCAD on the packages it opens. `README.md` ("Workspace trust is off in the PartCAD IDE") has why, and why a
+`configurationDefaults` entry does not do it.
+
 `tools/verify_bundle.py` fails the build if the wrapper is missing, if `main` does not point at it, or if it
-does not contain the switch -- each of which leaves an IDE that either has no software WebGL or does not start.
+does not contain the switch or the flag -- each of which leaves an IDE that either has no software WebGL or does not start.
 
 ## The macOS bundle
 

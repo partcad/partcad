@@ -2869,3 +2869,54 @@ def test_rendering_a_package_that_does_not_resolve_names_it():
             )
         )
     assert "//nosuch" in str(caught.value)
+
+
+def test_supply_totals_count_a_set_once():
+    """The items of one set were each quoted for whole sets: the set is paid for once"""
+
+    def line(name, price, vendor=None, sku=None, item_in_sku=None, currency="USD", supplier="store"):
+        return {
+            "name": name,
+            "vendor": vendor,
+            "sku": sku,
+            "item_in_sku": item_in_sku,
+            "suppliers": [{"name": supplier, "price": price, "currency": currency}],
+        }
+
+    items = [
+        # Two shafts and two clips: each quote is for two sets
+        line("//:shaft", 10.0, "acme", "SET", "shaft"),
+        line("//:clip", 10.0, "acme", "SET", "clip"),
+        # A third spacer needs a third set
+        line("//:spacer", 15.0, "acme", "SET", "spacer"),
+        # Lines of a SKU of one kind still add up
+        line("//:nut", 1.0, "acme", "NUT"),
+        line("//:bolt", 2.0, "acme", "BOLT"),
+    ]
+    assert operations._supply_totals(items) == [{"currency": "USD", "price": 18.0}]
+
+
+def test_supply_totals_price_a_set_by_one_supplier():
+    """A set is bought from one supplier, so its price is not assembled from several"""
+
+    def line(name, quotes):
+        return {
+            "name": name,
+            "vendor": "acme",
+            "sku": "SET",
+            "item_in_sku": name,
+            # cheapest first, the way the listing sorts them
+            "suppliers": sorted(
+                ({"name": supplier, "price": price, "currency": "USD"} for supplier, price in quotes),
+                key=lambda option: option["price"],
+            ),
+        }
+
+    # 'a' asks 30 for the set, 'b' asks 40: the cheapest of each item (10 and
+    # 12) would add up to a set price of 12, which nobody offers
+    items = [line("shaft", [("a", 10.0), ("b", 40.0)]), line("clip", [("a", 30.0), ("b", 12.0)])]
+    assert operations._supply_totals(items) == [{"currency": "USD", "price": 30.0}]
+
+    # Nobody quoted the whole set: it is not priced
+    items = [line("shaft", [("a", 10.0)]), line("clip", [("b", 12.0)])]
+    assert operations._supply_totals(items) == []

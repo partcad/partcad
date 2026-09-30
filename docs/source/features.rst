@@ -11,6 +11,12 @@ their parameters. Install it from the
 `VS Code marketplace <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_. See
 the :doc:`tutorial <tutorial>` for a step-by-step walkthrough.
 
+Opening a package runs the code its parts are written in, so in a folder Visual Studio Code has not been told
+to trust (Restricted Mode) the extension starts nothing: it asks for trust, the Explorer says why it is empty,
+and every PartCAD command offers **Manage Workspace Trust** instead of running. PartCAD starts as soon as the
+folder is trusted, without reopening the window. The :ref:`PartCAD IDE <partcad-ide>` does not ask -- it
+exists to run PartCAD, and trusts every folder.
+
 The extension exposes the following actions from the Explorer view and the command palette:
 
 Packages

@@ -1,0 +1,37 @@
+desc: A part with ports, and aliases of it that do and do not restate them
+
+sketches:
+  m3:
+    type: basic
+    circle: 1.5
+
+interfaces:
+  m3-thru:
+    desc: 3mm through hole
+    ports:
+      m3:
+        sketch: m3
+
+parts:
+  plate:
+    type: cadquery
+    desc: A plate with two through holes
+    implements:
+      m3-thru:
+        TL: [[-10.0, 10.0, 0.0], [0.0, 0.0, 1.0], 0.0]
+        TR: [[10.0, 10.0, 0.0], [0.0, 0.0, 1.0], 0.0]
+
+  # The same plate, bought elsewhere: the same geometry, so the same ports
+  plate-elsewhere:
+    type: alias
+    source: plate
+    vendor: acme
+    sku: PLATE-1
+
+  # One that says where it connects itself
+  plate-restated:
+    type: alias
+    source: plate
+    implements:
+      m3-thru:
+        C: [[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], 0.0]

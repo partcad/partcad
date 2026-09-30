@@ -556,8 +556,11 @@ The package is an ordinary one in an ordinary folder. It is under ``~/.partcad``
 application, so ``pc`` in any terminal works with the same package, and uninstalling the IDE does not take
 it with it. Move it, put it in git, or leave it and make your own with ``pc init`` somewhere else.
 
-The editor asks whether you trust the authors of a folder before it runs anything from it, and this folder
-is no exception -- the answer for the one it just made for you is yes.
+The PartCAD IDE does not ask whether you trust a folder before PartCAD opens it. PartCAD runs the code in
+the packages you open -- that is what building a part from a script means -- and the IDE exists for that, so
+workspace trust is turned off in it, for every folder and for the whole editor (tasks and debugging included,
+which is what lets the package's "Render" command run). Open only packages you would run. In Visual Studio
+Code, which does ask, :ref:`the extension <vscode-extension>` waits for the answer.
 
 Start from an example
 ---------------------
