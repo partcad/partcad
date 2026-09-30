@@ -286,60 +286,6 @@ function disposeMaterials(material: THREE.Material | THREE.Material[] | undefine
     }
 }
 
-/** Instance duplicate geometries to reduce draw calls. */
-function instanceDuplicates(group: THREE.Group): void {
-    const geometryMap = new Map<THREE.BufferGeometry, Array<THREE.Mesh>>();
-    const meshesToRemove: THREE.Mesh[] = [];
-
-    // Collect meshes by geometry
-    group.traverse((obj) => {
-        const mesh = obj as THREE.Mesh;
-        if (!mesh.isMesh || !mesh.geometry) {
-            return;
-        }
-        if (!geometryMap.has(mesh.geometry)) {
-            geometryMap.set(mesh.geometry, []);
-        }
-        geometryMap.get(mesh.geometry)!.push(mesh);
-    });
-
-    // Create InstancedMesh for geometries with duplicates
-    for (const [geometry, meshes] of geometryMap) {
-        if (meshes.length <= 1) {
-            continue; // Skip unique geometries
-        }
-
-        try {
-            const material = (meshes[0] as THREE.Mesh).material as THREE.Material;
-            const instanced = new THREE.InstancedMesh(geometry, material, meshes.length);
-
-            meshes.forEach((mesh, index) => {
-                instanced.setMatrixAt(index, mesh.matrixWorld);
-            });
-            instanced.instanceMatrix.needsUpdate = true;
-
-            // Add instanced mesh to the first mesh's parent
-            const parent = meshes[0].parent;
-            if (parent) {
-                parent.add(instanced);
-            }
-
-            // Mark individual meshes for removal
-            meshesToRemove.push(...meshes);
-        } catch (error) {
-            console.warn('[PartCAD Viewer] Instancing failed:', error);
-        }
-    }
-
-    // Remove individual meshes
-    meshesToRemove.forEach((mesh) => {
-        const parent = mesh.parent;
-        if (parent) {
-            parent.remove(mesh);
-        }
-    });
-}
-
 function disposeTree(root: THREE.Object3D): void {
     root.traverse((node) => {
         // A callout is an element in the DOM, not in the scene, and three removes
@@ -591,8 +537,7 @@ function restyle(group: THREE.Group, mesh: THREE.Material, line: THREE.Material)
 class Geometry {
     private readonly parsed = new Map<string, THREE.Group>();
     private readonly used = new Set<string>();
-    // Use BasicMaterial instead of Phong for better performance
-    readonly material = new THREE.MeshBasicMaterial({ color: 0x87ceeb, side: THREE.DoubleSide });
+    readonly material = new THREE.MeshPhongMaterial({ color: 0x87ceeb, side: THREE.DoubleSide });
     // A deeper blue than the faces, so that a line lying on one - a bend line
     // across the blank it bends - reads against it, and unlit and not tone-mapped
     // so that it is that blue on a light theme and a dark one alike.
@@ -886,10 +831,6 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
         scene.remove(content);
         disposeTree(content);
     }
-
-    // Optimize: instance duplicate geometries to reduce draw calls
-    instanceDuplicates(group);
-
     content = group;
     scene.add(group);
     // Framed on everything the show carries, whether or not it is switched on:
