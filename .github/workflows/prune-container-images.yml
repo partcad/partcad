@@ -1,0 +1,158 @@
+# The branch-tagged container images nobody is going to pull again.
+#
+# Three packages here carry a tag that starts "<release>-" and goes on to name
+# a branch, beside the release tags a published PartCAD resolves:
+#
+#   partcad-devcontainer       every run of "CI-Dev" that is not a version bump
+#                              publishes one -- see ".github/actions/setup-devcontainer"
+#   partcad-container-python   a run that rebuilt the sandbox images, one tag
+#                              per interpreter per architecture
+#   partcad-container-kicad    the same run, one tag
+#
+# Every one of them is addressed by exactly one CI run and by nothing else, so
+# they are safe to delete and nobody ever does. "CI" deletes its own Python
+# images when its test jobs finish (see "cleanup-images" there); this is what
+# covers the rest -- the dev container image, the KiCad image that "CI" cannot
+# delete because "CI-Dev" reads it too, and anything a cancelled run left
+# behind.
+#
+# A month, because the floor only has to be longer than a run: the point is to
+# never delete a tag some job is still pulling, and an hour would do for that.
+# A month costs nothing and leaves a branch somebody is still working on with
+# its images intact.
+name: Prune container images
+
+on:
+  schedule:
+    # Nothing else runs at this hour; the nightly test schedule is 08:00.
+    - cron: "40 5 * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "List what would be deleted and delete nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  prune:
+    name: "Prune branch-tagged images"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      packages: write
+    steps:
+      - name: Delete branch tags older than the floor
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Never interpolated into the script.
+          DRY_RUN: ${{ inputs.dry-run && 'true' || 'false' }}
+          MAX_AGE_DAYS: "30"
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY%%/*}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          cutoff=$(date -u -d "${MAX_AGE_DAYS} days ago" +%s)
+          echo "deleting branch tags last updated before $(date -u -d "@${cutoff}") (dry-run=${DRY_RUN})"
+
+          # Which tags are a branch's. Stated as what is KEPT, because that is
+          # the direction a mistake has to be safe in: a tag this fails to
+          # recognise is a tag that survives another day, and a tag it
+          # recognises wrongly is one a released PartCAD stops being able to
+          # pull.
+          #
+          #   0.8.70                        the release        -> keep
+          #   0.8.70-py3.11-amd64           the release's image -> keep
+          #   py3.11-amd64                  the moving tag      -> keep
+          #   0.8.70-my-branch              a branch's          -> delete
+          #   0.8.70-my-branch-py3.11-amd64 a branch's          -> delete
+          #
+          # So: a version prefix followed by something that does not begin
+          # "py<digit>". A branch actually called "py3-something" is therefore
+          # kept forever, which is the harmless half of being wrong.
+          is_branch_tag() {
+            if printf '%s' "$1" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-py[0-9]'; then
+              return 1
+            fi
+            printf '%s' "$1" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-.'
+          }
+
+          deleted=0
+          kept=0
+          problems=0
+          for package in "${repo}-devcontainer" "${repo}-container-python" "${repo}-container-kicad"; do
+            echo "::group::${package}"
+            # A package that has never been published 404s here, and that is
+            # not a reason to leave the other two unswept -- so the listing is
+            # per-package and a failure is recorded rather than fatal. It is
+            # still a failure: see the note at the end.
+            if ! versions=$(gh api --paginate \
+              "orgs/${owner}/packages/container/${package}/versions?per_page=100" \
+              --jq '.[] | {id: .id, updated: .updated_at, tags: (.metadata.container.tags // [])} | @json'); then
+              echo "::warning::could not list versions of ${package}"
+              problems=$((problems + 1))
+              echo "::endgroup::"
+              continue
+            fi
+
+            while IFS= read -r version; do
+              [ -n "${version}" ] || continue
+              id=$(echo "${version}" | jq -r '.id')
+              updated=$(echo "${version}" | jq -r '.updated')
+              mapfile -t tags < <(echo "${version}" | jq -r '.tags[]?')
+
+              # An untagged version is left alone. It is either a manifest-list
+              # member of a tagged one or a leftover of a tag that moved, and
+              # telling those apart is more than this needs to do.
+              [ "${#tags[@]}" -gt 0 ] || continue
+
+              # Every tag on the version has to be one we would delete: a
+              # version is deleted whole, so one release tag among them makes
+              # the whole version untouchable.
+              deletable=true
+              for tag in "${tags[@]}"; do
+                if ! is_branch_tag "${tag}"; then
+                  deletable=false
+                  break
+                fi
+              done
+              if [ "${deletable}" != "true" ]; then
+                kept=$((kept + 1))
+                continue
+              fi
+
+              if [ "$(date -u -d "${updated}" +%s)" -ge "${cutoff}" ]; then
+                echo "too recent, keeping: ${tags[*]} (${updated})"
+                kept=$((kept + 1))
+                continue
+              fi
+
+              if [ "${DRY_RUN}" = "true" ]; then
+                echo "would delete: ${tags[*]} (${updated})"
+              else
+                echo "deleting: ${tags[*]} (${updated})"
+                if ! gh api --method DELETE \
+                  "orgs/${owner}/packages/container/${package}/versions/${id}"; then
+                  echo "::warning::could not delete version ${id} (${tags[*]})"
+                  problems=$((problems + 1))
+                  continue
+                fi
+              fi
+              deleted=$((deleted + 1))
+            done <<< "${versions}"
+            echo "::endgroup::"
+          done
+
+          echo "${deleted} version(s) deleted, ${kept} kept." >> "${GITHUB_STEP_SUMMARY}"
+
+          # Loud on failure, unlike the per-run cleanup in "CI": that one warns
+          # so that a permissions problem does not redden somebody's pull
+          # request, which leaves this as the place the problem has to show. A
+          # sweep that cannot delete is a registry filling up with nothing
+          # saying so.
+          if [ "${problems}" -ne 0 ]; then
+            echo "::error::${problems} package listing(s) or deletion(s) failed"
+            exit 1
+          fi

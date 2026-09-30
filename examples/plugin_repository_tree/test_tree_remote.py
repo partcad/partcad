@@ -49,3 +49,11 @@ def test_leaf_subfolders_have_no_children():
 def test_unknown_key_is_none():
     assert _get("objects/part") is None  # the top package has no parts of its own
     assert _get("nonexistent/objects/part") is None
+
+
+def test_each_package_says_which_object_kinds_it_has():
+    """So PartCAD asks for the one kind that is here and not the other nine."""
+    assert _get("meta")["objectKinds"] == []  # the top package holds only children
+    assert _get("brackets/meta")["objectKinds"] == ["part"]
+    for kind in _get("brackets/meta")["objectKinds"]:
+        assert _get("brackets/objects/" + kind)

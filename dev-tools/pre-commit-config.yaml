@@ -11,14 +11,24 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # '.brep' is excluded from both because a BREP file is not source: it is
+      # what 'BRepTools::Write' wrote, and the fixtures under
+      # 'tests/partcad/unit/data/brep/' are checked in precisely so that a test
+      # reads real writer output. That output has trailing spaces on most of its
+      # lines and no final newline, so either hook would rewrite it into
+      # something OCCT never produced - which is the one property the fixtures
+      # have. (Files under 'examples/' are already covered by the path above.)
       - id: trailing-whitespace
-        exclude: "^examples/|_ai_.+\\.(py|scad)"
+        exclude: "^examples/|_ai_.+\\.(py|scad)|\\.brep$"
         exclude_types: [svg]
       - id: end-of-file-fixer
-        exclude: "^examples/|_ai_.+\\.(py|scad)"
+        exclude: "^examples/|_ai_.+\\.(py|scad)|\\.brep$"
         exclude_types: [svg]
       - id: check-yaml
-        exclude: "^partcad/tests/unit/data/project_config_(template|include).yaml$"
+        # Fixtures that are Jinja2 templates rather than YAML: a '{% ... %}' at
+        # the start of a line is not a YAML token, and rendering it is the whole
+        # point of what they test.
+        exclude: "^tests/partcad/unit/data/(project_config_(template|include)\\.yaml|config_template/partcad\\.yaml)$"
       - id: check-added-large-files
       # https://github.com/docker/for-mac/issues/5029
       # - id: check-executables-have-shebangs
@@ -32,23 +42,134 @@ repos:
       - id: check-github-actions
       - id: check-github-workflows
         args: ["--verbose"]
-  - repo: https://github.com/python-poetry/poetry
-    rev: 1.8.0
+  # Poetry's four hooks are declared here rather than pulled from
+  # `https://github.com/python-poetry/poetry`, for two reasons the
+  # one-distribution refactor made concrete.
+  #
+  # A hook repository is pinned by git tag, and the tag pinned here was 1.8.0 --
+  # a Poetry that predates PEP 621. It does not read `[project]`, so it took the
+  # `[tool.poetry.group.*]` tables in `pyproject.toml` for the package's own
+  # metadata and failed with "The fields ['authors', 'description', 'name',
+  # 'version'] are required in package mode" on every commit that touched that
+  # file. The version now sits in the open, next to what it is pinned to: the
+  # Poetry that generated `poetry.lock`.
+  #
+  # And a hook repository has to be cloned. A developer whose gitconfig rewrites
+  # `https://github.com/` to SSH -- the VS Code dev container copies the host's
+  # gitconfig in, rewrite rules included -- has pre-commit's fetch of it turned
+  # into an SSH fetch, which fails in a shell with no agent behind it (a
+  # `devcontainer exec` session, a CI runner). `additional_dependencies` comes
+  # from PyPI over https and is not rewritten.
+  #
+  # `poetry-plugin-export` is named because `poetry export` left core Poetry in
+  # 2.0. What it exports is byte-identical to what 1.8 exported.
+  - repo: local
     hooks:
       - id: poetry-check
+        name: poetry-check
+        description: run poetry check to validate config
+        entry: poetry check
+        language: python
+        additional_dependencies: ["poetry==2.3.3"]
+        pass_filenames: false
+        files: ^(.*/)?pyproject\.toml$
       - id: poetry-lock
+        name: poetry-lock
+        description: run poetry lock to update lock file
+        entry: poetry lock
+        language: python
+        additional_dependencies: ["poetry==2.3.3"]
+        pass_filenames: false
+        files: ^(.*/)?(poetry\.lock|pyproject\.toml)$
       - id: poetry-export
+        name: poetry-export
+        description: run poetry export to sync lock file with requirements.txt
+        entry: poetry export
+        language: python
+        additional_dependencies: ["poetry==2.3.3", "poetry-plugin-export==1.10.0"]
+        pass_filenames: false
+        files: ^(.*/)?poetry\.lock$
         args: [
-            # TODO: This should be updating corresponding ./{partcad,docs,partcad-cli}/requirements.txt
             "--format=requirements.txt",
             "--output=.devcontainer/requirements.txt",
             "--with=dev",
             "--with=test",
             "--with=partcad",
-            "--with=cli",
             "--with=docs",
           ]
       - id: poetry-install
+        name: poetry-install
+        description: run poetry install to install dependencies from the lock file
+        entry: poetry install
+        language: python
+        additional_dependencies: ["poetry==2.3.3"]
+        pass_filenames: false
+        stages: [post-checkout, post-merge]
+        always_run: true
+  # isort, as a local hook for the same two reasons the Poetry hooks above are
+  # local: a hook repository has to be cloned, and a developer whose gitconfig
+  # rewrites `https://github.com/` to SSH has that clone fail in a shell with no
+  # agent behind it. `additional_dependencies` comes from PyPI over https.
+  #
+  # The version is the one `pyproject.toml` resolves, so the hook and
+  # `poetry run isort` cannot disagree about what "sorted" means.
+  #
+  # `--filter-files` is not optional and not a tidiness flag. pre-commit hands
+  # the hook the staged files by name, and isort applies `extend_skip` /
+  # `extend_skip_glob` to what it *discovers* by walking a directory, not to
+  # what it is handed: without this flag a staged `src/partcad/wrappers/*.py`
+  # is sorted despite the skip, which is precisely the reordering the skip
+  # exists to prevent. `--settings-path` for the same reason -- the config is
+  # found from the repository root rather than from each file's directory.
+  #
+  # The `exclude:` on all three is `examples/` and `features/`, the two trees
+  # `pyproject.toml` holds out -- the comment above `[tool.black]` there says
+  # which idiom each of them is full of and why waiving it is a decision of its
+  # own. isort and black are configured to skip them and would skip them
+  # without this; flake8 is *not*, because its `extend-exclude` governs only
+  # the files it discovers by walking, and pre-commit hands a hook the staged
+  # files by name. So one of the three needs this line and the other two carry
+  # it to say, on the hook itself, what that hook looks at. If the held-out set
+  # changes it changes in `pyproject.toml` and in these three places.
+  - repo: local
+    hooks:
+      - id: isort
+        name: isort
+        description: import order, as configured in pyproject.toml
+        entry: isort --check-only --diff --filter-files --settings-path pyproject.toml
+        language: python
+        additional_dependencies: ["isort==8.0.1"]
+        types: [python]
+        exclude: ^(examples|features)/
+      # black and flake8 join isort on the same terms: local rather than a hook
+      # repository (nothing to clone, so a gitconfig that rewrites GitHub to SSH
+      # cannot break the install), pinned to the version `pyproject.toml`
+      # resolves, and mirrored by a job in `test.yml`.
+      #
+      # black holds back the two trees above and nothing else. The sandbox
+      # scripts isort skips are skipped because their *import order* is load
+      # bearing, and black never reorders imports -- it only wraps lines, which
+      # is safe there. (It needs `force-exclude` rather than `extend-exclude`
+      # for what it does hold back, for the reason `--filter-files` is on the
+      # isort line above: `pre-commit` passes files by name.)
+      - id: black
+        name: black
+        description: formatting, as configured in pyproject.toml
+        entry: black --check --diff
+        language: python
+        additional_dependencies: ["black==26.5.1"]
+        types: [python]
+        exclude: ^(examples|features)/
+      # `Flake8-pyproject` is not optional here: without it flake8 does not read
+      # `[tool.flake8]` at all and checks at its own 79-column default.
+      - id: flake8
+        name: flake8
+        description: lint, as configured in pyproject.toml
+        entry: flake8
+        language: python
+        additional_dependencies: ["flake8==7.3.0", "Flake8-pyproject==1.2.4"]
+        types: [python]
+        exclude: ^(examples|features)/
   - repo: local
     hooks:
       - id: shellcheck
@@ -58,17 +179,38 @@ repos:
         types: [shell]
         args: ["-e", "SC1091"] # Optional: exclude specific checks
         # args: ["--severity=warning"]  # Optional: show only errors and warnings
+      # The images under 'examples/' are generated by 'pc render' and checked in
+      # on purpose, so that a change in how PartCAD renders shows up as a diff.
+      # Regenerating a README stages itself ('git add -u') while the new images
+      # beside it stay untracked, which is how several examples came to point at
+      # images that are not in the repository. Rendering everything takes tens of
+      # minutes and lives in CI; this only reads what is already on disk.
+      - id: example-images
+        name: "Examples: images a README references are checked in"
+        entry: python3 dev-tools/check_example_images.py
+        language: system
+        pass_filenames: false
+        files: ^examples/
+      # 'pass_filenames: false' on both: the scripts ignore what they are
+      # handed and run the whole suite. Left on, pre-commit splits the staged
+      # files into as many batches as it has cores and runs the hook once per
+      # batch *concurrently* -- so a commit touching a handful of Python files
+      # ran the entire suite four times over, four times the cost, with four
+      # sessions racing each other over the paths a test writes (test_file.py
+      # downloads into 'examples/bolt.step' and deletes it again).
       - id: behave
         name: "Poetry: behave"
         entry: .devcontainer/behave_hook.sh
         language: system
         types: [python]
+        pass_filenames: false
         description: Run Behave tests in parallel using behavex
       - id: pytest
         name: "Poetry: pytest"
         entry: .devcontainer/pytest_hook.sh
         language: system
         types: [python]
+        pass_filenames: false
         description: Run pytest tests in parallel using xdist
   - repo: https://github.com/hadolint/hadolint
     rev: v2.14.0
@@ -103,7 +245,7 @@ repos:
         files: \.ts$
         name: eslint
         language: system
-        entry: bash -c "cd partcad-ide-vscode && npm run lint"
+        entry: bash -c "cd ide/vscode && npm run lint"
       # TODO: Add this back in when `npm run x-test` is fast
       # - id: x-test
       #   files: \.ts$

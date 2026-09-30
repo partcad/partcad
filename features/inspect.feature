@@ -1,4 +1,4 @@
-@wip @cli @pc-render
+@cli @pc-render
 Feature: `pc inspect` command
 
   Background: Sandbox
@@ -6,9 +6,35 @@ Feature: `pc inspect` command
     Given I have temporary $HOME in "/tmp/sandbox/home"
     Given a file named "partcad.yaml" does not exist
 
+  @success @pc-inspect
+  Scenario: `pc inspect -P` looks the object up in the given package
+    Given a directory named "sub" exists
+    And a file named "sub/test.scad" with content:
+      """
+      translate (v= [0,0,0])  cube (size = 10);
+      """
+    And a file named "sub/partcad.yaml" with content:
+      """
+      parts:
+        test:
+          type: scad
+          summary: the part that lives in the sub package
+      """
+    And a file named "partcad.yaml" with content:
+      """
+      import:
+        sub:
+          path: sub
+      """
+    When I run "pc inspect --verbal -P //sub test"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "the part that lives in the sub package"
+
+  @wip
   Scenario Outline: `pc inspect -i` command
     Given steps for testing
 
+  @wip
   Scenario Outline: `pc inspect -a` command
     When I run "partcad -p $PARTCAD_ROOT/examples inspect -a -V --package <package> <part>"
     Then the command should exit with a status code of "0"
@@ -26,6 +52,7 @@ Feature: `pc inspect` command
     | /produce_assembly_assy | partcad_logo_short |
     | /produce_assembly_assy | primitive |
 
+  @wip
   Scenario Outline: `pc inspect -s` command
     When I run "partcad -p $PARTCAD_ROOT/examples inspect -s -V --package <package> <part>"
     Then the command should exit with a status code of "0"
@@ -64,6 +91,7 @@ Feature: `pc inspect` command
     | package | part |
     | /produce_sketch_svg | svg_01 |
 
+  @wip
   Scenario Outline: `pc inspect` command
     When I run "partcad -p $PARTCAD_ROOT/examples inspect -V --package <package> <part>"
     Then the command should exit with a status code of "0"
@@ -82,6 +110,17 @@ Feature: `pc inspect` command
   Examples: Part: build123d
     | package | part |
     | /produce_part_build123d_primitive | cube |
+    | /produce_part_sheet_metal | angle_down |
+    | /produce_part_sheet_metal | angle_up |
+    | /produce_part_sheet_metal | bracket |
+    | /produce_part_subtractive | bearing_block |
+    | /produce_part_subtractive | blank |
+    | /produce_part_subtractive | drilled_plate |
+    | /produce_part_subtractive | gasket |
+    | /produce_part_subtractive | rail |
+    | /produce_part_subtractive | stock_board |
+    | /produce_part_subtractive | stock_plate |
+    | /produce_part_subtractive | stock_sheet |
 
   @sdf
   Examples: Part: sdf

@@ -1,0 +1,11 @@
+.vscode-test/**
+sampleWorkspace/**
+coverage/**
+out/**
+**/node_modules/**
+**/.venv/**
+**/.nox/**
+**/__pycache__/**
+**/.pyc
+**/.pytest_cache/**
+**/.conda/**

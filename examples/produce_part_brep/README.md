@@ -12,9 +12,8 @@ pc inspect box
 
 ### box
 <table><tr>
-<td valign=top><a href="box.brep"><img src="././box.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
-<td valign=top>30x20x10-box</td>
-<td valign=top>Aliases:<br/><ul></ul></td>
+<td valign=top><a href="box.brep"><img src="././box.svg" alt="box" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>A box defined in BREP</td>
 </tr></table>
 
 <br/><br/>

@@ -94,6 +94,25 @@ Feature: `pc install` command
     When I run "git -C $HOME/.partcad/git/*/ config --get user.email"
     Then STDOUT should contain "johndoe@example.com"
 
+  # The second half of an install: the objects, not just the imported packages.
+  # @requires-network: this downloads a part file over HTTPS; before_scenario in
+  # features/environment.py skips it when the network is unreachable.
+  @success @pc-init @pc-install @pc-ansi @requires-network
+  Scenario: Install downloads the files behind "fileFrom"
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        bolt:
+          type: step
+          fileFrom: url
+          fileUrl: https://raw.githubusercontent.com/openvmp/partcad/devel/examples/produce_part_step/bolt.step
+      """
+    When I run "pc install"
+    Then STDOUT should contain "DONE: Install: this:"
+    And the command should exit with a status code of "0"
+    # Downloaded by the cache key calculation, without the part being built.
+    And a file named "bolt.step" should exist
+
   @wip @failure @pc-install
   Scenario: Install non-existent package
     Given I am in "/tmp/sandbox/behave" directory

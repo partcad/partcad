@@ -1,0 +1,526 @@
+#
+# PartCAD, 2026
+#
+# Licensed under Apache License, Version 2.0.
+#
+"""Tests for the DaemonClient (request/response + notification delivery)."""
+
+import io
+import logging
+import os
+import pathlib
+import shutil
+import socket
+import tempfile
+import threading
+import time
+
+import pytest
+
+from partcad_client import client as client_module
+from partcad_client.client import DaemonClient, DaemonError, DaemonStalled
+from partcad_service_json_rpc.core import events
+from partcad_service_json_rpc.core.session import Session
+from partcad_service_json_rpc.rpc.dispatcher import JsonRpcError
+from partcad_service_json_rpc.transport.socket_server import SocketServer
+from partcad_utils import staging
+
+if not hasattr(socket, "AF_UNIX"):
+    pytest.skip("AF_UNIX not available on this platform", allow_module_level=True)
+
+
+@pytest.fixture
+def socket_dir():
+    """A directory short enough to hold an AF_UNIX socket path.
+
+    ``sun_path`` is a fixed-size field -- 104 bytes on macOS, 108 on Linux --
+    and pytest's ``tmp_path`` spends most of that before the socket name is
+    appended: on macOS it sits under
+    ``/private/var/folders/<hash>/T/pytest-of-<user>/pytest-<n>/<test-name><n>/``,
+    where a descriptive test name alone pushes a bind past the limit and fails
+    with "AF_UNIX path too long". ``/tmp`` keeps the prefix to a few characters,
+    which is also what a real daemon socket looks like (it lives under
+    ``~/.partcad/workspaces/<hash>/``).
+
+    Defined per-module rather than in a conftest: this package and ``partcad``
+    both have a ``tests`` package, so two ``tests.conftest`` modules collide
+    when a single pytest run collects both.
+    """
+    path = tempfile.mkdtemp(prefix="pcs", dir="/tmp")
+    try:
+        yield pathlib.Path(path)
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
+
+
+def _wait_until_listening(path, timeout=5.0):
+    """Block until the server at ``path`` accepts connections.
+
+    ``serve_unix()`` creates the socket *file* at bind() and only accepts after
+    listen(), so waiting for the file to exist returns too early and the next
+    connect is refused - a race a loaded CI runner loses (ECONNREFUSED on both
+    Linux and macOS). Probing with a real connect is the only signal that means
+    "ready".
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            probe.connect(path)
+            return
+        except (ConnectionRefusedError, FileNotFoundError):
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.01)
+        finally:
+            probe.close()
+
+
+def _serve(socket_dir, registry):
+    path = str(socket_dir / "socket")
+    server = SocketServer(Session(), registry)
+    threading.Thread(target=server.serve_unix, args=(path,), daemon=True).start()
+    # Wait until the server is *accepting*, not merely until the socket file
+    # exists: serve_unix() binds -- which creates the file -- and only then
+    # calls listen(), so a client that connects in between gets ECONNREFUSED.
+    _wait_until_listening(path)
+    return server, path
+
+
+def _client(path):
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.connect(path)
+    stream = sock.makefile("rwb")
+    return DaemonClient(stream, stream, closer=lambda: (stream.close(), sock.close()))
+
+
+def test_client_call_returns_result(socket_dir):
+    server, path = _serve(socket_dir, {"ping": lambda s, p: {"echo": p}})
+    try:
+        client = _client(path)
+        assert client.call("ping", {"x": 1}) == {"echo": {"x": 1}}
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_client_delivers_notifications_before_result(socket_dir):
+    def go(session, params):
+        session.emitter.emit(events.INFO, "working")
+        session.emitter.emit(events.ITEMS, {"name": "//"})
+        return "done"
+
+    server, path = _serve(socket_dir, {"go": go})
+    try:
+        seen = []
+        client = _client(path)
+        result = client.call("go", {}, on_event=lambda m, p: seen.append((m, p)))
+        assert result == "done"
+        assert seen == [(events.INFO, "working"), (events.ITEMS, {"name": "//"})]
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_client_raises_daemon_error_on_error_response(socket_dir):
+    server, path = _serve(socket_dir, {})  # rpc.discover exists; "nope" does not
+    try:
+        client = _client(path)
+        with pytest.raises(DaemonError):
+            client.call("nope")
+        client.close()
+    finally:
+        server.stop()
+
+
+def _stalling_client(path, timeout):
+    """A client bounded like the real socket one: a timeout on the socket."""
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.connect(path)
+    sock.settimeout(timeout)
+    stream = sock.makefile("rwb")
+    return DaemonClient(
+        stream,
+        stream,
+        closer=lambda: (stream.close(), sock.close()),
+        timeout=timeout,
+        endpoint=path,
+    )
+
+
+def test_client_gives_up_on_a_service_that_stops_answering(socket_dir):
+    """A handler that never returns must not hold the client forever.
+
+    Regression: 'pc test' deadlocked inside the daemon, and because the client
+    waited on the response with no bound, the CLI sat in 'framing.read_message'
+    until CI's own watchdog killed the job 40 minutes later.
+    """
+    release = threading.Event()
+
+    def wedged(session, params):
+        release.wait(30)  # bounded so a failure here cannot hang the suite
+        return "eventually"
+
+    server, path = _serve(socket_dir, {"wedged": wedged})
+    try:
+        client = _stalling_client(path, 0.5)
+        started = time.monotonic()
+        with pytest.raises(DaemonStalled) as caught:
+            client.call("wedged")
+        waited = time.monotonic() - started
+        assert waited < 15, "gave up after %.1fs, which is not the bound it was given" % waited
+        # Says what stopped and what it was doing, so the report is actionable
+        # without the caller already knowing which command it was running.
+        assert "stopped responding" in str(caught.value)
+        assert "wedged" in str(caught.value)
+        client.close()
+    finally:
+        release.set()
+        server.stop()
+
+
+def test_the_stall_report_names_where_to_look(socket_dir, caplog):
+    """The loud half: the endpoint, the logs and the pid reach the log."""
+    release = threading.Event()
+    (socket_dir / "pid").write_text("4242", encoding="utf-8")
+
+    server, path = _serve(socket_dir, {"wedged": lambda s, p: release.wait(30)})
+    try:
+        client = _stalling_client(path, 0.5)
+        with caplog.at_level(logging.ERROR, logger="partcad_client.client"):
+            with pytest.raises(DaemonStalled):
+                client.call("wedged")
+        report = "\n".join(r.getMessage() for r in caplog.records)
+        assert path in report
+        assert str(socket_dir) in report
+        assert "4242" in report
+        assert "PC_DAEMON_IDLE_TIMEOUT" in report
+        client.close()
+    finally:
+        release.set()
+        server.stop()
+
+
+def test_a_long_but_talkative_call_is_not_cut_off(socket_dir):
+    """The bound is on silence, not on how long the operation takes.
+
+    A recursive render runs for minutes and streams an event per action while
+    it does. Every one of those pushes the deadline out, or the bound would be
+    a limit on how much work a command may do.
+    """
+
+    def slow(session, params):
+        for _ in range(6):
+            time.sleep(0.1)
+            session.emitter.emit(events.INFO, "still here")
+        return "done"
+
+    server, path = _serve(socket_dir, {"slow": slow})
+    try:
+        client = _stalling_client(path, 0.35)  # shorter than the whole call
+        seen = []
+        assert client.call("slow", {}, on_event=lambda m, p: seen.append(m)) == "done"
+        assert len(seen) == 6
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_no_bound_is_applied_when_the_timeout_is_disabled(socket_dir, monkeypatch):
+    monkeypatch.setenv("PC_DAEMON_IDLE_TIMEOUT", "0")
+    assert client_module.idle_timeout() == 0.0
+
+
+@pytest.mark.parametrize("setting", ["0", "-1", "-0.5", "inf", "1e309"])
+def test_turning_the_bound_off_leaves_the_socket_blocking(socket_dir, monkeypatch, setting):
+    """ "No bound" has to mean waiting, not failing instantly or not connecting.
+
+    'settimeout(0)' does not make a socket wait forever, it makes it
+    non-blocking, and the first read then fails with BlockingIOError -- which is
+    not the TimeoutError a stall is reported from, so it would have escaped
+    'call' as an unhandled error on every request. The others never reach a
+    socket at all: 'settimeout()' raises ValueError on a negative number and
+    OverflowError on an infinite one, from inside the connect that 'connect()'
+    wraps in a bare except, so the client would have silently stopped using the
+    daemon and spawned a one-shot stdio service per command instead.
+    """
+    monkeypatch.setenv("PC_DAEMON_IDLE_TIMEOUT", setting)
+    assert client_module.idle_timeout() == 0.0
+
+    # The service holds its answer back until released, so that the call has to
+    # *wait* for one. Answering straight away would not prove anything: the
+    # answer can be sitting in the socket buffer by the time 'read_message'
+    # first reads, and a read that never has to wait cannot tell a blocking
+    # socket from a non-blocking one.
+    arrived = threading.Event()
+    release = threading.Event()
+
+    def slow_ping(session, params):
+        arrived.set()
+        release.wait(30)
+        return "pong"
+
+    server, path = _serve(socket_dir, {"ping": slow_ping})
+    try:
+        # The real '_connect_socket', with only the launcher stubbed out: the
+        # socket it builds is what this is about, and starting a daemon is not.
+        monkeypatch.setattr(client_module, "start_daemon", lambda cwd, extra_args: path)
+        client = client_module._connect_socket(None, ())
+
+        answer = []
+
+        def call_it():
+            try:
+                answer.append(client.call("ping"))
+            except BaseException as e:  # noqa: BLE001 - reported by the assertion below
+                answer.append(e)
+
+        caller = threading.Thread(target=call_it, daemon=True)
+        caller.start()
+        assert arrived.wait(10), "the service never received the request"
+        caller.join(timeout=0.5)
+        assert caller.is_alive(), "the call did not wait for an answer: %r" % (answer,)
+
+        release.set()
+        caller.join(timeout=30)
+        assert answer == ["pong"]
+        client.close()
+    finally:
+        release.set()
+        server.stop()
+
+
+@pytest.mark.parametrize("setting", [None, "", "   "])
+def test_the_default_bound_applies_when_nothing_is_set(socket_dir, monkeypatch, setting):
+    """The branch every command that does not set the variable goes through.
+
+    Blank is treated as unset rather than as a value, unlike the 'PC_*' flags
+    'partcad_utils.booleans' reads, where an empty value deliberately turns one
+    off. There is no "off" for a bound -- 0 says that -- so there is nothing for
+    a blank to mean but "no answer given".
+    """
+    if setting is None:
+        monkeypatch.delenv("PC_DAEMON_IDLE_TIMEOUT", raising=False)
+    else:
+        monkeypatch.setenv("PC_DAEMON_IDLE_TIMEOUT", setting)
+    assert client_module.idle_timeout() == client_module.DEFAULT_IDLE_TIMEOUT
+
+
+def test_the_default_bound_is_used_when_the_setting_is_not_a_number(socket_dir, monkeypatch):
+    monkeypatch.setenv("PC_DAEMON_IDLE_TIMEOUT", "soon")
+    assert client_module.idle_timeout() == client_module.DEFAULT_IDLE_TIMEOUT
+
+
+def test_the_bound_can_be_set_from_the_environment(socket_dir, monkeypatch):
+    monkeypatch.setenv("PC_DAEMON_IDLE_TIMEOUT", "12.5")
+    assert client_module.idle_timeout() == 12.5
+
+
+def test_a_stalled_stdio_service_is_interrupted_rather_than_waited_on():
+    """The other half of the bound, for a channel that takes no timeout.
+
+    The stdio service is reached over pipes, which cannot carry a timeout the
+    way a socket can, so a watchdog ends the read instead. It is allowed to be
+    this blunt only because that service is a child of this process and serves
+    nobody else.
+    """
+    read_fd, write_fd = os.pipe()
+    read_stream = os.fdopen(read_fd, "rb")
+    killed = threading.Event()
+
+    def interrupt():
+        killed.set()
+        os.close(write_fd)  # what 'proc.kill()' amounts to for the read
+
+    client = DaemonClient(
+        read_stream,
+        io.BytesIO(),
+        timeout=0.2,
+        endpoint="stdio, pid 4242",
+        interrupt=interrupt,
+    )
+    try:
+        started = time.monotonic()
+        with pytest.raises(DaemonStalled) as caught:
+            client.call("wedged")
+        assert time.monotonic() - started < 15
+        assert killed.is_set(), "the watchdog never interrupted the read"
+        # Not reported as the service closing the connection: it did not, this
+        # client closed it, and saying otherwise sends the reader looking for a
+        # crash that never happened.
+        assert "stopped responding" in str(caught.value)
+    finally:
+        read_stream.close()
+
+
+# ---- building an assembly in two phases -------------------------------------
+#
+# The client's half of 'partcad_utils.staging': a service that answers "not yet
+# -- build these first" is answered in kind, and only an answer it cannot act on
+# reaches the caller. Driven against the real socket server with a registry of
+# stand-in handlers, so what is exercised is the exchange rather than a mock.
+
+
+def _retry(items):
+    """What an operation raises when sub-assemblies have to be built first."""
+    return JsonRpcError(staging.RETRY_LATER, staging.error_message(items), staging.error_data(items))
+
+
+def _staging_registry(needs: dict):
+    """A registry where each assembly names what has to be built before it.
+
+    'needs' maps an assembly's name to the names it places. Asking for one
+    before those are built raises the retry error; 'assembly.instantiate' is
+    what marks one built, and every request made is recorded in order.
+    """
+    built = set()
+    calls = []
+
+    def instantiate(session, params):
+        calls.append((staging.INSTANTIATE_METHOD, params))
+        pending = [{"package": "//", "name": name} for name in needs.get(params["name"], []) if name not in built]
+        if pending:
+            raise _retry(pending)
+        built.add(params["name"])
+        return {"assembly": params["name"], "instantiated": True}
+
+    def inspect(session, params):
+        calls.append(("inspect.assembly", params))
+        pending = [{"package": "//", "name": name} for name in needs.get(params["name"], []) if name not in built]
+        if pending:
+            raise _retry(pending)
+        return {"shown": params["name"]}
+
+    return {staging.INSTANTIATE_METHOD: instantiate, "inspect.assembly": inspect}, calls
+
+
+def test_client_builds_the_subassemblies_the_service_asks_for_first(socket_dir):
+    registry, calls = _staging_registry({"top": ["unit"]})
+    server, path = _serve(socket_dir, registry)
+    try:
+        client = _client(path)
+        assert client.call("inspect.assembly", {"package": "//", "name": "top"}) == {"shown": "top"}
+        client.close()
+    finally:
+        server.stop()
+
+    assert [method for method, _ in calls] == [
+        "inspect.assembly",  # refused: 'unit' is not built
+        staging.INSTANTIATE_METHOD,  # 'unit', built and left there
+        "inspect.assembly",  # asked again, and answered
+    ]
+    # The result of a staging request stays on the service: this end asked for
+    # the cache entry, not for the geometry.
+    assert calls[1][1] == {
+        "package": "//",
+        "name": "unit",
+        staging.KIND: staging.KIND_ASSEMBLY,
+        staging.CACHE_ONLY: True,
+    }
+
+
+def test_client_builds_a_nested_tree_one_assembly_at_a_time(socket_dir):
+    """A staging request is an assembly request, so it can be refused in its turn."""
+    registry, calls = _staging_registry({"top": ["mid"], "mid": ["leaf"]})
+    server, path = _serve(socket_dir, registry)
+    try:
+        client = _client(path)
+        assert client.call("inspect.assembly", {"package": "//", "name": "top"}) == {"shown": "top"}
+        client.close()
+    finally:
+        server.stop()
+
+    assert [(method, params["name"]) for method, params in calls] == [
+        ("inspect.assembly", "top"),
+        (staging.INSTANTIATE_METHOD, "mid"),  # refused in its turn
+        (staging.INSTANTIATE_METHOD, "leaf"),
+        (staging.INSTANTIATE_METHOD, "mid"),  # now that 'leaf' is there
+        ("inspect.assembly", "top"),
+    ]
+
+
+def test_client_builds_a_shared_subassembly_once(socket_dir):
+    """Two branches over one assembly are one build, not two."""
+    registry, calls = _staging_registry({"top": ["left", "right"], "left": ["shared"], "right": ["shared"]})
+    server, path = _serve(socket_dir, registry)
+    try:
+        client = _client(path)
+        assert client.call("inspect.assembly", {"package": "//", "name": "top"}) == {"shown": "top"}
+        client.close()
+    finally:
+        server.stop()
+
+    staged = [params["name"] for method, params in calls if method == staging.INSTANTIATE_METHOD]
+    assert staged.count("shared") == 1
+
+
+def test_the_context_travels_with_a_staging_request(socket_dir):
+    """A warm service serves several contexts; the wrong one is another workspace."""
+    registry, calls = _staging_registry({"top": ["unit"]})
+    server, path = _serve(socket_dir, registry)
+    try:
+        client = _client(path)
+        client.call("inspect.assembly", {"package": "//", "name": "top", "context": "ctx-7"})
+        client.close()
+    finally:
+        server.stop()
+
+    assert calls[1][1]["context"] == "ctx-7"
+
+
+def test_a_scene_is_asked_for_as_a_scene(socket_dir):
+    """What the service named is what it is asked for, kind included."""
+    staged = []
+
+    def instantiate(session, params):
+        staged.append(params)
+        return {"instantiated": True}
+
+    def inspect(session, params):
+        if staged:
+            return {"shown": params["name"]}
+        raise _retry([{"package": "//", "name": "bench", staging.KIND: "scene"}])
+
+    server, path = _serve(socket_dir, {"inspect.scene": inspect, staging.INSTANTIATE_METHOD: instantiate})
+    try:
+        client = _client(path)
+        client.call("inspect.scene", {"package": "//", "name": "bench_alias"})
+        client.close()
+    finally:
+        server.stop()
+
+    assert staged[0][staging.KIND] == "scene"
+
+
+def test_a_service_that_asks_for_the_same_thing_twice_is_reported(socket_dir):
+    """The loop guard: an unbuildable sub-assembly ends the command, not the client."""
+
+    def never_satisfied(session, params):
+        raise _retry([{"package": "//", "name": "unit"}])
+
+    server, path = _serve(
+        socket_dir,
+        {"inspect.assembly": never_satisfied, staging.INSTANTIATE_METHOD: lambda s, p: {"instantiated": True}},
+    )
+    try:
+        client = _client(path)
+        with pytest.raises(DaemonError) as caught:
+            client.call("inspect.assembly", {"package": "//", "name": "top"})
+        # Says what actually happened, rather than repeating the service's
+        # "build these first" -- which is exactly what this end just did.
+        assert "asked again" in str(caught.value)
+        assert "//:unit" in str(caught.value)
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_an_ordinary_error_is_not_mistaken_for_a_staging_request(socket_dir):
+    server, path = _serve(socket_dir, {"boom": lambda s, p: (_ for _ in ()).throw(JsonRpcError(-32002, "no such"))})
+    try:
+        client = _client(path)
+        with pytest.raises(DaemonError):
+            client.call("boom")
+        client.close()
+    finally:
+        server.stop()

@@ -34,7 +34,7 @@ Visual Studio Code extension
 ----------------------------
 
 The PartCAD extension is
-`available <https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_
+`available <https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official>`_
 in VS Code extension marketplace.
 
 Command line tools
@@ -58,24 +58,24 @@ The command line tools are the easiest way to browse parts:
     pc list packages
 
     # List all sketches in all available packages
-    pc list sketches -r
+    pc list sketches //...
 
     # List all interfaces in all available packages
-    pc list interfaces -r
+    pc list interfaces //...
 
     # List all known matings of interfaces in all available packages
-    pc list mates -r
+    pc list mates //...
 
     # List all parts in all available packages
-    pc list parts -r
+    pc list parts //...
 
     # List all assemblies in all available packages
-    pc list assemblies -r
+    pc list assemblies //...
 
     # Try initializing the model, print some basic info without displaying it
     pc info //pub/std/metric/cqwarehouse:fastener/hexhead-din931
 
-    # Display the model in OCP CAD Viewer
+    # Display the model in the PartCAD Viewer
     pc inspect //pub/std/metric/cqwarehouse:fastener/hexhead-din931
 
     # Display the parametrized model
@@ -85,7 +85,7 @@ The command line tools are the easiest way to browse parts:
         //pub/std/metric/cqwarehouse:fastener/hexhead-din931
 
 The last command displays the chosen part in
-``OCP CAD Viewer`` view in Visual Studio Code.
+``PartCAD Viewer`` view in Visual Studio Code.
 There is currently no support for ``cq-server``.
 Please, let `support@partcad.org <mailto:support@partcad.org>`_ know if there is
 any other tool we should support.
@@ -104,6 +104,77 @@ The result of 2D projection of individual parts, assemblies and scenes onto a pl
 - Raster images
 
   - PNG
+  - JPEG
+
+Both raster formats accept ``width`` and ``height`` (in pixels, ``512`` by
+default); the projection is scaled to fit inside them while keeping its aspect
+ratio. JPEG accepts a few more options, since it is a lossy format without an
+alpha channel:
+
+.. code-block:: yaml
+
+  render:
+    jpeg:
+      prefix: ./images
+      width: 1024
+      height: 1024
+      quality: 85          # 1..100, defaults to 85
+      progressive: false   # write a progressive JPEG
+      optimize: false      # spend more time to produce a smaller file
+      subsampling: "4:4:4" # chroma subsampling: 4:4:4, 4:2:2, 4:2:0 or 4:1:1
+      background: "#ffffff"  # what the transparent background is flattened onto
+
+The default ``4:4:4`` subsampling keeps the full chroma resolution. A projection
+is line art, and the coarser modes smear color across its one-pixel-wide edges;
+switch to ``4:2:0`` when a smaller file matters more than the edges.
+
+The rendered file is named after the object with the format's own extension,
+so ``jpeg`` produces ``<name>.jpg``.
+
+Which direction the object is looked at from is ``viewport_origin``, and which
+way is up in the resulting picture is ``viewport_up``. Both are accepted by
+every projection above (and by ``dxf``), on the package or on a single object:
+
+.. code-block:: yaml
+
+  render:
+    png:
+      viewport_origin: [0, -100, 0]   # look at it from the front
+      viewport_up: [0, 0, 1]          # with Z up
+
+  parts:
+    cylinder:
+      type: cadquery
+      render:
+        png:
+          viewport_origin: [0, 0, 100]  # ... but look at this one head-on
+          viewport_up: [0, 1, 0]
+
+Left unset, a part is drawn from the front-right-top corner (which is what makes
+it read as 3D) and a sketch head-on. PartCAD is Z-up with ``+Y`` pointing away
+from the front view, which is what puts ``+X`` on the right of it. The distance
+does not matter — the pair names a direction, and the projection is scaled to fit
+whatever it is written into.
+
+``pc render`` takes the same two as ``--viewport-origin``/``--viewport-up``, and
+names the common directions with ``--view`` (``front``, ``back``, ``left``,
+``right``, ``top``, ``bottom``, ``iso``), for a view that belongs to one command
+rather than to the package:
+
+.. code-block:: shell
+
+  pc render -t png --view front -O ./ bracket
+  pc render -t png --viewport-origin 120,-40,60 -O ./ bracket
+
+A file that is not in a package at all is rendered by ``pc adhoc render``, which
+takes the same three options. They are the only way to aim one, there being no
+``partcad.yaml`` to configure a viewport in; left off, the projection comes out
+the way the renderer draws one by default:
+
+.. code-block:: shell
+
+  pc adhoc render part --view top bracket.step bracket.png
+  pc adhoc render sketch outline.svg outline.png
 
 
 =============
@@ -139,9 +210,17 @@ CAD Design GUIs
 ---------------
 
 You can use models from the public PartCAD repository in a CAD Design GUI, such as
-FreeCAD or its paid alternatives. PartCAD plugins for these apps are not yet
-available. For now, export the models to STEP or 3MF files and import those files
-into the CAD Design GUI of your choice.
+FreeCAD or its paid alternatives.
+
+FreeCAD has a PartCAD add-on. The ``PartCAD`` workbench lists the packages, parts
+and assemblies PartCAD can reach as a hierarchy, generates a dialog from the
+parameters of the part or assembly you pick, and imports the result into the open
+document as a STEP file. It drives the standalone PartCAD service, so FreeCAD
+needs no Python environment of its own. See :ref:`FreeCAD add-on <freecad-addon>`
+for how to install it.
+
+For the other apps, no add-on is available yet. Export the models to STEP or 3MF
+files and import those files into the CAD Design GUI of your choice.
 
   .. code-block:: shell
 

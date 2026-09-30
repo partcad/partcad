@@ -48,22 +48,19 @@ elif __name__ == "avail":
         }
 
 elif __name__ == "quote":
-    parts = request["cart"]["parts"]
-
     load()
 
+    # One line per SKU, with how many of it to order already worked out: a SKU
+    # that is a set of several parts is ordered once for all of them.
     price = 0
-    for part_spec in parts.values():
-        vendor = part_spec["vendor"]
-        sku = part_spec["sku"]
-        count_per_sku = part_spec["count_per_sku"]
-        count = part_spec["count"]
+    for line in request["cart"]["skus"]:
+        vendor = line["vendor"]
+        sku = line["sku"]
+        items = line["count"]
 
-        available = stock[(vendor, sku)][0] * count_per_sku
-        if available < part_spec["count"]:
+        if (vendor, sku) not in stock or stock[(vendor, sku)][0] < items:
             raise Exception("Not enough stock")
 
-        items = (count + count_per_sku - 1) // count_per_sku
         price += stock[(vendor, sku)][1] * float(items)
 
     output = {

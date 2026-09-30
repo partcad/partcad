@@ -46,6 +46,26 @@ Feature: `pc import assembly` command
           type: assy
       """
 
+  @urdf
+  Scenario: Import URDF assembly into the project
+    Given I copy file "examples/feature_import/robot.urdf" to "input_files/robot.urdf" inside test workspace
+    When I run "pc import assembly input_files/robot.urdf"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Assembly 'robot' imported successfully"
+    And a file named "robot.assy" should exist
+    And a file named "robot/base.stl" should exist
+    And a file named "robot/arm.stl" should exist
+    # One 'stl' part per link and an interface pair for the joint, so the
+    # generated assembly connects its parts instead of placing them.
+    When I run "pc --no-ansi list parts"
+    Then STDERR should contain "robot/base"
+    And STDERR should contain "robot/arm"
+    When I run "pc --no-ansi list interfaces"
+    Then STDERR should contain "robot/pan-socket"
+    And STDERR should contain "robot/pan-plug"
+    When I run "pc --no-ansi test -f cad -a robot"
+    Then the command should exit with a status code of "0"
+
   @error
   Scenario: Reject non-existent STEP file as assembly
     When I run "pc import assembly input_files/NonExistentAssembly.step"

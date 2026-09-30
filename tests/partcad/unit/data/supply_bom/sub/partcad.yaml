@@ -1,0 +1,23 @@
+desc: The package the top level assembly is built out of
+
+parts:
+  cube:
+    type: cadquery
+    desc: A cube
+  bolt:
+    type: cadquery
+    desc: A bolt sold by the vendor
+    vendor: acme
+    sku: BOLT-1
+    count_per_sku: 10
+
+assemblies:
+  unit:
+    type: assy
+    desc: A pair of cubes, sold assembled
+    vendor: acme
+    sku: UNIT-1
+    count_per_sku: 2
+  frame:
+    type: assy
+    desc: A pair of cubes nobody sells assembled

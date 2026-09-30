@@ -42,3 +42,6 @@ Feature: `pc system reset` command
     Then the command should exit with a status code of "0"
     And STDERR should contain "Git cache size: 0.00MB"
     And STDERR should contain "Tar cache size: 0.00MB"
+    # The package cache the bundled conda fills goes with the sandboxes it built
+    # -- a reset that left gigabytes of packages behind would not have reset much.
+    And STDERR should contain "Conda package cache size: 0.00MB"

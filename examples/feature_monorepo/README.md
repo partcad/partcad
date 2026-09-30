@@ -4,9 +4,9 @@ Demonstrates how to create a monorepo with multiple packages in it
 
 ## Sub-Packages
 
-### [package-b](./package-b/README.md)
-
 ### [package-a](./package-a/README.md)
+
+### [package-b](./package-b/README.md)
 
 <br/><br/>
 

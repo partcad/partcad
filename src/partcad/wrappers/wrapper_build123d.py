@@ -1,0 +1,207 @@
+#
+# OpenVMP, 2023-2024
+#
+# Author: Roman Kuzmenko
+# Created: 2024-01-01
+#
+# Licensed under Apache License, Version 2.0.
+#
+
+# This script is executed within the python sandbox environment (python runtime)
+# to invoke `build1213d` scripts.
+
+from collections.abc import Iterable
+import os
+import re
+import sys
+
+sys.path.append(os.path.dirname(__file__))
+import custom_cqgi
+import wrapper_common
+import py_stubs.ocp_vscode  # Make 'sys.modules["py_stubs.ocp_vscode"]' available
+from ocp_tessellate.ocp_utils import (
+    get_downcasted_shape,
+    downcast,
+    is_build123d,
+    is_build123d_compound,
+    is_build123d_shell,
+    is_wrapped,
+    is_vector,
+    is_topods_compound,
+    is_topods_shape,
+    vertex,
+)
+
+
+def process(path, request):
+    build_parameters = {}
+    if "patch" in request:
+        patch = request["patch"]
+    else:
+        patch = {}
+    if "build_parameters" in request:
+        build_parameters = request["build_parameters"]
+
+    with open(path, "r", encoding="utf-8") as f:
+        script = f.read()
+    for old, new in patch.items():
+        script = re.sub(old, new, script, flags=re.MULTILINE)
+
+    if "import partcad" in script:
+        script = "import logging\nlogging.basicConfig(level=60)\n" + script  # Disable PartCAD logging
+
+    # Ignore ocp_vscode as it is of no use in the sandboxed environment
+    # and it produces a lot of sporadic output to stdout and stderr
+    sys.modules["ocp_vscode"] = sys.modules["py_stubs.ocp_vscode"]
+    if "from ocp_vscode import " in script:
+        script = re.sub(
+            r"(from ocp_vscode import .*)\n",
+            "saved_show_object_early=show_object\n\\1\nimport ocp_vscode\nocp_vscode.saved_show_object=saved_show_object_early\n",
+            script,
+        )
+    if "import ocp_vscode" in script:
+        script = script.replace(
+            "import ocp_vscode",
+            "import ocp_vscode\nocp_vscode.saved_show_object=show_object\n#",
+        )
+
+    # Execute the script
+    script_object = custom_cqgi.parse(script)
+    # An object-type parameter the script has no use for is dropped rather than
+    # rejected: which names those are comes from the request, so the part type
+    # stays the one place that decides. Everything else is still strict.
+    build_parameters = custom_cqgi.filter_optional_params(
+        script_object, build_parameters, request.get("object_type_parameters")
+    )
+    build_result = script_object.build(build_parameters=build_parameters)
+
+    if not build_result.success:
+        wrapper_common.handle_exception(build_result.exception, path)
+
+    results = list()
+    # TODO(clairbee): make it recursive to handle nested lists and unify handling of items on different levels of nesting
+    for result in build_result.results:
+        shape = result.shape
+        converted = list()
+
+        # BuildPart, BuildSketch, BuildLine
+        if is_build123d(shape):
+            shape = getattr(shape, shape._obj_name)  # convert to direct API
+
+        # TODO(clairbee): do we really want to explode compounds?
+        #
+        # 'get_downcasted_shape' takes the first of solids/faces/wires/edges the
+        # shape holds any of, and knows nothing about shells - so a compound
+        # holding a shell and no solid comes back as that shell's faces, which a
+        # part's compound does not take. Such a part is therefore empty, and it
+        # is the 'degenerate' check that says so rather than 'shell'. Handing the
+        # compound over whole would let wrapper_common.solidify() state the shell
+        # as a solid instead; what stops that being a one-line change is the
+        # question above, since it is the same call that explodes a compound of
+        # solids into its solids.
+        if is_build123d_compound(shape):
+            converted.append(get_downcasted_shape(shape.wrapped))
+
+        elif is_build123d_shell(shape):
+            # The shell, not the faces it is made of. A closed one becomes the
+            # solid it bounds in wrapper_common.combine, and an open one stays a
+            # shell for the core to report; exploding it here produced neither,
+            # because a part's compound takes no bare faces - a script returning
+            # 'Shell' built a part with nothing in it. A sketch still keeps the
+            # faces: combine descends into a shell to collect them.
+            converted.append(downcast(shape.wrapped))
+
+        # TODO(clairbee): is this needed?
+        # elif is_build123d_shape(shape):
+        #     converted.append(get_downcasted_shape(shape.wrapped))
+
+        # TODO(clairbee): migrate the below to cadquery
+        # elif is_cadquery_sketch(shape):
+        #     converted.extend(conv_sketch(shape))
+
+        # elif is_cadquery(shape):
+        #     for v in shape.vals():
+        #         if is_cadquery_sketch(v):
+        #             # obj = conv_sketch(v)
+        #             pass
+        #         elif is_vector(v):
+        #             obj = [vertex(v.wrapped)]
+        #             converted.extend(obj)
+        #         else:
+        #             obj = [v.wrapped]
+        #             converted.extend(obj)
+
+        elif is_wrapped(shape):
+            if is_vector(shape):
+                converted.append(vertex(shape.wrapped))
+            elif is_topods_shape(shape):
+                converted.extend(
+                    get_downcasted_shape(shape.wrapped)
+                )  # TODO(clairbee): append(shape.wrapped)? append(downcast(shape.wrapped))?
+            else:
+                converted.append(shape.wrapped)
+
+        elif isinstance(shape, str):
+            converted.append(shape)
+
+        elif isinstance(shape, Iterable):
+
+            def unpack(objs):
+                for obj in objs:
+                    if is_wrapped(obj):
+                        if is_vector(obj):
+                            yield vertex(obj.wrapped)
+                        else:
+                            yield downcast(obj.wrapped)
+                    else:
+                        yield obj
+
+            converted.append(list(unpack(shape)))
+
+        elif is_topods_compound(shape):
+            converted.append(shape)
+
+        elif is_topods_shape(shape):
+            converted.append(downcast(shape))
+
+        else:
+            sys.stderr.write(f"Unknown object type: {type(shape)}\n")
+            converted.append(shape)
+
+        # TODO(clairbee): is this needed?
+        # if len(converted) > 0 and is_compound_list(converted):
+        #     converted = get_downcasted_shape(converted[0])
+
+        def solidify(obj):
+            if hasattr(obj, "solid"):
+                try:
+                    obj = obj.solid().wrapped
+                except Exception as e:
+                    pass
+            return obj
+
+        converted = list(
+            map(
+                solidify,
+                converted,
+            )
+        )
+        results.extend(converted)
+
+    # Compound and filter here (see wrapper_common.combine) rather than in the
+    # core process, so the factory just forwards the resulting envelope.
+    compound, components = wrapper_common.combine(results, request.get("kind", "part"))
+    return {
+        "success": build_result.success,
+        "exception": wrapper_common.exception_to_str(build_result.exception),
+        "shape": compound,
+        "components": components,
+    }
+
+
+path, request = wrapper_common.handle_input()
+
+# Call build123d through CQGI
+model = process(path, request)
+
+wrapper_common.handle_output(model)

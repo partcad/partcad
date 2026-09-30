@@ -12,7 +12,9 @@ Browse [our documentation] and visit [our website]. Watch our 💥💥[demos](ht
 
 ## What is PartCAD?
 
-[PartCAD] is the standard for documenting manufacturable physical products. It comes with a set of tools to maintain
+[PartCAD] is the programming language for things.
+
+It is the standard for documenting manufacturable physical products. It comes with a set of tools to maintain
 product information and to facilitate efficient and effective workflows at all product lifecycle phases.
 
 PartCAD is more than just a traditional CAD tool for drawing. In fact, it’s **not for drawing at all**. The letters
@@ -113,7 +115,7 @@ Stay informed and share feedback by joining [our Discord server](https://discord
 
 Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [Twitter/X].
 
-[![PartCAD Visual Studio Code extension](docs/source/images/vscode1.png)](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad)
+[![PartCAD Visual Studio Code extension](docs/source/images/vscode1.png)](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official)
 
 ## Features
 
@@ -121,16 +123,17 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] Windows
   - [x] Linux
   - [x] macOS
-- Workflow acceleration by caching rendered models (including OpenSCAD, CadQuery and build123d)
+- Workflow acceleration by caching rendered models (including OpenSCAD, CadQuery, build123d and Chili3D)
   - [x] In memory
   - [x] On disk
-  - [ ] Local Server _(in progress)_
-  - [ ] Cloud _(in progress)_
+  - [x] A memcached server shared by a team or a CI fleet (`cacheRemote`)
+  - [x] An S3 bucket that outlives both (`cacheS3`)
 - Collaboration on designs
   - [x] Versioning of CAD designs using `Git` _(like it's 2025 for real)_
     - [x] Mechanical
     - [x] Electronics
-    - [ ] Software _(in progress)_
+    - [x] Software — firmware images, binaries and disk images shipped as objects of a package,
+          reproducible by vendor and SKU, by file, or by `fileHash`
   - [x] Automated generation of `Markdown` documentation
   - [x] Parametric (hardware and software) bill of materials
   - [x] Publish models online on PartCAD.org
@@ -141,13 +144,32 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
 - Assembly models (3D)
   - [x] Using specialized `Assembly YAML` format
     - [x] Automatically maintaining the bill of materials
-    - [ ] Generating user-friendly visual assembly instructions _(in progress)_
-  - [ ] Generating with LLM/GenAI _(in progress)_
+    - [x] Generating user-friendly visual assembly instructions (`PDF` and `HTML` instruction books)
+  - [x] Using `URDF`, with links, joints and physics
+  - [x] Using a `STEP` file that stays the source
+- Scenes (3D) — placed arrangements of objects: a workcell, a table, a simulation world
+  - [x] Stating where things are, rather than how they got there
+  - [x] Reading and writing an engine's own scene format through the package that implements it —
+        [`partcad-sim-gazebo`](https://github.com/partcad/partcad-sim-gazebo) for a `Gazebo` world
+        (SDFormat), [`partcad-sim-mujoco`](https://github.com/partcad/partcad-sim-mujoco) for `MJCF`, each
+        also declaring the reader, the exporter and the `pc open` entry for its engine
+- Simulation — what an object is supposed to do once the world is switched on
+  - [x] `simulate:` on a part or an assembly: a scene, where in it the object goes, and the condition that
+        says whether it went as it should
+  - [x] `pc sim`, which runs it and validates the result
+  - [x] Simulation plugins, declared the way export and render implementations are — a scene goes in,
+        `before` and `after` come out. The simulator is a package, not part of this wheel:
+        [`partcad-sim-mujoco`](https://github.com/partcad/partcad-sim-mujoco) runs one in `MuJoCo` and
+        [`partcad-sim-gazebo`](https://github.com/partcad/partcad-sim-gazebo) one in `Gazebo`
+  - [x] `mu` on a material, so that what a part is made of decides whether it stands up — written out as
+        SDFormat's `<mu>`, URDF's `<mu1>` and MJCF's `friction`
 - Part models (3D)
   - Using scripting languages
     - [x] [CadQuery]
     - [x] [build123d]
+    - [x] [Chili3D]
     - [x] [OpenSCAD]
+    - [x] [SDF]
   - Using legacy CAD files
     - [x] `STEP`
     - [x] `BREP`
@@ -156,10 +178,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `OBJ`
   - Using file formats of third-party tools
     - [x] `KiCad EDA` (PCB)
-  - Generating with LLM/GenAI
-    - [x] Google AI (`Gemini`)
-    - [x] OpenAI (`ChatGPT`)
-    - [x] Any model in [Ollama](https://ollama.com/) (`Llama 3.1`, `DeepSeek-Coder-V2`, `CodeGemma`, `Code Llama` etc.)
+  - Using a part type the package defines itself (`partTypes`)
 - Part and interface blueprints (2D)
   - Using scripting languages
     - [x] [CadQuery]
@@ -167,12 +186,33 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - Using legacy file formats:
     - [x] `DXF`
     - [x] `SVG`
+- Tooling for AI agents doing mechanical design
+  - [x] Agent Skills any `SKILL.md`-aware coding agent can load ([`ai-agents/`](./ai-agents/README.md)),
+        installed by `pc init`, and distributed as the `pc` plugin
+    - [x] Generate a part, an assembly or a 2D sketch (`/pc:gen`, `/pc:gen-part`, `/pc:gen-assembly`,
+          `/pc:gen-sketch`) -- the agent authors the CAD script and validates it by rendering
+    - [x] Describe an existing object (`/pc:describe`), search the catalog (`/pc:search`), add interfaces
+          (`/pc:add-interfaces`)
+    - [x] Set a project up (`/pc:init`, `/pc:setup`)
+  - [x] `--no-ansi` output on every command, so an agent parses plain text rather than progress bars
+  - [x] Free-form `comment:` context in `Assembly YAML`, written for whoever reads the assembly next
 - Other features
   - Object-Oriented Programming approach to maintaining part interfaces and mating information
-  - Live preview of 3D models while working in Visual Studio Code
-  - Render 2D and 3D to images
+  - Live preview of 3D models while working in Visual Studio Code, with the bill of materials, the assembly
+    instructions and supplier quotes on tabs beside the 3D view
+  - Open an object in the application that made it (`pc open`): `FreeCAD`, `Blender`, `KiCad` — and
+    `Gazebo` or `MuJoCo` from the plugin package for that engine —
+    installed locally, or run in a container when it is not; an object `Blender` cannot read is converted to
+    a mesh on the way
+  - Render 2D projections, from any viewing angle (`--view`, or an arbitrary one), with the connection
+    ports and interfaces drawn on top if asked
     - [x] `SVG`
     - [x] `PNG`
+    - [x] `JPEG`
+    - [x] `DXF`
+  - Generate documents
+    - [x] `Markdown` package and assembly documents
+    - [x] `PDF` and `HTML` assembly instruction books
   - Export 3D models to CAD files
     - [x] `STEP`
     - [x] `BREP`
@@ -182,26 +222,107 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `OBJ`
     - [x] `IGES`
     - [x] `glTF`
+    - [x] `URDF`
+    - [x] `Gazebo` world (SDFormat) and `MJCF` (MuJoCo), from the plugin package for that engine
+  - Output types a package implements itself, for both `render:` and `export:`
 
 ## Installation
 
 Note, it's not required but highly recommended that you have [conda] installed. If you experience any difficulty
 installing or using any PartCAD tool, then make sure to install [conda].
 
+That applies to the Python packages below. The standalone command line tools, the snap and the PartCAD IDE
+carry a conda of their own and need none installed — they use yours when you have one.
+
+### Plugin for Claude Code
+
+Already using [Claude Code](https://claude.com/claude-code)? This is the shortest way in, and it installs
+everything else for you. The `pc` plugin adds skills that generate parts, assemblies and 2D sketches, describe
+and search what a package already has, and set up the tools themselves:
+
+```shell
+/plugin marketplace add partcad/partcad@plugin-dist
+/plugin install pc@partcad
+```
+
+Then `/pc:setup` puts the command line tools on the machine -- and, when it is run from a Visual Studio Code
+or VSCodium terminal, the extension below into that editor -- `/pc:init` starts a package, and
+`/pc:gen a mounting bracket with four M4 holes` writes the CAD script, renders four views of what came out and
+checks them against what was asked. The skills drive the same `pc` commands documented below, so nothing they
+produce is locked to the agent that produced it.
+
+This repository *is* the marketplace -- there is no hosted catalog to search. The `plugin-dist` branch above
+carries the latest release, symlink-free so that it installs the same way on Windows. Two alternatives:
+`/plugin marketplace add partcad/partcad` installs straight from the source tree (git has to be able to create
+symlinks, which on Windows means `git config core.symlinks true`), and every
+[release](https://github.com/partcad/partcad/releases) carries a `pc-<version>.zip` that
+`claude --plugin-url <url>` loads for a single session, to try one version without installing it.
+
+The skills are plain [Agent Skills](https://code.claude.com/docs/en/skills), so any `SKILL.md`-aware agent can
+read them out of [`ai-agents/`](./ai-agents/README.md) without the plugin. They also ship inside the `partcad`
+wheel, and `pc init` installs them into the repository it creates a package in: the plugin for Claude Code, and
+`pc-`-prefixed skills for Cursor. Pass `--no-skills` to skip it, or `--skills-only` to install them into a
+repository that has a package already.
+
+### PartCAD IDE
+
+The whole thing in one application: the editor, the PartCAD extension, and the command line tools. No Python,
+no extensions to pick, no environment to set up. It opens in the PartCAD workbench, and the first time it
+starts it creates a package for you and opens that -- so there is something to render before there is anything
+to read.
+
+```shell
+curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh -s -- --ide
+```
+
+On Windows, download and run `partcad-ide-<version>-windows-x86_64-setup.exe` from the
+[releases](https://github.com/partcad/partcad/releases); on macOS there is a `.dmg` there too. See
+[Installation](https://partcad.readthedocs.io/en/latest/installation.html) for the details.
+
 ### Extension for Visual Studio Code
 
+Already using Visual Studio Code? Install the extension into it instead of the IDE above.
+
 This extension can be installed by searching for `PartCAD` in the VS Code extension search form, or by browsing
-[its VS Code marketplace page](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad).
+[its VS Code marketplace page](https://marketplace.visualstudio.com/items?itemName=PartCAD.partcad-official). From a
+terminal it is `code --install-extension PartCAD.partcad-official`.
+
+Every [release](https://github.com/partcad/partcad/releases) also carries the packaged extension as
+`partcad-<version>.vsix`, to pin a version or to install where the marketplace is not reachable:
+`code --install-extension partcad-<version>.vsix`. On VSCodium it comes from [Open VSX](https://open-vsx.org/)
+-- the gallery VSCodium ships with, and where PartCAD publishes the extension for it, the Visual Studio
+Marketplace's terms restricting that one to Microsoft's own products:
+`codium --install-extension PartCAD.partcad-official`.
+
+`/pc:setup` above does this for you when it is run from a terminal inside the editor.
 
 Make sure to have Python configured and a [conda] environment set up in VS Code before using PartCAD.
+
+### Add-on for FreeCAD
+
+The `PartCAD` workbench browses packages, parts and assemblies inside FreeCAD, asks for an object's parameters,
+and imports the result into the open document. Copy or link
+[`cad/freecad`](./cad/freecad/README.md) into FreeCAD's `Mod` folder as `PartCAD` and restart
+FreeCAD:
+
+```shell
+ln -s "$PWD/cad/freecad" ~/.local/share/FreeCAD/Mod/PartCAD
+```
+
+No Python setup is needed: the add-on uses the standalone PartCAD service, downloading it on first use if no
+standalone installation is present.
 
 ### Command-Line Interface
 
 The recommended method to install PartCAD CLI tools for most users is:
 
 ```shell
-pip install -U partcad-cli
+pip install -U partcad
 ```
+
+That one package is everything: the `pc` command line tool, the Python module, and
+the JSON-RPC service the editor extensions talk to. `partcad-cli` still installs
+and still works — it is now a thin package that pulls `partcad` in.
 
 - On **Windows**, install `Miniforge3` using `Register Miniforge3 as my default Python X.XX` and use this Python
   environment for PartCAD. Also set `LongPathsEnabled` to 1 at
@@ -250,7 +371,9 @@ Give us a star for our hard work!
 [conda]: https://docs.conda.io/
 [CadQuery]: https://github.com/CadQuery/cadquery
 [build123d]: https://github.com/gumyr/build123d
+[Chili3D]: https://github.com/xiangechen/chili3d
 [OpenSCAD]: https://openscad.org/
+[SDF]: https://github.com/fogleman/sdf
 [STEP]: https://en.wikipedia.org/wiki/ISO_10303
 [BREP]: https://en.wikipedia.org/wiki/Boundary_representation
 [OpenCASCADE]: https://www.opencascade.com/

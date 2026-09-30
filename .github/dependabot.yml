@@ -24,14 +24,14 @@ updates:
       - "no-changelog"
 
   # - package-ecosystem: "pip"
-  #   directory: /partcad-ide-vscode/src/test/python_tests
+  #   directory: /ide/vscode/src/test/python_tests
   #   schedule:
   #     interval: daily
   #   labels:
   #     - "no-changelog"
 
   # - package-ecosystem: "pip"
-  #   directory: /partcad-ide-vscode
+  #   directory: /ide/vscode
   #   schedule:
   #     interval: daily
   #   labels:
@@ -41,7 +41,7 @@ updates:
   #     prefix: "pip"
 
   # - package-ecosystem: "npm"
-  #   directory: /partcad-ide-vscode
+  #   directory: /ide/vscode
   #   schedule:
   #     interval: monthly
   #   labels:

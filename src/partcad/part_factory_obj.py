@@ -1,0 +1,68 @@
+import os
+
+from . import logging as pc_logging
+from . import shape_envelope, wrapper
+from .exception import PartFactoryError
+from .part_factory_file import PartFactoryFile
+from .process_crash import command_failure
+
+
+class PartFactoryObj(PartFactoryFile):
+    PYTHON_SANDBOX_VERSION = "3.10"
+
+    def __init__(self, ctx, source_project, target_project, config):
+        """
+        Initialize the OBJ part factory.
+        """
+        with pc_logging.Action("InitOBJ", target_project.name, config["name"]):
+            super().__init__(ctx, source_project, target_project, config, extension=".obj", can_create=False)
+            self._create(config)
+            self.runtime = None  # Lazy initialization for the sandbox runtime
+
+    async def instantiate(self, part):
+        """
+        Instantiate an OBJ part by reading it in a sandbox wrapper.
+
+        Turning an OBJ mesh into OCCT faces needs OCCT, so it happens in a
+        sandboxed runtime - the core process never touches a CAD library. The
+        factory just forwards the resulting BREP envelope (a compound of faces).
+        """
+        await super().instantiate(part)
+
+        with pc_logging.Action("OBJ", part.project_name, part.name):
+            if self.runtime is None:
+                self.runtime = self.ctx.get_python_runtime(self.PYTHON_SANDBOX_VERSION)
+
+            wrapper_path = wrapper.get("obj.py")
+            request = {
+                "build_parameters": {},
+                "name": "%s:%s" % (part.project_name, part.name),
+                "label": part.name,
+            }
+            request_serialized = shape_envelope.serialize(request)
+
+            command = [
+                wrapper_path,
+                os.path.abspath(self.path),
+                os.path.abspath(self.project.config_dir),
+            ]
+            exitcode, response_serialized, errors = await self.runtime.run_async(
+                command,
+                request_serialized,
+            )
+            if exitcode != 0 and not errors:
+                errors = command_failure(command, exitcode)
+            if errors:
+                pc_logging.error(errors)
+                raise Exception(errors)
+
+            response = shape_envelope.deserialize(response_serialized)
+            if not response.get("success", False):
+                message = response.get("exception") or (
+                    "the OBJ wrapper reported failure without a message for '%s:%s'" % (part.project_name, part.name)
+                )
+                pc_logging.error(message)
+                raise PartFactoryError(message)
+
+            self.ctx.stats_parts_instantiated += 1
+            return response["shape"]

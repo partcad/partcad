@@ -1,0 +1,207 @@
+#
+# PartCAD, 2026
+#
+# Licensed under Apache License, Version 2.0.
+#
+"""The throwaway package an ad-hoc command works inside.
+
+`pc adhoc convert` and `pc adhoc render` both operate on a file that belongs to
+no package: PartCAD writes a `partcad.yaml` in a temporary directory declaring
+that one file as its only object, builds a context around it, produces one
+output file, and deletes the directory again.
+
+Everything specific to a verb lives in `convert.py` and `render.py`; what is
+here is the part they share, so that a change to how the throwaway package is
+built cannot mean one thing for a conversion and another for a projection.
+"""
+
+import asyncio
+import shutil
+import tempfile
+from pathlib import Path
+
+from .. import logging as pc_logging
+from ..context import Context
+
+# What a shape of each kind is called inside the throwaway package, and which
+# section of its 'partcad.yaml' declares it. The names are not arbitrary: they
+# are what the object is called, so they reach the user in an error message and
+# (for a render) name the output file when the caller did not.
+KINDS = {
+    "part": ("parts", "input_part"),
+    "sketch": ("sketches", "input_sketch"),
+    # A scene is the third thing a file can hold: an arrangement of objects
+    # rather than one shape. Only a self-contained scene format could reach here
+    # -- one that names its meshes by path, so that a throwaway package around it
+    # is enough -- and PartCAD implements none: an '.assy' names the parts of a
+    # package and is refused below, and an engine's own format is implemented by
+    # that engine's plugin package, which a throwaway package cannot reach.
+    "scene": ("scenes", "input_scene"),
+}
+
+# How the object of each kind is fetched out of the throwaway package.
+GETTERS = {
+    "part": "get_part",
+    "sketch": "get_sketch",
+    "scene": "get_scene",
+}
+
+
+def generate_partcad_config(temp_dir: Path, input_type: str, temp_input_path: Path, kind: str = "part") -> None:
+    """
+    Generate a temporary partcad.yaml configuration for processing.
+
+    Args:
+        temp_dir (Path): Temporary directory path.
+        input_type (str): Input file format type.
+        temp_input_path (Path): Path to the copied input file.
+        kind (str): "part", "sketch" or "scene" (default is "part")
+    """
+    section, name = KINDS[kind]
+
+    # Doubling is how an apostrophe is escaped inside a YAML single-quoted
+    # scalar. The path is the user's own -- '/home/me/part's.step' is a valid
+    # file name -- and without this it closes the scalar early and the
+    # throwaway package fails to parse before the input is ever read.
+    quoted_path = str(temp_input_path).replace("'", "''")
+
+    config = f"""
+{section}:
+  {name}:
+    type: {input_type}
+    path: '{quoted_path}'
+    """
+    config_path = temp_dir / "partcad.yaml"
+    config_path.write_text(config.strip() + "\n", encoding="utf-8")
+
+
+# Formats that describe an assembly rather than a single shape. An ad-hoc
+# operation is a file-in, file-out one with a throwaway package around it; these
+# need a real one. A URDF resolves its meshes against the package that holds them
+# and produces a part per link, and an ASSY is nothing but references to parts of
+# a package - neither means anything on its own.
+PACKAGE_ONLY_TYPES = {
+    "urdf": "a URDF names the meshes of its links and becomes a part per link",
+    "assy": "an ASSY file is a set of references to the parts of a package",
+}
+
+
+def reject_package_only(input_type: str, output_type: str = None, verb: str = "convert", advice: str = None) -> None:
+    """Refuse the formats that only mean something inside a package.
+
+    'verb' and 'advice' are what the caller is doing and what it should do
+    instead; the rest of the message is the same either way, because the reason
+    is the same either way.
+    """
+    if advice is None:
+        advice = "Use 'pc convert assembly' in a package instead."
+    for role, part_type in (("from", input_type), ("to", output_type)):
+        reason = PACKAGE_ONLY_TYPES.get((part_type or "").lower())
+        if reason is not None:
+            raise ValueError(
+                "Cannot %s %s '%s' ad-hoc: %s, so it only means anything inside a package. %s"
+                % (verb, role, part_type, reason, advice)
+            )
+
+
+def write_output_file(
+    input_filename: str,
+    input_type: str,
+    output_filename: str,
+    output_type: str,
+    kind: str = "part",
+    verb: str = "Convert",
+    **options,
+) -> None:
+    """Produce one output file from a CAD file that belongs to no package.
+
+    Args:
+        input_filename: Path to the input file.
+        input_type: Format of the input file.
+        output_filename: Path to write.
+        output_type: The file type to write - a part or sketch format for a
+            conversion, a 2D projection for a render.
+        kind: "part", "sketch" or "scene", which decides how the input is
+            declared and which section of the throwaway package declares it.
+        verb: What is being done, for the progress label and the error message.
+        options: Export parameters handed to the implementation, overriding what
+            it would otherwise default to. This is where a render's viewport
+            arrives; a conversion passes none.
+
+    Raises:
+        RuntimeError: the input could not be loaded, or the output not written.
+            The cause is in the message and not only in '__cause__', because
+            this is what the CLI prints.
+    """
+    _, object_name = KINDS[kind]
+    input_path = Path(input_filename).resolve()
+
+    # An ordinary temporary directory. It is the context root, so a container
+    # sandbox has to mount it -- and it does: the temporary directory is one of
+    # the fixed mounts, precisely so that nothing here has to be careful about
+    # where it puts things.
+    temp_dir = Path(tempfile.mkdtemp())
+
+    try:
+        generate_partcad_config(temp_dir, input_type, input_path, kind=kind)
+
+        ctx = Context(root_path=temp_dir, search_root=False)
+        # The generated package points at the user's file wherever it is, so
+        # neither the input nor the output is under the context root. A sandbox
+        # that runs on the host does not care; one that runs in a container sees
+        # only what is mounted, and without this it reports that it cannot read
+        # a file the user can see perfectly well.
+        #
+        # The directories rather than the files: an OpenSCAD or a CadQuery input
+        # may include a sibling, and the output's directory has to be writable
+        # for the export to land in it.
+        #
+        # Both, and both writable. Mounting the input read-only was tried and
+        # taken back out: it is one more way two containers of one image can
+        # differ, on a mount contract that is a stopgap rather than the
+        # isolation boundary -- the container is that. Either directory is
+        # usually under the home directory anyway, in which case naming it costs
+        # no mount at all.
+        ctx.sandbox_paths = [
+            str(Path(output_filename).resolve().parent),
+            str(input_path.parent),
+        ]
+        with pc_logging.Process(verb, "adhoc" if kind == "part" else "adhoc-" + kind):
+            project = ctx.get_project("//")
+            # Looked up by name and fetched one at a time: a dictionary of bound
+            # methods would reach for all three, and a caller with a project that
+            # only answers the kind it is being asked about - which is every test
+            # that stubs one - would fail on the two it is not.
+            obj = getattr(project, GETTERS[kind])(object_name)
+            if not obj:
+                raise RuntimeError(f"Failed to load the input {kind}: no {kind} returned")
+
+            shape = asyncio.run(obj.get_wrapped(ctx))
+            # Errors first: when the factory failed - a missing module, a
+            # sandbox that would not install - that is the reason there is no
+            # shape, and it is the one worth reporting. "No shape returned" is
+            # what is left to say when nothing was recorded.
+            if obj.errors:
+                raise RuntimeError(f"Failed to load the input {kind}: {obj.errors}")
+            if not shape:
+                raise RuntimeError(f"Failed to load the input {kind}: no shape returned")
+
+            if kind == "part":
+                pc_logging.info(f"Loaded input part: {input_path}")
+                pc_logging.info(f"Shape: {type(shape)}")
+            else:
+                pc_logging.debug(f"Loaded input {kind}: {input_path}")
+
+            obj.render(
+                ctx=ctx,
+                format_name=output_type,
+                project=project,
+                filepath=output_filename,
+                **options,
+            )
+
+    except Exception as e:
+        subject = "" if kind == "part" else " " + kind
+        raise RuntimeError(f"Failed to {verb.lower()}{subject}: {e}") from e
+    finally:
+        shutil.rmtree(temp_dir)

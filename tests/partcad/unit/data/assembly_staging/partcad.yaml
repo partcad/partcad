@@ -1,0 +1,19 @@
+desc: An assembly built out of another assembly, placed several times over
+
+parts:
+  cube:
+    type: cadquery
+    desc: A cube
+
+assemblies:
+  unit:
+    type: assy
+    desc: A pair of cubes, as far apart as its parameter says
+    parameters:
+      gap: 1.0
+  top:
+    type: assy
+    desc: Several units and a couple of loose cubes
+  top_alias:
+    type: alias
+    source: top

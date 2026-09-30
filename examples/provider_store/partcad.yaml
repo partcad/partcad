@@ -88,6 +88,32 @@ parts:
     type: alias
     source: //pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm
 
+  # The hardware "examples/feature_interface" is assembled from. That example
+  # defines no provider of its own and buys from this one, so what it needs has
+  # to be on the shelf here.
+  bracket:
+    type: alias
+    source: //pub/examples/partcad/feature_interface:example-bracket
+  motor:
+    type: alias
+    source: //pub/examples/partcad/feature_interface:example-motor
+  screw_m3_6mm:
+    type: alias
+    source: //pub/examples/partcad/feature_interface:socket-head-m3-screw-6mm
+  screw_m4_6mm:
+    type: alias
+    source: //pub/examples/partcad/feature_interface:socket-head-m4-screw-6mm
+
+  # The one bought part of the PartCAD logo.
+  screw_m8_35mm:
+    type: alias
+    source: //pub/examples/partcad/produce_part_step:bolt
+
 render:
   svg:
+    # This drawing is checked in, so it has to be the same file every time it
+    # is rendered. See 'reproducible' in '//builtin/render', and the note at
+    # the top of 'examples/partcad.yaml' for what that settles and what it
+    # cannot.
+    reproducible: true
   readme:

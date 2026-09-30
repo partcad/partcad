@@ -1,3 +1,0 @@
-vyper-config==1.2.1
-sentry-sdk[opentelemetry]==2.66.0
-psutil>=6.1.1

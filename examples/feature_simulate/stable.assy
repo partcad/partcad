@@ -1,0 +1,13 @@
+# Two blocks, the upper one squarely on top of the lower one.
+#
+# Each location is the *centre* of a block, so the pair spans z from -10 to 30
+# and the bottom face is at -10. The `offset:` of the `simulate:` in
+# partcad.yaml lifts it by 10 so that face lands on the floor of the scene.
+links:
+  - part: block
+    name: bottom
+    location: [[0, 0, 0], [0, 0, 1], 0]
+
+  - part: block
+    name: top
+    location: [[0, 0, 20], [0, 0, 1], 0]
