@@ -1525,11 +1525,47 @@ class Context:
         synchronous accessor drive it, which it cannot do from a thread that
         already owns a loop -- see 'Project._materialize_derived_part()'.
         """
+        project_name, _ = resolve_resource_path(self.current_project_path, part_spec)
+        await self._warm_project_async(project_name)
         resolved = self._resolve_part_project(part_spec)
         if resolved is None:
             return None
         prj, part_name = resolved
         return await prj.get_part_async(part_name, params)
+
+    async def _warm_project_async(self, project_path: str) -> None:
+        """Fetch, on the caller's loop, what 'get_project(project_path)' would fetch blocking it.
+
+        'get_project()' is synchronous, and a plugin-backed package on the way
+        down answers its 'dependencies()' with a fetch. From a thread that runs
+        a loop, that fetch is completed on another thread while this one waits
+        - and everything else on the loop waits with it: a sandbox process
+        whose input this loop is still writing, and the environment lock and
+        process slot that process's task holds. The fetch runs the plugin in a
+        sandbox, so it can need exactly those, and then neither side ever moves.
+        'pc test' over //pub stopped that way on macOS with #704's cycle gone.
+
+        So the plugin-backed packages above the one wanted are warmed here, top
+        down, by awaiting their fetches; the walk 'get_project()' then makes
+        finds each answer memoized. A level is looked up only once the level
+        above it is warm, so looking it up fetches nothing either. The package
+        itself is not walked through, so it has nothing to warm for this - what
+        is asked of it next warms itself (see 'Project.get_part_async').
+        """
+        abs_path = self.get_project_abs_path(project_path)
+        if not abs_path.startswith(self.name):
+            return
+        rest = abs_path[len(self.name) :].strip("/")
+        names = [self.name]
+        for component in rest.split("/") if rest else []:
+            names.append(get_child_project_path(names[-1], component))
+        for name in names[:-1]:
+            project = self.projects.get(name) or self.get_project(name)
+            if project is None:
+                return
+            warm = getattr(project, "ensure_enumerated_async", None)
+            if warm is not None:
+                await warm()
 
     def get_part(self, part_spec, params=None) -> Optional[Part]:
         return self._get_part(part_spec, params)

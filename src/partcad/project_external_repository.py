@@ -442,6 +442,21 @@ class ProjectExternalRepository(ProjectPlugin):
             return None
         return self._augment(self.get_data("objects/" + kind + "/" + name))
 
+    async def _warm_object_config_async(self, kind, name):
+        """Fetch what 'object_config(kind, name)' reads, awaited rather than waited for.
+
+        The same keys, in the same order, as the synchronous lookup that follows
+        - the object, then the whole kind if the plugin had no answer for it
+        alone - so that lookup finds them all memoized and fetches nothing.
+        """
+        if self.skipped or not self._serves_kind(kind):
+            return
+        configs = self._object_configs.get(kind)
+        if configs is not None and name in configs:
+            return
+        if await self.get_data_async("objects/" + kind + "/" + name) is None and configs is None:
+            await self.get_data_async("objects/" + kind)
+
     def dependencies(self):
         """Child packages of this package, served by the same repository.
 

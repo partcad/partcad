@@ -413,6 +413,42 @@ def test_a_plugin_nobody_declares_is_looked_for_only_when_it_is_needed(tmp_path)
                 shutil.rmtree(backend.cache_dir, ignore_errors=True)
 
 
+def test_an_assembly_resolving_a_cold_plugin_part_never_stops_its_loop(tmp_path, monkeypatch):
+    """Nothing it reads is fetched by a synchronous call that waits with the loop stopped.
+
+    Resolving through the lock no longer deadlocks, but waiting is still
+    waiting: a synchronous fetch from a loop holds up every other task on it,
+    including a sandbox process whose input the loop is writing, and the
+    environment lock and process slot that process's task holds - which the
+    fetch, running the plugin in a sandbox, may need. 'pc test' over //pub
+    stopped that way on macOS after #704's cycle was gone: the test's thread
+    waiting in 'get_data' for a part's declaration, and a 'wrapper_bbox.py'
+    waiting for the rest of its input.
+    """
+    ctx, _, fake = _plugin_package_under_a_root(
+        tmp_path,
+        {"deps": ["motors"], "motors/objects/part/rotor": {"type": "step", "path": "rotor.step"}},
+    )
+    # The child is imported the way a real one is, with an on-disk cache named
+    # after the plugin - which outlives the test unless it lives in the test's
+    # own directory, and a declaration read from it would never be fetched.
+    monkeypatch.setattr(ctx.user_config, "internal_state_dir", str(tmp_path / "state"))
+    stopped = []
+    original = ProjectExternalRepository._run_elsewhere
+
+    def waited_for(coroutine):
+        stopped.append(coroutine.__qualname__)
+        return original(coroutine)
+
+    monkeypatch.setattr(ProjectExternalRepository, "_run_elsewhere", staticmethod(waited_for))
+
+    part = asyncio.run(ctx.get_part_async("//test/ext/motors:rotor"))
+
+    assert part is not None and part.name == "rotor"
+    assert stopped == []
+    assert "deps" in fake.keys and "motors/objects/part/rotor" in fake.keys
+
+
 # --- 'objectKinds': the kinds a repository says it does not have -------------
 #
 # A package has ten kinds of object and every one of them is a separate key -
