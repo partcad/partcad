@@ -137,18 +137,18 @@ class ProjectExternalRepository(ProjectPlugin):
         the same repository never collide and the synchronous 'get_data' below
         reuses whatever this fetched.
         """
-        return await self._get_data_async(key, self._get_repository)
-
-    async def _get_data_async(self, key: str, resolve_repository):
-        """'get_data_async', getting the repository from 'resolve_repository'.
-
-        Which is called only when the memo and the on-disk cache have both
-        missed. 'get_data' passes one that answers with what it resolved before
-        handing this to another thread, because that thread must not resolve it
-        (see there).
-        """
         scoped = self._scope(key)
+        cached = await self._cached_async(scoped)
+        if cached is not _MISSING:
+            return cached
+        return await self._fetch_async(scoped, self._repository_for(scoped))
 
+    async def _cached_async(self, scoped: str):
+        """The value for 'scoped' from the memo or the on-disk cache, or _MISSING.
+
+        The first two layers of 'get_data_async', which need nothing but this
+        package: no plugin, and so nothing of the context's (see 'get_data').
+        """
         # 1. In-memory memo.
         with self._request_lock:
             if scoped in self._request_cache:
@@ -163,16 +163,34 @@ class ProjectExternalRepository(ProjectPlugin):
             if cached is not _MISSING:
                 with self._request_lock:
                     return self._request_cache.setdefault(scoped, cached)
+        return _MISSING
 
-        # 3. The repository. A broken or unreachable repository must not crash
-        #    the caller (e.g. 'pc list' over many packages); treat it as empty.
-        value = None
+    def _repository_for(self, scoped: str):
+        """The repository to ask for 'scoped', or None, having said why.
+
+        Called only once both caches have missed, so that a plugin that cannot
+        be found is reported for a fetch that needed it and for no other: a
+        cached answer does not need the plugin, and an error logged for a fetch
+        that succeeded would still be the exit status of the command.
+        """
         try:
-            repository = resolve_repository()
-            if repository is not None:
-                value = await repository.get_data(scoped)
+            return self._get_repository()
         except Exception as e:
             pc_logging.error("%s: failed to fetch '%s' from the repository: %s" % (self.name, scoped, e))
+            return None
+
+    async def _fetch_async(self, scoped: str, repository):
+        """3. Ask 'repository' for 'scoped', remember the answer, and persist it.
+
+        A broken or unreachable repository must not crash the caller (e.g. 'pc
+        list' over many packages); it is treated as empty.
+        """
+        value = None
+        if repository is not None:
+            try:
+                value = await repository.get_data(scoped)
+            except Exception as e:
+                pc_logging.error("%s: failed to fetch '%s' from the repository: %s" % (self.name, scoped, e))
 
         # Persist a successful fetch so it survives across runs.
         if value is not None and self._cache is not None:
@@ -291,40 +309,32 @@ class ProjectExternalRepository(ProjectPlugin):
             # No loop is running: bridge directly.
             return asyncio.run(self.get_data_async(key))
 
-        # The plugin is resolved here, on the thread that is about to wait, and
-        # never on the one it waits for. Resolving looks the hosting package up
-        # through 'Context.get_project()', which takes the context's lock - and
-        # this thread can be holding that lock right now: 'get_project()' asks a
+        # A loop is already running in this thread, so the coroutines are
+        # completed on the shared, otel-context-preserving executor to avoid
+        # nesting event loops (a raw ThreadPoolExecutor would drop the tracing
+        # context) - in two halves, with the plugin resolved between them, here.
+        #
+        # Here, on the thread that is about to wait, and never on the one it
+        # waits for. Resolving looks the hosting package up through
+        # 'Context.get_project()', which takes the context's lock - and this
+        # thread can be holding that lock right now: 'get_project()' asks a
         # package for its 'dependencies()' under it, and a plugin-backed
         # package's 'dependencies()' asks here. A worker that resolved for
         # itself would wait for the lock while this thread waits for the worker,
         # and neither would ever finish (#704). The lock is reentrant, so taking
-        # it again from here is harmless.
-        #
-        # A failure to resolve is not reported here but handed over, and raised
-        # where resolving would have happened: the on-disk cache may well answer
-        # without the plugin, and an error logged for a fetch that succeeded is
-        # still an error, and the exit status of the command.
-        try:
-            repository = self._get_repository()
-        except Exception as e:
-            failure = e
+        # it again from here is harmless. And between the halves, rather than
+        # before both, so that the plugin is looked for - and its absence
+        # reported - only when neither cache had the answer, as on a loop.
+        cached = self._run_elsewhere(self._cached_async(scoped))
+        if cached is not _MISSING:
+            return cached
+        repository = self._repository_for(scoped)
+        return self._run_elsewhere(self._fetch_async(scoped, repository))
 
-            def resolve_repository():
-                raise failure
-
-        else:
-
-            def resolve_repository():
-                return repository
-
-        # A loop is already running in this thread: run the fetch to completion
-        # on the shared, otel-context-preserving executor to avoid nesting event
-        # loops (a raw ThreadPoolExecutor would drop the tracing context).
-        future = threadpool_manager.unconstrained_executor.submit(
-            lambda: asyncio.run(self._get_data_async(key, resolve_repository))
-        )
-        return future.result()
+    @staticmethod
+    def _run_elsewhere(coroutine):
+        """Complete 'coroutine' on a worker thread's own loop, and wait for it."""
+        return threadpool_manager.unconstrained_executor.submit(lambda: asyncio.run(coroutine)).result()
 
     async def ensure_enumerated_async(self):
         """Warm the package's structure (metadata and child list) from the plugin.

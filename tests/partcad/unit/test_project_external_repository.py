@@ -333,12 +333,13 @@ def test_a_lookup_from_a_loop_resolves_through_a_cold_plugin_package(tmp_path):
 
 
 def test_a_plugin_that_cannot_be_resolved_is_reported_only_when_it_is_needed():
-    """Resolving ahead of the worker must not report what the cache answers.
+    """Resolving on the waiting thread must not report what the cache answers.
 
-    The plugin is resolved before the fetch is handed over, which is before
-    anybody knows whether the on-disk cache holds the answer. A failure to
-    resolve is an error only for a fetch that needed the plugin - and an error
-    logged for one that did not would still be the command's exit status.
+    From a loop the plugin is resolved on the thread that waits, between the
+    worker's look at the caches and its fetch - and only if the caches missed.
+    A failure to resolve is an error only for a fetch that needed the plugin;
+    one logged for a fetch that did not would still be the command's exit
+    status.
     """
     ctx = pc.Context("examples")
     cache = Cache("external/test_unresolvable", ctx.user_config)
@@ -365,6 +366,46 @@ def test_a_plugin_that_cannot_be_resolved_is_reported_only_when_it_is_needed():
 
         assert asyncio.run(from_a_loop("meta")) is None  # not cached: needs the plugin
         assert len(errors) == 1 and "no such package" in errors[0], errors
+    finally:
+        pc.logging.error = original
+        for backend in cache.backends:
+            if isinstance(backend, FilesCacheBackend):
+                shutil.rmtree(backend.cache_dir, ignore_errors=True)
+
+
+def test_a_plugin_nobody_declares_is_looked_for_only_when_it_is_needed(tmp_path):
+    """The same through the real resolution, which reports a missing plugin itself.
+
+    Resolving a repository the hosting package does not declare logs that it is
+    not there - from 'Project.get_repository' and again from '_get_repository'.
+    Neither may happen for a fetch the on-disk cache answers.
+    """
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "partcad.yaml").write_text("name: //test\n")
+    ctx = pc.Context(str(root))
+    cache = Cache("external/test_missing_plugin", ctx.user_config)
+    errors = []
+    original = pc.logging.error
+    try:
+        first = ProjectExternalRepository(ctx, "//test/ext", str(tmp_path), cache=cache, config_obj={})
+        first._repository = FakeRepository({"deps": ["child"]})
+        assert list(first.dependencies()) == ["child"]  # now on disk
+
+        second = ProjectExternalRepository(
+            ctx, "//test/ext", str(tmp_path), plugin_ref="//test:missing", cache=cache, config_obj={}
+        )
+        ctx.projects[second.name] = second
+        pc.logging.error = lambda msg, *a: errors.append(msg % a if a else msg)
+
+        async def from_a_loop(key):
+            return second.get_data(key)
+
+        assert asyncio.run(from_a_loop("deps")) == ["child"]
+        assert errors == []
+
+        assert asyncio.run(from_a_loop("meta")) is None  # not cached: needs the plugin
+        assert any("repository plugin not found" in error for error in errors), errors
     finally:
         pc.logging.error = original
         for backend in cache.backends:
