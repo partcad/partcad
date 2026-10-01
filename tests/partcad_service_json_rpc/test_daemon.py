@@ -79,6 +79,37 @@ def _serve(path, registry):
     return server
 
 
+def test_ensure_daemon_keeps_a_daemon_too_busy_to_answer(monkeypatch, capsys):
+    """A daemon serves one request at a time; one that is busy is not one that is gone.
+
+    Replacing it is how thirteen clients started at once came to be served by
+    three daemons for one workspace. Here nothing ever answers, and the launcher
+    still hands out the socket rather than unlinking it and starting another.
+    """
+    import shutil
+    import tempfile
+
+    home = tempfile.mkdtemp(prefix="pch", dir="/tmp")
+    monkeypatch.setenv("HOME", home)
+    root = "/some/root"
+    sock = daemon.socket_path(root)
+    os.makedirs(os.path.dirname(sock), exist_ok=True)
+    busy = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    busy.bind(sock)
+    busy.listen(8)
+    started = []
+    monkeypatch.setattr(daemon, "_serve_detached", lambda *args: started.append(args))
+    try:
+        returned = daemon.ensure_daemon(lambda: Session(), root_path=root, liveness_timeout=0.2)
+        assert returned == sock
+        assert capsys.readouterr().out.strip() == sock
+        assert started == []
+        assert os.path.exists(sock)
+    finally:
+        busy.close()
+        shutil.rmtree(home, ignore_errors=True)
+
+
 def test_ensure_daemon_returns_existing_socket_when_alive(monkeypatch, capsys):
     # A short HOME under /tmp keeps the AF_UNIX socket path under ~108 chars
     # (pytest's tmp_path is far too deep once the workspace subdirs are added).
