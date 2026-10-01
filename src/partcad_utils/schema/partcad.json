@@ -1040,6 +1040,14 @@
         { "type": "boolean" }
       ]
     },
+    "parameter-overrides": {
+      "description": "An object's 'with:': values for the parameters of the object it refers to, by name. Any parameter name is accepted, because which parameters there are is declared by that object rather than by this schema, and every kind of object - a part, a sketch, an assembly, a scene, a repository, a provider - declares its own the same way ('parameters:').",
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
+      },
+      "additionalProperties": false
+    },
     "parameter-default": {
       "description": "What a parameter is worth when nothing overrides it, and what its 'enum' offers. The same naming constraint as '#/definitions/parameter-override' applies to a string, for the same reason: a value that cannot be spelled in an instance name cannot be asked for by name. Any other type is left alone - only strings carry those characters.",
       "anyOf": [
@@ -1354,13 +1362,7 @@
                     }
                   ]
                 },
-                "with": {
-                  "type": "object",
-                  "patternProperties": {
-                    "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
-                  },
-                  "additionalProperties": false
-                },
+                "with": { "$ref": "#/definitions/parameter-overrides" },
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
                 "cwd": { "type": "string", "minLength": 1 },
                 "showObject": { "type": "string", "minLength": 1 },
@@ -1592,13 +1594,7 @@
                 "source": { "type": "string", "minLength": 1 },
                 "package": { "type": "string", "minLength": 1 },
                 "parameters": { "$ref": "#/definitions/shape-parameter"},
-                "with": {
-                  "type": "object",
-                  "patternProperties": {
-                    "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
-                  },
-                  "additionalProperties": false
-                },
+                "with": { "$ref": "#/definitions/parameter-overrides" },
                 "dependencies": {
                   "type": "array",
                   "items": { "type": "string", "minLength": 1 },
@@ -1705,13 +1701,7 @@
                 "source": { "type": "string", "minLength": 1 },
                 "package": { "type": "string", "minLength": 1 },
                 "parameters": { "$ref": "#/definitions/shape-parameter"},
-                "with": {
-                  "type": "object",
-                  "patternProperties": {
-                    "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
-                  },
-                  "additionalProperties": false
-                },
+                "with": { "$ref": "#/definitions/parameter-overrides" },
                 "dependencies": {
                   "type": "array",
                   "items": { "type": "string", "minLength": 1 },
@@ -1886,13 +1876,7 @@
               },
               "additionalProperties": false
             },
-            "with": {
-              "type": "object",
-              "patternProperties": {
-                "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
-              },
-              "additionalProperties": false
-            }
+            "with": { "$ref": "#/definitions/parameter-overrides" }
           },
           "required": ["type"],
           "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
@@ -2013,20 +1997,11 @@
             "source": { "type": "string", "minLength": 1 },
             "package": { "type": "string", "minLength": 1 },
             "with": {
-              "type": "object",
-              "properties": {
-                "currency": {
-                  "allOf": [{ "type": "string", "minLength": 1 }, { "$ref": "#/definitions/parameter-override" }]
-                },
-                "file": {
-                  "allOf": [{ "$ref": "#/definitions/file_path" }, { "$ref": "#/definitions/parameter-override" }]
-                },
-                "output": {
-                  "allOf": [{ "type": "string", "minLength": 1 }, { "$ref": "#/definitions/parameter-override" }]
-                },
-                "startOffsetWidth": { "type": "number" }
-              },
-              "additionalProperties": false
+              "description": "The parameters of the provider this one enriches, set to these values. 'currency' is also read by PartCAD itself, as what the provider quotes in, so it has to be a name rather than a number or a flag.",
+              "allOf": [
+                { "$ref": "#/definitions/parameter-overrides" },
+                { "properties": { "currency": { "type": "string", "minLength": 1 } } }
+              ]
             },
             "abstract": { "type": "boolean", "default": false },
             "unless": { "$ref": "#/definitions/unless" },
@@ -2048,13 +2023,7 @@
             "desc": { "type": "string", "maxLength": 1000 },
             "source": { "type": "string", "minLength": 1 },
             "package": { "type": "string", "minLength": 1 },
-            "with": {
-              "type": "object",
-              "patternProperties": {
-                "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
-              },
-              "additionalProperties": false
-            },
+            "with": { "$ref": "#/definitions/parameter-overrides" },
             "unless": { "$ref": "#/definitions/unless" },
             "parameters": { "$ref": "#/definitions/shape-parameter"}
           },
