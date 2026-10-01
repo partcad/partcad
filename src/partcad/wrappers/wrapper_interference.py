@@ -104,6 +104,26 @@ def _is_solid_enough_to_intersect(shape):
         return False
 
 
+def _matches(name, pattern):
+    """The rule 'partcad.test.interference' names pairs by, repeated here.
+
+    A wrapper runs in a sandbox that cannot import PartCAD, so the two copies are
+    held to each other by a test rather than by an import: a pattern is a leaf's
+    path or the tail of one, whole segments only.
+    """
+    return name == pattern or name.endswith("/" + pattern)
+
+
+def _is_expected(name_a, name_b, expected):
+    """Whether the joint between these two already says that they overlap."""
+    for a, b in expected:
+        if _matches(name_a, a) and _matches(name_b, b):
+            return True
+        if _matches(name_a, b) and _matches(name_b, a):
+            return True
+    return False
+
+
 def process(path, request):
     try:
         # Not 'wrapped': that key is decoded into OCCT geometry on arrival, and
@@ -122,6 +142,15 @@ def process(path, request):
         # worth the name.
         min_volume = float(request.get("min_volume", 0.05))
         min_fraction = float(request.get("min_fraction", 0.0))
+
+        # The pairs whose joint says they share space - a pin snapped into its
+        # hole, a screw cutting its own thread, whatever a connection names in
+        # 'interferes'. The caller discards whatever is measured for them, so
+        # measuring it is only cost, and it is the dominant cost: a pin seated
+        # in its hole is the very case in which two tessellated surfaces lie a
+        # hair apart along their whole length, which is where a boolean is at
+        # its slowest. Skipping them changes no verdict.
+        expected = [tuple(pair) for pair in (request.get("expected") or []) if len(pair) == 2]
 
         # The root's own name is on every part below it and says nothing, so
         # the paths are built from its children down: 'gearbox/shaft', not
@@ -161,9 +190,13 @@ def process(path, request):
 
         overlaps = []
         indeterminate = []
+        skipped = 0
         for a, b in candidates:
             name_a, shape_a, _ = boxes[a]
             name_b, shape_b, _ = boxes[b]
+            if _is_expected(name_a, name_b, expected):
+                skipped += 1
+                continue
             try:
                 common = BRepAlgoAPI_Common(shape_a, shape_b)
                 done = common.IsDone()
@@ -193,6 +226,7 @@ def process(path, request):
             "exception": None,
             "parts": len(boxes),
             "candidates": len(candidates),
+            "expected": skipped,
             "overlaps": overlaps,
             "unchecked": unchecked,
             "indeterminate": indeterminate,
@@ -204,6 +238,7 @@ def process(path, request):
             "exception": str(e),
             "parts": 0,
             "candidates": 0,
+            "expected": 0,
             "overlaps": [],
             "unchecked": [],
             "indeterminate": [],
