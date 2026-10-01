@@ -7,6 +7,7 @@
 import rich_click as click
 
 from ... import fast_only
+from ...exclude import exclude_option, exclude_params
 from ...service import run
 
 
@@ -21,12 +22,19 @@ from ...service import run
     show_envvar=True,
 )
 @fast_only.option()
+@exclude_option
 @click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
-def cli(cli_ctx, recursive: bool, fast_only: bool, package: str) -> None:
+def cli(cli_ctx, recursive: bool, fast_only: bool, exclude, package: str) -> None:
     run(
         cli_ctx,
         "list.objects",
-        {"kind": "assemblies", "package": package, "recursive": recursive, "fast_only": fast_only},
+        {
+            "kind": "assemblies",
+            "package": package,
+            "recursive": recursive,
+            "fast_only": fast_only,
+            **exclude_params(exclude),
+        },
         needs_context=True,
     )

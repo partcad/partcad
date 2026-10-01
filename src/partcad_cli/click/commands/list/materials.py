@@ -6,6 +6,7 @@
 
 import rich_click as click
 
+from ...exclude import exclude_option, exclude_params
 from ...service import run
 
 
@@ -19,12 +20,13 @@ from ...service import run
     help="Recursively process all imported packages (older spelling of '<package>...')",
     show_envvar=True,
 )
+@exclude_option
 @click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
-def cli(cli_ctx, recursive: bool, package: str):
+def cli(cli_ctx, recursive: bool, exclude, package: str):
     run(
         cli_ctx,
         "list.objects",
-        {"kind": "materials", "package": package, "recursive": recursive},
+        {"kind": "materials", "package": package, "recursive": recursive, **exclude_params(exclude)},
         needs_context=True,
     )

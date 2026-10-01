@@ -6,6 +6,7 @@
 
 import rich_click as click
 
+from ...exclude import exclude_option, exclude_params
 from ...service import run
 
 """List Packages command.
@@ -26,12 +27,13 @@ When no recursion in requested, it shows the current package if and only if it h
     is_flag=True,
     help="Recursively process all imported packages (older spelling of '<package>...')",
 )
+@exclude_option
 @click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
-def cli(cli_ctx, recursive: bool, package: str):
+def cli(cli_ctx, recursive: bool, exclude, package: str):
     run(
         cli_ctx,
         "list.packages",
-        {"package": package, "recursive": recursive},
+        {"package": package, "recursive": recursive, **exclude_params(exclude)},
         needs_context=True,
     )

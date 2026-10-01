@@ -26,7 +26,7 @@ from packaging.specifiers import SpecifierSet
 
 from partcad_utils import conda as pc_conda
 from partcad_utils import config_report, staging
-from partcad_utils.utils import directory_size_mb, split_recursive_object
+from partcad_utils.utils import directory_size_mb, split_recursive_object, split_recursive_package
 
 from ..rpc.dispatcher import JsonRpcError
 from . import events
@@ -133,6 +133,20 @@ def _request(params, default="."):
         params.get("object"),
     )
     return package, object_name, recursive or bool(params.get("recursive"))
+
+
+def _excluded(ctx, params) -> list:
+    """The packages a walk over a subtree is to leave out ('-x'/'--exclude').
+
+    Each is resolved the way '--package' is, so a relative name is relative to
+    the current package, and a '...' on the end changes nothing: excluding a
+    package always excludes everything below it. See 'Context.get_all_packages'.
+    """
+    excluded = []
+    for name in params.get("exclude") or ():
+        package, _ = split_recursive_package(name)
+        excluded.append(ctx.resolve_package_path(package))
+    return excluded
 
 
 def _object_kind(params) -> str:
@@ -1007,7 +1021,10 @@ def info_object(session, params):
         # '//pub/examples...' with no object: the package and every package
         # below it, each reported as this reports one.
         if recursive:
-            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package_name, has_stuff=False)]
+            packages = [
+                p["name"]
+                for p in ctx.get_all_packages(parent_name=package_name, has_stuff=False, exclude=_excluded(ctx, params))
+            ]
         else:
             packages = [package_name]
         for name in packages:
@@ -1025,7 +1042,10 @@ def info_object(session, params):
     # spelled as a flag on every command that could want it.
     kind = "software" if params.get("software") else _object_kind(params)
     if recursive:
-        packages = [p["name"] for p in ctx.get_all_packages(parent_name=package_name, has_stuff=False)]
+        packages = [
+            p["name"]
+            for p in ctx.get_all_packages(parent_name=package_name, has_stuff=False, exclude=_excluded(ctx, params))
+        ]
         targets = _targets(ctx, pc, packages, object_name, kind)
         if not targets:
             _nowhere(pc, object_name, package_name)
@@ -1379,7 +1399,7 @@ def test_run(session, params):
 
     with pc.logging.Process("Test", package):
         if recursive:
-            all_packages = ctx.get_all_packages(parent_name=package)
+            all_packages = ctx.get_all_packages(parent_name=package, exclude=_excluded(ctx, params))
             if ctx.stats_git_ops:
                 pc.logging.info("Git operations: %s" % ctx.stats_git_ops)
             packages = [p["name"] for p in all_packages]
@@ -1448,7 +1468,7 @@ def lint_run(session, params):
 
     with pc.logging.Process("Lint", package):
         if recursive:
-            all_packages = ctx.get_all_packages(parent_name=package)
+            all_packages = ctx.get_all_packages(parent_name=package, exclude=_excluded(ctx, params))
             if ctx.stats_git_ops:
                 pc.logging.info("Git operations: %s" % ctx.stats_git_ops)
             packages = [p["name"] for p in all_packages]
@@ -1537,7 +1557,7 @@ def simulate_run(session, params):
 
     with pc.logging.Process("Simulate", package):
         if recursive:
-            all_packages = ctx.get_all_packages(parent_name=package)
+            all_packages = ctx.get_all_packages(parent_name=package, exclude=_excluded(ctx, params))
             packages = [p["name"] for p in all_packages]
         else:
             packages = [package]
@@ -2258,6 +2278,7 @@ def list_objects(session, params):
         pc.logging.error("Package %s is not found" % package)
         return None
     package = package_obj.name  # '//' may resolve to a differently-named package
+    excluded = _excluded(ctx, params)
 
     with pc.logging.Process("List" + kind.capitalize(), package):
         count = 0
@@ -2265,7 +2286,9 @@ def list_objects(session, params):
             # `list interfaces` and `list software` walk every package; the
             # others only those with content.
             has_stuff = kind not in _LIST_EVERY_PACKAGE
-            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=has_stuff)]
+            packages = [
+                p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=has_stuff, exclude=excluded)
+            ]
         else:
             packages = [package]
 
@@ -2273,7 +2296,7 @@ def list_objects(session, params):
         # package has nothing to fetch and pays nothing; a plugin-backed one
         # would otherwise be asked for its enumeration as the walk below
         # reaches it, in turn, each wait end to end.
-        ctx.prefetch_object_configs(package, [_LIST_KINDS[kind]])
+        ctx.prefetch_object_configs(package, [_LIST_KINDS[kind]], excluded)
 
         output = _LIST_LABELS.get(kind, "PartCAD objects") + ":\n"
         for project_name in packages:
@@ -2334,7 +2357,10 @@ def list_packages(session, params):
     with pc.logging.Process("ListPackages", package):
         pkg_count = 0
         if recursive:
-            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
+            packages = [
+                p["name"]
+                for p in ctx.get_all_packages(parent_name=package, has_stuff=True, exclude=_excluded(ctx, params))
+            ]
         else:
             packages = [package]
 
@@ -2377,7 +2403,10 @@ def list_providers(session, params):
     with pc.logging.Process("ListProviders", package):
         provider_kinds = 0
         if recursive:
-            projects = sorted(p["name"] for p in ctx.get_all_packages(package if package != "." else None))
+            projects = sorted(
+                p["name"]
+                for p in ctx.get_all_packages(package if package != "." else None, exclude=_excluded(ctx, params))
+            )
         else:
             projects = [package]
 
@@ -2429,7 +2458,7 @@ def list_mates(session, params):
     with pc.logging.Process("ListMates", package):
         mating_kinds = 0
         if recursive:
-            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package)]
+            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, exclude=_excluded(ctx, params))]
         else:
             packages = [package]
 
@@ -2850,7 +2879,9 @@ def cam_route(session, params):
     # machine.
     machine = params.get("machine")
     if recursive:
-        packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
+        packages = [
+            p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True, exclude=_excluded(ctx, params))
+        ]
     else:
         packages = [package]
 
@@ -3635,7 +3666,9 @@ def _render_objects(
     import asyncio
 
     if recursive:
-        packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
+        packages = [
+            p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True, exclude=_excluded(ctx, params))
+        ]
     else:
         packages = [package]
 
