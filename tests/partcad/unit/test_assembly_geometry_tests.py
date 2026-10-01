@@ -655,3 +655,40 @@ def test_the_expected_pairs_are_sent_to_the_wrapper():
     assembly.get_wrapped = _wrapped
     asyncio.run(assembly.get_interference_async(_Ctx(), expected=[("beam", "pin")]))
     assert _json.loads(captured["request"])["expected"] == [["beam", "pin"]]
+
+
+def test_the_expected_pairs_are_read_from_an_assembly_that_is_not_instantiated_yet():
+    """The connections exist only once the assembly is instantiated.
+
+    The expected pairs are now worked out before the geometry is, and measuring
+    the geometry is what used to instantiate the assembly. Read from an assembly
+    nobody had instantiated, they came out empty: nothing was skipped, and
+    every seated pin was reported as a collision.
+    """
+    from types import SimpleNamespace
+
+    class _Lazy(_Assembly):
+        def __init__(self):
+            super().__init__(overlaps=[{"a": "pin", "b": "beam", "volume": 5.0}])
+            self._children = []
+            self.seen = None
+
+        async def do_instantiate(self):
+            self._children = [
+                SimpleNamespace(
+                    name="pin",
+                    connection={"target": "beam", "with_interface": None, "to_interface": None},
+                    how=SimpleNamespace(self_screw=False, snap_in=True),
+                )
+            ]
+
+        def connected_children(self):
+            return list(self._children)
+
+        async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0, expected=()):
+            self.seen = list(expected)
+            return await super().get_interference_async(ctx, min_volume, min_fraction, expected)
+
+    shape = _Lazy()
+    assert _run(InterferenceTest(), shape)
+    assert shape.seen == [("beam", "pin")]

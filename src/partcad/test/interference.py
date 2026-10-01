@@ -186,6 +186,14 @@ async def _expected_overlap_pairs(ctx, shape):
     """
     pairs = set()
     try:
+        # The children, and the connections on them, are there only once the
+        # assembly has been instantiated. Measuring the geometry does that as
+        # a side effect, and this used to run after it; asked first, it found
+        # an assembly with no children, expected nothing, and reported every
+        # pin seated in its hole.
+        instantiate = getattr(shape, "do_instantiate", None)
+        if instantiate is not None:
+            await instantiate()
         children = list(shape.connected_children())
     except Exception:
         return pairs
