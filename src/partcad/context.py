@@ -1348,7 +1348,12 @@ class Context:
         return asyncio.run(self._get_interface(interface_spec, params).get_wrapped(self))
 
     async def find_suppliers(self, cart: ProviderCart) -> dict[str, list[str]]:
-        """Find suppliers for each of the parts in the cart"""
+        """Find suppliers for each of the parts in the cart.
+
+        Keyed by each item's spec, '<name>#<count>', the same as
+        'select_supplier()': it is what 'prepare_supplier_carts()' rebuilds the
+        supplier carts from, and a name without its count is read as one of it.
+        """
         suppliers = {}
         for name, part_spec in cart.parts.items():
             suppliers_per_part = await self.find_part_suppliers(part_spec, cart)
@@ -1356,7 +1361,7 @@ class Context:
             if not suppliers_per_part:
                 pc_logging.error(f"No supplier found for {name}")
 
-            suppliers[name] = suppliers_per_part
+            suppliers[str(part_spec)] = suppliers_per_part
 
         # TODO(clairbee): calculate the recommended suppliers and reorder the results accordingly
         return suppliers
@@ -1439,7 +1444,11 @@ class Context:
         return suppliers
 
     async def prepare_supplier_carts(self, preferred_suppliers: dict[str, str]) -> dict[str, ProviderCart]:
-        """Given the list of preferred suppliers, prepare the supplier carts."""
+        """Given the list of preferred suppliers, prepare the supplier carts.
+
+        'preferred_suppliers' is keyed by cart item spec, '<name>#<count>', as
+        'select_supplier()' and 'select_preferred_suppliers()' return it.
+        """
         supplier_carts: dict[str, ProviderCart] = {}
 
         # Create a supplier cart for each supplier
