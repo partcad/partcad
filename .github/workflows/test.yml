@@ -1642,14 +1642,12 @@ jobs:
     # socket daemon there yet -- every operation opens a one-shot service over
     # stdio (client.connect -> _connect_stdio), so each of the six listings
     # 'pc list all' runs gets a cold context of its own and reloads the whole
-    # index, seven 'DONE: InitCtx' lines to Linux's one. Loading it is itself
-    # dearer than it was: '//pub/universe/lego/ldraw' is served by a repository
-    # plugin, so the index now runs a sandbox interpreter twice per LDraw
-    # category ('meta' and 'deps', 208 of them) and pays 'plugin.query.timeout'
-    # once for the enumeration nobody can wait out. Both are worth fixing
+    # index, seven 'DONE: InitCtx' lines to Linux's one. That is worth fixing
     # rather than buying more minutes for -- and a longer budget is time a
     # future wedge gets to burn before this job says so, which is the thing the
-    # deadline exists to prevent.
+    # deadline exists to prevent. The other thing that had outgrown the hour,
+    # the twenty thousand parts '//pub/universe/lego/ldraw' serves, is sampled
+    # rather than swept now (see the step below).
     timeout-minutes: 60
 
     # The images this run built, where it built any. See "Pytest" above.
@@ -1696,18 +1694,48 @@ jobs:
           # lesser failure than a part that will not build -- it is the same
           # sweep reporting that something in '//pub' is broken.
           #
-          # Known: '//pub/universe/lego/ldraw' serves the LDraw library through a
-          # repository plugin that cannot answer within 'plugin.query.timeout',
-          # so the listing exits non-zero every time and this job is red until
-          # that is fixed. That is the point -- it was always broken, and the
-          # tolerance is what made it look otherwise.
+          # Two packages are sampled rather than swept. The sweep leaves them out
+          # with '-x', and the commands in front of it test the few objects
+          # that stand for them:
+          #
+          # - '//pub/universe/lego/ldraw' is the LDraw library, served by a
+          #   repository plugin: ninety-two categories, some twenty thousand
+          #   parts. The day it started serving them (0.8.60) took 'test' from
+          #   65 seconds to half an hour on Linux and past the hour everywhere
+          #   else. What those parts exercise is the plugin, and a few of them
+          #   exercise all of it: these Power Functions parts are complex meshes
+          #   that carry studs, anti-studs, Technic pin holes, axle holes and a
+          #   Technic pin between them -- each kind of interface the plugin
+          #   reads off the geometry. The LDraw parts 'lego-demo' assembles are
+          #   still built by the sweep, which does not exclude that package.
+          # - '//pub/electronics/sbcs/intel' is twenty-two board meshes of one
+          #   kind, and the NUC 12 stands for them.
+          #
+          # The sample goes first: it fetches the LDraw root's child list, so the
+          # assemblies of the sweep find it fetched rather than asking for it
+          # cold (see #704).
+          ldraw_sample="99499c01 58121c01 26910 58123c01 87574c01"
+          sweep_exclude="-x //pub/universe/lego/ldraw -x //pub/electronics/sbcs/intel"
           set +e
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub
+          sample_rc=0
+          n=0
+          for part in ${ldraw_sample}; do
+            n=$((n + 1))
+            ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.ldraw${n}" -m partcad_cli.click.command --no-ansi --threads-max 4 test --package //pub/universe/lego/ldraw/Electric "${part}"
+            rc=$?
+            if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; fi
+          done
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.nuc -m partcad_cli.click.command --no-ansi --threads-max 4 test --package //pub/electronics/sbcs/intel nuc12
+          rc=$?
+          if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; fi
+          # shellcheck disable=SC2086 # 'sweep_exclude' is several words on purpose
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r ${sweep_exclude} //pub
           list_rc=$?
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --package //pub
+          # shellcheck disable=SC2086 # 'sweep_exclude' is several words on purpose
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r ${sweep_exclude} --package //pub
           test_rc=$?
           set -e
-          echo "::notice title=Repo //pub::'list all' exited ${list_rc}, 'test' exited ${test_rc}"
+          echo "::notice title=Repo //pub::the sample exited ${sample_rc}, 'list all' exited ${list_rc}, 'test' exited ${test_rc}"
           coverage combine
           # END PUBLIC REPO
 
@@ -1719,12 +1747,15 @@ jobs:
           # sweep still uploads the artifact that names which part failed.
           # Exiting the command's own code rather than 1 keeps 'bounded.sh's
           # timeout distinguishable from a part that would not build.
-          if [ "${test_rc}" -ne 0 ] || [ "${list_rc}" -ne 0 ]; then
-            echo "::error title=Repo //pub::'list all' exited ${list_rc}, 'test' exited ${test_rc}"
+          if [ "${test_rc}" -ne 0 ] || [ "${list_rc}" -ne 0 ] || [ "${sample_rc}" -ne 0 ]; then
+            echo "::error title=Repo //pub::the sample exited ${sample_rc}, 'list all' exited ${list_rc}, 'test' exited ${test_rc}"
             if [ "${test_rc}" -ne 0 ]; then
               exit "${test_rc}"
             fi
-            exit "${list_rc}"
+            if [ "${list_rc}" -ne 0 ]; then
+              exit "${list_rc}"
+            fi
+            exit "${sample_rc}"
           fi
 
       - name: Upload test results and coverage data

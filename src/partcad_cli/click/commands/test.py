@@ -10,6 +10,7 @@
 
 import rich_click as click
 
+from ..exclude import exclude_option, exclude_params
 from ..service import run
 
 
@@ -71,9 +72,10 @@ from ..service import run
     show_envvar=True,
     help="The object is a scene",
 )
+@exclude_option
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to test"
 @click.pass_obj
-def cli(cli_ctx, package, recursive, filter, sketch, interface, assembly, scene, object):
+def cli(cli_ctx, package, recursive, filter, sketch, interface, assembly, scene, exclude, object):
     run(
         cli_ctx,
         "test.run",
@@ -86,6 +88,7 @@ def cli(cli_ctx, package, recursive, filter, sketch, interface, assembly, scene,
             "assembly": assembly,
             "scene": scene,
             "object": object,
+            **exclude_params(exclude),
         },
         needs_context=True,
     )

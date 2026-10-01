@@ -24,6 +24,7 @@ import sys
 
 import rich_click as click
 
+from ..exclude import exclude_option, exclude_params
 from ..service import run
 
 
@@ -72,9 +73,10 @@ from ..service import run
     is_flag=True,
     help="Print the full result of every run as JSON, including what the plugin reported",
 )
+@exclude_option
 @click.argument("object", type=str, required=False)  # help="Part (default) or assembly to simulate"
 @click.pass_obj
-def cli(cli_ctx, package, recursive, assembly, filter_name, as_json, object) -> None:
+def cli(cli_ctx, package, recursive, assembly, filter_name, as_json, exclude, object) -> None:
     result = run(
         cli_ctx,
         "simulate.run",
@@ -84,6 +86,7 @@ def cli(cli_ctx, package, recursive, assembly, filter_name, as_json, object) -> 
             "assembly": assembly,
             "filter": filter_name,
             "object": object,
+            **exclude_params(exclude),
         },
         needs_context=True,
     )

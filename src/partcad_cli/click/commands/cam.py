@@ -8,6 +8,7 @@ import os
 
 import rich_click as click
 
+from ..exclude import exclude_option, exclude_params
 from ..service import run
 
 
@@ -72,9 +73,10 @@ from ..service import run
     type=str,
     show_envvar=True,
 )
+@exclude_option
 @click.argument("object", type=str, required=False)  # The object to route; all of them by default
 @click.pass_obj
-def cli(cli_ctx, package, implementation, output_dir, recursive, sketch, as_json, machine, object):
+def cli(cli_ctx, package, implementation, output_dir, recursive, sketch, as_json, machine, exclude, object):
     """Produce the program a machine cuts these objects with.
 
     With no object named this is a *package-level* command, which is what
@@ -107,6 +109,7 @@ def cli(cli_ctx, package, implementation, output_dir, recursive, sketch, as_json
             "sketch": sketch,
             "machine": machine,
             "json": as_json,
+            **exclude_params(exclude),
         },
         needs_context=True,
     )

@@ -35,6 +35,7 @@ import sys
 
 import rich_click as click
 
+from ..exclude import exclude_option, exclude_params
 from ..service import run
 
 
@@ -93,13 +94,22 @@ from ..service import run
         "say it is ('auto'). Ignored for a 'partcad.yaml', which has one schema."
     ),
 )
+@exclude_option
 @click.pass_context
 def cli(
-    click_ctx, package: str, recursive: bool, filter: str, file_paths, stdin: bool, as_json: bool, flavor: str
+    click_ctx,
+    package: str,
+    recursive: bool,
+    filter: str,
+    file_paths,
+    stdin: bool,
+    as_json: bool,
+    flavor: str,
+    exclude,
 ) -> None:
     if file_paths:
-        if package or recursive:
-            raise click.UsageError("--file checks the files named on the command line; --package/-r check a package")
+        if package or recursive or exclude:
+            raise click.UsageError("--file checks the files named on the command line; --package/-r/-x check a package")
         _lint_files(click_ctx, list(file_paths), stdin, as_json, flavor)
         return
 
@@ -109,7 +119,7 @@ def cli(
     run(
         click_ctx.obj,
         "lint.run",
-        {"package": package, "recursive": recursive, "filter": filter},
+        {"package": package, "recursive": recursive, "filter": filter, **exclude_params(exclude)},
         needs_context=True,
     )
 
