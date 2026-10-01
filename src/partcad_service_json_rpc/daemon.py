@@ -28,7 +28,7 @@ from typing import Callable, Optional
 from partcad_utils.workspace import (
     LIVENESS_TIMEOUT,
     determine_root_path,
-    is_alive,
+    is_listening,
     pid_path,
     socket_path,
 )
@@ -77,7 +77,7 @@ def ensure_daemon(
     if os.name == "nt":
         # Where the pipe is and whether anything answers on it comes from
         # `partcad_utils.win_pipe`, for the same reason the POSIX branch below
-        # takes `socket_path`/`is_alive` from `partcad_utils.workspace`: it is
+        # takes `socket_path`/`is_listening` from `partcad_utils.workspace`: it is
         # the rendezvous, and both ends have to read it from one place. Only
         # spawning the server is this package's own half.
         #
@@ -113,7 +113,12 @@ def ensure_daemon(
         os.chmod(wdir, 0o700)
 
     with _flock(os.path.join(wdir, "lock")):
-        if is_alive(sock, liveness_timeout):
+        # Listening is enough, answering is not required: a daemon serves one
+        # request at a time, so a busy one - or one still building its session
+        # behind a socket it has already bound - does not answer a probe in
+        # time, and replacing it would leave two daemons serving one workspace.
+        # A daemon that is gone refuses the connection, and is replaced.
+        if is_listening(sock, liveness_timeout):
             print(sock, flush=True)
             return sock
         if os.path.exists(sock):
