@@ -231,6 +231,49 @@ def test_metadata_materializes_from_the_repository():
     assert repo.name == "//ext"  # identity is never overridden by metadata
 
 
+def test_a_plugin_package_that_names_no_supplier_has_none():
+    """An empty set, and not a missing attribute.
+
+    A plugin-backed package skips the object initialization a local one does,
+    and the suppliers used to be skipped with it - so asking any part of one
+    who sells it raised AttributeError instead of answering "nobody".
+    """
+    ctx = pc.Context("examples")
+    repo, _ = _make_repo(ctx, {"meta": {"desc": "No store"}})
+    assert repo.get_suppliers() == {}
+
+
+def test_the_suppliers_come_from_the_metadata():
+    ctx = pc.Context("examples")
+    repo, _ = _make_repo(ctx, {"meta": {"suppliers": {"//pub/svc/store:shop": {"discount": "x"}}}})
+    asyncio.run(repo.ensure_enumerated_async())
+    assert repo.get_suppliers() == {"//pub/svc/store:shop": {"discount": "x"}}
+
+
+def test_the_suppliers_are_read_without_a_traversal():
+    """A package looked up on its own still says who sells it.
+
+    'pc supply quote' of one part resolves that part's package and nothing
+    else, so no traversal has applied its metadata by the time the suppliers
+    are asked for. Asking is what fetches it, and only once.
+    """
+    ctx = pc.Context("examples")
+    repo, fake = _make_repo(ctx, {"meta": {"suppliers": ["//pub/svc/store:shop"]}})
+    assert fake.keys == []
+    assert repo.get_suppliers() == {"//pub/svc/store:shop": {}}
+    assert repo.get_suppliers() == {"//pub/svc/store:shop": {}}
+    assert fake.keys == ["meta"]
+    # The traversal arriving later applies nothing twice.
+    asyncio.run(repo.ensure_enumerated_async())
+    assert fake.keys == ["meta", "deps"]
+
+
+def test_a_supplier_is_resolved_against_the_package_that_names_it():
+    ctx = pc.Context("examples")
+    repo, _ = _make_repo(ctx, {"meta": {"suppliers": "shop"}})
+    assert repo.get_suppliers() == {"//ext:shop": {}}
+
+
 def test_a_child_is_told_the_plugin_and_not_the_cache_version():
     """A child carries the plugin reference and nothing about the cache.
 

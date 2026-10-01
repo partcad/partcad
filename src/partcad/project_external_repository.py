@@ -86,6 +86,11 @@ class ProjectExternalRepository(ProjectPlugin):
         # rather than once per kind asked about - and so that a malformed
         # declaration is complained about once rather than ten times.
         self._served_kinds_parsed = _UNPARSED
+        # Whether the package-level metadata has been applied to this package
+        # yet. The traversal applies it as it goes; a package looked up on its
+        # own is applied the first time something needs what it says (see
+        # 'get_suppliers').
+        self._meta_applied = False
         super().__init__(ctx, name, path, config_obj=config_obj, inherited_config=inherited_config)
 
     def request(self, key: str, handler):
@@ -329,10 +334,27 @@ class ProjectExternalRepository(ProjectPlugin):
 
         Metadata is just another key in the same key/value space, so a plugin
         package can carry any package property a local one can (desc, render,
-        manufacturable, ...) with no new methods here. The location-derived
-        fields already set on the package win; the repository fills the rest.
+        manufacturable, suppliers, ...) with no new methods here. The
+        location-derived fields already set on the package win; the repository
+        fills the rest.
         """
-        meta = await self.get_data_async("meta")
+        if self._meta_applied:
+            return
+        self._apply_meta(await self.get_data_async("meta"))
+
+    def _materialize_meta(self):
+        """'_materialize_meta_async', for a synchronous accessor that needs the metadata.
+
+        The traversal applies every package's metadata as it walks; a package
+        reached by a single lookup ('Context.get_project') is never walked, so
+        whatever reads a property only the metadata carries has to ask for it.
+        """
+        if not self._meta_applied:
+            self._apply_meta(self.get_data("meta"))
+
+    def _apply_meta(self, meta):
+        """Apply one answer to 'meta' to this package, once."""
+        self._meta_applied = True
         if not meta:
             return
         # The repository supplies package properties, but never the identity
@@ -364,6 +386,21 @@ class ProjectExternalRepository(ProjectPlugin):
             if self.skipped:
                 pc_logging.info("Skipping the package '%s': excluded by 'unless' (%s)" % (self.name, self.skipped_by))
                 self._object_configs = {kind: {} for kind in self._object_configs}
+        if "suppliers" in meta:
+            # The same again: who sells what this package holds. A store that
+            # serves its catalog from a plugin says so here, and every part of
+            # it is then looked for at that store, as a local package's are.
+            self.init_suppliers()
+
+    def get_suppliers(self):
+        """The providers to consider for this package's objects, as the metadata states them.
+
+        Read on demand, because a package looked up on its own - the one a
+        'pc supply quote' of a single part names - has not had its metadata
+        applied by any traversal, and the suppliers are in nothing else.
+        """
+        self._materialize_meta()
+        return super().get_suppliers()
 
     # --- Object-access hooks (see Project) sourced from the repository ---
 
