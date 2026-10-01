@@ -1728,25 +1728,27 @@ jobs:
           # - '//pub/electronics/sbcs/intel' is twenty-two board meshes of one
           #   kind, and the NUC 12 stands for them.
           #
-          # The sample goes first: it fetches the LDraw root's child list, so the
-          # assemblies of the sweep find it fetched rather than asking for it
-          # cold (see #704).
+          # Which sample commands failed is said again at the end, beside the
+          # result: the sweep prints thousands of lines after them, and the end
+          # of a log is the part that is read first.
           #
           # '--fast-only' as in "Examples (PartCAD)": see the comment there.
           ldraw_sample="99499c01 58121c01 26910 58123c01 87574c01"
           sweep_exclude="-x //pub/universe/lego/ldraw -x //pub/electronics/sbcs/intel"
           set +e
           sample_rc=0
+          sample_failed=""
           n=0
           for part in ${ldraw_sample}; do
             n=$((n + 1))
             ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=".coverage.ldraw${n}" -m partcad_cli.click.command --no-ansi --threads-max 4 test --package //pub/universe/lego/ldraw/Electric "${part}"
             rc=$?
-            if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; fi
+            if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; sample_failed="${sample_failed} ${part}=${rc}"; fi
           done
           ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.nuc -m partcad_cli.click.command --no-ansi --threads-max 4 test --package //pub/electronics/sbcs/intel nuc12
           rc=$?
-          if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; fi
+          if [ "${rc}" -ne 0 ]; then sample_rc=${rc}; sample_failed="${sample_failed} nuc12=${rc}"; fi
+          sample="the sample exited ${sample_rc}${sample_failed:+ (${sample_failed# })}"
           # shellcheck disable=SC2086 # 'sweep_exclude' is several words on purpose
           ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r --fast-only ${sweep_exclude} //pub
           list_rc=$?
@@ -1754,7 +1756,7 @@ jobs:
           ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --fast-only ${sweep_exclude} --package //pub
           test_rc=$?
           set -e
-          echo "::notice title=Repo //pub::the sample exited ${sample_rc}, 'list all' exited ${list_rc}, 'test' exited ${test_rc}"
+          echo "::notice title=Repo //pub::${sample}, 'list all' exited ${list_rc}, 'test' exited ${test_rc}"
           coverage combine
           # END PUBLIC REPO
 
@@ -1767,7 +1769,7 @@ jobs:
           # Exiting the command's own code rather than 1 keeps 'bounded.sh's
           # timeout distinguishable from a part that would not build.
           if [ "${test_rc}" -ne 0 ] || [ "${list_rc}" -ne 0 ] || [ "${sample_rc}" -ne 0 ]; then
-            echo "::error title=Repo //pub::the sample exited ${sample_rc}, 'list all' exited ${list_rc}, 'test' exited ${test_rc}"
+            echo "::error title=Repo //pub::${sample}, 'list all' exited ${list_rc}, 'test' exited ${test_rc}"
             if [ "${test_rc}" -ne 0 ]; then
               exit "${test_rc}"
             fi

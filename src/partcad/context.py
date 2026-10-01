@@ -63,7 +63,7 @@ def _is_within(name: str, parent_name: Optional[str]) -> bool:
     return name == parent_name or name.startswith(parent_name.rstrip("/") + "/")
 
 
-def _is_excluded(name: str, exclude) -> bool:
+def is_excluded(name: str, exclude) -> bool:
     """Whether a package is one of 'exclude', or sits underneath one of them.
 
     What a walk over a subtree leaves out when it is told to ('pc test -x'):
@@ -1008,7 +1008,7 @@ class Context:
     async def _import_all_recursive(self, project, exclude=()):
         tasks = []
 
-        if _is_excluded(project.name, exclude):
+        if is_excluded(project.name, exclude):
             # Only the package the walk starts from can get here; every other
             # one is checked before it is imported, below.
             return []
@@ -1058,7 +1058,7 @@ class Context:
                     # Avoid circular dependencies of the root package
                     # TODO(clairbee): fix circular dependencies in general
                     continue
-                if _is_excluded(next_project_path, exclude):
+                if is_excluded(next_project_path, exclude):
                     pc_logging.debug("Not importing the excluded package: %s" % next_project_path)
                     continue
                 pc_logging.debug("Importing: %s..." % next_project_path)
@@ -1085,7 +1085,7 @@ class Context:
             ):
                 # TODO(clairbee): check if this subdir is already imported
                 next_project_path = get_child_project_path(project.name, subdir)
-                if _is_excluded(next_project_path, exclude):
+                if is_excluded(next_project_path, exclude):
                     pc_logging.debug("Not importing the excluded package: %s" % next_project_path)
                     continue
 
@@ -1136,7 +1136,7 @@ class Context:
         (see 'list_objects').
         """
         projects = [p for p in self.projects.values() if _is_within(p.name, parent_name)]
-        projects = [p for p in projects if not p.skipped and not _is_excluded(p.name, exclude)]
+        projects = [p for p in projects if not p.skipped and not is_excluded(p.name, exclude)]
         if not projects:
             return
 
@@ -1165,7 +1165,7 @@ class Context:
         if parent_name is not None:
             projects = filter(lambda x: _is_within(x.name, parent_name), projects)
         if exclude:
-            projects = filter(lambda x: not _is_excluded(x.name, exclude), projects)
+            projects = filter(lambda x: not is_excluded(x.name, exclude), projects)
 
         # Unconditionally, not only under 'has_stuff': a skipped package holds
         # no objects, so the filter below would drop it anyway, but a caller

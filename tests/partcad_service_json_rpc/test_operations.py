@@ -1305,6 +1305,44 @@ def test_a_recursive_test_does_not_test_an_excluded_package(monkeypatch):
     assert sub.parts_requested == []
 
 
+def test_a_mate_listing_leaves_out_a_mate_with_either_end_excluded():
+    """'ctx.mates' holds the mates of every package loaded, whatever loaded it,
+    so the walk leaving a package out does not leave its mates out by itself."""
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    ctx.projects["//kept"] = FakeProject(name="//kept")
+    ctx.mates = {
+        "//kept:pin": {
+            "//kept:hole": FakeObject("kept-kept", desc="kept to kept"),
+            "//gone/below:hole": FakeObject("kept-gone", desc="kept to gone"),
+        },
+        "//gone:stud": {"//kept:hole": FakeObject("gone-kept", desc="gone to kept")},
+    }
+
+    operations.list_mates(session, {"package": "//", "recursive": True, "exclude": ["//gone"]})
+
+    output = session.partcad.logging.only("info")
+    assert "kept to kept" in output
+    assert "kept to gone" not in output and "gone to kept" not in output
+    assert lines_of(output)[-1] == "Total: 1 mating interfaces"
+
+
+def test_a_provider_listing_leaves_an_excluded_package_out():
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    for name in ("//kept", "//gone", "//gone/below"):
+        project = FakeProject(name=name).add("parts", FakeObject("bolt"))
+        project.add("providers", FakeObject("store" + name.replace("/", "-"), desc="sells " + name))
+        ctx.projects[name] = project
+
+    operations.list_providers(session, {"package": "//", "recursive": True, "exclude": ["//gone"]})
+
+    output = session.partcad.logging.only("info")
+    assert "sells //kept" in output
+    assert "sells //gone" not in output
+    assert ctx.excluded == [["//gone"]]
+
+
 def test_an_excluded_package_is_named_the_way_a_package_is():
     """Relative to the current package, and with any '...' dropped: excluding a
     package always excludes everything below it, so the suffix says nothing."""
