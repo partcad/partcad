@@ -46,7 +46,7 @@ class _Shape:
             raise self._raises
         return self._box
 
-    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0):
+    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0, expected=()):
         if self._raises:
             raise self._raises
         self.asked_with = (min_volume, min_fraction)
@@ -602,3 +602,56 @@ def test_naming_a_further_item_is_enough_on_its_own():
         overlaps=overlaps,
     )
     assert _run_with_ctx(InterferenceTest(), asm, _IfaceCtx(set()))
+
+
+def test_the_pairs_the_joints_account_for_are_handed_to_the_check(monkeypatch):
+    """So that the wrapper can skip measuring them, rather than measure and discard."""
+    import partcad.test.interference as interference
+
+    async def _expected(ctx, shape):
+        return {("beam", "pin")}
+
+    monkeypatch.setattr(interference, "_expected_overlap_pairs", _expected)
+    seen = {}
+    shape = _Assembly(overlaps=[{"a": "beam", "b": "pin", "volume": 5.0}])
+    original = shape.get_interference_async
+
+    async def _spy(ctx, min_volume=0.05, min_fraction=0.0, expected=()):
+        seen["expected"] = list(expected)
+        return await original(ctx, min_volume, min_fraction, expected)
+
+    shape.get_interference_async = _spy
+    # Still filtered from the answer, whether or not the wrapper skipped it.
+    assert _run(InterferenceTest(), shape)
+    assert seen["expected"] == [("beam", "pin")]
+
+
+def test_the_expected_pairs_are_sent_to_the_wrapper():
+    import json as _json
+
+    from partcad.assembly import Assembly
+
+    captured = {}
+
+    class _Runtime:
+        async def ensure_async(self, *args):
+            return None
+
+        async def run_async(self, command, request_serialized):
+            captured["request"] = request_serialized
+            return 0, '{"success": true, "overlaps": [], "unchecked": [], "parts": 0}', ""
+
+    class _Ctx:
+        def get_python_runtime(self, version=None):
+            return _Runtime()
+
+    assembly = Assembly.__new__(Assembly)
+    assembly.project_name = "pkg"
+    assembly.name = "asm"
+
+    async def _wrapped(ctx):
+        return {"name": "asm", "label": "asm", "assembly": []}
+
+    assembly.get_wrapped = _wrapped
+    asyncio.run(assembly.get_interference_async(_Ctx(), expected=[("beam", "pin")]))
+    assert _json.loads(captured["request"])["expected"] == [["beam", "pin"]]

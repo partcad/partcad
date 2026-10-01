@@ -344,7 +344,7 @@ class Assembly(Shape):
             problems.extend([(child.name, problem) for problem in child.how.problems])
         return problems
 
-    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0):
+    async def get_interference_async(self, ctx, min_volume=0.05, min_fraction=0.0, expected=()):
         """The pairs of parts in this assembly whose solids share space.
 
         Returned as {"overlaps": [{"a", "b", "volume"}, ...], "unchecked": [...],
@@ -362,6 +362,11 @@ class Assembly(Shape):
         touch bound nothing, and a boolean over tessellated faces answers with a
         sliver rather than with zero. It is not a place to hide an overlap that
         is meant to be there.
+
+        'expected' is that place: the pairs whose joint says they share space,
+        as (a, b) name patterns. They are not measured at all, since nothing
+        would be done with the answer, and a seated pin is the slowest boolean
+        an assembly has. Neither is reported, then, nor counted as indeterminate.
         """
         obj = await self.get_wrapped(ctx)
         if obj is None:
@@ -386,6 +391,7 @@ class Assembly(Shape):
                     "assembly_json": shape_envelope.dumps(obj),
                     "min_volume": min_volume,
                     "min_fraction": min_fraction,
+                    "expected": [list(pair) for pair in expected],
                 }
             )
 

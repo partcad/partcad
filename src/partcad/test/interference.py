@@ -88,11 +88,18 @@ class InterferenceTest(Test):
 
         config = (shape.config or {}).get("interference") or {}
 
+        # Worked out before the geometry is, so that the pairs the joints
+        # account for are never measured. They are still filtered out of the
+        # answer below: that is what decides the verdict, and it does not
+        # depend on the wrapper having skipped them.
+        expected = await _expected_overlap_pairs(ctx, shape)
+
         try:
             result = await shape.get_interference_async(
                 ctx,
                 min_volume=float(config.get("minVolume", DEFAULT_MIN_VOLUME)),
                 min_fraction=float(config.get("minFraction", 0.0)),
+                expected=sorted(expected),
             )
         except Exception as e:
             # Not a pass. An assembly that will not realize returns None below
@@ -144,8 +151,6 @@ class InterferenceTest(Test):
             )
 
         overlaps = result.get("overlaps") or []
-
-        expected = await _expected_overlap_pairs(ctx, shape)
         reported = [o for o in overlaps if not _is_expected(o, expected)]
         if not reported:
             return self.passed(shape)
