@@ -12,6 +12,7 @@ the lazy object-access layer is exercised without a runtime or a CAD kernel.
 
 import asyncio
 import shutil
+import threading
 
 import partcad as pc
 from partcad import context as pc_context
@@ -265,6 +266,110 @@ def test_hierarchy_forwards_under_a_subfolder():
     child._repository = fake
     assert child.object_names("part") == ["rotor"]
     assert "motors/objects/part" in fake.keys
+
+
+# --- asked from a loop, under the context's lock (#704) ----------------------
+#
+# 'Context.get_project()' holds the context's lock all the way down to the
+# package it is after, and asks every package on the way for its
+# 'dependencies()'. For a plugin-backed package that is a fetch, and on a thread
+# that runs a loop - an assembly resolving its parts - the fetch is completed on
+# a worker thread while the asking thread waits. Resolving the plugin is a
+# 'get_project()' too, so a worker that did it waited for the lock the thread
+# waiting for it held: 'pc test' over //pub stopped, with no CPU spent, on the
+# first plugin-backed package it reached with nothing cached.
+
+
+class _ImpatientLock:
+    """The context's lock, except that waiting long for it is an error.
+
+    A regression here is a deadlock, and a deadlocked worker thread is one the
+    interpreter waits for on its way out: the test would not fail, the run
+    would hang. This turns it into a failure the fetch reports, and the lookup
+    comes back without the package.
+    """
+
+    def __init__(self):
+        self._lock = threading.RLock()
+
+    def __enter__(self):
+        if not self._lock.acquire(timeout=10):
+            raise TimeoutError("waited 10 seconds for the context's lock")
+
+    def __exit__(self, *_args):
+        self._lock.release()
+
+
+def _plugin_package_under_a_root(tmp_path, data):
+    """A root hosting a repository plugin, and a package that plugin serves.
+
+    The package is loaded but has neither resolved its plugin nor fetched
+    anything, which is how a hierarchy's top package is found by the first
+    lookup into it when the plugin's cache is cold.
+    """
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "partcad.yaml").write_text("name: //test\n")
+    ctx = pc.Context(str(root))
+    ctx.lock = _ImpatientLock()
+    fake = FakeRepository(data)
+    # What the repository's factory registers on the package declaring it.
+    ctx.get_project("//test").repositories["remote"] = fake
+    ext = ProjectExternalRepository(ctx, "//test/ext", str(tmp_path), plugin_ref="//test:remote", config_obj={})
+    ctx.projects[ext.name] = ext
+    return ctx, ext, fake
+
+
+def test_a_lookup_from_a_loop_resolves_through_a_cold_plugin_package(tmp_path):
+    ctx, _, fake = _plugin_package_under_a_root(tmp_path, {"deps": ["motors"]})
+
+    async def as_an_assembly_asks():
+        return ctx.get_project("//test/ext/motors")
+
+    found = asyncio.run(as_an_assembly_asks())
+
+    assert found is not None and found.name == "//test/ext/motors"
+    assert fake.keys == ["deps"]
+
+
+def test_a_plugin_that_cannot_be_resolved_is_reported_only_when_it_is_needed():
+    """Resolving ahead of the worker must not report what the cache answers.
+
+    The plugin is resolved before the fetch is handed over, which is before
+    anybody knows whether the on-disk cache holds the answer. A failure to
+    resolve is an error only for a fetch that needed the plugin - and an error
+    logged for one that did not would still be the command's exit status.
+    """
+    ctx = pc.Context("examples")
+    cache = Cache("external/test_unresolvable", ctx.user_config)
+    errors = []
+    original = pc.logging.error
+    try:
+        first = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", cache=cache)
+        first._repository = FakeRepository({"deps": ["child"]})
+        assert list(first.dependencies()) == ["child"]  # now on disk
+
+        second = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", plugin_ref="//nowhere:remote", cache=cache)
+
+        def unresolvable():
+            raise RuntimeError("no such package")
+
+        second._get_repository = unresolvable
+        pc.logging.error = lambda msg, *a: errors.append(msg)
+
+        async def from_a_loop(key):
+            return second.get_data(key)
+
+        assert asyncio.run(from_a_loop("deps")) == ["child"]
+        assert errors == []
+
+        assert asyncio.run(from_a_loop("meta")) is None  # not cached: needs the plugin
+        assert len(errors) == 1 and "no such package" in errors[0], errors
+    finally:
+        pc.logging.error = original
+        for backend in cache.backends:
+            if isinstance(backend, FilesCacheBackend):
+                shutil.rmtree(backend.cache_dir, ignore_errors=True)
 
 
 # --- 'objectKinds': the kinds a repository says it does not have -------------
