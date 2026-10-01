@@ -2415,10 +2415,13 @@ def list_mates(session, params):
         return None
     package = package_obj.name
 
+    from partcad.context import is_excluded
+
     with pc.logging.Process("ListMates", package):
         mating_kinds = 0
+        excluded = _excluded(ctx, params)
         if recursive:
-            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, exclude=_excluded(ctx, params))]
+            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, exclude=excluded)]
         else:
             packages = [package]
 
@@ -2447,6 +2450,12 @@ def list_mates(session, params):
                 ):
                     continue
                 if not recursive and source_package_name != package and target_package_name != package:
+                    continue
+                # 'ctx.mates' holds the mates of every package loaded, by
+                # whatever loaded it -- an assembly elsewhere using a part of an
+                # excluded package loads that package too. So leaving it out of
+                # the walk above is not enough to leave its mates out.
+                if is_excluded(source_package_name, excluded) or is_excluded(target_package_name, excluded):
                     continue
                 line = "\t"
                 line += "%s" % display_source + " " + " " * (35 - len(display_source))
