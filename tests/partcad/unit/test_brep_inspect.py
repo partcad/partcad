@@ -46,6 +46,7 @@ FIXTURES = {
     "compound_two_solids.brep": ("compound", 0, 2),
     "compound_nested_shell.brep": ("compound", 1, 2),
     "compsolid.brep": ("compsolid", 0, 2),
+    "solid_with_voids.brep": ("solid", 0, 12),
 }
 
 
@@ -85,6 +86,30 @@ def test_a_compound_that_holds_a_shell_beside_a_solid():
     assert topology.count("shell") == 2
     assert topology.count("solid") == 1
     assert topology.free_shells == 1
+
+
+def test_a_solid_with_more_than_ten_voids_still_owns_every_shell():
+    """The sub-shape list wraps, and reading only its last line is a false verdict.
+
+    TopTools_ShapeSet writes ten references per line. A solid is bounded by one
+    shell per cavity as well as by its outer one, so at eleven cavities the
+    solid's list runs onto a second line - and a scan that read only the line
+    ending in '*' saw one of the twelve shells and called the other eleven free.
+    A vendor's STEP of a servo actuator did exactly that: one solid, eleven
+    shells, reported as a surface model.
+    """
+    data = payload("solid_with_voids.brep")
+    # The fixture is only a fixture if its list really does wrap.
+    lines = data[data.index(b"\nSo\n") :].split(b"\n")
+    first = next(line for line in lines if line.startswith((b"+", b"-")))
+    assert first.count(b"+") + first.count(b"-") == 10, "ten references on the first line"
+    assert not first.endswith(b"*"), "and the list continues on the next"
+
+    topology = brep_inspect.topology(data)
+    assert topology.count("solid") == 1
+    assert topology.count("shell") == 12
+    assert topology.free_shells == 0
+    assert verdict(_Shape(envelope("solid_with_voids.brep"))) == ShellTest.TEST_PASSED
 
 
 def test_a_compsolids_references_are_not_mistaken_for_shells():
