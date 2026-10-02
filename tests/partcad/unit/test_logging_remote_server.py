@@ -19,13 +19,20 @@ import time
 import partcad_utils.logging as pc_logging
 import partcad_utils.logging_remote_server as remote_server
 
+_saved_level = logging.NOTSET
+
 
 def setup_function():
+    # The level is the shared ``partcad`` logger's, so put it back afterwards:
+    # a test that lowers it would otherwise silence DEBUG for every test after.
+    global _saved_level
+    _saved_level = logging.getLogger("partcad").level
     logging.getLogger("partcad").setLevel(logging.DEBUG)
 
 
 def teardown_function():
     remote_server.fini()
+    logging.getLogger("partcad").setLevel(_saved_level)
 
 
 def _collector():
