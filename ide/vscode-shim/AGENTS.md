@@ -81,3 +81,7 @@ out of `../vscode/package.json`.
 **Publish `PartCAD.partcad-official` before this.** The editor fails an install whose `extensionDependencies`
 cannot be resolved, so releasing this against a publisher that has nothing under it yet would break the very
 installations it is meant to carry over.
+
+That order is no longer only written down here: `deploy.yml`'s `publish-vscode-extension` job publishes the two
+packages to the galleries after a release, extension first, and stops without touching the shim if the
+extension did not go. Publishing by hand still has to obey the rule; the release path now cannot get it wrong.
