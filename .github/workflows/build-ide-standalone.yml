@@ -1465,6 +1465,43 @@ jobs:
         shell: pwsh
         run: |
           $app = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE"
+
+          # Nothing may still be running out of the tree about to be removed:
+          # Windows will not delete an executable that is running, and the
+          # uninstaller does not say which one it was refused -- it leaves the
+          # directory behind, and the check at the end of this step fails over
+          # it. "Start it once" stops the editor, by name, and that is not the
+          # whole of it. The PartCAD daemon, `partcad-json-rpc` out of
+          # "resources\partcad-cli", is started by the extension for the
+          # workspace it opens and by any `pc` run from this tree (`pc version`
+          # above asks the daemon for its version), and it is meant to outlive
+          # whatever started it. Stopping the editor leaves it running. That is
+          # the "Terminate orphan process: pid (NNNN) (partcad-json-rpc)" line
+          # a failed run ends with, after "is still there after uninstalling".
+          #
+          # So stop everything whose executable is under the application, by
+          # path rather than by name, so that the next thing to run out of this
+          # tree is covered too -- and wait for it to be gone, since
+          # Stop-Process returns once it has asked. A daemon killed here loses
+          # nothing: its state is under "~\.partcad\workspaces", outside the
+          # tree.
+          function Get-Running {
+            Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith("$app\", [StringComparison]::OrdinalIgnoreCase) }
+          }
+          $running = @(Get-Running)
+          if ($running) {
+            Write-Host "--- still running out of ${app}:"
+            $running | Format-Table Id, ProcessName, Path -AutoSize | Out-String -Width 400 | Write-Host
+            $running | Stop-Process -Force -ErrorAction SilentlyContinue
+            $deadline = (Get-Date).AddSeconds(30)
+            while ((Get-Running) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
+            $left = @(Get-Running)
+            if ($left) {
+              $left | Format-Table Id, ProcessName, Path -AutoSize | Out-String -Width 400 | Write-Host
+              throw "still running out of $app 30 seconds after being stopped; refusing to uninstall around it"
+            }
+          }
+
           # Inno Setup's uninstaller relaunches itself from the temp directory
           # and the process started here returns before the work is done, so
           # this waits for the result rather than for the process.
