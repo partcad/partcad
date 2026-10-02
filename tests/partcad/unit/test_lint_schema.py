@@ -118,7 +118,50 @@ ENRICHABLE = {
     "parts": {"cube": {"type": "enrich", "source": "block"}},
     "sketches": {"outline": {"type": "enrich", "source": "profile"}},
     "assemblies": {"desk": {"type": "enrich", "source": "table"}},
+    "repositories": {"mirror": {"type": "enrich", "source": "upstream"}},
+    "providers": {"shop": {"type": "enrich", "source": "store"}},
 }
+
+
+@pytest.mark.parametrize("kind", ENRICHABLE.keys())
+def test_schema_with_names_any_parameter(kind):
+    """Which parameters there are is up to the object referred to, not the schema.
+
+    A provider's 'with:' used to take four names and no others - 'currency',
+    'file', 'output' and 'startOffsetWidth', the parameters of the providers in
+    'examples/' - so setting the store a shop quotes for was an unexpected
+    property, in 'pc lint' and in the editor, on a configuration that worked.
+    """
+    name, config = next(iter(ENRICHABLE[kind].items()))
+    validate({kind: {name: dict(config, **{"with": {"storeNumber": "0595", "zip_code": 28117, "metric": False}})}})
+
+
+@pytest.mark.parametrize("kind", ENRICHABLE.keys())
+def test_schema_with_takes_only_names_a_parameter_can_have(kind):
+    name, config = next(iter(ENRICHABLE[kind].items()))
+    errors = failures({kind: {name: dict(config, **{"with": {"store number": "0595"}})}})
+    assert any(
+        error.json_path == "$.%s.%s.with" % (kind, name) and error.validator == "additionalProperties"
+        for error in errors
+    ), [(error.json_path, error.message) for error in errors]
+
+
+def test_schema_a_provider_quotes_in_a_named_currency():
+    """'currency' is the one provider parameter PartCAD reads itself.
+
+    It is what the quotes of the provider are in, and a quote's currency is a
+    name: anything else is ignored where it is read (see '_provider_currency').
+    """
+
+    def shop(currency):
+        return {"providers": {"shop": {"type": "enrich", "source": "store", "with": {"currency": currency}}}}
+
+    validate(shop("USD"))
+    for currency in (840, "", True):
+        errors = failures(shop(currency))
+        assert any(error.json_path == "$.providers.shop.with.currency" for error in errors), [
+            (error.json_path, error.message) for error in errors
+        ]
 
 
 @pytest.mark.parametrize("kind", ENRICHABLE.keys())
