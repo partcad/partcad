@@ -121,6 +121,23 @@ def test_a_missing_script_costs_the_version_and_not_the_run(tmp_path):
     assert pfe.declared_cache_version(FakeContext(), parent, "//pkg:repo") == 0
 
 
+def test_a_script_found_by_its_default_name_is_read_too(tmp_path):
+    """A repository that names no 'path' runs '<name>.py', and that is the one read.
+
+    The loader has always defaulted to it; only this lookup did not, so a
+    plugin relying on the default - 'examples/plugin_repository_tree' does -
+    could state any version it liked and still be served from version 0.
+    """
+    (tmp_path / "repo.py").write_text("CACHE_VERSION = 6\n")
+    parent = FakeProject("//pkg", tmp_path, {"repo": {"type": "basic"}})
+    assert pfe.declared_cache_version(FakeContext(), parent, "//pkg:repo") == 6
+
+
+def test_a_default_script_that_is_not_there_costs_the_version_and_not_the_run(tmp_path):
+    parent = FakeProject("//pkg", tmp_path, {"repo": {"type": "basic"}})
+    assert pfe.declared_cache_version(FakeContext(), parent, "//pkg:repo") == 0
+
+
 def test_a_repository_with_no_script_of_its_own_has_no_code_to_version(tmp_path):
     # An 'enrich' repository rewrites another repository's answers and declares
     # no 'path' at all.

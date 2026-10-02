@@ -51,9 +51,9 @@ _declared_versions_lock = threading.Lock()
 def _locate_plugin_script(ctx, parent: Project, plugin_ref: str):
     """The file the repository plugin is written in, or None.
 
-    None when the repository names no script - an 'enrich' one, which rewrites
-    another repository's answers, has no code of its own - or when the package
-    that hosts it is not loaded.
+    None for an 'enrich' repository, which rewrites another repository's answers
+    and has no code of its own, and when the package that hosts the repository
+    is not loaded or declares no such repository.
     """
     package_name, repository_name = resolve_resource_path(parent.name, plugin_ref)
     # The plugin almost always lives in the package that declares the dependency
@@ -65,9 +65,13 @@ def _locate_plugin_script(ctx, parent: Project, plugin_ref: str):
         return None
 
     config = (source.config_obj.get("repositories") or {}).get(repository_name)
-    if not isinstance(config, dict) or not config.get("path"):
+    if not isinstance(config, dict) or config.get("type") == "enrich":
         return None
-    return os.path.join(source.config_dir, config["path"])
+    # The script the loader runs, found the way the loader finds it
+    # ('PluginFactoryFile'): by 'path', or as '<name>.py' beside the
+    # configuration when it gives none. Reading only 'path' left every plugin
+    # that relies on the default unversioned, whatever its script stated.
+    return os.path.join(source.config_dir, config.get("path") or repository_name + ".py")
 
 
 def _read_declared_cache_version(path: str) -> int:
