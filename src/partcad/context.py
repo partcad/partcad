@@ -911,26 +911,34 @@ class Context:
         if next_project_path in self.projects:
             return self._get_project_recursive(self.projects[next_project_path], import_list)
 
-        # Check if there is a matching subfolder
-        subfolders = [f.name for f in os.scandir(project.config_dir) if f.is_dir()]
-        if next_import in list(subfolders):
-            if os.path.exists(
-                os.path.join(
-                    project.config_dir,
-                    next_import,
-                    consts.DEFAULT_PACKAGE_CONFIG,
-                )
-            ):
-                pc_logging.debug("Importing a subfolder (get): %s..." % next_project_path)
-                prj_conf = {
-                    "name": next_project_path,
-                    "type": "local",
-                    "path": next_import,
-                }
-                next_project = self.import_project(project, prj_conf)
-                if next_project is not None:
-                    result = self._get_project_recursive(next_project, import_list)
-                    return result
+        # Check if there is a matching subfolder that is a package. A folder of
+        # that name with no 'partcad.yaml' in it is not one - it is where the
+        # package keeps some files of its own, a plugin's code or a model's
+        # images - so it must not stop the lookup from reaching a dependency
+        # declared under the same name. It used to: the folder matched, held no
+        # package, and the dependencies below were never consulted, so every
+        # reference to '<package>/catalog' failed as "not found" while the
+        # traversal, which does check for 'partcad.yaml', imported it fine.
+        subfolders = (
+            [f.name for f in os.scandir(project.config_dir) if f.is_dir()] if os.path.isdir(project.config_dir) else []
+        )
+        if next_import in subfolders and os.path.exists(
+            os.path.join(
+                project.config_dir,
+                next_import,
+                consts.DEFAULT_PACKAGE_CONFIG,
+            )
+        ):
+            pc_logging.debug("Importing a subfolder (get): %s..." % next_project_path)
+            prj_conf = {
+                "name": next_project_path,
+                "type": "local",
+                "path": next_import,
+            }
+            next_project = self.import_project(project, prj_conf)
+            if next_project is not None:
+                result = self._get_project_recursive(next_project, import_list)
+                return result
         else:
             # Resolve a declared child dependency. Go through the 'dependencies()'
             # accessor rather than 'config_obj' directly so that a plugin-backed
@@ -1534,11 +1542,47 @@ class Context:
         synchronous accessor drive it, which it cannot do from a thread that
         already owns a loop -- see 'Project._materialize_derived_part()'.
         """
+        project_name, _ = resolve_resource_path(self.current_project_path, part_spec)
+        await self._warm_project_async(project_name)
         resolved = self._resolve_part_project(part_spec)
         if resolved is None:
             return None
         prj, part_name = resolved
         return await prj.get_part_async(part_name, params)
+
+    async def _warm_project_async(self, project_path: str) -> None:
+        """Fetch, on the caller's loop, what 'get_project(project_path)' would fetch blocking it.
+
+        'get_project()' is synchronous, and a plugin-backed package on the way
+        down answers its 'dependencies()' with a fetch. From a thread that runs
+        a loop, that fetch is completed on another thread while this one waits
+        - and everything else on the loop waits with it: a sandbox process
+        whose input this loop is still writing, and the environment lock and
+        process slot that process's task holds. The fetch runs the plugin in a
+        sandbox, so it can need exactly those, and then neither side ever moves.
+        'pc test' over //pub stopped that way on macOS with #704's cycle gone.
+
+        So the plugin-backed packages above the one wanted are warmed here, top
+        down, by awaiting their fetches; the walk 'get_project()' then makes
+        finds each answer memoized. A level is looked up only once the level
+        above it is warm, so looking it up fetches nothing either. The package
+        itself is not walked through, so it has nothing to warm for this - what
+        is asked of it next warms itself (see 'Project.get_part_async').
+        """
+        abs_path = self.get_project_abs_path(project_path)
+        if not abs_path.startswith(self.name):
+            return
+        rest = abs_path[len(self.name) :].strip("/")
+        names = [self.name]
+        for component in rest.split("/") if rest else []:
+            names.append(get_child_project_path(names[-1], component))
+        for name in names[:-1]:
+            project = self.projects.get(name) or self.get_project(name)
+            if project is None:
+                return
+            warm = getattr(project, "ensure_enumerated_async", None)
+            if warm is not None:
+                await warm()
 
     def get_part(self, part_spec, params=None) -> Optional[Part]:
         return self._get_part(part_spec, params)
