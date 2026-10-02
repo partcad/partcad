@@ -136,7 +136,9 @@ def test_render_assembly_readme():
         "| head_half | 2 | PLA | additive | ±0.2 mm | Bracket used as one side of the head on PartCAD logo |" in lines
     )
     assert "| Part | Count | Vendor | SKU | Description |" in lines
-    assert "| bolt | 1 | iso | ISO 4014 M8x35 | M8x35-screw |" in lines
+    # The bolt states a 'url:' beside its vendor and SKU - the page somebody
+    # orders from - so its SKU is a link rather than bare text.
+    assert "| bolt | 1 | iso | [ISO 4014 M8x35](https://www.iso.org/standard/53625.html) | M8x35-screw |" in lines
     # No sub-assembly of this assembly is an object of a package.
     assert "## Sub-Assemblies" not in lines
 
