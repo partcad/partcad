@@ -42,6 +42,27 @@ ends with '*'. So this stays a scan over lines rather than a second
 implementation of a BREP reader, and it needs no CAD dependency to do it -- the
 point of having it here rather than in a wrapper.
 
+**The sub-shape list wraps.** TopTools_ShapeSet writes ten references per line
+and continues on the next, so the list is one line only for a shape made of at
+most ten sub-shapes -- which a solid usually is, because a solid is usually
+bounded by one shell. A solid with internal voids is bounded by one shell per
+void as well, and at eleven of them the list wraps:
+
+    So
+    0100000
+    +4053 0 -4027 0 -4006 0 -3988 0 -3415 0 -2842 0 -2274 0 -1701 0 -1098 0 -530 0
+    -2 0 *
+
+Reading only the line that ends with '*' sees one of those eleven shells, and
+the other ten then look like shells no solid owns -- so a part modelled with ten
+or more cavities was reported as a surface model, which is the opposite of what
+it is. A real one did it: a vendor's STEP of a servo actuator, one solid bounded
+by eleven shells, failed the 'shell' check with "10 shell(s) that no solid bounds
+itself with". So the whole list is read, as the run of lines that ends on the '*'
+and holds nothing but references. The flags line before it holds no sign, which
+is what makes that run start where the list does rather than somewhere in the
+geometry above it.
+
 What it is for is the shell. A shell is a skin: a set of faces joined along
 their edges, with nothing said about which side of them is material. A solid is
 a shell that has been declared to bound a volume, and that declaration is the
@@ -101,6 +122,12 @@ _TSHAPES = b"TShapes "
 # A reference to another record: an orientation sign and the record's index,
 # followed by a location index this has no use for.
 _REFERENCE = re.compile(rb"[+-]\d+")
+
+# One line of a sub-shape list: references and nothing else, optionally the '*'
+# that closes the list. An empty list is the '*' alone. What this has to exclude
+# is the line above the list -- the flags, seven binary digits, which carry no
+# sign and so cannot match -- and whatever geometry sits above that.
+_REFERENCE_LINE = re.compile(rb"^(?:[+-]\d+ \d+\s*)*\*?$")
 
 
 class Topology:
@@ -195,12 +222,23 @@ def _records(data: bytes):
         # Everything between here and the line the sub-shape list closes on is
         # geometry, and is skipped unread. That is the whole of what makes this
         # a scan rather than a parse.
+        #
+        # The list itself can be several lines (ten references each; see the
+        # module docstring), so what is yielded is the run of lines that ends on
+        # the '*' and holds nothing but references. A line that is not one of
+        # those starts the run again, which is what keeps the geometry above the
+        # list out of it.
+        references = []
         while True:
             line, pos = _line(data, pos)
             if line is None:
                 raise ValueError("record %d of %d is truncated" % (index + 1, count))
+            references = references + [line] if _REFERENCE_LINE.match(line) else []
             if line.endswith(b"*"):
-                yield code, line
+                # The closing line is a reference line, so the run holds it; a
+                # payload where it somehow does not is read the way it was
+                # before this wrapped list was understood.
+                yield code, b" ".join(references) if references else line
                 break
 
 

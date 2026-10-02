@@ -21,6 +21,7 @@ dependency the module exists to avoid.
 | `compound_two_solids.brep` | two boxes in one compound | Two shells, both somebody's boundary. Free shells are counted, not sensed, and this is where a boolean would get it wrong. |
 | `compound_nested_shell.brep` | a box, and a compound holding a shell | The shell is two levels down. |
 | `compsolid.brep` | two boxes in a compsolid | A compsolid is made of solids, not of shells, so its references must not be mistaken for shells that bound something. |
+| `solid_with_voids.brep` | a 60×20×20 bar with eleven 4 mm cubic cavities | One solid bounded by twelve shells — its outer one and one per void. Twelve is past the ten references `TopTools_ShapeSet` puts on a line, so the solid's sub-shape list wraps, and a scan that read only the line ending in `*` called eleven of those twelve shells free. A vendor's STEP of a servo actuator is what found it. |
 
 Regenerating them means rebuilding the same shapes with OCCT and writing them
 again; nothing reads them but the one test, and the test states the topology it
