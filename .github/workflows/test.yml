@@ -1725,6 +1725,12 @@ jobs:
           # of a log is the part that is read first.
           ldraw_sample="99499c01 58121c01 26910 58123c01 87574c01"
           sweep_exclude="-x //pub/universe/lego/ldraw -x //pub/electronics/sbcs/intel"
+          # The daemon every command below talks to, started first and verbose:
+          # an action ends in a DONE line with its duration at DEBUG, and the
+          # daemon drops a record below its own level before its log file sees
+          # it -- which is where the timings below are read from. The commands
+          # themselves stay at INFO, so this job's own log does not grow with it.
+          python -m partcad_cli.click.command --no-ansi -v daemon start
           set +e
           sample_rc=0
           sample_failed=""
@@ -1749,7 +1755,8 @@ jobs:
           # the part of the log that can be read back: an object whose tests
           # pass logs nothing but DONE lines, and with one per action the log is
           # long. The daemon's own log has every DONE line with the time it was
-          # written. A recursive 'pc test' runs each package as an action, so
+          # written (the actions' ones because it runs verbose, see its start
+          # above). A recursive 'pc test' runs each package as an action, so
           # that line (no item) is when the package's tests finished, counted
           # from the start of the run -- the packages are tested together. Then
           # the slowest single actions, which say what in a package took it.
