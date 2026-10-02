@@ -252,7 +252,14 @@ end;
   installation. Whatever is still running out of this directory after that is
   ended -- and only that: a PartCAD that some other installation is running is
   not this uninstaller's to stop. A daemon's state is under %USERPROFILE%\.partcad,
-  outside this directory, so ending one loses nothing the next one needs. }
+  outside this directory, so ending one loses nothing the next one needs.
+
+  Ended until nothing is left, rather than once. A daemon is started by a
+  short-lived launcher, and a launcher the extension started just before the
+  editor was closed can still bring a daemon up after the first sweep: CI saw
+  one daemon ended and another, a different process, running from here thirty
+  seconds later. So this sweeps until two looks in a row find nothing, for up
+  to thirty seconds. }
 procedure StopPartcad;
 var
   Tools: String;
@@ -267,9 +274,14 @@ begin
   Quoted := Tools;
   StringChangeEx(Quoted, '''', '''''', True);
   Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-    '-NoProfile -NonInteractive -Command "Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith(''' +
-      Quoted + '\'', [StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force -PassThru | ' +
-      'Wait-Process -Timeout 30 -ErrorAction SilentlyContinue"',
+    '-NoProfile -NonInteractive -Command "' +
+      '$deadline = (Get-Date).AddSeconds(30); $quiet = 0; ' +
+      'while ($quiet -lt 2 -and (Get-Date) -lt $deadline) { ' +
+        '$running = @(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith(''' + Quoted +
+          '\'', [StringComparison]::OrdinalIgnoreCase) }); ' +
+        'if ($running) { $quiet = 0; $running | Stop-Process -Force -ErrorAction SilentlyContinue } ' +
+        'else { $quiet++ }; ' +
+        'Start-Sleep -Milliseconds 500 }"',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
