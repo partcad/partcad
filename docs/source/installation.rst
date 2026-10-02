@@ -423,8 +423,8 @@ is the packaging: snapd installs it, keeps it up to date, and removes it cleanly
 .. note::
 
   **The snap is not published yet.** It is built by CI, but it is not on the Snap Store and it is not attached
-  to GitHub releases, so ``snap install partcad`` does not work today. Publishing needs Snap Store credentials
-  and, because the snap is classic, a manual store review; both are still to come.
+  to GitHub releases, so ``snap install partcad`` does not work today. CI is set up to release it to the Snap
+  Store once the store has granted it classic confinement, which is a manual review that is still to come.
 
   To try it now, download the ``partcad-snap-amd64`` (or ``partcad-snap-arm64``) artifact from a run of the
   ``Standalone`` workflow on GitHub, unzip it, and install the ``.snap`` inside as below.

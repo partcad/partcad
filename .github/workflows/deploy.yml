@@ -27,11 +27,9 @@ jobs:
   # attached to the same GitHub release as the wheels, which is where
   # "install.sh" downloads them from.
   #
-  # That workflow also packs the Linux bundles as snaps. Those are deliberately
-  # NOT part of this release: publishing them needs Snap Store credentials and,
-  # because the snap is classic, a manual store review. Until that exists they
-  # stay build artifacts of the "Standalone" workflow, and nothing here
-  # downloads or uploads them.
+  # That workflow packs the Linux bundles as snaps everywhere but here: on the
+  # release path it leaves that to the "publish-snap" job at the end of this
+  # file, which wraps these same bundles once the release is out.
   build-standalone:
     uses: ./.github/workflows/build-standalone.yml
 
@@ -616,3 +614,30 @@ jobs:
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             plugin-dist
           echo "Published the 'pc' plugin ${version} to the 'plugin-dist' branch."
+
+  # The snap, on the Snap Store's "stable" channel: the Linux bundles this run
+  # froze and just attached to the release, wrapped, installed, run, and
+  # uploaded. "snap.yml" does all of it; "dev-tools/snap/README.md" says what
+  # the store needs first.
+  #
+  # Last, and only on "main", like the plugin marketplace above: "stable" should
+  # move to a release that exists, and a snap that fails to build or upload
+  # must not be able to hold up a release that has nothing else wrong with it.
+  # Not on a tag either, which is a rehearsal: the store has no test instance to
+  # rehearse against, and the version bump on "devel" has already built and
+  # tested a snap from this tree.
+  #
+  # Without the SNAPCRAFT_STORE_CREDENTIALS secret the snaps are still built and
+  # tested, and the upload is a notice rather than a failure.
+  publish-snap:
+    name: Snap
+    needs: [build-standalone, publish-to-pypi]
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/snap.yml
+    with:
+      matrix: ${{ needs.build-standalone.outputs.snap-matrix }}
+      channel: stable
+    secrets:
+      SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}

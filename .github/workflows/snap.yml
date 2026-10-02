@@ -1,0 +1,266 @@
+# The snap package: the Linux standalone bundle, wrapped so that `snap install`
+# is an option next to `install.sh` and `pip`, and -- when a channel is asked
+# for and the store credentials exist -- uploaded to the Snap Store.
+#
+# It packages the bundle rather than freezing a second time, so what the snap
+# carries is exactly what the archive carries. See "dev-tools/snap/README.md".
+#
+# Called, never run on its own, from two places that want different things:
+#
+#   * "build-standalone.yml" on a pull request, a dispatch and a version bump on
+#     "devel" -- the bump with `channel: edge`, so every version "devel" gets is
+#     on the edge channel too.
+#   * "deploy.yml" on "main", with `channel: stable`, after the GitHub release
+#     is out. It wraps the bundles that run attached to the release, so the
+#     stable snap and the release archives are one artifact.
+#
+# Both hand in the bundles: the caller's run has frozen them already, and a
+# called workflow shares its caller's artifacts.
+#
+# Without the SNAPCRAFT_STORE_CREDENTIALS secret the "Publish" job says so in a
+# notice and succeeds, and everything before it runs exactly as it would with
+# it. A fork has no such secret, and a repository that has not finished the
+# store setup in "dev-tools/snap/README.md" has none yet; neither is a failure.
+name: Snap
+
+on:
+  workflow_call:
+    inputs:
+      matrix:
+        description: >-
+          The legs to pack, as the "Set matrix" job of "build-standalone.yml"
+          writes them: {"include": [{"os", "arch", "bundle"}, ...]}. Passed in
+          rather than written out here, so that which architectures a run packs
+          stays one list, in that file.
+        type: string
+        required: true
+      channel:
+        description: >-
+          The Snap Store channel to release to ("edge", "stable", ...), or empty
+          to build and test without publishing.
+        type: string
+        default: ""
+    secrets:
+      SNAPCRAFT_STORE_CREDENTIALS:
+        description: >-
+          The output of `snapcraft export-login`. Optional: without it the
+          "Publish" job is a notice rather than an upload.
+        required: false
+
+permissions:
+  contents: read
+
+# No workflow-level "concurrency" block, on purpose: a called workflow evaluates
+# `github.workflow` as the *caller's* name, so a group keyed on it would be the
+# group the caller already holds. See the note on `concurrency` in
+# "build-standalone.yml". The "Publish" job serializes itself instead.
+
+jobs:
+  # One base, two architectures. The base is what a snap runs on, and a core24
+  # snap carries its own Ubuntu 24.04 runtime onto whatever distribution the
+  # user has -- so unlike the standalone archives, there is nothing to gain from
+  # a build per host OS version here. The build *host* still has to be the
+  # base's release, which is why the matrix pins the ubuntu-24.04 images and
+  # takes the ubuntu-24.04 bundles.
+  build:
+    name: "${{ matrix.arch }}"
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(inputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    # Squashing ~875MB of frozen bundle is most of this.
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download the Linux bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-standalone-${{ matrix.bundle }}
+          path: archives
+
+      # ".snapcraft.yaml" packages "dist/standalone/partcad", which is where
+      # a local "dev-tools/pyinstaller/build.sh" leaves the bundle. Unpacking the
+      # archive there puts the artifact in the same place -- and checks in
+      # passing that the archive the release ships is intact.
+      - name: Unpack the bundle
+        run: |
+          mkdir -p dist/standalone
+          tar -xf archives/partcad-*-${{ matrix.bundle }}.tar.xz -C dist/standalone
+          test -x dist/standalone/partcad/pc
+
+      - name: Install snapcraft
+        run: sudo snap install snapcraft --classic
+
+      # Destructive mode, so there is no LXD to set up: it builds straight on the
+      # runner, which snapcraft only allows when the runner is the base's release.
+      - name: Build the snap
+        run: dev-tools/snap/build.sh --no-bundle --destructive-mode
+
+      # Installing and running it is the only check that the bundle survives
+      # being wrapped: that the apps resolve, that the classic confinement lets
+      # the frozen interpreter start, and that PartCAD writes its state where the
+      # snap directs it rather than into the home directory.
+      - name: Install the snap and run it
+        run: |
+          sudo snap install --dangerous --classic dist/snap/partcad_*_${{ matrix.arch }}.snap
+          # Only the app named after the snap gets the bare name; `pc` is
+          # `partcad.pc` until aliased. Users do this too (see the README).
+          sudo snap alias partcad.pc pc
+          # Where snapd puts the commands. On the hosted images it is already on
+          # PATH; say so anyway, so this does not depend on the image.
+          export PATH="/snap/bin:${PATH}"
+          # From a directory that is not the checkout, so nothing can resolve
+          # against the sources by accident.
+          cd "${HOME}"
+          pc version
+          partcad --help
+          partcad.json-rpc --version
+          pc init
+          pc list
+
+      # ".snapcraft.yaml" points PC_INTERNAL_STATE_DIR at the per-user
+      # directory snapd gives the snap, so that PartCAD's cache, sandboxes and
+      # git clones do not land in ~/.partcad. Nothing about the commands above
+      # succeeding would show that, so check it from both ends: that snapd
+      # exports the variable, and that PartCAD acted on it. Note that snapd
+      # creates ~/snap/partcad/common for every snap it runs, so its mere
+      # existence proves nothing and is not what is asserted.
+      - name: Check the snap keeps its state in the snap directory
+        run: |
+          export PATH="/snap/bin:${PATH}"
+          # `tail -n 1` so that anything snapd chooses to print first cannot be
+          # mistaken for the value.
+          # shellcheck disable=SC2016  # the expansion has to happen in the snap's shell, not here
+          state_dir="$(echo 'echo "$PC_INTERNAL_STATE_DIR"' | snap run --shell partcad.pc | tail -n 1 || true)"
+          echo "PC_INTERNAL_STATE_DIR as the snap sees it: '${state_dir}'"
+          test "${state_dir}" = "${HOME}/snap/partcad/common" || {
+            echo "::error::the snap does not export PC_INTERNAL_STATE_DIR=${HOME}/snap/partcad/common"
+            exit 1
+          }
+          # ~/.partcad is still created and still holds the user configuration
+          # and the telemetry id -- that is by design (see dev-tools/snap/README.md).
+          # What must not be there is the state PC_INTERNAL_STATE_DIR redirects.
+          for leftover in cache git tar external sandbox conda; do
+            if [ -e "${HOME}/.partcad/${leftover}" ]; then
+              echo "::error::PartCAD wrote '${leftover}' into ~/.partcad rather than the snap directory"
+              exit 1
+            fi
+          done
+          ls -la "${HOME}/.partcad" "${HOME}/snap/partcad/common" || true
+
+      # A snap does not carry the user's shell environment, so a git outside the
+      # standard prefixes is not visible to it. That is accepted: PartCAD
+      # reports it missing. The health check is run for the record, and
+      # deliberately not allowed to fail the job over it.
+      #
+      # conda used to be in the same sentence and no longer is: the snap wraps
+      # the bundle, the bundle carries a conda, and a payload inside the snap is
+      # visible to it whatever the user's shell says. So this is also where the
+      # snap gets its CAD sandbox back -- which is why the conda half *is*
+      # asserted below while git stays informational.
+      - name: Health check (informational)
+        run: |
+          export PATH="/snap/bin:${PATH}"
+          cd "${HOME}"
+          pc --no-ansi healthcheck 2>&1 | tee healthcheck.log || true
+          echo "git is expected to be reported missing here."
+          grep -q "CondaAvailable: Passed" healthcheck.log || {
+            echo "::error::the snap did not resolve the conda the bundle carries"
+            exit 1
+          }
+
+      - name: Remove the snap
+        run: sudo snap remove --purge partcad
+
+      - name: Upload the snap
+        uses: actions/upload-artifact@v7
+        with:
+          name: partcad-snap-${{ matrix.arch }}
+          path: |
+            dist/snap/*.snap
+            dist/snap/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+
+  # After every architecture has been built, installed and run, and only then:
+  # a channel that gets amd64 but not arm64 because the second leg failed is a
+  # channel whose two halves are different versions.
+  publish:
+    name: "Publish (${{ inputs.channel }})"
+    needs: build
+    if: ${{ inputs.channel != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # Two runs releasing to one channel must not interleave: the later upload
+    # has to be the one the channel ends on. Not "cancel-in-progress" --
+    # cancelling an upload halfway is the thing to avoid.
+    concurrency:
+      group: snap-publish-${{ inputs.channel }}
+      cancel-in-progress: false
+
+    steps:
+      # The "secrets" context is not readable from an "if:", so this step asks
+      # and the rest read its answer.
+      - name: Check for store credentials
+        id: credentials
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          if [ -n "${SNAPCRAFT_STORE_CREDENTIALS}" ]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            message="No SNAPCRAFT_STORE_CREDENTIALS secret, so the snaps were built and tested but not released to '${CHANNEL}'. See dev-tools/snap/README.md, \"Publishing\"."
+            echo "::notice::${message}"
+            echo "${message}" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Download the snaps
+        if: steps.credentials.outputs.available == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: partcad-snap-*
+          merge-multiple: true
+          path: snaps
+
+      # The checksum the "build" job wrote beside each snap, so that what is
+      # uploaded is what was installed and run there.
+      - name: Check the snaps
+        if: steps.credentials.outputs.available == 'true'
+        working-directory: snaps
+        env:
+          EXPECTED: ${{ join(fromJson(inputs.matrix).include.*.arch, ' ') }}
+        run: |
+          sha256sum --check ./*.sha256
+          for arch in ${EXPECTED}; do
+            compgen -G "partcad_*_${arch}.snap" >/dev/null || {
+              echo "::error::no ${arch} snap to publish"
+              exit 1
+            }
+          done
+
+      - name: Install snapcraft
+        if: steps.credentials.outputs.available == 'true'
+        run: sudo snap install snapcraft --classic
+
+      # snapcraft reads the exported login from SNAPCRAFT_STORE_CREDENTIALS by
+      # itself; there is no `snapcraft login` step. Until the store has granted
+      # this snap classic confinement, the upload is accepted and then held for
+      # manual review, and snapcraft reports that as a failure -- which is why
+      # the README says to add the secret only once that is settled.
+      - name: Upload and release
+        if: steps.credentials.outputs.available == 'true'
+        working-directory: snaps
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          for snap in partcad_*.snap; do
+            echo "==> ${snap} -> ${CHANNEL}"
+            snapcraft upload "${snap}" --release="${CHANNEL}"
+          done
+          snapcraft status partcad || true

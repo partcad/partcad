@@ -5,9 +5,10 @@ and the [standalone bundle](../pyinstaller/README.md). It is not a third *build*
 PyInstaller bundle the standalone archives ship, so there is one frozen artifact and one answer to the question of what
 was released.
 
-**Not published yet.** CI builds these snaps and uploads them as workflow artifacts; nothing puts them on the Snap
-Store or on a GitHub release, so `snap install partcad` does not work today. Publishing needs store credentials and,
-because the snap is classic, a manual store review — see [Publishing](#publishing) for the step that is missing.
+**Publishing is wired up, and waits on the store.** CI releases every version bump on `devel` to the Snap Store's
+`edge` channel and every release from `main` to `stable` — once the `SNAPCRAFT_STORE_CREDENTIALS` secret exists.
+Until then it builds and tests the snaps and skips the upload with a notice. The store side (registering the name, the
+classic-confinement review, the credentials) is a one-time manual setup; [Publishing](#publishing) walks through it.
 
 | | wheels | standalone bundle | snap |
 | --- | --- | --- | --- |
@@ -94,8 +95,8 @@ connects to. Strict confinement would cut all of that off at the snap's own dire
 What it does not buy back is the host's `conda` and `git` — see the section on those below. Classic confinement is
 about reaching the user's *files*, not about inheriting the user's shell.
 
-The price is a manual review before the Snap Store will publish it, which is one of the two reasons nothing is
-published yet. A locally built or CI-built `.snap` installs with `--dangerous --classic` in the meantime.
+The price is a manual review before the Snap Store will publish it — see [Publishing](#publishing). A locally built
+or CI-built `.snap` installs with `--dangerous --classic`.
 
 For the same reason, snapcraft's `classic` and `library` linters are switched off in `.snapcraft.yaml`, and its
 `enable-patchelf` build attribute is deliberately left unset: PyInstaller's shared libraries find each other through
@@ -151,24 +152,117 @@ standalone README). No CAD kernel: the bundle stopped freezing one in, and every
 
 ## CI
 
-The `Standalone` workflow (`.github/workflows/build-standalone.yml`) builds both snaps in its `snap` job, from the
-`partcad-standalone-ubuntu-24.04-x86_64` and `partcad-standalone-ubuntu-24.04-arm64` artifacts its `build` job
-produced, then installs each and runs it. Taking the `ubuntu-24.04` bundle rather than whatever `ubuntu-latest` built
-is what keeps the payload and the `core24` runtime on the same libraries; a bundle frozen against a newer glibc than
-the base provides would install and then fail to start, and the "install and run" step is what would catch it.
+The job lives in `.github/workflows/snap.yml`, a reusable workflow with two callers:
 
-The job is skipped on the release path and in the merge queue. Nothing downstream consumes its output, and a job whose
-artifacts no release carries has no business being able to block one.
+| caller | when | channel |
+| --- | --- | --- |
+| `Standalone` (`build-standalone.yml`) | pull request, manual dispatch | none: build and test only |
+| `Standalone` (`build-standalone.yml`) | version bump on `devel` | `edge` |
+| `Deployment` (`deploy.yml`) | push to `main`, after the GitHub release is published | `stable` |
+
+Each caller has already frozen the Linux bundles in the same run, and `snap.yml` wraps the
+`partcad-standalone-ubuntu-24.04-x86_64` and `partcad-standalone-ubuntu-24.04-arm64` artifacts. Taking the
+`ubuntu-24.04` bundle rather than whatever `ubuntu-latest` built is what keeps the payload and the `core24` runtime on
+the same libraries; a bundle frozen against a newer glibc than the base provides would install and then fail to
+start, and the "install and run" step is what would catch it. Which architectures a run packs is `SNAP_CORE` and
+`SNAP_QUEUE_ONLY` in `build-standalone.yml` — amd64 alone on a pull request, both everywhere else — and `deploy.yml`
+reads that same list through the called workflow's `snap-matrix` output rather than keeping its own.
+
+The `build` job packs, installs and runs each architecture; the `publish` job runs only when a channel was asked for,
+only after every architecture passed, and uploads them all. It is serialized per channel, so two runs cannot
+interleave their releases.
+
+On the release path the snap runs *after* the release rather than inside `Standalone`, so a snap that fails to build
+or upload cannot hold back the wheels, the bundles or the IDE. A tag (the release rehearsal, which goes to Test
+PyPI) builds no snap: there is no test Snap Store to rehearse against, and the `devel` version bump has already built
+and tested the same tree.
 
 <a name="publishing"></a>
 
 ## Publishing
 
-Not wired up. It needs a `SNAPCRAFT_STORE_CREDENTIALS` secret and, because the snap is classic, a manual review by the
-Snap Store before the first upload is accepted. Once both exist, the step to add to the `snap` job is:
+What the workflows need is one repository secret, `SNAPCRAFT_STORE_CREDENTIALS`. **Without it nothing fails**: the
+`publish` job writes a notice into the run's summary and succeeds. That is also what every fork gets.
+
+Getting it is a one-time setup, done by a maintainer, on an Ubuntu machine (or any machine with
+`sudo snap install snapcraft --classic` and a desktop keyring — `snapcraft login` will not work over a bare SSH
+session).
+
+### 1. An account and the name
+
+1. Create an **Ubuntu One** account at <https://login.ubuntu.com> (it is the Snap Store's login), and sign in to
+   <https://snapcraft.io> with it once, which creates the developer account and asks you to accept the developer
+   agreement. Use an address the project controls rather than a personal one if you can: the account owns the
+   name, and moving a snap between accounts is a request to the store team. Turn on two-factor authentication.
+2. Register the name, either at <https://snapcraft.io/register-snap> or with
+
+   ```bash
+   snapcraft login
+   snapcraft register partcad
+   ```
+
+   If `partcad` is already registered to somebody else, the store offers a dispute form; a project that owns the
+   upstream (`partcad.org`, `github.com/partcad`) normally gets the name.
+3. Optionally, add co-maintainers: <https://snapcraft.io/snaps> → `partcad` → *Collaboration*, or turn the account
+   into a *brand* account for an organization.
+
+### 2. Classic confinement
+
+The snap is `classic` (see [Confinement](#confinement)), and the store refuses a classic snap until a human has
+granted it. Ask on the forum:
+
+1. Open a topic in the **store-requests** category of <https://forum.snapcraft.io>, titled e.g.
+   *"Classic confinement request for partcad"*.
+2. Say what the snap is and why strict confinement cannot work. The [Confinement](#confinement) section above is the
+   argument, and it falls squarely in the store's "developer tools that act on the user's files and run arbitrary
+   build tools" category. Link the recipe (`.snapcraft.yaml`) and the source repository.
+3. Ask for the **`pc` alias** in the same topic — an automatic alias `pc` → `partcad.pc` — so that users do not
+   have to run `snap alias` themselves (see [Commands](#commands)). It is reviewed the same way.
+
+The reviewers usually want an uploaded revision to look at. The simplest way is to upload one CI already built by
+hand: download the `partcad-snap-amd64` artifact from a `Standalone` run on `devel`, unzip it, and
 
 ```bash
-snapcraft upload dist/snap/partcad_<version>_<arch>.snap --release=stable
+snapcraft upload partcad_<version>_amd64.snap
 ```
 
-Until then `deploy.yml` deliberately does not download, check for, or upload these artifacts.
+without `--release`. The upload goes into manual review; mention it in the forum topic.
+
+### 3. The credentials
+
+Export a login that can do nothing but upload and release this one snap, with an expiry:
+
+```bash
+snapcraft export-login \
+  --snaps=partcad \
+  --channels=edge,stable \
+  --acls=package_access,package_push,package_update,package_release \
+  --expires=2027-10-01 \
+  snapcraft-credentials.txt
+```
+
+The file holds a single line of base64. Treat it like a password: it is not tied to a machine, and anyone holding it
+can publish `partcad` to those channels until it expires. Delete it once it is in GitHub.
+
+### 4. GitHub
+
+**Add the secret only once the classic review has been granted.** Before that, the store accepts each upload and then
+holds it for manual review, which `snapcraft upload` reports as a failure — every `devel` version bump would go red.
+
+1. Repository → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**.
+2. Name: `SNAPCRAFT_STORE_CREDENTIALS`. Value: the contents of `snapcraft-credentials.txt`, exactly as written.
+
+Or, with the GitHub CLI: `gh secret set SNAPCRAFT_STORE_CREDENTIALS --repo partcad/partcad < snapcraft-credentials.txt`.
+
+A repository secret, not an environment one: `snap.yml` is called both from `devel` (for `edge`) and from `main`
+(for `stable`), and its jobs declare no environment. Note the expiry somewhere a maintainer will see it; an expired
+login fails the `publish` job with an authentication error, and the fix is step 3 and step 4 again.
+
+### 5. After the first release
+
+- The store listing: <https://snapcraft.io/partcad/listing> takes the icon, screenshots and links, which the recipe
+  does not carry.
+- The documentation: the "not published yet" notes in `docs/source/installation.rst` can go, along with
+  `--dangerous` in its install command.
+- Releases go out through `snapcraft upload --release`; promoting an `edge` revision by hand
+  (`snapcraft release partcad <revision> stable`) also works and is how to roll `stable` back.

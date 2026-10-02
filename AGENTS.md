@@ -556,8 +556,9 @@ Six artifacts ship from this repo: **one Python wheel** (`partcad`, carrying all
 points, with a `partcad-cli` shim published beside it from `dev-tools/shim/` so the older install instruction keeps
 working), the standalone PyInstaller bundles for users who have no Python, the PartCAD IDE, which carries those
 bundles inside it, the VS Code extension's `.vsix` (with the `ide/vscode-shim` `.vsix` published beside it, for the
-same reason the wheel has one), the `pc` plugin for Claude Code, and the snap, which wraps the Linux bundle and is
-built but not published yet.
+same reason the wheel has one), the `pc` plugin for Claude Code, and the snap, which wraps the Linux bundle and goes
+to the Snap Store (`edge` from a `devel` version bump, `stable` from `main`) once a `SNAPCRAFT_STORE_CREDENTIALS`
+secret exists, and is a notice rather than a failure until then.
 
 There used to be five wheels pinning each other at `==`. Do not add a second distribution back: within one
 distribution a pin is an import, and two distributions owning one import name break each other on uninstall
