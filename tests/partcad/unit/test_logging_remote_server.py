@@ -13,6 +13,8 @@ file, but never the pc_event control records.
 """
 
 import logging
+import re
+import time
 
 import partcad_utils.logging as pc_logging
 import partcad_utils.logging_remote_server as remote_server
@@ -84,3 +86,36 @@ def test_rotating_file_receives_logs_but_not_pc_events(tmp_path):
     # The pc_event control records are not real log lines; they must not pollute
     # the persistent file.
     assert "process_start" not in content
+
+
+def test_a_record_is_forwarded_with_the_time_it_was_made():
+    """The client stamps that time on a plain line, not the time it printed it."""
+    events, hook = _collector()
+    remote_server.init(hook)
+
+    before = time.time()
+    pc_logging.info("when was this")
+    after = time.time()
+
+    (event,) = [e for e in events if e["kind"] == "log" and e["message"] == "when was this"]
+    assert before <= event["created"] <= after
+
+
+def test_an_action_and_a_process_end_in_the_same_done_line():
+    """Every action and every process that finishes says so, with its duration,
+    in one format -- a log is timed the same way at every level."""
+    events, hook = _collector()
+    remote_server.init(hook)
+
+    with pc_logging.Process("Test", "//pub"):
+        with pc_logging.Action("Test", "//pub/robots"):
+            pass
+        with pc_logging.Action("Test", "//pub/robots", "arm", "shell"):
+            pass
+
+    done = [e["message"] for e in events if e["kind"] == "log" and e["message"].startswith("DONE: ")]
+    assert [re.sub(r"\d+\.\d\ds$", "<t>s", m) for m in done] == [
+        "DONE: Test: //pub/robots: <t>s",
+        "DONE: Test: //pub/robots: arm : shell: <t>s",
+        "DONE: Test: //pub: <t>s",
+    ]
