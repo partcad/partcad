@@ -2576,6 +2576,7 @@ declared using the following syntax:
       # ...
       vendor: <(optional) the name of the vendor selling the part>
       sku: <(optional) the vendor's stock keeping unit (SKU) of the part>
+      url: <(optional) the page the part is ordered from>
       count_per_sku: <(optional) the number of parts in one SKU, 1 by default>
       item_in_sku: <(optional) which of the kinds of items in the SKU this is>
 
@@ -2592,6 +2593,16 @@ declared using the following syntax:
   Both ``vendor`` and ``sku`` must be set for the part to be considered
   purchasable. If either is missing, the part has to be manufactured instead,
   which relies on the MCFTT parameters described above.
+
+- ``url``
+
+  Optional. The page this part is ordered from.
+
+  ``vendor`` and ``sku`` say what to order; this is where. A generated bill of
+  materials makes the SKU a link to it, which is how a published parts list
+  writes one, so a package that states it needs no hand-written table of
+  product links beside its generated one. Nothing else reads it: PartCAD does
+  not fetch it and a provider is not given it.
 
 - ``count_per_sku``
 

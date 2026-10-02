@@ -740,6 +740,11 @@ def _bom_line(item) -> dict:
         line["sku"] = store.sku
         line["count_per_sku"] = store.count_per_sku
 
+    # Where the offer is. 'vendor' and 'sku' identify what to order; this is the
+    # page somebody actually opens to order it, and it is the one thing a
+    # published parts list has that a generated one could not carry.
+    line["url"] = config.get("url")
+
     # Where the geometry is, for the objects that are a file. A script, a
     # parametric instance or an assembly has no such answer and says nothing.
     line["source_file"] = config.get("path") or config.get("fileUrl")

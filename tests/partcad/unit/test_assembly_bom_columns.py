@@ -23,7 +23,7 @@ import pytest
 
 from partcad import document as pc_document
 from partcad.assembly import Assembly, _bom_line
-from partcad.assembly_guide import ImageSource, bom_blocks_async
+from partcad.assembly_guide import ImageSource, _bom_cell, bom_blocks_async
 
 
 class _Part:
@@ -355,3 +355,52 @@ def test_an_ordinary_cell_is_still_text(cell):
     table = pc_document.Table(columns=["Part"], rows=[[cell]])
     document = pc_document.Document(pages=[pc_document.Page(blocks=[table])])
     assert pc_document.to_data(document)["pages"][0]["blocks"][0]["rows"][0][0] == ("" if cell is None else str(cell))
+
+
+#
+# The offer a part is bought from
+#
+
+
+def test_a_sku_with_a_url_is_a_link():
+    """'vendor' and 'sku' say what to order; the url is how, and the SKU carries it."""
+    cell = _bom_cell({"sku": "B0DJQG5YLF", "url": "https://example.com/p/1"}, "sku")
+    assert isinstance(cell, pc_document.Link)
+    assert cell.text == "B0DJQG5YLF"
+    assert cell.url == "https://example.com/p/1"
+
+
+def test_a_sku_without_a_url_is_still_text():
+    assert _bom_cell({"sku": "B0DJQG5YLF"}, "sku") == "B0DJQG5YLF"
+
+
+def test_a_packed_sku_keeps_its_count_inside_the_link():
+    cell = _bom_cell({"sku": "B0DJQG5YLF", "count_per_sku": 120, "url": "https://example.com/p/1"}, "sku")
+    assert isinstance(cell, pc_document.Link)
+    assert cell.text == "B0DJQG5YLF (120 per pack)"
+
+
+def test_a_url_on_a_part_with_no_sku_shows_nothing():
+    """There is no column of URLs - the link rides on the SKU or not at all."""
+    assert _bom_cell({"url": "https://example.com/p/1"}, "sku") == ""
+
+
+def test_a_link_renders_in_every_format():
+    link = pc_document.Link(text="B0DJQG5YLF", url="https://example.com/p/1")
+    assert pc_document._table_cell(link) == "[B0DJQG5YLF](https://example.com/p/1)"
+    assert pc_document._html_cell(link) == '<a href="https://example.com/p/1">B0DJQG5YLF</a>'
+    assert pc_document._cell_to_data(link) == {"text": "B0DJQG5YLF", "url": "https://example.com/p/1"}
+
+
+def test_a_link_with_no_url_degrades_to_its_text():
+    link = pc_document.Link(text="B0DJQG5YLF")
+    assert pc_document._table_cell(link) == "B0DJQG5YLF"
+    assert pc_document._html_cell(link) == "B0DJQG5YLF"
+    assert pc_document._cell_to_data(link) == "B0DJQG5YLF"
+
+
+def test_html_escapes_both_halves_of_a_link():
+    link = pc_document.Link(text="A & B", url='https://example.com/?a=1&b="2"')
+    rendered = pc_document._html_cell(link)
+    assert "A &amp; B" in rendered
+    assert "&amp;b=" in rendered and '"2"' not in rendered

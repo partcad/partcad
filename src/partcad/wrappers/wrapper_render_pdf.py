@@ -331,7 +331,9 @@ def _cell_text(cell):
     than a blank column and is what the other two renderers do.
     """
     if isinstance(cell, dict):
-        return str(cell.get("alt") or "")
+        # A picture falls back to what it was of; a link to the text of it, since
+        # a PDF of a parts list is printed as often as it is clicked.
+        return str(cell.get("alt") or cell.get("text") or "")
     return "" if cell is None else str(cell)
 
 

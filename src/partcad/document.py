@@ -59,6 +59,21 @@ class Image:
 
 
 @dataclass
+class Link:
+    """A piece of text in a table cell that points somewhere.
+
+    Beside 'Image' rather than inside the text of a cell, because a cell is
+    rendered four ways and only two of them have anywhere to put a URL: markdown
+    writes '[text](url)', HTML an anchor, and the other two fall back to the text.
+    What it is for is the offer a part is bought from - a part states 'url:' beside
+    its 'vendor' and 'sku', and a parts list is where somebody orders from.
+    """
+
+    text: str = ""
+    url: Optional[str] = None
+
+
+@dataclass
 class Block:
     """Base class of everything a page is made of."""
 
@@ -148,6 +163,14 @@ def _table_cell(value):
         if not source:
             return ""
         return '<img src="%s" alt="%s" style="%s">' % (source, value.alt, MARKDOWN_THUMBNAIL_STYLE)
+    if isinstance(value, Link):
+        text = (value.text or "").replace("|", "\\|").replace("\n", " ")
+        if not value.url:
+            return text
+        # A URL is not escaped the way text is: a '|' in one would have to be
+        # percent-encoded to be in a URL at all, and a backslash before it would
+        # become part of the link.
+        return "[%s](%s)" % (text, value.url)
     text = "" if value is None else str(value)
     return text.replace("|", "\\|").replace("\n", "<br/>")
 
@@ -227,6 +250,11 @@ def _html_cell(value) -> str:
         if source is None:
             return ""
         return '<img src="%s" alt="%s" class="thumbnail">' % (source, html.escape(value.alt))
+    if isinstance(value, Link):
+        text = html.escape(value.text or "")
+        if not value.url:
+            return text
+        return '<a href="%s">%s</a>' % (html.escape(value.url, quote=True), text)
     return html.escape("" if value is None else str(value))
 
 
@@ -379,6 +407,11 @@ def _cell_to_data(cell, embed_images: bool = False):
     """
     if isinstance(cell, Image):
         return _image_to_data(cell, embed_images) or ""
+    if isinstance(cell, Link):
+        # 'text' is what every renderer can show; 'url' is for the ones that can
+        # do something with it. No 'path', so a reader looking for a picture in a
+        # cell does not find one here.
+        return {"text": cell.text or "", "url": cell.url} if cell.url else (cell.text or "")
     return "" if cell is None else str(cell)
 
 

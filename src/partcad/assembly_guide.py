@@ -664,7 +664,14 @@ BOM_COLUMNS = (
 
 
 def _bom_cell(entry, key):
-    """One cell of a bill of materials, as text.
+    """One cell of a bill of materials.
+
+    Text, except for a SKU that has a 'url:' to go with it, which is a
+    'doc.Link' - the renderers that can make it clickable do, and the ones that
+    cannot print the SKU. There is no column of URLs: 'vendor' and 'sku' say what
+    to order and the link is how, so the link belongs on the SKU the way a
+    published parts list writes it, and a column of bare URLs would be unreadable
+    in every format.
 
     'count_per_sku' is folded into the SKU rather than given a column of its own:
     "B0DJQGMQZM (120 per pack)" is what somebody ordering reads, and a column
@@ -675,8 +682,9 @@ def _bom_cell(entry, key):
         return ""
     if key == "sku":
         per_sku = entry.get("count_per_sku") or 1
-        if per_sku > 1:
-            return "%s (%d per pack)" % (value, per_sku)
+        text = "%s (%d per pack)" % (value, per_sku) if per_sku > 1 else str(value)
+        url = entry.get("url")
+        return doc.Link(text=text, url=url) if url else text
     if key == "tolerance":
         return _tolerance_text(value)
     if key == "source_file":
