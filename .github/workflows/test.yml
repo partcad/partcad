@@ -1753,9 +1753,8 @@ jobs:
           # shellcheck disable=SC2086 # 'sweep_exclude' is several words on purpose
           ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r ${sweep_exclude} //pub
           list_rc=$?
-          # Verbose, for every action's DONE line, into a file that is uploaded
-          # with the results, and without the DEBUG lines into this job's log,
-          # which keeps the length it had.
+          # Verbose, for every action's DONE line, into a file, and without the
+          # DEBUG lines into this job's log, which keeps the length it had.
           sweep_log=../pub-repo-test-results/sweep-verbose.log
           # shellcheck disable=SC2086 # 'sweep_exclude' is several words on purpose
           ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi -v --threads-max 4 test -r ${sweep_exclude} --package //pub 2>&1 |
@@ -1774,9 +1773,14 @@ jobs:
           grep -E ":DONE: Test: //pub[^: ]*: [0-9.]+s$" "${sweep_log}" | sort | cut -c1-300
           echo "::endgroup::"
           echo "::group::The 40 slowest actions other than tests"
-          grep -E ":DONE: " "${sweep_log}" | grep -v ":DONE: Test: " | awk '{ print $NF, $0 }' | sort -rn | sed -n '1,40p' | cut -c1-300
+          grep -E ":DONE: " "${sweep_log}" | grep -v ":DONE: Test: " | awk '{ print $NF, $0 }' | sort -rn | sed -n '1,40p' | cut -d' ' -f2- | cut -c1-300
           echo "::endgroup::"
-          gzip -f "${sweep_log}"
+          # Every DONE line is kept with the results, for the timings these two
+          # groups leave out. The rest of the verbose output is not: it is
+          # almost all DEBUG lines, and gzipped it made each of these jobs
+          # upload 100 MB.
+          grep -E ":DONE: " "${sweep_log}" | gzip >../pub-repo-test-results/sweep-done.log.gz
+          rm -f "${sweep_log}"
           # When anything failed, why -- again, at the end. Every command above
           # talks to the one daemon, whose own log has the errors of all of
           # them, the sample's included; but they are printed thousands of
