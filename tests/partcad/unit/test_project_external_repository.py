@@ -13,6 +13,7 @@ the lazy object-access layer is exercised without a runtime or a CAD kernel.
 import asyncio
 import shutil
 import threading
+import time
 
 import partcad as pc
 from partcad import context as pc_context
@@ -230,6 +231,124 @@ def test_metadata_materializes_from_the_repository():
     assert repo.is_manufacturable is False
     assert repo.config_obj["render"] == {"svg": {}}
     assert repo.name == "//ext"  # identity is never overridden by metadata
+
+
+def test_a_plugin_package_that_names_no_supplier_has_none():
+    """An empty set, and not a missing attribute.
+
+    A plugin-backed package skips the object initialization a local one does,
+    and the suppliers used to be skipped with it - so asking any part of one
+    who sells it raised AttributeError instead of answering "nobody".
+    """
+    ctx = pc.Context("examples")
+    repo, _ = _make_repo(ctx, {"meta": {"desc": "No store"}})
+    assert repo.get_suppliers() == {}
+
+
+def test_the_suppliers_come_from_the_metadata():
+    ctx = pc.Context("examples")
+    repo, _ = _make_repo(ctx, {"meta": {"suppliers": {"//pub/svc/store:shop": {"discount": "x"}}}})
+    asyncio.run(repo.ensure_enumerated_async())
+    assert repo.get_suppliers() == {"//pub/svc/store:shop": {"discount": "x"}}
+
+
+def test_the_suppliers_are_read_without_a_traversal():
+    """A package looked up on its own still says who sells it.
+
+    'pc supply quote' of one part resolves that part's package and nothing
+    else, so no traversal has applied its metadata by the time the suppliers
+    are asked for. Asking is what fetches it, and only once.
+    """
+    ctx = pc.Context("examples")
+    repo, fake = _make_repo(ctx, {"meta": {"suppliers": ["//pub/svc/store:shop"]}})
+    assert fake.keys == []
+    assert repo.get_suppliers() == {"//pub/svc/store:shop": {}}
+    assert repo.get_suppliers() == {"//pub/svc/store:shop": {}}
+    assert fake.keys == ["meta"]
+    # The traversal arriving later applies nothing twice.
+    asyncio.run(repo.ensure_enumerated_async())
+    assert fake.keys == ["meta", "deps"]
+
+
+def test_the_metadata_counts_as_applied_only_once_it_has_been():
+    """The flag a reader skips the work on is the last thing to be set.
+
+    It used to be the first, so a 'get_suppliers()' on another thread could
+    see it, skip the metadata, and read the constructor's empty suppliers
+    while this thread was still on its way to setting them.
+    """
+    ctx = pc.Context("examples")
+    repo, _ = _make_repo(ctx, {"meta": {"suppliers": ["//pub/svc/store:shop"]}})
+    seen = []
+    init_suppliers = repo.init_suppliers
+
+    def observing():
+        seen.append(repo._meta_applied)
+        init_suppliers()
+
+    repo.init_suppliers = observing
+    assert repo.get_suppliers() == {"//pub/svc/store:shop": {}}
+    assert seen == [False]
+    assert repo._meta_applied
+
+
+def test_concurrent_lookups_apply_the_metadata_once_and_all_see_it():
+    ctx = pc.Context("examples")
+    repo, fake = _make_repo(ctx, {"meta": {"suppliers": ["//pub/svc/store:shop"]}})
+    applied = []
+    init_suppliers = repo.init_suppliers
+
+    def counting():
+        applied.append(1)
+        time.sleep(0.05)  # widen the window a lookup used to fall into
+        init_suppliers()
+
+    repo.init_suppliers = counting
+    results = []
+    threads = [threading.Thread(target=lambda: results.append(repo.get_suppliers())) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert results == [{"//pub/svc/store:shop": {}}] * 8
+    assert len(applied) == 1
+    assert fake.keys.count("meta") == 1
+
+
+def test_a_supplier_is_resolved_against_the_package_that_names_it():
+    ctx = pc.Context("examples")
+    repo, _ = _make_repo(ctx, {"meta": {"suppliers": "shop"}})
+    assert repo.get_suppliers() == {"//ext:shop": {}}
+
+
+def test_a_supplier_lookup_from_a_loop_never_stops_it(monkeypatch):
+    """Who sells a part is asked from a loop, so the metadata is fetched on it.
+
+    'pc supply find' and the IDE's cart ask from inside a coroutine, where the
+    synchronous 'get_suppliers()' would complete its fetch on another thread
+    with the loop stopped - the wait 'Context._warm_project_async' is there to
+    keep a part lookup out of.
+    """
+    ctx = pc.Context("examples")
+    repo, fake = _make_repo(ctx, {"meta": {"suppliers": ["//pub/svc/store:shop"]}})
+    stopped = []
+    original = ProjectExternalRepository._run_elsewhere
+
+    def waited_for(coroutine):
+        stopped.append(coroutine.__qualname__)
+        return original(coroutine)
+
+    monkeypatch.setattr(ProjectExternalRepository, "_run_elsewhere", staticmethod(waited_for))
+
+    assert asyncio.run(repo.get_suppliers_async()) == {"//pub/svc/store:shop": {}}
+    assert stopped == []
+    assert fake.keys == ["meta"]
+
+
+def test_a_local_package_answers_a_supplier_lookup_from_a_loop_as_it_always_has():
+    ctx = pc.Context("examples/provider_store")
+    project = ctx.get_project("//")
+    assert asyncio.run(project.get_suppliers_async()) == project.get_suppliers()
 
 
 def test_a_child_is_told_the_plugin_and_not_the_cache_version():

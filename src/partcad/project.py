@@ -2340,6 +2340,15 @@ class Project(project_config.Configuration):
         """
         return {self.normalize(supplier_name): supplier for supplier_name, supplier in self.suppliers.items()}
 
+    async def get_suppliers_async(self):
+        """'get_suppliers()', for a caller on a loop.
+
+        A package that read its configuration from a file has its suppliers
+        already; one a plugin serves may have to fetch them first (see
+        'ProjectExternalRepository.get_suppliers_async').
+        """
+        return self.get_suppliers()
+
     def init_suppliers(self):
         cfg = self.config_obj.get("suppliers", {})
         if isinstance(cfg, str):
