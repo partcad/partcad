@@ -157,6 +157,9 @@ Host commands
     daemon, so that "where is it" has one implementation rather than one per language. The endpoint is printed
     once the daemon answers on it, so whoever reads it can connect straight away.
   - ``pc daemon stop`` — Stop the daemon serving this workspace, and say whether one was running.
+    ``--all`` stops every PartCAD daemon on this machine and waits for each to exit, which is what
+    the IDE's uninstaller and ``install.sh --uninstall`` run before removing the files a daemon runs
+    from; it exits non-zero if one did not stop.
   - ``pc daemon status`` — Display the state of the internal data the daemon holds.
   - ``pc daemon status config`` — Dump the configuration the daemon itself resolved, the daemon-side
     counterpart of ``pc system status config``. The two differ on purpose: a daemon is warm and shared per

@@ -56,3 +56,38 @@ def test_stop_reports_whether_one_was_running(monkeypatch, os_name):
     idle = CliRunner().invoke(stop_command.cli, [])
     assert idle.exit_code == 0
     assert "No PartCAD daemon was running" in idle.output
+
+
+def test_stop_all_stops_every_daemon_on_the_machine(monkeypatch):
+    """What an uninstaller runs, so that nothing is executing out of the files
+    it is about to remove."""
+    monkeypatch.setattr(stop_command.daemon, "live_daemon_dirs", lambda: ["a", "b"])
+    monkeypatch.setattr(stop_command.daemon, "stop_all_daemons", lambda: ["a", "b"])
+    monkeypatch.setattr(stop_command.daemon, "stop_daemon", lambda: pytest.fail("--all is not this workspace's"))
+
+    result = CliRunner().invoke(stop_command.cli, ["--all"])
+
+    assert result.exit_code == 0
+    assert "Stopped 2 of 2 PartCAD daemon(s)" in result.output
+
+
+def test_stop_all_with_nothing_running_says_so(monkeypatch):
+    monkeypatch.setattr(stop_command.daemon, "live_daemon_dirs", lambda: [])
+    monkeypatch.setattr(stop_command.daemon, "stop_all_daemons", lambda: pytest.fail("there was nothing to stop"))
+
+    result = CliRunner().invoke(stop_command.cli, ["--all"])
+
+    assert result.exit_code == 0, result.output
+    assert "No PartCAD daemon was running" in result.output
+
+
+def test_stop_all_fails_when_a_daemon_will_not_go(monkeypatch):
+    """The caller is about to delete what it runs from, so it has to know."""
+    monkeypatch.setattr(stop_command.daemon, "live_daemon_dirs", lambda: ["a", "b"])
+    monkeypatch.setattr(stop_command.daemon, "stop_all_daemons", lambda: ["a"])
+
+    result = CliRunner().invoke(stop_command.cli, ["--all"])
+
+    assert result.exit_code != 0
+    assert "Stopped 1 of 2 PartCAD daemon(s)" in result.output
+    assert "1 PartCAD daemon(s) did not stop" in result.output

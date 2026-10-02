@@ -159,6 +159,29 @@ if [ "${UNINSTALL}" = "1" ]; then
     fi
   done
 
+  # Stop every PartCAD daemon before removing the files they run from. One
+  # serves each workspace and outlives whatever started it -- the IDE's
+  # extension, any `pc` command -- so an uninstall can find several still
+  # executing out of this installation, writing into it as it is removed.
+  # `pc daemon stop --all` asks each to stop and waits for it to exit, the same
+  # way `pc upgrade` does before it replaces an installation. Run through the
+  # `pc` this script linked, and only that one: a `pc` from anywhere else on
+  # PATH is not this installation's. An older `pc` without `--all` just fails
+  # here, and the removal goes ahead as it always did.
+  pc_link="${BIN_DIR}/pc"
+  if [ -L "${pc_link}" ] && [ -x "${pc_link}" ]; then
+    pc_target="$(readlink "${pc_link}")"
+    pc_ours=0
+    case "${pc_target}" in "${INSTALL_DIR}"/*) pc_ours=1 ;; esac
+    if [ -n "${APP_PATH}" ]; then
+      case "${pc_target}" in "${APP_PATH}"/*) pc_ours=1 ;; esac
+    fi
+    if [ "${pc_ours}" = "1" ]; then
+      "${pc_link}" --no-ansi daemon stop --all ||
+        warn "a PartCAD daemon may still be running from the files being removed; 'pc daemon stop --all' did not stop it"
+    fi
+  fi
+
   for command_name in pc partcad partcad-ide; do
     link="${BIN_DIR}/${command_name}"
     # Only remove links this script owns. Anything else on PATH by that name,
