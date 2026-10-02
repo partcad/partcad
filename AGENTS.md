@@ -286,7 +286,10 @@ project commands with `poetry run`.
 
 Pass the global `--no-ansi` flag whenever `pc` is run non-interactively — in scripts, in batch jobs, and
 especially when an LLM agent parses the output. Without it, `pc` draws animated ANSI progress bars whose control
-characters corrupt captured output; with it, output is plain text with `INFO:`/`ERROR:` prefixes. Note that
+characters corrupt captured output; with it, output is plain text with `INFO:`/`ERROR:` prefixes, each line led
+by the UTC time the daemon logged it (`2026-10-02T14:31:01.816Z INFO:partcad:...`). Every process and every
+action ends in a `DONE: <op>: <package>[: <item>]: <seconds>s` line, in either mode; a recursive `pc test` runs
+each package as an action, so a long run's log says what each package took. Note that
 `--no-ansi` routes those logs to **stderr** (plain `logging`), whereas the default ANSI renderer writes to
 **stdout** — so capture both streams (`2>&1`) when parsing. The flag is global and goes before the subcommand:
 `poetry run pc --no-ansi info`.

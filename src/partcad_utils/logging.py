@@ -166,6 +166,20 @@ process_transaction = None
 process_span = None
 
 
+def _done(op: str, package: str, item, start: float) -> None:
+    """Report that a process or an action finished, and how long it took.
+
+    One line for both, in one format, so that a log can be timed the same way
+    at every level: a recursive run's packages, the objects in each, and the
+    steps of each object all end in a ``DONE`` line with the seconds they took.
+    """
+    delta = time.time() - start
+    if item is None:
+        info("DONE: %s: %s: %.2fs" % (op, package, delta))
+    else:
+        info("DONE: %s: %s: %s: %.2fs" % (op, package, item, delta))
+
+
 # Classes to be used with "with()" to alter the logging context.
 class Process(object):
     def __init__(
@@ -214,11 +228,7 @@ class Process(object):
             process_lock.release()
             ops.process_end(self.op, self.package, self.item)
             self.span_ctx_mgr.__exit__(*_args)
-            delta = time.time() - self.start
-            if self.item is None:
-                info("DONE: %s: %s: %.2fs" % (self.op, self.package, delta))
-            else:
-                info("DONE: %s: %s: %s: %.2fs" % (self.op, self.package, self.item, delta))
+            _done(self.op, self.package, self.item, self.start)
 
 
 class Action(object):
@@ -232,6 +242,7 @@ class Action(object):
         self.op = op
         self.package = package
         self.span_ctx_mgr = None
+        self.start = 0.0
 
         if extra:
             self.item = item + " : " + extra
@@ -253,6 +264,7 @@ class Action(object):
             attributes=attributes,
         )
         self.span_ctx_mgr.__enter__()
+        self.start = time.time()
         ops.action_start(self.op, self.package, self.item)
 
     async def __aexit__(self, *args):
@@ -261,3 +273,4 @@ class Action(object):
     def __exit__(self, *args):
         ops.action_end(self.op, self.package, self.item)
         self.span_ctx_mgr.__exit__(*args)
+        _done(self.op, self.package, self.item, self.start)
