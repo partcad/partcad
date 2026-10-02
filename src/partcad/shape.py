@@ -628,6 +628,10 @@ class Shape(ShapeConfiguration):
             # here, at the single choke point; factories that delegate to a
             # wrapper already return an envelope and pass straight through.
             shape = self._to_envelope(shape)
+            # Every part, by the one validation every part goes through,
+            # before anything is recorded or cached: see '_validated_part'.
+            if self.kind == "part" and shape_envelope.is_shape_object(shape) and ctx is not None:
+                shape = await self._validated_part(ctx, shape)
             if self.components:
                 self.components = [self._component_to_envelope(c) for c in self.components]
 
@@ -2660,9 +2664,24 @@ class Shape(ShapeConfiguration):
         obj = await self.get_wrapped(ctx)
         if obj is None:
             return None
+        result = await self._ask_solidity(ctx, obj)
+        if result is None:
+            return None
+        return {
+            "solids": result.get("solids", 0),
+            "volume": result.get("volume"),
+            "min_solid_volume": result.get("min_solid_volume"),
+            "valid": result.get("valid"),
+            "problems": result.get("problems"),
+        }
 
+    async def _ask_solidity(self, ctx, obj, solidify=False):
+        """The solidity wrapper's answer about 'obj', or None if it gave none."""
         with pc_logging.Action("Solidity", self.project_name, self.name):
-            request_serialized = shape_envelope.serialize({"wrapped": obj})
+            request = {"wrapped": obj}
+            if solidify:
+                request["solidify"] = True
+            request_serialized = shape_envelope.serialize(request)
 
             runtime = ctx.get_python_runtime(version="3.11")
             await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
@@ -2688,12 +2707,47 @@ class Shape(ShapeConfiguration):
                     % (self.project_name, self.name, result.get("exception", "Unknown error"))
                 )
                 return None
-            return {
-                "solids": result.get("solids", 0),
-                "volume": result.get("volume"),
-                "min_solid_volume": result.get("min_solid_volume"),
-                "valid": result.get("valid"),
-            }
+            return result
+
+    async def _validated_part(self, ctx, envelope):
+        """A part's envelope as every part leaves its factory: solidified, and judged.
+
+        The one validation every part goes through, whatever made it - a
+        cadquery or build123d script, a STEP, STL, 3MF, OBJ or BREP file, an
+        OpenSCAD or KiCad export, an SDF, an extrusion, a partType plugin such
+        as the LDraw library. Before this, only the script and plugin wrappers
+        turned a closed shell into the solid it bounds, and nothing at all
+        judged the result until somebody ran 'pc test': a STEP file's closed
+        shell stayed a shell where the same shell from a script became a solid.
+
+        Two things happen, in the sandbox, in one call. A closed shell becomes
+        the solid it bounds ('wrapper_common.solidify'); the geometry comes back
+        only when that changed it, and nothing else about the envelope moves.
+        And the part is held to 'wrapper_common.solid_problems' - the same
+        definition the interference check intersects by - with a warning that
+        says what is wrong when it is not a solid. A warning and not a failure:
+        a surface model is a legitimate thing to import and draw. Everything
+        that needs a solid asks the same question and declines to compute with
+        one that is not.
+
+        A sandbox that cannot answer leaves the part as it was, with a warning;
+        validating geometry is not a reason to stop building it.
+        """
+        try:
+            result = await self._ask_solidity(ctx, {shape_envelope.KEY_BREP: envelope[shape_envelope.KEY_BREP]}, True)
+        except Exception as e:
+            pc_logging.warning("%s:%s: could not be validated: %s" % (self.project_name, self.name, e))
+            return envelope
+        if result is None:
+            return envelope
+        solidified = result.get("solidified")
+        if isinstance(solidified, dict) and shape_envelope.KEY_BREP in solidified:
+            envelope = dict(envelope)
+            envelope[shape_envelope.KEY_BREP] = solidified[shape_envelope.KEY_BREP]
+        problems = result.get("problems") or []
+        if problems:
+            pc_logging.warning("%s:%s is not a solid: %s" % (self.project_name, self.name, "; ".join(problems)))
+        return envelope
 
     async def get_bounding_box_async(self, ctx):
         """The axis-aligned bounding box of this shape, in its own coordinates.

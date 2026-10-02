@@ -82,24 +82,22 @@ def _volume(shape):
 def _is_solid_enough_to_intersect(shape):
     """Whether a boolean against this shape would mean anything.
 
-    It is not a formality. A shape whose faces are inconsistently oriented is
-    inside out, which OCCT reports as a negative volume, and a boolean common
-    against it returns a number with no relation to any shared space: two LDraw
-    bricks meshed from triangles and placed 100 mm apart came back sharing
-    2282 mm^3. Reporting that as interference would be worse than not checking
-    at all, so a shape whose volume is not positive is left out and counted.
+    It does when the shape is made of closed, valid solids of positive volume,
+    and not otherwise - 'wrapper_common.solid_problems', which is the same test
+    every part is held to as it is built, whatever built it.
 
-    The test is the volume's sign and not BRepCheck_Analyzer, deliberately.
-    Plenty of usable geometry is not a valid solid in OCCT's sense and
-    intersects perfectly well regardless: an LDraw brick is an open mesh - a
-    stud is a cylinder and a top disc with no bottom, resting on a face the
-    parent never cuts - so it has hundreds of free boundary edges and fails
-    IsValid, while two copies of it 100 mm apart correctly share nothing.
-    Gating on validity would refuse to check any assembly built from such
-    parts, forever, which is most of what this test exists for.
+    This used to ask only for a positive volume, on the grounds that open
+    meshes - LDraw bricks, whose studs stand on faces nothing cuts - fail
+    OCCT's validity check and still intersect correctly. They do not. Measured
+    on the LEGO F1 car, an open shell's volume integral is positive as often as
+    not, and a boolean against it answers with whatever it likes: an axle
+    "sharing" 12.457 mm^3 with a cross block whose hole is wider than it at
+    every corner, overlaps of negative volume, and single pairs taking over a
+    minute to say so. A part that is not a solid is reported as not checked,
+    which is the truth, rather than checked wrongly.
     """
     try:
-        return _volume(shape) > 0.0
+        return not wrapper_common.solid_problems(shape)
     except Exception:
         return False
 

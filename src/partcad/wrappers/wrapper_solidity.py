@@ -43,6 +43,19 @@ def process(path, request):
         if shape is None:
             raise Exception("No wrapped object provided to check")
 
+        # Asked by the core of every part as it is built, whatever built it:
+        # the same conversion the script and plugin wrappers make, so that a
+        # closed shell from a STEP file or a mesh import becomes the solid it
+        # bounds exactly as one from a cadquery script does, and the geometry
+        # is sent back only when that changed it.
+        solidified = None
+        if request.get("solidify"):
+            converted = wrapper_common.solidify(shape)
+            if converted is not shape:
+                solidified = converted
+                shape = converted
+        problems = wrapper_common.solid_problems(shape)
+
         # Every solid separately, not the sum. A compound holding one inverted
         # solid and a larger correct one adds up to a positive number, and the
         # inversion - the thing this exists to find - disappears into the
@@ -64,6 +77,8 @@ def process(path, request):
                 "volume": None,
                 "min_solid_volume": None,
                 "valid": None,
+                "problems": problems,
+                "solidified": solidified,
             }
 
         return {
@@ -75,6 +90,8 @@ def process(path, request):
             # however much correct material surrounds it.
             "min_solid_volume": min(volumes),
             "valid": bool(BRepCheck_Analyzer(shape).IsValid()),
+            "problems": problems,
+            "solidified": solidified,
         }
     except Exception as e:
         wrapper_common.handle_exception(e)
@@ -85,6 +102,8 @@ def process(path, request):
             "volume": None,
             "min_solid_volume": None,
             "valid": None,
+            "problems": None,
+            "solidified": None,
         }
 
 

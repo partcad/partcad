@@ -97,3 +97,37 @@ def test_the_wrapper_and_the_test_name_pairs_by_the_same_rule():
     ]
     for name, pattern in cases:
         assert wrapper_interference._matches(name, pattern) == core_rule._matches(name, pattern), (name, pattern)
+
+
+def test_a_part_that_is_not_a_solid_is_not_checked_rather_than_checked_wrongly(monkeypatch):
+    """The guard is the definition every part is built against, not a volume sign.
+
+    An open shell's volume integral is positive as often as not, and a boolean
+    against it answers with whatever it likes.
+    """
+    from OCP.BRep import BRep_Builder
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS_Shell
+
+    asked = _counting_common(monkeypatch)
+    builder = BRep_Builder()
+    open_box = TopoDS_Shell()
+    builder.MakeShell(open_box)
+    faces = TopExp_Explorer(_box(8.0), TopAbs_FACE)
+    faces.Next()  # leave one face off: an open box over 'pin'
+    while faces.More():
+        builder.Add(open_box, faces.Current())
+        faces.Next()
+    tree = ocp_serialize.encode_assembly(
+        [
+            ocp_serialize.encode_shape(_box(0.0), name="//pkg:a", label="pin"),
+            ocp_serialize.encode_shape(open_box, name="//pkg:b", label="shell"),
+        ],
+        name="asm",
+    )
+    result = wrapper_interference.process(None, {"assembly_json": ocp_serialize.dumps(tree)})
+
+    assert result["success"]
+    assert result["unchecked"] == ["shell"]
+    assert result["overlaps"] == [] and asked == []
