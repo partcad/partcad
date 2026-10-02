@@ -1465,17 +1465,29 @@ jobs:
         shell: pwsh
         run: |
           $app = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE"
-          # What is running out of the application right now. The PartCAD daemon
-          # usually is -- `pc version` above asked one for its version, and the
-          # extension started one for the folder it opened -- and the uninstaller
-          # is what has to stop it ("StopPartcad" in partcad-ide.iss): Windows
-          # will not delete an executable that is running, and a user's machine
-          # has nothing to run a step like this one first.
+          # What is running out of the application right now. The uninstaller is
+          # what has to stop a PartCAD daemon ("StopPartcad" in partcad-ide.iss):
+          # Windows will not delete an executable that is running, and a user's
+          # machine has nothing to run a step like this one first.
           function Get-Running {
             Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith("$app\", [StringComparison]::OrdinalIgnoreCase) }
           }
+          # Started here, for the starter package the editor opened above. One
+          # from those steps may or may not still be up by now -- on some runs
+          # it is and on some it is not -- and a run with nothing running tests
+          # nothing.
+          Push-Location (Join-Path $env:USERPROFILE ".partcad/projects/start")
+          try {
+            & (Join-Path $app "resources\partcad-cli\pc.exe") --no-ansi daemon start
+            if ($LASTEXITCODE -ne 0) { throw "pc daemon start exited $LASTEXITCODE" }
+          } finally {
+            Pop-Location
+          }
           Write-Host "--- running out of $app before uninstalling:"
           Get-Running | Format-Table Id, ProcessName, Path -AutoSize | Out-String -Width 400 | Write-Host
+          if (-not (Get-Process partcad-json-rpc -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith("$app\", [StringComparison]::OrdinalIgnoreCase) })) {
+            throw "no PartCAD daemon is running out of $app to test the uninstaller against"
+          }
 
           # Inno Setup's uninstaller relaunches itself from the temp directory
           # and the process started here returns before the work is done, so
