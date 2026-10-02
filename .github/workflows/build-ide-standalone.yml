@@ -1465,42 +1465,17 @@ jobs:
         shell: pwsh
         run: |
           $app = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE"
-
-          # Nothing may still be running out of the tree about to be removed:
-          # Windows will not delete an executable that is running, and the
-          # uninstaller does not say which one it was refused -- it leaves the
-          # directory behind, and the check at the end of this step fails over
-          # it. "Start it once" stops the editor, by name, and that is not the
-          # whole of it. The PartCAD daemon, `partcad-json-rpc` out of
-          # "resources\partcad-cli", is started by the extension for the
-          # workspace it opens and by any `pc` run from this tree (`pc version`
-          # above asks the daemon for its version), and it is meant to outlive
-          # whatever started it. Stopping the editor leaves it running. That is
-          # the "Terminate orphan process: pid (NNNN) (partcad-json-rpc)" line
-          # a failed run ends with, after "is still there after uninstalling".
-          #
-          # So stop everything whose executable is under the application, by
-          # path rather than by name, so that the next thing to run out of this
-          # tree is covered too -- and wait for it to be gone, since
-          # Stop-Process returns once it has asked. A daemon killed here loses
-          # nothing: its state is under "~\.partcad\workspaces", outside the
-          # tree.
+          # What is running out of the application right now. The PartCAD daemon
+          # usually is -- `pc version` above asked one for its version, and the
+          # extension started one for the folder it opened -- and the uninstaller
+          # is what has to stop it ("StopPartcad" in partcad-ide.iss): Windows
+          # will not delete an executable that is running, and a user's machine
+          # has nothing to run a step like this one first.
           function Get-Running {
             Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith("$app\", [StringComparison]::OrdinalIgnoreCase) }
           }
-          $running = @(Get-Running)
-          if ($running) {
-            Write-Host "--- still running out of ${app}:"
-            $running | Format-Table Id, ProcessName, Path -AutoSize | Out-String -Width 400 | Write-Host
-            $running | Stop-Process -Force -ErrorAction SilentlyContinue
-            $deadline = (Get-Date).AddSeconds(30)
-            while ((Get-Running) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
-            $left = @(Get-Running)
-            if ($left) {
-              $left | Format-Table Id, ProcessName, Path -AutoSize | Out-String -Width 400 | Write-Host
-              throw "still running out of $app 30 seconds after being stopped; refusing to uninstall around it"
-            }
-          }
+          Write-Host "--- running out of $app before uninstalling:"
+          Get-Running | Format-Table Id, ProcessName, Path -AutoSize | Out-String -Width 400 | Write-Host
 
           # Inno Setup's uninstaller relaunches itself from the temp directory
           # and the process started here returns before the work is done, so
@@ -1509,6 +1484,14 @@ jobs:
             -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART"
           $deadline = (Get-Date).AddMinutes(5)
           while ((Test-Path $app) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 5 }
-          if (Test-Path $app) { throw "$app is still there after uninstalling" }
+          if (Test-Path $app) {
+            Get-Running | Format-Table Id, ProcessName, Path -AutoSize | Out-String -Width 400 | Write-Host
+            throw "$app is still there after uninstalling"
+          }
+          $left = @(Get-Running)
+          if ($left) {
+            $left | Format-Table Id, ProcessName, Path -AutoSize | Out-String -Width 400 | Write-Host
+            throw "the uninstaller left processes running out of $app"
+          }
           $path = (Get-ItemProperty -Path "HKCU:\Environment" -Name Path).Path
           if ($path -like "*PartCAD IDE*") { throw "the uninstaller left PATH entries behind" }
