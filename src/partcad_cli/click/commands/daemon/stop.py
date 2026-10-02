@@ -47,7 +47,10 @@ def _stop_all() -> None:
     if not running:
         click.echo("No PartCAD daemon was running")
         return
-    stopped = daemon.stop_all_daemons()
+    # Counted against what was running here, not just counted: the helper looks
+    # again before it stops anything, and a daemon that started in between and
+    # stopped must not make up for one from this list that did not.
+    stopped = set(running).intersection(daemon.stop_all_daemons())
     click.echo("Stopped %d of %d PartCAD daemon(s)" % (len(stopped), len(running)))
     if len(stopped) < len(running):
         raise click.ClickException("%d PartCAD daemon(s) did not stop" % (len(running) - len(stopped)))

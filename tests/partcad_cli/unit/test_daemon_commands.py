@@ -91,3 +91,15 @@ def test_stop_all_fails_when_a_daemon_will_not_go(monkeypatch):
     assert result.exit_code != 0
     assert "Stopped 1 of 2 PartCAD daemon(s)" in result.output
     assert "1 PartCAD daemon(s) did not stop" in result.output
+
+
+def test_stop_all_does_not_count_a_daemon_it_was_not_asked_about(monkeypatch):
+    """The helper takes its own snapshot: a daemon that started after this one
+    and stopped must not stand in for one from this list that did not."""
+    monkeypatch.setattr(stop_command.daemon, "live_daemon_dirs", lambda: ["a", "b"])
+    monkeypatch.setattr(stop_command.daemon, "stop_all_daemons", lambda: ["a", "late"])
+
+    result = CliRunner().invoke(stop_command.cli, ["--all"])
+
+    assert result.exit_code != 0
+    assert "Stopped 1 of 2 PartCAD daemon(s)" in result.output
