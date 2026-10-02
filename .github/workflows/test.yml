@@ -1692,6 +1692,11 @@ jobs:
           # exist", leaving each of those parts with "No module named
           # 'partcad'".
           PC_PARTCAD_PACKAGE_SUB: ${{ github.workspace }}
+          # The daemon's own log file, which the errors at the end are read
+          # from, stays at INFO although the daemon runs verbose (see its start
+          # below). It rotates at 10 MB, and with every DEBUG line in it the
+          # sweep's early errors were rotated out before they could be printed.
+          PC_LOG_LEVEL: info
         run: |
           . ~/.bashrc
           . ~/.bash_profile
@@ -1737,9 +1742,9 @@ jobs:
           sweep_exclude="-x //pub/universe/lego/ldraw -x //pub/electronics/sbcs/intel"
           # The daemon every command below talks to, started first and verbose:
           # an action ends in a DONE line with its duration at DEBUG, and the
-          # daemon drops a record below its own level before its log file sees
-          # it -- which is where the timings below are read from. The commands
-          # themselves stay at INFO, so this job's own log does not grow with it.
+          # daemon drops a record below its own level before it forwards it.
+          # Only the sweep asks for them (see it below); the other commands
+          # stay at INFO.
           python -m partcad_cli.click.command --no-ansi -v daemon start
           set +e
           sample_rc=0
@@ -1758,27 +1763,30 @@ jobs:
           # shellcheck disable=SC2086 # 'sweep_exclude' is several words on purpose
           ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r --fast-only ${sweep_exclude} //pub
           list_rc=$?
+          # Verbose, for every action's DONE line, into a file that is uploaded
+          # with the results, and without the DEBUG lines into this job's log,
+          # which keeps the length it had.
+          sweep_log=../pub-repo-test-results/sweep-verbose.log
           # shellcheck disable=SC2086 # 'sweep_exclude' is several words on purpose
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --fast-only ${sweep_exclude} --package //pub
-          test_rc=$?
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi -v --threads-max 4 test -r --fast-only ${sweep_exclude} --package //pub 2>&1 |
+            tee "${sweep_log}" | grep --line-buffered -v " DEBUG:partcad:"
+          test_rc=${PIPESTATUS[0]}
           # Where the sweep's time went, printed near the end so that it is in
-          # the part of the log that can be read back: an object whose tests
-          # pass logs nothing but DONE lines, and with one per action the log is
-          # long. The daemon's own log has every DONE line with the time it was
-          # written (the actions' ones because it runs verbose, see its start
-          # above). A recursive 'pc test' runs each package as an action, so
-          # that line (no item) is when the package's tests finished, counted
-          # from the start of the run -- the packages are tested together. Then
-          # the slowest single actions, which say what in a package took it.
-          for dir in ~/.partcad/workspaces/*/; do
-            ls "${dir}"partcad.log* >/dev/null 2>&1 || continue
-            echo "::group::When each package of the sweep finished (${dir})"
-            cat "${dir}"partcad.log* | grep -E " DONE: Test: //pub[^: ]*: [0-9.]+s$" | sort | cut -c1-300
-            echo "::endgroup::"
-            echo "::group::The 40 slowest actions (${dir})"
-            cat "${dir}"partcad.log* | grep -E " DONE: " | awk '{ print $NF, $0 }' | sort -rn | head -n 40 | cut -c1-300
-            echo "::endgroup::"
-          done
+          # the part of the log that can be read back, and read from the
+          # sweep's own verbose output, which has every DONE line. A recursive
+          # 'pc test' runs each package as an action, so that line (no item) is
+          # when the package's tests finished, counted from the start of the
+          # run -- the packages are tested together. A 'Test' action starts
+          # when it is scheduled, so every test's duration is likewise when it
+          # finished; the second group leaves them out, and what is left --
+          # an interference check, a render, a script -- took the time it says.
+          echo "::group::When each package of the sweep finished"
+          grep -E ":DONE: Test: //pub[^: ]*: [0-9.]+s$" "${sweep_log}" | sort | cut -c1-300
+          echo "::endgroup::"
+          echo "::group::The 40 slowest actions other than tests"
+          grep -E ":DONE: " "${sweep_log}" | grep -v ":DONE: Test: " | awk '{ print $NF, $0 }' | sort -rn | sed -n '1,40p' | cut -c1-300
+          echo "::endgroup::"
+          gzip -f "${sweep_log}"
           # When anything failed, why -- again, at the end. Every command above
           # talks to the one daemon, whose own log has the errors of all of
           # them, the sample's included; but they are printed thousands of
