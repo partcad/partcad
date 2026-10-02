@@ -1994,6 +1994,7 @@
           "properties": {
             "type": { "type": "string", "enum": ["store", "manufacturer", "enrich"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "path": { "type": "string", "minLength": 1, "description": "The script that implements the provider, relative to the package that declares it. Defaults to '<name>.py'" },
             "source": { "type": "string", "minLength": 1 },
             "package": { "type": "string", "minLength": 1 },
             "with": {
@@ -2021,6 +2022,7 @@
           "properties": {
             "type": { "type": "string", "enum": ["basic", "enrich"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "path": { "type": "string", "minLength": 1, "description": "The script that serves the repository (a 'basic' one), relative to the package that declares it. Defaults to '<name>.py'" },
             "source": { "type": "string", "minLength": 1 },
             "package": { "type": "string", "minLength": 1 },
             "with": { "$ref": "#/definitions/parameter-overrides" },

@@ -329,6 +329,33 @@ def test_schema_a_mating_does_not_take_what_it_cannot_mean(mating):
     failure({"interfaces": {"a": {"mates": {"b": mating}}}})
 
 
+# A plugin is a script, and both kinds of plugin a package declares find theirs
+# the same way: by 'path', or as '<name>.py' beside the configuration when it
+# gives none. The loader has always read 'path'; the schema did not have it, so
+# 'pc lint' warned "unexpected property 'path'" on every repository or provider
+# that named its script - which is any whose script is not in the package root.
+PLUGINS = {
+    "repositories": {"type": "basic"},
+    "providers": {"type": "store"},
+}
+
+
+@pytest.mark.parametrize("section", PLUGINS.keys())
+def test_schema_a_plugin_names_its_script(section):
+    validate({section: {"shop": dict(PLUGINS[section], path="plugins/shop.py")}})
+
+
+@pytest.mark.parametrize("section", PLUGINS.keys())
+def test_schema_a_plugin_may_leave_its_script_to_the_default(section):
+    validate({section: {"shop": dict(PLUGINS[section])}})
+
+
+@pytest.mark.parametrize("section", PLUGINS.keys())
+@pytest.mark.parametrize("path", ["", 3, None])
+def test_schema_a_plugin_script_is_a_path(section, path):
+    failure({section: {"shop": dict(PLUGINS[section], path=path)}})
+
+
 # The package walk: which check claims which file, and what it reports.
 
 
