@@ -91,6 +91,11 @@ class ProjectExternalRepository(ProjectPlugin):
         # own is applied the first time something needs what it says (see
         # 'get_suppliers').
         self._meta_applied = False
+        # Held while metadata is applied, so that a second caller - the
+        # traversal and a supplier lookup can be on different threads of one
+        # daemon - waits for the first to finish rather than reading a package
+        # that is half applied.
+        self._meta_lock = threading.Lock()
         super().__init__(ctx, name, path, config_obj=config_obj, inherited_config=inherited_config)
 
     def request(self, key: str, handler):
@@ -353,10 +358,23 @@ class ProjectExternalRepository(ProjectPlugin):
             self._apply_meta(self.get_data("meta"))
 
     def _apply_meta(self, meta):
-        """Apply one answer to 'meta' to this package, once."""
-        self._meta_applied = True
-        if not meta:
-            return
+        """Apply one answer to 'meta' to this package, once.
+
+        '_meta_applied' is what lets a reader skip this, so it is published
+        last: set before the suppliers were initialized, it let a concurrent
+        'get_suppliers()' read the constructor's empty set and report that
+        nobody sells anything here. It is checked again under the lock, so a
+        caller that lost the race applies nothing a second time.
+        """
+        with self._meta_lock:
+            if self._meta_applied:
+                return
+            if meta:
+                self._apply_meta_locked(meta)
+            self._meta_applied = True
+
+    def _apply_meta_locked(self, meta):
+        """The body of '_apply_meta', with its lock held and 'meta' non-empty."""
         # The repository supplies package properties, but never the identity
         # (name) or the import-derived fields: those pin where and how this
         # package was loaded. Child packages come from the 'deps' key, not from

@@ -12,6 +12,8 @@ the lazy object-access layer is exercised without a runtime or a CAD kernel.
 
 import asyncio
 import shutil
+import threading
+import time
 
 import partcad as pc
 from partcad import context as pc_context
@@ -266,6 +268,51 @@ def test_the_suppliers_are_read_without_a_traversal():
     # The traversal arriving later applies nothing twice.
     asyncio.run(repo.ensure_enumerated_async())
     assert fake.keys == ["meta", "deps"]
+
+
+def test_the_metadata_counts_as_applied_only_once_it_has_been():
+    """The flag a reader skips the work on is the last thing to be set.
+
+    It used to be the first, so a 'get_suppliers()' on another thread could
+    see it, skip the metadata, and read the constructor's empty suppliers
+    while this thread was still on its way to setting them.
+    """
+    ctx = pc.Context("examples")
+    repo, _ = _make_repo(ctx, {"meta": {"suppliers": ["//pub/svc/store:shop"]}})
+    seen = []
+    init_suppliers = repo.init_suppliers
+
+    def observing():
+        seen.append(repo._meta_applied)
+        init_suppliers()
+
+    repo.init_suppliers = observing
+    assert repo.get_suppliers() == {"//pub/svc/store:shop": {}}
+    assert seen == [False]
+    assert repo._meta_applied
+
+
+def test_concurrent_lookups_apply_the_metadata_once_and_all_see_it():
+    ctx = pc.Context("examples")
+    repo, fake = _make_repo(ctx, {"meta": {"suppliers": ["//pub/svc/store:shop"]}})
+    applied = []
+    init_suppliers = repo.init_suppliers
+
+    def counting():
+        applied.append(1)
+        time.sleep(0.05)  # widen the window a lookup used to fall into
+        init_suppliers()
+
+    repo.init_suppliers = counting
+    results = []
+    threads = [threading.Thread(target=lambda: results.append(repo.get_suppliers())) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert results == [{"//pub/svc/store:shop": {}}] * 8
+    assert len(applied) == 1
+    assert fake.keys.count("meta") == 1
 
 
 def test_a_supplier_is_resolved_against_the_package_that_names_it():
