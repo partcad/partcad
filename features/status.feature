@@ -1,4 +1,7 @@
-@cli
+# @cold-state: these report on the internal state directory itself, including
+# asserting that it is at its default $HOME/.partcad location, so they opt out
+# of the seeded directory the rest of the suite is pointed at.
+@cli @cold-state
 Feature: `pc system status` command
 
   Background: Initialize Private PartCAD project
