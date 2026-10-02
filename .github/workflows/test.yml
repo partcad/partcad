@@ -1745,6 +1745,23 @@ jobs:
           # shellcheck disable=SC2086 # 'sweep_exclude' is several words on purpose
           ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r ${sweep_exclude} --package //pub
           test_rc=$?
+          # Where the sweep's time went, printed near the end so that it is in
+          # the part of the log that can be read back: an object whose tests
+          # pass logs nothing but DONE lines, and with one per action the log is
+          # long. The daemon's own log has every DONE line with the time it was
+          # written. A recursive 'pc test' runs each package as an action, so
+          # that line (no item) is when the package's tests finished, counted
+          # from the start of the run -- the packages are tested together. Then
+          # the slowest single actions, which say what in a package took it.
+          for dir in ~/.partcad/workspaces/*/; do
+            ls "${dir}"partcad.log* >/dev/null 2>&1 || continue
+            echo "::group::When each package of the sweep finished (${dir})"
+            cat "${dir}"partcad.log* | grep -E " DONE: Test: //pub[^: ]*: [0-9.]+s$" | sort | cut -c1-300
+            echo "::endgroup::"
+            echo "::group::The 40 slowest actions (${dir})"
+            cat "${dir}"partcad.log* | grep -E " DONE: " | awk '{ print $NF, $0 }' | sort -rn | head -n 40 | cut -c1-300
+            echo "::endgroup::"
+          done
           # When anything failed, why -- again, at the end. Every command above
           # talks to the one daemon, whose own log has the errors of all of
           # them, the sample's included; but they are printed thousands of
