@@ -1,10 +1,12 @@
 import tempfile
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 from pygit2 import GitError
 
 import partcad as pc
+from partcad import project_factory_git
 from partcad.user_config import UserConfig
 
 repo_url = "https://github.com/partcad/partcad"
@@ -120,3 +122,84 @@ def test_a_permanent_failure_is_not_retried(user_config):
 
     # The optimized clone, then the full clone it falls back to, and no retries
     assert mock_clone.call_count == 2
+
+
+class _Clock:
+    """The 'time' that 'project_factory_git' sees, with 'sleep' recorded rather
+    than waited out. Replacing the module's name and not 'time.sleep' itself
+    keeps every other caller of 'time.sleep' in the process waiting as usual."""
+
+    def __init__(self):
+        self.slept = []
+
+    def sleep(self, seconds):
+        self.slept.append(seconds)
+
+    def __getattr__(self, name):
+        return getattr(time, name)
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    recorded = _Clock()
+    monkeypatch.setattr(project_factory_git, "time", recorded)
+    return recorded
+
+
+@pytest.fixture
+def unconfigured(temp_dir, monkeypatch):
+    """A configuration that says nothing about retries.
+
+    Read from a home directory with no configuration file in it, so that what
+    the developer running this has in '~/.partcad/config.yaml' cannot decide
+    the answer. expanduser reads HOME on POSIX and USERPROFILE on Windows.
+    """
+    monkeypatch.setenv("HOME", temp_dir)
+    monkeypatch.setenv("USERPROFILE", temp_dir)
+    config = UserConfig()
+    config.internal_state_dir = temp_dir
+    return config
+
+
+def test_the_retry_defaults(unconfigured):
+    assert unconfigured.get_int("git.clone.retry.max") == 2
+    assert unconfigured.get_float("git.clone.retry.patience") == 5.0
+
+
+def test_a_timed_out_clone_is_retried_when_nothing_configures_retries(unconfigured, clock, mocked_git_open):
+    """There was no default, and an unset key reads as 0: the loop recognized a
+    timeout as transient and gave up on it all the same, and CI lost a job to
+    one such timeout three times in one day."""
+
+    def side_effect(*args, **kwargs):
+        side_effect.counter += 1
+        if side_effect.counter == 1:
+            raise GitError("could not read from socket: timed out")
+        return MagicMock()
+
+    side_effect.counter = 0
+
+    with (
+        patch("partcad.project_factory_git._clone", side_effect=side_effect) as mock_clone,
+        mocked_git_open(),
+    ):
+        ctx = pc.Context(user_config=unconfigured)
+        assert pc.ProjectFactoryGit(ctx, None, test_config_import_git) is not None
+
+    assert mock_clone.call_count == 2
+    assert clock.slept == [5.0]
+
+
+def test_a_clone_that_keeps_timing_out_is_given_up_on_after_two_retries(unconfigured, clock):
+    with (
+        patch(
+            "partcad.project_factory_git._clone",
+            side_effect=GitError("could not read from socket: timed out"),
+        ) as mock_clone,
+        pytest.raises(RuntimeError),
+    ):
+        ctx = pc.Context(user_config=unconfigured)
+        pc.ProjectFactoryGit(ctx, None, test_config_import_git)
+
+    assert mock_clone.call_count == 3
+    assert clock.slept == [5.0, 5.0]
