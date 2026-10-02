@@ -103,7 +103,8 @@ def test_a_record_is_forwarded_with_the_time_it_was_made():
 
 def test_an_action_and_a_process_end_in_the_same_done_line():
     """Every action and every process that finishes says so, with its duration,
-    in one format -- a log is timed the same way at every level."""
+    in one format -- a log is timed the same way at every level. A process says
+    it at INFO; an action, of which a run has thousands, only at DEBUG."""
     events, hook = _collector()
     remote_server.init(hook)
 
@@ -113,9 +114,24 @@ def test_an_action_and_a_process_end_in_the_same_done_line():
         with pc_logging.Action("Test", "//pub/robots", "arm", "shell"):
             pass
 
-    done = [e["message"] for e in events if e["kind"] == "log" and e["message"].startswith("DONE: ")]
-    assert [re.sub(r"\d+\.\d\ds$", "<t>s", m) for m in done] == [
-        "DONE: Test: //pub/robots: <t>s",
-        "DONE: Test: //pub/robots: arm : shell: <t>s",
-        "DONE: Test: //pub: <t>s",
+    done = [e for e in events if e["kind"] == "log" and e["message"].startswith("DONE: ")]
+    assert [(e["levelname"], re.sub(r"\d+\.\d\ds$", "<t>s", e["message"])) for e in done] == [
+        ("DEBUG", "DONE: Test: //pub/robots: <t>s"),
+        ("DEBUG", "DONE: Test: //pub/robots: arm : shell: <t>s"),
+        ("INFO", "DONE: Test: //pub: <t>s"),
     ]
+
+
+def test_an_action_ending_says_nothing_at_info():
+    """Without --verbose, a run's log has its processes' DONE lines and not one
+    per action."""
+    events, hook = _collector()
+    remote_server.init(hook)
+    logging.getLogger("partcad").setLevel(logging.INFO)
+
+    with pc_logging.Process("Test", "//pub"):
+        with pc_logging.Action("Test", "//pub/robots"):
+            pass
+
+    done = [e["message"] for e in events if e["kind"] == "log" and e["message"].startswith("DONE: ")]
+    assert [re.sub(r"\d+\.\d\ds$", "<t>s", m) for m in done] == ["DONE: Test: //pub: <t>s"]

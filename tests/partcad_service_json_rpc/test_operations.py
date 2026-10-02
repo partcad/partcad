@@ -1648,8 +1648,8 @@ def test_test_run_recursive_tests_the_object_in_each_package(monkeypatch):
 
 def test_a_recursive_test_run_tests_each_package_as_an_action(monkeypatch):
     """A package whose tests pass logs nothing, so without an action of its own
-    -- and the DONE line every action ends in -- a long run said nothing below
-    its total."""
+    -- and the DONE line every action ends in -- a long run's verbose log said
+    nothing below its total."""
     install_fake_tests(monkeypatch)
     session, _ = make_session()
     session.partcad_ctx.projects["//"].add("parts", FakeObject("widget"))
