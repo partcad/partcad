@@ -356,6 +356,28 @@ def test_schema_a_plugin_script_is_a_path(section, path):
     failure({section: {"shop": dict(PLUGINS[section], path=path)}})
 
 
+# A URL's host name may have a hyphen in it - most do, from 'my-store.com' to
+# 'cq-warehouse.readthedocs.io' - and the pattern's host characters did not
+# include one, so 'pc lint' refused every such URL as not being one.
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://cq-warehouse.readthedocs.io/",
+        "https://my-store.example.com/p/some-part/123",
+        "http://www.partcad.org",
+        "https://github.com/partcad/partcad-index.git",
+    ],
+)
+def test_schema_a_url_may_have_a_hyphen_in_its_host(url):
+    validate({"url": url})
+    validate({"parts": {"bolt": {"type": "step", "fileFrom": "url", "fileUrl": url}}})
+
+
+@pytest.mark.parametrize("url", ["not a url", "ftp://example.com/file", "https://-"])
+def test_schema_what_is_not_a_url_is_still_refused(url):
+    failure({"url": url})
+
+
 # The package walk: which check claims which file, and what it reports.
 
 

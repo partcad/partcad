@@ -422,7 +422,7 @@
     },
     "url": {
       "type": "string",
-      "pattern": "((http|https)://)(www.)?[a-zA-Z0-9@:%._\\+~#?&//=]{2,256}\\.[a-z]{2,6}\\b([-a-zA-Z0-9@:%._\\+~#?&//=]*)"
+      "pattern": "((http|https)://)(www.)?[-a-zA-Z0-9@:%._\\+~#?&//=]{2,256}\\.[a-z]{2,6}\\b([-a-zA-Z0-9@:%._\\+~#?&//=]*)"
     },
     "unless": {
       "description": "The conditions this declaration does not work under. A list of clauses, any one of which excludes it (OR); a clause is a single tag, or a list of tags that must all hold together (AND) - e.g. [[arm, useDocker, useDockerKicad]]. It is skipped, with an INFO line saying so, wherever a clause holds. A tag names something true of the context: the host's architecture ('arm64', 'arm', 'x86_64'), its operating system ('linux', 'macos', 'windows'), that system's version ('ubuntu-24.04', 'macos-26'), a boolean configuration option in one of its two spellings ('useDocker' when on, '!useDocker' when off; likewise 'useDockerPython' and 'useDockerKicad'), or a tag the user configuration adds. '!' is part of a tag's name, not an operator.",
