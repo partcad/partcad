@@ -321,6 +321,36 @@ def test_a_supplier_is_resolved_against_the_package_that_names_it():
     assert repo.get_suppliers() == {"//ext:shop": {}}
 
 
+def test_a_supplier_lookup_from_a_loop_never_stops_it(monkeypatch):
+    """Who sells a part is asked from a loop, so the metadata is fetched on it.
+
+    'pc supply find' and the IDE's cart ask from inside a coroutine, where the
+    synchronous 'get_suppliers()' would complete its fetch on another thread
+    with the loop stopped - the wait 'Context._warm_project_async' is there to
+    keep a part lookup out of.
+    """
+    ctx = pc.Context("examples")
+    repo, fake = _make_repo(ctx, {"meta": {"suppliers": ["//pub/svc/store:shop"]}})
+    stopped = []
+    original = ProjectExternalRepository._run_elsewhere
+
+    def waited_for(coroutine):
+        stopped.append(coroutine.__qualname__)
+        return original(coroutine)
+
+    monkeypatch.setattr(ProjectExternalRepository, "_run_elsewhere", staticmethod(waited_for))
+
+    assert asyncio.run(repo.get_suppliers_async()) == {"//pub/svc/store:shop": {}}
+    assert stopped == []
+    assert fake.keys == ["meta"]
+
+
+def test_a_local_package_answers_a_supplier_lookup_from_a_loop_as_it_always_has():
+    ctx = pc.Context("examples/provider_store")
+    project = ctx.get_project("//")
+    assert asyncio.run(project.get_suppliers_async()) == project.get_suppliers()
+
+
 def test_a_child_is_told_the_plugin_and_not_the_cache_version():
     """A child carries the plugin reference and nothing about the cache.
 

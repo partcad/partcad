@@ -321,6 +321,9 @@ class FakeProject:
     def get_suppliers(self):
         return dict(self.suppliers)
 
+    async def get_suppliers_async(self):
+        return self.get_suppliers()
+
     async def assembly_guide_data_async(self, assembly_name, ignore_manufacturability=False):
         self.guide_requests.append((assembly_name, ignore_manufacturability))
         if self.guide_error is not None:

@@ -1397,7 +1397,7 @@ class Context:
             return {}
         pc_logging.debug("Retrieving suppliers from %s" % project_name)
 
-        part_suppliers = prj.get_suppliers()
+        part_suppliers = await prj.get_suppliers_async()
         if len(part_suppliers) == 0:
             pc_logging.error("No suppliers found for %s in %s" % (part_name, project_name))
             return {}

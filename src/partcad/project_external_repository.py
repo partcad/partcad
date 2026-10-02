@@ -469,6 +469,16 @@ class ProjectExternalRepository(ProjectPlugin):
         self._materialize_meta()
         return super().get_suppliers()
 
+    async def get_suppliers_async(self):
+        """'get_suppliers()', with the metadata fetched on the caller's loop.
+
+        From a loop, the synchronous fetch 'get_suppliers()' makes would be
+        completed on another thread with this loop stopped, and everything else
+        on it with it (see 'Context._warm_project_async').
+        """
+        await self._materialize_meta_async()
+        return self.get_suppliers()
+
     # --- Object-access hooks (see Project) sourced from the repository ---
 
     def _augment(self, config):
