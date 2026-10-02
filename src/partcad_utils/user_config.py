@@ -680,6 +680,32 @@ class UserConfig(vyper.Vyper):
         # default: 180
         self.set_default("git.clone.timeout", 180)
 
+        # option: git.clone.retry.max
+        # description: how many more times a clone or refresh of a git
+        #              dependency is attempted after a transient network
+        #              failure -- the timeout above, a refused or reset
+        #              connection, a 5xx (see 'git_error_patterns' in
+        #              partcad.project_factory_git). An answer about the
+        #              repository itself, such as a 404, a missing ref or a
+        #              refused credential, is reported at once whatever this
+        #              says. There was no default, and an unset key reads as 0,
+        #              so a single dropped connection to GitHub failed the whole
+        #              command even though the retry loop had recognized it as
+        #              transient.
+        #
+        #              Two, because each attempt can take up to the timeout
+        #              above: a remote that has really gone away now costs three
+        #              of those rather than one before the error is reported.
+        # values: <int>
+        # default: 2
+        self.set_default("git.clone.retry.max", 2)
+
+        # option: git.clone.retry.patience
+        # description: how long to wait before each of those retries, in seconds
+        # values: <float>
+        # default: 5.0
+        self.set_default("git.clone.retry.patience", 5.0)
+
         # option: plugin.query.timeout
         # description: how long one query to a package's plugin script may take
         #              before PartCAD gives up on it, in seconds. A plugin
