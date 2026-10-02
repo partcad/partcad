@@ -1288,12 +1288,13 @@ def adhoc_render(session, params):
 async def _test_package_async(pc, package, coroutine):
     """One package's tests in a recursive run, as an action of its own.
 
-    So that, like every action, it ends in a ``DONE`` line with its duration:
-    a package whose tests all pass logs nothing else, and a long run's log
-    otherwise said nothing below its total. The packages are tested together,
-    so each duration counts from the start of the run and they overlap; the run
-    takes as long as the slowest of them, not their sum. The 'Test' process of
-    the run is what a single package's tests already report under.
+    So that, like every action, it ends in a ``DONE`` line with its duration
+    (logged at DEBUG, so with ``--verbose``): a package whose tests all pass
+    logs nothing else, and a long run's log otherwise said nothing below its
+    total. The packages are tested together, so each duration counts from the
+    start of the run and they overlap; the run takes as long as the slowest of
+    them, not their sum. The 'Test' process of the run is what a single
+    package's tests already report under.
     """
     with pc.logging.Action("Test", package):
         return await coroutine

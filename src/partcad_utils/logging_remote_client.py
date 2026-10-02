@@ -20,9 +20,9 @@ action markers are replayed through ``ops`` under ANSI, where they drive the
 progress footer.
 
 Plain mode has no footer and drops the markers: the daemon logs a ``DONE`` line,
-with its duration, for every process and every action that finishes. It is what
-a CI log and an agent read, so every line carries the UTC time the daemon logged
-it.
+with its duration, for every process that finishes, and for every action too
+when it runs verbose. It is what a CI log and an agent read, so every line
+carries the UTC time the daemon logged it.
 """
 
 import logging

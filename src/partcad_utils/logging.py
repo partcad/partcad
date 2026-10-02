@@ -166,18 +166,21 @@ process_transaction = None
 process_span = None
 
 
-def _done(op: str, package: str, item, start: float) -> None:
+def _done(log, op: str, package: str, item, start: float) -> None:
     """Report that a process or an action finished, and how long it took.
 
     One line for both, in one format, so that a log can be timed the same way
     at every level: a recursive run's packages, the objects in each, and the
     steps of each object all end in a ``DONE`` line with the seconds they took.
+    A process logs it with ``info`` and an action with ``debug``: a run has a
+    handful of processes and thousands of actions, so the actions' lines are
+    for a verbose log (and the daemon's ``partcad.log`` when it runs verbose).
     """
     delta = time.time() - start
     if item is None:
-        info("DONE: %s: %s: %.2fs" % (op, package, delta))
+        log("DONE: %s: %s: %.2fs" % (op, package, delta))
     else:
-        info("DONE: %s: %s: %s: %.2fs" % (op, package, item, delta))
+        log("DONE: %s: %s: %s: %.2fs" % (op, package, item, delta))
 
 
 # Classes to be used with "with()" to alter the logging context.
@@ -228,7 +231,7 @@ class Process(object):
             process_lock.release()
             ops.process_end(self.op, self.package, self.item)
             self.span_ctx_mgr.__exit__(*_args)
-            _done(self.op, self.package, self.item, self.start)
+            _done(info, self.op, self.package, self.item, self.start)
 
 
 class Action(object):
@@ -273,4 +276,4 @@ class Action(object):
     def __exit__(self, *args):
         ops.action_end(self.op, self.package, self.item)
         self.span_ctx_mgr.__exit__(*args)
-        _done(self.op, self.package, self.item, self.start)
+        _done(debug, self.op, self.package, self.item, self.start)

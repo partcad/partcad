@@ -132,8 +132,8 @@ def test_a_record_below_the_level_is_not_rendered():
 
 
 def test_plain_mode_still_drops_action_markers():
-    """The daemon logs a DONE line when an action ends; the markers themselves
-    only drive the ANSI footer, so plain mode adds no line for them."""
+    """The daemon logs a DONE line (at DEBUG) when an action ends; the markers
+    themselves only drive the ANSI footer, so plain mode adds no line for them."""
     buf = io.StringIO()
     remote_client.init(want_ansi=False, stream=buf)
 
