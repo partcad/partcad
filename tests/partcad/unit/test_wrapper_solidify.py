@@ -301,3 +301,40 @@ def test_a_shell_is_not_something_a_boolean_can_be_taken_against():
     assert _volume(BRepAlgoAPI_Common(other, solid).Shape()) == pytest.approx(500.0)
     assert _volume(BRepAlgoAPI_Cut(other, solid).Shape()) == pytest.approx(500.0)
     assert _volume(BRepAlgoAPI_Fuse(other, solid).Shape()) == pytest.approx(1500.0)
+
+
+# --- the one definition of a part that is a solid --------------------------
+
+
+def test_a_solid_is_a_part():
+    assert wrapper_common.solid_problems(_box()) == []
+
+
+def test_a_closed_shell_is_not_a_part_until_it_is_solidified():
+    shell = _sub_shape(_box(), TopAbs_SHELL)
+    assert "it holds no solid" in wrapper_common.solid_problems(shell)
+    assert wrapper_common.solid_problems(wrapper_common.solidify(shell)) == []
+
+
+def test_an_open_shell_is_not_a_part_and_solidify_does_not_pretend_it_is():
+    builder = _builder()
+    open_shell = TopoDS_Shell()
+    builder.MakeShell(open_shell)
+    builder.Add(open_shell, _sub_shape(_box(), TopAbs_FACE))
+    problems = wrapper_common.solid_problems(wrapper_common.solidify(open_shell))
+    assert "it holds no solid" in problems
+    assert "it has faces that belong to no solid" in problems
+
+
+def test_a_loose_face_beside_a_solid_is_reported():
+    compound = _compound(_box(), _moved(_sub_shape(_box(), TopAbs_FACE)))
+    assert wrapper_common.solid_problems(compound) == ["it has faces that belong to no solid"]
+
+
+def test_an_inside_out_solid_is_reported():
+    inside_out = _box().Reversed()
+    assert any("no volume inside it" in p for p in wrapper_common.solid_problems(inside_out))
+
+
+def test_nothing_is_not_a_part():
+    assert wrapper_common.solid_problems(None) == ["nothing was built"]
