@@ -892,7 +892,7 @@ async def _is_available_to_buy(ctx, assembly, cache: dict) -> bool:
     # left to 'find_part_suppliers()': that reports the absence as an error, and
     # a package that simply does not sell anything is not one.
     project = ctx.get_project(assembly.project_name)
-    if project is None or not project.get_suppliers():
+    if project is None or not await project.get_suppliers_async():
         return answer(False)
 
     item = ProviderCartItem()

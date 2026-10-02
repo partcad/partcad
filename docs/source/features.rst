@@ -372,7 +372,17 @@ the parts are declared:
 A supplier is written from the point of view of the package that lists it, and
 is resolved against that package the way every other reference it makes is: a
 bare name is one of its own providers, while a qualified one lets it buy from a
-provider defined elsewhere instead of declaring one of its own. In the future PartCAD will be able to select providers
+provider defined elsewhere instead of declaring one of its own.
+
+A package served by a repository plugin has no ``partcad.yaml`` to write this
+in, so its plugin states the same section in the package's ``meta``, and it is
+read the same way (see :ref:`repositories`):
+
+.. code-block:: json
+
+  {"desc": "Metric hex bolts", "suppliers": {"//pub/svc/commerce/homedepot:homedepot": {}}}
+
+In the future PartCAD will be able to select providers
 based on the location and preferences of the requester, while leaving the
 possibility to enforce the use of a specific provider for corresponding parts
 (for example, for parts that are using a patented design).

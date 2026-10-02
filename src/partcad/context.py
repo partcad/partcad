@@ -921,26 +921,34 @@ class Context:
         if next_project_path in self.projects:
             return self._get_project_recursive(self.projects[next_project_path], import_list)
 
-        # Check if there is a matching subfolder
-        subfolders = [f.name for f in os.scandir(project.config_dir) if f.is_dir()]
-        if next_import in list(subfolders):
-            if os.path.exists(
-                os.path.join(
-                    project.config_dir,
-                    next_import,
-                    consts.DEFAULT_PACKAGE_CONFIG,
-                )
-            ):
-                pc_logging.debug("Importing a subfolder (get): %s..." % next_project_path)
-                prj_conf = {
-                    "name": next_project_path,
-                    "type": "local",
-                    "path": next_import,
-                }
-                next_project = self.import_project(project, prj_conf)
-                if next_project is not None:
-                    result = self._get_project_recursive(next_project, import_list)
-                    return result
+        # Check if there is a matching subfolder that is a package. A folder of
+        # that name with no 'partcad.yaml' in it is not one - it is where the
+        # package keeps some files of its own, a plugin's code or a model's
+        # images - so it must not stop the lookup from reaching a dependency
+        # declared under the same name. It used to: the folder matched, held no
+        # package, and the dependencies below were never consulted, so every
+        # reference to '<package>/catalog' failed as "not found" while the
+        # traversal, which does check for 'partcad.yaml', imported it fine.
+        subfolders = (
+            [f.name for f in os.scandir(project.config_dir) if f.is_dir()] if os.path.isdir(project.config_dir) else []
+        )
+        if next_import in subfolders and os.path.exists(
+            os.path.join(
+                project.config_dir,
+                next_import,
+                consts.DEFAULT_PACKAGE_CONFIG,
+            )
+        ):
+            pc_logging.debug("Importing a subfolder (get): %s..." % next_project_path)
+            prj_conf = {
+                "name": next_project_path,
+                "type": "local",
+                "path": next_import,
+            }
+            next_project = self.import_project(project, prj_conf)
+            if next_project is not None:
+                result = self._get_project_recursive(next_project, import_list)
+                return result
         else:
             # Resolve a declared child dependency. Go through the 'dependencies()'
             # accessor rather than 'config_obj' directly so that a plugin-backed
@@ -1385,7 +1393,12 @@ class Context:
         return asyncio.run(self._get_interface(interface_spec, params).get_wrapped(self))
 
     async def find_suppliers(self, cart: ProviderCart) -> dict[str, list[str]]:
-        """Find suppliers for each of the parts in the cart"""
+        """Find suppliers for each of the parts in the cart.
+
+        Keyed by each item's spec, '<name>#<count>', the same as
+        'select_supplier()': it is what 'prepare_supplier_carts()' rebuilds the
+        supplier carts from, and a name without its count is read as one of it.
+        """
         suppliers = {}
         for name, part_spec in cart.parts.items():
             suppliers_per_part = await self.find_part_suppliers(part_spec, cart)
@@ -1393,7 +1406,7 @@ class Context:
             if not suppliers_per_part:
                 pc_logging.error(f"No supplier found for {name}")
 
-            suppliers[name] = suppliers_per_part
+            suppliers[str(part_spec)] = suppliers_per_part
 
         # TODO(clairbee): calculate the recommended suppliers and reorder the results accordingly
         return suppliers
@@ -1421,7 +1434,7 @@ class Context:
             return {}
         pc_logging.debug("Retrieving suppliers from %s" % project_name)
 
-        part_suppliers = prj.get_suppliers()
+        part_suppliers = await prj.get_suppliers_async()
         if len(part_suppliers) == 0:
             pc_logging.error("No suppliers found for %s in %s" % (part_name, project_name))
             return {}
@@ -1476,7 +1489,11 @@ class Context:
         return suppliers
 
     async def prepare_supplier_carts(self, preferred_suppliers: dict[str, str]) -> dict[str, ProviderCart]:
-        """Given the list of preferred suppliers, prepare the supplier carts."""
+        """Given the list of preferred suppliers, prepare the supplier carts.
+
+        'preferred_suppliers' is keyed by cart item spec, '<name>#<count>', as
+        'select_supplier()' and 'select_preferred_suppliers()' return it.
+        """
         supplier_carts: dict[str, ProviderCart] = {}
 
         # Create a supplier cart for each supplier

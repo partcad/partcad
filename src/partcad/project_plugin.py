@@ -38,7 +38,13 @@ class ProjectPlugin(Project):
         # a query per kind, made while loading the package, to be told 'none' by
         # every package that holds no such thing. They are created on demand by
         # the getters instead, like everything else here.
-        pass
+        #
+        # Suppliers are the exception, because they are not objects: they are
+        # the names of providers, read out of the configuration and nothing
+        # else, so reading them asks the repository for nothing. Without this a
+        # plugin-backed package had no suppliers at all - not an empty set, no
+        # attribute - and quoting any part of one failed with an AttributeError.
+        self.init_suppliers()
 
     def _enumerate_object_configs(self, kind):
         # A bare plugin package exposes nothing; concrete subclasses (e.g.

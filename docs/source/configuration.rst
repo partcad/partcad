@@ -3979,8 +3979,18 @@ Providers are declared in ``partcad.yaml`` using the following syntax:
           enum: <(optional) list of possible values>
           default: <default value>
 
+    <enriched provider name>:
+      type: enrich
+      source: <provider name, or /path/to:provider-name>
+      with:
+        <param name>: <value>
+
 ``enrich`` providers are just references to other providers with some parameters
-modified to specific values.
+modified to specific values. ``with:`` sets any of the parameters the source
+provider declares, the same way an ``enrich`` part's ``with:`` does, and under
+the same rule: a value may not contain ``,``, ``;`` or ``=``. ``currency`` is
+also read by PartCAD itself, as what the provider's quotes are in, so it has to
+be a name such as ``USD``.
 
 ``store`` and ``manufacturer`` providers are implemented as Python scripts.
 These scripts are invoked using the ``runpy`` module which allows to pass input
@@ -4139,7 +4149,7 @@ or a new piece of metadata needs no new API:
   the whole repository
 - ``deps`` -- the names of the child packages
 - ``meta`` -- package-level properties (``desc``, ``render``, ``manufacturable``,
-  ...), and ``objectKinds`` (see below)
+  ``suppliers``, ...), and ``objectKinds`` (see below)
 - ``files/<path>`` -- the base64-encoded content of a file an object references
   by ``path``. A plugin-backed package has no source tree, so a file-backed
   object's file is fetched from the plugin and materialized into the package's

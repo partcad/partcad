@@ -18,6 +18,7 @@ from . import logging as pc_logging
 from . import project_factory as pf
 from . import telemetry
 from .cache import Cache
+from .cache_hash import file_stat
 from .project import Project
 from .project_external_repository import ProjectExternalRepository
 from .utils import resolve_resource_path
@@ -45,22 +46,6 @@ CACHE_VERSION_NAME = "CACHE_VERSION"
 # The plugin's own script does have a file, and this is where it is watched.
 _declared_versions: "weakref.WeakKeyDictionary[object, dict[str, tuple]]" = weakref.WeakKeyDictionary()
 _declared_versions_lock = threading.Lock()
-
-
-def _script_stat(path: str):
-    """What the plugin's script looks like from outside, to tell whether it changed.
-
-    Modification time and size: a stat, not a read. None for a file that is not
-    there, which is a script that has been deleted since it was read.
-
-    The same notion as 'cache_hash.file_stat', which arrives with the caching
-    work in #702; fold the two together once that lands.
-    """
-    try:
-        st = os.stat(path)
-    except OSError:
-        return None
-    return (st.st_mtime_ns, st.st_size)
 
 
 def _locate_plugin_script(ctx, parent: Project, plugin_ref: str):
@@ -144,7 +129,7 @@ def declared_cache_version(ctx, parent: Project, plugin_ref: str) -> int:
         entry = known.get(plugin_ref)
     if entry is not None:
         path, stat, version = entry
-        if _script_stat(path) != stat:
+        if file_stat(path) != stat:
             version = _read_declared_cache_version(path)
         else:
             return version
@@ -154,7 +139,7 @@ def declared_cache_version(ctx, parent: Project, plugin_ref: str) -> int:
             return 0
         version = _read_declared_cache_version(path)
     with _declared_versions_lock:
-        known[plugin_ref] = (path, _script_stat(path), version)
+        known[plugin_ref] = (path, file_stat(path), version)
     return version
 
 
