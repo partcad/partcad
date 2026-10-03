@@ -40,8 +40,14 @@ const CLI = process.platform === 'win32' ? 'pc.exe' : 'pc';
 const MANAGED_BY = 'PARTCAD_MANAGED_BY';
 const MANAGED_BY_EXTENSION = 'vscode-extension';
 
-/** The directory currently prepended, so a refresh can tell when nothing moved. */
-let applied: string | undefined;
+/**
+ * The directory currently prepended, so a refresh can tell when nothing moved.
+ *
+ * `null` until the first refresh, which is then never mistaken for "nothing
+ * moved": a window that finds no tools has to say so, or a terminal without
+ * `pc` leaves nothing in the log to explain it.
+ */
+let applied: string | undefined | null = null;
 
 /**
  * The directory holding the tools, or undefined when nothing is installed yet.
@@ -111,7 +117,18 @@ export function refreshToolsPath(context: vscode.ExtensionContext, serverId: str
     }
 
     collection.description = 'Adds the PartCAD command line tools (pc, partcad) to the PATH';
-    collection.prepend('PATH', directory + path.delimiter);
+    // Applied twice: when the terminal's process is created, and again once
+    // shell integration reports the shell is up. The second is the one that
+    // counts. The first lands before the user's rc files run, and those
+    // commonly prepend a directory of their own -- `conda init` activating
+    // `base` is the usual one, and a base environment with an older PartCAD in
+    // it then answers `pc` ahead of ours. The first stays for a shell without
+    // integration (turned off, or one VS Code cannot inject into), where it is
+    // all there is. The directory then appears on PATH twice, which is inert.
+    collection.prepend('PATH', directory + path.delimiter, {
+        applyAtProcessCreation: true,
+        applyAtShellIntegration: true,
+    });
     collection.replace(MANAGED_BY, MANAGED_BY_EXTENSION);
     traceInfo(`PartCAD: added ${directory} to the terminal PATH`);
 
@@ -125,7 +142,73 @@ export function refreshToolsPath(context: vscode.ExtensionContext, serverId: str
     }
 }
 
+/** The editor setting `applyAtShellIntegration` depends on. */
+const SHELL_INTEGRATION_SECTION = 'terminal.integrated.shellIntegration';
+const SHELL_INTEGRATION_SETTING = `${SHELL_INTEGRATION_SECTION}.enabled`;
+
+export const SHELL_INTEGRATION_OFF_MESSAGE =
+    'PartCAD commands (pc, partcad) may not work in this terminal: terminal shell integration is turned off, ' +
+    'so a shell startup file (a `conda init`, for one) can put a different PartCAD ahead of this one on the PATH. ' +
+    'Turn shell integration on, then open a new terminal.';
+export const ENABLE_SHELL_INTEGRATION_ACTION = 'Enable Shell Integration';
+const OPEN_SETTING_ACTION = 'Open Setting';
+
+/** Whether the warning has been shown in this window. */
+let warnedShellIntegrationOff = false;
+
+/**
+ * Whether a terminal the user just opened will get the tools only at process
+ * creation, where its rc files can override them.
+ *
+ * Only for a terminal that runs a shell: the extension's own `PartCAD` output
+ * view is a pseudoterminal, and so are other extensions' -- there is no shell
+ * in them to read an rc file or to integrate with.
+ */
+export function needsShellIntegrationWarning(terminal: vscode.Terminal, serverId: string): boolean {
+    if (warnedShellIntegrationOff || !applied) {
+        return false;
+    }
+    if (!getAddToolsToTerminalPathFromSetting(serverId)) {
+        return false;
+    }
+    if ('pty' in terminal.creationOptions) {
+        return false;
+    }
+    return vscode.workspace.getConfiguration(SHELL_INTEGRATION_SECTION).get<boolean>('enabled') === false;
+}
+
+/**
+ * Warn, once per window, when a terminal opens with shell integration off.
+ *
+ * `refreshToolsPath` re-applies the tools directory once shell integration
+ * reports the shell is up; that second application is what puts it ahead of
+ * whatever the user's rc files prepend. With the setting off it never happens,
+ * and `pc` is whichever one the rc files put first -- which is the bug this
+ * warns about rather than one the extension can fix on its own.
+ */
+export async function warnIfShellIntegrationOff(terminal: vscode.Terminal, serverId: string): Promise<void> {
+    if (!needsShellIntegrationWarning(terminal, serverId)) {
+        return;
+    }
+    warnedShellIntegrationOff = true;
+    traceInfo(`PartCAD: ${SHELL_INTEGRATION_SETTING} is off; the tools may be shadowed on the terminal PATH`);
+
+    const chosen = await vscode.window.showWarningMessage(
+        SHELL_INTEGRATION_OFF_MESSAGE,
+        ENABLE_SHELL_INTEGRATION_ACTION,
+        OPEN_SETTING_ACTION,
+    );
+    if (chosen === ENABLE_SHELL_INTEGRATION_ACTION) {
+        await vscode.workspace
+            .getConfiguration(SHELL_INTEGRATION_SECTION)
+            .update('enabled', true, vscode.ConfigurationTarget.Global);
+    } else if (chosen === OPEN_SETTING_ACTION) {
+        await vscode.commands.executeCommand('workbench.action.openSettings', SHELL_INTEGRATION_SETTING);
+    }
+}
+
 /** Forget the applied directory. For tests, and for a clean deactivate. */
 export function resetToolsPathForTesting(): void {
-    applied = undefined;
+    applied = null;
+    warnedShellIntegrationOff = false;
 }
