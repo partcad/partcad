@@ -851,6 +851,38 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         """
         return bool(glob.glob(os.path.join(self.path, "lib", "python*", "site-packages", "pip")))
 
+    def _ensurepip(self) -> list:
+        """The environment's own interpreter, putting back the pip its Python bundles -- see '_lost_pip'.
+
+        Named rather than resolved through 'get_venv_python_path': for the
+        runtime's own directory that answers 'exec_path', which until the
+        environment is accepted is the *image's* interpreter, and its
+        'ensurepip' would install into the image rather than the environment.
+        """
+        args = ["-m", "ensurepip", "--upgrade", "--default-pip"]
+        venv_python = docker_mount.rewrite(self._host_venv_python, self._mounted)
+        return [venv_python, *self.flags_for(args), *args]
+
+    def _lost_pip(self, exitcode) -> bool:
+        """Whether '-m venv' reported success and left an environment with no pip in it.
+
+        Seen on GitHub's runners, in the dev container's Docker sandbox and
+        nowhere else: the environment is created with the pip and setuptools
+        its Python bundles, and '--upgrade-deps' -- pip upgrading itself --
+        then leaves it with neither the old pip nor the new one, and exits 0.
+        Running the environment's own 'ensurepip' again puts the bundled pip
+        back, which is all the environment needs: everything after this is
+        installed through it. Said as a warning, since it means the step that
+        was asked for did not do what it says.
+        """
+        if exitcode != 0 or not os.path.lexists(self._host_venv_python) or self._has_pip:
+            return False
+        pc_logging.warning(
+            "Creating the '%s' sandbox left no pip in %s; putting back the one its Python bundles"
+            % (self.sandbox, self.path)
+        )
+        return True
+
     def _created(self, exitcode, stderr, stdout="") -> None:
         """Accept the environment, or fail with what actually went wrong.
 
@@ -936,6 +968,8 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             if command:
                 with pc_logging.Action("Docker", self.version, self.path):
                     exitcode, stdout, stderr = self.run_onced_locked(command)
+                    if self._lost_pip(exitcode):
+                        runtime.Runtime.run(self, self._ensurepip())
                 self._created(exitcode, stderr, stdout)
             elif self._environment_built:
                 self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)
@@ -949,6 +983,8 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             if command:
                 with pc_logging.Action("Docker", self.version, self.path):
                     exitcode, stdout, stderr = await self.run_async_onced_locked(command)
+                    if self._lost_pip(exitcode):
+                        await runtime.Runtime.run_async(self, self._ensurepip())
                 self._created(exitcode, stderr, stdout)
             elif self._environment_built:
                 self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)

@@ -1409,3 +1409,33 @@ def test_where_it_went_never_raises(tmp_path, monkeypatch):
 
     monkeypatch.setattr(made, "_start", broken)
     assert "could not be asked: no daemon" in made._where_it_went()
+
+
+def _interpreter_only(made):
+    os.makedirs(os.path.dirname(made._host_venv_python), exist_ok=True)
+    open(made._host_venv_python, "w").close()
+
+
+def test_a_creation_that_lost_its_pip_is_noticed(tmp_path):
+    """'--upgrade-deps' leaving no pip and exiting 0, as it does on GitHub's runners."""
+    made = _runtime(tmp_path)
+    _interpreter_only(made)
+    assert made._lost_pip(0) is True
+
+
+def test_a_failed_or_complete_creation_did_not_lose_pip(tmp_path):
+    made = _runtime(tmp_path)
+    assert made._lost_pip(0) is False  # nothing there at all: a failure, reported as one
+    _interpreter_only(made)
+    assert made._lost_pip(1) is False  # it said it failed; '_created' reports that
+    os.makedirs(os.path.join(made.path, "lib", "python3.11", "site-packages", "pip"))
+    assert made._lost_pip(0) is False
+
+
+def test_pip_is_put_back_by_the_environment_and_not_by_the_image(tmp_path):
+    """'exec_path' is still the image's 'python3' then; its ensurepip installs into the image."""
+    made = _runtime(tmp_path)
+    command = made._ensurepip()
+    assert command[0] == docker_mount.rewrite(made._host_venv_python, made._mounted)
+    assert command[0] != runtime_python_docker.CONTAINER_PYTHON
+    assert command[-3:] == ["ensurepip", "--upgrade", "--default-pip"]
