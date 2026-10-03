@@ -879,7 +879,21 @@ async function connectDaemon(
     try {
         await backend.stopDaemon();
         await backend.stop();
-        return await connectSocket(execPath, args, cwd, env, outputChannel);
+        const replacement = await connectSocket(execPath, args, cwd, env, outputChannel);
+        // Checked, not assumed: the old daemon may not have gone (a stop whose
+        // answer was lost closes only the connection), or the new one may not
+        // have reached the listener. Either way the window keeps a working
+        // PartCAD - a debug session that cannot attach is still one to use -
+        // and the next connection asks again.
+        const replaced = await replacement.debugStatus();
+        if (replaced?.debugger !== true) {
+            debugChecked = false;
+            traceError(
+                `PartCAD: daemon ${replaced?.pid ?? '?'} is not attached to the debugger either; ` +
+                    'its Python is not debugged. "Restart PartCAD" tries again.',
+            );
+        }
+        return replacement;
     } catch (e) {
         // Asked again on the next connection - "Restart PartCAD" - rather than
         // leaving the rest of the session on a daemon nobody can debug.
