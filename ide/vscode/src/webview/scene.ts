@@ -537,7 +537,7 @@ function restyle(group: THREE.Group, mesh: THREE.Material, line: THREE.Material)
 class Geometry {
     private readonly parsed = new Map<string, THREE.Group>();
     private readonly used = new Set<string>();
-    readonly material = new THREE.MeshBasicMaterial({ color: 0x87ceeb, side: THREE.DoubleSide });
+    readonly material = new THREE.MeshPhongMaterial({ color: 0x87ceeb, side: THREE.DoubleSide });
     // A deeper blue than the faces, so that a line lying on one - a bend line
     // across the blank it bends - reads against it, and unlit and not tone-mapped
     // so that it is that blue on a light theme and a dark one alike.
