@@ -60,7 +60,7 @@ When `partcad.viewer.performanceDebug` is **enabled**, the viewer captures:
    45000 triangles | 98000 vertices
    234.5KB
    Draw calls: 14000 | Meshes: 7386
-   
+
    FPS: 60.0 | Frame: 16.7ms
    ```
 
