@@ -1200,7 +1200,7 @@ def test_a_dangling_interpreter_symlink_still_counts_as_built(tmp_path):
         pytest.skip("this platform will not create a symlink here")
 
     assert os.path.exists(made._host_venv_python) is False, "the premise: the target is not here"
-    os.makedirs(os.path.join(made.path, "lib", "python3.11", "site-packages", "pip"))
+    _give_pip(made.path)
     assert made._environment_built is True
     # And so it is not built again, which is what turned a good build into a
     # failure every time.
@@ -1411,6 +1411,13 @@ def test_where_it_went_never_raises(tmp_path, monkeypatch):
     assert "could not be asked: no daemon" in made._where_it_went()
 
 
+def _give_pip(path):
+    """An environment with pip in it: the package, not just a directory of its name."""
+    package = os.path.join(path, "lib", "python3.11", "site-packages", "pip")
+    os.makedirs(package, exist_ok=True)
+    open(os.path.join(package, "__init__.py"), "w").close()
+
+
 def _interpreter_only(made):
     os.makedirs(os.path.dirname(made._host_venv_python), exist_ok=True)
     open(made._host_venv_python, "w").close()
@@ -1428,7 +1435,7 @@ def test_a_failed_or_complete_creation_did_not_lose_pip(tmp_path):
     assert made._lost_pip(0) is False  # nothing there at all: a failure, reported as one
     _interpreter_only(made)
     assert made._lost_pip(1) is False  # it said it failed; '_created' reports that
-    os.makedirs(os.path.join(made.path, "lib", "python3.11", "site-packages", "pip"))
+    _give_pip(made.path)
     assert made._lost_pip(0) is False
 
 
@@ -1465,7 +1472,7 @@ def test_creation_that_lost_its_pip_ends_with_pip_put_back(tmp_path, monkeypatch
     def ensurepip(self, cmd, stdin=None, **_kwargs):
         assert isinstance(stdin, str), "the runner encodes stdin; None is a crash"
         put_back.append(cmd)
-        os.makedirs(os.path.join(made.path, "lib", "python3.11", "site-packages", "pip"))
+        _give_pip(made.path)
         return 0, "", ""
 
     async def ensurepip_async(self, cmd, stdin=None, **kwargs):
@@ -1496,13 +1503,19 @@ def test_a_session_environment_that_lost_its_pip_gets_it_back(tmp_path, monkeypa
     session_path = os.path.join(made.path, "v-env-0123456789abcdef")
     os.makedirs(os.path.join(session_path, "bin"))
     ran = []
-    monkeypatch.setattr(made, "run_onced_locked", lambda cmd, path=None, **kw: ran.append((cmd, path)) or (0, "", ""))
+
+    def ensurepip(cmd, path=None, **_kw):
+        ran.append((cmd, path))
+        _give_pip(path)
+        return 0, "", ""
+
+    monkeypatch.setattr(made, "run_onced_locked", ensurepip)
 
     made._restore_pip_onced_locked(session_path)
     assert ran == [(made.ENSUREPIP, session_path)]
 
+    # And an environment that has pip is left alone.
     ran.clear()
-    os.makedirs(os.path.join(session_path, "lib", "python3.11", "site-packages", "pip"))
     made._restore_pip_onced_locked(session_path)
     assert ran == []
 
@@ -1516,3 +1529,23 @@ def test_stale_pip_metadata_is_cleared_so_ensurepip_installs_it_again(tmp_path):
     made._clear_stale_pip(made.path)
     assert not os.path.exists(os.path.join(site, "pip-24.0.dist-info"))
     assert os.path.exists(os.path.join(site, "setuptools-79.0.1.dist-info"))
+
+
+def test_an_empty_pip_directory_is_not_pip(tmp_path):
+    made = _runtime(tmp_path)
+    os.makedirs(os.path.join(made.path, "lib", "python3.11", "site-packages", "pip"))
+    assert made.venv_has_pip(made.path) is False
+    _give_pip(made.path)
+    assert made.venv_has_pip(made.path) is True
+
+
+def test_a_recovery_that_does_not_recover_stops_provisioning(tmp_path, monkeypatch):
+    """Otherwise installs go on, fail, and some still record themselves as done."""
+    made = _runtime(tmp_path)
+    session_path = os.path.join(made.path, "v-env-0123456789abcdef")
+    os.makedirs(os.path.join(session_path, "bin"))
+    monkeypatch.setattr(made, "run_onced_locked", lambda cmd, path=None, **kw: (1, "", "no space left on device"))
+    with pytest.raises(Exception) as raised:
+        made._restore_pip_onced_locked(session_path)
+    assert "did not put one back" in str(raised.value)
+    assert "no space left on device" in str(raised.value)

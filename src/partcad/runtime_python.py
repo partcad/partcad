@@ -558,7 +558,9 @@ class PythonRuntime(runtime.Runtime):
                                 session["path"],
                             ]
                         )
-                        self._restore_pip_onced_locked(session["path"])
+                # Created just now or left by an earlier creation that did not
+                # finish: either way, nothing goes into it without pip.
+                self._restore_pip_onced_locked(session["path"])
                 # Install the dependencies into the venv. We already hold the
                 # venv lock, so use the *_locked ensure and take the install
                 # lock explicitly; the resulting order (venv lock, then the
@@ -663,9 +665,11 @@ class PythonRuntime(runtime.Runtime):
         A method rather than a static one: the runtimes are wrapped by the
         telemetry decorator, which does not keep a 'staticmethod' one.
         """
+        # The package itself, not just a directory of its name: an empty
+        # 'pip/' is not a pip anybody can run.
         return bool(
-            glob.glob(os.path.join(path, "lib", "python*", "site-packages", "pip"))
-            or glob.glob(os.path.join(path, "Lib", "site-packages", "pip"))
+            glob.glob(os.path.join(path, "lib", "python*", "site-packages", "pip", "__init__.py"))
+            or glob.glob(os.path.join(path, "Lib", "site-packages", "pip", "__init__.py"))
         )
 
     def _lost_pip_warning(self, path) -> bool:
@@ -703,13 +707,26 @@ class PythonRuntime(runtime.Runtime):
         """
         if self._lost_pip_warning(path):
             self._clear_stale_pip(path)
-            self.run_onced_locked(self.ENSUREPIP, path=path)
+            self._restored(path, *self.run_onced_locked(self.ENSUREPIP, path=path))
 
     async def _restore_pip_async_onced_locked(self, path) -> None:
         """The asynchronous twin of '_restore_pip_onced_locked'."""
         if self._lost_pip_warning(path):
             self._clear_stale_pip(path)
-            await self.run_async_onced_locked(self.ENSUREPIP, path=path)
+            self._restored(path, *(await self.run_async_onced_locked(self.ENSUREPIP, path=path)))
+
+    def _restored(self, path, exitcode, stdout, stderr) -> None:
+        """Fail, rather than carry on, when putting pip back did not put pip back.
+
+        Carrying on is worse than it looks: every install after this fails,
+        and the ones that write a guard anyway leave the environment recorded
+        as having packages it does not have.
+        """
+        if exitcode != 0 or not self.venv_has_pip(path):
+            raise Exception(
+                "The '%s' environment at %s has no pip, and its own 'ensurepip' did not put one back "
+                "(exit %s): %s" % (self.sandbox, path, exitcode, ((stderr or "") + (stdout or "")).strip())
+            )
 
     def run_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None):
         if session and session["dirty"]:
@@ -727,7 +744,9 @@ class PythonRuntime(runtime.Runtime):
                             session["path"],
                         ]
                     )
-                    self._restore_pip_onced_locked(session["path"])
+            # Created just now or left by an earlier creation that did not
+            # finish: either way, nothing goes into it without pip.
+            self._restore_pip_onced_locked(session["path"])
             # Install of the dependencies into the venv environment
             for dep in session["deps"]:
                 if dep == "partcad":
@@ -788,7 +807,9 @@ class PythonRuntime(runtime.Runtime):
                                 session["path"],
                             ]
                         )
-                        await self._restore_pip_async_onced_locked(session["path"])
+                # Created just now or left by an earlier creation that did not
+                # finish: either way, nothing goes into it without pip.
+                await self._restore_pip_async_onced_locked(session["path"])
                 # Install the dependencies into the venv. We already hold the
                 # venv lock, so use the *_locked ensure and take the install
                 # lock explicitly; the resulting order (venv lock, then the
@@ -889,7 +910,9 @@ class PythonRuntime(runtime.Runtime):
                             session["path"],
                         ]
                     )
-                    await self._restore_pip_async_onced_locked(session["path"])
+            # Created just now or left by an earlier creation that did not
+            # finish: either way, nothing goes into it without pip.
+            await self._restore_pip_async_onced_locked(session["path"])
             # Install of the dependencies into the venv environment
             for dep in session["deps"]:
                 if dep == "partcad":

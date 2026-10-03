@@ -532,6 +532,12 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
                 // went away while it was being activated, which is the very close
                 // queued below. Reported, and not thrown past the follow-up.
                 traceError(`PartCAD: reconnecting failed: ${e}`);
+                if (!followUp) {
+                    // Nothing else is going to try, so the view must say "failed"
+                    // rather than go on saying "loading" (resetView set that).
+                    await vscode.commands.executeCommand('setContext', 'partcad.beingLoaded', false);
+                    await vscode.commands.executeCommand('setContext', 'partcad.failed', true);
+                }
             } finally {
                 reconnecting = undefined;
                 reconnectingFrom = undefined;
