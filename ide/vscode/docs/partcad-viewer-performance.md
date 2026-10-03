@@ -63,9 +63,9 @@ When `partcad.viewer.performanceDebug` is **enabled**, the **VS Code viewer** ca
 3. **On-Screen Display** (top-right corner of VS Code viewer):
    ```
    reactor-unit (assembly)
-   45000 triangles | 98000 vertices
+   45000 triangles
    234.5KB
-   Draw calls: 14000 | Meshes: 7386
+   Draw Calls: 14000 | Geometries: 7386
 
    FPS: 60.0 | Frame: 16.7ms
    ```
