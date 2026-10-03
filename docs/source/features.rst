@@ -372,7 +372,17 @@ the parts are declared:
 A supplier is written from the point of view of the package that lists it, and
 is resolved against that package the way every other reference it makes is: a
 bare name is one of its own providers, while a qualified one lets it buy from a
-provider defined elsewhere instead of declaring one of its own. In the future PartCAD will be able to select providers
+provider defined elsewhere instead of declaring one of its own.
+
+A package served by a repository plugin has no ``partcad.yaml`` to write this
+in, so its plugin states the same section in the package's ``meta``, and it is
+read the same way (see :ref:`repositories`):
+
+.. code-block:: json
+
+  {"desc": "Metric hex bolts", "suppliers": {"//pub/svc/commerce/homedepot:homedepot": {}}}
+
+In the future PartCAD will be able to select providers
 based on the location and preferences of the requester, while leaving the
 possibility to enforce the use of a specific provider for corresponding parts
 (for example, for parts that are using a patented design).
@@ -673,6 +683,34 @@ S3-compatible store that is not AWS.
 (``pip install -U 'partcad[aws]'``); enabling it without that reports an error
 naming the package to install and leaves the remaining tiers working. See
 :doc:`installation` for both.
+
+Cache keys
+----------
+
+An object is cached under a hash of what produces it: its configuration (less
+the keys that only describe it, such as ``desc``), the environment it is built
+in, and the files it is built from. A file contributes its size and its content
+-- all of it up to 1 MB, and the first and last 0.5 MB of a larger one -- but
+never its modification time, so a fresh clone on another machine produces the
+same keys and a shared tier is shared. An edit confined to the middle of a file
+over 1 MB that leaves its size unchanged is therefore not seen; run that command
+with ``--cache-bypass``.
+
+An object made out of others is keyed on theirs as well: an ``extrude`` or
+``sweep`` on its sketch, a ``compound`` part on its assembly, an ``assy``
+assembly on everything it links to. Editing a part rebuilds every assembly that
+uses it, and an object with ``cache: false`` makes everything built out of it
+uncached too.
+
+``pc --cache-bypass <command>`` (or ``PC_CACHE_BYPASS=1``, or ``cacheBypass: True``)
+bypasses every tier for one run: nothing is read from a cache and nothing built
+is written to one.
+
+The daemon keeps packages loaded between commands. Before each command it
+compares the ``partcad.yaml`` of the packages the command is about, and of every
+package they declare as a dependency, with what it read, by modification time
+and size, and reloads a package that changed together with the packages
+underneath it. Each package is compared at most once every 15 seconds.
 
 ========
 Security

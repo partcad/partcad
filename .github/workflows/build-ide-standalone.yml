@@ -1465,6 +1465,30 @@ jobs:
         shell: pwsh
         run: |
           $app = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE"
+          # What is running out of the application right now. The uninstaller is
+          # what has to stop a PartCAD daemon ("StopPartcad" in partcad-ide.iss):
+          # Windows will not delete an executable that is running, and a user's
+          # machine has nothing to run a step like this one first.
+          function Get-Running {
+            Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith("$app\", [StringComparison]::OrdinalIgnoreCase) }
+          }
+          # Started here, for the starter package the editor opened above. One
+          # from those steps may or may not still be up by now -- on some runs
+          # it is and on some it is not -- and a run with nothing running tests
+          # nothing.
+          Push-Location (Join-Path $env:USERPROFILE ".partcad/projects/start")
+          try {
+            & (Join-Path $app "resources\partcad-cli\pc.exe") --no-ansi daemon start
+            if ($LASTEXITCODE -ne 0) { throw "pc daemon start exited $LASTEXITCODE" }
+          } finally {
+            Pop-Location
+          }
+          Write-Host "--- running out of $app before uninstalling:"
+          Get-Running | Format-Table Id, ProcessName, Path -AutoSize | Out-String -Width 400 | Write-Host
+          if (-not (Get-Process partcad-json-rpc -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith("$app\", [StringComparison]::OrdinalIgnoreCase) })) {
+            throw "no PartCAD daemon is running out of $app to test the uninstaller against"
+          }
+
           # Inno Setup's uninstaller relaunches itself from the temp directory
           # and the process started here returns before the work is done, so
           # this waits for the result rather than for the process.
@@ -1472,6 +1496,14 @@ jobs:
             -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART"
           $deadline = (Get-Date).AddMinutes(5)
           while ((Test-Path $app) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 5 }
-          if (Test-Path $app) { throw "$app is still there after uninstalling" }
+          if (Test-Path $app) {
+            Get-Running | Format-Table Id, ProcessName, Path -AutoSize | Out-String -Width 400 | Write-Host
+            throw "$app is still there after uninstalling"
+          }
+          $left = @(Get-Running)
+          if ($left) {
+            $left | Format-Table Id, ProcessName, Path -AutoSize | Out-String -Width 400 | Write-Host
+            throw "the uninstaller left processes running out of $app"
+          }
           $path = (Get-ItemProperty -Path "HKCU:\Environment" -Name Path).Path
           if ($path -like "*PartCAD IDE*") { throw "the uninstaller left PATH entries behind" }

@@ -159,6 +159,45 @@ if [ "${UNINSTALL}" = "1" ]; then
     fi
   done
 
+  # Stop every PartCAD daemon before removing the files they run from. One
+  # serves each workspace and outlives whatever started it -- the IDE's
+  # extension, any `pc` command -- so an uninstall can find several still
+  # executing out of this installation, writing into it as it is removed.
+  # `pc daemon stop --all` asks each to stop and waits for it to exit, the same
+  # way `pc upgrade` does before it replaces an installation. It is run with a
+  # `pc` from the files being removed: the one this script linked when that link
+  # points here, and otherwise any this installation holds -- the link may
+  # point at another installation by now, and this one's daemons still have to
+  # stop. Never one from elsewhere on PATH, which is not this installation's.
+  # `--all` stops every daemon on the machine whichever `pc` runs it, so one
+  # that succeeds is enough. An older `pc` without `--all` just fails here, and
+  # the removal goes ahead as it always did.
+  pc_linked=""
+  if [ -L "${BIN_DIR}/pc" ]; then
+    pc_linked="$(readlink "${BIN_DIR}/pc")"
+  fi
+  pc_found=""
+  pc_stopped=""
+  for pc in "${pc_linked}" "${INSTALL_DIR}"/*/pc "${INSTALL_DIR}"/*/resources/partcad-cli/pc \
+    ${APP_PATH:+"${APP_PATH}/Contents/Resources/partcad-cli/pc"}; do
+    case "${pc}" in
+    "${INSTALL_DIR}"/*) ;;
+    *)
+      [ -n "${APP_PATH}" ] || continue
+      case "${pc}" in "${APP_PATH}"/*) ;; *) continue ;; esac
+      ;;
+    esac
+    [ -x "${pc}" ] || continue
+    pc_found=1
+    if "${pc}" --no-ansi daemon stop --all; then
+      pc_stopped=1
+      break
+    fi
+  done
+  if [ -n "${pc_found}" ] && [ -z "${pc_stopped}" ]; then
+    warn "a PartCAD daemon may still be running from the files being removed; 'pc daemon stop --all' did not stop it"
+  fi
+
   for command_name in pc partcad partcad-ide; do
     link="${BIN_DIR}/${command_name}"
     # Only remove links this script owns. Anything else on PATH by that name,

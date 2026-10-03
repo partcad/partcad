@@ -13,17 +13,26 @@ file, but never the pc_event control records.
 """
 
 import logging
+import re
+import time
 
 import partcad_utils.logging as pc_logging
 import partcad_utils.logging_remote_server as remote_server
 
+_saved_level = logging.NOTSET
+
 
 def setup_function():
+    # The level is the shared ``partcad`` logger's, so put it back afterwards:
+    # a test that lowers it would otherwise silence DEBUG for every test after.
+    global _saved_level
+    _saved_level = logging.getLogger("partcad").level
     logging.getLogger("partcad").setLevel(logging.DEBUG)
 
 
 def teardown_function():
     remote_server.fini()
+    logging.getLogger("partcad").setLevel(_saved_level)
 
 
 def _collector():
@@ -84,3 +93,52 @@ def test_rotating_file_receives_logs_but_not_pc_events(tmp_path):
     # The pc_event control records are not real log lines; they must not pollute
     # the persistent file.
     assert "process_start" not in content
+
+
+def test_a_record_is_forwarded_with_the_time_it_was_made():
+    """The client stamps that time on a plain line, not the time it printed it."""
+    events, hook = _collector()
+    remote_server.init(hook)
+
+    before = time.time()
+    pc_logging.info("when was this")
+    after = time.time()
+
+    (event,) = [e for e in events if e["kind"] == "log" and e["message"] == "when was this"]
+    assert before <= event["created"] <= after
+
+
+def test_an_action_and_a_process_end_in_the_same_done_line():
+    """Every action and every process that finishes says so, with its duration,
+    in one format -- a log is timed the same way at every level. A process says
+    it at INFO; an action, of which a run has thousands, only at DEBUG."""
+    events, hook = _collector()
+    remote_server.init(hook)
+
+    with pc_logging.Process("Test", "//pub"):
+        with pc_logging.Action("Test", "//pub/robots"):
+            pass
+        with pc_logging.Action("Test", "//pub/robots", "arm", "shell"):
+            pass
+
+    done = [e for e in events if e["kind"] == "log" and e["message"].startswith("DONE: ")]
+    assert [(e["levelname"], re.sub(r"\d+\.\d\ds$", "<t>s", e["message"])) for e in done] == [
+        ("DEBUG", "DONE: Test: //pub/robots: <t>s"),
+        ("DEBUG", "DONE: Test: //pub/robots: arm : shell: <t>s"),
+        ("INFO", "DONE: Test: //pub: <t>s"),
+    ]
+
+
+def test_an_action_ending_says_nothing_at_info():
+    """Without --verbose, a run's log has its processes' DONE lines and not one
+    per action."""
+    events, hook = _collector()
+    remote_server.init(hook)
+    logging.getLogger("partcad").setLevel(logging.INFO)
+
+    with pc_logging.Process("Test", "//pub"):
+        with pc_logging.Action("Test", "//pub/robots"):
+            pass
+
+    done = [e["message"] for e in events if e["kind"] == "log" and e["message"].startswith("DONE: ")]
+    assert [re.sub(r"\d+\.\d\ds$", "<t>s", m) for m in done] == ["DONE: Test: //pub: <t>s"]

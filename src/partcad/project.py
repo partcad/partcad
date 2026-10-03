@@ -1835,11 +1835,23 @@ class Project(project_config.Configuration):
         The pair exists the way 'test()'/'test_async()' and
         'render_assembly_readme()'/'render_assembly_readme_async()' do: the
         coroutine is the implementation and the synchronous one wraps it. What is
-        specific here is that the wrapping is around the *materialization* only -
-        looking a declared part up costs nothing and needs no loop.
+        specific here is that the wrapping is around the *materialization* and
+        the declaration - looking a declared part up is otherwise synchronous.
+        The declaration is awaited first because in a package a plugin serves,
+        reading it is a fetch, and the synchronous lookup would wait for that
+        fetch with this loop stopped (see 'Context._warm_project_async').
         """
         await self._materialize_derived_part_async(part_name)
+        base_name, _ = parse_parameterized_name(part_name)
+        await self._warm_object_config_async("part", base_name)
         return self._part_object(part_name, func_params, quiet=quiet)
+
+    async def _warm_object_config_async(self, kind: str, name: str) -> None:
+        """Have the declaration 'object_config(kind, name)' reads at hand, on the caller's loop.
+
+        A package that read its declarations from a file has them already.
+        """
+        return None
 
     def _derived_part_owner(self, part_name: str) -> Optional[tuple]:
         """The object whose parts are named '<that object>/<something>'.
@@ -2327,6 +2339,15 @@ class Project(project_config.Configuration):
         '../sibling:name' is one next door, and an absolute path is itself.
         """
         return {self.normalize(supplier_name): supplier for supplier_name, supplier in self.suppliers.items()}
+
+    async def get_suppliers_async(self):
+        """'get_suppliers()', for a caller on a loop.
+
+        A package that read its configuration from a file has its suppliers
+        already; one a plugin serves may have to fetch them first (see
+        'ProjectExternalRepository.get_suppliers_async').
+        """
+        return self.get_suppliers()
 
     def init_suppliers(self):
         cfg = self.config_obj.get("suppliers", {})

@@ -12,6 +12,8 @@ the lazy object-access layer is exercised without a runtime or a CAD kernel.
 
 import asyncio
 import shutil
+import threading
+import time
 
 import partcad as pc
 from partcad import context as pc_context
@@ -231,24 +233,137 @@ def test_metadata_materializes_from_the_repository():
     assert repo.name == "//ext"  # identity is never overridden by metadata
 
 
-def test_cache_version_propagates_to_children():
-    """The cache version is inherited by every child of a plugin-backed
-    hierarchy, so the whole tree shares one versioned cache namespace."""
+def test_a_plugin_package_that_names_no_supplier_has_none():
+    """An empty set, and not a missing attribute.
+
+    A plugin-backed package skips the object initialization a local one does,
+    and the suppliers used to be skipped with it - so asking any part of one
+    who sells it raised AttributeError instead of answering "nobody".
+    """
     ctx = pc.Context("examples")
-    top = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", plugin_ref="//ext:remote", cache_version=3)
-    top._repository = FakeRepository({"deps": ["motors"]})
-    child = top.dependencies()["motors"]
-    assert child["cacheVersion"] == 3
-    assert child["plugin"] == "//ext:remote"
+    repo, _ = _make_repo(ctx, {"meta": {"desc": "No store"}})
+    assert repo.get_suppliers() == {}
 
 
-def test_no_cache_version_leaves_children_unversioned():
-    """Without a cache version (the default), children carry no cacheVersion,
-    preserving the pre-existing cache namespace."""
+def test_the_suppliers_come_from_the_metadata():
+    ctx = pc.Context("examples")
+    repo, _ = _make_repo(ctx, {"meta": {"suppliers": {"//pub/svc/store:shop": {"discount": "x"}}}})
+    asyncio.run(repo.ensure_enumerated_async())
+    assert repo.get_suppliers() == {"//pub/svc/store:shop": {"discount": "x"}}
+
+
+def test_the_suppliers_are_read_without_a_traversal():
+    """A package looked up on its own still says who sells it.
+
+    'pc supply quote' of one part resolves that part's package and nothing
+    else, so no traversal has applied its metadata by the time the suppliers
+    are asked for. Asking is what fetches it, and only once.
+    """
+    ctx = pc.Context("examples")
+    repo, fake = _make_repo(ctx, {"meta": {"suppliers": ["//pub/svc/store:shop"]}})
+    assert fake.keys == []
+    assert repo.get_suppliers() == {"//pub/svc/store:shop": {}}
+    assert repo.get_suppliers() == {"//pub/svc/store:shop": {}}
+    assert fake.keys == ["meta"]
+    # The traversal arriving later applies nothing twice.
+    asyncio.run(repo.ensure_enumerated_async())
+    assert fake.keys == ["meta", "deps"]
+
+
+def test_the_metadata_counts_as_applied_only_once_it_has_been():
+    """The flag a reader skips the work on is the last thing to be set.
+
+    It used to be the first, so a 'get_suppliers()' on another thread could
+    see it, skip the metadata, and read the constructor's empty suppliers
+    while this thread was still on its way to setting them.
+    """
+    ctx = pc.Context("examples")
+    repo, _ = _make_repo(ctx, {"meta": {"suppliers": ["//pub/svc/store:shop"]}})
+    seen = []
+    init_suppliers = repo.init_suppliers
+
+    def observing():
+        seen.append(repo._meta_applied)
+        init_suppliers()
+
+    repo.init_suppliers = observing
+    assert repo.get_suppliers() == {"//pub/svc/store:shop": {}}
+    assert seen == [False]
+    assert repo._meta_applied
+
+
+def test_concurrent_lookups_apply_the_metadata_once_and_all_see_it():
+    ctx = pc.Context("examples")
+    repo, fake = _make_repo(ctx, {"meta": {"suppliers": ["//pub/svc/store:shop"]}})
+    applied = []
+    init_suppliers = repo.init_suppliers
+
+    def counting():
+        applied.append(1)
+        time.sleep(0.05)  # widen the window a lookup used to fall into
+        init_suppliers()
+
+    repo.init_suppliers = counting
+    results = []
+    threads = [threading.Thread(target=lambda: results.append(repo.get_suppliers())) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert results == [{"//pub/svc/store:shop": {}}] * 8
+    assert len(applied) == 1
+    assert fake.keys.count("meta") == 1
+
+
+def test_a_supplier_is_resolved_against_the_package_that_names_it():
+    ctx = pc.Context("examples")
+    repo, _ = _make_repo(ctx, {"meta": {"suppliers": "shop"}})
+    assert repo.get_suppliers() == {"//ext:shop": {}}
+
+
+def test_a_supplier_lookup_from_a_loop_never_stops_it(monkeypatch):
+    """Who sells a part is asked from a loop, so the metadata is fetched on it.
+
+    'pc supply find' and the IDE's cart ask from inside a coroutine, where the
+    synchronous 'get_suppliers()' would complete its fetch on another thread
+    with the loop stopped - the wait 'Context._warm_project_async' is there to
+    keep a part lookup out of.
+    """
+    ctx = pc.Context("examples")
+    repo, fake = _make_repo(ctx, {"meta": {"suppliers": ["//pub/svc/store:shop"]}})
+    stopped = []
+    original = ProjectExternalRepository._run_elsewhere
+
+    def waited_for(coroutine):
+        stopped.append(coroutine.__qualname__)
+        return original(coroutine)
+
+    monkeypatch.setattr(ProjectExternalRepository, "_run_elsewhere", staticmethod(waited_for))
+
+    assert asyncio.run(repo.get_suppliers_async()) == {"//pub/svc/store:shop": {}}
+    assert stopped == []
+    assert fake.keys == ["meta"]
+
+
+def test_a_local_package_answers_a_supplier_lookup_from_a_loop_as_it_always_has():
+    ctx = pc.Context("examples/provider_store")
+    project = ctx.get_project("//")
+    assert asyncio.run(project.get_suppliers_async()) == project.get_suppliers()
+
+
+def test_a_child_is_told_the_plugin_and_not_the_cache_version():
+    """A child carries the plugin reference and nothing about the cache.
+
+    The version belongs to the plugin, and a child names the same plugin, so it
+    arrives at the same namespace by reading the same script. Passing the number
+    between packages would make every child a place it could be wrong.
+    """
     ctx = pc.Context("examples")
     top = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", plugin_ref="//ext:remote")
     top._repository = FakeRepository({"deps": ["motors"]})
-    assert "cacheVersion" not in top.dependencies()["motors"]
+    child = top.dependencies()["motors"]
+    assert child["plugin"] == "//ext:remote"
+    assert "cacheVersion" not in child
 
 
 def test_hierarchy_forwards_under_a_subfolder():
@@ -270,6 +385,187 @@ def test_hierarchy_forwards_under_a_subfolder():
     child._repository = fake
     assert child.object_names("part") == ["rotor"]
     assert "motors/objects/part" in fake.keys
+
+
+# --- asked from a loop, under the context's lock (#704) ----------------------
+#
+# 'Context.get_project()' holds the context's lock all the way down to the
+# package it is after, and asks every package on the way for its
+# 'dependencies()'. For a plugin-backed package that is a fetch, and on a thread
+# that runs a loop - an assembly resolving its parts - the fetch is completed on
+# a worker thread while the asking thread waits. Resolving the plugin is a
+# 'get_project()' too, so a worker that did it waited for the lock the thread
+# waiting for it held: 'pc test' over //pub stopped, with no CPU spent, on the
+# first plugin-backed package it reached with nothing cached.
+
+
+class _ImpatientLock:
+    """The context's lock, except that waiting long for it is an error.
+
+    A regression here is a deadlock, and a deadlocked worker thread is one the
+    interpreter waits for on its way out: the test would not fail, the run
+    would hang. This turns it into a failure the fetch reports, and the lookup
+    comes back without the package.
+    """
+
+    def __init__(self):
+        self._lock = threading.RLock()
+
+    def __enter__(self):
+        if not self._lock.acquire(timeout=10):
+            raise TimeoutError("waited 10 seconds for the context's lock")
+
+    def __exit__(self, *_args):
+        self._lock.release()
+
+
+def _plugin_package_under_a_root(tmp_path, data):
+    """A root hosting a repository plugin, and a package that plugin serves.
+
+    The package is loaded but has neither resolved its plugin nor fetched
+    anything, which is how a hierarchy's top package is found by the first
+    lookup into it when the plugin's cache is cold.
+    """
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "partcad.yaml").write_text("name: //test\n")
+    ctx = pc.Context(str(root))
+    ctx.lock = _ImpatientLock()
+    fake = FakeRepository(data)
+    # What the repository's factory registers on the package declaring it.
+    ctx.get_project("//test").repositories["remote"] = fake
+    ext = ProjectExternalRepository(ctx, "//test/ext", str(tmp_path), plugin_ref="//test:remote", config_obj={})
+    ctx.projects[ext.name] = ext
+    return ctx, ext, fake
+
+
+def test_a_lookup_from_a_loop_resolves_through_a_cold_plugin_package(tmp_path):
+    ctx, _, fake = _plugin_package_under_a_root(tmp_path, {"deps": ["motors"]})
+
+    async def as_an_assembly_asks():
+        return ctx.get_project("//test/ext/motors")
+
+    found = asyncio.run(as_an_assembly_asks())
+
+    assert found is not None and found.name == "//test/ext/motors"
+    assert fake.keys == ["deps"]
+
+
+def test_a_plugin_that_cannot_be_resolved_is_reported_only_when_it_is_needed():
+    """Resolving on the waiting thread must not report what the cache answers.
+
+    From a loop the plugin is resolved on the thread that waits, between the
+    worker's look at the caches and its fetch - and only if the caches missed.
+    A failure to resolve is an error only for a fetch that needed the plugin;
+    one logged for a fetch that did not would still be the command's exit
+    status.
+    """
+    ctx = pc.Context("examples")
+    cache = Cache("external/test_unresolvable", ctx.user_config)
+    errors = []
+    original = pc.logging.error
+    try:
+        first = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", cache=cache)
+        first._repository = FakeRepository({"deps": ["child"]})
+        assert list(first.dependencies()) == ["child"]  # now on disk
+
+        second = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", plugin_ref="//nowhere:remote", cache=cache)
+
+        def unresolvable():
+            raise RuntimeError("no such package")
+
+        second._get_repository = unresolvable
+        pc.logging.error = lambda msg, *a: errors.append(msg)
+
+        async def from_a_loop(key):
+            return second.get_data(key)
+
+        assert asyncio.run(from_a_loop("deps")) == ["child"]
+        assert errors == []
+
+        assert asyncio.run(from_a_loop("meta")) is None  # not cached: needs the plugin
+        assert len(errors) == 1 and "no such package" in errors[0], errors
+    finally:
+        pc.logging.error = original
+        for backend in cache.backends:
+            if isinstance(backend, FilesCacheBackend):
+                shutil.rmtree(backend.cache_dir, ignore_errors=True)
+
+
+def test_a_plugin_nobody_declares_is_looked_for_only_when_it_is_needed(tmp_path):
+    """The same through the real resolution, which reports a missing plugin itself.
+
+    Resolving a repository the hosting package does not declare logs that it is
+    not there - from 'Project.get_repository' and again from '_get_repository'.
+    Neither may happen for a fetch the on-disk cache answers.
+    """
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "partcad.yaml").write_text("name: //test\n")
+    ctx = pc.Context(str(root))
+    cache = Cache("external/test_missing_plugin", ctx.user_config)
+    errors = []
+    original = pc.logging.error
+    try:
+        first = ProjectExternalRepository(ctx, "//test/ext", str(tmp_path), cache=cache, config_obj={})
+        first._repository = FakeRepository({"deps": ["child"]})
+        assert list(first.dependencies()) == ["child"]  # now on disk
+
+        second = ProjectExternalRepository(
+            ctx, "//test/ext", str(tmp_path), plugin_ref="//test:missing", cache=cache, config_obj={}
+        )
+        ctx.projects[second.name] = second
+        pc.logging.error = lambda msg, *a: errors.append(msg % a if a else msg)
+
+        async def from_a_loop(key):
+            return second.get_data(key)
+
+        assert asyncio.run(from_a_loop("deps")) == ["child"]
+        assert errors == []
+
+        assert asyncio.run(from_a_loop("meta")) is None  # not cached: needs the plugin
+        assert any("repository plugin not found" in error for error in errors), errors
+    finally:
+        pc.logging.error = original
+        for backend in cache.backends:
+            if isinstance(backend, FilesCacheBackend):
+                shutil.rmtree(backend.cache_dir, ignore_errors=True)
+
+
+def test_an_assembly_resolving_a_cold_plugin_part_never_stops_its_loop(tmp_path, monkeypatch):
+    """Nothing it reads is fetched by a synchronous call that waits with the loop stopped.
+
+    Resolving through the lock no longer deadlocks, but waiting is still
+    waiting: a synchronous fetch from a loop holds up every other task on it,
+    including a sandbox process whose input the loop is writing, and the
+    environment lock and process slot that process's task holds - which the
+    fetch, running the plugin in a sandbox, may need. 'pc test' over //pub
+    stopped that way on macOS after #704's cycle was gone: the test's thread
+    waiting in 'get_data' for a part's declaration, and a 'wrapper_bbox.py'
+    waiting for the rest of its input.
+    """
+    ctx, _, fake = _plugin_package_under_a_root(
+        tmp_path,
+        {"deps": ["motors"], "motors/objects/part/rotor": {"type": "step", "path": "rotor.step"}},
+    )
+    # The child is imported the way a real one is, with an on-disk cache named
+    # after the plugin - which outlives the test unless it lives in the test's
+    # own directory, and a declaration read from it would never be fetched.
+    monkeypatch.setattr(ctx.user_config, "internal_state_dir", str(tmp_path / "state"))
+    stopped = []
+    original = ProjectExternalRepository._run_elsewhere
+
+    def waited_for(coroutine):
+        stopped.append(coroutine.__qualname__)
+        return original(coroutine)
+
+    monkeypatch.setattr(ProjectExternalRepository, "_run_elsewhere", staticmethod(waited_for))
+
+    part = asyncio.run(ctx.get_part_async("//test/ext/motors:rotor"))
+
+    assert part is not None and part.name == "rotor"
+    assert stopped == []
+    assert "deps" in fake.keys and "motors/objects/part/rotor" in fake.keys
 
 
 # --- 'objectKinds': the kinds a repository says it does not have -------------

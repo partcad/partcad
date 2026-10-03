@@ -324,6 +324,7 @@ OPTION_KEYS = (
     "cacheS3MaxEntrySize",
     "cacheS3MinEntrySize",
     "cacheDependenciesIgnore",
+    "cacheBypass",
     "pythonSandbox",
     "remoteSandbox",
     "remoteSandboxToken",
@@ -601,6 +602,7 @@ class UserConfig(vyper.Vyper):
         self.set_default("cacheS3MaxEntrySize", 100 * 1024 * 1024)
         self.set_default("cacheS3MinEntrySize", 100)
         self.set_default("cacheDependenciesIgnore", False)
+        self.set_default("cacheBypass", False)
 
         # Whether the *user* said which sandbox to use, as opposed to PartCAD
         # picking one below. Captured before the default is set, because
@@ -677,6 +679,32 @@ class UserConfig(vyper.Vyper):
         # values: <int>
         # default: 180
         self.set_default("git.clone.timeout", 180)
+
+        # option: git.clone.retry.max
+        # description: how many more times a clone or refresh of a git
+        #              dependency is attempted after a transient network
+        #              failure -- the timeout above, a refused or reset
+        #              connection, a 5xx (see 'git_error_patterns' in
+        #              partcad.project_factory_git). An answer about the
+        #              repository itself, such as a 404, a missing ref or a
+        #              refused credential, is reported at once whatever this
+        #              says. There was no default, and an unset key reads as 0,
+        #              so a single dropped connection to GitHub failed the whole
+        #              command even though the retry loop had recognized it as
+        #              transient.
+        #
+        #              Two, because each attempt can take up to the timeout
+        #              above: a remote that has really gone away now costs three
+        #              of those rather than one before the error is reported.
+        # values: <int>
+        # default: 2
+        self.set_default("git.clone.retry.max", 2)
+
+        # option: git.clone.retry.patience
+        # description: how long to wait before each of those retries, in seconds
+        # values: <float>
+        # default: 5.0
+        self.set_default("git.clone.retry.patience", 5.0)
 
         # option: plugin.query.timeout
         # description: how long one query to a package's plugin script may take
@@ -855,6 +883,15 @@ class UserConfig(vyper.Vyper):
         # default: False
         self.bind_env("cacheDependenciesIgnore", "PC_CACHE_DEPENDENCIES_IGNORE")
         self.cache_dependencies_ignore = self.get_bool("cacheDependenciesIgnore")
+
+        # option: cacheBypass
+        # description: neither read from nor write to any cache tier (files,
+        #              remote, S3) for this run: everything is built afresh and
+        #              nothing built is kept. What '--cache-bypass' sets.
+        # values: [True | False]
+        # default: False
+        self.bind_env("cacheBypass", "PC_CACHE_BYPASS")
+        self.cache_bypass = self.get_bool("cacheBypass")
 
         # option: pythonSandbox
         # description: sandboxing environment for invoking python scripts

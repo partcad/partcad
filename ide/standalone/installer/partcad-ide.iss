@@ -238,6 +238,53 @@ begin
   end;
 end;
 
+{ Stops what runs out of the PartCAD command line tools this application
+  carries, before the uninstaller removes them.
+
+  The PartCAD daemon (partcad-json-rpc) serves one workspace each and outlives
+  whatever started it: the extension starts one for every folder it opens, and
+  so does any `pc` run from here. Windows will not delete an executable that is
+  running, so an uninstall that found one left the application's directory
+  behind, and said nothing about why.
+
+  Asked first: `pc daemon stop --all` tells every daemon to stop and waits for
+  each to exit, which is what `pc upgrade` does before it replaces an
+  installation. Whatever is still running out of this directory after that is
+  ended -- and only that: a PartCAD that some other installation is running is
+  not this uninstaller's to stop. A daemon's state is under %USERPROFILE%\.partcad,
+  outside this directory, so ending one loses nothing the next one needs.
+
+  Ended until nothing is left, rather than once. A daemon is started by a
+  short-lived launcher, and a launcher the extension started just before the
+  editor was closed can still bring a daemon up after the first sweep: CI saw
+  one daemon ended and another, a different process, running from here thirty
+  seconds later. So this sweeps until two looks in a row find nothing, for up
+  to thirty seconds. }
+procedure StopPartcad;
+var
+  Tools: String;
+  Quoted: String;
+  ResultCode: Integer;
+begin
+  Tools := PathDirectory(1);
+  if FileExists(Tools + '\pc.exe') then
+    Exec(Tools + '\pc.exe', '--no-ansi daemon stop --all', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+  { A single-quoted PowerShell string, so a quote in the path is doubled. }
+  Quoted := Tools;
+  StringChangeEx(Quoted, '''', '''''', True);
+  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -Command "' +
+      '$deadline = (Get-Date).AddSeconds(30); $quiet = 0; ' +
+      'while ($quiet -lt 2 -and (Get-Date) -lt $deadline) { ' +
+        '$running = @(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith(''' + Quoted +
+          '\'', [StringComparison]::OrdinalIgnoreCase) }); ' +
+        'if ($running) { $quiet = 0; $running | Stop-Process -Force -ErrorAction SilentlyContinue } ' +
+        'else { $quiet++ }; ' +
+        'Start-Sleep -Milliseconds 500 }"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   { Unconditionally: the task the user chose at install time is not recorded
@@ -245,6 +292,7 @@ begin
     does nothing. }
   if CurUninstallStep = usUninstall then
   begin
+    StopPartcad;
     RemoveFromPath(PathDirectory(0));
     RemoveFromPath(PathDirectory(1));
   end;

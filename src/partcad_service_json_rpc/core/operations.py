@@ -71,8 +71,41 @@ def _ctx(session, params):
             # Report it rather than no-op silently: the caller cannot otherwise
             # tell "unknown context" from "nothing to do".
             raise JsonRpcError(USAGE_ERROR, "Unknown context: %s" % context_id)
-        return ctx
-    return session.partcad_ctx
+    else:
+        ctx = session.partcad_ctx
+    if ctx is not None:
+        # Every operation on a context comes through here first, whichever
+        # client sent it, and requests are dispatched one at a time: this is
+        # the point between commands, where nothing is using the packages a
+        # reload replaces. A warm context would otherwise go on answering from
+        # the 'partcad.yaml' it read first, until the daemon is stopped.
+        packages, recursive = _config_check_targets(ctx, params)
+        try:
+            ctx.reload_changed_packages(packages, recursive=recursive)
+        except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
+            # Reported as 'context.create' reports it. The context is kept, and
+            # loads the root again on the next request (see the reload).
+            raise JsonRpcError(INVALID_CONFIG, "Invalid configuration file", data={"detail": str(e)}) from e
+    return ctx
+
+
+def _config_check_targets(ctx, params):
+    """The packages a request is about, and whether it reaches below them.
+
+    What 'reload_changed_packages' checks, together with what those packages
+    declare as dependencies. Read off the same parameters the operations read:
+    'package' (the current package when absent), and an object - 'object' from
+    the CLI, 'name' from the editor - that names a package of its own.
+    """
+    package, object_name, recursive = _request(params)
+    target = ctx.resolve_package_path(package)
+    for name in (object_name, params.get("name")):
+        if isinstance(name, str) and ":" in name:
+            object_package = name.split(":", 1)[0]
+            if object_package:
+                target = ctx.resolve_package_path(object_package)
+            break
+    return [target], recursive
 
 
 def _qualified(package: str, name: str) -> str:
@@ -1232,6 +1265,21 @@ def adhoc_render(session, params):
     return None
 
 
+async def _test_package_async(pc, package, coroutine):
+    """One package's tests in a recursive run, as an action of its own.
+
+    So that, like every action, it ends in a ``DONE`` line with its duration
+    (logged at DEBUG, so with ``--verbose``): a package whose tests all pass
+    logs nothing else, and a long run's log otherwise said nothing below its
+    total. The packages are tested together, so each duration counts from the
+    start of the run and they overlap; the run takes as long as the slowest of
+    them, not their sum. The 'Test' process of the run is what a single
+    package's tests already report under.
+    """
+    with pc.logging.Action("Test", package):
+        return await coroutine
+
+
 async def _test_async(ctx, pc, packages, filter_prefix, sketch, interface, assembly, scene, object_name):
     import asyncio
 
@@ -1271,7 +1319,8 @@ async def _test_async(ctx, pc, packages, filter_prefix, sketch, interface, assem
             pc.logging.error("Package %s is not found" % target)
             continue
         if not obj:
-            tasks.append(prj.test_log_wrapper_async(ctx, tests=tests_to_run))
+            task = prj.test_log_wrapper_async(ctx, tests=tests_to_run)
+            tasks.append(_test_package_async(pc, target, task) if len(packages) > 1 else task)
         elif interface:
             shape = prj.get_interface(obj)
             if shape is None:
@@ -2016,7 +2065,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.8.131"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.8.141"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -3032,7 +3081,7 @@ async def _item_suppliers(pc, ctx, cart_item, cart):
     """
     project_name, _ = pc.utils.resolve_resource_path(ctx.current_project_path, cart_item.name)
     project = ctx.get_project(project_name)
-    if project is None or not project.get_suppliers():
+    if project is None or not await project.get_suppliers_async():
         return []
     return await ctx.find_part_suppliers(cart_item, cart)
 

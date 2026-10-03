@@ -321,6 +321,9 @@ class FakeProject:
     def get_suppliers(self):
         return dict(self.suppliers)
 
+    async def get_suppliers_async(self):
+        return self.get_suppliers()
+
     async def assembly_guide_data_async(self, assembly_name, ignore_manufacturability=False):
         self.guide_requests.append((assembly_name, ignore_manufacturability))
         if self.guide_error is not None:
@@ -382,6 +385,9 @@ class FakeContext:
         # (parent, kinds) of every warm-up a listing asked for.
         self.prefetched = []
         self.mates = {}
+        # How many times an operation asked for the packages whose
+        # configuration changed to be reloaded (see '_ctx').
+        self.reloads = 0
         # What `ProviderCart.add_object()` puts in the cart, by object name: the
         # line items an object breaks down into.
         self.cart_contents = {}
@@ -414,6 +420,11 @@ class FakeContext:
             "stats_memory",
         ):
             setattr(self, name, 0)
+
+    def reload_changed_packages(self, packages=None, recursive=False):
+        self.reloads += 1
+        self.reload_targets = (packages, recursive)
+        return []
 
     def _stats_declared(self, kind):
         return sum(project.object_count_known(kind) for project in self.projects.values())
@@ -1633,6 +1644,32 @@ def test_test_run_recursive_tests_the_object_in_each_package(monkeypatch):
 
     assert root.parts_requested == ["widget"]
     assert sub.parts_requested == ["widget"]
+
+
+def test_a_recursive_test_run_tests_each_package_as_an_action(monkeypatch):
+    """A package whose tests pass logs nothing, so without an action of its own
+    -- and the DONE line every action ends in -- a long run's verbose log said
+    nothing below its total."""
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].add("parts", FakeObject("widget"))
+    session.partcad_ctx.projects["//sub"] = FakeProject(name="//sub").add("parts", FakeObject("gadget"))
+
+    operations.test_run(session, {"recursive": True})
+
+    assert sorted(a for a in session.partcad.logging.actions if a[0] == "Test") == [("Test", "//"), ("Test", "//sub")]
+
+
+def test_a_single_package_test_run_leaves_its_timing_to_the_process(monkeypatch):
+    """One package is the whole run, and the run's own process says that."""
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].add("parts", FakeObject("widget"))
+
+    operations.test_run(session, {})
+
+    assert [a for a in session.partcad.logging.actions if a[0] == "Test"] == []
+    assert ("Test", "//") in session.partcad.logging.processes
 
 
 def test_test_run_recursive_runs_a_qualified_object_once(monkeypatch):

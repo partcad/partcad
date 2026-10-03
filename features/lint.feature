@@ -344,6 +344,63 @@ Feature: `pc lint` command
     And STDOUT should contain "partcad.yaml:7:16: 1 is not of type 'string'"
 
   @success
+  Scenario: A provider that enriches another sets whichever parameters that one declares
+    # Which parameters a provider has is up to the provider, the same as it is
+    # for a part, so the schema cannot close the set of names 'with:' may use.
+    Given a file named "partcad.yaml" with content:
+      """
+      providers:
+        shop:
+          type: store
+          parameters:
+            storeNumber:
+              type: string
+              default: "0595"
+            currency:
+              type: string
+              default: USD
+        shopNearMe:
+          type: enrich
+          source: shop
+          with:
+            storeNumber: "1234"
+            currency: EUR
+      """
+    And a file named "shop.py" with content:
+      """
+      # This is a py file for shop.py
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+    And STDOUT should not contain "unexpected property"
+
+  @failure
+  Scenario: A provider's currency is a name
+    # PartCAD reads it itself, as what the provider's quotes are in.
+    Given a file named "partcad.yaml" with content:
+      """
+      providers:
+        shop:
+          type: store
+          parameters:
+            currency:
+              type: string
+              default: USD
+        shopNearMe:
+          type: enrich
+          source: shop
+          with:
+            currency: 840
+      """
+    And a file named "shop.py" with content:
+      """
+      # This is a py file for shop.py
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "partcad.yaml:12:17: 840 is not of type 'string'"
+
+  @success
   Scenario: Part offset written as an expression
     Given a file named "partcad.yaml" with content:
       """

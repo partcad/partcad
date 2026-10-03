@@ -10,6 +10,8 @@
 
 import asyncio
 
+import pytest
+
 import partcad as pc
 from partcad.plugin_provider_data_cart import ProviderCart
 
@@ -73,3 +75,28 @@ def test_provider_user_config_params_get():
     provider = ctx.get_provider("myGarage")
     assert provider is not None
     assert provider.config["parameters"]["currency"]["default"] == "INR"
+
+
+def test_provider_quote_without_provider_keeps_counts():
+    """A quote that finds its own suppliers asks each one for as many as the cart holds.
+
+    'find_suppliers()' and 'select_preferred_suppliers()' hand
+    'prepare_supplier_carts()' the specs to rebuild the supplier carts from, and
+    a spec without its '#count' is read as one of it: three bolts were quoted as
+    one, and an assembly needing four of a board was quoted for one board.
+    """
+    PART_NAME = "//pub/examples/partcad/provider_store:screw_m8_35mm#3"
+    FULL_PROVIDER_NAME = "//pub/examples/partcad/provider_store:myGarage"
+
+    ctx = pc.init("examples/provider_store")
+
+    cart = ProviderCart()
+    asyncio.run(cart.add_object(ctx, PART_NAME))
+
+    suppliers = asyncio.run(ctx.find_suppliers(cart))
+    preferred_suppliers = ctx.select_preferred_suppliers(suppliers)
+    supplier_carts = asyncio.run(ctx.prepare_supplier_carts(preferred_suppliers))
+
+    assert [item.count for item in supplier_carts[FULL_PROVIDER_NAME].parts.values()] == [3]
+    quotes = asyncio.run(ctx.supplier_carts_to_quotes(supplier_carts))
+    assert quotes[FULL_PROVIDER_NAME].result["price"] == pytest.approx(1.20)

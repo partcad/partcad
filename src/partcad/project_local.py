@@ -17,6 +17,7 @@ from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from . import config_template
 from . import logging as pc_logging
 from . import telemetry
+from .cache_hash import file_stat
 from .project import Project
 
 
@@ -50,6 +51,11 @@ class ProjectLocal(Project):
             config_dir = os.path.dirname(os.path.abspath(path))
             config_path = path
         self.config_path = config_path
+        # What the file looked like when it was read - None if it was not there
+        # - so that a context kept warm can tell it has been edited, created or
+        # removed since (see 'Context.reload_changed_packages'). Taken before
+        # the read, so that an edit racing it is seen as one.
+        self.config_stat = file_stat(config_path)
 
         if not os.path.isfile(config_path):
             pc_logging.error("PartCAD configuration file is not found: '%s'" % config_path)

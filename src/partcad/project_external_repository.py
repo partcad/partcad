@@ -64,7 +64,6 @@ class ProjectExternalRepository(ProjectPlugin):
         subfolder: str = "",
         repository=None,
         cache=None,
-        cache_version: int = 0,
         config_obj=None,
         inherited_config=None,
     ):
@@ -80,9 +79,6 @@ class ProjectExternalRepository(ProjectPlugin):
         self._subfolder = subfolder
         self._repository = repository
         self._cache = cache
-        # Carried so that child packages served by the same plugin inherit it and
-        # land in the same versioned cache namespace (see 'dependencies()').
-        self._cache_version = cache_version
         self._request_cache: dict[str, object] = {}
         self._request_lock = threading.Lock()
         # The parsed 'objectKinds', once the metadata has arrived. Kept apart
@@ -90,6 +86,16 @@ class ProjectExternalRepository(ProjectPlugin):
         # rather than once per kind asked about - and so that a malformed
         # declaration is complained about once rather than ten times.
         self._served_kinds_parsed = _UNPARSED
+        # Whether the package-level metadata has been applied to this package
+        # yet. The traversal applies it as it goes; a package looked up on its
+        # own is applied the first time something needs what it says (see
+        # 'get_suppliers').
+        self._meta_applied = False
+        # Held while metadata is applied, so that a second caller - the
+        # traversal and a supplier lookup can be on different threads of one
+        # daemon - waits for the first to finish rather than reading a package
+        # that is half applied.
+        self._meta_lock = threading.Lock()
         super().__init__(ctx, name, path, config_obj=config_obj, inherited_config=inherited_config)
 
     def request(self, key: str, handler):
@@ -142,7 +148,17 @@ class ProjectExternalRepository(ProjectPlugin):
         reuses whatever this fetched.
         """
         scoped = self._scope(key)
+        cached = await self._cached_async(scoped)
+        if cached is not _MISSING:
+            return cached
+        return await self._fetch_async(scoped, self._repository_for(scoped))
 
+    async def _cached_async(self, scoped: str):
+        """The value for 'scoped' from the memo or the on-disk cache, or _MISSING.
+
+        The first two layers of 'get_data_async', which need nothing but this
+        package: no plugin, and so nothing of the context's (see 'get_data').
+        """
         # 1. In-memory memo.
         with self._request_lock:
             if scoped in self._request_cache:
@@ -157,16 +173,34 @@ class ProjectExternalRepository(ProjectPlugin):
             if cached is not _MISSING:
                 with self._request_lock:
                     return self._request_cache.setdefault(scoped, cached)
+        return _MISSING
 
-        # 3. The repository. A broken or unreachable repository must not crash
-        #    the caller (e.g. 'pc list' over many packages); treat it as empty.
-        value = None
+    def _repository_for(self, scoped: str):
+        """The repository to ask for 'scoped', or None, having said why.
+
+        Called only once both caches have missed, so that a plugin that cannot
+        be found is reported for a fetch that needed it and for no other: a
+        cached answer does not need the plugin, and an error logged for a fetch
+        that succeeded would still be the exit status of the command.
+        """
         try:
-            repository = self._get_repository()
-            if repository is not None:
-                value = await repository.get_data(scoped)
+            return self._get_repository()
         except Exception as e:
             pc_logging.error("%s: failed to fetch '%s' from the repository: %s" % (self.name, scoped, e))
+            return None
+
+    async def _fetch_async(self, scoped: str, repository):
+        """3. Ask 'repository' for 'scoped', remember the answer, and persist it.
+
+        A broken or unreachable repository must not crash the caller (e.g. 'pc
+        list' over many packages); it is treated as empty.
+        """
+        value = None
+        if repository is not None:
+            try:
+                value = await repository.get_data(scoped)
+            except Exception as e:
+                pc_logging.error("%s: failed to fetch '%s' from the repository: %s" % (self.name, scoped, e))
 
         # Persist a successful fetch so it survives across runs.
         if value is not None and self._cache is not None:
@@ -285,11 +319,32 @@ class ProjectExternalRepository(ProjectPlugin):
             # No loop is running: bridge directly.
             return asyncio.run(self.get_data_async(key))
 
-        # A loop is already running in this thread: run the fetch to completion
-        # on the shared, otel-context-preserving executor to avoid nesting event
-        # loops (a raw ThreadPoolExecutor would drop the tracing context).
-        future = threadpool_manager.unconstrained_executor.submit(lambda: asyncio.run(self.get_data_async(key)))
-        return future.result()
+        # A loop is already running in this thread, so the coroutines are
+        # completed on the shared, otel-context-preserving executor to avoid
+        # nesting event loops (a raw ThreadPoolExecutor would drop the tracing
+        # context) - in two halves, with the plugin resolved between them, here.
+        #
+        # Here, on the thread that is about to wait, and never on the one it
+        # waits for. Resolving looks the hosting package up through
+        # 'Context.get_project()', which takes the context's lock - and this
+        # thread can be holding that lock right now: 'get_project()' asks a
+        # package for its 'dependencies()' under it, and a plugin-backed
+        # package's 'dependencies()' asks here. A worker that resolved for
+        # itself would wait for the lock while this thread waits for the worker,
+        # and neither would ever finish (#704). The lock is reentrant, so taking
+        # it again from here is harmless. And between the halves, rather than
+        # before both, so that the plugin is looked for - and its absence
+        # reported - only when neither cache had the answer, as on a loop.
+        cached = self._run_elsewhere(self._cached_async(scoped))
+        if cached is not _MISSING:
+            return cached
+        repository = self._repository_for(scoped)
+        return self._run_elsewhere(self._fetch_async(scoped, repository))
+
+    @staticmethod
+    def _run_elsewhere(coroutine):
+        """Complete 'coroutine' on a worker thread's own loop, and wait for it."""
+        return threadpool_manager.unconstrained_executor.submit(lambda: asyncio.run(coroutine)).result()
 
     async def ensure_enumerated_async(self):
         """Warm the package's structure (metadata and child list) from the plugin.
@@ -333,12 +388,42 @@ class ProjectExternalRepository(ProjectPlugin):
 
         Metadata is just another key in the same key/value space, so a plugin
         package can carry any package property a local one can (desc, render,
-        manufacturable, ...) with no new methods here. The location-derived
-        fields already set on the package win; the repository fills the rest.
+        manufacturable, suppliers, ...) with no new methods here. The
+        location-derived fields already set on the package win; the repository
+        fills the rest.
         """
-        meta = await self.get_data_async("meta")
-        if not meta:
+        if self._meta_applied:
             return
+        self._apply_meta(await self.get_data_async("meta"))
+
+    def _materialize_meta(self):
+        """'_materialize_meta_async', for a synchronous accessor that needs the metadata.
+
+        The traversal applies every package's metadata as it walks; a package
+        reached by a single lookup ('Context.get_project') is never walked, so
+        whatever reads a property only the metadata carries has to ask for it.
+        """
+        if not self._meta_applied:
+            self._apply_meta(self.get_data("meta"))
+
+    def _apply_meta(self, meta):
+        """Apply one answer to 'meta' to this package, once.
+
+        '_meta_applied' is what lets a reader skip this, so it is published
+        last: set before the suppliers were initialized, it let a concurrent
+        'get_suppliers()' read the constructor's empty set and report that
+        nobody sells anything here. It is checked again under the lock, so a
+        caller that lost the race applies nothing a second time.
+        """
+        with self._meta_lock:
+            if self._meta_applied:
+                return
+            if meta:
+                self._apply_meta_locked(meta)
+            self._meta_applied = True
+
+    def _apply_meta_locked(self, meta):
+        """The body of '_apply_meta', with its lock held and 'meta' non-empty."""
         # The repository supplies package properties, but never the identity
         # (name) or the import-derived fields: those pin where and how this
         # package was loaded. Child packages come from the 'deps' key, not from
@@ -368,6 +453,31 @@ class ProjectExternalRepository(ProjectPlugin):
             if self.skipped:
                 pc_logging.info("Skipping the package '%s': excluded by 'unless' (%s)" % (self.name, self.skipped_by))
                 self._object_configs = {kind: {} for kind in self._object_configs}
+        if "suppliers" in meta:
+            # The same again: who sells what this package holds. A store that
+            # serves its catalog from a plugin says so here, and every part of
+            # it is then looked for at that store, as a local package's are.
+            self.init_suppliers()
+
+    def get_suppliers(self):
+        """The providers to consider for this package's objects, as the metadata states them.
+
+        Read on demand, because a package looked up on its own - the one a
+        'pc supply quote' of a single part names - has not had its metadata
+        applied by any traversal, and the suppliers are in nothing else.
+        """
+        self._materialize_meta()
+        return super().get_suppliers()
+
+    async def get_suppliers_async(self):
+        """'get_suppliers()', with the metadata fetched on the caller's loop.
+
+        From a loop, the synchronous fetch 'get_suppliers()' makes would be
+        completed on another thread with this loop stopped, and everything else
+        on it with it (see 'Context._warm_project_async').
+        """
+        await self._materialize_meta_async()
+        return self.get_suppliers()
 
     # --- Object-access hooks (see Project) sourced from the repository ---
 
@@ -397,6 +507,21 @@ class ProjectExternalRepository(ProjectPlugin):
             return None
         return self._augment(self.get_data("objects/" + kind + "/" + name))
 
+    async def _warm_object_config_async(self, kind, name):
+        """Fetch what 'object_config(kind, name)' reads, awaited rather than waited for.
+
+        The same keys, in the same order, as the synchronous lookup that follows
+        - the object, then the whole kind if the plugin had no answer for it
+        alone - so that lookup finds them all memoized and fetches nothing.
+        """
+        if self.skipped or not self._serves_kind(kind):
+            return
+        configs = self._object_configs.get(kind)
+        if configs is not None and name in configs:
+            return
+        if await self.get_data_async("objects/" + kind + "/" + name) is None and configs is None:
+            await self.get_data_async("objects/" + kind)
+
     def dependencies(self):
         """Child packages of this package, served by the same repository.
 
@@ -413,8 +538,8 @@ class ProjectExternalRepository(ProjectPlugin):
                 "plugin": self._plugin_ref,
                 "subfolder": self._scope(child),
             }
-            # Propagate the cache version so a child computes the same versioned
-            # cache namespace as its parent (the whole hierarchy shares one cache).
-            if self._cache_version:
-                deps[child]["cacheVersion"] = self._cache_version
+            # The cache version is not passed down. A child names the same
+            # plugin, and the version is read from that plugin rather than from
+            # anybody's configuration, so the whole hierarchy arrives at one
+            # namespace without carrying the number between packages.
         return deps

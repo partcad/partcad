@@ -76,6 +76,9 @@ def record_to_event(record: logging.LogRecord) -> dict:
         "levelno": record.levelno,
         "levelname": record.levelname,
         "message": record.getMessage(),
+        # When it happened, which the client stamps on a plain line: a client
+        # printing it a moment later must not move the moment.
+        "created": record.created,
     }
 
 

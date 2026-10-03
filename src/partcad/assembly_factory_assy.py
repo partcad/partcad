@@ -42,6 +42,17 @@ def _as_names(value, where=""):
     return []
 
 
+def _uses_connections(node) -> bool:
+    """Whether an ASSY tree places anything by connecting it to something else."""
+    if isinstance(node, list):
+        return any(_uses_connections(item) for item in node)
+    if not isinstance(node, dict):
+        return False
+    if node.get("connect") is not None or node.get("connectPorts") is not None:
+        return True
+    return _uses_connections(node.get("links"))
+
+
 class AssemblyFactoryAssy(AssemblyFactoryFile):
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitASSY", source_project.name, config["name"]):
@@ -129,20 +140,33 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         """
         await super().prepare_async(assembly)
         unresolved = []
-        await self.prepare_node_async(self.read_assy(), unresolved)
+        unkeyed = []
+        assy = self.read_assy()
+        await self.prepare_node_async(assy, unresolved, assembly, unkeyed, _uses_connections(assy))
+        # The ASSY file says which objects this is made of, and its content is
+        # in the key already; what those objects contain is in it once each of
+        # their keys is. Until then an edited part left every assembly using
+        # it served from the entry built before the edit.
+        if not unresolved and not unkeyed:
+            assembly.cache_dependencies_broken = False
+        if unkeyed:
+            # Something it links to has no key - 'cache: false', or made of
+            # something that is - so its content is in no key, and neither may
+            # this assembly be cached: it would be served with the old one.
+            assembly.cacheable = False
         if unresolved:
             raise Exception("Failed to resolve the links to: %s" % ", ".join(unresolved))
 
-    async def prepare_node_async(self, node, unresolved: list) -> None:
+    async def prepare_node_async(self, node, unresolved: list, assembly=None, unkeyed=None, connects=False) -> None:
         if isinstance(node, list):
             for item in node:
-                await self.prepare_node_async(item, unresolved)
+                await self.prepare_node_async(item, unresolved, assembly, unkeyed, connects)
             return
         if not isinstance(node, dict):
             return
 
         if "links" in node and node["links"] is not None:
-            await self.prepare_node_async(node["links"], unresolved)
+            await self.prepare_node_async(node["links"], unresolved, assembly, unkeyed, connects)
             return
 
         if "assembly" in node:
@@ -158,6 +182,41 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             unresolved.append(name)
             return
         await item.prepare_async()
+        # In the order the file names them, which is the order the key needs.
+        if assembly is not None and not await assembly.add_cache_key_of(item):
+            unkeyed.append(name)
+        elif assembly is not None and connects and not await self.add_interfaces_to_key(assembly, item):
+            unkeyed.append(name)
+
+    async def add_interfaces_to_key(self, assembly, item) -> bool:
+        """Key 'assembly' on the interfaces 'item' implements, as they are declared.
+
+        Where a connected object goes is worked out from its interfaces - their
+        ports, their freedom of movement, what they inherit and what they mate
+        with - and those are declared in whichever packages define them, not in
+        the object. Its key covers what it says it implements, not what that
+        means; this covers the rest, for an assembly that connects anything.
+
+        Every interface, not only the ones a 'connect:' names: which one is used
+        can be worked out from what both ends implement. False when one of them
+        does not resolve, which leaves the placement unaccounted for.
+        """
+        # An assembly presents the ports it maps from its children, and those
+        # are worked out from its tree (see 'handle_node', which does the same).
+        await prepare_ports_async(item, self.ctx)
+        interfaces = {}
+        for name in sorted(item.with_ports.get_interfaces()):
+            interface = self.ctx.get_interface(name)
+            if interface is None:
+                return False
+            mates = self.ctx.mates.get(interface.full_name, {})
+            interfaces[name] = {
+                "config": interface.config,
+                "mates": {target: {"config": mate.config, "reverse": mate.reverse} for target, mate in mates.items()},
+            }
+        if interfaces:
+            assembly.hash.add_dict({"interfaces": interfaces})
+        return True
 
     async def subassemblies_async(self, assembly) -> list:
         """The assemblies this file links to, resolved but not built.
