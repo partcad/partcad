@@ -936,7 +936,17 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                     "-c",
                     "import glob,os,sys; p=sys.argv[1]; "
                     "print(sorted(os.listdir(p)) if os.path.isdir(p) else 'nothing', "
-                    "glob.glob(os.path.join(p, 'lib', 'python*', 'site-packages', 'pip')))",
+                    "glob.glob(os.path.join(p, 'lib', 'python*', 'site-packages', 'pip'))); "
+                    # All of site-packages, and what pip's own record says it
+                    # wrote: whether 'pip/' was never written or was written and
+                    # then went is the whole question.
+                    "[print('site-packages:', sorted(os.listdir(s))) "
+                    "for s in glob.glob(os.path.join(p, 'lib', 'python*', 'site-packages'))]; "
+                    "[print(r, 'lists', sum(1 for _ in open(r)), 'files, e.g.', "
+                    "[l.split(',')[0] for l in open(r)][:3]) "
+                    "for r in glob.glob(os.path.join(p, 'lib', 'python*', 'site-packages', 'pip-*.dist-info', 'RECORD'))]; "
+                    "print('stat pip:', [os.lstat(x) for x in glob.glob(os.path.join(p, 'lib', 'python*', "
+                    "'site-packages', 'pip*'))][:2])",
                     path,
                 ]
             )
