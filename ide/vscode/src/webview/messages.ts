@@ -232,7 +232,17 @@ export interface SpaceMouseEventMessage {
     pressed?: boolean;
 }
 
-export type HostMessage = ShowMessage | ClearMessage | TabDataMessage | SpaceMouseStateMessage | SpaceMouseEventMessage;
+/** Updated viewer configuration when settings change. */
+export interface UpdateConfigMessage {
+    type: 'updateConfig';
+    config: {
+        viewer: {
+            performanceDebug: boolean;
+        };
+    };
+}
+
+export type HostMessage = ShowMessage | ClearMessage | TabDataMessage | SpaceMouseStateMessage | SpaceMouseEventMessage | UpdateConfigMessage;
 
 /** Renderer to host: fill this tab in, quoting 'token' back in the answer. */
 export interface FetchTabMessage {

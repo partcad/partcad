@@ -253,12 +253,7 @@ export class Tree {
             const count = triangleCounts.get(row.item.id);
             if (count !== undefined && count > 0) {
                 displayName = `${row.item.name} (${count.toLocaleString()} triangles)`;
-            } else if (row.item.id.includes(':') || row.item.id.includes('/')) {
-                // Debug: log node IDs to help diagnose mismatch
-                console.log(`[PartCAD Tree] Node ID not found: "${row.item.id}", available keys:`, Array.from(triangleCounts.keys()).slice(0, 5));
             }
-        } else {
-            console.log('[PartCAD Tree] Triangle counts map not found');
         }
         const name = el('span', 'tree-name', displayName);
         // The names are long (a port is 'inner-TL-3mm-thru-opening-m3') and the

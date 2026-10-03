@@ -80,6 +80,9 @@ export class PartcadViewer implements vscode.Disposable {
                 if (event.affectsConfiguration('partcad.spaceMouse')) {
                     this.updateSpaceMouse();
                 }
+                if (event.affectsConfiguration('partcad.viewer.performanceDebug')) {
+                    this.updateViewerConfig();
+                }
             }),
             // Whether this panel is where the user is changes with the window's focus
             // as well as with the panel's own visibility.
@@ -338,6 +341,23 @@ export class PartcadViewer implements vscode.Disposable {
             active: this.spaceMouseActive(),
             spacenavd: this.spacenav?.connected === true,
             spacenavdDevice: this.spacenav?.device ?? null,
+        });
+    }
+
+    private updateViewerConfig(): void {
+        let performanceDebug = false;
+        try {
+            performanceDebug = getViewerPerformanceDebugFromSetting('partcad');
+        } catch (error) {
+            traceVerbose(`PartCAD Viewer: failed to read performanceDebug setting: ${(error as Error)?.message ?? error}`);
+        }
+        void this.panel?.webview.postMessage({
+            type: 'updateConfig',
+            config: {
+                viewer: {
+                    performanceDebug,
+                },
+            },
         });
     }
 

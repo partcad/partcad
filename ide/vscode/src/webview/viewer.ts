@@ -242,9 +242,9 @@ async function show(message: ShowMessage): Promise<void> {
     // Set up viewer configuration on the window object for access by scene.ts
     if (message.config) {
         (window as any).partcadConfig = message.config;
-        console.log('[PartCAD Viewer] Config set:', message.config);
-    } else {
-        console.log('[PartCAD Viewer] No config in message');
+        if (message.config?.viewer?.performanceDebug) {
+            console.log('[PartCAD Viewer] Config set:', message.config);
+        }
     }
 
     // The pane first, and the visibility it asks for with it: an item that starts
@@ -423,6 +423,21 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
             spaceMouse.spacenavMotion(message.motion, performance.now());
         } else if (message.button !== undefined) {
             spaceMouse.spacenavButton(message.button, message.pressed === true);
+        }
+    } else if (message.type === 'updateConfig') {
+        (window as any).partcadConfig = message.config;
+        if (message.config?.viewer?.performanceDebug) {
+            // Recalculate triangle counts when enabled
+            objectTree?.refreshLabels();
+        } else {
+            // Clear diagnostic state when disabled
+            delete (window as any).pcNodeTriangleCounts;
+            const statsDisplay = (window as any).pcViewerStats?.statsDisplay;
+            if (statsDisplay) {
+                statsDisplay.remove();
+                (window as any).pcViewerStats.statsDisplay = null;
+            }
+            objectTree?.refreshLabels();
         }
     }
 });

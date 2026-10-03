@@ -853,8 +853,16 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
 
     // Performance logging (behind config flag)
     const perfDebug = (window as any).partcadConfig?.viewer?.performanceDebug ?? false;
-    console.log('[PartCAD Viewer] perfDebug flag:', perfDebug, 'config:', (window as any).partcadConfig);
     const nodeTriangleCounts = new Map<string, number>();
+
+    if (!perfDebug) {
+        delete (window as any).pcNodeTriangleCounts;
+        const statsDisplay = (window as any).pcViewerStats?.statsDisplay;
+        if (statsDisplay) {
+            statsDisplay.remove();
+            (window as any).pcViewerStats.statsDisplay = null;
+        }
+    }
 
     // Diagnostic: Scene structure profiling
     if (perfDebug) {
@@ -886,29 +894,25 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
     }
 
     if (perfDebug) {
-        // Count triangles per node
-        console.log('[PartCAD Viewer] Counting triangles for', loaded.built.length, 'nodes');
+        // Count triangles per node (excluding child node groups)
         for (const { node, path, group: nodeGroup } of loaded.built) {
             let nodeTriangles = 0;
-            nodeGroup.traverse((obj: any) => {
-                if (obj.isMesh && obj.geometry) {
-                    if (obj.geometry.index) {
-                        nodeTriangles += obj.geometry.index.count / 3;
+            nodeGroup.children.forEach((child: any) => {
+                // Skip groups that represent child nodes (they have their own loaded.built entries)
+                if (child.isMesh && child.geometry) {
+                    if (child.geometry.index) {
+                        nodeTriangles += child.geometry.index.count / 3;
                     } else {
-                        nodeTriangles += obj.geometry.attributes.position.count / 3;
+                        nodeTriangles += child.geometry.attributes.position.count / 3;
                     }
                 }
             });
             const id = nodeId(path);
             const count = Math.round(nodeTriangles);
             nodeTriangleCounts.set(id, count);
-            if (count > 0) {
-                console.log(`[PartCAD Viewer] Node ${id}: ${count} triangles`);
-            }
         }
         // Store for access by tree display
         (window as any).pcNodeTriangleCounts = nodeTriangleCounts;
-        console.log('[PartCAD Viewer] Stored', nodeTriangleCounts.size, 'nodes with triangle counts');
 
         const stats = {
             name: message.name || '(unnamed)',
@@ -1058,51 +1062,37 @@ function animate(): void {
     const perfDebug = (window as any).partcadConfig?.viewer?.performanceDebug ?? false;
     if (perfDebug) {
         if (!(window as any).pcViewerStats) {
-            (window as any).pcViewerStats = { frameTimeHistory: [], lastLogTime: 0, statsDisplay: null, geometryInfo: '' };
+            (window as any).pcViewerStats = { frameTimeHistory: [], lastLogTime: 0, lastFrameTime: now, statsDisplay: null, geometryInfo: '' };
         }
-        const frameEnd = performance.now();
-        const frameTime = frameEnd - now;
-        (window as any).pcViewerStats.frameTimeHistory.push(frameTime);
-        if ((window as any).pcViewerStats.frameTimeHistory.length > 60) {
-            (window as any).pcViewerStats.frameTimeHistory.shift();
+        const stats = (window as any).pcViewerStats;
+        const frameInterval = now - stats.lastFrameTime;
+        stats.frameTimeHistory.push(frameInterval);
+        if (stats.frameTimeHistory.length > 60) {
+            stats.frameTimeHistory.shift();
         }
+        stats.lastFrameTime = now;
 
         // Log FPS every second
-        if (frameEnd - (window as any).pcViewerStats.lastLogTime > 1000) {
-            const avg = (window as any).pcViewerStats.frameTimeHistory.reduce((a: number, b: number) => a + b, 0) / (window as any).pcViewerStats.frameTimeHistory.length;
+        if (now - stats.lastLogTime > 1000) {
+            const avg = stats.frameTimeHistory.reduce((a: number, b: number) => a + b, 0) / stats.frameTimeHistory.length;
             const fps = 1000 / avg;
             console.log(`[PartCAD Viewer] FPS: ${fps.toFixed(1)} (frame time: ${avg.toFixed(2)}ms)`);
 
-            // Update on-screen display with FPS info
-            if ((window as any).pcViewerStats.statsDisplay) {
-                const fpsInfo = `\nFPS: ${fps.toFixed(1)}\nFrame: ${avg.toFixed(1)}ms`;
-                (window as any).pcViewerStats.statsDisplay.textContent = (window as any).pcViewerStats.geometryInfo + fpsInfo;
+            // Update on-screen display with FPS and graphics info
+            const renderInfo = renderer.info.render;
+            const memInfo = renderer.info.memory;
+            if (stats.statsDisplay) {
+                const fpsInfo = `\nFPS: ${fps.toFixed(1)} | Frame: ${avg.toFixed(1)}ms`;
+                const graphicsInfo = `\nDraw Calls: ${renderInfo.calls} | Geometries: ${memInfo.geometries}`;
+                stats.statsDisplay.textContent = stats.geometryInfo + fpsInfo + graphicsInfo;
             }
-            (window as any).pcViewerStats.lastLogTime = frameEnd;
-        }
-
-        // Graphics profiling: draw calls and memory usage
-        if (!(window as any).pcGraphicsStats) {
-            const gl = renderer.getContext() as WebGLRenderingContext;
-            const ext = gl.getExtension('WEBGL_debug_renderer_info');
-            const unmasked_vendor = ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : 'unknown';
-            const unmasked_renderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'unknown';
-            console.log(`[PartCAD Viewer] GPU: ${unmasked_vendor} - ${unmasked_renderer}`);
-            (window as any).pcGraphicsStats = { lastLogTime: frameEnd };
-        }
-        const renderInfo = renderer.info.render;
-        const memInfo = renderer.info.memory;
-        const graphicsDisplay = `Draw Calls: ${renderInfo.calls}\nTriangles: ${renderInfo.triangles}\nGeometries: ${memInfo.geometries}\nTextures: ${memInfo.textures}`;
-
-        // Log graphics info every 3 seconds
-        if (frameEnd - (window as any).pcGraphicsStats.lastLogTime > 3000) {
             console.log('[PartCAD Viewer] Graphics Stats:', {
                 drawCalls: renderInfo.calls,
                 triangles: renderInfo.triangles,
                 geometries: memInfo.geometries,
                 textures: memInfo.textures,
             });
-            (window as any).pcGraphicsStats.lastLogTime = frameEnd;
+            stats.lastLogTime = now;
         }
     }
 }
