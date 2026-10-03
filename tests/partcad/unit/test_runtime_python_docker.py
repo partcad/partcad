@@ -1224,7 +1224,7 @@ def test_an_environment_without_pip_is_built_again_from_nothing(tmp_path):
 
     assert made._environment_built is False
     command = made._create_locked()
-    assert command[:2] == ["-m", "venv"]
+    assert command[:3] == ["-m", "venv", "--upgrade-deps"]
     assert "--clear" in command
 
 
@@ -1417,7 +1417,7 @@ def _interpreter_only(made):
 
 
 def test_a_creation_that_lost_its_pip_is_noticed(tmp_path):
-    """'--upgrade-deps' leaving no pip and exiting 0, as it does on GitHub's runners."""
+    """'-m venv' leaving no pip and exiting 0, as it has on GitHub's runners."""
     made = _runtime(tmp_path)
     _interpreter_only(made)
     assert made._lost_pip(0) is True
@@ -1505,13 +1505,6 @@ def test_a_session_environment_that_lost_its_pip_gets_it_back(tmp_path, monkeypa
     os.makedirs(os.path.join(session_path, "lib", "python3.11", "site-packages", "pip"))
     made._restore_pip_onced_locked(session_path)
     assert ran == []
-
-
-def test_the_docker_sandbox_does_not_have_pip_replace_itself(tmp_path):
-    """'--upgrade-deps' is what left GitHub's runners with pip's metadata and no pip."""
-    made = _runtime(tmp_path)
-    assert "--upgrade-deps" not in made._create_locked()
-    assert made.venv_create_flags == []
 
 
 def test_stale_pip_metadata_is_cleared_so_ensurepip_installs_it_again(tmp_path):

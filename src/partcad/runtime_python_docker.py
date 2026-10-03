@@ -477,14 +477,6 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         self.exec_name = "python"
         self.exec_path = CONTAINER_PYTHON
 
-        # No '--upgrade-deps': its pip replacing itself is what left GitHub's
-        # runners with an environment whose 'pip-*.dist-info' was there and
-        # whose 'pip' package was not -- every install after it failed with "No
-        # module named pip", and 'ensurepip' believed the metadata and did
-        # nothing. The pip the image's Python bundles installs everything this
-        # sandbox needs; nothing here asks for a newer one.
-        self.venv_create_flags = []
-
     # ----------------------------------------------------------------- paths --
 
     @property
@@ -811,7 +803,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         if self._environment_built:
             return []
         os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
-        command = ["-m", "venv", *self.venv_create_flags]
+        command = ["-m", "venv", "--upgrade-deps"]
         if os.path.lexists(self._host_venv_python):
             # There, and not finished -- see '_environment_built'. Built again
             # from nothing rather than over the top of whatever got that far.
@@ -874,12 +866,10 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         """Whether '-m venv' reported success and left an environment with no pip in it.
 
         Seen on GitHub's runners, in the dev container's Docker sandbox and
-        nowhere else: the environment is created with the pip and setuptools
-        its Python bundles, and '--upgrade-deps' -- pip upgrading itself --
-        then leaves it with neither the old pip nor the new one, and exits 0.
-        Running the environment's own 'ensurepip' again puts the bundled pip
-        back, which is all the environment needs: everything after this is
-        installed through it. Said as a warning, since it means the step that
+        nowhere else, for a reason not known yet: '-m venv' exits 0 and the
+        environment has no pip. Running the environment's own 'ensurepip'
+        again puts the bundled pip back, which is all the environment needs:
+        everything after this is installed through it. Said as a warning, since it means the step that
         was asked for did not do what it says.
         """
         if exitcode != 0 or not os.path.lexists(self._host_venv_python) or self._has_pip:

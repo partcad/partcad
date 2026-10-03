@@ -303,11 +303,6 @@ class PythonRuntime(runtime.Runtime):
 
         self.pip_flags = []
         self.pip_install_flags = []
-        # What '-m venv' is given besides the path, for every environment this
-        # runtime creates. '--upgrade-deps' has pip replace itself with the
-        # newest one straight away; the 'docker' sandbox does without it (see
-        # there).
-        self.venv_create_flags = ["--upgrade-deps"]
         if platform.system() == "Windows":
             self.pip_install_flags += ["--no-warn-script-location"]
 
@@ -559,7 +554,7 @@ class PythonRuntime(runtime.Runtime):
                             [
                                 "-m",
                                 "venv",
-                                *self.venv_create_flags,
+                                "--upgrade-deps",
                                 session["path"],
                             ]
                         )
@@ -686,11 +681,10 @@ class PythonRuntime(runtime.Runtime):
     def _clear_stale_pip(self, path) -> None:
         """Remove pip's metadata where pip itself is gone, so that 'ensurepip' installs it again.
 
-        What a pip that replaced itself unsuccessfully leaves behind: its
-        'pip-*.dist-info' says it is installed, and the 'pip' package it
-        describes is not there. 'ensurepip' believes the metadata ("Requirement
-        already satisfied") and does nothing, which is a recovery that recovers
-        nothing.
+        The state CI has been seen in: 'pip-*.dist-info' says pip is installed,
+        and the 'pip' package it describes is not there. 'ensurepip' believes
+        the metadata ("Requirement already satisfied") and does nothing, which
+        is a recovery that recovers nothing.
         """
         for stale in glob.glob(os.path.join(path, "lib", "python*", "site-packages", "pip-*.dist-info")) + glob.glob(
             os.path.join(path, "Lib", "site-packages", "pip-*.dist-info")
@@ -700,12 +694,12 @@ class PythonRuntime(runtime.Runtime):
     def _restore_pip_onced_locked(self, path) -> None:
         """Put pip back into a session environment '-m venv --upgrade-deps' left without one.
 
-        Seen on GitHub's runners in the Docker sandbox: the environment is
-        created with the pip its Python bundles, and '--upgrade-deps' -- pip
-        upgrading itself -- leaves neither that pip nor a new one, and exits 0.
-        Every package then fails to install with "No module named pip". The
-        environment's own 'ensurepip' puts the bundled one back, which is all it
-        needs: everything after this goes in through it.
+        Seen on GitHub's runners in the dev container's Docker sandbox, and not
+        reproduced anywhere else: '-m venv' exits 0 and the environment has no
+        pip, so every package then fails to install with "No module named pip".
+        Why is not known yet. The environment's own 'ensurepip' puts the bundled
+        one back, which is all it needs: everything after this goes in
+        through it.
         """
         if self._lost_pip_warning(path):
             self._clear_stale_pip(path)
@@ -729,7 +723,7 @@ class PythonRuntime(runtime.Runtime):
                         [
                             "-m",
                             "venv",
-                            *self.venv_create_flags,
+                            "--upgrade-deps",
                             session["path"],
                         ]
                     )
@@ -790,7 +784,7 @@ class PythonRuntime(runtime.Runtime):
                             [
                                 "-m",
                                 "venv",
-                                *self.venv_create_flags,
+                                "--upgrade-deps",
                                 session["path"],
                             ]
                         )
@@ -891,7 +885,7 @@ class PythonRuntime(runtime.Runtime):
                         [
                             "-m",
                             "venv",
-                            *self.venv_create_flags,
+                            "--upgrade-deps",
                             session["path"],
                         ]
                     )
