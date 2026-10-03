@@ -1389,3 +1389,23 @@ def test_a_failed_environment_with_nothing_on_stderr_still_says_the_exit_code(tm
 
     with pytest.raises(Exception, match="exited with 3"):
         made._created(3, "")
+
+
+def test_a_build_that_is_not_here_says_where_it_went(tmp_path, monkeypatch):
+    """'-m venv' exits 0 and nothing is here: the error names both sides and the mounts."""
+    made = _runtime(tmp_path)
+    monkeypatch.setattr(made, "_where_it_went", lambda: "In the container: [...]")
+    with pytest.raises(Exception) as raised:
+        made._created(0, "")
+    assert "exited with 0, but the environment is not here" in str(raised.value)
+    assert "In the container" in str(raised.value)
+
+
+def test_where_it_went_never_raises(tmp_path, monkeypatch):
+    made = _runtime(tmp_path)
+
+    def broken():
+        raise RuntimeError("no daemon")
+
+    monkeypatch.setattr(made, "_start", broken)
+    assert "could not be asked: no daemon" in made._where_it_went()

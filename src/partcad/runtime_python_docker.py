@@ -859,16 +859,56 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         anybody saw would be pip failing on a missing file.
         """
         if exitcode != 0 or not self._environment_built:
+            said = (stderr or "").strip() or "'-m venv' exited with %s" % exitcode
+            if exitcode == 0:
+                # It says it built one, and it is not here: the container wrote
+                # it somewhere this process does not see, which is a mount that
+                # is not the directory it claims to be. Say where, since that
+                # is the whole of what anybody would need to fix it.
+                said += ", but the environment is not here. " + self._where_it_went()
             raise Exception(
-                "Failed to create the '%s' sandbox at %s in %s: %s"
-                % (
-                    self.sandbox,
-                    self.path,
-                    self.image,
-                    (stderr or "").strip() or "'-m venv' exited with %s" % exitcode,
-                )
+                "Failed to create the '%s' sandbox at %s in %s: %s" % (self.sandbox, self.path, self.image, said)
             )
         self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)
+
+    def _where_it_went(self) -> str:
+        """What the container and this process each see at the environment's path, and how it is mounted.
+
+        For a build the container reported as finished and this process cannot
+        find: everything here is a guess at which side's mount is wrong, and
+        this is what decides it. Never raises -- it is part of an error message.
+        """
+        parts = []
+        try:
+            here = sorted(os.listdir(self.path)) if os.path.isdir(self.path) else "nothing"
+            parts.append("Here: %s" % (here,))
+        except Exception as e:
+            parts.append("Here: %s" % e)
+        try:
+            container = self._start()
+            container.reload()
+            path = docker_mount.rewrite(self.path, self._mounted)
+            code, output = container.exec_run(
+                [
+                    CONTAINER_PYTHON,
+                    "-c",
+                    "import glob,os,sys; p=sys.argv[1]; "
+                    "print(sorted(os.listdir(p)) if os.path.isdir(p) else 'nothing', "
+                    "glob.glob(os.path.join(p, 'lib', 'python*', 'site-packages', 'pip')))",
+                    path,
+                ]
+            )
+            parts.append("In the container: %s" % output.decode("utf-8", "replace").strip())
+            parts.append(
+                "Its mounts: %s"
+                % "; ".join(
+                    "%s from %s" % (m.get("Destination"), m.get("Source")) for m in container.attrs.get("Mounts") or []
+                )
+            )
+            parts.append("Mount sources: %s" % (self._mount_sources,))
+        except Exception as e:
+            parts.append("The container could not be asked: %s" % e)
+        return " ".join(parts)
 
     def once(self):
         if self.provisioned:
