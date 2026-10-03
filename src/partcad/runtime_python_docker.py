@@ -477,6 +477,14 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         self.exec_name = "python"
         self.exec_path = CONTAINER_PYTHON
 
+        # No '--upgrade-deps': its pip replacing itself is what left GitHub's
+        # runners with an environment whose 'pip-*.dist-info' was there and
+        # whose 'pip' package was not -- every install after it failed with "No
+        # module named pip", and 'ensurepip' believed the metadata and did
+        # nothing. The pip the image's Python bundles installs everything this
+        # sandbox needs; nothing here asks for a newer one.
+        self.venv_create_flags = []
+
     # ----------------------------------------------------------------- paths --
 
     @property
@@ -803,7 +811,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         if self._environment_built:
             return []
         os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
-        command = ["-m", "venv", "--upgrade-deps"]
+        command = ["-m", "venv", *self.venv_create_flags]
         if os.path.lexists(self._host_venv_python):
             # There, and not finished -- see '_environment_built'. Built again
             # from nothing rather than over the top of whatever got that far.
@@ -968,6 +976,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                 with pc_logging.Action("Docker", self.version, self.path):
                     exitcode, stdout, stderr = self.run_onced_locked(command)
                     if self._lost_pip(exitcode):
+                        self._clear_stale_pip(self.path)
                         # Its output joins the creation's, so that a recovery
                         # that fails says why in the error '_created' raises.
                         _, pip_out, pip_err = runtime.Runtime.run(self, self._ensurepip(), stdin="")
@@ -987,6 +996,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                 with pc_logging.Action("Docker", self.version, self.path):
                     exitcode, stdout, stderr = await self.run_async_onced_locked(command)
                     if self._lost_pip(exitcode):
+                        self._clear_stale_pip(self.path)
                         _, pip_out, pip_err = await runtime.Runtime.run_async(self, self._ensurepip(), stdin="")
                         stdout = "\n".join(s for s in (stdout, pip_out) if s)
                         stderr = "\n".join(s for s in (stderr, pip_err) if s)

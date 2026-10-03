@@ -14,6 +14,7 @@ import hashlib
 import os
 import pathlib
 import platform
+import shutil
 import subprocess
 import sys
 
@@ -302,6 +303,11 @@ class PythonRuntime(runtime.Runtime):
 
         self.pip_flags = []
         self.pip_install_flags = []
+        # What '-m venv' is given besides the path, for every environment this
+        # runtime creates. '--upgrade-deps' has pip replace itself with the
+        # newest one straight away; the 'docker' sandbox does without it (see
+        # there).
+        self.venv_create_flags = ["--upgrade-deps"]
         if platform.system() == "Windows":
             self.pip_install_flags += ["--no-warn-script-location"]
 
@@ -553,7 +559,7 @@ class PythonRuntime(runtime.Runtime):
                             [
                                 "-m",
                                 "venv",
-                                "--upgrade-deps",
+                                *self.venv_create_flags,
                                 session["path"],
                             ]
                         )
@@ -677,6 +683,20 @@ class PythonRuntime(runtime.Runtime):
         )
         return True
 
+    def _clear_stale_pip(self, path) -> None:
+        """Remove pip's metadata where pip itself is gone, so that 'ensurepip' installs it again.
+
+        What a pip that replaced itself unsuccessfully leaves behind: its
+        'pip-*.dist-info' says it is installed, and the 'pip' package it
+        describes is not there. 'ensurepip' believes the metadata ("Requirement
+        already satisfied") and does nothing, which is a recovery that recovers
+        nothing.
+        """
+        for stale in glob.glob(os.path.join(path, "lib", "python*", "site-packages", "pip-*.dist-info")) + glob.glob(
+            os.path.join(path, "Lib", "site-packages", "pip-*.dist-info")
+        ):
+            shutil.rmtree(stale, ignore_errors=True)
+
     def _restore_pip_onced_locked(self, path) -> None:
         """Put pip back into a session environment '-m venv --upgrade-deps' left without one.
 
@@ -688,11 +708,13 @@ class PythonRuntime(runtime.Runtime):
         needs: everything after this goes in through it.
         """
         if self._lost_pip_warning(path):
+            self._clear_stale_pip(path)
             self.run_onced_locked(self.ENSUREPIP, path=path)
 
     async def _restore_pip_async_onced_locked(self, path) -> None:
         """The asynchronous twin of '_restore_pip_onced_locked'."""
         if self._lost_pip_warning(path):
+            self._clear_stale_pip(path)
             await self.run_async_onced_locked(self.ENSUREPIP, path=path)
 
     def run_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None):
@@ -707,7 +729,7 @@ class PythonRuntime(runtime.Runtime):
                         [
                             "-m",
                             "venv",
-                            "--upgrade-deps",
+                            *self.venv_create_flags,
                             session["path"],
                         ]
                     )
@@ -768,7 +790,7 @@ class PythonRuntime(runtime.Runtime):
                             [
                                 "-m",
                                 "venv",
-                                "--upgrade-deps",
+                                *self.venv_create_flags,
                                 session["path"],
                             ]
                         )
@@ -869,7 +891,7 @@ class PythonRuntime(runtime.Runtime):
                         [
                             "-m",
                             "venv",
-                            "--upgrade-deps",
+                            *self.venv_create_flags,
                             session["path"],
                         ]
                     )

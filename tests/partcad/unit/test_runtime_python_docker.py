@@ -1224,7 +1224,7 @@ def test_an_environment_without_pip_is_built_again_from_nothing(tmp_path):
 
     assert made._environment_built is False
     command = made._create_locked()
-    assert command[:3] == ["-m", "venv", "--upgrade-deps"]
+    assert command[:2] == ["-m", "venv"]
     assert "--clear" in command
 
 
@@ -1505,3 +1505,21 @@ def test_a_session_environment_that_lost_its_pip_gets_it_back(tmp_path, monkeypa
     os.makedirs(os.path.join(session_path, "lib", "python3.11", "site-packages", "pip"))
     made._restore_pip_onced_locked(session_path)
     assert ran == []
+
+
+def test_the_docker_sandbox_does_not_have_pip_replace_itself(tmp_path):
+    """'--upgrade-deps' is what left GitHub's runners with pip's metadata and no pip."""
+    made = _runtime(tmp_path)
+    assert "--upgrade-deps" not in made._create_locked()
+    assert made.venv_create_flags == []
+
+
+def test_stale_pip_metadata_is_cleared_so_ensurepip_installs_it_again(tmp_path):
+    """Otherwise 'ensurepip' says "Requirement already satisfied" and puts nothing back."""
+    made = _runtime(tmp_path)
+    site = os.path.join(made.path, "lib", "python3.11", "site-packages")
+    os.makedirs(os.path.join(site, "pip-24.0.dist-info"))
+    os.makedirs(os.path.join(site, "setuptools-79.0.1.dist-info"))
+    made._clear_stale_pip(made.path)
+    assert not os.path.exists(os.path.join(site, "pip-24.0.dist-info"))
+    assert os.path.exists(os.path.join(site, "setuptools-79.0.1.dist-info"))
