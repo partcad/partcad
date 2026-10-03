@@ -379,3 +379,33 @@ def test_only_a_request_that_names_settings_can_differ():
     assert not config_restart.settings_differ(None, ["--offline"])
     assert not config_restart.settings_differ({"settings": ["--offline"]}, ["--offline"])
     assert config_restart.settings_differ({"settings": []}, ["--offline"])
+
+
+def test_an_edit_made_while_the_daemon_was_starting_still_counts(monkeypatch, tmp_path):
+    """The baseline is what the daemon was configured from, not what the watcher first sees."""
+    monkeypatch.setattr(config_restart, "POLL_SECONDS", TICK)
+    config = tmp_path / "config.yaml"
+    config.write_text("pythonSandbox: conda\n")
+    config_restart.remember(str(config))
+    config.write_text("# edited while the session was being built\n")
+
+    fired = threading.Event()
+    monkeypatch.setattr(config_restart, "ConfigWatcher", _fast_watcher(fired))
+    watcher = config_restart.watch(lambda: None, str(config))
+    try:
+        assert fired.wait(5)
+    finally:
+        watcher.stop()
+
+
+def _fast_watcher(fired):
+    original = ConfigWatcher
+
+    def make(path, on_change, interval=None, baseline=None):
+        def both():
+            on_change()
+            fired.set()
+
+        return original(path, both, interval=TICK, baseline=baseline)
+
+    return make

@@ -71,7 +71,7 @@ def test_a_daemon_that_cannot_see_these_files_is_named_as_the_reason(monkeypatch
     monkeypatch.setattr(runtime, "docker_available", lambda: True)
     monkeypatch.setattr(runtime_python_docker.docker, "from_env", lambda: object())
     monkeypatch.setattr(runtime_python_docker, "resolve_image", lambda client, image, version="": image)
-    monkeypatch.setattr(runtime_python_docker, "mounts_are_shared", lambda client, image: False)
+    monkeypatch.setattr(runtime_python_docker, "mount_sources", lambda client, image: False)
 
     own = runtime_python_docker.image_for("3.11")
     assert not runtime_python_docker.image_available(own, "3.11")
@@ -97,7 +97,7 @@ def test_an_image_that_became_available_has_no_reason_left(monkeypatch):
     monkeypatch.setattr(runtime, "docker_available", lambda: True)
     monkeypatch.setattr(runtime_python_docker.docker, "from_env", lambda: object())
     monkeypatch.setattr(runtime_python_docker, "resolve_image", lambda client, image, version="": image)
-    monkeypatch.setattr(runtime_python_docker, "mounts_are_shared", lambda client, image: True)
+    monkeypatch.setattr(runtime_python_docker, "mount_sources", lambda client, image: None)
     assert runtime_python_docker.image_available(IMAGE)
     assert runtime_python_docker.unavailable_reason(IMAGE) is None
 
@@ -132,3 +132,32 @@ def test_a_failure_carries_the_note():
     # One that runs in a container of its own runs there or not at all.
     assert sandbox_note(ctx, types.SimpleNamespace(container={"image": "x"}, docker_image=IMAGE)) == ""
     assert sandbox_note(ctx, types.SimpleNamespace(container=None, docker_image=None)) == ""
+
+
+def test_a_sandbox_the_caller_named_is_named_as_the_reason(monkeypatch):
+    """Not "Docker is unavailable", which would send the reader after the wrong thing."""
+    monkeypatch.setattr(runtime, "docker_enabled", lambda config: True)
+    ctx = _Ctx(UserConfig())
+    ctx._note_image_skipped(IMAGE, ctx._why_not_docker("conda", "3.11", requested=True))
+    note = ctx.docker_image_note(IMAGE)
+    assert "asked to run in" in note
+    assert "not available" not in note
+
+
+def test_mounts_that_miss_a_needed_directory_make_the_image_unavailable(monkeypatch, tmp_path):
+    """Said before PartCAD chooses Docker, where it can still choose something else,
+    rather than when the container starts and every part fails."""
+    import tempfile
+
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr(runtime_python_docker.docker, "from_env", lambda: object())
+    monkeypatch.setattr(runtime_python_docker, "resolve_image", lambda client, image, version="": image)
+    covered = [(tempfile.gettempdir(), "/daemon/tmp"), (runtime_python_docker.INSTALL_DIR, "/daemon/install")]
+    monkeypatch.setattr(runtime_python_docker, "mount_sources", lambda client, image: covered)
+
+    assert runtime_python_docker.image_available(IMAGE)
+    # A package somewhere none of this container's mounts reaches.
+    package = "/opt/elsewhere/package"
+    assert runtime_python_docker.misses(IMAGE, [package])
+    assert package in runtime_python_docker.unavailable_reason(IMAGE)
+    assert not runtime_python_docker.image_available(IMAGE, needed=[package])

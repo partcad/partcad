@@ -194,3 +194,9 @@ def test_home_is_left_out_and_the_rest_bound_from_the_daemon(tmp_path):
     assert mounts["/daemon/install"] == {"bind": install, "mode": "rw"}
     assert all(spec["bind"] != os.path.expanduser("~") for spec in mounts.values())
     assert sandbox._mount_sources == sources
+
+
+def test_unbacked_names_what_the_daemon_cannot_bind():
+    assert runtime_python_docker.unbacked(["/workspaces/partcad/x", "/opt/y"], SOURCES) == ["/opt/y"]
+    # Where the daemon shares this filesystem, nothing is unbacked.
+    assert runtime_python_docker.unbacked(["/opt/y"], None) == []

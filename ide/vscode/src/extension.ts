@@ -486,12 +486,21 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
     const RECONNECT_LIMIT = 3;
     let reconnectTimes: number[] = [];
     let reconnecting: Promise<void> | undefined;
+    // The backend the reconnect in progress is replacing, and a close from its
+    // *replacement* that arrived before that reconnect finished. The second is
+    // not a duplicate: the new connection went away while it was being set up,
+    // and dropping it would leave the window with no backend and nobody trying.
+    let reconnectingFrom: PartcadBackend | undefined;
+    let followUp: { why: string; from: PartcadBackend } | undefined;
     const reconnect = (why: string, from: PartcadBackend | undefined): Promise<void> => {
         if (from !== lsClient) {
             // A backend this window has already moved on from.
             return Promise.resolve();
         }
         if (reconnecting) {
+            if (from !== undefined && from !== reconnectingFrom) {
+                followUp = { why, from };
+            }
             return reconnecting;
         }
         const now = Date.now();
@@ -502,18 +511,30 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
                 `ERROR: The PartCAD service ${why} ${RECONNECT_LIMIT + 1} times in a minute, so it is not being reconnected again.\r\n` +
                     'ERROR: Its log is in the PartCAD output channel. Run "Restart PartCAD" to try again.\r\n',
             );
-            void vscode.commands.executeCommand('setContext', 'partcad.failed', true);
-            return Promise.resolve();
+            // Nothing shown came from a backend that is still there, and the
+            // view must say "failed" rather than go on saying "loading".
+            return (async () => {
+                await resetView();
+                await vscode.commands.executeCommand('setContext', 'partcad.beingLoaded', false);
+                await vscode.commands.executeCommand('setContext', 'partcad.failed', true);
+            })();
         }
         reconnectTimes.push(now);
         traceInfo(`PartCAD: ${why}; reconnecting`);
         writeTerminal(`INFO: The PartCAD service ${why}; reconnecting.\r\n`);
+        reconnectingFrom = from;
         reconnecting = (async () => {
             try {
                 await resetView();
                 await handleRestartServer(serverId, serverName, outputChannel);
             } finally {
                 reconnecting = undefined;
+                reconnectingFrom = undefined;
+            }
+            const next = followUp;
+            followUp = undefined;
+            if (next) {
+                await reconnect(next.why, next.from);
             }
         })();
         return reconnecting;

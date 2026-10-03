@@ -33,6 +33,7 @@ pretending otherwise would mean routing pip through an allowlist that PartCAD
 writes and PartCAD checks.
 """
 
+import glob
 import hashlib
 import os
 import platform
@@ -186,7 +187,27 @@ def unavailable_reason(image: str) -> Optional[str]:
     return _UNAVAILABLE_REASONS.get(image)
 
 
-def image_available(image: str, version: str = "") -> bool:
+# How the daemon reaches this machine's directories, by the image 'image_available'
+# asked about (see 'mount_sources'), for 'misses' to check a context's against.
+_SOURCES = {}
+
+
+def misses(image: str, needed) -> bool:
+    """Whether the daemon cannot bind one of ``needed`` for ``image``; records why, as 'image_available' does.
+
+    Separate from 'image_available' because the directories are a context's
+    and the answer to that question is not: asked after it said yes.
+    """
+    missing = unbacked(needed, _SOURCES.get(image))
+    if missing:
+        _UNAVAILABLE_REASONS[image] = (
+            "the Docker daemon does not share this filesystem, and %s %s not on any of the mounts it could "
+            "bind from instead" % (", ".join(missing), "is" if len(missing) == 1 else "are")
+        )
+    return bool(missing)
+
+
+def image_available(image: str, version: str = "", needed=()) -> bool:
     """Whether this machine can get an image to run that sandbox in.
 
     Local first, then a pull, exactly as starting the sandbox would -- so a
@@ -215,15 +236,28 @@ def image_available(image: str, version: str = "") -> bool:
     # would run it can see the directories PartCAD is going to bind -- see
     # 'mounts_are_shared'. A machine that fails this is one where every part
     # would fail later, in a way that names nothing.
-    if not mounts_are_shared(client, resolved):
+    sources = mount_sources(client, resolved)
+    if sources is False:
         _UNAVAILABLE_REASONS[image] = (
             "the Docker daemon cannot see this machine's files, so nothing can be bind-mounted into a "
             "container -- which is what a dev container using the host's Docker socket, or a 'DOCKER_HOST' "
             "on another machine, looks like"
         )
         return False
+    # Reaching the files through this container's mounts is only as good as
+    # the mounts: a directory the sandbox needs on none of them is a start that
+    # fails later (see 'DockerPythonRuntime._mounts'), asked here instead, where
+    # "no" still leaves PartCAD another sandbox to choose.
+    _SOURCES[image] = sources
     _UNAVAILABLE_REASONS.pop(image, None)
-    return True
+    return not misses(image, [*needed, tempfile.gettempdir(), INSTALL_DIR])
+
+
+def unbacked(paths, sources) -> list:
+    """Which of ``paths`` the daemon cannot bind, given 'mount_sources'; none where it shares this filesystem."""
+    if sources is None:
+        return []
+    return [p for p in paths if p and docker_mount.backed_by(p, sources) is None]
 
 
 # Whether a directory this process creates is the one the daemon binds, keyed by
@@ -508,7 +542,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         paths = self._mounted
         if sources is not None:
             home = os.path.expanduser("~")
-            missing = [p for p in paths if p != home and docker_mount.backed_by(p, sources) is None]
+            missing = unbacked([p for p in paths if p != home], sources)
             if missing:
                 raise runtime.SandboxUnavailable(
                     "the 'docker' sandbox runs on a Docker daemon that does not share this filesystem, and "
@@ -770,7 +804,12 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         if self._environment_built:
             return []
         os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
-        return ["-m", "venv", "--upgrade-deps", docker_mount.rewrite(self.path, self._mounted)]
+        command = ["-m", "venv", "--upgrade-deps"]
+        if os.path.lexists(self._host_venv_python):
+            # There, and not finished -- see '_environment_built'. Built again
+            # from nothing rather than over the top of whatever got that far.
+            command.append("--clear")
+        return command + [docker_mount.rewrite(self.path, self._mounted)]
 
     @property
     def _host_venv_python(self) -> str:
@@ -798,7 +837,19 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         wrong question, and the answer was to build the environment again, every
         time, and then call a successful build a failure.
         """
-        return os.path.lexists(self._host_venv_python)
+        return os.path.lexists(self._host_venv_python) and self._has_pip
+
+    @property
+    def _has_pip(self) -> bool:
+        """Whether the environment got as far as having pip, which is the last thing '-m venv' puts in it.
+
+        An interpreter alone is not an environment this sandbox can use: every
+        dependency goes in through pip. Counting one as built -- a creation
+        that was interrupted, or one whose 'ensurepip' did not run -- made every
+        install in it fail with "No module named pip", on every command, with
+        nothing to say why and nothing that would ever build it again.
+        """
+        return bool(glob.glob(os.path.join(self.path, "lib", "python*", "site-packages", "pip")))
 
     def _created(self, exitcode, stderr) -> None:
         """Accept the environment, or fail with what actually went wrong.

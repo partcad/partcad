@@ -1200,6 +1200,7 @@ def test_a_dangling_interpreter_symlink_still_counts_as_built(tmp_path):
         pytest.skip("this platform will not create a symlink here")
 
     assert os.path.exists(made._host_venv_python) is False, "the premise: the target is not here"
+    os.makedirs(os.path.join(made.path, "lib", "python3.11", "site-packages", "pip"))
     assert made._environment_built is True
     # And so it is not built again, which is what turned a good build into a
     # failure every time.
@@ -1208,6 +1209,23 @@ def test_a_dangling_interpreter_symlink_still_counts_as_built(tmp_path):
 
 def test_no_environment_is_not_built(tmp_path):
     assert _runtime(tmp_path)._environment_built is False
+
+
+def test_an_environment_without_pip_is_built_again_from_nothing(tmp_path):
+    """An interpreter and no pip: a creation that never finished.
+
+    Counted as built, every install in it failed with "No module named pip" on
+    every command, and nothing ever built it again. It is built again, cleared
+    first, so that nothing half-made survives into the new one.
+    """
+    made = _runtime(tmp_path)
+    os.makedirs(os.path.dirname(made._host_venv_python))
+    open(made._host_venv_python, "w").close()
+
+    assert made._environment_built is False
+    command = made._create_locked()
+    assert command[:3] == ["-m", "venv", "--upgrade-deps"]
+    assert "--clear" in command
 
 
 # --------------------------------------------------------------------------- #

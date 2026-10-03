@@ -20,7 +20,7 @@ import sys
 
 from partcad_utils import process_role
 
-from . import __version__
+from . import __version__, config_restart
 from .core.session import Session
 from .rpc.methods import build_registry
 from .transport.stdio import serve_stdio
@@ -148,6 +148,10 @@ def _build_session(args: argparse.Namespace, log_dir: str = None) -> Session:
     # that conclusion for five minutes, and it holds it on behalf of every
     # client of the workspace rather than one command.
     process_role.mark_daemon()
+
+    # Before anything reads the configuration, so that an edit made while the
+    # session is being built still counts as one (see 'config_restart').
+    config_restart.remember()
 
     session = Session(settings=build_settings(args))
     # The per-workspace daemon keeps a rotating log file next to its socket; the

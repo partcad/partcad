@@ -1788,7 +1788,14 @@ class Context:
         from . import runtime_python_docker
 
         if image not in self.docker_images_available:
-            self.docker_images_available[image] = runtime_python_docker.image_available(image, version)
+            # The directories every sandbox of this context binds, so that a
+            # daemon reaching only some of them is "no" here -- where PartCAD
+            # can still choose another sandbox -- rather than a failure when
+            # the container starts.
+            needed = [self.user_config.internal_state_dir, getattr(self, "root_path", None)]
+            self.docker_images_available[image] = runtime_python_docker.image_available(
+                image, version
+            ) and not runtime_python_docker.misses(image, [p for p in needed if p])
         return self.docker_images_available[image]
 
     def _docker_or_next_best(self, version: str) -> str:
@@ -1827,8 +1834,14 @@ class Context:
             )
         return self.user_config.python_sandbox
 
-    def _why_not_docker(self, python_runtime: str, version: str) -> str:
-        """Why a Python sandbox other than 'docker' was the one chosen, as a clause."""
+    def _why_not_docker(self, python_runtime: str, version: str, requested: bool = False) -> str:
+        """Why a Python sandbox other than 'docker' was the one chosen, as a clause.
+
+        ``requested``: the caller of 'get_python_runtime' named the sandbox, so
+        that is the reason, whatever Docker could have done.
+        """
+        if requested:
+            return "it ran in the '%s' sandbox, which is the one this was asked to run in" % python_runtime
         if self._sandbox_was_declared():
             return (
                 "it ran in the '%s' sandbox, which is what 'pythonSandbox' asks for, and only the 'docker' "
@@ -1906,6 +1919,7 @@ class Context:
                     " using %s instead" % (requested, sandbox_versions.MAX_PYTHON_VERSION_CAD, version)
                 )
 
+            requested = python_runtime is not None
             if python_runtime is None:
                 python_runtime = self.preferred_python_sandbox()
                 if python_runtime == "docker" and not self._sandbox_was_declared():
@@ -1937,7 +1951,7 @@ class Context:
             # makes 'dockerImage' a preference rather than a requirement.
             if python_runtime not in ("docker", "remote"):
                 if image:
-                    self._note_image_skipped(image, self._why_not_docker(python_runtime, version))
+                    self._note_image_skipped(image, self._why_not_docker(python_runtime, version, requested))
                 image = None
             runtime_name = python_runtime + "-" + version + ("@" + image if image else "")
             if runtime_name not in self.runtimes_python:

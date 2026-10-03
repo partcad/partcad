@@ -1621,8 +1621,14 @@ class Shape(ShapeConfiguration):
 
         if not result.get("success", False):
             self.error(
-                "Render %s failed for %s:%s: %s"
-                % (format_name.upper(), self.project_name, self.name, result.get("exception", "Unknown error"))
+                "Render %s failed for %s:%s: %s%s"
+                % (
+                    format_name.upper(),
+                    self.project_name,
+                    self.name,
+                    result.get("exception", "Unknown error"),
+                    sandbox_note(ctx, impl),
+                )
             )
         if result.get("exception"):
             pc_logging.exception("Render %s exception: %s" % (format_name.upper(), result["exception"]))

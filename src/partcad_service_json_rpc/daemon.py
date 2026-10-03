@@ -107,8 +107,13 @@ def ensure_daemon(
             if _settings_differ(lambda params: _pipe_ask(pipe, params, liveness_timeout), daemon_argv):
                 # It stops offering the pipe on its own loop, a moment after
                 # answering; starting the replacement before then would hand
-                # out a name the old daemon still answers on.
-                _wait_until(lambda: not is_pipe_alive(pipe, liveness_timeout), START_TIMEOUT)
+                # out a name the old daemon still answers on -- with the old
+                # settings, which is the one thing this launch was for.
+                if not _wait_until(lambda: not is_pipe_alive(pipe, liveness_timeout), START_TIMEOUT):
+                    raise RuntimeError(
+                        "the PartCAD daemon serving %s was asked to restart with other settings and was still "
+                        "answering after %ss; run 'pc daemon stop' and try again" % (pipe, START_TIMEOUT)
+                    )
         if not is_pipe_alive(pipe, liveness_timeout):
             spawn_pipe_daemon(root, daemon_argv)
             # Wait for it to answer before saying where it is. The POSIX branch

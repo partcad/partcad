@@ -104,12 +104,16 @@ class ConfigWatcher:
     Fires at most once: what it triggers is the end of this process.
     """
 
-    def __init__(self, path: str, on_change: Callable[[], None], interval: float = POLL_SECONDS):
+    def __init__(self, path: str, on_change: Callable[[], None], interval: float = POLL_SECONDS, baseline=None):
         self.path = path
         self._on_change = on_change
         self._interval = interval
         self._stop = threading.Event()
-        self._baseline = self._read()
+        # What the daemon actually started from, when it was taken then (see
+        # 'remember'): read here instead, an edit made while the session was
+        # being built would become the baseline, and the daemon would go on
+        # serving the configuration from before it without ever restarting.
+        self._baseline = baseline if baseline is not None else self._read()
         self._thread = threading.Thread(target=self._run, name="partcad-config-watch", daemon=True)
 
     def _read(self):
@@ -247,6 +251,25 @@ class Connections:
             time.sleep(tick)
 
 
+# What the configuration file said when this process started reading it, by
+# path -- see 'remember'.
+_REMEMBERED = {}
+
+
+def remember(path: Optional[str] = None) -> None:
+    """Note what the configuration says *now*, before anything reads it.
+
+    Called first thing by every serving process, so that the watcher started
+    later compares against what the daemon was configured from rather than
+    against whatever the file says by the time it gets round to looking.
+    """
+    path = path or config_path()
+    try:
+        _REMEMBERED[path] = ("ok", _fingerprint(path))
+    except OSError:
+        _REMEMBERED[path] = ("unreadable", None)
+
+
 def config_path() -> str:
     """The file whose edits restart the daemon: the one ``UserConfig`` reads."""
     from partcad_utils.user_config import UserConfig
@@ -279,4 +302,4 @@ def watch(on_change: Callable[[], None], path: Optional[str] = None) -> Optional
         announce(path)
         on_change()
 
-    return ConfigWatcher(path, fire).start()
+    return ConfigWatcher(path, fire, baseline=_REMEMBERED.get(path)).start()

@@ -466,10 +466,20 @@ missing -- empty, and owned by root -- and the container starts perfectly well
 with directories that are not yours. Nothing announces that; the first symptom
 is a permission error on a directory you can write to. So PartCAD asks the
 daemon directly, once: it writes a file and has a throwaway container look for
-it. A daemon that cannot see it is one this sandbox cannot use, and PartCAD says
-so and uses conda or a virtual environment, both of which stay on this machine.
-A daemon *inside* this container -- Docker in Docker -- shares the filesystem
+it. A daemon *inside* this container -- Docker in Docker -- shares the filesystem
 and is fine.
+
+A dev container is usually fine too. When the file is not found and PartCAD is
+running in a container *of that daemon*, it reads that container's mounts --
+the workspace bound in from the host, a volume -- and binds each directory from
+where the daemon keeps it, at the path it has inside, then asks again. This
+repository's own dev container keeps ``~/.partcad`` and ``/tmp`` on volumes for
+exactly this reason. ``PC_DOCKER_MOUNT_SOURCES`` (``here=there`` pairs, separated
+by ``;``) says the same by hand. Only when there is no such answer -- a
+``DOCKER_HOST`` on another machine, or a directory the sandbox needs on none of
+the container's mounts -- is the daemon one this sandbox cannot use, and PartCAD
+says so and uses conda or a virtual environment, both of which stay on this
+machine.
 
 That fallback is only ever for a choice PartCAD made. Say ``pythonSandbox:
 docker`` yourself and it is obeyed: an image that cannot be had, or a daemon
