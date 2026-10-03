@@ -8,6 +8,7 @@ import rich_click as click
 from click.testing import CliRunner
 
 from ...cli_context import CliContext
+from ...exclude import exclude_option
 from .assemblies import cli as list_assemblies
 from .interfaces import cli as list_interfaces
 from .materials import cli as list_materials
@@ -30,15 +31,18 @@ from .software import cli as list_software
 @click.command(
     help="List all available parts, assemblies and scenes. PACKAGE may end in '...' to reach every package below it",
 )
+@exclude_option
 @click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
-def cli(cli_ctx: CliContext, recursive: bool, package: str) -> None:
+def cli(cli_ctx: CliContext, recursive: bool, exclude, package: str) -> None:
     """List all available parts, assemblies and scenes recursively."""
     runner = CliRunner()
     options = []
 
     if recursive:
         options.append("--recursive")
+    for excluded in exclude:
+        options.extend(["--exclude", excluded])
     if package:
         options.append(package)
 

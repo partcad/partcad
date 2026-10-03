@@ -384,6 +384,8 @@ class FakeContext:
         self.requested = []
         # (parent, kinds) of every warm-up a listing asked for.
         self.prefetched = []
+        # What every walk was told to leave out ('-x'), in the order asked.
+        self.excluded = []
         self.mates = {}
         # How many times an operation asked for the packages whose
         # configuration changed to be reloaded (see '_ctx').
@@ -452,7 +454,7 @@ class FakeContext:
     def stats_recalc(self):
         self.stats_packages = 3
 
-    def prefetch_object_configs(self, parent_name, kinds):
+    def prefetch_object_configs(self, parent_name, kinds, exclude=()):
         """What a listing asks for before it walks, recorded rather than done.
 
         A real context sends the enumerations of a plugin-backed tree in flight
@@ -506,10 +508,12 @@ class FakeContext:
             package = self.get_current_project_path() + "/" + package
         return package
 
-    def get_all_packages(self, parent_name=None, has_stuff=True):
+    def get_all_packages(self, parent_name=None, has_stuff=True, exclude=()):
+        self.excluded.append(list(exclude))
         projects = list(self.projects.values())
         if parent_name is not None:
             projects = [p for p in projects if p.name.startswith(parent_name)]
+        projects = [p for p in projects if not any(p.name == e or p.name.startswith(e + "/") for e in exclude)]
         if has_stuff:
             # As in Context.get_packages(): packages with no sketch, part or
             # assembly are dropped -- which is why `list interfaces` asks for
@@ -1232,6 +1236,88 @@ def test_list_interfaces_recursive_covers_packages_with_nothing_else_in_them():
     output = session.partcad.logging.only("info")
     assert row_for(output, "m3").startswith("\t//pkg1")
     assert lines_of(output)[-1] == "Total: 1"
+
+
+# --- '-x'/'--exclude': what a walk leaves out --------------------------------
+
+
+def test_a_listing_leaves_an_excluded_package_and_what_is_below_it_out():
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    ctx.projects["//kept"] = FakeProject(name="//kept").add("parts", FakeObject("bolt"))
+    ctx.projects["//gone"] = FakeProject(name="//gone").add("parts", FakeObject("nut"))
+    ctx.projects["//gone/below"] = FakeProject(name="//gone/below").add("parts", FakeObject("washer"))
+
+    operations.list_objects(session, {"kind": "parts", "package": "//", "recursive": True, "exclude": ["//gone"]})
+
+    output = session.partcad.logging.only("info")
+    assert row_for(output, "bolt").startswith("\t//kept")
+    assert "nut" not in output and "washer" not in output
+    assert ctx.excluded == [["//gone"]]
+
+
+def test_a_recursive_test_does_not_test_an_excluded_package(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+    sub = FakeProject(name="//sub").add("parts", FakeObject("widget"))
+    session.partcad_ctx.projects["//sub"] = sub
+
+    operations.test_run(session, {"recursive": True, "object": "widget", "exclude": ["//sub"]})
+
+    assert root.parts_requested == ["widget"]
+    assert sub.parts_requested == []
+
+
+def test_a_mate_listing_leaves_out_a_mate_with_either_end_excluded():
+    """'ctx.mates' holds the mates of every package loaded, whatever loaded it,
+    so the walk leaving a package out does not leave its mates out by itself."""
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    ctx.projects["//kept"] = FakeProject(name="//kept")
+    ctx.mates = {
+        "//kept:pin": {
+            "//kept:hole": FakeObject("kept-kept", desc="kept to kept"),
+            "//gone/below:hole": FakeObject("kept-gone", desc="kept to gone"),
+        },
+        "//gone:stud": {"//kept:hole": FakeObject("gone-kept", desc="gone to kept")},
+    }
+
+    operations.list_mates(session, {"package": "//", "recursive": True, "exclude": ["//gone"]})
+
+    output = session.partcad.logging.only("info")
+    assert "kept to kept" in output
+    assert "kept to gone" not in output and "gone to kept" not in output
+    assert lines_of(output)[-1] == "Total: 1 mating interfaces"
+
+
+def test_a_provider_listing_leaves_an_excluded_package_out():
+    session, _ = make_session()
+    ctx = session.partcad_ctx
+    for name in ("//kept", "//gone", "//gone/below"):
+        project = FakeProject(name=name).add("parts", FakeObject("bolt"))
+        project.add("providers", FakeObject("store" + name.replace("/", "-"), desc="sells " + name))
+        ctx.projects[name] = project
+
+    operations.list_providers(session, {"package": "//", "recursive": True, "exclude": ["//gone"]})
+
+    output = session.partcad.logging.only("info")
+    assert "sells //kept" in output
+    assert "sells //gone" not in output
+    assert ctx.excluded == [["//gone"]]
+
+
+def test_an_excluded_package_is_named_the_way_a_package_is():
+    """Relative to the current package, and with any '...' dropped: excluding a
+    package always excludes everything below it, so the suffix says nothing."""
+    ctx = FakeContext()
+    ctx.current_project_path = "//pub"
+
+    excluded = operations._excluded(ctx, {"exclude": ["universe/lego/ldraw", "//pub/electronics...", "//other/"]})
+
+    assert excluded == ["//pub/universe/lego/ldraw", "//pub/electronics", "//other"]
+    assert operations._excluded(ctx, {}) == []
 
 
 def test_list_packages_reports_the_package_with_its_url():

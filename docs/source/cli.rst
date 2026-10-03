@@ -73,6 +73,18 @@ over the packages that declare none: a tree of forty packages in which three dec
 renders, not thirty-seven complaints. Finding it nowhere in the subtree is the one failure, and it is reported
 once.
 
+``-x``/``--exclude`` leaves a package **and everything below it** out of the walk, and can be given more than
+once::
+
+    pc test -P //pub... -x //pub/universe/lego/ldraw    # all of //pub but the LDraw library's twenty thousand parts
+    pc list parts ... -x vendor -x experimental         # relative names are relative to the current package
+
+An excluded package is not loaded by the walk at all, which is what makes it worth having for a package served
+by a repository plugin: none of the requests its children would have cost are made. It does not make the package
+unreachable -- an assembly elsewhere in the tree can still use one of its parts -- only absent from the walk.
+Every command that walks a subtree takes it: ``pc test``, ``pc render``, ``pc export``, ``pc lint``, ``pc info``,
+``pc sim``, ``pc cam`` and the ``pc list`` commands.
+
 ``-r``/``--recursive`` is the older spelling of a ``...`` on the package name and still works everywhere it
 did. It cannot say where the walk starts, it is not available on every command that could use one (``pc info``
 has none), and the rest of this page is written with ``...``. Note that ``pc supply find -r`` and
