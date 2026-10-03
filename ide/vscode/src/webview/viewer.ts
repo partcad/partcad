@@ -269,8 +269,6 @@ async function show(message: ShowMessage): Promise<void> {
     if (generation !== mine) {
         return;
     }
-    // Refresh tree labels to show triangle counts after geometry is loaded
-    objectTree.refreshLabels();
     // Apply current opacity slider value to newly loaded geometry
     if (opacitySlider) {
         const opacity = parseInt(opacitySlider.value, 10) / 100;
@@ -426,10 +424,7 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
         }
     } else if (message.type === 'updateConfig') {
         (window as any).partcadConfig = message.config;
-        if (message.config?.viewer?.performanceDebug) {
-            // Recalculate triangle counts when enabled
-            objectTree?.refreshLabels();
-        } else {
+        if (!message.config?.viewer?.performanceDebug) {
             // Clear diagnostic state when disabled
             delete (window as any).pcNodeTriangleCounts;
             const statsDisplay = (window as any).pcViewerStats?.statsDisplay;
@@ -437,7 +432,6 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
                 statsDisplay.remove();
                 (window as any).pcViewerStats.statsDisplay = null;
             }
-            objectTree?.refreshLabels();
         }
     }
 });
