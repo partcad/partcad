@@ -1646,6 +1646,32 @@ def test_test_run_recursive_tests_the_object_in_each_package(monkeypatch):
     assert sub.parts_requested == ["widget"]
 
 
+def test_a_recursive_test_run_tests_each_package_as_an_action(monkeypatch):
+    """A package whose tests pass logs nothing, so without an action of its own
+    -- and the DONE line every action ends in -- a long run's verbose log said
+    nothing below its total."""
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].add("parts", FakeObject("widget"))
+    session.partcad_ctx.projects["//sub"] = FakeProject(name="//sub").add("parts", FakeObject("gadget"))
+
+    operations.test_run(session, {"recursive": True})
+
+    assert sorted(a for a in session.partcad.logging.actions if a[0] == "Test") == [("Test", "//"), ("Test", "//sub")]
+
+
+def test_a_single_package_test_run_leaves_its_timing_to_the_process(monkeypatch):
+    """One package is the whole run, and the run's own process says that."""
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].add("parts", FakeObject("widget"))
+
+    operations.test_run(session, {})
+
+    assert [a for a in session.partcad.logging.actions if a[0] == "Test"] == []
+    assert ("Test", "//") in session.partcad.logging.processes
+
+
 def test_test_run_recursive_runs_a_qualified_object_once(monkeypatch):
     # '//sub:widget' resolves to the same package whatever package it is reached
     # from, so a recursive run must not schedule -- and report -- that one object

@@ -1265,6 +1265,21 @@ def adhoc_render(session, params):
     return None
 
 
+async def _test_package_async(pc, package, coroutine):
+    """One package's tests in a recursive run, as an action of its own.
+
+    So that, like every action, it ends in a ``DONE`` line with its duration
+    (logged at DEBUG, so with ``--verbose``): a package whose tests all pass
+    logs nothing else, and a long run's log otherwise said nothing below its
+    total. The packages are tested together, so each duration counts from the
+    start of the run and they overlap; the run takes as long as the slowest of
+    them, not their sum. The 'Test' process of the run is what a single
+    package's tests already report under.
+    """
+    with pc.logging.Action("Test", package):
+        return await coroutine
+
+
 async def _test_async(ctx, pc, packages, filter_prefix, sketch, interface, assembly, scene, object_name):
     import asyncio
 
@@ -1304,7 +1319,8 @@ async def _test_async(ctx, pc, packages, filter_prefix, sketch, interface, assem
             pc.logging.error("Package %s is not found" % target)
             continue
         if not obj:
-            tasks.append(prj.test_log_wrapper_async(ctx, tests=tests_to_run))
+            task = prj.test_log_wrapper_async(ctx, tests=tests_to_run)
+            tasks.append(_test_package_async(pc, target, task) if len(packages) > 1 else task)
         elif interface:
             shape = prj.get_interface(obj)
             if shape is None:
