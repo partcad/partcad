@@ -933,12 +933,12 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
             }
         });
         const perfLog = {
-            'Part': stats.name,
-            'Type': stats.kind,
-            'Package': stats.package,
-            'Total triangles': stats.triangleCount.toFixed(0),
-            'Total vertices': stats.vertexCount.toFixed(0),
-            'Data transferred (KB)': (stats.bytesTransferred / 1024).toFixed(2),
+            part: stats.name,
+            type: stats.kind,
+            package: stats.package,
+            totalTriangles: stats.triangleCount.toFixed(0),
+            totalVertices: stats.vertexCount.toFixed(0),
+            dataTransferredKB: (stats.bytesTransferred / 1024).toFixed(2),
         };
         console.log('[PartCAD Viewer] Performance Stats:', perfLog);
 
