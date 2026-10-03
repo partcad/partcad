@@ -232,16 +232,22 @@ def test_restart_leaves_the_map_at_once_and_tells_who_is_connected(socket_dir):
 
 @needs_unix
 def test_restart_waits_for_the_request_in_progress(socket_dir):
+    started = threading.Event()
     release = threading.Event()
 
     def slow(session, params):
+        started.set()
         release.wait(5)
         return "done"
 
     server, path, thread = _serve(socket_dir, {"slow": slow}, grace=60)
     f, c = _connect(path)
     write_message(f, {"jsonrpc": "2.0", "id": 1, "method": "slow"})
-    assert _wait(lambda: not server._connections.settled(grace=0))
+    # Until the request is really running. The connection being known is not
+    # enough: a restart arriving before the request is read finds it idle and
+    # rightly tells it first, which is a different case -- and a slow runner
+    # (an ARM one, in CI) is where that ordering shows up.
+    assert started.wait(5)
 
     server.restart()
     time.sleep(0.3)
