@@ -14,7 +14,13 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-import { refreshToolsPath, resetToolsPathForTesting, toolsDirectory } from '../../common/terminalPath';
+import {
+    needsShellIntegrationWarning,
+    refreshToolsPath,
+    resetToolsPathForTesting,
+    toolsDirectory,
+    warnIfShellIntegrationOff,
+} from '../../common/terminalPath';
 
 const EXE = process.platform === 'win32' ? 'partcad-json-rpc.exe' : 'partcad-json-rpc';
 const CLI = process.platform === 'win32' ? 'pc.exe' : 'pc';
@@ -28,14 +34,16 @@ const CLI = process.platform === 'win32' ? 'pc.exe' : 'pc';
  */
 class RecordingCollection {
     public readonly calls: string[] = [];
+    public readonly options: (vscode.EnvironmentVariableMutatorOptions | undefined)[] = [];
     public persistent = true;
     public description: string | vscode.MarkdownString | undefined;
 
     clear(): void {
         this.calls.push('clear');
     }
-    prepend(variable: string, value: string): void {
+    prepend(variable: string, value: string, options?: vscode.EnvironmentVariableMutatorOptions): void {
         this.calls.push(`prepend ${variable}=${value}`);
+        this.options.push(options);
     }
     /** The rest of the interface, unused here but required by the type. */
     replace(): void {}
@@ -130,6 +138,18 @@ suite('Terminal PATH', () => {
         assert.strictEqual(collection.persistent, false, 'a deleted bundle directory must not survive a reload');
     });
 
+    test('the directory is put back after the shell has read its rc files', async () => {
+        // Applied only at process creation, the prepend lands before `.zshrc`
+        // runs, and `conda init` activating `base` there puts its own `bin`
+        // -- with an older PartCAD's `pc` in it -- ahead of ours.
+        const collection = new RecordingCollection();
+        const dir = bundle(tmp, '0.8.0');
+        await pointServicePathAt(path.join(dir, EXE));
+        refreshToolsPath(fakeContext(collection), 'partcad');
+
+        assert.deepStrictEqual(collection.options, [{ applyAtProcessCreation: true, applyAtShellIntegration: true }]);
+    });
+
     test('an upgrade replaces the directory rather than stacking a second one', async () => {
         // `pc upgrade` installs beside the running bundle and deletes every
         // superseded one, so the directory moves. `prepend` appends to what the
@@ -169,5 +189,78 @@ suite('Terminal PATH', () => {
 
         refreshToolsPath(context, 'partcad');
         assert.strictEqual(collection.calls.length, after, 'a no-op refresh is a no-op');
+    });
+
+    // ---- the warning when shell integration is off --------------------------
+
+    /** A terminal as `onDidOpenTerminal` hands it over: a shell, or a pseudoterminal. */
+    function terminal(options: vscode.TerminalOptions | vscode.ExtensionTerminalOptions = {}): vscode.Terminal {
+        return { creationOptions: options } as unknown as vscode.Terminal;
+    }
+
+    async function setShellIntegration(enabled: boolean | undefined): Promise<void> {
+        await vscode.workspace
+            .getConfiguration('terminal.integrated.shellIntegration')
+            .update('enabled', enabled, vscode.ConfigurationTarget.Global);
+    }
+
+    /** Put a bundle on the PATH, so there is something for an rc file to shadow. */
+    async function applyBundle(): Promise<void> {
+        const dir = bundle(tmp, '0.8.0');
+        await pointServicePathAt(path.join(dir, EXE));
+        refreshToolsPath(fakeContext(new RecordingCollection()), 'partcad');
+    }
+
+    test('a shell opened with shell integration off is warned about', async () => {
+        await applyBundle();
+        await setShellIntegration(false);
+        try {
+            assert.ok(needsShellIntegrationWarning(terminal(), 'partcad'));
+        } finally {
+            await setShellIntegration(undefined);
+        }
+    });
+
+    test('no warning with shell integration on', async () => {
+        await applyBundle();
+        await setShellIntegration(true);
+        try {
+            assert.ok(!needsShellIntegrationWarning(terminal(), 'partcad'));
+        } finally {
+            await setShellIntegration(undefined);
+        }
+    });
+
+    test('no warning for a pseudoterminal, which runs no shell', async () => {
+        await applyBundle();
+        await setShellIntegration(false);
+        try {
+            const pty = { onDidWrite: new vscode.EventEmitter<string>().event, open() {}, close() {} };
+            assert.ok(!needsShellIntegrationWarning(terminal({ name: 'PartCAD', pty }), 'partcad'));
+        } finally {
+            await setShellIntegration(undefined);
+        }
+    });
+
+    test('no warning when the extension put nothing on the PATH', async () => {
+        await pointServicePathAt(undefined);
+        await setShellIntegration(false);
+        try {
+            assert.ok(!needsShellIntegrationWarning(terminal(), 'partcad'));
+        } finally {
+            await setShellIntegration(undefined);
+        }
+    });
+
+    test('the warning is shown once per window, not once per terminal', async () => {
+        await applyBundle();
+        await setShellIntegration(false);
+        try {
+            // Not awaited: the message stays up until someone answers it.
+            void warnIfShellIntegrationOff(terminal(), 'partcad');
+            assert.ok(!needsShellIntegrationWarning(terminal(), 'partcad'), 'already warned');
+        } finally {
+            await setShellIntegration(undefined);
+        }
     });
 });
