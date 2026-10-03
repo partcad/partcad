@@ -1,6 +1,7 @@
 # PartCAD Viewer Performance Debug Feature
 
-**Scope:** VS Code IDE Extension (webview viewer only)  
+**Scope:** VS Code IDE Extension (webview viewer only)
+
 **Not applicable to:** PartCAD CLI, core library, or other components
 
 ## Overview
