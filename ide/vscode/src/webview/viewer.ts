@@ -239,6 +239,14 @@ async function show(message: ShowMessage): Promise<void> {
         caeViews[tab]?.setBusy('Select this tab to run the analysis.');
     }
 
+    // Set up viewer configuration on the window object for access by scene.ts
+    if (message.config) {
+        (window as any).partcadConfig = message.config;
+        if (message.config?.viewer?.performanceDebug) {
+            console.log('[PartCAD Viewer] Config set:', message.config);
+        }
+    }
+
     // The pane first, and the visibility it asks for with it: an item that starts
     // out unticked - the ports of everything inside an assembly - must not be
     // drawn even for the one frame between the geometry arriving and the pane
@@ -413,6 +421,17 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
             spaceMouse.spacenavMotion(message.motion, performance.now());
         } else if (message.button !== undefined) {
             spaceMouse.spacenavButton(message.button, message.pressed === true);
+        }
+    } else if (message.type === 'updateConfig') {
+        (window as any).partcadConfig = message.config;
+        if (!message.config?.viewer?.performanceDebug) {
+            // Clear diagnostic state when disabled
+            delete (window as any).pcNodeTriangleCounts;
+            const statsDisplay = (window as any).pcViewerStats?.statsDisplay;
+            if (statsDisplay) {
+                statsDisplay.remove();
+                (window as any).pcViewerStats.statsDisplay = null;
+            }
         }
     }
 });

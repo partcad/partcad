@@ -46,6 +46,11 @@ export function getPopupTerminalFromSetting(namespace: string, scope?: Configura
     return config.get<string>('popupTerminal');
 }
 
+export function getViewerPerformanceDebugFromSetting(namespace: string, scope?: ConfigurationScope): boolean {
+    const config = getConfiguration(namespace, scope);
+    return config.get<boolean>('viewer.performanceDebug') ?? false;
+}
+
 export function checkIfConfigurationChanged(e: ConfigurationChangeEvent, namespace: string): boolean {
     const settings = [
         `${namespace}.servicePath`,

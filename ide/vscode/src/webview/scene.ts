@@ -850,6 +850,126 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
         return;
     }
     overlay.style.display = 'none';
+
+    // Performance logging (behind config flag)
+    const perfDebug = (window as any).partcadConfig?.viewer?.performanceDebug ?? false;
+    const nodeTriangleCounts = new Map<string, number>();
+
+    if (!perfDebug) {
+        delete (window as any).pcNodeTriangleCounts;
+        const statsDisplay = (window as any).pcViewerStats?.statsDisplay;
+        if (statsDisplay) {
+            statsDisplay.remove();
+            (window as any).pcViewerStats.statsDisplay = null;
+        }
+    }
+
+    // Diagnostic: Scene structure profiling
+    if (perfDebug) {
+        let totalMeshes = 0;
+        const materialCounts = new Map<THREE.Material, number>();
+        group.traverse((obj) => {
+            if ((obj as THREE.Mesh).isMesh) {
+                totalMeshes++;
+                const material = (obj as THREE.Mesh).material as THREE.Material | undefined;
+                if (material) {
+                    materialCounts.set(material, (materialCounts.get(material) ?? 0) + 1);
+                }
+            }
+        });
+        const topLevelNodes = loaded.built.length;
+        const avgMeshesPerNode = topLevelNodes > 0 ? (totalMeshes / topLevelNodes).toFixed(1) : '0';
+        const materialDistribution: Record<string, number> = {};
+        let materialIndex = 0;
+        for (const [mat, count] of materialCounts) {
+            materialDistribution[`Material${materialIndex++}`] = count;
+        }
+        console.log('[PartCAD Viewer] Scene Structure:', {
+            totalMeshes,
+            topLevelNodes,
+            avgMeshesPerNode,
+            materials: materialCounts.size,
+            ...materialDistribution,
+        });
+    }
+
+    if (perfDebug) {
+        // Count triangles per node (excluding child node groups)
+        for (const { node, path, group: nodeGroup } of loaded.built) {
+            let nodeTriangles = 0;
+            nodeGroup.children.forEach((child: any) => {
+                // Skip groups that represent child nodes (they have their own loaded.built entries)
+                if (child.isMesh && child.geometry) {
+                    if (child.geometry.index) {
+                        nodeTriangles += child.geometry.index.count / 3;
+                    } else {
+                        nodeTriangles += child.geometry.attributes.position.count / 3;
+                    }
+                }
+            });
+            const id = nodeId(path);
+            const count = Math.round(nodeTriangles);
+            nodeTriangleCounts.set(id, count);
+        }
+        // Store for access by tree display
+        (window as any).pcNodeTriangleCounts = nodeTriangleCounts;
+
+        const stats = {
+            name: message.name || '(unnamed)',
+            kind: message.kind || 'object',
+            package: message.package || '(local)',
+            triangleCount: 0,
+            vertexCount: 0,
+            bytesTransferred: total,
+        };
+        group.traverse((obj: any) => {
+            if (obj.isMesh && obj.geometry) {
+                if (obj.geometry.index) {
+                    stats.triangleCount += obj.geometry.index.count / 3;
+                } else {
+                    stats.triangleCount += obj.geometry.attributes.position.count / 3;
+                }
+                stats.vertexCount += obj.geometry.attributes.position.count;
+            }
+        });
+        const perfLog = {
+            part: stats.name,
+            type: stats.kind,
+            package: stats.package,
+            totalTriangles: stats.triangleCount.toFixed(0),
+            totalVertices: stats.vertexCount.toFixed(0),
+            dataTransferredKB: (stats.bytesTransferred / 1024).toFixed(2),
+        };
+        console.log('[PartCAD Viewer] Performance Stats:', perfLog);
+
+        // Create on-screen stats display
+        if (!(window as any).pcViewerStats) {
+            (window as any).pcViewerStats = { frameTimeHistory: [], lastLogTime: 0, statsDisplay: null, geometryInfo: '' };
+        }
+        if (!(window as any).pcViewerStats.statsDisplay) {
+            const div = document.createElement('div');
+            div.style.cssText = `
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                background: rgba(0, 0, 0, 0.7);
+                color: #00ff00;
+                font-family: monospace;
+                font-size: 12px;
+                padding: 10px;
+                border-radius: 4px;
+                pointer-events: none;
+                z-index: 1000;
+                white-space: pre;
+                line-height: 1.4;
+            `;
+            document.body.appendChild(div);
+            (window as any).pcViewerStats.statsDisplay = div;
+        }
+        const geometryInfo = `${stats.name} (${stats.kind})\n${stats.triangleCount.toFixed(0)} triangles\n${(stats.bytesTransferred / 1024).toFixed(1)}KB`;
+        (window as any).pcViewerStats.geometryInfo = geometryInfo;
+        (window as any).pcViewerStats.statsDisplay.textContent = geometryInfo;
+    }
 }
 
 export function resizeCanvas(): void {
@@ -937,6 +1057,44 @@ function animate(): void {
     }
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
+
+    // FPS tracking for performance logging (behind config flag)
+    const perfDebug = (window as any).partcadConfig?.viewer?.performanceDebug ?? false;
+    if (perfDebug) {
+        if (!(window as any).pcViewerStats) {
+            (window as any).pcViewerStats = { frameTimeHistory: [], lastLogTime: 0, lastFrameTime: now, statsDisplay: null, geometryInfo: '' };
+        }
+        const stats = (window as any).pcViewerStats;
+        const frameInterval = now - stats.lastFrameTime;
+        stats.frameTimeHistory.push(frameInterval);
+        if (stats.frameTimeHistory.length > 60) {
+            stats.frameTimeHistory.shift();
+        }
+        stats.lastFrameTime = now;
+
+        // Log FPS every second
+        if (now - stats.lastLogTime > 1000) {
+            const avg = stats.frameTimeHistory.reduce((a: number, b: number) => a + b, 0) / stats.frameTimeHistory.length;
+            const fps = 1000 / avg;
+            console.log(`[PartCAD Viewer] FPS: ${fps.toFixed(1)} (frame time: ${avg.toFixed(2)}ms)`);
+
+            // Update on-screen display with FPS and graphics info
+            const renderInfo = renderer.info.render;
+            const memInfo = renderer.info.memory;
+            if (stats.statsDisplay) {
+                const fpsInfo = `\nFPS: ${fps.toFixed(1)} | Frame: ${avg.toFixed(1)}ms`;
+                const graphicsInfo = `\nDraw Calls: ${renderInfo.calls} | Geometries: ${memInfo.geometries}`;
+                stats.statsDisplay.textContent = stats.geometryInfo + fpsInfo + graphicsInfo;
+            }
+            console.log('[PartCAD Viewer] Graphics Stats:', {
+                drawCalls: renderInfo.calls,
+                triangles: renderInfo.triangles,
+                geometries: memInfo.geometries,
+                textures: memInfo.textures,
+            });
+            stats.lastLogTime = now;
+        }
+    }
 }
 
 window.addEventListener('resize', resizeCanvas);
