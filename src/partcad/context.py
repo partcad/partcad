@@ -367,6 +367,9 @@ class Context:
         self.docker_images_available = {}
         self.docker_sandbox_fallback_warned = False
         self.docker_image_fallback_warned = set()
+        # Why a package's own image was not used, by image (see
+        # 'docker_image_note'), for the error of whatever then failed without it.
+        self.docker_image_notes = {}
         self.runtimes_javascript = {}
         self.runtimes_javascript_lock = threading.Lock()
 
@@ -1785,7 +1788,14 @@ class Context:
         from . import runtime_python_docker
 
         if image not in self.docker_images_available:
-            self.docker_images_available[image] = runtime_python_docker.image_available(image, version)
+            # The directories every sandbox of this context binds, so that a
+            # daemon reaching only some of them is "no" here -- where PartCAD
+            # can still choose another sandbox -- rather than a failure when
+            # the container starts.
+            needed = [self.user_config.internal_state_dir, getattr(self, "root_path", None)]
+            self.docker_images_available[image] = runtime_python_docker.image_available(
+                image, version
+            ) and not runtime_python_docker.misses(image, [p for p in needed if p])
         return self.docker_images_available[image]
 
     def _docker_or_next_best(self, version: str) -> str:
@@ -1823,6 +1833,51 @@ class Context:
                 " failure rather than a fallback." % (version, self.user_config.python_sandbox)
             )
         return self.user_config.python_sandbox
+
+    def _why_not_docker(self, python_runtime: str, version: str, requested: bool = False) -> str:
+        """Why a Python sandbox other than 'docker' was the one chosen, as a clause.
+
+        ``requested``: the caller of 'get_python_runtime' named the sandbox, so
+        that is the reason, whatever Docker could have done.
+        """
+        if requested:
+            return "it ran in the '%s' sandbox, which is the one this was asked to run in" % python_runtime
+        if self._sandbox_was_declared():
+            return (
+                "it ran in the '%s' sandbox, which is what 'pythonSandbox' asks for, and only the 'docker' "
+                "sandbox runs a package's own image" % python_runtime
+            )
+        if not runtime.docker_enabled(self.user_config):
+            return (
+                "it ran in the '%s' sandbox, because Docker is not available here "
+                "(or 'useDocker' turns it off)" % python_runtime
+            )
+        from . import runtime_python_docker
+
+        reason = runtime_python_docker.unavailable_reason(runtime_python_docker.image_for(version))
+        return "it ran in the '%s' sandbox, because the 'docker' sandbox cannot be used here: %s" % (
+            python_runtime,
+            reason or "PartCAD's own image for Python %s is not available" % version,
+        )
+
+    def _note_image_skipped(self, image: str, why: str) -> None:
+        """Remember, and say once, that a package's image is not what runs it.
+
+        A warning rather than the debug line PartCAD's own choice of sandbox
+        gets: here a *package* said where its code runs best -- usually because
+        what it needs cannot be installed by pip -- and running it anywhere else
+        is the likeliest reason it is about to fail. Once per image, since a
+        tree of parts asks the same question for each of them.
+        """
+        note = "'%s' was not used: %s." % (image, why)
+        self.docker_image_notes[image] = note
+        if image not in self.docker_image_fallback_warned:
+            self.docker_image_fallback_warned.add(image)
+            pc_logging.warning(note + " Anything the package needs that image for has to be in its requirements too.")
+
+    def docker_image_note(self, image: Optional[str]) -> Optional[str]:
+        """Why ``image``, named by a package, was not used here; ``None`` if it was or was never asked for."""
+        return self.docker_image_notes.get(image) if image else None
 
     def get_python_runtime(self, version=None, python_runtime=None, image=None):
         with self.runtimes_python_lock:
@@ -1864,6 +1919,7 @@ class Context:
                     " using %s instead" % (requested, sandbox_versions.MAX_PYTHON_VERSION_CAD, version)
                 )
 
+            requested = python_runtime is not None
             if python_runtime is None:
                 python_runtime = self.preferred_python_sandbox()
                 if python_runtime == "docker" and not self._sandbox_was_declared():
@@ -1877,12 +1933,13 @@ class Context:
             # Only for 'docker'. The 'remote' sandbox's images are the service's
             # to obtain, on a machine that is not necessarily this one.
             if python_runtime == "docker" and image and not self._image_available(image, version):
-                if image not in self.docker_image_fallback_warned:
-                    self.docker_image_fallback_warned.add(image)
-                    pc_logging.warning(
-                        "'%s' cannot be pulled here, so PartCAD's own image is being used instead."
-                        " Anything the package needs that image for has to be in its requirements too." % image
-                    )
+                from . import runtime_python_docker
+
+                self._note_image_skipped(
+                    image,
+                    "PartCAD's own image was used instead, because %s"
+                    % (runtime_python_docker.unavailable_reason(image) or "it cannot be pulled here"),
+                )
                 image = None
 
             # The image is part of a sandbox's identity, not just of how it is
@@ -1893,6 +1950,8 @@ class Context:
             # machine uses and the name is simply not consulted -- which is what
             # makes 'dockerImage' a preference rather than a requirement.
             if python_runtime not in ("docker", "remote"):
+                if image:
+                    self._note_image_skipped(image, self._why_not_docker(python_runtime, version, requested))
                 image = None
             runtime_name = python_runtime + "-" + version + ("@" + image if image else "")
             if runtime_name not in self.runtimes_python:

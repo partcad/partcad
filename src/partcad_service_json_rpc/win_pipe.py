@@ -31,6 +31,7 @@ import threading
 from partcad_utils.win_pipe import STOP_METHOD, pipe_name, read_frame, write_frame
 from partcad_utils.workspace import workspace_dir
 
+from . import config_restart
 from .rpc.dispatcher import Dispatcher
 from .rpc.methods import build_registry
 
@@ -107,8 +108,17 @@ def _daemon_log(root_path: str):
         log.close()
 
 
-def serve_pipe(session, registry=None, name: str = None) -> None:
-    """Serve the shared session over a Windows named pipe until stopped."""
+def serve_pipe(session, registry=None, name: str = None, settings=()) -> None:
+    """Serve the shared session over a Windows named pipe until stopped.
+
+    Restarts when the user configuration changes, exactly as the POSIX daemon
+    does (see ``config_restart``): no new pipe instances, so the next client
+    spawns a fresh daemon, while the connections already here finish and are
+    told to reconnect.
+
+    ``settings`` are the launcher flags it was started with, which is what it
+    answers ``daemon.settings`` with (see ``config_restart.SETTINGS_METHOD``).
+    """
     registry = registry if registry is not None else build_registry()
     dispatcher = Dispatcher(registry)
     dispatch_lock = threading.Lock()
@@ -116,45 +126,102 @@ def serve_pipe(session, registry=None, name: str = None) -> None:
     loop = asyncio.ProactorEventLoop()  # type: ignore[attr-defined]
     asyncio.set_event_loop(loop)
     stop_event = asyncio.Event()
+    # The same fact for the threads: the drain runs on one.
+    stopped = threading.Event()
+    restarting = threading.Event()
+    connections = config_restart.Connections()
+    servers = []
+
+    def stop():
+        stopped.set()
+        stop_event.set()
 
     async def handle(reader, writer):
         def sink(event, payload):
             write_frame(writer, {"jsonrpc": "2.0", "method": event, "params": payload})
 
-        while not stop_event.is_set():
-            request = await read_frame(reader)
-            if request is None:
-                break
-            if isinstance(request, dict) and request.get("method") == STOP_METHOD:
-                if "id" in request:
-                    write_frame(writer, {"jsonrpc": "2.0", "id": request["id"], "result": {"stopped": True}})
-                    await writer.drain()
-                stop_event.set()
-                break
+        def notify(event, payload):
+            # From the drain's thread, so onto the loop rather than written here.
+            loop.call_soon_threadsafe(sink, event, payload)
 
-            def _run():
-                with dispatch_lock:
-                    session.emitter.set_sink(sink)
-                    try:
-                        return dispatcher.dispatch(request, session)
-                    finally:
-                        session.emitter.set_sink(None)
+        token = connections.add(notify)
+        try:
+            while not stop_event.is_set():
+                request = await read_frame(reader)
+                if request is None:
+                    break
+                if isinstance(request, dict) and request.get("method") == STOP_METHOD:
+                    if "id" in request:
+                        write_frame(writer, {"jsonrpc": "2.0", "id": request["id"], "result": {"stopped": True}})
+                        await writer.drain()
+                    stop()
+                    break
+                if isinstance(request, dict) and request.get("method") == config_restart.SETTINGS_METHOD:
+                    differ = config_restart.settings_differ(request.get("params"), settings)
+                    if differ:
+                        restart()
+                    if "id" in request:
+                        write_frame(
+                            writer,
+                            {
+                                "jsonrpc": "2.0",
+                                "id": request["id"],
+                                "result": {"restarting": differ, "settings": list(settings)},
+                            },
+                        )
+                        await writer.drain()
+                    continue
 
-            response = await loop.run_in_executor(None, _run)
-            if response is not None:
-                write_frame(writer, response)
-                await writer.drain()
+                def _run():
+                    with dispatch_lock:
+                        session.emitter.set_sink(sink)
+                        try:
+                            return dispatcher.dispatch(request, session)
+                        finally:
+                            session.emitter.set_sink(None)
+
+                connections.begin(token)
+                try:
+                    response = await loop.run_in_executor(None, _run)
+                    if response is not None:
+                        write_frame(writer, response)
+                        await writer.drain()
+                finally:
+                    connections.end(token)
+        finally:
+            connections.remove(token)
+
+    def begin_restart():
+        # Closing the server stops it offering new pipe instances; the ones
+        # already connected are not closed with it.
+        for server in servers:
+            server.close()
+
+        async def drain():
+            await loop.run_in_executor(None, connections.drain, config_restart.GRACE_SECONDS, stopped)
+            stop()
+
+        loop.create_task(drain())
+
+    def restart():
+        if not restarting.is_set() and not stopped.is_set():
+            restarting.set()
+            loop.call_soon_threadsafe(begin_restart)
 
     async def _serve():
         [server] = await loop.start_serving_pipe(  # type: ignore[attr-defined]
             lambda: _PipeProtocol(handle, loop), name
         )
+        servers.append(server)
         await stop_event.wait()
         server.close()
 
+    watcher = config_restart.watch(restart)
     try:
         loop.run_until_complete(_serve())
     finally:
+        if watcher is not None:
+            watcher.stop()
         loop.close()
 
 

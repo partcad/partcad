@@ -175,7 +175,11 @@ class Session:
             settings = copy.deepcopy(self.settings)
             user_config = self.partcad.user_config
             if settings.get("pythonSandbox"):
-                user_config.python_runtime = settings["pythonSandbox"]
+                # 'python_sandbox', the property: assigning it is what records
+                # the sandbox as asked for rather than picked. This used to set
+                # 'python_runtime', which nothing reads, so '--python-sandbox'
+                # on the daemon did nothing at all.
+                user_config.python_sandbox = settings["pythonSandbox"]
             # Both spellings, one reading: the daemon's own command line turns
             # a flag into "true", while the VS Code extension forwards its
             # settings with their JSON types intact.

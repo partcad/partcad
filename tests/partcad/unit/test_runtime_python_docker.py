@@ -1200,6 +1200,7 @@ def test_a_dangling_interpreter_symlink_still_counts_as_built(tmp_path):
         pytest.skip("this platform will not create a symlink here")
 
     assert os.path.exists(made._host_venv_python) is False, "the premise: the target is not here"
+    os.makedirs(os.path.join(made.path, "lib", "python3.11", "site-packages", "pip"))
     assert made._environment_built is True
     # And so it is not built again, which is what turned a good build into a
     # failure every time.
@@ -1208,6 +1209,23 @@ def test_a_dangling_interpreter_symlink_still_counts_as_built(tmp_path):
 
 def test_no_environment_is_not_built(tmp_path):
     assert _runtime(tmp_path)._environment_built is False
+
+
+def test_an_environment_without_pip_is_built_again_from_nothing(tmp_path):
+    """An interpreter and no pip: a creation that never finished.
+
+    Counted as built, every install in it failed with "No module named pip" on
+    every command, and nothing ever built it again. It is built again, cleared
+    first, so that nothing half-made survives into the new one.
+    """
+    made = _runtime(tmp_path)
+    os.makedirs(os.path.dirname(made._host_venv_python))
+    open(made._host_venv_python, "w").close()
+
+    assert made._environment_built is False
+    command = made._create_locked()
+    assert command[:3] == ["-m", "venv", "--upgrade-deps"]
+    assert "--clear" in command
 
 
 # --------------------------------------------------------------------------- #
@@ -1371,3 +1389,119 @@ def test_a_failed_environment_with_nothing_on_stderr_still_says_the_exit_code(tm
 
     with pytest.raises(Exception, match="exited with 3"):
         made._created(3, "")
+
+
+def test_a_build_that_is_not_here_says_where_it_went(tmp_path, monkeypatch):
+    """'-m venv' exits 0 and nothing is here: the error names both sides and the mounts."""
+    made = _runtime(tmp_path)
+    monkeypatch.setattr(made, "_where_it_went", lambda: "In the container: [...]")
+    with pytest.raises(Exception) as raised:
+        made._created(0, "")
+    assert "exited with 0, but the environment is not here" in str(raised.value)
+    assert "In the container" in str(raised.value)
+
+
+def test_where_it_went_never_raises(tmp_path, monkeypatch):
+    made = _runtime(tmp_path)
+
+    def broken():
+        raise RuntimeError("no daemon")
+
+    monkeypatch.setattr(made, "_start", broken)
+    assert "could not be asked: no daemon" in made._where_it_went()
+
+
+def _interpreter_only(made):
+    os.makedirs(os.path.dirname(made._host_venv_python), exist_ok=True)
+    open(made._host_venv_python, "w").close()
+
+
+def test_a_creation_that_lost_its_pip_is_noticed(tmp_path):
+    """'--upgrade-deps' leaving no pip and exiting 0, as it does on GitHub's runners."""
+    made = _runtime(tmp_path)
+    _interpreter_only(made)
+    assert made._lost_pip(0) is True
+
+
+def test_a_failed_or_complete_creation_did_not_lose_pip(tmp_path):
+    made = _runtime(tmp_path)
+    assert made._lost_pip(0) is False  # nothing there at all: a failure, reported as one
+    _interpreter_only(made)
+    assert made._lost_pip(1) is False  # it said it failed; '_created' reports that
+    os.makedirs(os.path.join(made.path, "lib", "python3.11", "site-packages", "pip"))
+    assert made._lost_pip(0) is False
+
+
+def test_pip_is_put_back_by_the_environment_and_not_by_the_image(tmp_path):
+    """'exec_path' is still the image's 'python3' then; its ensurepip installs into the image."""
+    made = _runtime(tmp_path)
+    command = made._ensurepip()
+    assert command[0] == docker_mount.rewrite(made._host_venv_python, made._mounted)
+    assert command[0] != runtime_python_docker.CONTAINER_PYTHON
+    assert command[-3:] == ["ensurepip", "--upgrade", "--default-pip"]
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_creation_that_lost_its_pip_ends_with_pip_put_back(tmp_path, monkeypatch, asynchronous):
+    """Both creation paths, end to end, short of a container.
+
+    The asynchronous one died on its first run in CI: the runner encodes its
+    standard input, and a call without one handed it None.
+    """
+    import asyncio
+
+    from partcad import runtime_python
+
+    made = _runtime(tmp_path)
+    put_back = []
+
+    def created(*_args, **_kwargs):
+        _interpreter_only(made)
+        return 0, "", ""
+
+    async def created_async(*args, **kwargs):
+        return created()
+
+    def ensurepip(self, cmd, stdin=None, **_kwargs):
+        assert isinstance(stdin, str), "the runner encodes stdin; None is a crash"
+        put_back.append(cmd)
+        os.makedirs(os.path.join(made.path, "lib", "python3.11", "site-packages", "pip"))
+        return 0, "", ""
+
+    async def ensurepip_async(self, cmd, stdin=None, **kwargs):
+        return ensurepip(self, cmd, stdin=stdin, **kwargs)
+
+    async def provisioned_async(self):
+        return None
+
+    monkeypatch.setattr(made, "run_onced_locked", created)
+    monkeypatch.setattr(made, "run_async_onced_locked", created_async)
+    monkeypatch.setattr(runtime.Runtime, "run", ensurepip)
+    monkeypatch.setattr(runtime.Runtime, "run_async", ensurepip_async)
+    monkeypatch.setattr(runtime_python.PythonRuntime, "once", lambda self: None)
+    monkeypatch.setattr(runtime_python.PythonRuntime, "once_async", provisioned_async)
+
+    if asynchronous:
+        asyncio.run(made.once_async())
+    else:
+        made.once()
+
+    assert put_back and put_back[0] == made._ensurepip()
+    assert made._environment_built is True
+
+
+def test_a_session_environment_that_lost_its_pip_gets_it_back(tmp_path, monkeypatch):
+    """The same loss, one level down: CI's next failure after the base environment was fixed."""
+    made = _runtime(tmp_path)
+    session_path = os.path.join(made.path, "v-env-0123456789abcdef")
+    os.makedirs(os.path.join(session_path, "bin"))
+    ran = []
+    monkeypatch.setattr(made, "run_onced_locked", lambda cmd, path=None, **kw: ran.append((cmd, path)) or (0, "", ""))
+
+    made._restore_pip_onced_locked(session_path)
+    assert ran == [(made.ENSUREPIP, session_path)]
+
+    ran.clear()
+    os.makedirs(os.path.join(session_path, "lib", "python3.11", "site-packages", "pip"))
+    made._restore_pip_onced_locked(session_path)
+    assert ran == []

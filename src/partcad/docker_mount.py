@@ -32,6 +32,18 @@ design keeps everywhere; on Windows the translation already happens, and
 ``translate()`` is not an identity nobody would write down. Anything that
 proposes mounting somewhere else is trading away a POSIX convenience, not
 breaking an invariant.
+
+There is one more case, and it keeps the rule rather than bending it: PartCAD
+running *inside* a container whose Docker daemon is somebody else's -- a dev
+container with the host's socket bound in. The paths PartCAD sees are this
+container's, and the daemon resolves a bind source against its own filesystem,
+where they are not. But most of them are mounts of this container -- the
+workspace a bind from the host, a cache a named volume -- and the daemon knows
+where each of those really is. ``sources`` is that knowledge, as pairs of
+(where it is here, where the daemon has it), and only the *source* of a bind is
+taken from it: the target stays the path PartCAD knows, so inside the sandbox
+everything is still at the path it has here. See
+``runtime_python_docker.mount_sources``.
 """
 
 import os
@@ -116,7 +128,30 @@ def _tidy(path: str) -> str:
     return stripped if stripped else path[:1]
 
 
-def mounts(host_paths, windows: Optional[bool] = None) -> dict:
+def _holding(path: str, sources):
+    """The innermost of ``sources`` holding ``path``, as (here, there); ``None`` if none does."""
+    best = None
+    for here, there in sources or ():
+        here = _tidy(here)
+        if contains(here, path, False) and (best is None or len(here) > len(best[0])):
+            best = (here, _tidy(there))
+    return best
+
+
+def backed_by(path: str, sources) -> Optional[str]:
+    """Where the daemon has ``path``, by the innermost of ``sources`` holding it; ``None`` if none does.
+
+    ``sources`` are (here, daemon-side) pairs. POSIX only: a container whose
+    daemon is somebody else's is a Linux container, whatever runs the daemon.
+    """
+    best = _holding(path, sources)
+    if best is None:
+        return None
+    here, there = best
+    return there + path[len(here) :] if path != here else there
+
+
+def mounts(host_paths, windows: Optional[bool] = None, sources=None) -> dict:
     """The bind mounts for these host directories, as the docker SDK wants them.
 
     Deduplicated and with nested paths dropped: mounting both a directory and
@@ -129,12 +164,36 @@ def mounts(host_paths, windows: Optional[bool] = None) -> dict:
     goes to the cache or back over its own protocol -- and cost a second thing
     that could differ between two containers of one image, on a mount contract
     that is a stopgap rather than a boundary. The boundary is the container.
+
+    With ``sources`` (see the module docstring), each bind's source is where
+    the daemon has the directory, and a directory it does not have is left out:
+    binding it would have the daemon create an empty one of that name on its
+    own filesystem. Saying whether that is acceptable is the caller's business.
+
+    And each directory is widened to the whole mount holding it -- the
+    workspace rather than the package in it, the state volume rather than one
+    sandbox. That is the home directory's job on an ordinary host, and it is
+    done here for the same reason: a container is shared by every context that
+    uses its image and is replaced when the mounts it needs differ, so a mount
+    set that follows each context's root is a container replaced from under
+    whichever context started it -- its next command run in a container that
+    does not have its package.
     """
     if windows is None:
         windows = os.name == "nt"
 
+    tidied = {_tidy(p) for p in host_paths}
+    if sources is not None:
+        tidied = {_holding(p, sources)[0] for p in tidied if _holding(p, sources) is not None}
+
+    if sources is not None:
+        # Every one of these is a mount of this container now, and one nested
+        # in another is a mount of its own: a bind of the outer one's source
+        # does not carry it, so it is bound as well rather than dropped.
+        return {backed_by(path, sources): {"bind": path, "mode": "rw"} for path in sorted(tidied, key=len)}
+
     kept = []
-    for path in sorted({_tidy(p) for p in host_paths}, key=len):
+    for path in sorted(tidied, key=len):
         if not any(contains(outer, path, windows) for outer in kept):
             kept.append(path)
 
