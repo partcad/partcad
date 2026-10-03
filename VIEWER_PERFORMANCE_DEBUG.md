@@ -2,37 +2,37 @@
 
 ## Overview
 
-Added configurable performance logging and on-screen metrics display to the PartCAD VS Code viewer. Behind a feature flag to keep default behavior clean.
+Added configurable performance profiling to the PartCAD VS Code viewer to diagnose rendering bottlenecks. Purely diagnostic—no rendering optimizations. Behind a feature flag to keep default behavior clean.
 
 ## Comparison to Devel Branch
 
 | Feature | Devel | This Branch |
 |---------|-------|-------------|
-| Performance stats logging | ❌ None | ✅ Configurable via UI setting |
-| On-screen FPS/metrics | ❌ None | ✅ Top-right corner display |
-| Console logging | ❌ None | ✅ Console + VS Code output panel |
+| Triangle count per node | ❌ None | ✅ Shown in control tree |
+| Graphics profiling | ❌ None | ✅ Draw calls, GPU memory, mesh count |
+| FPS/frame time display | ❌ None | ✅ Console + on-screen |
 | Default behavior | N/A | Clean (all logging disabled by default) |
 | Configuration | N/A | VS Code Settings UI + partcad.viewer.performanceDebug |
 
 ## What's Measured
 
-When `partcad.viewer.performanceDebug` is **enabled**, the viewer shows:
+When `partcad.viewer.performanceDebug` is **enabled**, the viewer captures:
 
 **In Control Tree:**
 - Triangle count for each node in parentheses (e.g., "reactor-core (45,000 triangles)")
-- Helps identify which parts are geometry-heavy
+- Helps identify geometry-heavy parts
 
 **On Load (Console & On-Screen):**
 - Part name (e.g., "reactor-unit")
 - Assembly type (e.g., "assembly", "part")
 - Package name (e.g., "4tv", "local")
-- Total triangle count
-- Total vertex count
+- Total triangle count and vertex count
 - Data transferred (KB)
+- **Draw calls** and mesh count (GPU/CPU bottleneck indicator)
 
 **During Rotation/Interaction (every 1 second):**
 - FPS (frames per second)
-- Frame time (milliseconds)
+- Frame time (milliseconds per frame)
 
 ## Where Data Appears
 
@@ -57,11 +57,11 @@ When `partcad.viewer.performanceDebug` is **enabled**, the viewer shows:
 3. **On-Screen Display** (top-right corner of viewer):
    ```
    reactor-unit (assembly)
-   45000 triangles
+   45000 triangles | 98000 vertices
    234.5KB
+   Draw calls: 14000 | Meshes: 7386
    
-   FPS: 60.0
-   Frame: 16.7ms
+   FPS: 60.0 | Frame: 16.7ms
    ```
 
 ## How to Enable
@@ -99,25 +99,29 @@ Located in: `PartCAD Viewer` section of extension settings
 
 ### Code Changes
 
-- **scene.ts (showGeometry)**: Calculates geometry stats, creates on-screen display
-- **scene.ts (animate)**: Measures frame time, updates FPS every second
-- **All logging**: Wrapped in `if (perfDebug)` check to prevent overhead when disabled
+- **scene.ts**: Per-node triangle counting, draw call profiling, scene structure diagnostics
+- **tree.ts**: Triangle count display in control tree labels
+- **viewer.ts**: Config passing from extension to webview
+- **settings.ts**: Reading `partcad.viewer.performanceDebug` setting from VS Code
+- **All diagnostics**: Wrapped in `if (perfDebug)` check to prevent overhead when disabled
 
 ### Performance Impact
 
 - **When disabled** (default): Zero performance cost
-- **When enabled**: <1% CPU overhead for frame timing and logging
+- **When enabled**: Negligible CPU overhead (~1%) for statistics calculation
 
-## Benefits
+## Diagnostic Use Cases
 
-1. **Debugging performance issues**: Identify bottlenecks in viewer rendering
-2. **Monitor tessellation**: Verify triangle reduction from 0.8.131 optimization
-3. **Development feedback**: Real-time metrics during viewer work
-4. **Non-intrusive**: Disabled by default, no noise in production
-5. **Easy access**: Built into VS Code settings, no command-line needed
+1. **Identify bottlenecks**: Draw calls vs. triangle count reveal CPU (mesh count) or GPU (geometry) bottlenecks
+2. **Profile heavy parts**: Triangle count per node shows which assemblies dominate geometry
+3. **Mesh distribution**: Scene diagnostics show average meshes per node (helps identify exporter issues)
+4. **Monitor frame rate**: FPS and frame time tracking during model interaction
+5. **Non-intrusive**: Disabled by default, zero overhead when off
 
-## Related Changes in 0.8.124+
+## Known Findings
 
-- **0.8.124**: Tessellation optimization reduces triangles by ~50%
-- **0.8.131**: SpaceMouse support, folder trust improvements
-- **This branch**: Performance visibility into what 0.8.131's optimizations achieve
+With `partcad.viewer.performanceDebug` enabled on large models:
+- Typical mesh distribution: 150+ meshes per node (upstream exporter behavior)
+- Draw call bottleneck: 10,000–14,000+ calls on 49-node assemblies (CPU-bound)
+- Triangle count is manageable (400K–500K); GPU is not the constraint
+- BasicMaterial vs. Phong has minimal impact; mesh count is the constraint
