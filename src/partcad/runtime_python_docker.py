@@ -969,7 +969,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                 with pc_logging.Action("Docker", self.version, self.path):
                     exitcode, stdout, stderr = self.run_onced_locked(command)
                     if self._lost_pip(exitcode):
-                        runtime.Runtime.run(self, self._ensurepip())
+                        runtime.Runtime.run(self, self._ensurepip(), stdin="")
                 self._created(exitcode, stderr, stdout)
             elif self._environment_built:
                 self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)
@@ -984,7 +984,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                 with pc_logging.Action("Docker", self.version, self.path):
                     exitcode, stdout, stderr = await self.run_async_onced_locked(command)
                     if self._lost_pip(exitcode):
-                        await runtime.Runtime.run_async(self, self._ensurepip())
+                        await runtime.Runtime.run_async(self, self._ensurepip(), stdin="")
                 self._created(exitcode, stderr, stdout)
             elif self._environment_built:
                 self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)

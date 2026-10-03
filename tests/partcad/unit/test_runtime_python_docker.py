@@ -1439,3 +1439,52 @@ def test_pip_is_put_back_by_the_environment_and_not_by_the_image(tmp_path):
     assert command[0] == docker_mount.rewrite(made._host_venv_python, made._mounted)
     assert command[0] != runtime_python_docker.CONTAINER_PYTHON
     assert command[-3:] == ["ensurepip", "--upgrade", "--default-pip"]
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_creation_that_lost_its_pip_ends_with_pip_put_back(tmp_path, monkeypatch, asynchronous):
+    """Both creation paths, end to end, short of a container.
+
+    The asynchronous one died on its first run in CI: the runner encodes its
+    standard input, and a call without one handed it None.
+    """
+    import asyncio
+
+    from partcad import runtime_python
+
+    made = _runtime(tmp_path)
+    put_back = []
+
+    def created(*_args, **_kwargs):
+        _interpreter_only(made)
+        return 0, "", ""
+
+    async def created_async(*args, **kwargs):
+        return created()
+
+    def ensurepip(self, cmd, stdin=None, **_kwargs):
+        assert isinstance(stdin, str), "the runner encodes stdin; None is a crash"
+        put_back.append(cmd)
+        os.makedirs(os.path.join(made.path, "lib", "python3.11", "site-packages", "pip"))
+        return 0, "", ""
+
+    async def ensurepip_async(self, cmd, stdin=None, **kwargs):
+        return ensurepip(self, cmd, stdin=stdin, **kwargs)
+
+    async def provisioned_async(self):
+        return None
+
+    monkeypatch.setattr(made, "run_onced_locked", created)
+    monkeypatch.setattr(made, "run_async_onced_locked", created_async)
+    monkeypatch.setattr(runtime.Runtime, "run", ensurepip)
+    monkeypatch.setattr(runtime.Runtime, "run_async", ensurepip_async)
+    monkeypatch.setattr(runtime_python.PythonRuntime, "once", lambda self: None)
+    monkeypatch.setattr(runtime_python.PythonRuntime, "once_async", provisioned_async)
+
+    if asynchronous:
+        asyncio.run(made.once_async())
+    else:
+        made.once()
+
+    assert put_back and put_back[0] == made._ensurepip()
+    assert made._environment_built is True
