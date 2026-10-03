@@ -5,7 +5,7 @@
 //
 // The panel's tab strips: which tab one opens on, as the object under it changes.
 //
-// Engineering and Manufacturing show all their tabs always and disable the ones
+// Every group shows all its tabs always and disables the ones
 // that do not apply, and a strip rebuilt for a new object has to land on a tab
 // that can be opened: the one the user last opened while it still can be, and
 // the first one that can otherwise. The strip runs in the webview and this suite

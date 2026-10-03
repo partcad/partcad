@@ -8,10 +8,22 @@
 import os
 import socket
 import sys
+import threading
 import types
 
 from partcad_service_json_rpc import debugger
 from partcad_service_json_rpc.rpc import methods
+
+
+def _waiter(record=None):
+    """A 'debugpy.wait_for_client' that returns at once and, like the real one, can be cancelled."""
+
+    def wait_for_client():
+        if record is not None:
+            record.append(("wait", None))
+
+    wait_for_client.cancel = lambda: None
+    return wait_for_client
 
 
 def test_unset_is_a_no_op(monkeypatch):
@@ -39,7 +51,7 @@ def test_no_listener_serves_on(monkeypatch, capsys):
     def refuse(_address):
         raise ConnectionRefusedError("nothing is listening")
 
-    fake = types.SimpleNamespace(configure=lambda **_: None, connect=refuse, wait_for_client=lambda: None)
+    fake = types.SimpleNamespace(configure=lambda **_: None, connect=refuse, wait_for_client=_waiter())
     monkeypatch.setenv(debugger.ENV, "localhost:5678")
     monkeypatch.setitem(sys.modules, "debugpy", fake)
     assert debugger.attach_from_env() is False
@@ -51,7 +63,7 @@ def test_attaches_without_following_subprocesses(monkeypatch):
     fake = types.SimpleNamespace(
         configure=lambda **kw: calls.append(("configure", kw)),
         connect=lambda address: calls.append(("connect", address)),
-        wait_for_client=lambda: calls.append(("wait", None)),
+        wait_for_client=_waiter(calls),
     )
     monkeypatch.setenv(debugger.ENV, "localhost:5678")
     monkeypatch.setitem(sys.modules, "debugpy", fake)
@@ -88,3 +100,22 @@ def test_a_real_refusal(monkeypatch):
         port = s.getsockname()[1]
     monkeypatch.setenv(debugger.ENV, "127.0.0.1:%d" % port)
     assert debugger.attach_from_env() is False
+
+
+def test_a_handshake_that_never_finishes_does_not_keep_the_service_waiting(monkeypatch):
+    """A listener that took the connection and never sent the breakpoints: the wait is cut short."""
+    released = threading.Event()
+
+    def wait_for_client():
+        assert released.wait(5), "the wait was never cancelled"
+
+    wait_for_client.cancel = released.set
+    fake = types.SimpleNamespace(
+        configure=lambda **_: None, connect=lambda address: None, wait_for_client=wait_for_client
+    )
+    monkeypatch.setenv(debugger.ENV, "localhost:5678")
+    monkeypatch.setitem(sys.modules, "debugpy", fake)
+    monkeypatch.setattr(debugger, "HANDSHAKE_TIMEOUT", 0.05)
+
+    assert debugger.attach_from_env() is True
+    assert released.is_set()

@@ -28,8 +28,14 @@ served past.
 
 import os
 import sys
+import threading
 
 ENV = "PC_DEBUGPY"
+
+# How long to wait for the adapter to send the breakpoints once connected. A
+# listener that accepted the connection and never finished the handshake must
+# not keep the service from serving.
+HANDSHAKE_TIMEOUT = 30.0
 
 
 def _address(value: str) -> tuple[str, int]:
@@ -55,7 +61,15 @@ def attach_from_env() -> bool:
         debugpy.connect(_address(value))
         # Until the adapter has sent the breakpoints, so that one in startup
         # code -- building the session, loading the first package -- is hit.
-        debugpy.wait_for_client()
+        # Bounded: past the timeout the wait is cancelled and the service
+        # serves on, still connected, with breakpoints arriving when they do.
+        timer = threading.Timer(HANDSHAKE_TIMEOUT, debugpy.wait_for_client.cancel)
+        timer.daemon = True
+        timer.start()
+        try:
+            debugpy.wait_for_client()
+        finally:
+            timer.cancel()
     except Exception as e:  # pylint: disable=broad-except
         print("%s=%s: could not attach (%s); serving without a debugger" % (ENV, value, e), file=sys.stderr)
         return False

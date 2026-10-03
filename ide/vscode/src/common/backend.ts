@@ -876,9 +876,16 @@ async function connectDaemon(
         return backend;
     }
     traceInfo(`PartCAD: daemon ${status?.pid} is not attached to the debugger; replacing it`);
-    await backend.stopDaemon();
-    await backend.stop();
-    return connectSocket(execPath, args, cwd, env, outputChannel);
+    try {
+        await backend.stopDaemon();
+        await backend.stop();
+        return await connectSocket(execPath, args, cwd, env, outputChannel);
+    } catch (e) {
+        // Asked again on the next connection - "Restart PartCAD" - rather than
+        // leaving the rest of the session on a daemon nobody can debug.
+        debugChecked = false;
+        throw e;
+    }
 }
 
 /**
