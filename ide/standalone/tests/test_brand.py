@@ -61,6 +61,9 @@ def test_the_shipped_overlay_brands_a_vscodium_product(tmp_path):
     # ...and VSCodium's own defaults survive alongside the ones added here.
     assert branded["configurationDefaults"]["extensions.gallery.useUnpkgResourceApi"] is False
     assert branded["configurationDefaults"]["partcad.backend"] == "service"
+    # The bundled tools are re-applied to the terminal PATH through shell
+    # integration, after the user's rc files have had their say.
+    assert branded["configurationDefaults"]["terminal.integrated.shellIntegration.enabled"] is True
 
     assert json.loads(path.read_text(encoding="utf-8"))["nameLong"] == "PartCAD IDE"
 

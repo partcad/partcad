@@ -75,6 +75,15 @@
     // IDE ships the executable it runs, and the bootstrap extension points the
     // setting below at it.
     "partcad.backend": "service",
-    "partcad.serviceChannel": "socket"
+    "partcad.serviceChannel": "socket",
+    // What lets `pc` and `partcad` work in the IDE's terminal for a user whose
+    // shell startup files put another PartCAD on the PATH (a `conda init`
+    // activating a base environment with one in it, say). The bootstrap
+    // extension adds the bundled tools to the PATH when a terminal starts and,
+    // with shell integration, once more after those files have run -- the
+    // second is the one that ends up first. It is the editor's default too;
+    // it is stated here so that the IDE does not depend on that. A user who
+    // turns it off is warned by the PartCAD extension when a terminal opens.
+    "terminal.integrated.shellIntegration.enabled": true
   }
 }

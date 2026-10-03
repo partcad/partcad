@@ -18,7 +18,7 @@ import {
     getPopupTerminalFromSetting,
 } from './common/settings';
 import { updateServiceBundle } from './common/provision';
-import { refreshToolsPath } from './common/terminalPath';
+import { refreshToolsPath, warnIfShellIntegrationOff } from './common/terminalPath';
 import { activateWhenTrusted } from './common/trust';
 import { loadServerDefaults } from './common/setup';
 import { getLSClientTraceLevel } from './common/utilities';
@@ -163,6 +163,11 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
     // whatever is already installed, and a user who opened a terminal first
     // should not have to wait for a language server to get `pc`.
     refreshToolsPath(context, serverId);
+    // A terminal opened with shell integration off gets the tools only at
+    // process creation, where its rc files can put another `pc` ahead of them.
+    context.subscriptions.push(
+        vscode.window.onDidOpenTerminal((terminal) => warnIfShellIntegrationOff(terminal, serverId)),
+    );
 
     // Log Server information
     traceLog(`Name: ${serverInfo.name}`);
