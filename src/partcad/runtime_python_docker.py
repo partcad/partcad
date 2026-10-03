@@ -810,6 +810,10 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             command.append("--clear")
         return command + [docker_mount.rewrite(self.path, self._mounted)]
 
+    def venv_interpreter(self, path) -> str:
+        """Always 'bin': the environment was built by a Linux image, whatever this machine is."""
+        return os.path.join(path, "bin", self.exec_name)
+
     @property
     def _host_venv_python(self) -> str:
         """The environment's interpreter as a path on *this* machine.

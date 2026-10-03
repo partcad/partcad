@@ -726,16 +726,21 @@ class PythonRuntime(runtime.Runtime):
         the directory being there is what keeps it from being created again.
         'ensurepip' cannot help: it needs the interpreter that is missing.
 
-        Listed rather than followed: in the 'docker' sandbox 'bin/python' is a
-        symlink to the *image's* interpreter, which this machine does not have,
-        and a dangling link here is an interpreter that is there.
+        The interpreter the runtime will actually run (see 'venv_interpreter'),
+        not any 'python*': 'bin/python3' alone is no help when 'bin/python' is
+        what gets executed. And 'lexists' rather than 'exists': in the 'docker'
+        sandbox 'bin/python' is a symlink to the *image's* interpreter, which
+        this machine does not have, and a dangling link here is an interpreter
+        that is there.
         """
-        if not os.path.exists(path):
-            return False
-        if glob.glob(os.path.join(path, "bin", "python*")) or glob.glob(os.path.join(path, "Scripts", "python*")):
+        if not os.path.exists(path) or os.path.lexists(self.venv_interpreter(path)):
             return False
         pc_logging.warning("The '%s' environment at %s has no interpreter; creating it again" % (self.sandbox, path))
         return True
+
+    def venv_interpreter(self, path) -> str:
+        """Where a virtual environment's interpreter is, on this machine, as 'get_venv_python_path' would run it."""
+        return os.path.join(path, "Scripts" if os.name == "nt" else "bin", self.exec_name)
 
     def _recreate(self, path) -> list:
         """'-m venv' for ``path``, clearing whatever an earlier creation left there."""

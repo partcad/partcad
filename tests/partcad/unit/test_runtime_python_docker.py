@@ -1583,3 +1583,14 @@ def test_a_dangling_session_interpreter_is_still_an_interpreter(tmp_path):
     except (OSError, NotImplementedError):  # pragma: no cover - Windows without privilege
         pytest.skip("this platform will not create a symlink here")
     assert made._lost_interpreter(session_path) is False
+
+
+def test_only_the_interpreter_that_will_be_run_counts(tmp_path):
+    """'bin/python3' is no help when 'bin/python' is what gets executed."""
+    made = _runtime(tmp_path)
+    session_path = os.path.join(made.path, "v-env-0123456789abcdef")
+    os.makedirs(os.path.join(session_path, "bin"))
+    open(os.path.join(session_path, "bin", "python3"), "w").close()
+    assert made._lost_interpreter(session_path) is True
+    open(os.path.join(session_path, "bin", "python"), "w").close()
+    assert made._lost_interpreter(session_path) is False
