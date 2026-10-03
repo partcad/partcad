@@ -9,6 +9,7 @@
 import asyncio
 import contextlib
 import copy
+import glob
 import hashlib
 import os
 import pathlib
@@ -556,6 +557,7 @@ class PythonRuntime(runtime.Runtime):
                                 session["path"],
                             ]
                         )
+                        self._restore_pip_onced_locked(session["path"])
                 # Install the dependencies into the venv. We already hold the
                 # venv lock, so use the *_locked ensure and take the install
                 # lock explicitly; the resulting order (venv lock, then the
@@ -650,6 +652,49 @@ class PythonRuntime(runtime.Runtime):
 
             return exitcode, stdout, stderr
 
+    # What puts back the pip a virtual environment's Python bundles -- see
+    # '_restore_pip_onced_locked'.
+    ENSUREPIP = ["-m", "ensurepip", "--upgrade", "--default-pip"]
+
+    def venv_has_pip(self, path) -> bool:
+        """Whether the virtual environment at ``path`` has pip, which is the last thing '-m venv' puts in it.
+
+        A method rather than a static one: the runtimes are wrapped by the
+        telemetry decorator, which does not keep a 'staticmethod' one.
+        """
+        return bool(
+            glob.glob(os.path.join(path, "lib", "python*", "site-packages", "pip"))
+            or glob.glob(os.path.join(path, "Lib", "site-packages", "pip"))
+        )
+
+    def _lost_pip_warning(self, path) -> bool:
+        """Whether a just-created environment has no pip; says so once if it has not."""
+        if not os.path.exists(path) or self.venv_has_pip(path):
+            return False
+        pc_logging.warning(
+            "Creating a '%s' environment left no pip in %s; putting back the one its Python bundles"
+            % (self.sandbox, path)
+        )
+        return True
+
+    def _restore_pip_onced_locked(self, path) -> None:
+        """Put pip back into a session environment '-m venv --upgrade-deps' left without one.
+
+        Seen on GitHub's runners in the Docker sandbox: the environment is
+        created with the pip its Python bundles, and '--upgrade-deps' -- pip
+        upgrading itself -- leaves neither that pip nor a new one, and exits 0.
+        Every package then fails to install with "No module named pip". The
+        environment's own 'ensurepip' puts the bundled one back, which is all it
+        needs: everything after this goes in through it.
+        """
+        if self._lost_pip_warning(path):
+            self.run_onced_locked(self.ENSUREPIP, path=path)
+
+    async def _restore_pip_async_onced_locked(self, path) -> None:
+        """The asynchronous twin of '_restore_pip_onced_locked'."""
+        if self._lost_pip_warning(path):
+            await self.run_async_onced_locked(self.ENSUREPIP, path=path)
+
     def run_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None):
         if session and session["dirty"]:
             # The venv environment has to be created
@@ -666,6 +711,7 @@ class PythonRuntime(runtime.Runtime):
                             session["path"],
                         ]
                     )
+                    self._restore_pip_onced_locked(session["path"])
             # Install of the dependencies into the venv environment
             for dep in session["deps"]:
                 if dep == "partcad":
@@ -726,6 +772,7 @@ class PythonRuntime(runtime.Runtime):
                                 session["path"],
                             ]
                         )
+                        await self._restore_pip_async_onced_locked(session["path"])
                 # Install the dependencies into the venv. We already hold the
                 # venv lock, so use the *_locked ensure and take the install
                 # lock explicitly; the resulting order (venv lock, then the
@@ -826,6 +873,7 @@ class PythonRuntime(runtime.Runtime):
                             session["path"],
                         ]
                     )
+                    await self._restore_pip_async_onced_locked(session["path"])
             # Install of the dependencies into the venv environment
             for dep in session["deps"]:
                 if dep == "partcad":

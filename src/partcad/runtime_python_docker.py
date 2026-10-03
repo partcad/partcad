@@ -33,7 +33,6 @@ pretending otherwise would mean routing pip through an allowlist that PartCAD
 writes and PartCAD checks.
 """
 
-import glob
 import hashlib
 import os
 import platform
@@ -849,7 +848,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         install in it fail with "No module named pip", on every command, with
         nothing to say why and nothing that would ever build it again.
         """
-        return bool(glob.glob(os.path.join(self.path, "lib", "python*", "site-packages", "pip")))
+        return self.venv_has_pip(self.path)
 
     def _ensurepip(self) -> list:
         """The environment's own interpreter, putting back the pip its Python bundles -- see '_lost_pip'.
@@ -859,7 +858,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         environment is accepted is the *image's* interpreter, and its
         'ensurepip' would install into the image rather than the environment.
         """
-        args = ["-m", "ensurepip", "--upgrade", "--default-pip"]
+        args = self.ENSUREPIP
         venv_python = docker_mount.rewrite(self._host_venv_python, self._mounted)
         return [venv_python, *self.flags_for(args), *args]
 
@@ -969,7 +968,11 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                 with pc_logging.Action("Docker", self.version, self.path):
                     exitcode, stdout, stderr = self.run_onced_locked(command)
                     if self._lost_pip(exitcode):
-                        runtime.Runtime.run(self, self._ensurepip(), stdin="")
+                        # Its output joins the creation's, so that a recovery
+                        # that fails says why in the error '_created' raises.
+                        _, pip_out, pip_err = runtime.Runtime.run(self, self._ensurepip(), stdin="")
+                        stdout = "\n".join(s for s in (stdout, pip_out) if s)
+                        stderr = "\n".join(s for s in (stderr, pip_err) if s)
                 self._created(exitcode, stderr, stdout)
             elif self._environment_built:
                 self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)
@@ -984,7 +987,9 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                 with pc_logging.Action("Docker", self.version, self.path):
                     exitcode, stdout, stderr = await self.run_async_onced_locked(command)
                     if self._lost_pip(exitcode):
-                        await runtime.Runtime.run_async(self, self._ensurepip(), stdin="")
+                        _, pip_out, pip_err = await runtime.Runtime.run_async(self, self._ensurepip(), stdin="")
+                        stdout = "\n".join(s for s in (stdout, pip_out) if s)
+                        stderr = "\n".join(s for s in (stderr, pip_err) if s)
                 self._created(exitcode, stderr, stdout)
             elif self._environment_built:
                 self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)

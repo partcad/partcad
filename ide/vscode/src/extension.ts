@@ -527,6 +527,11 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
             try {
                 await resetView();
                 await handleRestartServer(serverId, serverName, outputChannel);
+            } catch (e) {
+                // Activating the replacement can fail -- most likely because it
+                // went away while it was being activated, which is the very close
+                // queued below. Reported, and not thrown past the follow-up.
+                traceError(`PartCAD: reconnecting failed: ${e}`);
             } finally {
                 reconnecting = undefined;
                 reconnectingFrom = undefined;

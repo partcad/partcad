@@ -1488,3 +1488,20 @@ def test_creation_that_lost_its_pip_ends_with_pip_put_back(tmp_path, monkeypatch
 
     assert put_back and put_back[0] == made._ensurepip()
     assert made._environment_built is True
+
+
+def test_a_session_environment_that_lost_its_pip_gets_it_back(tmp_path, monkeypatch):
+    """The same loss, one level down: CI's next failure after the base environment was fixed."""
+    made = _runtime(tmp_path)
+    session_path = os.path.join(made.path, "v-env-0123456789abcdef")
+    os.makedirs(os.path.join(session_path, "bin"))
+    ran = []
+    monkeypatch.setattr(made, "run_onced_locked", lambda cmd, path=None, **kw: ran.append((cmd, path)) or (0, "", ""))
+
+    made._restore_pip_onced_locked(session_path)
+    assert ran == [(made.ENSUREPIP, session_path)]
+
+    ran.clear()
+    os.makedirs(os.path.join(session_path, "lib", "python3.11", "site-packages", "pip"))
+    made._restore_pip_onced_locked(session_path)
+    assert ran == []
