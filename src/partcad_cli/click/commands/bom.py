@@ -12,7 +12,7 @@ import rich_click as click
 from ..service import run
 
 
-@click.command(help="Print the bill of materials of an assembly or a scene")
+@click.command(help="Print the bill of materials of a part, an assembly or a scene")
 @click.option(
     "-P",
     "--package",
@@ -35,9 +35,8 @@ from ..service import run
     "--stop-at-purchasable",
     "stop_at_purchasable",
     is_flag=True,
-    help="Do not expand a sub-assembly that can be purchased as a whole "
-    "(it declares a vendor and an SKU, and a supplier has it available); "
-    "list it as a single line item instead",
+    help="Accepted for compatibility, and changes nothing: a sub-assembly that declares a vendor "
+    "and an SKU is always listed as a single line item now",
     show_envvar=True,
 )
 @click.option(

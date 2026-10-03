@@ -4,6 +4,9 @@
 // Licensed under Apache License, Version 2.0.
 //
 
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { traceError, traceVerbose } from '../common/log/logging';
 import * as utils from '../utils';
@@ -45,7 +48,24 @@ const TAB_COMMANDS: Record<string, string> = {
     // operation with the analysis in the request.
     fea: 'partcad.cae',
     cfd: 'partcad.cae',
+    // One object to one file: a picture PartCAD renders itself, or a drawing
+    // a package renders ('pc render -e').
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '2d': 'partcad.renderInline',
+    draft: 'partcad.renderInline',
 };
+
+/** The tabs that render the object to a file, which is then kept and can be saved. */
+const RENDER_TABS = new Set(['2d', 'draft']);
+
+/** A file a render tab is showing, kept until the next one replaces it. */
+interface RenderedFile {
+    /** Where it is kept: a temporary directory of this panel's. */
+    file: string;
+    /** The name PartCAD gave it, which is what the save dialog proposes. */
+    filename: string;
+    extension: string;
+}
 
 /** The tabs that run an analysis rather than ask a question about the object. */
 const ANALYSIS_TABS = new Set(['fea', 'cfd']);
@@ -72,6 +92,23 @@ export class PartcadViewer implements vscode.Disposable {
      */
     private spacenav: SpacenavClient | undefined;
     private readonly disposables: vscode.Disposable[] = [];
+    /**
+     * What each render tab is showing, as a file on this machine.
+     *
+     * The daemon sends the bytes rather than a path - it may be on another
+     * machine - and they are written here, into a temporary directory, so that
+     * Save is a copy of the file on screen rather than a second render that
+     * could come out different. One per tab: a new render replaces the file.
+     */
+    private readonly rendered = new Map<string, RenderedFile>();
+    /**
+     * The newest request of each render tab. The renderer drops an answer that
+     * is not the one it waits for, and so must this side: a PNG asked for and
+     * then an SVG can come back the other way round, and the file kept for Save
+     * has to be the one on screen.
+     */
+    private readonly latestRender = new Map<string, number>();
+    private renderDirectory: string | undefined;
 
     constructor(private readonly extensionUri: vscode.Uri) {
         this.disposables.push(
@@ -132,6 +169,8 @@ export class PartcadViewer implements vscode.Disposable {
         }
 
         this.lastShow = message;
+        // A file rendered for the previous object is not this one's to save.
+        this.forgetRendered();
 
         // Showing something is what opens the viewer: the user asked to inspect
         // an item, and an inspection with nowhere to draw is not useful.
@@ -166,7 +205,13 @@ export class PartcadViewer implements vscode.Disposable {
      * assembly that has no assembly steps is told why, and the reader sees that
      * instead of an empty tab.
      */
-    private async fetchTab(tab: string, token: number, implementation?: string): Promise<void> {
+    private async fetchTab(
+        tab: string,
+        token: number,
+        implementation?: string,
+        format?: string,
+        plugin?: string,
+    ): Promise<void> {
         const analysis = ANALYSIS_TABS.has(tab);
         // Which implementation the request ends up carrying, so that the field
         // over the model can be pre-filled with it -- including when the
@@ -201,6 +246,18 @@ export class PartcadViewer implements vscode.Disposable {
                 throw new Error('PartCAD is not connected. Use "Restart PartCAD" to reconnect.');
             }
             const args: Record<string, unknown> = { pkg: target.package, name: target.name };
+            if (RENDER_TABS.has(tab)) {
+                args.kind = target.kind ?? 'part';
+                args.format = format;
+                args.plugin = plugin;
+                this.latestRender.set(tab, token);
+                const data = (await vscode.commands.executeCommand(command, args)) as RenderedData | undefined;
+                if (data?.content && this.lastShow === target && this.latestRender.get(tab) === token) {
+                    this.keepRendered(tab, data);
+                }
+                post({ data });
+                return;
+            }
             if (analysis) {
                 args.analysis = tab;
                 args.implementation = used;
@@ -213,6 +270,79 @@ export class PartcadViewer implements vscode.Disposable {
         } catch (error: any) {
             traceError(`PartCAD Viewer: failed to fetch the '${tab}' tab: ${error?.message ?? error}`);
             post({ error: `${error?.message ?? error}` });
+        }
+    }
+
+    /** Answer the Draft tab: which file types a drawing package renders to. */
+    private async fetchFormats(token: number, plugin: string): Promise<void> {
+        const post = (payload: { formats?: unknown; error?: string }) =>
+            void this.panel?.webview.postMessage({ type: 'formats', token, plugin, ...payload });
+        try {
+            if (!(await vscode.commands.getCommands(true)).includes('partcad.renderFormats')) {
+                throw new Error('PartCAD is not connected. Use "Restart PartCAD" to reconnect.');
+            }
+            const answer = (await vscode.commands.executeCommand('partcad.renderFormats', { package: plugin })) as
+                { formats?: unknown } | undefined;
+            post({ formats: answer?.formats ?? [] });
+        } catch (error: any) {
+            traceError(`PartCAD Viewer: failed to ask ${plugin} for its formats: ${error?.message ?? error}`);
+            post({ error: `${error?.message ?? error}` });
+        }
+    }
+
+    /** Write what a render tab received to a file of its own, replacing the last one. */
+    private keepRendered(tab: string, data: RenderedData): void {
+        try {
+            if (this.renderDirectory === undefined) {
+                this.renderDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'partcad-viewer-'));
+            }
+            this.forgetRendered(tab);
+            // A directory per file, so that it keeps the name PartCAD gave it
+            // and the two tabs cannot write over each other.
+            const directory = fs.mkdtempSync(path.join(this.renderDirectory, `${tab}-`));
+            const file = path.join(directory, path.basename(data.filename));
+            fs.writeFileSync(file, Buffer.from(data.content, 'base64'));
+            this.rendered.set(tab, { file, filename: path.basename(data.filename), extension: data.extension });
+        } catch (error: any) {
+            // Shown all the same: the picture is in the message. Only Save needs
+            // the file, and it says so if there is none.
+            traceError(`PartCAD Viewer: failed to keep the rendered file: ${error?.message ?? error}`);
+        }
+    }
+
+    /** Drop the kept file of one render tab, or of all of them. */
+    private forgetRendered(tab?: string): void {
+        for (const [key, kept] of [...this.rendered]) {
+            if (tab === undefined || key === tab) {
+                fs.rmSync(path.dirname(kept.file), { recursive: true, force: true });
+                this.rendered.delete(key);
+            }
+        }
+    }
+
+    /** Save what a render tab is showing, wherever the user says. */
+    private async saveRendered(tab: string): Promise<void> {
+        const kept = this.rendered.get(tab);
+        if (kept === undefined || !fs.existsSync(kept.file)) {
+            void vscode.window.showErrorMessage('There is no rendered file to save. Render it again, then save.');
+            return;
+        }
+        const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+        const target = await vscode.window.showSaveDialog({
+            defaultUri: folder ? vscode.Uri.joinPath(folder, kept.filename) : undefined,
+            filters: { [`${kept.extension.toUpperCase()} files`]: [kept.extension] },
+            saveLabel: 'Save',
+            title: `Save ${kept.filename}`,
+        });
+        if (target === undefined) {
+            return;
+        }
+        try {
+            await vscode.workspace.fs.copy(vscode.Uri.file(kept.file), target, { overwrite: true });
+            vscode.window.setStatusBarMessage(`PartCAD: saved ${target.fsPath}`, 5000);
+        } catch (error: any) {
+            traceError(`PartCAD Viewer: failed to save ${target.fsPath}: ${error?.message ?? error}`);
+            void vscode.window.showErrorMessage(`Could not save ${target.fsPath}: ${error?.message ?? error}`);
         }
     }
 
@@ -260,7 +390,15 @@ export class PartcadViewer implements vscode.Disposable {
         });
         panel.onDidChangeViewState(() => this.postSpaceMouseState());
         panel.webview.onDidReceiveMessage(
-            (message: { type: string; message?: string; tab?: string; token?: number; implementation?: string }) => {
+            (message: {
+                type: string;
+                message?: string;
+                tab?: string;
+                token?: number;
+                implementation?: string;
+                format?: string;
+                plugin?: string;
+            }) => {
                 if (message.type === 'error') {
                     traceError(`PartCAD Viewer: ${message.message}`);
                 } else if (message.type === 'ready') {
@@ -272,7 +410,17 @@ export class PartcadViewer implements vscode.Disposable {
                         this.handle(this.lastShow);
                     }
                 } else if (message.type === 'fetchTab') {
-                    void this.fetchTab(message.tab ?? '', message.token ?? 0, message.implementation);
+                    void this.fetchTab(
+                        message.tab ?? '',
+                        message.token ?? 0,
+                        message.implementation,
+                        message.format,
+                        message.plugin,
+                    );
+                } else if (message.type === 'fetchFormats') {
+                    void this.fetchFormats(message.token ?? 0, message.plugin ?? '');
+                } else if (message.type === 'save') {
+                    void this.saveRendered(message.tab ?? '');
                 } else {
                     traceVerbose(`PartCAD Viewer: ${message.type}`);
                 }
@@ -358,8 +506,11 @@ export class PartcadViewer implements vscode.Disposable {
 				<div class="panel">
 					<div id="tabs" class="tabs" hidden></div>
 					<div class="panes">
+						<div id="pane-design" class="pane pane-group">
+						<div id="design-tabs" class="tabs sub-tabs" hidden></div>
+						<div class="panes">
 						<div id="pane-3d" class="pane pane-3d">
-							<div class="controls">
+							<div class="controls" hidden>
 								<div id="tree" class="tree" role="tree"></div>
 								<div class="viewer-controls">
 									<label class="control-label" id="metadata-control" hidden><input type="checkbox" id="metadata-checkbox" checked> Metadata</label>
@@ -371,11 +522,27 @@ export class PartcadViewer implements vscode.Disposable {
 								<div id="overlay" class="overlay">Nothing to display yet.</div>
 							</div>
 						</div>
-						<div id="pane-bom" class="pane" hidden></div>
-						<div id="pane-instructions" class="pane" hidden></div>
+						<div id="pane-2d" class="pane" hidden></div>
+						<div id="pane-draft" class="pane" hidden></div>
+						</div>
+						</div>
+						<div id="pane-analysis" class="pane pane-group" hidden>
+						<div id="analysis-tabs" class="tabs sub-tabs" hidden></div>
+						<div class="panes">
 						<div id="pane-fea" class="pane" hidden></div>
 						<div id="pane-cfd" class="pane" hidden></div>
+						</div>
+						</div>
+						<div id="pane-supply-chain" class="pane pane-group" hidden>
+						<div id="supply-chain-tabs" class="tabs sub-tabs" hidden></div>
+						<div class="panes">
+						<div id="pane-bom" class="pane" hidden></div>
+						<div id="pane-instructions" class="pane" hidden></div>
 						<div id="pane-supply" class="pane" hidden></div>
+						</div>
+						</div>
+						<div id="pane-validation" class="pane" hidden></div>
+						<div id="pane-operations" class="pane" hidden></div>
 					</div>
 				</div>
 				<script nonce="${nonce}" src="${scriptUri}"></script>
@@ -386,10 +553,24 @@ export class PartcadViewer implements vscode.Disposable {
     public dispose(): void {
         this.panel?.dispose();
         this.panel = undefined;
+        this.forgetRendered();
+        if (this.renderDirectory !== undefined) {
+            fs.rmSync(this.renderDirectory, { recursive: true, force: true });
+            this.renderDirectory = undefined;
+        }
         this.spacenav?.dispose();
         this.spacenav = undefined;
         this.disposables.forEach((disposable) => disposable.dispose());
     }
+}
+
+/** What 'render.inline' answers with; see 'RenderData' in 'webview/messages.ts'. */
+interface RenderedData {
+    object: string;
+    format: string;
+    filename: string;
+    extension: string;
+    content: string;
 }
 
 /** The 'partcad.spaceMouse.*' settings, in the shape the renderer takes them. */

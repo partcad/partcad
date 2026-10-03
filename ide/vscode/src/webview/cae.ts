@@ -35,139 +35,14 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { el, empty, placeholder } from './dom';
+import { IMAGE_TYPES, ImageView, decodeBase64 } from './image';
 import { CaeData, CaeFinding } from './messages';
 
 /** How much of the pane the findings take when there are any. */
 const FINDINGS_SHARE = '20%';
 
-/** The still-image formats the 2D viewer can show, by file extension. */
-const IMAGE_TYPES: Record<string, string> = {
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    gif: 'image/gif',
-    webp: 'image/webp',
-    // Shown through an <img>, which cannot run script in it whatever the file
-    // says. Never inlined into the DOM: the panel's CSP would not stop an
-    // inlined <svg> from carrying an <a> or a <foreignObject>.
-    svg: 'image/svg+xml',
-};
-
 /** The mesh formats the 3D viewer can load, by file extension. */
 const MESH_TYPES = new Set(['glb', 'gltf', 'stl']);
-
-const MIN_ZOOM = 0.1;
-const MAX_ZOOM = 20;
-
-function decodeBase64(content: string): Uint8Array {
-    const binary = atob(content);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes;
-}
-
-/**
- * A still image that pans and zooms.
- *
- * A 2D analysis plot is a picture with numbers written on it, and the numbers
- * are small: the whole point of it being 2D is that it is read closely. So the
- * wheel zooms about the pointer and a drag moves the image, which is what every
- * other image viewer does and therefore what nobody has to be told.
- */
-class ImageView {
-    private readonly image = el('img', 'cae-image');
-    private readonly listeners = new AbortController();
-    private scale = 1;
-    private x = 0;
-    private y = 0;
-    private dragging: { x: number; y: number } | undefined;
-
-    constructor(private readonly host: HTMLElement) {
-        host.classList.add('cae-canvas', 'cae-image-host');
-        host.appendChild(this.image);
-        this.image.draggable = false;
-
-        // Every listener under one signal, so that 'dispose()' is one call and
-        // cannot forget one: they are added to the *host*, which outlives this
-        // view, so emptying the pane does not take them with it.
-        const on = { signal: this.listeners.signal };
-
-        host.addEventListener(
-            'wheel',
-            (event: WheelEvent) => {
-                event.preventDefault();
-                const rect = host.getBoundingClientRect();
-                // Zoom about the pointer rather than the centre: the thing being
-                // looked at should stay under the cursor.
-                const px = event.clientX - rect.left;
-                const py = event.clientY - rect.top;
-                const factor = Math.exp(-event.deltaY / 400);
-                const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, this.scale * factor));
-                const applied = next / this.scale;
-                this.x = px - (px - this.x) * applied;
-                this.y = py - (py - this.y) * applied;
-                this.scale = next;
-                this.apply();
-            },
-            on,
-        );
-        host.addEventListener(
-            'pointerdown',
-            (event: PointerEvent) => {
-                this.dragging = { x: event.clientX - this.x, y: event.clientY - this.y };
-                host.setPointerCapture(event.pointerId);
-            },
-            on,
-        );
-        host.addEventListener(
-            'pointermove',
-            (event: PointerEvent) => {
-                if (this.dragging === undefined) {
-                    return;
-                }
-                this.x = event.clientX - this.dragging.x;
-                this.y = event.clientY - this.dragging.y;
-                this.apply();
-            },
-            on,
-        );
-        const release = (event: PointerEvent) => {
-            this.dragging = undefined;
-            if (host.hasPointerCapture(event.pointerId)) {
-                host.releasePointerCapture(event.pointerId);
-            }
-        };
-        host.addEventListener('pointerup', release, on);
-        host.addEventListener('pointercancel', release, on);
-        host.addEventListener('dblclick', () => this.reset(), on);
-    }
-
-    public show(source: string, alt: string): void {
-        this.image.src = source;
-        this.image.alt = alt;
-        this.reset();
-    }
-
-    /** Let go of the host: the listeners, the classes, and the <img> itself. */
-    public dispose(): void {
-        this.listeners.abort();
-        this.image.remove();
-        this.host.classList.remove('cae-canvas', 'cae-image-host');
-    }
-
-    private reset(): void {
-        this.scale = 1;
-        this.x = 0;
-        this.y = 0;
-        this.apply();
-    }
-
-    private apply(): void {
-        this.image.style.transform = `translate(${this.x}px, ${this.y}px) scale(${this.scale})`;
-    }
-}
 
 /**
  * A mesh, turned and zoomed with an orbit camera.

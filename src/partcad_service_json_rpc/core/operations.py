@@ -2453,12 +2453,13 @@ def list_mates(session, params):
 
 
 def bom(session, params):
-    """Print the bill of materials of an assembly or a scene.
+    """Print the bill of materials of a part, an assembly or a scene.
 
     Returns the line items so the CLI can render them as JSON; the human-readable
     table is emitted here, through PartCAD logging, the way `pc list` renders its
-    own. ``stop_at_purchasable`` keeps sub-assemblies that can be bought whole
-    from being expanded into their contents.
+    own. What is listed is what has to be procured: see
+    ``Assembly.get_bom_detailed_async`` and ``part_bom_detailed_async``.
+    ``stop_at_purchasable`` is passed through and no longer changes anything.
     """
     import asyncio
 
@@ -2485,23 +2486,40 @@ def bom(session, params):
         # the package's declarations rather than tried in turn: asking for the
         # assembly first would report "not found" for every scene.
         package_obj = ctx.get_project(package)
+        declared_assembly = package_obj is not None and package_obj.get_assembly_config(object_name) is not None
         is_scene = (
+            package_obj is not None and not declared_assembly and package_obj.get_scene_config(object_name) is not None
+        )
+        # A part is what it is procured as: itself when it is bought, the stock
+        # it is made from when it is made (see 'part_bom_detailed_async').
+        is_part = (
             package_obj is not None
-            and package_obj.get_assembly_config(object_name) is None
-            and package_obj.get_scene_config(object_name) is not None
+            and not declared_assembly
+            and not is_scene
+            and package_obj.get_part_config(object_name) is not None
         )
-        assembly = ctx.get_scene(path, params=param_dict) if is_scene else ctx.get_assembly(path, params=param_dict)
-        if assembly is None:
-            # Name the kind that was looked for. 'is_scene' has already decided
-            # which of the two this is, so there is nothing to be vague about,
-            # and "Object" tells a user asking for an assembly the least useful
-            # true thing: that something of some unnamed kind is missing.
-            pc.logging.error("%s %s is not found" % ("Scene" if is_scene else "Assembly", path))
-            return None
+        if is_part:
+            part = ctx.get_part(path, params=param_dict)
+            if part is None:
+                pc.logging.error("Part %s is not found" % path)
+                return None
+            from partcad.assembly import part_bom_detailed_async
 
-        bom_items = asyncio.run(
-            assembly.get_bom_detailed_async(ctx, stop_at_purchasable=bool(params.get("stop_at_purchasable")))
-        )
+            bom_items = asyncio.run(part_bom_detailed_async(ctx, part))
+        else:
+            assembly = ctx.get_scene(path, params=param_dict) if is_scene else ctx.get_assembly(path, params=param_dict)
+            if assembly is None:
+                # Name the kind that was looked for. 'is_scene' has already
+                # decided which of the two this is, so there is nothing to be
+                # vague about, and "Object" tells a user asking for an assembly
+                # the least useful true thing: that something of some unnamed
+                # kind is missing.
+                pc.logging.error("%s %s is not found" % ("Scene" if is_scene else "Assembly", path))
+                return None
+
+            bom_items = asyncio.run(
+                assembly.get_bom_detailed_async(ctx, stop_at_purchasable=bool(params.get("stop_at_purchasable")))
+            )
 
         items = [{"name": name, **entry} for name, entry in sorted(bom_items.items())]
         # 'total' counts the hardware, as it always has; the software of an
@@ -3436,6 +3454,138 @@ def render_objects(session, params):
             # asked for, not a failure of the machinery.
             raise JsonRpcError(USAGE_ERROR, str(e)) from e
     return None
+
+
+def render_formats(session, params):
+    """List the file types a package declares under ``render:``.
+
+    What the IDE's Draft tab offers in its format list: a package such as
+    ``//pub/feature/render/draftwright`` supplies its own implementations of
+    some file types (a drawing as PDF, SVG and DXF), and which ones is written
+    in that package's ``render:`` section and nowhere else. Each entry carries
+    the type's name, which is what ``render.inline`` takes, and what the package
+    says about it.
+    """
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    package = ctx.resolve_package_path(params.get("package") or ".")
+    project = ctx.get_project(package)
+    if project is None:
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "The package %s is not found. Is it imported by this workspace?" % package,
+        )
+    section = project.config_obj.get(pc.output.RENDER) or {}
+    formats = []
+    for name in pc.output.format_names(section):
+        config = section.get(name)
+        config = config if isinstance(config, dict) else {}
+        formats.append({"name": name, "desc": config.get("desc"), "extension": config.get("extension") or name})
+    return {"package": project.name, "formats": formats}
+
+
+# The kinds of object 'render.inline' draws, and how each is found. An interface
+# is not here: it is a set of ports rather than a shape, and has no file of its
+# own to be rendered to.
+_RENDERABLE = ("part", "assembly", "scene", "sketch")
+
+
+def render_inline(session, params):
+    """Render one object to one file type and return the file itself.
+
+    What the IDE's 2D and Draft tabs show and save: ``format`` is the file type
+    (``png``, ``svg``, ...), ``kind`` what the object is (a part unless it says
+    otherwise), and ``options_package`` a package whose ``render:`` section
+    supplies the implementation -- ``pc render -e``, which is how a drawing by
+    ``//pub/feature/render/draftwright`` is asked for.
+
+    The file is written into a temporary directory on the daemon's machine, read
+    back and base64-encoded, and the directory removed. A path would not do:
+    the daemon may be on another machine, and the client decides where the file
+    is kept -- the IDE holds it in a temporary file of its own until the user
+    saves it somewhere. What comes back is the bytes, the file name PartCAD
+    chose, and its extension, which is what says how to show it.
+
+    An implementation that writes nothing has said why in the log, which the
+    client is streaming; the error here says only that there is no file.
+    """
+    import asyncio
+    import base64
+    import shutil
+    import tempfile
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    fmt = params.get("format")
+    if not fmt:
+        raise JsonRpcError(USAGE_ERROR, "No file type is given")
+    kind = params.get("kind") or "part"
+    if kind not in _RENDERABLE:
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "Only parts, assemblies, scenes and sketches can be rendered to a file; '%s' is none of them" % kind,
+        )
+    getter = {
+        "part": ctx.get_part,
+        "assembly": ctx.get_assembly,
+        "scene": ctx.get_scene,
+        "sketch": ctx.get_sketch,
+    }[kind]
+
+    resolved = _resolve_object(ctx, pc, params)
+    if resolved is None:
+        return None
+    package, name = resolved
+    path = _qualified(package, name)
+
+    options_package = params.get("options_package")
+    if options_package:
+        options_package = ctx.resolve_package_path(options_package)
+        if ctx.get_project(options_package) is None:
+            raise JsonRpcError(
+                USAGE_ERROR,
+                "The package %s is not found. Is it imported by this workspace?" % options_package,
+            )
+    _validate_output_format(pc, ctx, fmt, [package] + ([options_package] if options_package else []))
+
+    if kind in ("assembly", "scene"):
+        # Phase one of an assembly build, as for every other request that ends
+        # in one: see '_stage_named_object'.
+        _stage_subassemblies(session, ctx, getter(path))
+    shape = getter(path)
+    if shape is None:
+        raise JsonRpcError(USAGE_ERROR, "%s %s is not found" % (kind.capitalize(), path))
+
+    directory = tempfile.mkdtemp(prefix="partcad-render-")
+    try:
+        with pc.logging.Process("Render", package, name):
+            asyncio.run(shape.render_async(ctx, fmt, output_dir=directory, options_package=options_package))
+        # Found rather than predicted: which extension a file type writes, and
+        # under which name, is the implementation's configuration to decide.
+        # One render writes one file; the newest is taken should an
+        # implementation leave something beside it.
+        written = [os.path.join(root, file) for root, _, files in os.walk(directory) for file in files]
+        if not written:
+            raise JsonRpcError(USAGE_ERROR, "No %s file was produced for %s; the log says why." % (fmt, path))
+        filepath = max(written, key=os.path.getmtime)
+        with open(filepath, "rb") as f:
+            content = base64.b64encode(f.read()).decode("ascii")
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
+
+    filename = os.path.basename(filepath)
+    return {
+        "object": path,
+        "format": fmt,
+        "filename": filename,
+        "extension": os.path.splitext(filename)[1].lstrip(".").lower(),
+        "content": content,
+    }
 
 
 def _render_objects(

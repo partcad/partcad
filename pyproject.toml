@@ -468,6 +468,11 @@ Flake8-pyproject = "^1.2.3"
 isort = "^8.0.1"
 sentry-sdk = {extras = ["opentelemetry"], version = "^2.66.0"}
 poetry-plugin-shell = "^1.0.1"
+# What a `partcad-json-rpc` run from this checkout attaches to the debugger
+# with, when `PC_DEBUGPY` is set -- see `partcad_service_json_rpc.debugger` and
+# the `Debug Extension and Python` launch configuration. Never a runtime
+# dependency: a service without it serves as before and says why in its log.
+debugpy = "^1.8.21"
 
 [tool.poetry.group.test.dependencies]
 # Serves a throwaway git repository over smart HTTP, so tests can exercise
