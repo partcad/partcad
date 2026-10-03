@@ -134,7 +134,7 @@ in a tool that draws, next to what the extension does with it.
   is, because that is the file KiCad has anything to say about.
 
 This runs on your machine and never goes anywhere near the PartCAD daemon: the extension runs `pc open`, which
-looks for the application installed here and starts it. If there is none, and `partcad.open.useDocker` is on,
+looks for the application installed here and starts it. If there is none, and `partcad.open.useDocker` is on (the default),
 PartCAD runs it in a Docker container instead -- one container per application, named after it
 (`partcad-freecad`, `partcad-blender`, `partcad-gazebo`, `partcad-mujoco`, `partcad-kicad`), created from the application's image (or
 `partcad.open.dockerImage`) the first time and reused afterwards, with your
@@ -143,9 +143,9 @@ on both sides. Its windows come out on your X display. On Linux that is the disp
 macOS and Windows it needs an X server (XQuartz, VcXsrv) that PartCAD cannot install for you, so it tells you
 which one to install and what to allow rather than starting a container whose windows go nowhere. Remove the
 container of the application in question (`docker rm -f partcad-freecad`, `partcad-blender`,
-`partcad-gazebo`, `partcad-mujoco` or `partcad-kicad`) to have the next open create a fresh one. With
-`partcad.open.useDocker` off, a machine that has neither the application nor Docker is told so rather than
-left with a menu entry that quietly does nothing.
+`partcad-gazebo`, `partcad-mujoco` or `partcad-kicad`) to have the next open create a fresh one. Turn
+`partcad.open.useDocker` off to use installed applications only. Either way, a machine that has neither the
+application nor Docker is told so rather than left with a menu entry that quietly does nothing.
 
 ## Inspecting published PartCAD packages
 

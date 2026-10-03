@@ -414,12 +414,18 @@ nobody compared the job's colour with the JUnit it had just uploaded. `Run: beha
 with. Every one of those scripts now starts with `set -e`, and the two that have a report to write keep the
 status and `exit` it at the end. Do not end such a script with a command whose success is not the result.
 
-That dev container also cannot use the `docker` Python sandbox, and PartCAD now knows it: it holds the *host's*
-`/var/run/docker.sock`, so the daemon it talks to resolves bind mounts against the host's filesystem rather than
-the container's. `mounts_are_shared` in `runtime_python_docker.py` asks that question by writing a file and
-having a throwaway container look for it, so the sandbox is reported unavailable there and conda is used
-instead, rather than every part failing on a path. It is one probe per process; see the docstring for what a
-wrong answer costs in each direction.
+That dev container holds the *host's* `/var/run/docker.sock`, so the daemon it talks to resolves bind mounts
+against the host's filesystem rather than the container's -- and the `docker` Python sandbox works there anyway.
+`mount_sources` in `runtime_python_docker.py` writes a file and has a throwaway container look for it; when it is
+not found, PartCAD finds its own container on that daemon, binds each directory from where the daemon keeps the
+mount holding it, and keeps the target, so inside the sandbox every path is still the one PartCAD sees. That is
+why `devcontainer.json` puts `~/.partcad` and `/tmp` on per-container volumes (the workspace is a bind already):
+a directory that lives only in the container's own layer is one the host's daemon cannot reach, and the sandbox
+refuses, naming it, rather than binding an empty directory of the same name. `PC_DOCKER_MOUNT_SOURCES`
+(`here=there;...`) says the same by hand. A `DOCKER_HOST` on another machine has no such answer and still falls
+back to conda; when a package's own `dockerImage` is skipped for any such reason, PartCAD warns once and repeats
+the reason in the failure. It is one probe per process; see the docstring for what a wrong answer costs in each
+direction.
 
 The packages under `examples/` are a third suite. The images and `README.md` files there are what
 `cd examples && pc render -r` produces, and they are checked in so that a change in how PartCAD renders is a

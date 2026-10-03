@@ -201,6 +201,24 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
 )
 
 
+def sandbox_note(ctx, impl) -> str:
+    """Why ``impl`` did not run in the image it named, as a line to append; or nothing.
+
+    An implementation names an image for what pip cannot install, so one run
+    anywhere else has very likely failed *because* of that -- and its own
+    message cannot say so, since it does not know where it was run. Not for one
+    declaring a 'container:', which runs there or not at all.
+
+    A function rather than a method: `Shape` is wrapped by the telemetry
+    decorator, which does not keep a `staticmethod` one.
+    """
+    if getattr(impl, "container", None):
+        return ""
+    note_for = getattr(ctx, "docker_image_note", None)
+    note = note_for(getattr(impl, "docker_image", None)) if note_for else None
+    return "\n" + note if note else ""
+
+
 @telemetry.instrument(exclude=["locked"])
 class Shape(ShapeConfiguration):
     name: str
@@ -1544,6 +1562,7 @@ class Shape(ShapeConfiguration):
             if exitcode != 0 and len(errors) == 0:
                 errors = command_failure(command, exitcode)
             if errors:
+                errors = errors.rstrip() + sandbox_note(ctx, impl)
                 pc_logging.error(errors)
                 raise Exception(errors)
 
@@ -2207,8 +2226,14 @@ class Shape(ShapeConfiguration):
                     raise Exception("The '%s' implementation reported nothing: %s" % (format_name, script))
                 if not result.get("success", False):
                     raise Exception(
-                        "%s failed for %s:%s: %s"
-                        % (analysis.upper(), self.project_name, self.name, result.get("exception", "Unknown error"))
+                        "%s failed for %s:%s: %s%s"
+                        % (
+                            analysis.upper(),
+                            self.project_name,
+                            self.name,
+                            result.get("exception", "Unknown error"),
+                            sandbox_note(ctx, impl),
+                        )
                     )
                 written = os.path.exists(final_filepath)
 
@@ -2535,8 +2560,13 @@ class Shape(ShapeConfiguration):
                     raise Exception("The '%s' implementation reported nothing: %s" % (format_name, script))
                 if not result.get("success", False):
                     raise Exception(
-                        "No route for %s:%s: %s"
-                        % (self.project_name, self.name, result.get("exception", "Unknown error"))
+                        "No route for %s:%s: %s%s"
+                        % (
+                            self.project_name,
+                            self.name,
+                            result.get("exception", "Unknown error"),
+                            sandbox_note(ctx, impl),
+                        )
                     )
                 written = os.path.exists(final_filepath)
 

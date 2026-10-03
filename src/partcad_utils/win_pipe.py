@@ -41,15 +41,15 @@ def is_pipe_alive(name: str, timeout: float = 1.0) -> bool:
     return isinstance(reply, dict) and reply.get("id") == 0 and "result" in reply
 
 
-def pipe_request(name: str, method: str, timeout: float):
+def pipe_request(name: str, method: str, timeout: float, params=None):
     """Send one request over the named pipe and return the reply (None on error)."""
     try:
-        return asyncio.run(_pipe_roundtrip(name, method, timeout))
+        return asyncio.run(_pipe_roundtrip(name, method, timeout, params))
     except Exception:  # pylint: disable=broad-except
         return None
 
 
-async def _pipe_roundtrip(name: str, method: str, timeout: float):  # pragma: no cover - Windows only
+async def _pipe_roundtrip(name: str, method: str, timeout: float, params=None):  # pragma: no cover - Windows only
     loop = asyncio.get_event_loop()
     transport = None
     try:
@@ -58,7 +58,7 @@ async def _pipe_roundtrip(name: str, method: str, timeout: float):  # pragma: no
         protocol = asyncio.StreamReaderProtocol(reader)
         transport, _ = await asyncio.wait_for(loop.create_pipe_connection(lambda: protocol, name), timeout=timeout)
         writer = asyncio.StreamWriter(transport, protocol, reader, loop)
-        write_frame(writer, {"jsonrpc": "2.0", "id": 0, "method": method, "params": {}})
+        write_frame(writer, {"jsonrpc": "2.0", "id": 0, "method": method, "params": params or {}})
         await writer.drain()
         return await asyncio.wait_for(read_frame(reader), timeout=timeout)
     finally:

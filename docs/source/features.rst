@@ -43,7 +43,7 @@ Objects
   the workspace imports the package that declares the engine. This runs
   on your machine rather than on the daemon: the extension runs ``pc open`` (see :doc:`cli`), which starts an
   application installed here, or runs one in a container when there is none and ``partcad.open.useDocker``
-  is on. Blender reads meshes, so an object that is not one is converted on the way.
+  is on, which it is by default. Blender reads meshes, so an object that is not one is converted on the way.
 
 The Explorer also lists the ``software`` a package ships. Selecting one shows its path and its ``fileHash``
 in the Inspector and leaves the ``PartCAD Viewer`` as it is: software is a file, not geometry, so there is

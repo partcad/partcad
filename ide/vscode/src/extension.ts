@@ -9,7 +9,7 @@
 
 import * as vscode from 'vscode';
 import { PartcadBackend, restartBackend } from './common/backend';
-import { registerLogger, traceError, traceLog, traceVerbose } from './common/log/logging';
+import { registerLogger, traceError, traceInfo, traceLog, traceVerbose } from './common/log/logging';
 import {
     checkIfConfigurationChanged,
     getInstallOnOpenFromSetting,
@@ -32,7 +32,7 @@ import { PartcadViewer } from './viewer/PartcadViewer';
 import { PartcadViewerServer } from './viewer/PartcadViewerServer';
 import * as PartcadItem from './PartcadItem';
 import { examples } from './examples';
-import { setTerminalWriter, terminalInit } from './terminal';
+import { setTerminalWriter, terminalInit, writeTerminal } from './terminal';
 import * as utils from './utils';
 
 let lsClient: PartcadBackend | undefined;
@@ -197,6 +197,14 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
             },
         );
         if (lsClient !== undefined) {
+            // This backend, not whichever `lsClient` is by the time an event
+            // arrives: an event from a backend that has since been replaced is
+            // about a connection nobody is using any more.
+            const client = lsClient;
+            const lost = client.onUnexpectedClose?.(() => void reconnect('went away', client));
+            if (lost) {
+                context.subscriptions.push(lost);
+            }
             await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
             await vscode.commands.executeCommand('setContext', 'partcad.installed', false);
             await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
@@ -356,8 +364,11 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
                     await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', true);
                     partcadExplorer?.exportDone();
                 }),
+                // The daemon restarting itself -- it does when the user
+                // configuration changes -- after it has answered everything
+                // this window asked. Not "Restart PartCAD": see `reconnect`.
                 lsClient.onNotification('?/partcad/doRestart', async () => {
-                    await vscode.commands.executeCommand('partcad.restart');
+                    await reconnect('is restarting', client);
                 }),
                 lsClient.onNotification('?/partcad/stats', async ({ stats, version }) => {
                     await partcadContext?.setStats(stats, version);
@@ -443,6 +454,71 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
         }
     };
 
+    /** Forget everything shown from the backend that is about to be replaced. */
+    const resetView = async () => {
+        await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
+        await vscode.commands.executeCommand('setContext', 'partcad.installed', false);
+        await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
+        await vscode.commands.executeCommand('setContext', 'partcad.itemsReceived', false);
+        await vscode.commands.executeCommand('setContext', 'partcad.failed', false);
+        await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', false);
+        await vscode.commands.executeCommand('setContext', 'partcad.beingLoaded', true);
+        await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', false);
+        currentItemType = PartcadItem.ITEM_TYPE_NONE;
+        currentItemName = '//';
+        currentItemPackage = '//';
+        currentItemParams = {};
+
+        partcadExplorer?.clearItems();
+        await partcadInspector?.clear();
+    };
+
+    // Reconnecting after the service went away on its own, which is not what
+    // "Restart PartCAD" does: that one stops the daemon first, and here there
+    // is nothing to stop -- the daemon this window used is already gone, and
+    // the one serving the workspace by now may be a fresh one another client
+    // just started, which a `pc daemon stop` would take away from it. So just
+    // connect again; `pc` starts a daemon if there is none.
+    //
+    // Bounded: a service that dies as it starts would otherwise be restarted
+    // for as long as the window is open.
+    const RECONNECT_WINDOW_MS = 60_000;
+    const RECONNECT_LIMIT = 3;
+    let reconnectTimes: number[] = [];
+    let reconnecting: Promise<void> | undefined;
+    const reconnect = (why: string, from: PartcadBackend | undefined): Promise<void> => {
+        if (from !== lsClient) {
+            // A backend this window has already moved on from.
+            return Promise.resolve();
+        }
+        if (reconnecting) {
+            return reconnecting;
+        }
+        const now = Date.now();
+        reconnectTimes = reconnectTimes.filter((t) => now - t < RECONNECT_WINDOW_MS);
+        if (reconnectTimes.length >= RECONNECT_LIMIT) {
+            traceError(`PartCAD: ${why}, and it has already been reconnected ${RECONNECT_LIMIT} times in a minute`);
+            writeTerminal(
+                `ERROR: The PartCAD service ${why} ${RECONNECT_LIMIT + 1} times in a minute, so it is not being reconnected again.\r\n` +
+                    'ERROR: Its log is in the PartCAD output channel. Run "Restart PartCAD" to try again.\r\n',
+            );
+            void vscode.commands.executeCommand('setContext', 'partcad.failed', true);
+            return Promise.resolve();
+        }
+        reconnectTimes.push(now);
+        traceInfo(`PartCAD: ${why}; reconnecting`);
+        writeTerminal(`INFO: The PartCAD service ${why}; reconnecting.\r\n`);
+        reconnecting = (async () => {
+            try {
+                await resetView();
+                await handleRestartServer(serverId, serverName, outputChannel);
+            } finally {
+                reconnecting = undefined;
+            }
+        })();
+        return reconnecting;
+    };
+
     const runServer = async () => {
         if (vscode.workspace.workspaceFolders === undefined || vscode.workspace.workspaceFolders.length === 0) {
             traceError('No workspace folders found');
@@ -469,22 +545,7 @@ async function activateTrusted(context: vscode.ExtensionContext): Promise<void> 
             }
         }),
         registerCommand(`partcad.restart`, async () => {
-            await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
-            await vscode.commands.executeCommand('setContext', 'partcad.installed', false);
-            await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
-            await vscode.commands.executeCommand('setContext', 'partcad.itemsReceived', false);
-            await vscode.commands.executeCommand('setContext', 'partcad.failed', false);
-            await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', false);
-            await vscode.commands.executeCommand('setContext', 'partcad.beingLoaded', true);
-            await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', false);
-            currentItemType = PartcadItem.ITEM_TYPE_NONE;
-            currentItemName = '//';
-            currentItemPackage = '//';
-            currentItemParams = {};
-
-            partcadExplorer?.clearItems();
-            await partcadInspector?.clear();
-
+            await resetView();
             // Terminate the shared daemon so its warm context is torn down,
             // then start a fresh daemon, reconnect, and reactivate.
             await lsClient?.stopDaemon?.();

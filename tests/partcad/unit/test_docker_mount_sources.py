@@ -1,0 +1,196 @@
+#
+# PartCAD, 2026
+#
+# Licensed under Apache License, Version 2.0.
+#
+"""The 'docker' sandbox from inside a container whose Docker daemon is the host's.
+
+The dev container this repository ships binds the host's Docker socket, so the
+daemon resolves a bind source against the *host's* filesystem, where the paths
+PartCAD sees do not exist. Most of them are mounts of the dev container, though,
+and the daemon knows where each of those really is -- so the sandbox binds from
+there and keeps the target, and inside the sandbox every path is still the one
+PartCAD knows.
+"""
+
+import os
+import tempfile
+import types
+
+import docker
+import pytest
+
+from partcad import docker_mount, runtime, runtime_python_docker
+
+# ---- docker_mount ------------------------------------------------------------
+
+SOURCES = [
+    ("/workspaces/partcad", "/home/me/partcad"),
+    ("/home/vscode/.partcad", "/var/lib/docker/volumes/state/_data"),
+    ("/home/vscode/.partcad/cache", "/var/lib/docker/volumes/cache/_data"),
+]
+
+
+def test_a_path_is_backed_by_the_mount_holding_it():
+    assert docker_mount.backed_by("/workspaces/partcad/examples", SOURCES) == "/home/me/partcad/examples"
+    assert docker_mount.backed_by("/workspaces/partcad", SOURCES) == "/home/me/partcad"
+
+
+def test_the_innermost_mount_wins():
+    assert docker_mount.backed_by("/home/vscode/.partcad/cache/x", SOURCES) == "/var/lib/docker/volumes/cache/_data/x"
+
+
+def test_a_textual_prefix_is_not_a_parent():
+    assert docker_mount.backed_by("/workspaces/partcad-other", SOURCES) is None
+
+
+def test_binds_come_from_where_the_daemon_has_them_and_land_where_they_are_here():
+    mounts = docker_mount.mounts(["/workspaces/partcad/examples", "/home/vscode/.partcad"], sources=SOURCES)
+    assert mounts == {
+        "/home/me/partcad": {"bind": "/workspaces/partcad", "mode": "rw"},
+        "/var/lib/docker/volumes/state/_data": {"bind": "/home/vscode/.partcad", "mode": "rw"},
+    }
+
+
+def test_every_context_asks_for_the_same_mounts():
+    """What the home directory does on a host. A container is shared by every context
+    using its image and replaced when the mounts differ -- from under the one that
+    started it, whose next command then ran without its package."""
+    one = docker_mount.mounts(["/workspaces/partcad/examples/a", "/workspaces/partcad/src"], sources=SOURCES)
+    two = docker_mount.mounts(["/workspaces/partcad/tests/b", "/workspaces/partcad/src"], sources=SOURCES)
+    assert one == two == {"/home/me/partcad": {"bind": "/workspaces/partcad", "mode": "rw"}}
+
+
+def test_a_directory_the_daemon_does_not_have_is_not_bound():
+    """Binding it would have the daemon make an empty one of that name on the host."""
+    assert docker_mount.mounts(["/home/vscode"], sources=SOURCES) == {}
+
+
+def test_a_directory_inside_another_is_still_bound_once():
+    mounts = docker_mount.mounts(["/home/vscode/.partcad", "/home/vscode/.partcad/cache/x"], sources=SOURCES)
+    # The cache volume is a mount of its own inside the state volume; bound once
+    # each, since the outer bind does not carry what is mounted inside it.
+    assert mounts == {
+        "/var/lib/docker/volumes/state/_data": {"bind": "/home/vscode/.partcad", "mode": "rw"},
+        "/var/lib/docker/volumes/cache/_data": {"bind": "/home/vscode/.partcad/cache", "mode": "rw"},
+    }
+
+
+def test_without_sources_nothing_changes():
+    assert docker_mount.mounts(["/srv/pkg"], windows=False) == {"/srv/pkg": {"bind": "/srv/pkg", "mode": "rw"}}
+
+
+# ---- finding them ------------------------------------------------------------
+
+DAEMON_TMP = "/var/lib/docker/volumes/tmp/_data"
+
+
+class _HostDaemon:
+    """The host's daemon, seen from a dev container that has '/tmp' on a volume.
+
+    It finds the probe's file only when the bind's source is where it keeps that
+    volume -- which is the whole difference between binding a path and binding
+    the directory that path is here.
+    """
+
+    def __init__(self, me="devcontainer", mounts=None):
+        self.me = me
+        self.own_mounts = (
+            mounts
+            if mounts is not None
+            else [
+                {"Type": "volume", "Source": DAEMON_TMP, "Destination": tempfile.gettempdir()},
+                {"Type": "tmpfs", "Destination": "/run"},
+            ]
+        )
+        self.runs = []
+        self.api = types.SimpleNamespace(base_url="unix://var/run/docker.sock")
+        self.containers = types.SimpleNamespace(get=self._get, run=self._run)
+
+    def _get(self, name):
+        if name == self.me:
+            return types.SimpleNamespace(attrs={"Mounts": self.own_mounts})
+        raise docker.errors.NotFound(name)
+
+    def _run(self, image, **kwargs):
+        self.runs.append(kwargs["volumes"])
+        if any(source.startswith(DAEMON_TMP) for source in kwargs["volumes"]):
+            return b""
+        raise docker.errors.ContainerError(
+            container="probe", exit_status=1, command=kwargs.get("command"), image=image, stderr=b""
+        )
+
+
+@pytest.fixture(autouse=True)
+def _fresh(monkeypatch):
+    runtime_python_docker._MOUNTS_SHARED.clear()
+    monkeypatch.delenv("PC_DOCKER_MOUNT_SOURCES", raising=False)
+    monkeypatch.setattr(runtime_python_docker.socket, "gethostname", lambda: "devcontainer")
+    yield
+    runtime_python_docker._MOUNTS_SHARED.clear()
+
+
+def test_inside_a_container_of_that_daemon_its_mounts_are_the_answer():
+    daemon = _HostDaemon()
+    sources = runtime_python_docker.mount_sources(daemon, "img")
+    assert sources == [(tempfile.gettempdir(), DAEMON_TMP)]
+    assert runtime_python_docker.mounts_are_shared(daemon, "img") is True
+    # Asked plainly first, then with the mapping -- and the second time the
+    # probe's directory was bound from where the daemon keeps it.
+    assert len(daemon.runs) == 2
+    assert all(source.startswith(DAEMON_TMP) for source in daemon.runs[1])
+
+
+def test_a_daemon_this_process_is_not_a_container_of_has_no_answer():
+    """'DOCKER_HOST' on another machine: nothing there knows where these files are."""
+    daemon = _HostDaemon(me="somebody-else")
+    assert runtime_python_docker.mount_sources(daemon, "img") is False
+
+
+def test_mounts_that_do_not_hold_the_probe_are_no_answer():
+    daemon = _HostDaemon(mounts=[{"Type": "bind", "Source": "/home/me/x", "Destination": "/workspaces/x"}])
+    assert runtime_python_docker.mount_sources(daemon, "img") is False
+
+
+def test_they_can_be_named_by_hand(monkeypatch):
+    monkeypatch.setenv("PC_DOCKER_MOUNT_SOURCES", "%s=%s; =ignored" % (tempfile.gettempdir(), DAEMON_TMP))
+    daemon = _HostDaemon(me="somebody-else")
+    assert runtime_python_docker.mount_sources(daemon, "img") == [(tempfile.gettempdir(), DAEMON_TMP)]
+
+
+# ---- the sandbox's own mounts --------------------------------------------------
+
+
+def _sandbox(tmp_path):
+    sandbox = runtime_python_docker.DockerPythonRuntime.__new__(runtime_python_docker.DockerPythonRuntime)
+    sandbox.ctx = types.SimpleNamespace(
+        user_config=types.SimpleNamespace(internal_state_dir=str(tmp_path / "state")),
+        root_path=str(tmp_path / "package"),
+        sandbox_paths=(),
+    )
+    return sandbox
+
+
+def test_every_directory_but_home_has_to_be_backed(tmp_path):
+    sandbox = _sandbox(tmp_path)
+    sources = [(str(tmp_path), "/daemon/t"), (tempfile.gettempdir(), DAEMON_TMP)]
+    install = runtime_python_docker.INSTALL_DIR
+    with pytest.raises(runtime.SandboxUnavailable) as raised:
+        sandbox._mounts(sources)
+    # Named, so the reader knows what to mount.
+    assert install in str(raised.value)
+    assert os.path.expanduser("~") not in str(raised.value).replace(install, "")
+
+
+def test_home_is_left_out_and_the_rest_bound_from_the_daemon(tmp_path):
+    sandbox = _sandbox(tmp_path)
+    install = runtime_python_docker.INSTALL_DIR
+    sources = [
+        (str(tmp_path), "/daemon/t"),
+        (tempfile.gettempdir(), DAEMON_TMP),
+        (install, "/daemon/install"),
+    ]
+    mounts = sandbox._mounts(sources)
+    assert mounts["/daemon/install"] == {"bind": install, "mode": "rw"}
+    assert all(spec["bind"] != os.path.expanduser("~") for spec in mounts.values())
+    assert sandbox._mount_sources == sources
