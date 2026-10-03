@@ -212,6 +212,13 @@ export class PartcadViewer implements vscode.Disposable {
         format?: string,
         plugin?: string,
     ): Promise<void> {
+        if (RENDER_TABS.has(tab)) {
+            // Before anything is awaited: two requests in flight reach the
+            // awaits below in either order, and the one to keep the file of is
+            // the newest asked for, not the last to get this far. Tokens only
+            // grow, so the larger one is the newer.
+            this.latestRender.set(tab, Math.max(token, this.latestRender.get(tab) ?? 0));
+        }
         const analysis = ANALYSIS_TABS.has(tab);
         // Which implementation the request ends up carrying, so that the field
         // over the model can be pre-filled with it -- including when the
@@ -250,7 +257,6 @@ export class PartcadViewer implements vscode.Disposable {
                 args.kind = target.kind ?? 'part';
                 args.format = format;
                 args.plugin = plugin;
-                this.latestRender.set(tab, token);
                 const data = (await vscode.commands.executeCommand(command, args)) as RenderedData | undefined;
                 if (data?.content && this.lastShow === target && this.latestRender.get(tab) === token) {
                     this.keepRendered(tab, data);
