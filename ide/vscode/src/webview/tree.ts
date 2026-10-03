@@ -246,11 +246,13 @@ export class Tree {
         const label = el('label', 'tree-label');
         let displayName = row.item.name;
         // Add triangle count if performance debugging is enabled
-        const triangleCounts = (window as any).pcNodeTriangleCounts as Map<string, number> | undefined;
-        if (triangleCounts) {
-            const count = triangleCounts.get(row.item.id);
-            if (count !== undefined && count > 0) {
-                displayName = `${row.item.name} (${count.toLocaleString()} triangles)`;
+        if (typeof window !== 'undefined') {
+            const triangleCounts = (window as any).pcNodeTriangleCounts as Map<string, number> | undefined;
+            if (triangleCounts) {
+                const count = triangleCounts.get(row.item.id);
+                if (count !== undefined && count > 0) {
+                    displayName = `${row.item.name} (${count.toLocaleString()} triangles)`;
+                }
             }
         }
         const name = el('span', 'tree-name', displayName);
