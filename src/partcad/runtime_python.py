@@ -705,15 +705,41 @@ class PythonRuntime(runtime.Runtime):
         one back, which is all it needs: everything after this goes in
         through it.
         """
+        if self._lost_interpreter(path):
+            self.run_onced_locked(self._recreate(path))
         if self._lost_pip_warning(path):
             self._clear_stale_pip(path)
             self._restored(path, *self.run_onced_locked(self.ENSUREPIP, path=path))
 
     async def _restore_pip_async_onced_locked(self, path) -> None:
         """The asynchronous twin of '_restore_pip_onced_locked'."""
+        if self._lost_interpreter(path):
+            await self.run_async_onced_locked(self._recreate(path))
         if self._lost_pip_warning(path):
             self._clear_stale_pip(path)
             self._restored(path, *(await self.run_async_onced_locked(self.ENSUREPIP, path=path)))
+
+    def _lost_interpreter(self, path) -> bool:
+        """Whether an environment directory is there with no interpreter in it; says so if it is.
+
+        A creation that stopped before it got that far leaves exactly this, and
+        the directory being there is what keeps it from being created again.
+        'ensurepip' cannot help: it needs the interpreter that is missing.
+
+        Listed rather than followed: in the 'docker' sandbox 'bin/python' is a
+        symlink to the *image's* interpreter, which this machine does not have,
+        and a dangling link here is an interpreter that is there.
+        """
+        if not os.path.exists(path):
+            return False
+        if glob.glob(os.path.join(path, "bin", "python*")) or glob.glob(os.path.join(path, "Scripts", "python*")):
+            return False
+        pc_logging.warning("The '%s' environment at %s has no interpreter; creating it again" % (self.sandbox, path))
+        return True
+
+    def _recreate(self, path) -> list:
+        """'-m venv' for ``path``, clearing whatever an earlier creation left there."""
+        return ["-m", "venv", "--clear", "--upgrade-deps", path]
 
     def _restored(self, path, exitcode, stdout, stderr) -> None:
         """Fail, rather than carry on, when putting pip back did not put pip back.

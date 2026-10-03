@@ -1502,6 +1502,7 @@ def test_a_session_environment_that_lost_its_pip_gets_it_back(tmp_path, monkeypa
     made = _runtime(tmp_path)
     session_path = os.path.join(made.path, "v-env-0123456789abcdef")
     os.makedirs(os.path.join(session_path, "bin"))
+    open(os.path.join(session_path, "bin", "python"), "w").close()
     ran = []
 
     def ensurepip(cmd, path=None, **_kw):
@@ -1544,8 +1545,41 @@ def test_a_recovery_that_does_not_recover_stops_provisioning(tmp_path, monkeypat
     made = _runtime(tmp_path)
     session_path = os.path.join(made.path, "v-env-0123456789abcdef")
     os.makedirs(os.path.join(session_path, "bin"))
+    open(os.path.join(session_path, "bin", "python"), "w").close()
     monkeypatch.setattr(made, "run_onced_locked", lambda cmd, path=None, **kw: (1, "", "no space left on device"))
     with pytest.raises(Exception) as raised:
         made._restore_pip_onced_locked(session_path)
     assert "did not put one back" in str(raised.value)
     assert "no space left on device" in str(raised.value)
+
+
+def test_a_session_environment_with_no_interpreter_is_created_again(tmp_path, monkeypatch):
+    """A directory and nothing in it: 'ensurepip' would need the interpreter that is missing."""
+    made = _runtime(tmp_path)
+    session_path = os.path.join(made.path, "v-env-0123456789abcdef")
+    os.makedirs(session_path)
+    ran = []
+
+    def run(cmd, path=None, **_kw):
+        ran.append(cmd)
+        if "venv" in cmd:
+            os.makedirs(os.path.join(session_path, "bin"))
+            open(os.path.join(session_path, "bin", "python"), "w").close()
+            _give_pip(session_path)
+        return 0, "", ""
+
+    monkeypatch.setattr(made, "run_onced_locked", run)
+    made._restore_pip_onced_locked(session_path)
+    assert ran == [["-m", "venv", "--clear", "--upgrade-deps", session_path]]
+
+
+def test_a_dangling_session_interpreter_is_still_an_interpreter(tmp_path):
+    """The 'docker' sandbox's 'bin/python' points into the image, which is not here."""
+    made = _runtime(tmp_path)
+    session_path = os.path.join(made.path, "v-env-0123456789abcdef")
+    os.makedirs(os.path.join(session_path, "bin"))
+    try:
+        os.symlink(str(tmp_path / "only-inside-the-image"), os.path.join(session_path, "bin", "python"))
+    except (OSError, NotImplementedError):  # pragma: no cover - Windows without privilege
+        pytest.skip("this platform will not create a symlink here")
+    assert made._lost_interpreter(session_path) is False
