@@ -26,19 +26,27 @@ is the `partcad_ide_client` package, which ships inside `partcad` itself.
 Anything that can reach that port displays into the same viewer, including a `pc inspect` run in a plain
 terminal. Set `PARTCAD_IDE_PORT` to move both ends off the default port.
 
-The panel is a strip of tabs over the one object, not just a canvas. The 3D view is always the first; the rest
-appear where they apply:
+The panel is a strip of tabs over the one object, not just a canvas: groups, **Design** (the object
+itself), **Analysis** (analysing it) and **Supply Chain** (making it), each with tabs of its own, then
+**Validation** and **Operations**, which are always disabled for now. Every group
+shows all of its tabs, disabling what does not apply, and Analysis and Supply Chain are disabled
+themselves when none of theirs does - hovering over a disabled group says why; each opens on the tab last opened in it while that one applies,
+and on the first that does otherwise.
 
 | tab | what it shows |
 | --- | --- |
-| **3D** | The shape, drawn here from what arrived over the socket above. |
-| **Bill of Materials** | For an assembly or a scene: every part it is made of, recursively, counted. |
-| **Instructions** | For an assembly that declares its steps: the assembly guide, step by step. |
-| **Supply** | Where the objects in view can be bought, and a quote per supplier. |
+| **Design → 3D** | The shape, drawn here from what arrived over the socket above. |
+| **Design → 2D** | The object rendered to a PNG, JPEG or SVG picture, as `pc render` renders it, with **Save…**. |
+| **Design → Draft** | For a part or an assembly: a dimensioned technical drawing by `//pub/feature/render/draftwright`, in the formats it offers (PDF, SVG, DXF), with **Save…**. |
+| **Analysis → FEA**, **CFD** | For a part: the analysis `pc cae` runs, and what it found. |
+| **Supply Chain → Bill of Materials** | For a part or an assembly: what has to be procured to have it, as `pc bom` lists it - a made part as the stock it is made from, a sub-assembly with a vendor and an SKU as one item ordered whole. |
+| **Supply Chain → Instructions** | For an assembly that declares its steps: the assembly guide, step by step. |
+| **Supply Chain → Procurement** | For a part or an assembly: where it can be bought, and a quote per supplier. Supply Chain is disabled for a scene, a sketch or an interface. |
 
 Only the 3D view comes over the viewer protocol. The others are questions about `<package>:<name>` that this
 extension puts to the PartCAD daemon, fetched the first time a tab is looked at and cached until the next
-object is shown — so an object belonging to no package gets the 3D view alone.
+object is shown — so an object belonging to no package gets the 3D view alone. The 3D view needs WebGL; in a
+window without it, the 3D tab says how to fix that and the other tabs, 2D included, work as usual.
 
 ### 3Dconnexion SpaceMouse
 

@@ -34,10 +34,11 @@ import {
 
 import { traceError, traceInfo } from './log/logging';
 import { identity, INSTANTIATE_METHOD, pendingSubassemblies, requestParams } from './staging';
-import { cliBeside, ensureServiceExecutable, locateCommand, resolveServicePath } from './provision';
+import { cliBeside, ensureServiceExecutable, locateCommand, resolveServicePath, ServiceResolution } from './provision';
 import { writeTerminal } from '../terminal';
 import { refreshToolsPath } from './terminalPath';
 import { getServiceChannelFromSetting } from './settings';
+import { checkoutService, debugCheckout, DEBUG_STATUS_METHOD, DebugStatus, needsReplacing } from './debug';
 
 /** The subset of the language client the extension depends on. */
 export interface PartcadBackend {
@@ -208,6 +209,16 @@ class JsonRpcBackend implements PartcadBackend {
             await this.connection.sendRequest('daemon.stop', {});
         } catch {
             // The daemon closes the connection as it exits; ignore.
+        }
+    }
+
+    /** Where the service runs from and whether a debugger is attached; undefined if it cannot say. */
+    async debugStatus(): Promise<DebugStatus | undefined> {
+        try {
+            return await this.connection.sendRequest(DEBUG_STATUS_METHOD, {});
+        } catch (e) {
+            traceInfo(`PartCAD service: no ${DEBUG_STATUS_METHOD} (${e})`);
+            return undefined;
         }
     }
 
@@ -422,6 +433,21 @@ class JsonRpcBackend implements PartcadBackend {
             }),
         );
         reg('partcad.caeDefaults', () => this.send('cae.defaults', {}));
+        // The Design tab's 2D and Draft tabs: one object rendered to one file,
+        // which comes back as bytes, since the daemon may be on another machine.
+        // 'plugin' is the package that implements the file type, as 'pc render
+        // -e' names one; left out, PartCAD's own renderers draw it.
+        reg('partcad.renderInline', (a) =>
+            this.send('render.inline', {
+                package: a.pkg,
+                object: a.name,
+                kind: a.kind,
+                format: a.format,
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                options_package: a.plugin,
+            }),
+        );
+        reg('partcad.renderFormats', (a) => this.send('render.formats', { package: a.package }));
         reg('partcad.exportPart', (type, path, pkg, name, params) =>
             this.send('export.part', { type, path, package: pkg, name, params }),
         );
@@ -813,6 +839,70 @@ function reportNoService(context: vscode.ExtensionContext, serverId: string): vo
 }
 
 /**
+ * Whether this extension host has asked a daemon about the debugger yet.
+ *
+ * Once only: after that, every daemon this host reaches is one it started
+ * itself, with `PC_DEBUGPY` in its environment -- or one the user restarted on
+ * purpose.
+ */
+let debugChecked = false;
+
+/**
+ * Connect to the workspace daemon, first replacing it with one attached to the
+ * debugger when this is a debug session and the daemon is this checkout's (see
+ * `debug.ts`).
+ */
+async function connectDaemon(
+    checkout: string | undefined,
+    execPath: string,
+    args: string[],
+    cwd: string,
+    env: NodeJS.ProcessEnv,
+    outputChannel: vscode.LogOutputChannel,
+): Promise<JsonRpcBackend> {
+    const backend = await connectSocket(execPath, args, cwd, env, outputChannel);
+    if (!checkout || debugChecked) {
+        return backend;
+    }
+    debugChecked = true;
+    const status = await backend.debugStatus();
+    if (!needsReplacing(status, checkout)) {
+        traceInfo(
+            status?.debugger
+                ? `PartCAD: daemon ${status.pid} is attached to the debugger`
+                : `PartCAD: daemon ${status?.pid ?? '?'} runs ${status?.source ?? 'an unknown build'}, ` +
+                      `not ${checkout}; leaving it alone, so its Python is not debugged`,
+        );
+        return backend;
+    }
+    traceInfo(`PartCAD: daemon ${status?.pid} is not attached to the debugger; replacing it`);
+    try {
+        await backend.stopDaemon();
+        await backend.stop();
+        const replacement = await connectSocket(execPath, args, cwd, env, outputChannel);
+        // Checked, not assumed: the old daemon may not have gone (a stop whose
+        // answer was lost closes only the connection), or the new one may not
+        // have reached the listener. Either way the window keeps a working
+        // PartCAD - a debug session that cannot attach is still one to use -
+        // and the next connection asks again.
+        const replaced = await replacement.debugStatus();
+        if (replaced?.debugger !== true) {
+            debugChecked = false;
+            traceError(
+                `PartCAD: daemon ${replaced?.pid ?? '?'} is not attached to the debugger either; ` +
+                    'its Python is not debugged. "Restart PartCAD" tries again.',
+            );
+        }
+        return replacement;
+    } catch (e) {
+        // Asked again on the next connection - "Restart PartCAD" - rather than
+        // leaving the rest of the session on a daemon nobody can debug.
+        debugChecked = false;
+        throw e;
+    }
+}
+
+/**
  * (Re)start the configured backend. Returns undefined if it could not start;
  * when the user declines the service download, the backend setting is switched
  * to "python" (which re-triggers startup through the configuration-change path).
@@ -831,7 +921,20 @@ export async function restartBackend(
             traceError(`Failed to stop the previous backend: ${e}`);
         }
     }
-    const resolution = await ensureServiceExecutable(context, serverId);
+    // Being debugged from a checkout: its own service, so that its breakpoints
+    // are the code that runs. Anything else falls through to the usual search.
+    const checkout = debugCheckout(context);
+    const checkoutExec = checkout ? checkoutService(checkout) : undefined;
+    if (checkout) {
+        traceInfo(
+            checkoutExec
+                ? `PartCAD: debugging; using the checkout's service ${checkoutExec}`
+                : `PartCAD: debugging, but ${checkout} has no .venv service; run \`poetry install\` there`,
+        );
+    }
+    const resolution: ServiceResolution = checkoutExec
+        ? { kind: 'ready', execPath: checkoutExec }
+        : await ensureServiceExecutable(context, serverId);
     // The tools directory only exists once something is installed, and this is
     // where a first install happens: `ensureServiceExecutable` downloads the
     // bundle when there is none. Activation already ran and found nothing, so
@@ -875,7 +978,7 @@ export async function restartBackend(
         if (getServiceChannelFromSetting(serverId) === 'stdio') {
             return connectStdio(execPath, args, cwd, env, outputChannel);
         }
-        return await connectSocket(execPath, args, cwd, env, outputChannel);
+        return await connectDaemon(checkout, execPath, args, cwd, env, outputChannel);
     } catch (e) {
         if (e instanceof NoDaemonChannel) {
             // The installation has no daemon for this platform. That is a

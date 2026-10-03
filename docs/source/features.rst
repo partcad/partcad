@@ -53,17 +53,46 @@ The PartCAD Viewer
 ------------------
 
 Displaying an object opens the ``PartCAD Viewer``, which is a strip of tabs over that one object rather than
-a bare canvas. Which tabs appear depends on what is being shown, and the 3D view is always the first:
+a bare canvas: groups of tabs, each with tabs of its own -- **Design**, **Analysis** and **Supply Chain**,
+followed by **Validation** and **Operations**, which have nothing in them yet and are always disabled. Design
+is always the first:
 
-- **3D** — the shape itself, tessellated by PartCAD and drawn here. Always present.
-- **Bill of Materials** — for an assembly or a scene: every part it is made of, recursively, counted.
-- **Instructions** — for an assembly that declares its steps: the assembly guide, step by step.
-- **FEA** and **CFD** — for a part: the analysis :ref:`pc cae <cae>` runs, and what it found.
-- **Supply** — what the objects in view can be bought from, and a quote per supplier.
+- **Design** — the object itself, three ways, in tabs of its own:
+
+  - **3D** — the shape, tessellated by PartCAD and drawn here, to turn and zoom. Always present.
+  - **2D** — the object rendered to a picture, as ``pc render`` renders it: PNG, JPEG or SVG,
+    chosen from a list. For a part, an assembly, a scene or a sketch.
+  - **Draft** — a dimensioned technical drawing of a part or an assembly, made by a drawing package the way
+    ``pc render -e`` uses one. ``//pub/feature/render/draftwright`` is offered, and the formats are whatever
+    it declares (PDF, SVG and DXF). The first drawing takes a few minutes while PartCAD installs draftwright.
+
+  2D and Draft each have a **Save…** button that saves the file on screen wherever you choose. A picture is
+  shown on the tab, and can be zoomed with the mouse wheel, dragged, and put back with a double-click; a PDF or
+  a DXF cannot be shown there, and is saved and opened in another program instead.
+- **Analysis** — what engineering analysis says about the object:
+
+  - **FEA** and **CFD** — for a part: the analysis :ref:`pc cae <cae>` runs, and what it found.
+- **Supply Chain** — what making it takes:
+
+  - **Bill of Materials** — for a part or an assembly: what has to be procured to have it, as ``pc bom``
+    lists it. A made part is the stock it is made from, and a sub-assembly that declares a vendor and an SKU
+    is one item ordered whole.
+  - **Instructions** — for an assembly: the assembly guide, step by step.
+  - **Procurement** — what the objects in view can be bought from, and a quote per supplier.
+
+  Supply Chain is for a part or an assembly; for a scene, a sketch or an interface it is disabled.
+
+Every group always shows all of its tabs and disables the ones that do not apply, and a group none of whose
+tabs apply is disabled itself, and says why when the mouse is over it. Design and its 3D tab are always enabled,
+and are what the Viewer shows before anything has been selected. A group opens on the tab you last had open in
+it, if that one applies to the object, and on the first one that does otherwise.
 
 The 3D view arrives over the viewer protocol from whichever ``partcad`` asked for the shape to be shown; the
 other tabs are questions put to the PartCAD daemon, fetched the first time the tab is looked at and cached
 until the next object is shown. An object that belongs to no package gets the 3D view alone.
+
+The 3D view needs WebGL. In a window that has none, the 3D tab says what to do about it and every other tab
+works as usual -- including 2D, which is rendered by PartCAD rather than by the window.
 
 Down the left of the 3D view is a list of **what is on screen**, with a checkbox on every line: unticking one
 hides that line and everything under it, and ticking it again brings back exactly what was showing before.

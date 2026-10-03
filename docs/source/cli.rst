@@ -440,16 +440,23 @@ Object commands
   tells them apart.
 
 ``pc bom``
-  Print the bill of materials of an assembly or a scene: every part it is made of, recursively, with how many of each
-  are needed and, where the object says so, the vendor and the SKU to order it by. Use ``-P`` to name the
-  package the assembly comes from, ``-p <name>=<value>`` to set parameters, and ``-j``/``--json`` to produce
-  JSON on standard output instead of a table.
+  Print the bill of materials of a part, an assembly or a scene: what has to be procured to have it, with how
+  many of each are needed and, where the object says so, the vendor and the SKU to order it by.
 
-  ``-s``/``--stop-at-purchasable`` stops the recursion at a sub-assembly that can be bought ready-made — one
-  that declares both a ``vendor`` and an ``sku``, and that a supplier of its package reports as available.
-  Such a sub-assembly is listed as a single line item and its own contents are left out: it is one thing to
-  order, not a list of parts to source and assemble. A sub-assembly that names a vendor and an SKU nobody
-  supplies is still expanded.
+  - A part is what one of it is procured as: the part itself when it declares a ``vendor`` and an ``sku``, or
+    says neither how it is bought nor how it is made; the stock it is made from when it has ``manufacturing:``
+    instructions -- followed while that stock is made in turn, down to what is bought, and listed with
+    ``kind: stock``; and nothing at all when it is made from nothing it names (printed, formed).
+  - A sub-assembly that declares a ``vendor`` and an ``sku`` is one line item, ordered whole, and its own
+    contents are left out. Any other sub-assembly is expanded into its own bill of materials, by these same
+    rules.
+
+  This is the rule ``pc supply`` fills its cart by, so the two agree on every count. Whether a supplier has
+  something today is the supply quote's question; the bill of materials goes by what the model declares, and
+  answers offline. Use ``-P`` to name the package the object comes from, ``-p <name>=<value>`` to set
+  parameters, and ``-j``/``--json`` to produce JSON on standard output instead of a table.
+  ``-s``/``--stop-at-purchasable`` is still accepted and changes nothing: a sub-assembly that declares a vendor
+  and an SKU is always ordered whole now.
 
   The :ref:`software` the parts and the assembly ship with is listed under a heading of its own, counted
   apart from the hardware. Each software line names the package it came from and the revision of that
