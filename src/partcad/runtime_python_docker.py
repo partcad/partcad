@@ -851,7 +851,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         """
         return bool(glob.glob(os.path.join(self.path, "lib", "python*", "site-packages", "pip")))
 
-    def _created(self, exitcode, stderr) -> None:
+    def _created(self, exitcode, stderr, stdout="") -> None:
         """Accept the environment, or fail with what actually went wrong.
 
         'run_*_locked' reports an exit code rather than raising, so a '-m venv'
@@ -865,7 +865,10 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                 # it somewhere this process does not see, which is a mount that
                 # is not the directory it claims to be. Say where, since that
                 # is the whole of what anybody would need to fix it.
-                said += ", but the environment is not here. " + self._where_it_went()
+                said += ", but the environment is not here. "
+                if (stdout or "").strip():
+                    said += "It said: %s " % stdout.strip()
+                said += self._where_it_went()
             raise Exception(
                 "Failed to create the '%s' sandbox at %s in %s: %s" % (self.sandbox, self.path, self.image, said)
             )
@@ -899,6 +902,21 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                 ]
             )
             parts.append("In the container: %s" % output.decode("utf-8", "replace").strip())
+            # What the environment's own 'ensurepip' says, which is the step
+            # that should have put pip there: whatever stopped it, it says so.
+            code, output = container.exec_run(
+                [
+                    "/".join([path, "bin", "python"]),
+                    "-m",
+                    "ensurepip",
+                    "--upgrade",
+                    "--default-pip",
+                ],
+                environment={"HOME": docker_mount.rewrite(self._container_home, self._mounted)},
+            )
+            parts.append(
+                "Its ensurepip, run again: exit %s: %s" % (code, output.decode("utf-8", "replace").strip()[-1500:])
+            )
             parts.append(
                 "Its mounts: %s"
                 % "; ".join(
@@ -917,8 +935,8 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             command = self._create_locked()
             if command:
                 with pc_logging.Action("Docker", self.version, self.path):
-                    exitcode, _, stderr = self.run_onced_locked(command)
-                self._created(exitcode, stderr)
+                    exitcode, stdout, stderr = self.run_onced_locked(command)
+                self._created(exitcode, stderr, stdout)
             elif self._environment_built:
                 self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)
         super().once()
@@ -930,8 +948,8 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             command = self._create_locked()
             if command:
                 with pc_logging.Action("Docker", self.version, self.path):
-                    exitcode, _, stderr = await self.run_async_onced_locked(command)
-                self._created(exitcode, stderr)
+                    exitcode, stdout, stderr = await self.run_async_onced_locked(command)
+                self._created(exitcode, stderr, stdout)
             elif self._environment_built:
                 self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)
         await super().once_async()
