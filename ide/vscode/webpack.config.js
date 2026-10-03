@@ -7,6 +7,12 @@ const path = require('path');
 
 /** @type WebpackConfig */
 const extensionConfig = {
+  // Named so that webpack-cli says which compiler started and finished: the
+  // `npm: watch` task's problem matcher waits for this one's "finished" before
+  // the debug launch starts the Extension Development Host, which loads
+  // `dist/extension.js` straight away -- and not for the viewer's, which is
+  // built beside it and read only once a panel opens.
+  name: 'extension',
   target: 'node', // vscode extensions run in a Node.js-context 📖 -> https://webpack.js.org/configuration/node/
   mode: 'none', // this leaves the source code as close as possible to the original (when packaging we set this to 'production')
 
@@ -62,6 +68,7 @@ const extensionConfig = {
  * @type WebpackConfig
  */
 const viewerConfig = {
+  name: 'viewer',
   target: 'web',
   mode: 'none',
 

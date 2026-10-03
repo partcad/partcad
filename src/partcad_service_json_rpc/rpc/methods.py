@@ -16,6 +16,7 @@ import functools
 
 from partcad_utils import staging
 
+from .. import debugger
 from ..core import operations
 
 # CLI-shaped method name -> operation callable.
@@ -58,6 +59,11 @@ _OPERATIONS = {
     "cam.route": operations.cam_route,
     "search.objects": operations.search_objects,
     "render.objects": operations.render_objects,
+    # Not CLI commands: one object to one file, returned as bytes, and the file
+    # types a package declares -- the IDE's 2D and Draft tabs, which show a file
+    # and save it where the user says rather than into the package.
+    "render.inline": operations.render_inline,
+    "render.formats": operations.render_formats,
     "convert.object": operations.convert_object,
     "open.tools": operations.open_tools,
     "adhoc.convert": operations.adhoc_convert,
@@ -70,6 +76,10 @@ _OPERATIONS = {
     "daemon.status.config": operations.daemon_status_config,
     "daemon.status.env": operations.daemon_status_env,
     "daemon.set.telemetry": operations.daemon_set_telemetry,
+    # Not a CLI command: what the editor extension asks, once, when it is being
+    # debugged from a checkout, to decide whether the daemon it reached has to
+    # be replaced by one attached to the debugger (see `debugger`).
+    "daemon.debug": debugger.status,
     "test": operations.test,
     "info": operations.info,
     "info.object": operations.info_object,

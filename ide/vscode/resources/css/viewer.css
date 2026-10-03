@@ -49,8 +49,15 @@ body {
     cursor: pointer;
 }
 
-.tab:hover {
+.tab:not(.disabled):hover {
     color: var(--vscode-foreground);
+}
+
+/* Shown so that the strip does not change shape from one object to the next,
+   and so that "not for this object" reads as that rather than as missing. */
+.tab.disabled {
+    opacity: 0.4;
+    cursor: default;
 }
 
 .tab.current {
@@ -73,6 +80,116 @@ body {
     position: absolute;
     inset: 0;
     overflow: auto;
+}
+
+/* Design, Analysis and Supply Chain are each a strip of their own over
+   panes of their own, laid out the way the panel lays out the outer ones. Their
+   tabs are a step quieter than the panel's, so that the two strips read as one
+   inside the other rather than as two rows of equals. */
+.pane-group {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.sub-tabs .tab {
+    padding: 0.25rem 0.8rem;
+    font-size: 0.95em;
+}
+
+/* The 2D and Draft tabs: what to render to along the top, the file under it. */
+.pane.render {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.render-header {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.render-label {
+    color: var(--vscode-descriptionForeground);
+}
+
+.render-select {
+    padding: 0.2em 0.4em;
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border, transparent));
+    border-radius: 2px;
+    background: var(--vscode-dropdown-background);
+    color: var(--vscode-dropdown-foreground);
+    font-family: inherit;
+    font-size: inherit;
+}
+
+.render-plugin {
+    max-width: 50%;
+}
+
+.render-select:focus-visible,
+.render-save:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.render-save {
+    margin-left: 0.5rem;
+    padding: 0.25em 0.9em;
+    border: none;
+    border-radius: 2px;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+
+.render-save:hover:enabled {
+    background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
+}
+
+.render-save:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.render-body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* A rendered file is shown on white, the way it prints: a drawing's SVG has
+   no background of its own, and black lines on a dark theme's editor are a
+   drawing nobody can read. */
+.render-body.image-host {
+    background: #fff;
+}
+
+.render-body > .placeholder,
+.render-body > .error {
+    padding: 1rem;
+    white-space: pre-line;
+}
+
+/* What the pane is waiting for, or why there is nothing to show: in the middle,
+   where the file will be. An error stays at the top, where a long one reads. */
+.render-body > .placeholder {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: min(40rem, calc(100% - 2rem));
+    margin: 0;
+    transform: translate(-50%, -50%);
+    text-align: center;
 }
 
 /* The 3D pane is the control pane and the canvas, side by side. The canvas never
@@ -206,6 +323,23 @@ body {
     text-align: center;
     white-space: pre-line;
     pointer-events: none;
+}
+
+/* The same place, saying the viewer failed (see 'report' in 'host.ts'). Unlike
+   the readout, it takes the pointer - so that it can be selected and copied - and
+   reads as a paragraph rather than a centred caption, because it is several
+   sentences long. There is nothing on the canvas underneath to drag by then. */
+.overlay.failure {
+    pointer-events: auto;
+    user-select: text;
+    cursor: text;
+    text-align: left;
+    /* Keeps the indent that sets the command to type apart from the steps. */
+    white-space: pre-wrap;
+    width: min(40rem, calc(100% - 2rem));
+    /* Centred on its middle, so in a short panel the top would go off-screen. */
+    max-height: calc(100% - 2rem);
+    overflow: auto;
 }
 
 /*
@@ -644,7 +778,10 @@ a {
     height: 100%;
 }
 
-.cae-image-host {
+.image-host {
+    display: block;
+    width: 100%;
+    height: 100%;
     /* The pan is a transform on the image, so the band clips it and the pointer
        belongs to the band rather than to whatever is under the pointer. */
     position: relative;
@@ -653,11 +790,11 @@ a {
     touch-action: none;
 }
 
-.cae-image-host:active {
+.image-host:active {
     cursor: grabbing;
 }
 
-.cae-image {
+.image-view {
     position: absolute;
     top: 0;
     left: 0;
