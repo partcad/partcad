@@ -128,7 +128,7 @@
           },
           "partcad.addToolsToTerminalPath": {
             "default": true,
-            "description": "Put the PartCAD command line tools (`pc`, `partcad`) on the PATH of terminals opened in this window, so they work without installing anything or editing a shell profile. Applies to terminals opened after the extension activates; VS Code shows which extension changed the environment. Turn this off to keep a PartCAD of your own on the PATH instead.",
+            "description": "Put the PartCAD command line tools (`pc`, `partcad`) on the PATH of terminals opened in this window, so they work without installing anything or editing a shell profile. Applies to terminals opened after the extension activates, and is re-applied after the shell has read its startup files (so a `conda init` there cannot put another `pc` ahead) when the terminal has shell integration, which it does by default; VS Code shows which extension changed the environment. Turn this off to keep a PartCAD of your own on the PATH instead.",
             "scope": "machine",
             "type": "boolean"
           },

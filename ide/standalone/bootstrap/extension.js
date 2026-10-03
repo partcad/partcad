@@ -442,7 +442,13 @@ async function activate(context) {
             // So that `pc` works in the IDE's terminal without the user
             // installing anything or editing their shell profile.
             context.environmentVariableCollection.description = 'Adds the bundled PartCAD tools to the PATH';
-            context.environmentVariableCollection.prepend('PATH', tools + path.delimiter);
+            // Re-applied once shell integration reports the shell is up, too:
+            // otherwise a `conda init` in the user's rc files puts its own
+            // `bin` ahead of ours after the fact.
+            context.environmentVariableCollection.prepend('PATH', tools + path.delimiter, {
+                applyAtProcessCreation: true,
+                applyAtShellIntegration: true,
+            });
             try {
                 await useBundledService(path.join(tools, SERVICE_EXECUTABLE));
             } catch (error) {
