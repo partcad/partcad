@@ -6,6 +6,7 @@
 
 import * as vscode from 'vscode';
 import { traceError, traceVerbose } from '../common/log/logging';
+import { getViewerPerformanceDebugFromSetting } from '../common/settings';
 import * as utils from '../utils';
 import { MSG_CLEAR, MSG_SHOW, ViewerMessage, ViewerNode, decodeGltf } from './protocol';
 import { SpacenavClient } from './spacenav';
@@ -79,6 +80,9 @@ export class PartcadViewer implements vscode.Disposable {
                 if (event.affectsConfiguration('partcad.spaceMouse')) {
                     this.updateSpaceMouse();
                 }
+                if (event.affectsConfiguration('partcad.viewer.performanceDebug')) {
+                    this.updateViewerConfig();
+                }
             }),
             // Whether this panel is where the user is changes with the window's focus
             // as well as with the panel's own visibility.
@@ -139,6 +143,13 @@ export class PartcadViewer implements vscode.Disposable {
             this.create(vscode.ViewColumn.Beside, true);
         }
 
+        let performanceDebug = false;
+        try {
+            performanceDebug = getViewerPerformanceDebugFromSetting('partcad');
+        } catch (error: any) {
+            traceVerbose(`PartCAD Viewer: failed to read performanceDebug setting: ${error?.message ?? error}`);
+        }
+
         void this.panel?.webview.postMessage({
             type: 'show',
             name: message.name ?? null,
@@ -153,6 +164,11 @@ export class PartcadViewer implements vscode.Disposable {
             // what is on screen, and this side knows nothing about assemblies,
             // ports or interfaces.
             object,
+            config: {
+                viewer: {
+                    performanceDebug,
+                },
+            },
         });
     }
 
@@ -325,6 +341,23 @@ export class PartcadViewer implements vscode.Disposable {
             active: this.spaceMouseActive(),
             spacenavd: this.spacenav?.connected === true,
             spacenavdDevice: this.spacenav?.device ?? null,
+        });
+    }
+
+    private updateViewerConfig(): void {
+        let performanceDebug = false;
+        try {
+            performanceDebug = getViewerPerformanceDebugFromSetting('partcad');
+        } catch (error) {
+            traceVerbose(`PartCAD Viewer: failed to read performanceDebug setting: ${(error as Error)?.message ?? error}`);
+        }
+        void this.panel?.webview.postMessage({
+            type: 'updateConfig',
+            config: {
+                viewer: {
+                    performanceDebug,
+                },
+            },
         });
     }
 

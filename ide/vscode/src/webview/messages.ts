@@ -161,6 +161,12 @@ export interface ShowMessage {
     keepCamera: boolean;
     /** The object itself, as the root node of its tree, or null when it is empty. */
     object: ShowNode | null;
+    /** Configuration for the viewer, sent from the extension. */
+    config?: {
+        viewer?: {
+            performanceDebug?: boolean;
+        };
+    };
 }
 
 export interface ClearMessage {
@@ -226,7 +232,17 @@ export interface SpaceMouseEventMessage {
     pressed?: boolean;
 }
 
-export type HostMessage = ShowMessage | ClearMessage | TabDataMessage | SpaceMouseStateMessage | SpaceMouseEventMessage;
+/** Updated viewer configuration when settings change. */
+export interface UpdateConfigMessage {
+    type: 'updateConfig';
+    config: {
+        viewer: {
+            performanceDebug: boolean;
+        };
+    };
+}
+
+export type HostMessage = ShowMessage | ClearMessage | TabDataMessage | SpaceMouseStateMessage | SpaceMouseEventMessage | UpdateConfigMessage;
 
 /** Renderer to host: fill this tab in, quoting 'token' back in the answer. */
 export interface FetchTabMessage {
