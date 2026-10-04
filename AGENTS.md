@@ -422,7 +422,12 @@ mount holding it, and keeps the target, so inside the sandbox every path is stil
 why `devcontainer.json` puts `~/.partcad` and `/tmp` on per-container volumes (the workspace is a bind already):
 a directory that lives only in the container's own layer is one the host's daemon cannot reach, and the sandbox
 refuses, naming it, rather than binding an empty directory of the same name. `PC_DOCKER_MOUNT_SOURCES`
-(`here=there;...`) says the same by hand. A `DOCKER_HOST` on another machine has no such answer and still falls
+(`here=there;...`) says the same by hand. There the sandbox binds *every* directory mount of its dev container,
+so that every process in it -- a test with a temporary `~` as much as the daemon with the real one -- asks for
+one mount set. A sandbox container is named after its image **and** its mount set (`container_name`), on an
+ordinary host too: named after the image alone, any process needing other mounts (another dev container on the
+same machine, a package outside the home directory) replaced the shared container, and whoever had started it
+went on running commands by name in a container without its files. A `DOCKER_HOST` on another machine has no such answer and still falls
 back to conda; when a package's own `dockerImage` is skipped for any such reason, PartCAD warns once and repeats
 the reason in the failure. It is one probe per process; see the docstring for what a wrong answer costs in each
 direction.

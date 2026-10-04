@@ -345,6 +345,56 @@ def mount_sources(client, image: str):
     return answer
 
 
+def client_mounts(sources) -> dict:
+    """Every directory this process's container has from the daemon, bound where it is here.
+
+    All of them, rather than the ones the context at hand asked for. The
+    sandbox container is shared and replaced when the mounts it needs differ,
+    and inside one dev container they used to differ for no reason that
+    mattered: a test with a temporary '~' needs '/tmp' and the workspace, and
+    the daemon with the real one needs '~/.partcad' too. Each removed the
+    other's container, and the one whose container went on running commands
+    by name in its replacement -- with somebody else's mounts, so that what it
+    wrote went where it never looked. One set per dev container, so nothing in
+    it ever replaces anything.
+
+    Directories only: a socket or a file bound in (the host's Docker socket,
+    the CI runner's command files) is not something a sandbox has any use for,
+    and the Docker socket least of all.
+    """
+    mounts = {}
+    for here, there in sorted(sources or ()):
+        here = here.rstrip("/") or "/"
+        if os.path.isdir(here) and not os.path.islink(here) and here != "/":
+            mounts[there.rstrip("/") or "/"] = {"bind": here, "mode": "rw"}
+    return mounts
+
+
+def container_name(image: str, mounts=None) -> str:
+    """The sandbox container for ``image`` with ``mounts``: one per image and mount set.
+
+    Named after the image alone, one container served every process on the
+    daemon, and any of them needing different mounts replaced it -- a package
+    outside the home directory on an ordinary host, another dev container on
+    the same machine, a test with a temporary home. Whoever had started it went
+    on running commands by name in the replacement, with somebody else's
+    mounts: writing where it never looked, reading what was not its own, and
+    killed outright if a command was running when it was removed.
+
+    So the mounts are in the name: where each one comes from and where it
+    lands. Processes needing the same ones share a container, which is safe
+    because they see the same files -- every project under one home directory
+    on an ordinary host, everything in one dev container (see 'client_mounts').
+    Processes needing different ones each have their own, and never touch each
+    other's. Without ``mounts``, the name before '_start' has worked them out.
+    """
+    name = "pc-sandbox-" + _short(image)
+    if not mounts:
+        return name
+    whose = repr(sorted((source, spec["bind"]) for source, spec in mounts.items()))
+    return name + "-" + _short(whose)
+
+
 def _declared_sources():
     """``PC_DOCKER_MOUNT_SOURCES`` as (here, there) pairs; ``None`` if it is not set."""
     value = os.environ.get("PC_DOCKER_MOUNT_SOURCES", "").strip()
@@ -459,12 +509,10 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         super().__init__(ctx, "docker-" + _short(image), version)
 
         self.image = image
-        # One container per image, and nothing else in the name. It outlives
-        # the process that started it, so the next 'pc' command finds it warm
-        # rather than paying for a start; only a new version or image tag makes
-        # it a different container. Naming it after the mounts as well was
-        # tried, and traded that reuse for a container per context.
-        self.container_name = "pc-sandbox-" + _short(image)
+        # Named after the image and, once '_start' knows them, the mounts -- see
+        # 'container_name'. It outlives the process that started it, so the
+        # next 'pc' command with the same mounts finds it warm.
+        self.container_name = container_name(image)
         self._container = None
         # Where the daemon has the directories, when it is not here -- see
         # 'mount_sources'. Set by '_start'.
@@ -537,6 +585,10 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         a wrapper will be handed and the container will not have, so the
         sandbox is refused here, naming it, rather than failing later on a file
         that is not there.
+
+        And with ``sources`` what is bound is not this context's directories
+        but every directory mount of the container this process runs in -- see
+        'client_mounts' -- under a name that says whose they are.
         """
         paths = self._mounted
         if sources is not None:
@@ -556,7 +608,12 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
                     )
                 )
         self._mount_sources = sources
-        return docker_mount.mounts(paths, sources=sources)
+        # Where the daemon is somebody else's, everything this container has
+        # from it rather than only what this context asked for -- see
+        # 'client_mounts'. Either way the container is named after the result.
+        mounts = docker_mount.mounts(paths) if sources is None else client_mounts(sources)
+        self.container_name = container_name(self.image, mounts)
+        return mounts
 
     @property
     def _container_home(self) -> str:

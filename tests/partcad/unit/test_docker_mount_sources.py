@@ -162,13 +162,12 @@ def test_they_can_be_named_by_hand(monkeypatch):
 
 
 def _sandbox(tmp_path):
-    sandbox = runtime_python_docker.DockerPythonRuntime.__new__(runtime_python_docker.DockerPythonRuntime)
-    sandbox.ctx = types.SimpleNamespace(
+    ctx = types.SimpleNamespace(
         user_config=types.SimpleNamespace(internal_state_dir=str(tmp_path / "state")),
         root_path=str(tmp_path / "package"),
         sandbox_paths=(),
     )
-    return sandbox
+    return runtime_python_docker.DockerPythonRuntime(ctx, "3.11", image="ghcr.io/x/solver:abc")
 
 
 def test_every_directory_but_home_has_to_be_backed(tmp_path):
@@ -200,3 +199,131 @@ def test_unbacked_names_what_the_daemon_cannot_bind():
     assert runtime_python_docker.unbacked(["/workspaces/partcad/x", "/opt/y"], SOURCES) == ["/opt/y"]
     # Where the daemon shares this filesystem, nothing is unbacked.
     assert runtime_python_docker.unbacked(["/opt/y"], None) == []
+
+
+# ---- whose container it is ---------------------------------------------------
+
+
+def _dev_container(tmp_path, volume, home=None):
+    """A sandbox in a dev container whose state and temp dirs come from ``volume``.
+
+    'here' is shared by every simulated dev container, the way '/workspaces/x'
+    and '/tmp' are the same paths in two containers built from one config; the
+    daemon-side sources are what differ, as each container's volumes do.
+    """
+    sandbox = _sandbox(tmp_path)
+    if home is not None:
+        sandbox.ctx.user_config.internal_state_dir = str(home / ".partcad")
+    sources = [
+        (str(tmp_path), "/var/lib/docker/volumes/%s-work/_data" % volume),
+        (tempfile.gettempdir(), "/var/lib/docker/volumes/%s-tmp/_data" % volume),
+        (runtime_python_docker.INSTALL_DIR, "/var/lib/docker/volumes/%s-install/_data" % volume),
+    ]
+    return sandbox, sources
+
+
+def test_two_dev_containers_on_one_host_are_two_containers(tmp_path):
+    """What they had in common was the host's daemon and one container name.
+
+    Named after the image alone, every dev container on a machine shared one
+    sandbox container: each replaced it with its own mounts, and the others'
+    commands, run by name, ran in that one -- writing where they never looked.
+    """
+    one, one_sources = _dev_container(tmp_path, "devcontainer-one")
+    two, two_sources = _dev_container(tmp_path, "devcontainer-two")
+    one._mounts(one_sources)
+    two._mounts(two_sources)
+    assert one.container_name != two.container_name
+    assert one.container_name.startswith(runtime_python_docker.container_name(one.image) + "-")
+
+
+def test_one_dev_container_is_one_container_whatever_its_home(tmp_path):
+    """A test with a temporary '~' and the daemon with the real one used to need
+    different mounts -- and so replaced each other's container."""
+    os.makedirs(tmp_path / "home-a")
+    os.makedirs(tmp_path / "home-b")
+    real, sources = _dev_container(tmp_path, "devcontainer-one", home=tmp_path / "home-a")
+    temporary, _ = _dev_container(tmp_path, "devcontainer-one", home=tmp_path / "home-b")
+    assert real._mounts(sources) == temporary._mounts(sources)
+    assert real.container_name == temporary.container_name
+
+
+def test_on_an_ordinary_host_a_project_elsewhere_gets_its_own_container(tmp_path):
+    """Two PartCAD processes on one host, one of them on a package somewhere else.
+
+    The second needs a mount the first does not; it gets a container of its own
+    rather than replacing the one the first is running commands in.
+    """
+    here = _sandbox(tmp_path)
+    elsewhere = _sandbox(tmp_path)
+    elsewhere.ctx.root_path = "/srv/elsewhere/package"
+    here._mounts(None)
+    elsewhere._mounts(None)
+    assert here.container_name != elsewhere.container_name
+
+
+def test_only_directories_are_bound(tmp_path):
+    """The host's Docker socket is bound into a dev container; a sandbox gets none of it."""
+    socket_file = tmp_path / "docker.sock"
+    socket_file.write_text("")
+    mounts = runtime_python_docker.client_mounts(
+        [(str(socket_file), "/var/run/docker.sock"), (str(tmp_path), "/daemon/t")]
+    )
+    assert mounts == {"/daemon/t": {"bind": str(tmp_path), "mode": "rw"}}
+
+
+class _HostDockerDaemon:
+    """The host's daemon, shared by two dev containers: containers by name, removed for real."""
+
+    def __init__(self):
+        self.containers_by_name = {}
+        self.removed = []
+        self.api = types.SimpleNamespace(base_url="unix://var/run/docker.sock")
+        self.images = types.SimpleNamespace(get=lambda name: name, pull=lambda name: name)
+        self.containers = types.SimpleNamespace(get=self._get, run=self._run)
+
+    def _get(self, name):
+        if name not in self.containers_by_name:
+            raise docker.errors.NotFound(name)
+        return self.containers_by_name[name]
+
+    def _run(self, image, name=None, volumes=None, **_kwargs):
+        daemon = self
+
+        class _Made:
+            status = "running"
+            attrs = {
+                "Mounts": [
+                    {"Type": "bind", "Source": source, "Destination": spec["bind"], "RW": True}
+                    for source, spec in (volumes or {}).items()
+                ]
+            }
+
+            def remove(self, force=False):
+                daemon.removed.append(name)
+                daemon.containers_by_name.pop(name, None)
+
+        made = _Made()
+        self.containers_by_name[name] = made
+        return made
+
+
+def test_a_second_dev_container_does_not_remove_the_first_ones_container(tmp_path, monkeypatch):
+    """The problem itself, end to end through '_start'."""
+    daemon = _HostDockerDaemon()
+    one, one_sources = _dev_container(tmp_path, "devcontainer-one")
+    two, two_sources = _dev_container(tmp_path, "devcontainer-two")
+    sources_of = {id(one): one_sources, id(two): two_sources}
+    starting = []
+
+    monkeypatch.setattr(runtime, "docker_available", lambda: True)
+    monkeypatch.setattr(runtime_python_docker.docker, "from_env", lambda: daemon)
+    monkeypatch.setattr(runtime_python_docker, "resolve_image", lambda client, image, version="": image)
+    monkeypatch.setattr(runtime_python_docker, "mount_sources", lambda client, image: sources_of[starting[-1]])
+
+    for sandbox in (one, two):
+        starting.append(id(sandbox))
+        sandbox._start()
+
+    assert daemon.removed == []
+    assert set(daemon.containers_by_name) == {one.container_name, two.container_name}
