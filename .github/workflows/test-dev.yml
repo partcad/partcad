@@ -765,13 +765,6 @@ jobs:
           env: |
             PC_CONTAINER_IMAGE_TAG=${{ needs.scope.outputs.image-override }}
             PC_CONTAINER_IMAGE_OWNER=${{ needs.scope.outputs.image-owner }}
-            # The conda sandbox, stated, rather than the "docker" one this dev
-            # container could otherwise use: on GitHub's runners (and nowhere
-            # else, so far) the Docker sandbox's environment ends up without a
-            # usable pip, and every install in it fails. Remove this line to
-            # reproduce; https://github.com/partcad/partcad/issues/727 has
-            # what is known.
-            PC_PYTHON_SANDBOX=conda
           # Same shape as the two jobs above: every "pc" counts, and the report
           # is still written when one of them fails. This job was the only one of
           # the three that ever went red, and only by accident -- the "pc"
