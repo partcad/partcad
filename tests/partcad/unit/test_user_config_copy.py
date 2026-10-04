@@ -20,6 +20,7 @@ opposing config files.
 """
 
 import json
+import os
 
 import pytest
 
@@ -97,7 +98,13 @@ def homes(request, tmp_path, monkeypatch):
     # Cleared first, or the bare case is only bare when the suite happens to be
     # run outside CI -- which is exactly the blind spot this parametrization
     # exists to close, and it would close it in one direction only.
-    for name in CI_TELEMETRY_ENV:
+    #
+    # Every 'PC_*', not only the telemetry pair: an option set in the
+    # environment outranks the configuration files these tests write, and the
+    # dev container's CI jobs state 'PC_PYTHON_SANDBOX=conda' -- which beat the
+    # 'pypy' a client file said, and failed the round trip for a reason that is
+    # not in the code under test.
+    for name in [n for n in os.environ if n.startswith("PC_")]:
         monkeypatch.delenv(name, raising=False)
 
     client_home = config_at(tmp_path, "client", CLIENT_CONFIG)
