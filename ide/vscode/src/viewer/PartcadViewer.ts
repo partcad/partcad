@@ -336,7 +336,7 @@ export class PartcadViewer implements vscode.Disposable {
     private forgetRendered(tab?: string): void {
         for (const [key, kept] of [...this.rendered]) {
             if (tab === undefined || key === tab) {
-                fs.rmSync(path.dirname(kept.file), { recursive: true, force: true });
+                removeQuietly(path.dirname(kept.file));
                 this.rendered.delete(key);
             }
         }
@@ -594,12 +594,28 @@ export class PartcadViewer implements vscode.Disposable {
         this.panel = undefined;
         this.forgetRendered();
         if (this.renderDirectory !== undefined) {
-            fs.rmSync(this.renderDirectory, { recursive: true, force: true });
+            removeQuietly(this.renderDirectory);
             this.renderDirectory = undefined;
         }
         this.spacenav?.dispose();
         this.spacenav = undefined;
         this.disposables.forEach((disposable) => disposable.dispose());
+    }
+}
+
+/**
+ * Delete a temporary file or directory, and only log if that fails.
+ *
+ * 'force' covers a path that is already gone and nothing else: on Windows an
+ * antivirus scanner or the indexer holding the file open fails it with EBUSY or
+ * EPERM. A file left in the temporary directory costs nothing; letting that
+ * throw would stop the next object being shown, or the panel being disposed.
+ */
+function removeQuietly(target: string): void {
+    try {
+        fs.rmSync(target, { recursive: true, force: true });
+    } catch (error: any) {
+        traceVerbose(`PartCAD Viewer: could not remove ${target}: ${error?.message ?? error}`);
     }
 }
 
