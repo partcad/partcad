@@ -23,7 +23,7 @@ from partcad_service_json_rpc.core import events
 from partcad_service_json_rpc.core.session import Session
 from partcad_service_json_rpc.rpc.dispatcher import JsonRpcError
 from partcad_service_json_rpc.transport.socket_server import SocketServer
-from partcad_utils import staging
+from partcad_utils import staging, timeouts
 
 if not hasattr(socket, "AF_UNIX"):
     pytest.skip("AF_UNIX not available on this platform", allow_module_level=True)
@@ -524,3 +524,168 @@ def test_an_ordinary_error_is_not_mistaken_for_a_staging_request(socket_dir):
         client.close()
     finally:
         server.stop()
+
+
+# ---- an assembly's declared timeout -----------------------------------------
+#
+# The client's half of 'partcad_utils.timeouts': while the service works on an
+# assembly that declares 'timeout:', it says so, and the client waits that long
+# instead of its default. Driven against the real socket server, with the
+# markers emitted the way the daemon's log hook emits them.
+
+
+def _windowed_client(path, timeout):
+    """'_stalling_client', with the bound applied to the socket as it moves."""
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.connect(path)
+    sock.settimeout(timeout)
+    stream = sock.makefile("rwb")
+    return DaemonClient(
+        stream,
+        stream,
+        closer=lambda: (stream.close(), sock.close()),
+        timeout=timeout,
+        endpoint=path,
+        settimeout=lambda seconds: sock.settimeout(seconds if seconds > 0 else None),
+    )
+
+
+def _window(session, kind, seconds, item="slow"):
+    session.emitter.emit("log", timeouts.event(kind, seconds, "//pkg", item))
+
+
+def test_a_declared_timeout_outlasts_the_default(socket_dir):
+    """Quiet for longer than the default, inside a window that allows it."""
+
+    def slow(session, params):
+        _window(session, timeouts.START, 5.0)
+        time.sleep(1.0)
+        _window(session, timeouts.END, 5.0)
+        return "built"
+
+    server, path = _serve(socket_dir, {"slow": slow})
+    try:
+        client = _windowed_client(path, 0.3)
+        assert client.call("slow") == "built"
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_a_closed_window_puts_the_default_back(socket_dir):
+    release = threading.Event()
+
+    def slow_then_wedged(session, params):
+        _window(session, timeouts.START, 5.0)
+        _window(session, timeouts.END, 5.0)
+        release.wait(30)
+        return "eventually"
+
+    server, path = _serve(socket_dir, {"slow": slow_then_wedged})
+    try:
+        client = _windowed_client(path, 0.3)
+        started = time.monotonic()
+        with pytest.raises(DaemonStalled):
+            client.call("slow")
+        assert time.monotonic() - started < 4, "waited for a window that had closed"
+        client.close()
+    finally:
+        release.set()
+        server.stop()
+
+
+def test_a_declared_timeout_never_shortens_the_wait(socket_dir):
+    """The bound is one for the connection; the default still holds beside it."""
+
+    def quick_declared(session, params):
+        _window(session, timeouts.START, 0.05)
+        time.sleep(0.5)
+        _window(session, timeouts.END, 0.05)
+        return "built"
+
+    server, path = _serve(socket_dir, {"quick": quick_declared})
+    try:
+        client = _windowed_client(path, 2.0)
+        assert client.call("quick") == "built"
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_the_stall_report_names_the_declaration(socket_dir):
+    """A wait longer than the configured one says whose it was."""
+    release = threading.Event()
+
+    def wedged_inside(session, params):
+        _window(session, timeouts.START, 1.0, item="tower")
+        release.wait(30)
+        return "eventually"
+
+    server, path = _serve(socket_dir, {"wedged": wedged_inside})
+    try:
+        client = _windowed_client(path, 0.3)
+        with pytest.raises(DaemonStalled) as caught:
+            client.call("wedged")
+        assert "'timeout: 1'" in str(caught.value)
+        assert "//pkg:tower" in str(caught.value)
+        client.close()
+    finally:
+        release.set()
+        server.stop()
+
+
+def test_a_window_does_not_outlive_its_request(socket_dir):
+    """One left open by a request that ended must not stretch the next."""
+    release = threading.Event()
+
+    def opens(session, params):
+        _window(session, timeouts.START, 30.0)
+        return "left open"
+
+    def wedged(session, params):
+        release.wait(30)
+        return "eventually"
+
+    server, path = _serve(socket_dir, {"opens": opens, "wedged": wedged})
+    try:
+        client = _windowed_client(path, 0.3)
+        assert client.call("opens") == "left open"
+        started = time.monotonic()
+        with pytest.raises(DaemonStalled):
+            client.call("wedged")
+        assert time.monotonic() - started < 10
+        client.close()
+    finally:
+        release.set()
+        server.stop()
+
+
+def test_overlapping_windows_wait_for_the_longest_open_one():
+    client = DaemonClient(io.BytesIO(), io.BytesIO(), timeout=300.0)
+    applied = []
+    client._settimeout = applied.append
+
+    for kind, seconds, item in [
+        (timeouts.START, 900.0, "a"),
+        (timeouts.START, 1800.0, "b"),
+        (timeouts.END, 1800.0, "b"),
+        (timeouts.END, 900.0, "a"),
+    ]:
+        client._observe("log", timeouts.event(kind, seconds, "//pkg", item))
+
+    assert applied == [900.0, 1800.0, 900.0, 300.0]
+
+
+def test_no_bound_stays_no_bound():
+    """PC_DAEMON_IDLE_TIMEOUT=0 asked to wait forever; a declaration is not longer."""
+    client = DaemonClient(io.BytesIO(), io.BytesIO(), timeout=0)
+    client._observe("log", timeouts.event(timeouts.START, 900.0, "//pkg", "a"))
+    assert client._timeout == 0
+
+
+def test_only_timeout_markers_move_the_bound():
+    client = DaemonClient(io.BytesIO(), io.BytesIO(), timeout=300.0)
+    client._observe("log", {"kind": "action_start", "op": "Assembly", "package": "//pkg", "item": "a"})
+    client._observe("log", {"kind": timeouts.START, "seconds": "soon", "package": "//pkg", "item": "a"})
+    client._observe("info", timeouts.event(timeouts.START, 900.0, "//pkg", "a"))
+    assert client._timeout == 300.0

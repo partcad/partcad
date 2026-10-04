@@ -1,0 +1,21 @@
+desc: Two assemblies alike but for one of them saying it is slow
+
+parts:
+  cube:
+    type: cadquery
+    desc: A cube
+
+assemblies:
+  quick:
+    type: assy
+    path: unit.assy
+    desc: A pair of cubes
+    parameters:
+      gap: 1.0
+  slow:
+    type: assy
+    path: unit.assy
+    desc: The same pair of cubes, declared slow
+    timeout: 1800
+    parameters:
+      gap: 1.0

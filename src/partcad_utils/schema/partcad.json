@@ -1615,6 +1615,11 @@
                 "export": { "$ref": "#/definitions/output-section" },
                 "simulate": { "$ref": "#/definitions/simulate" },
                 "manufacturable": { "type": "boolean" },
+                "timeout": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "How many seconds working on this assembly may go without a word from the daemon before a client gives up on it, in place of the default of 300 (PC_DAEMON_IDLE_TIMEOUT). Declaring it also marks the assembly as slow: a command run with '--fast-only' passes over it"
+                },
                 "unless": { "$ref": "#/definitions/unless" },
                 "connect": { "$ref": "#/definitions/connect" },
                 "map": { "$ref": "#/definitions/port-map" },
@@ -1652,6 +1657,11 @@
                 "export": { "$ref": "#/definitions/output-section" },
                 "simulate": { "$ref": "#/definitions/simulate" },
                 "manufacturable": { "type": "boolean" },
+                "timeout": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "How many seconds working on this assembly may go without a word from the daemon before a client gives up on it, in place of the default of 300 (PC_DAEMON_IDLE_TIMEOUT). Declaring it also marks the assembly as slow: a command run with '--fast-only' passes over it"
+                },
                 "unless": { "$ref": "#/definitions/unless" },
                 "properties": { "$ref": "#/definitions/shape-properties" },
                 "software": { "$ref": "#/definitions/software-refs" }
@@ -1715,6 +1725,11 @@
                   "default": false,
                   "description": "A scene is not a product to be made, so it is not manufacturable unless it says so"
                 },
+                "timeout": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "How many seconds working on this scene may go without a word from the daemon before a client gives up on it, in place of the default of 300 (PC_DAEMON_IDLE_TIMEOUT). Declaring it also marks the scene as slow: a command run with '--fast-only' passes over it"
+                },
                 "unless": { "$ref": "#/definitions/unless" },
                 "properties": { "$ref": "#/definitions/shape-properties" }
               },
@@ -1745,6 +1760,11 @@
                 "export": { "$ref": "#/definitions/output-section" },
                 "simulate": { "$ref": "#/definitions/simulate" },
                 "manufacturable": { "type": "boolean", "default": false },
+                "timeout": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "How many seconds working on this scene may go without a word from the daemon before a client gives up on it, in place of the default of 300 (PC_DAEMON_IDLE_TIMEOUT). Declaring it also marks the scene as slow: a command run with '--fast-only' passes over it"
+                },
                 "unless": { "$ref": "#/definitions/unless" },
                 "properties": { "$ref": "#/definitions/shape-properties" }
               },

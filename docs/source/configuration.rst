@@ -2746,6 +2746,8 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
         - <macros.j2>
         - <other.assy>
       offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
+      timeout: <(optional) seconds building this assembly may take without a word, default: 300;
+               also what "--fast-only" leaves it out for>
 
       # What this assembly contributes to every connection it takes part in.
       connect: # (optional) same as for parts
@@ -2781,6 +2783,16 @@ The source file does not have to be a part of the package: ``fileFrom`` and
 ``fileUrl`` pull it from a remote location on first use, exactly as they do for
 :ref:`parts` (see :ref:`files`). This holds for every assembly type -- a vendor's
 STEP assembly is declared with its URL and read from there.
+
+``timeout`` is for an assembly that is known to be slow. PartCAD waits five
+minutes for the daemon to say *something* while it works, and one large assembly
+built or rendered in a sandbox can say nothing for longer than that; one that
+declares ``timeout: 1800`` is waited on for half an hour instead, for as long as
+it is being worked on. It never shortens the wait, and it does not change the
+assembly's cache key. Declaring it also marks the assembly as slow:
+``--fast-only`` leaves it out of a render, a test or a listing, which is what a
+sweep over a large tree in CI wants (see :ref:`fast-only`). A scene takes the
+same key.
 
 ``dependencies`` is for the files the source file pulls in by itself -- a Jinja
 macro file, another ``.assy`` it includes. The parts and assemblies an ``assy``

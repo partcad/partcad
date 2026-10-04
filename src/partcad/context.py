@@ -1687,6 +1687,7 @@ class Context:
         ignore_manufacturability=False,
         overlay=None,
         render_opts=None,
+        fast_only=False,
     ):
         if project_path is None:
             project_path = self.get_current_project_path()
@@ -1699,6 +1700,7 @@ class Context:
             ignore_manufacturability=ignore_manufacturability,
             overlay=overlay,
             render_opts=render_opts,
+            fast_only=fast_only,
         )
 
     def render(
@@ -1710,6 +1712,7 @@ class Context:
         ignore_manufacturability=False,
         overlay=None,
         render_opts=None,
+        fast_only=False,
     ):
         if project_path is None:
             project_path = self.get_current_project_path()
@@ -1722,6 +1725,7 @@ class Context:
             ignore_manufacturability=ignore_manufacturability,
             overlay=overlay,
             render_opts=render_opts,
+            fast_only=fast_only,
         )
 
     # TODO(clairbee): convert it into: ctx.get_runtime("python", "conda", {"version": "3.11"})

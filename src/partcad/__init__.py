@@ -85,6 +85,10 @@ telemetry.init(__version__)
 
 from . import actions, exception, healthcheck, logging, tags, utils
 
+# Bound for the daemon, whose operations reach what '--fast-only' leaves out
+# through the package (see 'partcad.fast_only').
+from . import fast_only  # noqa: F401
+
 # Imported for the binding rather than for anything here: it makes
 # `partcad.plugin` resolve as an attribute of the package, which is how the
 # daemon marks the start of each command (see

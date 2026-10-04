@@ -30,7 +30,7 @@ import threading
 import time
 from typing import Callable, Optional
 
-from partcad_utils import staging
+from partcad_utils import staging, timeouts
 from partcad_utils.framing import read_message, write_message
 from partcad_utils.workspace import pid_path
 
@@ -48,7 +48,9 @@ _logger = logging.getLogger(__name__)
 # log ending mid-sentence, and at a terminal it cost the session.
 #
 # Five minutes, because the quiet stretch to beat is one big shape being built
-# in a sandbox, which says nothing between starting and finishing.
+# in a sandbox, which says nothing between starting and finishing. An assembly
+# known to take longer declares 'timeout:', and the daemon says so while it
+# works on it (see 'partcad_utils.timeouts').
 DEFAULT_IDLE_TIMEOUT = 300.0
 
 # How often the stdio watchdog looks at the clock. Only the coarseness of the
@@ -165,6 +167,13 @@ class DaemonClient:
     passes ``interrupt``, a way to unblock a read that is never going to return,
     and a watchdog calls it. Neither is offered for the Windows named pipe,
     which nothing reaches this class through today.
+
+    The bound can move while a request is in flight: an assembly that declares
+    a ``timeout:`` is worked on inside a window the service announces, and for
+    as long as one is open the client waits the longest of them instead (see
+    ``partcad_utils.timeouts``). ``settimeout`` is how the connector applies a
+    new bound to a socket, which reads it on every receive; the watchdog of a
+    pipe reads ``_timeout`` on every poll and needs nothing.
     """
 
     def __init__(
@@ -175,6 +184,7 @@ class DaemonClient:
         timeout: Optional[float] = None,
         endpoint: Optional[str] = None,
         interrupt: Optional[Callable[[], None]] = None,
+        settimeout: Optional[Callable[[float], None]] = None,
     ):
         self._read = read_stream
         self._write = write_stream
@@ -182,7 +192,14 @@ class DaemonClient:
         self._next_id = 0
         # Clamped, so that only '> 0' has to be tested everywhere below. Zero
         # and anything below it mean the same thing: no bound.
-        self._timeout = max(timeout or 0.0, 0.0)
+        self._base_timeout = max(timeout or 0.0, 0.0)
+        # The bound in force right now: the base, or the longest timeout an
+        # open window declares.
+        self._timeout = self._base_timeout
+        # The windows the service has opened and not yet closed, during the
+        # current request: (seconds, what declared them).
+        self._windows: list = []
+        self._settimeout = settimeout
         self._endpoint = endpoint
         self._interrupt = interrupt
         # Written by the request thread on every message and read by the
@@ -262,6 +279,11 @@ class DaemonClient:
         request["params"] = {} if params is None else params
         self._stall = None
         self._last_heard = time.monotonic()
+        # A window belongs to the work of one request. One left open by a
+        # request that ended in an error must not stretch the next one.
+        if self._windows:
+            self._windows = []
+            self._apply_timeout()
 
         stop = threading.Event()
         watchdog = None
@@ -296,12 +318,44 @@ class DaemonClient:
                     if "error" in message:
                         raise DaemonError(message["error"])
                     return message.get("result")
-                if "method" in message and "id" not in message and on_event is not None:
-                    on_event(message["method"], message.get("params"))
+                if "method" in message and "id" not in message:
+                    self._observe(message["method"], message.get("params"))
+                    if on_event is not None:
+                        on_event(message["method"], message.get("params"))
         finally:
             stop.set()
             if watchdog is not None:
                 watchdog.join(timeout=_STALL_POLL_SECONDS * 2)
+
+    def _observe(self, method: str, params) -> None:
+        """Open or close a timeout window the service announced, if this is one."""
+        if method != "log" or not isinstance(params, dict) or params.get("kind") not in timeouts.KINDS:
+            return
+        seconds = timeouts.seconds(params.get(timeouts.SECONDS))
+        if seconds is None:
+            return
+        window = (seconds, timeouts.subject(params))
+        if params.get("kind") == timeouts.START:
+            self._windows.append(window)
+        elif window in self._windows:
+            self._windows.remove(window)
+        self._apply_timeout()
+
+    def _apply_timeout(self) -> None:
+        """Make the bound the base, or the longest open window if that is longer.
+
+        Never shorter than the base: the bound is one bound for the connection,
+        and whatever else the service is doing meanwhile still deserves it. And
+        no bound stays no bound.
+        """
+        bound = self._base_timeout
+        if bound > 0 and self._windows:
+            bound = max(bound, max(seconds for seconds, _ in self._windows))
+        if bound == self._timeout:
+            return
+        self._timeout = bound
+        if self._settimeout is not None:
+            self._settimeout(bound)
 
     def _watch_for_stall(self, method: str, stop: threading.Event) -> None:
         """Unblock a read that the service is never going to satisfy.
@@ -342,6 +396,11 @@ class DaemonClient:
             doing,
             method,
         )
+        if self._windows and self._timeout > self._base_timeout:
+            # Said, because a wait longer than the one the user configured is
+            # otherwise a mystery: it is the declaration that asked for it.
+            _, declared_by = max(self._windows)
+            summary += " That is the 'timeout: %g' %s declares." % (self._timeout, declared_by)
         _logger.error("%s\n%s", summary, self._where_to_look())
         return summary
 
@@ -409,7 +468,11 @@ def _connect_socket(cwd: Optional[str], extra_args) -> DaemonClient:
         finally:
             sock.close()
 
-    return DaemonClient(stream, stream, closer=closer, timeout=timeout, endpoint=path)
+    def settimeout(seconds: float) -> None:
+        # The same 'None' for "no bound" as above, and for the same reason.
+        sock.settimeout(seconds if seconds > 0 else None)
+
+    return DaemonClient(stream, stream, closer=closer, timeout=timeout, endpoint=path, settimeout=settimeout)
 
 
 def _connect_stdio(cwd: Optional[str], extra_args) -> DaemonClient:

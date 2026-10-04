@@ -222,10 +222,13 @@ are not sufficient because CI also gates on the example run:
 
    ```bash
    cd examples
-   pc list all -r //pub/examples/partcad
-   pc test -r --package //pub/examples/partcad
-   pc render -r --package //pub/examples/partcad
+   pc list all -r --fast-only //pub/examples/partcad
+   pc test -r --fast-only --package //pub/examples/partcad
+   pc render -r --fast-only --package //pub/examples/partcad
    ```
+
+   `--fast-only` is what CI passes on every recursive run over `//pub`: it leaves out each assembly and scene
+   that declares a `timeout:`, the ones its package says are slow. Drop it when the change is about those.
 
    If `pc`/`partcad` isn't resolvable even under `poetry run`, run the module directly instead:
    `poetry run python -m partcad_cli.click.command --no-ansi <same args>`.

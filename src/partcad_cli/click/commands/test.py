@@ -10,6 +10,7 @@
 
 import rich_click as click
 
+from .. import fast_only
 from ..service import run
 
 
@@ -35,6 +36,7 @@ from ..service import run
     show_envvar=True,
     help="Recursively test all imported packages (older spelling of '<package>...')",
 )
+@fast_only.option(short=False)
 @click.option(
     "--filter",
     "-f",
@@ -73,13 +75,14 @@ from ..service import run
 )
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to test"
 @click.pass_obj
-def cli(cli_ctx, package, recursive, filter, sketch, interface, assembly, scene, object):
+def cli(cli_ctx, package, recursive, fast_only, filter, sketch, interface, assembly, scene, object):
     run(
         cli_ctx,
         "test.run",
         {
             "package": package,
             "recursive": recursive,
+            "fast_only": fast_only,
             "filter": filter,
             "sketch": sketch,
             "interface": interface,

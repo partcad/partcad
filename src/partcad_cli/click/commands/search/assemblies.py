@@ -1,5 +1,6 @@
 import rich_click as click
 
+from ... import fast_only
 from ...service import run
 
 
@@ -12,6 +13,7 @@ from ...service import run
     help="Recursively search in all imported packages (older spelling of '<package>...')",
     show_envvar=True,
 )
+@fast_only.option()
 @click.option(
     "--package",
     "-P",
@@ -41,12 +43,19 @@ from ...service import run
     show_envvar=True,
 )
 @click.pass_obj
-def cli(cli_ctx, recursive: bool, package: str, keyword: str, interface: str) -> None:
+def cli(cli_ctx, recursive: bool, fast_only: bool, package: str, keyword: str, interface: str) -> None:
     if not keyword and not interface:
         raise click.UsageError("Nothing to search for: pass --keyword, --interface, or both")
     run(
         cli_ctx,
         "search.objects",
-        {"kind": "assemblies", "package": package, "recursive": recursive, "keyword": keyword, "interface": interface},
+        {
+            "kind": "assemblies",
+            "package": package,
+            "recursive": recursive,
+            "fast_only": fast_only,
+            "keyword": keyword,
+            "interface": interface,
+        },
         needs_context=True,
     )

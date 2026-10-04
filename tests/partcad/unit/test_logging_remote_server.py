@@ -142,3 +142,53 @@ def test_an_action_ending_says_nothing_at_info():
 
     done = [e["message"] for e in events if e["kind"] == "log" and e["message"].startswith("DONE: ")]
     assert [re.sub(r"\d+\.\d\ds$", "<t>s", m) for m in done] == ["DONE: Test: //pub: <t>s"]
+
+
+def test_a_timeout_window_is_forwarded_with_its_seconds():
+    """What tells a waiting client to wait longer, and for whom."""
+    events, hook = _collector()
+    remote_server.init(hook)
+
+    with pc_logging.Timeout(1800.0, "//pub/robots", "arm"):
+        pass
+
+    markers = [e for e in events if e["kind"] in ("timeout_start", "timeout_end")]
+    assert markers == [
+        {"kind": "timeout_start", "seconds": 1800.0, "package": "//pub/robots", "item": "arm"},
+        {"kind": "timeout_end", "seconds": 1800.0, "package": "//pub/robots", "item": "arm"},
+    ]
+
+
+def test_an_object_that_declares_no_timeout_opens_no_window():
+    """So that whatever works on an object can wrap it without asking first."""
+    events, hook = _collector()
+    remote_server.init(hook)
+
+    with pc_logging.Timeout(None, "//pub/robots", "arm"):
+        pass
+
+    assert events == []
+
+
+def test_a_timeout_window_stays_out_of_the_rotating_file(tmp_path):
+    events, hook = _collector()
+    log_file = tmp_path / "partcad.log"
+    remote_server.init(hook, log_file=str(log_file), file_level=logging.DEBUG)
+
+    with pc_logging.Timeout(1800.0, "//pub/robots", "arm"):
+        pass
+
+    remote_server.fini()
+    assert "timeout_start" not in log_file.read_text()
+
+
+def test_in_process_a_timeout_window_is_nothing():
+    """Nobody is waiting on a daemon, so there is nobody to tell."""
+    events, hook = _collector()
+    remote_server.init(hook)
+    remote_server.fini()
+
+    with pc_logging.Timeout(1800.0, "//pub/robots", "arm"):
+        pass
+
+    assert events == []
