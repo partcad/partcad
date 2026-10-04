@@ -223,8 +223,9 @@ def test_contexts_with_different_mounts_do_not_share_a_container(tmp_path):
     one = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
     two = _runtime(tmp_path, image="ghcr.io/x/solver:abc")
     # Outside both the home directory and the temporary one, which every
-    # context mounts anyway: a package somewhere else entirely.
-    two.ctx.sandbox_paths = ["/srv/somebody-elses-files"]
+    # context mounts anyway: a package somewhere else entirely -- and rooted at
+    # this filesystem's own root, so that it is a path Windows can mount too.
+    two.ctx.sandbox_paths = [os.path.join(os.path.abspath(os.sep), "somebody-elses-files")]
 
     assert one._mounts(None) != two._mounts(None)
     assert one.container_name != two.container_name
@@ -1388,3 +1389,9 @@ def test_a_failed_environment_with_nothing_on_stderr_still_says_the_exit_code(tm
 
     with pytest.raises(Exception, match="exited with 3"):
         made._created(3, "")
+
+
+def test_installs_prefer_the_image_s_wheels_to_newer_source(tmp_path):
+    """The image has no compiler; a newer sdist on PyPI must not win over its prebuilt wheel."""
+    made = _runtime(tmp_path)
+    assert "--prefer-binary" in made.pip_install_command("rlpycairo==0.3.0", force=False)

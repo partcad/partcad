@@ -525,6 +525,16 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         self.exec_name = "python"
         self.exec_path = CONTAINER_PYTHON
 
+        # A wheel over a newer source distribution. PartCAD's images have no
+        # compiler, and carry what would need one prebuilt instead -- pycairo,
+        # in '/opt/pc-wheels', which the image hands pip as PIP_FIND_LINKS. That
+        # only adds the wheel as a candidate: the moment PyPI publishes a newer
+        # pycairo, as source only for Linux, pip prefers the newer version,
+        # tries to build it, and every PNG render fails on "Unknown
+        # compiler(s)". Preferring a binary keeps the image's wheel chosen until
+        # the image is rebuilt with a newer one.
+        self.pip_install_flags += ["--prefer-binary"]
+
     # ----------------------------------------------------------------- paths --
 
     @property

@@ -256,7 +256,9 @@ def test_on_an_ordinary_host_a_project_elsewhere_gets_its_own_container(tmp_path
     """
     here = _sandbox(tmp_path)
     elsewhere = _sandbox(tmp_path)
-    elsewhere.ctx.root_path = "/srv/elsewhere/package"
+    # Outside the home and the temporary directory on every platform, and a
+    # path Windows can mount too: a POSIX-only one is not, on the Windows legs.
+    elsewhere.ctx.root_path = os.path.join(os.path.abspath(os.sep), "elsewhere", "package")
     here._mounts(None)
     elsewhere._mounts(None)
     assert here.container_name != elsewhere.container_name
