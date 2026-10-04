@@ -201,6 +201,11 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
 )
 
 
+# The part types whose geometry is the file they are read from, and is handed
+# over as the file holds it: a closed shell in one is reported, not converted.
+FILE_AUTHORITY_TYPES = frozenset({"step", "brep"})
+
+
 @telemetry.instrument(exclude=["locked"])
 class Shape(ShapeConfiguration):
     name: str
@@ -2733,8 +2738,16 @@ class Shape(ShapeConfiguration):
         A sandbox that cannot answer leaves the part as it was, with a warning;
         validating geometry is not a reason to stop building it.
         """
+        # Except a part read from a STEP or BREP file, which is judged and
+        # never converted: those hand over what the file holds, because the
+        # file is the authority on what the part is and 'pc convert'
+        # round-trips through them (see "A part is a body, not a skin" in
+        # AGENTS.md). A shell in one is reported, not quietly changed.
+        solidify = (self.config or {}).get("type") not in FILE_AUTHORITY_TYPES
         try:
-            result = await self._ask_solidity(ctx, {shape_envelope.KEY_BREP: envelope[shape_envelope.KEY_BREP]}, True)
+            result = await self._ask_solidity(
+                ctx, {shape_envelope.KEY_BREP: envelope[shape_envelope.KEY_BREP]}, solidify
+            )
         except Exception as e:
             pc_logging.warning("%s:%s: could not be validated: %s" % (self.project_name, self.name, e))
             return envelope
@@ -2744,6 +2757,21 @@ class Shape(ShapeConfiguration):
         if isinstance(solidified, dict) and shape_envelope.KEY_BREP in solidified:
             envelope = dict(envelope)
             envelope[shape_envelope.KEY_BREP] = solidified[shape_envelope.KEY_BREP]
+            # What the geometry measures is replaced with what the converted
+            # geometry measures - a shell holds no solid and the solid holds
+            # one - and nothing else: what the source stated about itself and
+            # its elements is still true of the same faces.
+            recorded = shape_envelope.without_measurements(shape_envelope.metadata_of(envelope))
+            fresh = shape_envelope.metadata_section(
+                shape_envelope.metadata_of(solidified), shape_envelope.METADATA_MEASUREMENTS
+            )
+            metadata = dict(recorded)
+            if fresh:
+                metadata[shape_envelope.METADATA_MEASUREMENTS] = fresh
+            if metadata:
+                envelope[shape_envelope.KEY_METADATA] = metadata
+            else:
+                envelope.pop(shape_envelope.KEY_METADATA, None)
         problems = result.get("problems") or []
         if problems:
             pc_logging.warning("%s:%s is not a solid: %s" % (self.project_name, self.name, "; ".join(problems)))

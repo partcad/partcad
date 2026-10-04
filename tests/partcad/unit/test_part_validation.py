@@ -110,3 +110,58 @@ def test_an_assembly_is_not_a_part_and_is_not_asked(monkeypatch):
     part = _Part("asm")
     part.kind = "assembly"
     asyncio.run(part.get_wrapped(object()))
+
+
+class _FilePart(_Part):
+    """A part read from a file of the given type."""
+
+    def __init__(self, name, part_type):
+        super().__init__(name)
+        self.config = {"name": name, "type": part_type}
+
+
+def test_a_step_or_brep_part_is_judged_but_never_converted(monkeypatch, caplog):
+    for part_type in ("step", "brep"):
+        seen = []
+
+        async def ask(self, ctx, obj, solidify=False):
+            seen.append(solidify)
+            return {"success": True, "solidified": None, "problems": ["it holds no solid"]}
+
+        monkeypatch.setattr(Shape, "_ask_solidity", ask)
+        caplog.clear()
+        with caplog.at_level(logging.WARNING):
+            envelope = asyncio.run(_FilePart("file", part_type).get_wrapped(object()))
+        assert seen == [False], part_type
+        assert envelope[shape_envelope.KEY_BREP] == b"shell"
+        assert "is not a solid: it holds no solid" in caplog.text
+
+
+class _MeasuredPart(_Part):
+    async def get_shape(self, ctx):
+        return {
+            "name": self.name,
+            "brep": b"shell",
+            shape_envelope.KEY_METADATA: shape_envelope.make_metadata(
+                measurements={"volume": 0.0, "area": 2200.0},
+                annotations=[{"kind": "bend"}],
+                sections={"source": {"units": "mm"}},
+            ),
+        }
+
+
+def test_a_solidified_part_is_measured_again_and_keeps_what_its_source_said(monkeypatch):
+    async def ask(self, ctx, obj, solidify=False):
+        solid = {
+            "brep": b"solid",
+            shape_envelope.KEY_METADATA: shape_envelope.make_metadata(measurements={"volume": 6000.0}),
+        }
+        return {"success": True, "solidified": solid, "problems": []}
+
+    monkeypatch.setattr(Shape, "_ask_solidity", ask)
+    envelope = asyncio.run(_MeasuredPart("measured").get_wrapped(object()))
+    metadata = envelope[shape_envelope.KEY_METADATA]
+    # The shell's numbers are gone, not merged under the solid's.
+    assert metadata[shape_envelope.METADATA_MEASUREMENTS] == {"volume": 6000.0}
+    assert metadata[shape_envelope.METADATA_ANNOTATIONS] == [{"kind": "bend"}]
+    assert metadata[shape_envelope.METADATA_SECTIONS] == {"source": {"units": "mm"}}
