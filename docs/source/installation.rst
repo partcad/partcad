@@ -136,7 +136,7 @@ The commands and options supported by PartCAD CLI:
     test         Run tests on a part, assembly, or scene
     inspect      View a part, assembly, or scene visually
     info         Show detailed information about a part, assembly, or scene
-    bom          Print the bill of materials of an assembly or a scene
+    bom          Print the bill of materials of a part, an assembly or a scene
     convert      Convert parts, sketches or assemblies to another format and update their type
     export       Export a 3D view of parts, assemblies, or scenes
     render       Render a 2D projection of parts, assemblies, or scenes onto a plane

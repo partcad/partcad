@@ -69,9 +69,25 @@ a 20 MB `.vsix`.
 ## Developing
 
 Open the **repository root** in VS Code and run the `Debug Extension and Python` launch configuration
-(`.vscode/launch.json`). It starts the `npm: watch` task and opens an Extension Development Host with
-`--extensionDevelopmentPath=ide/vscode`. `npm run watch` on its own is the same webpack watch build without the
-host.
+(`.vscode/launch.json`). It runs the `npm: watch` task, starts a debugpy listener, and opens an Extension
+Development Host on `examples/` with `--extensionDevelopmentPath=ide/vscode`. Breakpoints work on both sides: in
+the extension's TypeScript, and in PartCAD's Python as the daemon runs it.
+
+The build needs nothing done by hand. `npm: watch` depends on `npm: install`, which runs `npm ci` when
+`package-lock.json` is newer than what `node_modules` was installed from and does nothing otherwise, and the
+launch waits for webpack's first build of the extension. `npm: compile` is the same build once, without a
+watcher; `npm run watch` in a terminal is the watcher without the host.
+
+The Python half is `PC_DEBUGPY=localhost:5678` in the host's environment, which every service the extension
+starts inherits and attaches to the listener with (`partcad_service_json_rpc.debugger`). Two things make sure
+the code being run is this checkout's:
+
+* While `PC_DEBUGPY` is set and the extension runs in development mode, it prefers the checkout's own
+  `.venv/bin/partcad-json-rpc` over any other installation, so run `poetry install` first.
+* The daemon is warm and outlives the window that started it, so the first time the extension connects it
+  asks the daemon (`daemon.debug`) where it runs from and whether it is attached. A daemon from this checkout
+  that is not attached is stopped, and connecting again starts one that is. A daemon from anywhere else is
+  left alone, and the extension's log says that its Python is not being debugged.
 
 Two bundles come out of webpack, because the extension host is CommonJS and the viewer webview is a browser
 context: `dist/extension.js` and `dist/viewer.js`. `npm run compile` builds both.

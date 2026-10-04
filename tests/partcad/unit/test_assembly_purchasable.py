@@ -7,9 +7,9 @@
 """What `Assembly.is_declared_purchasable()` answers, and what it does not.
 
 It reads the model and asks no supplier anything, so it is answerable offline -
-which is what lets a BoM walk use it. The market-side question, whether anybody
-has one available today, belongs to `_is_available_to_buy()` and is not tested
-here.
+which is what lets a BoM walk use it: a sub-assembly it says yes for is one line
+item to order. The market-side question, whether anybody has one available
+today, is the supply quote's and is not tested here.
 """
 
 import partcad as pc

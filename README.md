@@ -198,8 +198,8 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] Free-form `comment:` context in `Assembly YAML`, written for whoever reads the assembly next
 - Other features
   - Object-Oriented Programming approach to maintaining part interfaces and mating information
-  - Live preview of 3D models while working in Visual Studio Code, with the bill of materials, the assembly
-    instructions and supplier quotes on tabs beside the 3D view
+  - Live preview of 3D models while working in Visual Studio Code, with 2D renders, dimensioned drawings, the
+    bill of materials, the assembly instructions and supplier quotes on tabs beside the 3D view
   - Open an object in the application that made it (`pc open`): `FreeCAD`, `Blender`, `KiCad` — and
     `Gazebo` or `MuJoCo` from the plugin package for that engine —
     installed locally, or run in a container when it is not; an object `Blender` cannot read is converted to

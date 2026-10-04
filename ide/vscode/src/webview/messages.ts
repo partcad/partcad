@@ -15,8 +15,48 @@
 
 import type { SpaceMouseSettings } from './spacemouse';
 
-/** The tabs the panel can show. '3d' is always the first one. */
-export type TabId = '3d' | 'bom' | 'instructions' | 'supply' | 'fea' | 'cfd';
+/**
+ * The tabs the panel can show.
+ *
+ * Two levels of them. The panel's own strip is five groups, always the same
+ * five: 'design', the object itself; 'analysis', what analysing it says;
+ * 'supplyChain', what making it takes; and 'validation' and 'operations',
+ * which have nothing in them yet and are shown disabled. Each group is a strip of its own: the
+ * object as '3d' (first, always), '2d' and 'draft'; 'fea' and 'cfd'; 'bom',
+ * 'instructions' and 'supply' (labelled Procurement).
+ */
+export type TabId =
+    | 'design'
+    | 'analysis'
+    | 'supplyChain'
+    | 'validation'
+    | 'operations'
+    | '3d'
+    | '2d'
+    | 'draft'
+    | 'bom'
+    | 'instructions'
+    | 'supply'
+    | 'fea'
+    | 'cfd';
+
+/** The Design tab's own tabs. */
+export const DESIGN_TABS: TabId[] = ['3d', '2d', 'draft'];
+
+/** The two tabs that show the object rendered to a file, and save it. */
+export const RENDER_TABS: TabId[] = ['2d', 'draft'];
+
+export function isRenderTab(tab: TabId): boolean {
+    return RENDER_TABS.includes(tab);
+}
+
+/**
+ * Where the Draft tab's drawings come from, until there is more than one.
+ *
+ * A package whose 'render:' section implements drawing file types, used the way
+ * 'pc render -e' uses one: see 'examples/feature_render_custom'.
+ */
+export const DRAFT_PLUGINS = ['//pub/feature/render/draftwright'];
 
 /** The two tabs that run an analysis rather than ask a question about the object. */
 export const ANALYSIS_TABS: TabId[] = ['fea', 'cfd'];
@@ -161,6 +201,12 @@ export interface ShowMessage {
     keepCamera: boolean;
     /** The object itself, as the root node of its tree, or null when it is empty. */
     object: ShowNode | null;
+    /** Configuration for the viewer, sent from the extension. */
+    config?: {
+        viewer?: {
+            performanceDebug?: boolean;
+        };
+    };
 }
 
 export interface ClearMessage {
@@ -226,7 +272,33 @@ export interface SpaceMouseEventMessage {
     pressed?: boolean;
 }
 
-export type HostMessage = ShowMessage | ClearMessage | TabDataMessage | SpaceMouseStateMessage | SpaceMouseEventMessage;
+/** Updated viewer configuration when settings change. */
+export interface UpdateConfigMessage {
+    type: 'updateConfig';
+    config: {
+        viewer: {
+            performanceDebug: boolean;
+        };
+    };
+}
+
+/** The answer to one 'fetchFormats': the file types a package renders to. */
+export interface FormatsMessage {
+    type: 'formats';
+    token: number;
+    plugin: string;
+    formats?: RenderFormat[];
+    error?: string;
+}
+
+export type HostMessage =
+    | ShowMessage
+    | ClearMessage
+    | TabDataMessage
+    | FormatsMessage
+    | SpaceMouseStateMessage
+    | SpaceMouseEventMessage
+    | UpdateConfigMessage;
 
 /** Renderer to host: fill this tab in, quoting 'token' back in the answer. */
 export interface FetchTabMessage {
@@ -242,6 +314,32 @@ export interface FetchTabMessage {
      * '--implementation' overrides.
      */
     implementation?: string;
+    /** On a render tab: which file type to render to ('png', 'svg', ...). */
+    format?: string;
+    /**
+     * On the Draft tab: the package whose 'render:' section implements that
+     * file type, as 'pc render -e' names one. The 2D tab leaves it out and gets
+     * PartCAD's own.
+     */
+    plugin?: string;
+}
+
+/** Renderer to host: which file types a package renders to, for the Draft tab. */
+export interface FetchFormatsMessage {
+    type: 'fetchFormats';
+    token: number;
+    plugin: string;
+}
+
+/**
+ * Renderer to host: save what a render tab is showing.
+ *
+ * Only the tab is named, never a file: the host keeps the file it rendered, and
+ * asks the user where it should go.
+ */
+export interface SaveMessage {
+    type: 'save';
+    tab: TabId;
 }
 
 //
@@ -386,4 +484,26 @@ export interface CaeData {
     content?: string | null;
     /** Empty when the analysis found nothing to report, which is a pass. */
     findings: CaeFinding[];
+}
+
+/** One file type a package renders to, as 'render.formats' lists it. */
+export interface RenderFormat {
+    name: string;
+    desc?: string | null;
+    extension?: string | null;
+}
+
+/**
+ * One object rendered to one file, as 'render.inline' returns it.
+ *
+ * The file itself, base64-encoded, because the panel has no file system in
+ * reach - and the daemon may be on another machine, where a path would name
+ * nothing the user has. 'extension' is what decides how it is shown.
+ */
+export interface RenderData {
+    object: string;
+    format: string;
+    filename: string;
+    extension: string;
+    content: string;
 }

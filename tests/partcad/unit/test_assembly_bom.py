@@ -8,8 +8,10 @@
 
 The fixture package ('data/assembly_bom_store') is a top level assembly built out
 of two sub-assemblies and a loose part. Both sub-assemblies declare a vendor and
-an SKU, so both look purchasable; only one of them is in the store's stock, which
-is what tells the two halves of the purchasability rule apart.
+an SKU, so both are ordered whole: what is listed is what has to be procured,
+and a sub-assembly that says what to order it by is that. Only one of them is in
+the store's stock, and that makes no difference here - whether anybody has one
+today is the supply quote's question, not the bill of materials'.
 """
 
 import asyncio
@@ -24,32 +26,6 @@ CUBE = "//sub:cube"
 UNIT = "//sub:unit"
 PANEL = "//sub:panel"
 
-# What 'sub/stock.csv' has: the unit, and nothing else.
-IN_STOCK = {("partcad", "UNIT-1")}
-
-
-@pytest.fixture
-def store(monkeypatch):
-    """Answer the store's availability queries without the Python sandbox.
-
-    What the assembly's store data turns into, and how the answer is read back,
-    is the path these tests are about; running 'sub/myStore.py' in a sandbox is
-    not, and features/bom.feature covers that end to end. The request is checked
-    here rather than merely answered: a provider that is asked about the wrong
-    item would otherwise still report it as available.
-    """
-    from partcad.plugin_factory_python import PluginFactoryPython
-
-    async def query_script(self, plugin, script_name, request):
-        assert script_name == "avail"
-        # An availability request names the item by its store data alone, so
-        # this is also where a cart item built from an assembly is checked.
-        assert (request["vendor"], request["sku"]) in IN_STOCK | {("partcad", "PANEL-1")}
-        assert request["count"] == 1 and request["count_per_sku"] == 1
-        return {"available": (request["vendor"], request["sku"]) in IN_STOCK}
-
-    monkeypatch.setattr(PluginFactoryPython, "query_script", query_script)
-
 
 def _bom(stop_at_purchasable=False, with_context=True):
     ctx = pc.Context(DATA)
@@ -60,20 +36,28 @@ def _bom(stop_at_purchasable=False, with_context=True):
     )
 
 
-def test_bom_detailed_flattens_the_whole_tree():
-    """Without the option, every sub-assembly is expanded into its parts."""
-    bom = _bom()
-
-    # Two units of two cubes, one panel of three, and one loose cube.
-    assert sorted(bom.keys()) == [CUBE]
-    assert bom[CUBE]["count"] == 8
-    assert bom[CUBE]["kind"] == "part"
-    assert bom[CUBE]["desc"] == "A cube"
+def _counts(bom):
+    return {name: (entry["kind"], entry["count"]) for name, entry in bom.items()}
 
 
-def test_bom_detailed_carries_the_store_data(store):
+def test_a_sub_assembly_with_a_vendor_and_an_sku_is_ordered_whole():
+    """Two units and a panel, each a line item of its own; the cubes inside them are not listed."""
+    assert _counts(_bom()) == {UNIT: ("assembly", 2), PANEL: ("assembly", 1), CUBE: ("part", 1)}
+
+
+def test_whether_it_is_in_stock_makes_no_difference():
+    """The panel is out of stock and still a line item: the declaration decides, offline."""
+    assert _bom()[PANEL]["sku"] == "PANEL-1"
+    assert _counts(_bom(with_context=False)) == _counts(_bom())
+
+
+def test_stop_at_purchasable_is_accepted_and_changes_nothing():
+    assert _counts(_bom(stop_at_purchasable=True)) == _counts(_bom())
+
+
+def test_bom_detailed_carries_the_store_data():
     """A line item says what to order, not only how many are needed."""
-    bom = _bom(stop_at_purchasable=True)
+    bom = _bom()
 
     assert bom[UNIT]["vendor"] == "partcad"
     assert bom[UNIT]["sku"] == "UNIT-1"
@@ -81,44 +65,15 @@ def test_bom_detailed_carries_the_store_data(store):
     # The cube is not sold on its own, so it carries no store data.
     assert bom[CUBE]["vendor"] is None
     assert bom[CUBE]["sku"] is None
+    assert bom[CUBE]["desc"] == "A cube"
 
 
-def test_bom_detailed_stops_at_a_purchasable_sub_assembly(store):
-    """A sub-assembly that can be bought whole is a line item, not a parts list."""
-    bom = _bom(stop_at_purchasable=True)
-
-    assert sorted(bom.keys()) == [CUBE, UNIT]
-    # The unit is bought twice; the cubes inside it are not listed at all.
-    assert bom[UNIT]["count"] == 2
-    assert bom[UNIT]["kind"] == "assembly"
-    # Three cubes from the panel, which is not in stock, plus the loose one.
-    assert bom[CUBE]["count"] == 4
-
-
-def test_bom_detailed_expands_what_no_supplier_has(store):
-    """A vendor and an SKU alone do not make a sub-assembly purchasable.
-
-    The panel declares both, but the store has none in stock, so it is still
-    something to assemble: it is expanded, and is not a line item of its own.
-    """
-    bom = _bom(stop_at_purchasable=True)
-
-    assert PANEL not in bom
-
-
-def test_bom_detailed_without_a_context_buys_nothing(store):
-    """Suppliers cannot be queried without a context, so nothing is purchasable."""
-    bom = _bom(stop_at_purchasable=True, with_context=False)
-
-    assert sorted(bom.keys()) == [CUBE]
-    assert bom[CUBE]["count"] == 8
-
-
-def test_bom_detailed_matches_the_flat_bom():
-    """The counts are the ones 'get_bom()' has always reported."""
+@pytest.mark.parametrize("with_context", [True, False])
+def test_bom_detailed_counts_what_the_supply_bom_counts(with_context):
+    """The bill of materials and the cart are one rule, so they agree on every count."""
     ctx = pc.Context(DATA)
     top = ctx._get_assembly(":top")
-    flat = asyncio.run(top.get_bom())
-    detailed = asyncio.run(top.get_bom_detailed_async(ctx))
+    supply = asyncio.run(top.get_supply_bom(ctx if with_context else None))
+    detailed = asyncio.run(top.get_bom_detailed_async(ctx if with_context else None))
 
-    assert {name: entry["count"] for name, entry in detailed.items()} == flat
+    assert {name: entry["count"] for name, entry in detailed.items()} == supply

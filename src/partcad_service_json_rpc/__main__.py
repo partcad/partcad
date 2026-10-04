@@ -20,7 +20,7 @@ import sys
 
 from partcad_utils import process_role
 
-from . import __version__, config_restart
+from . import __version__, config_restart, debugger
 from .core.session import Session
 from .rpc.methods import build_registry
 from .transport.stdio import serve_stdio
@@ -152,6 +152,11 @@ def _build_session(args: argparse.Namespace, log_dir: str = None) -> Session:
     # Before anything reads the configuration, so that an edit made while the
     # session is being built still counts as one (see 'config_restart').
     config_restart.remember()
+
+    # The same reasoning puts the debugger here: every serving process, and only
+    # those, and before the session exists so that building it can be stepped
+    # through. A no-op unless PC_DEBUGPY is set.
+    debugger.attach_from_env()
 
     session = Session(settings=build_settings(args))
     # The per-workspace daemon keeps a rotating log file next to its socket; the

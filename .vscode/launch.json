@@ -243,20 +243,31 @@
       "type": "extensionHost",
       "request": "launch",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/ide/vscode"
+        "--extensionDevelopmentPath=${workspaceFolder}/ide/vscode",
+        // A folder with packages in it, so that the PartCAD views have
+        // something to show. Not the repository root: `examples/` is a
+        // workspace of its own (the root has no `partcad.yaml`), so its daemon
+        // is not the one a window on the checkout may already be using.
+        "${workspaceFolder}/examples"
       ],
       "outFiles": [
-        "ide/vscode/dist/**/*.js"
+        "${workspaceFolder}/ide/vscode/dist/**/*.js"
       ],
       "env": {
-        "USE_DEBUGPY": "True"
+        // Where "Python debug server (hidden)" listens. The extension host
+        // inherits this and so does every service it starts, which attaches to
+        // the listener as it starts (`partcad_service_json_rpc.debugger`). It is
+        // also what tells the extension it is being debugged with Python: it
+        // then runs this checkout's `.venv` service and, the first time it
+        // connects, replaces a daemon from this checkout that is not attached
+        // (`ide/vscode/src/common/debug.ts`).
+        "PC_DEBUGPY": "localhost:5678"
       },
       "presentation": {
         "hidden": true,
         "group": "",
         "order": 4
-      },
-      "localRoot": "ide/vscode"
+      }
     },
     {
       "name": "Python debug server (hidden)",

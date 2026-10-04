@@ -134,13 +134,66 @@ def test_the_grouped_bom_lists_the_stock_and_what_is_made():
     assert set(grouped["parts"]["//"]) == {"bracket", "blank", "knob", "spacer", "plate"}
 
 
-def test_the_detailed_bom_orders_the_stock_by_its_sku():
+def test_the_detailed_bom_lists_what_is_procured_and_orders_the_stock_by_its_sku():
+    """A made part is the stock it is made from, followed to what is bought; it is not a line item itself."""
     ctx = _context()
     bom = asyncio.run(ctx._get_assembly("//:kit").get_bom_detailed_async(ctx))
     sheet = bom["//:sheet"]
     assert (sheet["kind"], sheet["count"], sheet["vendor"], sheet["sku"]) == ("stock", 3, "acme", "SHEET-1")
-    assert bom["//:bracket"]["madeFrom"] == "//:blank"
-    assert "madeFrom" not in bom["//:spacer"]
+    assert {name: (entry["kind"], entry["count"]) for name, entry in bom.items()} == {
+        # Two brackets and a blank, all from the sheet.
+        "//:sheet": ("stock", 3),
+        # Sold, so bought rather than cut.
+        "//:spacer": ("part", 1),
+        # Says neither, so listed as itself.
+        "//:plate": ("part", 1),
+        # The knob is printed from nothing it names: nothing to procure.
+    }
+
+
+def test_the_detailed_bom_counts_what_the_supply_bom_counts():
+    ctx = _context()
+    kit = ctx._get_assembly("//:kit")
+    detailed = asyncio.run(kit.get_bom_detailed_async(ctx))
+    assert {name: entry["count"] for name, entry in detailed.items()} == asyncio.run(kit.get_supply_bom(ctx))
+
+
+#
+# The bill of materials of one part: what one of it is procured as
+#
+
+
+def _part_bom(name):
+    from partcad.assembly import part_bom_detailed_async
+
+    ctx = _context()
+    bom = asyncio.run(part_bom_detailed_async(ctx, _part(ctx, name)))
+    return {key: (entry["kind"], entry["count"], entry["sku"]) for key, entry in bom.items()}
+
+
+def test_a_bought_part_is_its_own_bill_of_materials():
+    assert _part_bom("sheet") == {"//:sheet": ("part", 1, "SHEET-1")}
+
+
+def test_a_made_part_is_the_stock_it_is_made_from():
+    assert _part_bom("blank") == {"//:sheet": ("stock", 1, "SHEET-1")}
+
+
+def test_a_part_made_from_a_made_part_is_followed_to_what_is_bought():
+    """The bracket is bent from the blank, which is cut from the sheet: one sheet."""
+    assert _part_bom("bracket") == {"//:sheet": ("stock", 1, "SHEET-1")}
+
+
+def test_a_part_made_from_nothing_it_names_has_nothing_to_procure():
+    assert _part_bom("knob") == {}
+
+
+def test_a_part_that_is_both_is_bought():
+    assert _part_bom("spacer") == {"//:spacer": ("part", 1, "SPACER-1")}
+
+
+def test_a_part_that_says_neither_is_its_own_bill_of_materials():
+    assert _part_bom("plate") == {"//:plate": ("part", 1, None)}
 
 
 def test_the_cart_holds_the_stock_of_a_part_that_is_made():
