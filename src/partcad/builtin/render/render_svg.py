@@ -23,6 +23,7 @@ import pyexpat  # noqa: F401
 import build123d as b3d
 
 sys.path.append(os.path.dirname(__file__))
+import label_layout
 import ocp_serialize
 import stroke_text
 import wrapper_common
@@ -209,6 +210,14 @@ def _marker_edges(location, size):
     return edges
 
 
+def _dot(a, b):
+    return sum(a[axis] * b[axis] for axis in range(3))
+
+
+def _cross(a, b):
+    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+
+
 def _label_edges(text, anchor, height, right, up):
     """'text' written on the page, starting at the 3D point 'anchor'.
 
@@ -226,31 +235,6 @@ def _label_edges(text, anchor, height, right, up):
     return edges
 
 
-def _spread(anchor, text, size, right, up, placed):
-    """Move a label down the page until it is not written over another one.
-
-    Ports coincide on a projection far more often than they coincide in space -
-    the near and the far end of a through hole are one spot on the picture, and
-    so are the two faces of a plate - and a port's name is long enough that two
-    labels a good distance apart still overlap. So each one is compared against
-    the ones already written, as the boxes they actually occupy, and pushed down
-    a line at a time until it fits. 'placed' accumulates those boxes in the
-    coordinates of the picture.
-    """
-    left = sum(anchor[axis] * right[axis] for axis in range(3))
-    right_edge = left + stroke_text.width(text) * size
-    down = sum(anchor[axis] * up[axis] for axis in range(3))
-    step = size * 1.4
-    shift = 0.0
-    while any(
-        left < other_right and right_edge > other_left and abs(down + shift - other_down) < step * 0.9
-        for other_left, other_right, other_down in placed
-    ):
-        shift -= step
-    placed.append((left, right_edge, down + shift))
-    return tuple(anchor[axis] + up[axis] * shift for axis in range(3))
-
-
 def _interface_label(port):
     """How one port's interface is named on the picture.
 
@@ -266,7 +250,21 @@ def _interface_label(port):
     return label
 
 
-def _overlay_edges(request, max_dimension, right, up):
+def _picture_offset(origin, up, look_at, right, upward, reproducible):
+    """What 'project' adds to a point's coordinates in the plane of the picture.
+
+    The two algorithms do not agree on where the picture's origin is: the exact
+    one centres it on 'look_at', the polygonal one leaves it where the camera's
+    axes put it. So rather than knowing which does what, one short line from
+    'look_at' is projected the same way, and where it lands says.
+    """
+    tip = tuple(look_at[axis] + right[axis] + upward[axis] for axis in range(3))
+    probe = project(b3d.Edge.make_line(look_at, tip), origin, up, look_at, reproducible)
+    bounds = b3d.Compound(children=probe).bounding_box()
+    return (bounds.min.X - _dot(look_at, right), bounds.min.Y - _dot(look_at, upward))
+
+
+def _overlay_edges(request, max_dimension, right, up, keep_out):
     """The two overlays "pc render" can be asked to draw, as (layer, edges) pairs.
 
     'request["ports"]' is what 'partcad.render_overlay' worked out: every port of
@@ -279,6 +277,11 @@ def _overlay_edges(request, max_dimension, right, up):
     *instance* of an interface, with a line out to each of the ports that belong
     to it - a bolt pattern of four holes is one thing a part connects through,
     and writing its name four times would say less, not more.
+
+    Every name, of either overlay, is written around the object rather than on
+    it, and joined to what it names by a leader: see 'label_layout'. They are
+    laid out together, so that an interface name does not land on a port name
+    either. 'keep_out' is the object, as a box in the plane of the picture.
     """
     ports = request.get("ports") or []
     marker_size = float(request.get("port_marker_size", DEFAULT_MARKER_SIZE)) * max_dimension
@@ -286,42 +289,76 @@ def _overlay_edges(request, max_dimension, right, up):
     with_ports = bool(request.get("with_ports"))
     with_interfaces = bool(request.get("with_interfaces"))
 
-    port_edges = []
-    interface_edges = []
+    def flat(point):
+        return (_dot(point, right), _dot(point, up))
+
+    edges = {"Ports": [], "Interfaces": []}
+    names = []
     instances = {}
-    # Shared by both overlays, so that an interface name does not land on a port
-    # name either.
-    written = []
+    # The markers are not geometry of the object, but a name written over one
+    # hides it all the same.
+    marked = []
     for port in ports:
         location = port.get("location")
         if location is None:
             continue
-        # A label hangs off the tip of the port's +Z arrow, which spreads the
-        # labels the way the ports themselves are spread rather than piling them
-        # all up on one face of the object.
         origin = _transform_point(location, (0, 0, 0))
+        # A port's leader ends at the tip of its +Z arrow, which is the end of
+        # the marker that says which way the port faces.
         tip = _transform_point(location, (0, 0, marker_size * 1.15))
         if with_ports:
-            port_edges.extend(_marker_edges(location, marker_size))
-            text = port.get("port") or ""
-            at = _spread(tip, text, label_size, right, up, written)
-            port_edges.extend(_label_edges(text, at, label_size, right, up))
+            edges["Ports"].extend(_marker_edges(location, marker_size))
+            marked.extend((flat(origin), flat(tip)))
+            if port.get("port"):
+                names.append(("Ports", port["port"], [tip], None))
         if with_interfaces and port.get("interface_label"):
             instances.setdefault(_interface_label(port), []).append((origin, tip))
-
     for label, placed in instances.items():
+        # One name, and a line out to each of the ports that belong to it. A
+        # bolt pattern is only recognizable as one interface if the four holes
+        # are joined up, and a name with nothing joining it to anything names
+        # nothing in particular.
         centre = tuple(sum(tip[axis] for _origin, tip in placed) / len(placed) for axis in range(3))
-        anchor = _spread(centre, label, label_size, right, up, written)
-        interface_edges.extend(_label_edges(label, anchor, label_size, right, up))
-        # Which ports the name is the name of. A bolt pattern is only
-        # recognizable as one interface if the four holes are joined up, and a
-        # name with nothing joining it to anything names nothing in particular.
-        for origin, _tip in placed:
-            interface_edges.extend(_polyline_edges([anchor, origin]))
+        names.append(("Interfaces", label, [origin for origin, _tip in placed], centre))
+    if not names:
+        return [("Ports", PORTS_COLOR, edges["Ports"]), ("Interfaces", INTERFACES_COLOR, edges["Interfaces"])]
+
+    if marked:
+        keep_out = (
+            min([keep_out[0]] + [u for u, _v in marked]),
+            min([keep_out[1]] + [v for _u, v in marked]),
+            max([keep_out[2]] + [u for u, _v in marked]),
+            max([keep_out[3]] + [v for _u, v in marked]),
+        )
+    labels = [
+        label_layout.Label(
+            stroke_text.width(text) * label_size,
+            label_size,
+            [flat(target) for target in targets],
+            None if anchor is None else flat(anchor),
+        )
+        for _layer, text, targets, anchor in names
+    ]
+    label_layout.layout(labels, keep_out)
+
+    # Back from the plane of the picture into 3D. The projection is orthographic,
+    # so how far along the line of sight a name is put changes nothing about
+    # where it is drawn; it is put level with what it names.
+    normal = _cross(right, up)
+    for (layer, text, targets, _anchor), label in zip(names, labels):
+        depth = _dot(targets[0], normal)
+
+        def lift(point, depth=depth):
+            return tuple(point[0] * right[axis] + point[1] * up[axis] + depth * normal[axis] for axis in range(3))
+
+        edges[layer].extend(_label_edges(text, lift(label.position), label_size, right, up))
+        attach = lift(label.attach)
+        for target in targets:
+            edges[layer].extend(_polyline_edges([attach, target]))
 
     return [
-        ("Ports", PORTS_COLOR, port_edges),
-        ("Interfaces", INTERFACES_COLOR, interface_edges),
+        ("Ports", PORTS_COLOR, edges["Ports"]),
+        ("Interfaces", INTERFACES_COLOR, edges["Interfaces"]),
     ]
 
 
@@ -673,7 +710,18 @@ def process(path, request):
         if request.get("with_ports") or request.get("with_interfaces"):
             try:
                 right, upward = _camera_axes(origin, up, look_at)
-                overlays = _overlay_edges(request, max_dimension, right, upward)
+                # The object, as a box in the plane of the picture, which is
+                # where the names are laid out - in the coordinates
+                # '_overlay_edges' flattens everything into.
+                bounds = b3d.Compound(children=visible).bounding_box()
+                shift = _picture_offset(origin, up, look_at, right, upward, reproducible)
+                keep_out = (
+                    bounds.min.X - shift[0],
+                    bounds.min.Y - shift[1],
+                    bounds.max.X - shift[0],
+                    bounds.max.Y - shift[1],
+                )
+                overlays = _overlay_edges(request, max_dimension, right, upward, keep_out)
                 shapes = {"Interfaces": _interface_shapes(request)}
                 for layer, color, layer_edges in overlays:
                     layer_shapes = layer_edges + shapes.get(layer, [])
