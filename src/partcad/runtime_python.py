@@ -9,12 +9,10 @@
 import asyncio
 import contextlib
 import copy
-import glob
 import hashlib
 import os
 import pathlib
 import platform
-import shutil
 import subprocess
 import sys
 
@@ -558,9 +556,6 @@ class PythonRuntime(runtime.Runtime):
                                 session["path"],
                             ]
                         )
-                # Created just now or left by an earlier creation that did not
-                # finish: either way, nothing goes into it without pip.
-                self._restore_pip_onced_locked(session["path"])
                 # Install the dependencies into the venv. We already hold the
                 # venv lock, so use the *_locked ensure and take the install
                 # lock explicitly; the resulting order (venv lock, then the
@@ -655,110 +650,6 @@ class PythonRuntime(runtime.Runtime):
 
             return exitcode, stdout, stderr
 
-    # What puts back the pip a virtual environment's Python bundles -- see
-    # '_restore_pip_onced_locked'.
-    ENSUREPIP = ["-m", "ensurepip", "--upgrade", "--default-pip"]
-
-    def venv_has_pip(self, path) -> bool:
-        """Whether the virtual environment at ``path`` has pip, which is the last thing '-m venv' puts in it.
-
-        A method rather than a static one: the runtimes are wrapped by the
-        telemetry decorator, which does not keep a 'staticmethod' one.
-        """
-        # The package itself, not just a directory of its name: an empty
-        # 'pip/' is not a pip anybody can run.
-        return bool(
-            glob.glob(os.path.join(path, "lib", "python*", "site-packages", "pip", "__init__.py"))
-            or glob.glob(os.path.join(path, "Lib", "site-packages", "pip", "__init__.py"))
-        )
-
-    def _lost_pip_warning(self, path) -> bool:
-        """Whether a just-created environment has no pip; says so once if it has not."""
-        if not os.path.exists(path) or self.venv_has_pip(path):
-            return False
-        pc_logging.warning(
-            "Creating a '%s' environment left no pip in %s; putting back the one its Python bundles"
-            % (self.sandbox, path)
-        )
-        return True
-
-    def _clear_stale_pip(self, path) -> None:
-        """Remove pip's metadata where pip itself is gone, so that 'ensurepip' installs it again.
-
-        The state CI has been seen in: 'pip-*.dist-info' says pip is installed,
-        and the 'pip' package it describes is not there. 'ensurepip' believes
-        the metadata ("Requirement already satisfied") and does nothing, which
-        is a recovery that recovers nothing.
-        """
-        for stale in glob.glob(os.path.join(path, "lib", "python*", "site-packages", "pip-*.dist-info")) + glob.glob(
-            os.path.join(path, "Lib", "site-packages", "pip-*.dist-info")
-        ):
-            shutil.rmtree(stale, ignore_errors=True)
-
-    def _restore_pip_onced_locked(self, path) -> None:
-        """Put pip back into a session environment '-m venv --upgrade-deps' left without one.
-
-        Seen on GitHub's runners in the dev container's Docker sandbox, and not
-        reproduced anywhere else: '-m venv' exits 0 and the environment has no
-        pip, so every package then fails to install with "No module named pip".
-        Why is not known yet. The environment's own 'ensurepip' puts the bundled
-        one back, which is all it needs: everything after this goes in
-        through it.
-        """
-        if self._lost_interpreter(path):
-            self.run_onced_locked(self._recreate(path))
-        if self._lost_pip_warning(path):
-            self._clear_stale_pip(path)
-            self._restored(path, *self.run_onced_locked(self.ENSUREPIP, path=path))
-
-    async def _restore_pip_async_onced_locked(self, path) -> None:
-        """The asynchronous twin of '_restore_pip_onced_locked'."""
-        if self._lost_interpreter(path):
-            await self.run_async_onced_locked(self._recreate(path))
-        if self._lost_pip_warning(path):
-            self._clear_stale_pip(path)
-            self._restored(path, *(await self.run_async_onced_locked(self.ENSUREPIP, path=path)))
-
-    def _lost_interpreter(self, path) -> bool:
-        """Whether an environment directory is there with no interpreter in it; says so if it is.
-
-        A creation that stopped before it got that far leaves exactly this, and
-        the directory being there is what keeps it from being created again.
-        'ensurepip' cannot help: it needs the interpreter that is missing.
-
-        The interpreter the runtime will actually run (see 'venv_interpreter'),
-        not any 'python*': 'bin/python3' alone is no help when 'bin/python' is
-        what gets executed. And 'lexists' rather than 'exists': in the 'docker'
-        sandbox 'bin/python' is a symlink to the *image's* interpreter, which
-        this machine does not have, and a dangling link here is an interpreter
-        that is there.
-        """
-        if not os.path.exists(path) or os.path.lexists(self.venv_interpreter(path)):
-            return False
-        pc_logging.warning("The '%s' environment at %s has no interpreter; creating it again" % (self.sandbox, path))
-        return True
-
-    def venv_interpreter(self, path) -> str:
-        """Where a virtual environment's interpreter is, on this machine, as 'get_venv_python_path' would run it."""
-        return os.path.join(path, "Scripts" if os.name == "nt" else "bin", self.exec_name)
-
-    def _recreate(self, path) -> list:
-        """'-m venv' for ``path``, clearing whatever an earlier creation left there."""
-        return ["-m", "venv", "--clear", "--upgrade-deps", path]
-
-    def _restored(self, path, exitcode, stdout, stderr) -> None:
-        """Fail, rather than carry on, when putting pip back did not put pip back.
-
-        Carrying on is worse than it looks: every install after this fails,
-        and the ones that write a guard anyway leave the environment recorded
-        as having packages it does not have.
-        """
-        if exitcode != 0 or not self.venv_has_pip(path):
-            raise Exception(
-                "The '%s' environment at %s has no pip, and its own 'ensurepip' did not put one back "
-                "(exit %s): %s" % (self.sandbox, path, exitcode, ((stderr or "") + (stdout or "")).strip())
-            )
-
     def run_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None):
         if session and session["dirty"]:
             # The venv environment has to be created
@@ -775,9 +666,6 @@ class PythonRuntime(runtime.Runtime):
                             session["path"],
                         ]
                     )
-            # Created just now or left by an earlier creation that did not
-            # finish: either way, nothing goes into it without pip.
-            self._restore_pip_onced_locked(session["path"])
             # Install of the dependencies into the venv environment
             for dep in session["deps"]:
                 if dep == "partcad":
@@ -838,9 +726,6 @@ class PythonRuntime(runtime.Runtime):
                                 session["path"],
                             ]
                         )
-                # Created just now or left by an earlier creation that did not
-                # finish: either way, nothing goes into it without pip.
-                await self._restore_pip_async_onced_locked(session["path"])
                 # Install the dependencies into the venv. We already hold the
                 # venv lock, so use the *_locked ensure and take the install
                 # lock explicitly; the resulting order (venv lock, then the
@@ -941,9 +826,6 @@ class PythonRuntime(runtime.Runtime):
                             session["path"],
                         ]
                     )
-            # Created just now or left by an earlier creation that did not
-            # finish: either way, nothing goes into it without pip.
-            await self._restore_pip_async_onced_locked(session["path"])
             # Install of the dependencies into the venv environment
             for dep in session["deps"]:
                 if dep == "partcad":

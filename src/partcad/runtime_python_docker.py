@@ -860,16 +860,7 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         if self._environment_built:
             return []
         os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
-        command = ["-m", "venv", "--upgrade-deps"]
-        if os.path.lexists(self._host_venv_python):
-            # There, and not finished -- see '_environment_built'. Built again
-            # from nothing rather than over the top of whatever got that far.
-            command.append("--clear")
-        return command + [docker_mount.rewrite(self.path, self._mounted)]
-
-    def venv_interpreter(self, path) -> str:
-        """Always 'bin': the environment was built by a Linux image, whatever this machine is."""
-        return os.path.join(path, "bin", self.exec_name)
+        return ["-m", "venv", "--upgrade-deps", docker_mount.rewrite(self.path, self._mounted)]
 
     @property
     def _host_venv_python(self) -> str:
@@ -897,51 +888,9 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         wrong question, and the answer was to build the environment again, every
         time, and then call a successful build a failure.
         """
-        return os.path.lexists(self._host_venv_python) and self._has_pip
+        return os.path.lexists(self._host_venv_python)
 
-    @property
-    def _has_pip(self) -> bool:
-        """Whether the environment got as far as having pip, which is the last thing '-m venv' puts in it.
-
-        An interpreter alone is not an environment this sandbox can use: every
-        dependency goes in through pip. Counting one as built -- a creation
-        that was interrupted, or one whose 'ensurepip' did not run -- made every
-        install in it fail with "No module named pip", on every command, with
-        nothing to say why and nothing that would ever build it again.
-        """
-        return self.venv_has_pip(self.path)
-
-    def _ensurepip(self) -> list:
-        """The environment's own interpreter, putting back the pip its Python bundles -- see '_lost_pip'.
-
-        Named rather than resolved through 'get_venv_python_path': for the
-        runtime's own directory that answers 'exec_path', which until the
-        environment is accepted is the *image's* interpreter, and its
-        'ensurepip' would install into the image rather than the environment.
-        """
-        args = self.ENSUREPIP
-        venv_python = docker_mount.rewrite(self._host_venv_python, self._mounted)
-        return [venv_python, *self.flags_for(args), *args]
-
-    def _lost_pip(self, exitcode) -> bool:
-        """Whether '-m venv' reported success and left an environment with no pip in it.
-
-        Seen on GitHub's runners, in the dev container's Docker sandbox and
-        nowhere else, for a reason not known yet: '-m venv' exits 0 and the
-        environment has no pip. Running the environment's own 'ensurepip'
-        again puts the bundled pip back, which is all the environment needs:
-        everything after this is installed through it. Said as a warning, since it means the step that
-        was asked for did not do what it says.
-        """
-        if exitcode != 0 or not os.path.lexists(self._host_venv_python) or self._has_pip:
-            return False
-        pc_logging.warning(
-            "Creating the '%s' sandbox left no pip in %s; putting back the one its Python bundles"
-            % (self.sandbox, self.path)
-        )
-        return True
-
-    def _created(self, exitcode, stderr, stdout="") -> None:
+    def _created(self, exitcode, stderr) -> None:
         """Accept the environment, or fail with what actually went wrong.
 
         'run_*_locked' reports an exit code rather than raising, so a '-m venv'
@@ -949,84 +898,16 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         anybody saw would be pip failing on a missing file.
         """
         if exitcode != 0 or not self._environment_built:
-            said = (stderr or "").strip() or "'-m venv' exited with %s" % exitcode
-            if exitcode == 0:
-                # It says it built one, and it is not here: the container wrote
-                # it somewhere this process does not see, which is a mount that
-                # is not the directory it claims to be. Say where, since that
-                # is the whole of what anybody would need to fix it.
-                said += ", but the environment is not here. "
-                if (stdout or "").strip():
-                    said += "It said: %s " % stdout.strip()
-                said += self._where_it_went()
             raise Exception(
-                "Failed to create the '%s' sandbox at %s in %s: %s" % (self.sandbox, self.path, self.image, said)
-            )
-        self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)
-
-    def _where_it_went(self) -> str:
-        """What the container and this process each see at the environment's path, and how it is mounted.
-
-        For a build the container reported as finished and this process cannot
-        find: everything here is a guess at which side's mount is wrong, and
-        this is what decides it. Never raises -- it is part of an error message.
-        """
-        parts = []
-        try:
-            here = sorted(os.listdir(self.path)) if os.path.isdir(self.path) else "nothing"
-            parts.append("Here: %s" % (here,))
-        except Exception as e:
-            parts.append("Here: %s" % e)
-        try:
-            container = self._start()
-            container.reload()
-            path = docker_mount.rewrite(self.path, self._mounted)
-            code, output = container.exec_run(
-                [
-                    CONTAINER_PYTHON,
-                    "-c",
-                    "import glob,os,sys; p=sys.argv[1]; "
-                    "print(sorted(os.listdir(p)) if os.path.isdir(p) else 'nothing', "
-                    "glob.glob(os.path.join(p, 'lib', 'python*', 'site-packages', 'pip'))); "
-                    # All of site-packages, and what pip's own record says it
-                    # wrote: whether 'pip/' was never written or was written and
-                    # then went is the whole question.
-                    "[print('site-packages:', sorted(os.listdir(s))) "
-                    "for s in glob.glob(os.path.join(p, 'lib', 'python*', 'site-packages'))]; "
-                    "[print(r, 'lists', sum(1 for _ in open(r)), 'files, e.g.', "
-                    "[l.split(',')[0] for l in open(r)][:3]) "
-                    "for r in glob.glob(os.path.join(p, 'lib', 'python*', 'site-packages', 'pip-*.dist-info', 'RECORD'))]; "
-                    "print('stat pip:', [os.lstat(x) for x in glob.glob(os.path.join(p, 'lib', 'python*', "
-                    "'site-packages', 'pip*'))][:2])",
-                    path,
-                ]
-            )
-            parts.append("In the container: %s" % output.decode("utf-8", "replace").strip())
-            # What the environment's own 'ensurepip' says, which is the step
-            # that should have put pip there: whatever stopped it, it says so.
-            code, output = container.exec_run(
-                [
-                    "/".join([path, "bin", "python"]),
-                    "-m",
-                    "ensurepip",
-                    "--upgrade",
-                    "--default-pip",
-                ],
-                environment={"HOME": docker_mount.rewrite(self._container_home, self._mounted)},
-            )
-            parts.append(
-                "Its ensurepip, run again: exit %s: %s" % (code, output.decode("utf-8", "replace").strip()[-1500:])
-            )
-            parts.append(
-                "Its mounts: %s"
-                % "; ".join(
-                    "%s from %s" % (m.get("Destination"), m.get("Source")) for m in container.attrs.get("Mounts") or []
+                "Failed to create the '%s' sandbox at %s in %s: %s"
+                % (
+                    self.sandbox,
+                    self.path,
+                    self.image,
+                    (stderr or "").strip() or "'-m venv' exited with %s" % exitcode,
                 )
             )
-            parts.append("Mount sources: %s" % (self._mount_sources,))
-        except Exception as e:
-            parts.append("The container could not be asked: %s" % e)
-        return " ".join(parts)
+        self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)
 
     def once(self):
         if self.provisioned:
@@ -1035,15 +916,8 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             command = self._create_locked()
             if command:
                 with pc_logging.Action("Docker", self.version, self.path):
-                    exitcode, stdout, stderr = self.run_onced_locked(command)
-                    if self._lost_pip(exitcode):
-                        self._clear_stale_pip(self.path)
-                        # Its output joins the creation's, so that a recovery
-                        # that fails says why in the error '_created' raises.
-                        _, pip_out, pip_err = runtime.Runtime.run(self, self._ensurepip(), stdin="")
-                        stdout = "\n".join(s for s in (stdout, pip_out) if s)
-                        stderr = "\n".join(s for s in (stderr, pip_err) if s)
-                self._created(exitcode, stderr, stdout)
+                    exitcode, _, stderr = self.run_onced_locked(command)
+                self._created(exitcode, stderr)
             elif self._environment_built:
                 self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)
         super().once()
@@ -1055,13 +929,8 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
             command = self._create_locked()
             if command:
                 with pc_logging.Action("Docker", self.version, self.path):
-                    exitcode, stdout, stderr = await self.run_async_onced_locked(command)
-                    if self._lost_pip(exitcode):
-                        self._clear_stale_pip(self.path)
-                        _, pip_out, pip_err = await runtime.Runtime.run_async(self, self._ensurepip(), stdin="")
-                        stdout = "\n".join(s for s in (stdout, pip_out) if s)
-                        stderr = "\n".join(s for s in (stderr, pip_err) if s)
-                self._created(exitcode, stderr, stdout)
+                    exitcode, _, stderr = await self.run_async_onced_locked(command)
+                self._created(exitcode, stderr)
             elif self._environment_built:
                 self.exec_path = docker_mount.rewrite(self._host_venv_python, self._mounted)
         await super().once_async()

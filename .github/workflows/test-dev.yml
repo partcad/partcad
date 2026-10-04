@@ -357,13 +357,6 @@ jobs:
           env: |
             PC_CONTAINER_IMAGE_TAG=${{ needs.scope.outputs.image-override }}
             PC_CONTAINER_IMAGE_OWNER=${{ needs.scope.outputs.image-owner }}
-            # The conda sandbox, stated, rather than the "docker" one this dev
-            # container could otherwise use: on GitHub's runners (and nowhere
-            # else, so far) the Docker sandbox's environment ends up without a
-            # usable pip, and every install in it fails. Remove this line to
-            # reproduce; https://github.com/partcad/partcad/issues/727 has
-            # what is known.
-            PC_PYTHON_SANDBOX=conda
           # "runCmd" is handed to a shell as one script, so the step's result is
           # the *last* command's unless the script says otherwise. This one used
           # to end with "echo DONE", which meant a failing pytest was reported as
@@ -565,13 +558,6 @@ jobs:
             # See "Which images this run uses" on "Scope".
             PC_CONTAINER_IMAGE_TAG=${{ needs.scope.outputs.image-override }}
             PC_CONTAINER_IMAGE_OWNER=${{ needs.scope.outputs.image-owner }}
-            # The conda sandbox, stated, rather than the "docker" one this dev
-            # container could otherwise use: on GitHub's runners (and nowhere
-            # else, so far) the Docker sandbox's environment ends up without a
-            # usable pip, and every install in it fails. Remove this line to
-            # reproduce; https://github.com/partcad/partcad/issues/727 has
-            # what is known.
-            PC_PYTHON_SANDBOX=conda
 
           # The suite's status is kept and reported, and the coverage report is
           # written either way. Ending on "coverage xml" reported *its* status,

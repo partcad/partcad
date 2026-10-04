@@ -427,7 +427,11 @@ so that every process in it -- a test with a temporary `~` as much as the daemon
 one mount set. A sandbox container is named after its image **and** its mount set (`container_name`), on an
 ordinary host too: named after the image alone, any process needing other mounts (another dev container on the
 same machine, a package outside the home directory) replaced the shared container, and whoever had started it
-went on running commands by name in a container without its files. A `DOCKER_HOST` on another machine has no such answer and still falls
+went on running commands by name in a container without its files. Where the host's socket is not the container user's
+to write (GitHub's runners), `.devcontainer/docker-socket-start.sh` proxies it with `socat`, and that proxy needs
+`-t`: with socat's default half-second half-close timeout, `docker exec -i` returned exit 0 the moment its stdin
+closed while the command went on running, which is what failed every dev-container CI job on the `docker` sandbox
+(#727). A `DOCKER_HOST` on another machine has no such answer and still falls
 back to conda; when a package's own `dockerImage` is skipped for any such reason, PartCAD warns once and repeats
 the reason in the failure. It is one probe per process; see the docstring for what a wrong answer costs in each
 direction.
