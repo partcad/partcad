@@ -203,6 +203,71 @@ def solidify(shape):
     return rebuilt
 
 
+def solid_problems(shape):
+    """What keeps 'shape' from being a part made of solids. Empty when nothing does.
+
+    The one definition of it, for every part whatever produced it - a script, a
+    file importer, a partType plugin - and for everything that relies on it:
+    the core validating a part as it is built, and the interference check
+    deciding which parts it can intersect at all. A part fails it when:
+
+    - it has no solid in it;
+    - it has faces that belong to no solid (a shell, or loose faces beside the
+      solids) - 'solidify' has already turned every closed shell into a solid,
+      so what is left is open;
+    - a solid in it is open: an edge carries one face only, which is a hole in
+      the surface (an edge a face carries inside itself, INTERNAL, is not);
+    - OCCT finds it invalid;
+    - a solid in it has no volume, or a negative one - inside out.
+
+    Each of those is a shape a boolean against answers with a number unrelated
+    to any geometry, while it renders and measures like the part. That is the
+    whole reason to ask.
+    """
+    import OCP.BRep
+    import OCP.BRepCheck
+    import OCP.BRepGProp
+    import OCP.GProp
+    import OCP.TopAbs
+    import OCP.TopExp
+    import OCP.TopoDS
+    import OCP.TopTools
+
+    if shape is None or not isinstance(shape, OCP.TopoDS.TopoDS_Shape) or shape.IsNull():
+        return ["nothing was built"]
+
+    found = []
+    solids = []
+    explorer = OCP.TopExp.TopExp_Explorer(shape, OCP.TopAbs.TopAbs_SOLID)
+    while explorer.More():
+        solids.append(explorer.Current())
+        explorer.Next()
+    if not solids:
+        found.append("it holds no solid")
+    if OCP.TopExp.TopExp_Explorer(shape, OCP.TopAbs.TopAbs_FACE, OCP.TopAbs.TopAbs_SOLID).More():
+        found.append("it has faces that belong to no solid")
+    for solid in solids:
+        edges = OCP.TopTools.TopTools_IndexedDataMapOfShapeListOfShape()
+        OCP.TopExp.TopExp.MapShapesAndAncestors_s(solid, OCP.TopAbs.TopAbs_EDGE, OCP.TopAbs.TopAbs_FACE, edges)
+        for i in range(1, edges.Extent() + 1):
+            edge = OCP.TopoDS.TopoDS.Edge_s(edges.FindKey(i))
+            if (
+                edges.FindFromIndex(i).Extent() == 1
+                and not OCP.BRep.BRep_Tool.Degenerated_s(edge)
+                and edge.Orientation() in (OCP.TopAbs.TopAbs_FORWARD, OCP.TopAbs.TopAbs_REVERSED)
+            ):
+                found.append("a solid in it is open")
+                break
+        props = OCP.GProp.GProp_GProps()
+        OCP.BRepGProp.BRepGProp.VolumeProperties_s(solid, props)
+        if props.Mass() <= 0.0:
+            found.append("a solid in it has no volume inside it (%.3f mm^3)" % props.Mass())
+    if solids and not OCP.BRepCheck.BRepCheck_Analyzer(shape).IsValid():
+        found.append("OCCT finds it invalid")
+    # Said once each: a part of a hundred open solids has one problem.
+    return list(dict.fromkeys(found))
+
+
 def _shell_to_solid(shell):
     """The solid a closed shell bounds, or None if the shell is not closed.
 

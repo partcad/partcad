@@ -314,7 +314,8 @@ def _probe_mounts(client, image: str) -> bool:
 @telemetry.instrument()
 class DockerPythonRuntime(runtime_python.PythonRuntime):
     def __init__(self, ctx, version=None, image=None):
-        if image is None:
+        own_image = image is None
+        if own_image:
             image = image_for(version or runtime_python.sandbox_versions.DEFAULT_PYTHON_VERSION)
         # The image is part of the sandbox's identity, not just of how it is
         # reached. What pip resolves and what it compiles against depends on the
@@ -338,6 +339,15 @@ class DockerPythonRuntime(runtime_python.PythonRuntime):
         # built by Linux and has 'bin/python' whatever the host is.
         self.exec_name = "python"
         self.exec_path = CONTAINER_PYTHON
+
+        # PartCAD's own images carry a 'pycairo' wheel (PIP_FIND_LINKS, see
+        # 'tools/containers/python/Dockerfile') and no compiler. pip ranks a
+        # newer sdist on PyPI above that wheel, so the day pycairo releases,
+        # every PNG render in a published image tries to compile it and fails.
+        # Only for our images: one a package names may have a compiler and no
+        # wheel, and building from source is then what works there.
+        if own_image:
+            self.pip_install_flags += ["--only-binary", "pycairo"]
 
     # ----------------------------------------------------------------- paths --
 

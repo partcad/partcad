@@ -69,6 +69,7 @@ The following syntax is used to create a node that places a part in the assembly
       comment: <(optional) free form text, see "Comment" below>
       how: <(optional) assembly instructions, see "How" below>
       exploded: <(optional) the gap to show in the exploded view of this step, in mm>
+      interferes: <(optional) named nodes this one also ends up sharing space with, see "Expected overlaps" below>
 
 The `name` a node is given is how everything else in and around this assembly
 refers to it: the `name` of a `connect`/`connectPorts` names a node, and so does
@@ -92,6 +93,38 @@ The `exploded` field does not affect the assembly itself: it is how far apart
 the two parts are drawn in the exploded view of this step in the assembly
 instruction book (`pc render -t pdf` and `pc render -t html`).
 Without it, the two are spaced by half of the largest dimension of the two.
+
+Expected overlaps
+-----------------
+
+`pc test` checks that the parts of an assembly do not share space - except where
+a joint says they must. A pin snapped into its hole, a screw cutting its own
+thread: the joint is made by occupying the material, and a model that holds no
+springs holds it overlapping. Three things say so, and all three are read from
+the joint, never declared against a pair of parts:
+
+* the mating or the `how` of the connection says `snapIn` or `selfScrew`, or an
+  interface it joins cuts its own thread (`selfScrew`). The overlap expected is
+  between the two parts that provide the joined ports - followed through any
+  `map:` of a sub-assembly to the part inside it that provides the port;
+* `interferes` lists the further nodes the same act of joining drives into: a
+  screw connected to the part its head bears on cuts its thread in the ones
+  underneath as well, and a sub-assembly fitted by one of its pins drives its
+  other pins into the same neighbour.
+
+`interferes` names nodes of the same `links:` list as the connection, by
+`name`, which a node must have to be named; a node inside a named `links:`
+container is `container/name`, and one inside an unnamed container is named as
+if the container were not there. A node may be a part or an assembly. Naming an
+assembly excuses every overlap between the two, which is as precise as the
+declaration is: a sub-assembly with a mapped port is named rather than the part
+inside it that provides the port, since it is the sub-assembly that is fitted.
+
+An assembly answers only for what it puts together. A sub-assembly declared in
+`partcad.yaml` and placed in it has a verdict of its own, which the assembly
+takes rather than repeats: only the overlaps between what it places are looked
+at there, and every assembly - declared or a `links:` container - is first
+compared by the box around everything in it.
 
 Assemblies
 ----------
