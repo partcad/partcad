@@ -345,7 +345,13 @@ def _stage_named_object(session, ctx, pc, params, package, object_name, recursiv
     # The object may name a package of its own, which is the one that produces
     # it whatever '--package' selected.
     owner, name = pc.utils.resolve_resource_path(package, object_name)
-    _stage_subassemblies(session, ctx, getter(_qualified(owner, name)))
+    shape = getter(_qualified(owner, name))
+    if params.get("fast_only") and getattr(shape, "timeout", None) is not None:
+        # Not built at all: '--fast-only' leaves it out, which the render says
+        # when it gets to it. Staging it first would build exactly what was
+        # asked not to be.
+        return
+    _stage_subassemblies(session, ctx, shape)
 
 
 def instantiate_assembly(session, params):
@@ -1280,7 +1286,9 @@ async def _test_package_async(pc, package, coroutine):
         return await coroutine
 
 
-async def _test_async(ctx, pc, packages, filter_prefix, sketch, interface, assembly, scene, object_name):
+async def _test_async(
+    ctx, pc, packages, filter_prefix, sketch, interface, assembly, scene, object_name, fast_only=False
+):
     import asyncio
 
     from partcad.test.all import tests as all_tests
@@ -1319,7 +1327,7 @@ async def _test_async(ctx, pc, packages, filter_prefix, sketch, interface, assem
             pc.logging.error("Package %s is not found" % target)
             continue
         if not obj:
-            task = prj.test_log_wrapper_async(ctx, tests=tests_to_run)
+            task = prj.test_log_wrapper_async(ctx, tests=tests_to_run, fast_only=fast_only)
             tasks.append(_test_package_async(pc, target, task) if len(packages) > 1 else task)
         elif interface:
             shape = prj.get_interface(obj)
@@ -1345,6 +1353,8 @@ async def _test_async(ctx, pc, packages, filter_prefix, sketch, interface, assem
                 pc.logging.error("%s is not found" % obj)
             elif not shape.finalized:
                 pc.logging.warning("%s is not finalized" % obj)
+            elif fast_only and pc.fast_only.leaves_out(shape):
+                continue
             else:
                 tasks.extend([t.test_log_wrapper(tests_to_run, ctx, shape) for t in tests_to_run])
 
@@ -1398,6 +1408,7 @@ def test_run(session, params):
                 params.get("assembly"),
                 params.get("scene"),
                 object_name,
+                bool(params.get("fast_only")),
             )
         )
     return None
@@ -1447,7 +1458,7 @@ def lint_run(session, params):
     return None
 
 
-async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_name):
+async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_name, fast_only=False):
     """Run every declared simulation of what was selected, one after another.
 
     Sequentially, and deliberately: a simulation plugin is a whole simulator
@@ -1495,6 +1506,9 @@ async def _simulate_async(ctx, pc, packages, object_name, is_assembly, filter_na
                 continue
             targets.extend(("part", shape) for shape in list(prj.parts.values()))
             targets.extend(("assembly", shape) for shape in list(prj.assemblies.values()))
+
+    if fast_only:
+        targets = [(kind, shape) for kind, shape in targets if not pc.fast_only.leaves_out(shape)]
 
     results = []
     for kind, shape in targets:
@@ -1549,6 +1563,7 @@ def simulate_run(session, params):
                 object_name,
                 params.get("assembly"),
                 params.get("filter"),
+                bool(params.get("fast_only")),
             )
         )
 
@@ -2235,6 +2250,7 @@ def list_objects(session, params):
     pc = session.partcad
     kind = params.get("kind", "parts")
     selected, _, recursive = _request(params)
+    fast_only = bool(params.get("fast_only"))
 
     package = ctx.resolve_package_path(selected)
     package_obj = ctx.get_project(package)
@@ -2274,6 +2290,14 @@ def list_objects(session, params):
                 # build it: a recursive listing of a catalog used to run a
                 # factory per row (see 'Project.object_descriptions').
                 rows = project.object_descriptions(_LIST_KINDS[kind])
+            if fast_only:
+                # What a '--fast-only' run over the same tree would reach, read
+                # from the same declarations and building nothing either.
+                rows = {
+                    name: desc
+                    for name, desc in rows.items()
+                    if not pc.fast_only.leaves_out_declared(project, _LIST_KINDS[kind], name, quiet=True)
+                }
             for name, desc in sorted(rows.items()):
                 line = "\t"
                 if recursive:
@@ -3283,6 +3307,10 @@ def search_objects(session, params):
             if takes_interface
             else search_fn(ctx, package, recursive, keyword)
         )
+        if params.get("fast_only") and kind in ("assemblies", "scenes"):
+            # Quietly, as a listing does: a row left out because it was asked
+            # to be is not news.
+            found = [obj for obj in found if getattr(obj, "timeout", None) is None]
         for obj in found:
             if kind == "packages":
                 line = "\t%s" % obj.name
@@ -3692,6 +3720,7 @@ async def _render_packages_async(
     # import them.
     pc.output.all_formats(ctx)
 
+    fast_only = bool(params.get("fast_only"))
     at_once = asyncio.Semaphore(max(1, process_slots.count))
 
     async def render_package(package):
@@ -3709,6 +3738,7 @@ async def _render_packages_async(
                     ignore_manufacturability=ignore_manufacturability,
                     overlay=overlay,
                     render_opts=render_opts,
+                    fast_only=fast_only,
                 )
             else:
                 sketches, interfaces, parts, assemblies, scenes = [], [], [], [], []
@@ -3745,6 +3775,7 @@ async def _render_packages_async(
                     ignore_manufacturability=ignore_manufacturability,
                     overlay=overlay,
                     render_opts=render_opts,
+                    fast_only=fast_only,
                 )
 
     results = await asyncio.gather(*[render_package(package) for package in packages], return_exceptions=True)

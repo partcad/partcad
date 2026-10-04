@@ -50,6 +50,12 @@ a CAD addon, or documentation.
   and answers "not yet — build these first", naming them. A client that reads that from a different copy of
   the rule reports the daemon's "ask me again" to the user as a failure.
 
+  `timeouts` is the third: an assembly that declares `timeout:` is worked on inside a window the daemon
+  announces (as a pair of `log` markers, like the process and action ones), and the client waits that long
+  instead of its default five minutes for as long as it is open. A client reading the markers differently from
+  the daemon writing them gives up on exactly the assemblies that said they would be slow. The same key is
+  what `--fast-only` leaves an assembly out for (`partcad.fast_only`).
+
 * [src/partcad_client](./src/partcad_client):
 
   What a **client** does, and a daemon must not: discovering the daemon serving a workspace and connecting to
@@ -427,7 +433,9 @@ diff someone has to look at rather than something a reader of the README discove
 projection or a generated document, re-render and commit the result. The `example-images` `pre-commit` hook
 catches the cheap half of this instantly (a README pointing at an image that is not checked in); the
 `Examples (PartCAD)` job in `test.yml` renders everything and fails if the tree changed, on one cell of the
-matrix because what is checked in is one rendering.
+matrix because what is checked in is one rendering. "Everything" short of what declares a `timeout:`: every
+recursive run over `//pub` in CI says `--fast-only`, which passes over an assembly or a scene whose package says
+it is slow (`partcad.fast_only`), so an example like that is re-rendered locally and nowhere else.
 
 **Every drawing under `examples/` is rendered with `reproducible: true`, and a new one has to say so too.**
 That is the flag every `render:` and `export:` file type takes, `false` by default, and it is what makes a

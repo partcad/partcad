@@ -1369,10 +1369,17 @@ jobs:
           # 'timeout-minutes' with the log ending mid-sentence -- which is how
           # every version-bump run on 'devel' from 0.8.19 onward ended, and how
           # the next hang would end without it.
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples/partcad
+          #
+          # Every recursive run over '//pub' in CI says '--fast-only': an
+          # assembly whose package declares 'timeout:' is one known to take
+          # longer than the client waits by default, and a sweep is not where
+          # to spend that (see 'partcad.fast_only'). So such an example is not
+          # re-rendered here, and the check below does not see it change;
+          # re-render it locally, where nothing is left out.
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r --fast-only //pub/examples/partcad
           # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --package //pub/examples/partcad
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi --threads-max 4 render -r --package //pub/examples/partcad
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --fast-only --package //pub/examples/partcad
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi --threads-max 4 render -r --fast-only --package //pub/examples/partcad
           coverage combine
           # END PARTCAD EXAMPLES
 
@@ -1593,8 +1600,9 @@ jobs:
           # BEGIN ALL EXAMPLES
           cd ./examples
           # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
+          # '--fast-only' as in "Examples (PartCAD)": see the comment there.
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r --fast-only //pub/examples
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --fast-only --package //pub/examples
           coverage combine
           # END ALL EXAMPLES
 
@@ -1701,10 +1709,12 @@ jobs:
           # so the listing exits non-zero every time and this job is red until
           # that is fixed. That is the point -- it was always broken, and the
           # tolerance is what made it look otherwise.
+          #
+          # '--fast-only' as in "Examples (PartCAD)": see the comment there.
           set +e
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r --fast-only //pub
           list_rc=$?
-          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --package //pub
+          ../dev-tools/ci/bounded.sh coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --fast-only --package //pub
           test_rc=$?
           set -e
           echo "::notice title=Repo //pub::'list all' exited ${list_rc}, 'test' exited ${test_rc}"

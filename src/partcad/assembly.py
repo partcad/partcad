@@ -11,6 +11,8 @@ import os
 import tempfile
 import typing
 
+from partcad_utils import timeouts
+
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, shape_ports
 from . import software as pc_software
@@ -103,6 +105,16 @@ class Assembly(Shape):
         # assembly nobody declared - one put together in Python with 'add()' -
         # which has no declaration to read them out of.
         self._subassemblies = None
+
+    @property
+    def timeout(self) -> typing.Optional[float]:
+        """The seconds this assembly declares building it may take ('timeout:'), or None.
+
+        Announced to a waiting client while anything is done to the assembly
+        (see 'Shape.locked'), and what '--fast-only' leaves it out for. See
+        'partcad_utils.timeouts'.
+        """
+        return timeouts.declared(self.config)
 
     async def get_subassemblies_async(self) -> list["Assembly"]:
         """The assemblies this one places, resolved but not built.

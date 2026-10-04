@@ -8,6 +8,7 @@ import os
 
 import rich_click as click
 
+from .. import fast_only
 from ..service import run
 
 
@@ -51,6 +52,7 @@ from ..service import run
     help="Recursively test all imported packages (older spelling of '<package>...')",
     is_flag=True,
 )
+@fast_only.option()
 @click.option(
     "-s",
     "--sketch",
@@ -84,6 +86,7 @@ def cli(
     package: str,
     options_package: str,
     recursive,
+    fast_only,
     sketch,
     interface,
     assembly,
@@ -101,6 +104,7 @@ def cli(
             "package": package,
             "options_package": options_package,
             "recursive": recursive,
+            "fast_only": fast_only,
             "sketch": sketch,
             "interface": interface,
             "assembly": assembly,

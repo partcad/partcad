@@ -24,6 +24,7 @@ import sys
 
 import rich_click as click
 
+from .. import fast_only
 from ..service import run
 
 
@@ -49,6 +50,7 @@ from ..service import run
     show_envvar=True,
     help="Recursively simulate the objects of all imported packages (older spelling of '<package>...')",
 )
+@fast_only.option(short=False)
 @click.option(
     "--assembly",
     "-a",
@@ -74,13 +76,14 @@ from ..service import run
 )
 @click.argument("object", type=str, required=False)  # help="Part (default) or assembly to simulate"
 @click.pass_obj
-def cli(cli_ctx, package, recursive, assembly, filter_name, as_json, object) -> None:
+def cli(cli_ctx, package, recursive, fast_only, assembly, filter_name, as_json, object) -> None:
     result = run(
         cli_ctx,
         "simulate.run",
         {
             "package": package,
             "recursive": recursive,
+            "fast_only": fast_only,
             "assembly": assembly,
             "filter": filter_name,
             "object": object,

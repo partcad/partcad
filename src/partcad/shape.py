@@ -194,6 +194,10 @@ _NON_GEOMETRIC_CONFIG_KEYS = frozenset(
         "summary",
         "supplier",
         "tags",
+        # How long building it may take, not what gets built: declaring one, or
+        # changing it, must not cost an assembly its cache entry -- least of all
+        # the slow ones, which are the only ones that declare it.
+        "timeout",
         "title",
         "url",
         "vendor",
@@ -393,9 +397,22 @@ class Shape(ShapeConfiguration):
             async with self.get_async_lock():
                 owners[self_id] = task
                 try:
-                    yield
+                    # Whatever is done to a shape is done under this lock -
+                    # building it, writing its files, analyzing it - so this is
+                    # where the time an object declares it may take is
+                    # announced. Nothing for a shape that declares none.
+                    with pc_logging.Timeout(self.timeout, self.project_name, self.name):
+                        yield
                 finally:
                     owners.pop(self_id, None)
+
+    @property
+    def timeout(self) -> Optional[float]:
+        """How many seconds working on this shape may take, as it declares, or None.
+
+        Only an assembly (or a scene) declares one; see 'Assembly.timeout'.
+        """
+        return None
 
     async def get_components(self, ctx):
         if len(self.components) == 0:

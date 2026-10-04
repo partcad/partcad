@@ -1118,9 +1118,10 @@ jobs:
         continue-on-error: ${{ matrix.suite == 'All' }}
         shell: bash -el {0}
         run: |
+          # '--fast-only' as in test.yml's "Examples (PartCAD)": see the comment there.
           cd examples
-          pc --no-ansi list all -r ${{ matrix.package }}
-          pc --no-ansi --threads-max 4 test -r --package ${{ matrix.package }}
+          pc --no-ansi list all -r --fast-only ${{ matrix.package }}
+          pc --no-ansi --threads-max 4 test -r --fast-only --package ${{ matrix.package }}
           if [ "${{ matrix.render }}" = "true" ]; then
-            pc --no-ansi --threads-max 4 render -r --package ${{ matrix.package }}
+            pc --no-ansi --threads-max 4 render -r --fast-only --package ${{ matrix.package }}
           fi

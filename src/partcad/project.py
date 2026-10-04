@@ -38,6 +38,9 @@ from . import (
 from . import document as pc_document
 from . import (
     factory,
+)
+from . import fast_only as fast_only_mod
+from . import (
     interface,
     interface_config,
 )
@@ -2624,7 +2627,7 @@ class Project(project_config.Configuration):
                     yaml.dump(config, fp)
                     fp.close()
 
-    async def _run_test_async(self, ctx, tests: list, use_wrapper: bool = False) -> bool:
+    async def _run_test_async(self, ctx, tests: list, use_wrapper: bool = False, fast_only: bool = False) -> bool:
         if tests is None:
             tests = ctx.get_all_tests()
 
@@ -2636,6 +2639,8 @@ class Project(project_config.Configuration):
                 obj = getter(name)
                 # skip testing objects that are not finalized
                 if obj and (not hasattr(obj, "finalized") or obj.finalized):
+                    if fast_only and fast_only_mod.leaves_out(obj):
+                        continue
                     yield obj
 
         tasks.extend(
@@ -2656,17 +2661,17 @@ class Project(project_config.Configuration):
 
         return all(await asyncio.gather(*tasks))
 
-    async def test_async(self, ctx, tests=None) -> bool:
-        return await self._run_test_async(ctx, tests, use_wrapper=False)
+    async def test_async(self, ctx, tests=None, fast_only: bool = False) -> bool:
+        return await self._run_test_async(ctx, tests, use_wrapper=False, fast_only=fast_only)
 
-    def test(self, ctx, tests=None) -> bool:
-        return asyncio.run(self.test_async(ctx, tests))
+    def test(self, ctx, tests=None, fast_only: bool = False) -> bool:
+        return asyncio.run(self.test_async(ctx, tests, fast_only=fast_only))
 
-    async def test_log_wrapper_async(self, ctx, tests=None) -> bool:
-        return await self._run_test_async(ctx, tests, use_wrapper=True)
+    async def test_log_wrapper_async(self, ctx, tests=None, fast_only: bool = False) -> bool:
+        return await self._run_test_async(ctx, tests, use_wrapper=True, fast_only=fast_only)
 
-    def test_log_wrapper(self, ctx, tests=None) -> bool:
-        return asyncio.run(self.test_log_wrapper_async(ctx, tests))
+    def test_log_wrapper(self, ctx, tests=None, fast_only: bool = False) -> bool:
+        return asyncio.run(self.test_log_wrapper_async(ctx, tests, fast_only=fast_only))
 
     def _output_cfg(self, shape, options_project=None) -> dict:
         """Which output file types are configured for a shape, and how.
@@ -2705,6 +2710,7 @@ class Project(project_config.Configuration):
         scenes: Optional[List] = None,
         overlay=None,
         render_opts: Optional[dict] = None,
+        fast_only: bool = False,
     ):
         with pc_logging.Action("RenderPkg", self.name):
             # A skipped package has nothing to render, and must not be asked to:
@@ -2729,6 +2735,12 @@ class Project(project_config.Configuration):
 
             if None in shapes:
                 raise EmptyShapesError
+
+            if fast_only:
+                # Before anything is produced, so that an assembly left out
+                # gets neither its files nor its documents: an instruction book
+                # is illustrated with the assembly, which is building it.
+                shapes = fast_only_mod.without_slow(shapes)
 
             tasks = []
             # Every file type that has a built-in implementation, plus any the
@@ -3014,6 +3026,7 @@ class Project(project_config.Configuration):
         scenes: Optional[list] = None,
         overlay=None,
         render_opts: Optional[dict] = None,
+        fast_only: bool = False,
     ):
         asyncio.run(
             self.render_async(
@@ -3028,6 +3041,7 @@ class Project(project_config.Configuration):
                 scenes,
                 overlay,
                 render_opts,
+                fast_only,
             )
         )
 

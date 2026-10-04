@@ -8,6 +8,7 @@ from partcad_cli.click.commands.search.parts import cli as search_parts
 from partcad_cli.click.commands.search.scenes import cli as search_scenes
 from partcad_cli.click.commands.search.sketches import cli as search_sketches
 
+from ... import fast_only
 from ...cli_context import CliContext
 
 
@@ -19,6 +20,7 @@ from ...cli_context import CliContext
     help="Recursively search in all imported packages (older spelling of '<package>...')",
     show_envvar=True,
 )
+@fast_only.option()
 @click.option(
     "-k",
     "--keyword",
@@ -38,7 +40,7 @@ from ...cli_context import CliContext
     ),
 )
 @click.pass_obj
-def cli(cli_ctx: CliContext, recursive: bool, package: str, keyword: str) -> None:
+def cli(cli_ctx: CliContext, recursive: bool, fast_only: bool, package: str, keyword: str) -> None:
     """Search all available parts, assemblies and scenes recursively with the given keyword."""
     options = []
     runner = CliRunner()
@@ -49,6 +51,9 @@ def cli(cli_ctx: CliContext, recursive: bool, package: str, keyword: str) -> Non
         options.extend(["--package", package])
     if keyword:
         options.extend(["--keyword", keyword])
+    # Only the searches that find assemblies take it: nothing else declares a
+    # timeout, so nothing else has anything to leave out.
+    assembly_options = (["--fast-only"] if fast_only else []) + options
 
     catch_exceptions = False
 
@@ -56,5 +61,5 @@ def cli(cli_ctx: CliContext, recursive: bool, package: str, keyword: str) -> Non
     runner.invoke(search_sketches, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     runner.invoke(search_interfaces, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     runner.invoke(search_parts, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
-    runner.invoke(search_assemblies, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
-    runner.invoke(search_scenes, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
+    runner.invoke(search_assemblies, assembly_options, catch_exceptions=catch_exceptions, obj=cli_ctx)
+    runner.invoke(search_scenes, assembly_options, catch_exceptions=catch_exceptions, obj=cli_ctx)

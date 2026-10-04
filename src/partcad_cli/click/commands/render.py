@@ -12,6 +12,7 @@ import os
 
 import rich_click as click
 
+from .. import fast_only
 from ..service import run
 from ..viewport import viewport_options, viewport_params
 
@@ -66,6 +67,7 @@ from ..viewport import viewport_options, viewport_params
     is_flag=True,
     show_envvar=True,
 )
+@fast_only.option()
 @click.option(
     "-s",
     "--sketch",
@@ -137,6 +139,7 @@ def cli(
     package,
     options_package,
     recursive,
+    fast_only,
     sketch,
     interface,
     assembly,
@@ -160,6 +163,7 @@ def cli(
             "package": package,
             "options_package": options_package,
             "recursive": recursive,
+            "fast_only": fast_only,
             "sketch": sketch,
             "interface": interface,
             "assembly": assembly,

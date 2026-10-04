@@ -21,11 +21,18 @@ that file — they are transport events, not log lines.
 import logging
 from logging.handlers import RotatingFileHandler
 
+from . import timeouts
 from .logging import ops
 
 # The process/action markers PartCAD emits as log records carrying a `pc_event`
 # extra (identical to what the ANSI terminal backend consumes).
 PC_EVENTS = ("process_start", "process_end", "action_start", "action_end")
+
+# The ops this backend takes over, and gives back in 'fini'. The timeout window
+# markers travel the same way as the others but are not in 'PC_EVENTS': they
+# are not progress, nothing renders them, and what reads them is the client
+# connection itself (see 'partcad_utils.timeouts').
+_OPS = PC_EVENTS + timeouts.KINDS
 
 # Rotating file defaults: enough to keep a useful history without unbounded growth.
 FILE_MAX_BYTES = 10 * 1024 * 1024
@@ -61,9 +68,32 @@ def _action_end(op: str, package: str, item: str = None) -> None:
     _emit_event("action_end", op, package, item)
 
 
+def _timeout_start(seconds: float, package: str, item: str = None) -> None:
+    _emit_timeout(timeouts.START, seconds, package, item)
+
+
+def _timeout_end(seconds: float, package: str, item: str = None) -> None:
+    _emit_timeout(timeouts.END, seconds, package, item)
+
+
+def _emit_timeout(kind: str, seconds: float, package: str, item: str = None) -> None:
+    """A timeout window marker, as a pc_event record like the others."""
+    logging.getLogger("partcad").critical(
+        "%s: %gs: %s: %s" % (kind, seconds, package, item),
+        extra={"pc_event": kind, "op": None, "package": package, "item": item, timeouts.SECONDS: seconds},
+    )
+
+
 def record_to_event(record: logging.LogRecord) -> dict:
     """Turn a log record into the structured event dict sent to the client."""
     pc_event = getattr(record, "pc_event", None)
+    if pc_event in timeouts.KINDS:
+        return timeouts.event(
+            pc_event,
+            getattr(record, timeouts.SECONDS, None),
+            getattr(record, "package", None),
+            getattr(record, "item", None),
+        )
     if pc_event is not None:
         return {
             "kind": pc_event,
@@ -146,6 +176,8 @@ def init(hook, log_file: str = None, file_level: int = logging.DEBUG) -> None:
     ops.process_end = _process_end
     ops.action_start = _action_start
     ops.action_end = _action_end
+    ops.timeout_start = _timeout_start
+    ops.timeout_end = _timeout_end
 
 
 def fini() -> None:
@@ -170,7 +202,7 @@ def fini() -> None:
     _saved_handlers = []
 
     # Drop the instance overrides so ops falls back to the class-level defaults.
-    for attr in ("process_start", "process_end", "action_start", "action_end"):
+    for attr in _OPS:
         try:
             delattr(ops, attr)
         except AttributeError:

@@ -124,6 +124,29 @@ class FakePartcad:
         # A real 'partcad' exposes this, and the load operations catch through
         # it to tell "PartCAD is too old" apart from an ordinary failure.
         self.exception = types.SimpleNamespace(NeedsUpdateException=FakeNeedsUpdateException)
+        self.fast_only = FakeFastOnly(self.logging)
+
+
+class FakeFastOnly:
+    """'partcad.fast_only', reading the same 'timeout' the real one reads.
+
+    Whether an object is slow is the real module's question, and is tested
+    beside it; what is under test here is which objects an operation asks.
+    """
+
+    def __init__(self, logging):
+        self._logging = logging
+
+    def leaves_out(self, shape):
+        seconds = getattr(shape, "timeout", None)
+        if seconds is None:
+            return False
+        self._logging.info("Skipping '%s:%s'" % (shape.project_name, shape.name))
+        return True
+
+    def leaves_out_declared(self, project, kind, name, quiet=False):
+        config = project.object_config(kind, name) or {}
+        return config.get("timeout") is not None
 
 
 class FakeShape:
@@ -344,8 +367,16 @@ class FakeProject:
         self.parts_requested.append(name)
         return self.parts.get(name)
 
-    async def test_log_wrapper_async(self, ctx, tests=None):
+    async def test_log_wrapper_async(self, ctx, tests=None, fast_only=False):
         self.tested_whole_package = True
+        self.tested_fast_only = fast_only
+
+    def object_config(self, kind, name):
+        obj = getattr(self, self._sections[kind]).get(name)
+        return obj.config if obj is not None else None
+
+    def get_assembly(self, name):
+        return self.assemblies.get(name)
 
     async def render_async(self, **kwargs):
         self.render_requests.append(kwargs)
@@ -3192,3 +3223,114 @@ def test_render_formats_of_a_package_that_renders_nothing():
     session = _inline_session(projects={"//plain": {"parts": {}}})
 
     assert operations.render_formats(session, {"package": "//plain"}) == {"package": "//plain", "formats": []}
+
+
+# ---- --fast-only -------------------------------------------------------------
+#
+# An assembly that declares 'timeout:' is one its package says is slow, and a
+# command run with '--fast-only' passes over it (see 'partcad.fast_only'). What
+# is pinned here is that every operation offering the flag hands it on, and
+# leaves out what it names itself.
+
+
+def _slow(name, **kwargs):
+    obj = FakeObject(name, config={"desc": "takes a while", "timeout": 1800}, **kwargs)
+    obj.timeout = 1800.0
+    return obj
+
+
+def test_a_listing_with_fast_only_leaves_out_what_declares_a_timeout():
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("assemblies", FakeObject("quick", desc="a moment"))
+    root.add("assemblies", _slow("slow"))
+
+    operations.list_objects(session, {"kind": "assemblies", "package": "//", "fast_only": True})
+
+    output = session.partcad.logging.only("info")
+    assert row_for(output, "quick")
+    assert "slow" not in output
+    assert lines_of(output)[-1] == "Total: 1"
+
+
+def test_a_listing_without_it_lists_everything():
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("assemblies", FakeObject("quick", desc="a moment"))
+    root.add("assemblies", _slow("slow"))
+
+    operations.list_objects(session, {"kind": "assemblies", "package": "//"})
+
+    assert lines_of(session.partcad.logging.only("info"))[-1] == "Total: 2"
+
+
+def test_a_search_with_fast_only_leaves_out_what_declares_a_timeout(monkeypatch):
+    install_fake_search(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("assemblies", FakeObject("quick", desc="a cube tower", project_name="//"))
+    root.add("assemblies", _slow("slow", desc="a cube skyscraper", project_name="//"))
+
+    operations.search_objects(session, {"kind": "assemblies", "keyword": "cube", "package": "//", "fast_only": True})
+
+    output = lines_of(session.partcad.logging.only("info"))
+    assert output[1].startswith("\t// quick")
+    assert output[-1] == "Matches: 1"
+
+
+def test_a_whole_package_test_run_hands_fast_only_on(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    root = session.partcad_ctx.projects["//"]
+    root.add("parts", FakeObject("widget"))
+
+    operations.test_run(session, {"fast_only": True})
+
+    assert root.tested_whole_package
+    assert root.tested_fast_only is True
+
+
+def test_a_named_slow_assembly_is_not_tested_with_fast_only(monkeypatch):
+    install_fake_tests(monkeypatch)
+    session, _ = make_session()
+    session.partcad_ctx.projects["//"].add("assemblies", _slow("slow", project_name="//"))
+
+    operations.test_run(session, {"object": "slow", "assembly": True, "fast_only": True})
+
+    log = session.partcad.logging
+    assert "Skipping '//:slow'" in log.messages("info")
+    assert log.messages("error") == []
+
+
+def test_a_render_hands_fast_only_on(monkeypatch):
+    session, rendered = _render_session(monkeypatch)
+
+    operations.render_objects(session, {"package": "//", "format": "step", "fast_only": True})
+
+    assert rendered and rendered[0]["fast_only"] is True
+
+
+def test_a_named_slow_assembly_is_not_staged_with_fast_only(monkeypatch):
+    """Staging builds what it places, which is exactly what was asked not to be."""
+    session, rendered = _render_session(monkeypatch)
+    top = _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+    top.timeout = 1800.0
+
+    operations.render_objects(
+        session, {"package": "//", "format": "step", "object": "top", "assembly": True, "fast_only": True}
+    )
+
+    # No retry error: nothing was asked to be built first. The render itself is
+    # what passes over the assembly, and it was told to.
+    assert rendered and rendered[0]["fast_only"] is True
+
+
+def test_a_named_slow_assembly_is_still_staged_without_it(monkeypatch):
+    session, rendered = _render_session(monkeypatch)
+    top = _assembly_with(session, "//:top", uncached=[("//sub", "unit")])
+    top.timeout = 1800.0
+
+    with pytest.raises(JsonRpcError) as caught:
+        operations.render_objects(session, {"package": "//", "format": "step", "object": "top", "assembly": True})
+
+    assert _retry_error(caught) == [{"package": "//sub", "name": "unit", "kind": "assembly"}]

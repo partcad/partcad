@@ -79,6 +79,41 @@ has none), and the rest of this page is written with ``...``. Note that ``pc sup
 ``pc supply quote -r`` mean something else entirely — break every assembly down to its parts — and take no
 ``...``.
 
+.. _fast-only:
+
+***********************************
+Slow assemblies and ``--fast-only``
+***********************************
+
+``pc`` gives up on the daemon when it has said nothing for five minutes. That is a bound on *silence*, not on
+the command -- a recursive render reports every object as it goes and can run for an hour -- and building or
+rendering one large assembly is exactly a stretch of silence. An assembly (or a scene) that is known to take
+longer says so where it is declared, in seconds:
+
+.. code-block:: yaml
+
+  assemblies:
+    skyscraper:
+      type: assy
+      timeout: 1800
+
+While the daemon works on it -- building it, rendering it, exporting it, testing it -- it tells ``pc`` so,
+and ``pc`` waits up to 1800 seconds instead of 300 for as long as that lasts. A declared timeout only ever
+lengthens the wait, never shortens it, and ``PC_DAEMON_IDLE_TIMEOUT`` still sets the default (``0`` waits
+forever, whatever an assembly declares).
+
+Declaring a timeout is also saying the assembly is slow, and ``--fast-only`` (``-f``) leaves out every assembly
+and scene that says so::
+
+    pc render --fast-only //pub...       # render everything quick in the whole public index
+    pc test -r --fast-only               # test this package and everything below it, the quick parts
+
+It is read from the declaration alone, so leaving an object out builds nothing. An assembly that *places* a
+slow one is built by building that one, and is left out only if it declares a timeout of its own. The flag is
+offered by ``pc render``, ``pc export``, ``pc test``, ``pc sim``, ``pc list`` and ``pc search``; on ``pc test``
+and ``pc sim`` it is ``--fast-only`` alone, since ``-f`` is their ``--filter``. Every recursive run over
+``//pub`` in PartCAD's own CI passes it.
+
 *************
 Host commands
 *************
