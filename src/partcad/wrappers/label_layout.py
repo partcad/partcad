@@ -68,12 +68,14 @@ class Label:
 
 
 def _bounds(points):
+    """The smallest box holding every one of 'points'."""
     us = [point[0] for point in points]
     vs = [point[1] for point in points]
     return (min(us), min(vs), max(us), max(vs))
 
 
 def _overlap(a, b):
+    """Whether two boxes share any area; boxes that only touch do not."""
     return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
 
 
@@ -268,7 +270,50 @@ def _uncross(labels, keep_out):
 
 
 def _leader_length(label):
+    """How much line 'label' needs to reach every one of its targets."""
     return sum(math.hypot(target[0] - label.attach[0], target[1] - label.attach[1]) for target in label.targets)
+
+
+def _search(label, placed, keep_out, ring, distances, offsets):
+    """The spot for 'label' that is clear of everything, nearest the object.
+
+    Tries every one of 'distances' along the ring at each of 'offsets' in turn,
+    and returns the spot with the shortest leader in the first row that has
+    any clear spot at all - or None if no row has one.
+    """
+    for offset in offsets:
+        best = None
+        for distance in distances:
+            point, outward = ring.at(distance)
+            _place(label, point, outward, offset)
+            if _clear(label, placed, keep_out):
+                length = _leader_length(label)
+                if best is None or length < best[0]:
+                    best = (length, label.spot)
+        if best is not None:
+            return best[1]
+    return None
+
+
+def _least_bad(label, placed, ring, distances, offset):
+    """The spot for 'label' that touches the fewest names, for when none is clear.
+
+    Every spot is tried at 'offset' - the outermost row, where the fewest
+    names are - and scored by how many names this one would be written over,
+    run its leader through, or have a leader run through it.
+    """
+    best = None
+    for distance in distances:
+        point, outward = ring.at(distance)
+        _place(label, point, outward, offset)
+        hits = (
+            sum(_overlap(label.box(), other.box()) for other in placed)
+            + sum(_segment_hits_box(label.attach, target, other.box()) for other in placed for target in label.targets)
+            + sum(_segment_hits_box(other.attach, target, label.box()) for other in placed for target in other.targets)
+        )
+        if best is None or hits < best[0]:
+            best = (hits, label.spot)
+    return best[1]
 
 
 def layout(labels, keep_out):
@@ -308,26 +353,33 @@ def layout(labels, keep_out):
     # either way along the ring, never further than halfway to the next slot,
     # and then a row further out, and so on: the first row that has room for it
     # is the one it goes in, at whichever spot in that row gives it the
-    # shortest leader. The bound on rows is only there so that something
-    # degenerate cannot loop forever, and is far beyond any real picture.
-    slides = [0.0] + [sign * step * fraction / 8.0 for fraction in range(1, 5) for sign in (1, -1)]
+    # shortest leader.
+    #
+    # A crowd of long names can leave no room near a slot at all - fifteen
+    # ports on one spot, say - so the whole ring is tried next, row by row the
+    # same way. The bound on rows is only there so that something degenerate
+    # cannot loop forever, and is far beyond any real picture.
+    local = [0.0] + [sign * step * fraction / 8.0 for fraction in range(1, 5) for sign in (1, -1)]
+    around = [ring.length * index / max(64, 8 * len(labels)) for index in range(max(64, 8 * len(labels)))]
+    offsets = [row * level for level in range(4 * len(labels) + 20)]
+    # The names with the most leaders are placed first. Every leader of a name
+    # placed in an outer row has to find a way between the names of the rows
+    # inside it, and four of them fanning out to four ports rarely can - so
+    # those take the inner row, and the names with one leader go round them.
+    slots = {id(label): turn + index * step for index, label in enumerate(order)}
     placed = []
-    for index, label in enumerate(order):
-        slot = turn + index * step
-        for offset in [row * level for level in range(4 * len(labels) + 20)]:
-            best = None
-            for slide in slides:
-                point, outward = ring.at(slot + slide)
-                _place(label, point, outward, offset)
-                if _clear(label, placed, keep_out):
-                    length = _leader_length(label)
-                    if best is None or length < best[0]:
-                        best = (length, label.spot)
-            if best is not None:
-                _place(label, *best[1])
-                break
-        else:
-            _place(label, *ring.at(slot), offset)
+    for label in sorted(order, key=lambda label: -len(label.targets)):
+        slot = slots[id(label)]
+        spot = _search(label, placed, keep_out, ring, [slot + slide for slide in local], offsets)
+        if spot is None:
+            spot = _search(label, placed, keep_out, ring, [slot + distance for distance in around], offsets)
+        if spot is None:
+            # Nowhere on the picture is clear of everything. Rather than lose
+            # every name on the drawing over one - which is what raising here
+            # would do, since the renderer drops an overlay that fails - this
+            # one goes where it touches the fewest others.
+            spot = _least_bad(label, placed, ring, [slot + distance for distance in around], offsets[-1])
+        _place(label, *spot)
         placed.append(label)
     _uncross(order, keep_out)
     return labels

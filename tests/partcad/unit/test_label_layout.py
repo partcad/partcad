@@ -11,6 +11,7 @@ nothing, so it is exercised here directly rather than through a render.
 
 import math
 import os
+import random
 import sys
 
 import partcad as pc
@@ -102,3 +103,41 @@ def test_the_layout_is_the_same_every_time():
     first = [label.position for label in label_layout.layout(_crowd(15), OBJECT)]
     second = [label.position for label in label_layout.layout(_crowd(15), OBJECT)]
     assert first == second
+
+
+def _faults(labels):
+    """Every name written over another, and every leader run through one."""
+    faults = []
+    for index, label in enumerate(labels):
+        for other_index, other in enumerate(labels):
+            if other is label:
+                continue
+            if index < other_index and _overlap(label.box(), other.box()):
+                faults.append((index, other_index, "name"))
+            for target in label.targets:
+                if label_layout._segment_hits_box(label.attach, target, other.box()):
+                    faults.append((index, other_index, "leader"))
+    return faults
+
+
+def _random_crowd(seed):
+    """Twenty to forty names, long and short, some of them interfaces leading
+    to several ports scattered over and around the object."""
+    rng = random.Random(seed)
+    return [
+        label_layout.Label(
+            rng.choice([20, 40, 80, 150, 300]),
+            rng.choice([2, 3.5, 6]),
+            [(rng.uniform(-10, 70), rng.uniform(-10, 110)) for _ in range(rng.choice([1, 1, 1, 2, 4]))],
+        )
+        for _ in range(rng.randint(20, 40))
+    ]
+
+
+def test_a_crowd_of_long_names_never_falls_back_to_an_unchecked_spot():
+    """Once every spot near a name's own slot is taken, the rest of the ring is
+    searched, and the names with the most leaders are placed first - rather
+    than a name being put down wherever its slot happened to be. Each of these
+    seeds left a name or a leader on top of another before that."""
+    for seed in (0, 4, 5, 6, 9, 10, 11):
+        assert _faults(label_layout.layout(_random_crowd(seed), OBJECT)) == [], seed

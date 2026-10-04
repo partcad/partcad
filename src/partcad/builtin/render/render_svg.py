@@ -211,10 +211,12 @@ def _marker_edges(location, size):
 
 
 def _dot(a, b):
+    """The dot product of two 3D vectors given as tuples."""
     return sum(a[axis] * b[axis] for axis in range(3))
 
 
 def _cross(a, b):
+    """The cross product of two 3D vectors given as tuples."""
     return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
 
 
@@ -290,6 +292,7 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
     with_interfaces = bool(request.get("with_interfaces"))
 
     def flat(point):
+        """'point' in the plane of the picture: how far right, how far up."""
         return (_dot(point, right), _dot(point, up))
 
     edges = {"Ports": [], "Interfaces": []}
@@ -349,6 +352,7 @@ def _overlay_edges(request, max_dimension, right, up, keep_out):
         depth = _dot(targets[0], normal)
 
         def lift(point, depth=depth):
+            """A point of the picture's plane, back in 3D at 'depth'."""
             return tuple(point[0] * right[axis] + point[1] * up[axis] + depth * normal[axis] for axis in range(3))
 
         edges[layer].extend(_label_edges(text, lift(label.position), label_size, right, up))
