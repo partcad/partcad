@@ -78,25 +78,79 @@ def test_a_pair_the_joint_accounts_for_is_not_measured_at_all(monkeypatch):
     assert result["indeterminate"] == []
 
 
-def test_a_pattern_names_whole_path_segments():
+def test_a_pattern_names_a_subtree_by_its_exact_path():
     expected = [("frame/beam", "pin")]
-    assert wrapper_interference._is_expected("car/frame/beam", "car/pin", expected)
-    assert not wrapper_interference._is_expected("car/subframe/beam", "car/pin", expected)
-    assert not wrapper_interference._is_expected("car/frame/crossbeam", "car/pin", expected)
+    assert wrapper_interference._is_expected("frame/beam", "pin", expected)
+    assert wrapper_interference._is_expected("frame/beam/rib", "pin", expected)
+    assert not wrapper_interference._is_expected("subframe/beam", "pin", expected)
+    assert not wrapper_interference._is_expected("frame/crossbeam", "pin", expected)
+    assert not wrapper_interference._is_expected("car/frame/beam", "car/pin", expected)
 
 
 def test_the_wrapper_and_the_test_name_pairs_by_the_same_rule():
     """Two copies of one rule, since the sandbox cannot import PartCAD; held together here."""
     cases = [
         ("pin", "pin"),
+        ("a/pin", "a"),
+        ("a/b/pin", "a/b"),
         ("a/pin", "pin"),
-        ("a/b/pin", "b/pin"),
-        ("a/spin", "pin"),
+        ("ab/pin", "a"),
         ("pin/a", "pin"),
-        ("ab/pin", "b/pin"),
+        ("spin", "pin"),
     ]
     for name, pattern in cases:
-        assert wrapper_interference._matches(name, pattern) == core_rule._matches(name, pattern), (name, pattern)
+        assert wrapper_interference._within(name, pattern) == core_rule._within(name, pattern), (name, pattern)
+
+
+def _group(label, *children, at=None):
+    """An assembly node of the tree, placed 'at' an x offset if given."""
+    node = ocp_serialize.encode_assembly(list(children), name="//pkg:" + label, label=label)
+    if at is not None:
+        node["location"] = [[at, 0.0, 0.0], [0.0, 0.0, 1.0], 0.0]
+    return node
+
+
+def _part(label, x):
+    return ocp_serialize.encode_shape(_box(x), name="//pkg:" + label, label=label)
+
+
+def _check(tree, **request):
+    request["assembly_json"] = ocp_serialize.dumps(ocp_serialize.encode_assembly(tree, name="asm"))
+    return wrapper_interference.process(None, request)
+
+
+def test_a_pair_of_subtrees_the_joints_account_for_is_skipped_whole(monkeypatch):
+    """Kept as the pair of subtrees the joint declared: nothing under either is measured against the other."""
+    asked = _counting_common(monkeypatch)
+    battery = _group("battery", _part("box", 0.0), _part("pin", 8.0))
+    frame = _group("frame", _part("rail", 8.0), _part("post", 16.0))
+    result = _check([battery, frame], expected=[["frame", "battery"]])
+    # battery/pin and frame/rail coincide, battery/box meets frame/rail: all excused.
+    assert [(o["a"], o["b"]) for o in result["overlaps"] if o["a"].split("/")[0] != o["b"].split("/")[0]] == []
+    assert result["expected"] == 1
+    # What is inside each subtree is still measured: box/pin, rail/post.
+    assert sorted((o["a"], o["b"]) for o in result["overlaps"]) == [
+        ("battery/box", "battery/pin"),
+        ("frame/rail", "frame/post"),
+    ]
+    assert len(asked) == 2
+
+
+def test_the_inside_of_a_subassembly_with_a_verdict_of_its_own_is_not_measured(monkeypatch):
+    asked = _counting_common(monkeypatch)
+    piece = _group("piece", _part("a", 0.0), _part("b", 8.0))
+    result = _check([piece, _part("neighbour", 16.0)], opaque=["piece"])
+    # piece/a-piece/b overlap too, but that is the piece's own business.
+    assert [(o["a"], o["b"]) for o in result["overlaps"]] == [("piece/b", "neighbour")]
+    assert len(asked) == 1
+
+
+def test_subtrees_whose_boxes_miss_are_done_with_in_one_test(monkeypatch):
+    asked = _counting_common(monkeypatch)
+    near = _group("near", _part("a", 0.0), _part("b", 20.0))
+    far = _group("far", _part("c", 0.0), _part("d", 20.0), at=1000.0)
+    result = _check([near, far])
+    assert result["overlaps"] == [] and result["candidates"] == 0 and asked == []
 
 
 def test_a_part_that_is_not_a_solid_is_not_checked_rather_than_checked_wrongly(monkeypatch):

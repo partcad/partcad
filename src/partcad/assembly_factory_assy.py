@@ -1148,15 +1148,19 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             # default: half of the largest dimension of the two items
             "exploded": self._exploded_distance(connect.get("exploded", None), connect_to_name),
             # option: "interferes"
-            # description: the other items this one also ends up sharing space
+            # description: the other nodes this one also ends up sharing space
             #              with as this connection is made. A screw is driven
             #              into the part it is connected to and carries on
             #              through the ones underneath, cutting its thread in
             #              those as well; the connection is to one of them and
             #              the interference is with all of them, and only the
-            #              connection knows which. Read by
+            #              connection knows which. Each names a node of this
+            #              'links:' list by its 'name' ('container/name' inside
+            #              a named container), part or assembly; a node with no
+            #              name cannot be named. An assembly named excuses
+            #              every overlap between it and this node. Read by
             #              'partcad.test.interference'.
-            # values: an item name, or a list of them
+            # values: a node name, or a list of them
             # default: none
             "interferes": _as_names(connect.get("interferes", None), self.name),
         }
