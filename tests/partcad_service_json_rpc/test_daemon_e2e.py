@@ -16,7 +16,7 @@ import time
 import pytest
 
 import partcad_service_json_rpc
-from partcad_service_json_rpc import daemon
+from partcad_utils import workspace
 from partcad_utils.framing import read_message, write_message
 
 if not hasattr(socket, "AF_UNIX"):
@@ -62,7 +62,7 @@ def test_socket_daemon_starts_reuses_and_stops(short_dirs):
     sock = first.stdout.strip()
     assert sock.endswith("/socket")
     assert os.path.exists(sock)
-    assert daemon.is_alive(sock)
+    assert workspace.is_alive(sock)
 
     try:
         # Second launch finds the live daemon and prints the same path (no new one).
@@ -78,7 +78,7 @@ def test_socket_daemon_starts_reuses_and_stops(short_dirs):
         client.close()
 
     for _ in range(50):
-        if not daemon.is_alive(sock):
+        if not workspace.is_alive(sock):
             break
         time.sleep(0.1)
-    assert not daemon.is_alive(sock)
+    assert not workspace.is_alive(sock)
