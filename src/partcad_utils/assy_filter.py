@@ -185,7 +185,16 @@ def parse(data, where: str = "the filter") -> Filter:
         children = {}
         for item in data:
             if isinstance(item, dict):
-                for name, mask in parse(item, where).children.items():
+                inside = parse(item, where)
+                if inside.keeps_all:
+                    # An empty mapping among the names. On its own '{}' means
+                    # "and everything under it", which says nothing about a
+                    # *list* of names -- and reading its children would reach
+                    # through the 'None' that means it, so this was an
+                    # AttributeError rather than the usage error every other
+                    # unreadable filter gets.
+                    raise FilterError("%s: an empty mapping names no link" % where)
+                for name, mask in inside.children.items():
                     children[name] = mask
             elif isinstance(item, str):
                 children[item] = Filter()
@@ -309,6 +318,39 @@ def link_name(node, index=None):
     return None if index is None else synthetic_link_name(index)
 
 
+def colliding_positional_names(links) -> list:
+    """The links of one list whose *positional* name another link also answers to.
+
+    ``[(index, name)]``, in file order. One case reaches this: a link that
+    writes out ``name: link#2`` beside a second entry that names itself nothing
+    and is therefore called ``link#2`` as well. Two links of one name is a
+    defect in the file either way -- a ``connect:`` naming it reaches the first
+    of them -- and `AssemblyFactoryAssy.link_names` reports it when the file is
+    read.
+
+    Filtering is where it stops being recoverable, which is why this is here as
+    well as there: the positional name is *written down* as the link is kept
+    (see `filter_document`), so the result would hold two links called
+    ``link#2`` and nothing afterwards could tell them apart or say which the
+    filter had meant.
+
+    Two links that both declare one name, or that are both named after the same
+    part, are not this: nothing is written down for them, so a filtered copy is
+    no more ambiguous than the file it came from.
+    """
+    answers = {}
+    for index, node in enumerate(links):
+        if isinstance(node, dict):
+            answers.setdefault(link_name(node, index), []).append(index)
+    found = []
+    for index, node in enumerate(links):
+        if isinstance(node, dict) and link_name(node) is None:
+            name = link_name(node, index)
+            if len(answers.get(name, ())) > 1:
+                found.append((index, name))
+    return found
+
+
 def is_container(node) -> bool:
     """Whether this node holds other nodes rather than placing an object."""
     return isinstance(node, dict) and node.get(LINKS) is not None
@@ -330,6 +372,14 @@ def filter_document(document, mask: Filter) -> list:
     """
     problems: list = []
     links = document.get(LINKS) if isinstance(document, dict) else None
+    if links is not None:
+        # Before anything is touched: a name the filter selects that two links
+        # answer to cannot be honoured, and keeping both would write the
+        # ambiguity into the result. Raised rather than reported, because
+        # 'filter_document' mutates as it walks and a half-filtered document is
+        # not an answer -- and because every other problem it reports is "more
+        # was kept than you asked for", which a reader can still act on.
+        _refuse_ambiguous(links, mask, "the filter")
     if links is None:
         # A file that is one part or one assembly and nothing else. There is no
         # list of links to select from, and a filter has nothing to say about
@@ -342,6 +392,31 @@ def filter_document(document, mask: Filter) -> list:
         return problems
     document[LINKS] = _filter_links(links, mask, "the filter", problems)
     return problems
+
+
+def _refuse_ambiguous(links, mask: Filter, where: str) -> None:
+    """Refuse a selection that two links of one list answer to.
+
+    Walks only the lists the mask reaches: a collision the filter does not name
+    is dropped along with both links and writes nothing down, so it is the
+    file's business and not this operation's (``pc lint`` and the ASSY reader
+    are where it is reported).
+    """
+    if mask.keeps_all:
+        return
+    for index, name in colliding_positional_names(links):
+        if mask.select(name) is not None:
+            raise FilterError(
+                "%s: '%s' names two links here -- link %d has no name of its own and is called that by its "
+                "position, and another link here is called that outright. Give one of them a 'name' of its own"
+                % (where, name, index + 1)
+            )
+    for index, node in enumerate(links):
+        if not isinstance(node, dict) or not is_container(node):
+            continue
+        sub = mask.select(link_name(node, index))
+        if sub is not None:
+            _refuse_ambiguous(node[LINKS], sub, "%s: '%s'" % (where, link_name(node, index)))
 
 
 def _filter_links(links, mask: Filter, where: str, problems: list) -> list:

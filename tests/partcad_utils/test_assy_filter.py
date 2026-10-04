@@ -15,6 +15,7 @@ argument becomes a mask (a file, or the text itself).
 """
 
 import json
+import re
 
 import pytest
 
@@ -64,6 +65,16 @@ def test_a_number_is_read_as_the_name_it_is_written_as():
 @pytest.mark.parametrize("data", ["bone1", 7, 1.5, b"x"])
 def test_anything_that_is_not_a_tree_of_names_is_refused(data):
     with pytest.raises(FilterError):
+        assy_filter.parse(data)
+
+
+@pytest.mark.parametrize("data", [[{}], ["base", {}], [{}, "base"]])
+def test_an_empty_mapping_among_a_list_of_names_is_refused(data):
+    # On its own '{}' means "and everything under it", which says nothing about
+    # a *list* of names. Refused as the usage error it is: reading its children
+    # reaches through the 'None' that means it, which was an AttributeError and
+    # so a traceback rather than a message.
+    with pytest.raises(FilterError, match="empty mapping"):
         assy_filter.parse(data)
 
 
@@ -128,7 +139,7 @@ def test_the_text_itself_is_read_when_there_is_no_such_file():
 def test_a_missing_file_says_both_things_that_went_wrong():
     # A mistyped filename and a malformed filter are fixed in different places,
     # so the message says which of the two happened.
-    with pytest.raises(FilterError, match="nosuch.yaml") as caught:
+    with pytest.raises(FilterError, match=re.escape("nosuch.yaml")) as caught:
         assy_filter.resolve_spec("nosuch.yaml")
     assert "mapping or list" in str(caught.value)
 
@@ -136,7 +147,10 @@ def test_a_missing_file_says_both_things_that_went_wrong():
 def test_a_file_that_does_not_parse_is_reported_as_the_file(tmp_path):
     path = tmp_path / "f.yaml"
     path.write_text("head: [unclosed\n", encoding="utf-8")
-    with pytest.raises(FilterError, match=str(path)):
+    # 'match' is a regular expression, and a Windows path is full of
+    # backslashes: unescaped, this one is an invalid pattern rather than a
+    # failing assertion ("incomplete escape"), which is what it was.
+    with pytest.raises(FilterError, match=re.escape(str(path))):
         assy_filter.resolve_spec(str(path))
 
 
@@ -306,3 +320,61 @@ def test_two_spellings_of_one_selection_are_one_key():
     assert assy_filter.parse(["a"]).key() != assy_filter.parse(["b"]).key()
     assert assy_filter.parse({"a": ["b"]}).key() != assy_filter.parse({"a": None}).key()
     assert assy_filter.KEEP_ALL.key() == "*"
+
+
+# ---- two links of one name -------------------------------------------------
+
+
+def test_a_positional_name_that_another_link_declares_outright():
+    links = [{"part": "cube", "name": "link#2"}, {"links": []}]
+    assert assy_filter.colliding_positional_names(links) == [(1, "link#2")]
+
+    # Two links that both *declare* one name, or are both named after the same
+    # part, are not this: nothing is written down for them, so a filtered copy
+    # is no more ambiguous than the file it came from.
+    assert assy_filter.colliding_positional_names([{"part": "cube"}, {"part": "cube"}]) == []
+    assert assy_filter.colliding_positional_names([{"part": "a", "name": "x"}, {"part": "b", "name": "x"}]) == []
+    assert assy_filter.colliding_positional_names([{"part": "cube"}, {"links": []}]) == []
+
+
+def test_filtering_refuses_a_selection_two_links_answer_to():
+    doc = {
+        "links": [
+            {"part": "cube", "name": "link#2"},
+            {"links": [{"part": "pin", "name": "inner"}]},
+        ]
+    }
+    before = json.dumps(doc, sort_keys=True)
+    with pytest.raises(FilterError, match="names two links here"):
+        assy_filter.filter_document(doc, assy_filter.parse(["link#2"]))
+    # Refused before anything was touched: 'filter_document' mutates as it
+    # walks, and a half-filtered document is not an answer.
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+def test_a_collision_the_filter_does_not_name_is_left_to_the_file():
+    # Both links are dropped and nothing is written down, so the result is no
+    # more ambiguous than the source. Reporting it here would refuse a filter
+    # over a file that works; the ASSY reader and 'pc lint' are where it is said.
+    doc = {
+        "links": [
+            {"part": "cube", "name": "link#2"},
+            {"links": [{"part": "pin", "name": "inner"}]},
+            {"part": "other"},
+        ]
+    }
+    assert assy_filter.filter_document(doc, assy_filter.parse(["other"])) == []
+    assert names(doc["links"]) == ["other"]
+
+
+def test_a_collision_inside_a_selected_container_is_refused_too():
+    doc = {
+        "links": [
+            {
+                "name": "tower",
+                "links": [{"part": "cube", "name": "link#2"}, {"links": []}],
+            }
+        ]
+    }
+    with pytest.raises(FilterError, match="'tower'"):
+        assy_filter.filter_document(doc, assy_filter.parse({"tower": ["link#2"]}))

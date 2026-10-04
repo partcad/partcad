@@ -345,18 +345,19 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         Resolved here, over the whole list, rather than node by node: a
         positional name is only a name in the context of its list, and a
         collision between one and a declared name is only visible with the list
-        in hand. Such a collision is reported and left alone -- both links keep
-        the name, which makes a ``connect:`` to it resolve to the first of them,
-        exactly as two links declared with one name always have.
+        in hand (`assy_filter.colliding_positional_names`, which ``pc filter``
+        reads too). Such a collision is reported and left alone -- both links
+        keep the name, which makes a ``connect:`` to it resolve to the first of
+        them, exactly as two links declared with one name always have. It is
+        ``pc filter`` that refuses, because writing the positional name down is
+        what would make the ambiguity permanent.
         """
         names = [assy_filter.link_name(node, index) for index, node in enumerate(node_list)]
-        declared = {name for node, name in zip(node_list, names) if assy_filter.link_name(node) is not None}
-        for index, (node, name) in enumerate(zip(node_list, names)):
-            if assy_filter.link_name(node) is None and name in declared:
-                pc_logging.error(
-                    "%s: link %d has no name of its own, so it is called '%s' -- which another link here is "
-                    "already called. Give one of them a 'name' of its own" % (self.name, index + 1, name)
-                )
+        for index, name in assy_filter.colliding_positional_names(node_list):
+            pc_logging.error(
+                "%s: link %d has no name of its own, so it is called '%s' -- which another link here is "
+                "already called. Give one of them a 'name' of its own" % (self.name, index + 1, name)
+            )
         return names
 
     async def handle_node_list(self, assembly, node_list):

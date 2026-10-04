@@ -173,7 +173,9 @@ that any are drawn, so it goes with one of the three:
 
 ```sh
 pc --no-ansi render -t png --view iso -O ./out/ports --with-all --port TL-m3 bracket
-``` On an assembly or a scene all three walk everything inside it and place
+```
+
+On an assembly or a scene all three walk everything inside it and place
 each child's ports where it put the child, which is how a connection that went
 wrong is found: two frames that should have met and did not. Every port drawn is
 also named on stderr, which is where the exact string for an Assembly YAML file
